@@ -394,7 +394,7 @@ describe("prettyPrint", () => {
 
   it("TsScopedVar global with moduleId", () => {
     expect(printTs(ts.scopedVar("x", "global", "test.agency"))).toBe(
-      'getRuntimeContext().ctx.globals.get("test.agency", "x")',
+      '__globals()!.get("test.agency", "x")',
     );
   });
 

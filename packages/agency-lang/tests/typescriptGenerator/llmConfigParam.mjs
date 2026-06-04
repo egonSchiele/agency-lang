@@ -23,7 +23,7 @@ import {
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -183,7 +183,7 @@ __stack.locals.foo = await runPrompt({
           responseFormat: z.object({
             response: z.array(z.number())
           }),
-          clientConfig: getRuntimeContext().ctx.globals.get("llmConfigParam.agency", "config"),
+          clientConfig: __globals()!.get("llmConfigParam.agency", "config"),
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()

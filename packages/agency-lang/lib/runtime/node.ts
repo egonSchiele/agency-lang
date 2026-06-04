@@ -269,7 +269,13 @@ export async function runNode({
         // the scope-local stack/threads, so this top-level frame is just
         // the fallback for early code (callHook, validation, etc.).
         const result = await agencyStore.run(
-          { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore, moduleDir },
+          {
+            ctx: execCtx,
+            stack: execCtx.stateStack,
+            threads: threadStore,
+            globals: execCtx.globals,
+            moduleDir,
+          },
           () =>
             execCtx.graph.run(
               nodeName,
@@ -310,7 +316,13 @@ export async function runNode({
           // the final conversation through stdlib helpers see the
           // actual messages, not a sentinel.
           await agencyStore.run(
-            { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore, moduleDir },
+            {
+              ctx: execCtx,
+              stack: execCtx.stateStack,
+              threads: threadStore,
+              globals: execCtx.globals,
+              moduleDir,
+            },
             () =>
               callHook({
                 ctx: execCtx,

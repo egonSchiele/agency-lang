@@ -23,7 +23,7 @@ import {
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -154,7 +154,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("bangParams.agency")) {
+  if (!__globals()!.isInitialized("bangParams.agency")) {
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();

@@ -769,21 +769,28 @@ export const ts = {
 
   /** GlobalStore operations.
    *
-   *  Receiver defaults to `getRuntimeContext().ctx` (strict accessor —
-   *  throws clearly if no ALS frame). Pass `ctxRef` explicitly when the
-   *  emission site has a different lexical context — most notably the
-   *  `__initializeGlobals(__ctx)` helper body in sectionAssembler.ts,
-   *  where `__ctx` is a parameter and ALS isn't yet installed; pass
-   *  `ts.id("__ctx")` there. Routing through the strict accessor by
-   *  default keeps the no-frame failure mode loud and aligns with the
-   *  two-flavor rule in docs/dev/codegen-als-accessors.md. */
+   *  Receiver defaults to `ts.runtime.globals` (the `__globals()!`
+   *  accessor — see its docstring). Pass `globalsRef` explicitly when
+   *  the emission site has a different lexical handle on the store —
+   *  most notably inside `__initializeGlobals(__ctx)` in
+   *  sectionAssembler.ts, where the function's `__ctx` parameter
+   *  exposes the canonical store directly; pass
+   *  `ts.prop(ts.id("__ctx"), "globals")` there. Routing through the
+   *  accessor by default ensures every user-visible read/write
+   *  participates in per-branch isolation without further codegen
+   *  changes. */
   globalGet(
     moduleId: string,
     varName: string,
-    ctxRef: TsNode = ts.raw("getRuntimeContext().ctx"),
+    globalsRef?: TsNode,
   ): TsCall {
+    // Inline the default — referencing `ts.runtime.globals` here
+    // creates a self-typing cycle that makes TS infer `ts: any`. The
+    // `__globals()!` raw is the canonical "current per-scope
+    // GlobalStore" expression (see `ts.runtime.globals`).
+    const receiver = globalsRef ?? ({ kind: "raw", code: "__globals()!" } as TsRaw);
     return ts.methodCall(
-      ts.prop(ctxRef, "globals"),
+      receiver,
       "get",
       [ts.str(moduleId), ts.str(varName)],
     );
@@ -793,10 +800,11 @@ export const ts = {
     moduleId: string,
     varName: string,
     value: TsNode,
-    ctxRef: TsNode = ts.raw("getRuntimeContext().ctx"),
+    globalsRef?: TsNode,
   ): TsCall {
+    const receiver = globalsRef ?? ({ kind: "raw", code: "__globals()!" } as TsRaw);
     return ts.methodCall(
-      ts.prop(ctxRef, "globals"),
+      receiver,
       "set",
       [ts.str(moduleId), ts.str(varName), value],
     );
@@ -835,6 +843,18 @@ export const ts = {
     ctx: { kind: "raw", code: "getRuntimeContext().ctx" } as TsRaw,
     threads: { kind: "raw", code: "__threads()" } as TsRaw,
     stateStack: { kind: "raw", code: "__stateStack()" } as TsRaw,
+    /** Per-scope GlobalStore accessor. Reads from the active ALS
+     *  frame's `globals` slot — pointer-shared with the canonical
+     *  store at every frame builder (Stage 1) and the branch-local
+     *  clone inside `runInBranchAlsFrame` (Stage 2). Replaces the
+     *  pre-ALS `__ctx.globals.…` codegen pattern: every user-visible
+     *  global read/write is now routed through this accessor so the
+     *  branch-local view participates without further codegen
+     *  changes. The non-null assertion (`!`) is appropriate because
+     *  every emission site runs inside an Agency execution frame
+     *  (function/node body wrapped in `withAlsFrame`, Runner step
+     *  body, or bootstrap frame). */
+    globals: { kind: "raw", code: "__globals()!" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,
     step: { kind: "identifier", name: "__step" } as TsIdentifier,
     state: { kind: "identifier", name: "__state" } as TsIdentifier,

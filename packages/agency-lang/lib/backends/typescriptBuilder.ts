@@ -1624,13 +1624,19 @@ export class TypeScriptBuilder {
         ctx: ts.raw("getRuntimeContext().ctx"),
       }),
 
-      // Ensure this module's globals are initialized on the current ctx.
-      // Runs BEFORE the `withAlsFrame` wrap installs the per-scope ALS
-      // frame, so `__ctx` here is the setupEnv-emitted local — not the
-      // `__ctx()` accessor (which would return undefined).
+      // Ensure this module's globals are initialized on the
+      // current per-scope view. Runs BEFORE this function's own
+      // `withAlsFrame` wrap, but the caller's ALS frame is still
+      // active (every entry to a generated function body comes from
+      // a Runner step body, runNode's top-level frame, or a fork
+      // branch frame — all of which seed `globals`). Reading via
+      // `__globals()!` means a branch checks its own clone — whose
+      // `initializedModules` set was snapshotted at fork time — so
+      // already-initialized modules skip init without touching the
+      // canonical store.
       ts.if(
         ts.raw(
-          `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
+          `!__globals()!.isInitialized(${JSON.stringify(this.moduleId)})`,
         ),
         ts.await(ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")])),
       ),

@@ -21,7 +21,7 @@ function makeStore() {
   });
   const stack = new StateStack();
   const threads = new ThreadStore();
-  return { ctx, stack, threads };
+  return { ctx, stack, threads, globals: ctx.globals };
 }
 
 describe("agencyStore", () => {
@@ -89,7 +89,7 @@ describe("agencyStore", () => {
     await agencyStore.run(outer, async () => {
       expect(getRuntimeContext().stack).toBe(outer.stack);
       await agencyStore.run(
-        { ctx: outer.ctx, stack: innerStack, threads: innerThreads },
+        { ctx: outer.ctx, stack: innerStack, threads: innerThreads, globals: outer.globals },
         async () => {
           expect(getRuntimeContext().stack).toBe(innerStack);
           expect(getRuntimeContext().threads).toBe(innerThreads);
@@ -255,7 +255,7 @@ describe("getModuleDir", () => {
   it("returns moduleDir when set", () => {
     const seed = makeStore();
     agencyStore.run(
-      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, moduleDir: "/x" },
+      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, globals: seed.globals, moduleDir: "/x" },
       () => expect(getModuleDir()).toBe("/x"),
     );
   });
@@ -265,14 +265,14 @@ describe("getModuleDir", () => {
   it("falls back to process.cwd when a frame is active but no moduleDir is set", () => {
     const seed = makeStore();
     agencyStore.run(
-      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads },
+      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, globals: seed.globals },
       () => expect(getModuleDir()).toBe(process.cwd()),
     );
   });
   it("inherits moduleDir into nested {...store} frames", () => {
     const seed = makeStore();
     agencyStore.run(
-      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, moduleDir: "/outer" },
+      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, globals: seed.globals, moduleDir: "/outer" },
       () => {
         const s = agencyStore.getStore()!;
         agencyStore.run(

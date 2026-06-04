@@ -274,6 +274,12 @@ function runInBranchAlsFrame<T>(
         ctx: parent.ctx,
         stack: branchStack,
         threads: parent.threads,
+        // Stage 1: pointer-share the parent's GlobalStore so behavior
+        // is identical to the pre-ALS code (every site that emitted
+        // `__ctx.globals.…` saw the canonical store). Stage 2 swaps
+        // this for `parent.globals.clone()` to give each branch its
+        // own snapshotted globals.
+        globals: parent.globals,
         // Inherit `moduleDir` from the parent so stdlib helpers inside
         // the branch resolve paths relative to the same compiled
         // module that started the run. This frame doesn't spread

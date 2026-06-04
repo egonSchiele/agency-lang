@@ -24,6 +24,7 @@ export {
   __threads,
   __stateStack,
   __ctx,
+  __globals,
   type AgencyStore,
 } from "./asyncContext.js";
 export { StateStack, State } from "./state/stateStack.js";

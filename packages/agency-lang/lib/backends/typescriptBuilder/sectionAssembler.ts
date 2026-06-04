@@ -152,15 +152,18 @@ export function partitionProgram(
       const { stmt, handlerName } = globalAssign;
       const valueNode = deps.processNodeInGlobalInit(stmt.value);
       // These statements are emitted inside `__initializeGlobals(__ctx)`
-      // (see buildInitializeGlobalsFn below). `__ctx` is the parameter
-      // there — no ALS frame is installed by the caller — so pass the
-      // lexical `__ctx` identifier as the receiver instead of letting
-      // globalSet default to `getRuntimeContext().ctx`.
+      // (see buildInitializeGlobalsFn below). The function's `__ctx`
+      // parameter exposes the canonical store directly, so pass
+      // `__ctx.globals` as the receiver — keeping writes on the
+      // canonical store regardless of whether the caller installed an
+      // ALS frame whose `globals` slot points at a clone. (Bootstrap
+      // is the normal caller and pointer-shares the canonical store
+      // anyway; this is just defensive against future callers.)
       const setNode = ts.globalSet(
         deps.moduleId,
         stmt.variableName,
         valueNode,
-        ts.id("__ctx"),
+        ts.prop(ts.id("__ctx"), "globals"),
       );
       globalInitTagged.push({
         varName: stmt.variableName,

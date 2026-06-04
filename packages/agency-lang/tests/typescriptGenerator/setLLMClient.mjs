@@ -24,7 +24,7 @@ import {
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -145,7 +145,7 @@ async function __initializeGlobals(__ctx) {
     type: "positional",
     args: []
   }))
-  await setLLMClient(getRuntimeContext().ctx.globals.get("setLLMClient.agency", "client"))
+  await setLLMClient(__globals()!.get("setLLMClient.agency", "client"))
 }
 __registerGlobalsInit("setLLMClient.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {

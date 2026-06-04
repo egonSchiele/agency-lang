@@ -49,6 +49,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import process from "node:process";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { Runner } from "./runner.js";
@@ -64,6 +65,17 @@ export type AgencyStore = {
   ctx: RuntimeContext<any>;
   stack: StateStack;
   threads: ThreadStore;
+  /**
+   * Per-scope GlobalStore. Today pointer-shares the `RuntimeContext`'s
+   * canonical store at every frame builder, so behavior matches the
+   * pre-ALS code that emitted `__ctx.globals.…` directly. The slot
+   * exists separately from `ctx.globals` to allow per-branch
+   * snapshotting (Stage 2): when `runInBranchAlsFrame` clones the
+   * parent's store, the branch's frame holds the clone and the
+   * generated `__globals()!` accessor sees the branch-local view
+   * without disturbing the parent's globals.
+   */
+  globals: GlobalStore;
   /**
    * Per-call-site source location for the currently-executing step.
    * Seeded by `Runner.runInScope` for every step body. Stdlib helpers
@@ -213,6 +225,27 @@ export function __ctx(): RuntimeContext<any> | undefined {
 }
 
 /**
+ * Generated-code accessor for the current per-scope GlobalStore. Mirrors
+ * `__threads()` / `__stateStack()` / `__ctx()`. Returns the GlobalStore
+ * from the active ALS frame when one is present (every Runner step body,
+ * node/function setup code, `runInBranchAlsFrame` body, and
+ * `runInBootstrapFrame` body all seed this slot). Returns `undefined`
+ * when no frame is installed.
+ *
+ * Generated code typically dereferences this with `__globals()!.…`
+ * because every code-emission site that uses it runs inside an Agency
+ * execution frame by construction. The pre-ALS counterpart was
+ * `__ctx.globals.…` against the setupEnv-emitted local.
+ *
+ * The slot is distinct from `ctx.globals` so that Stage 2 can clone the
+ * parent's store at fork-time into the branch's ALS frame without
+ * mutating the canonical `RuntimeContext.globals` reference.
+ */
+export function __globals(): GlobalStore | undefined {
+  return agencyStore.getStore()?.globals;
+}
+
+/**
  * Read the module directory from the current ALS frame. Returns
  * `process.cwd()` as a fallback when no frame is active or no module
  * directory was seeded. Callers that need strictness should use
@@ -234,7 +267,7 @@ export function runInTestContext<T>(
   threads: ThreadStore,
   fn: () => T,
 ): T {
-  return agencyStore.run({ ctx, stack, threads }, fn);
+  return agencyStore.run({ ctx, stack, threads, globals: ctx.globals }, fn);
 }
 
 /**
@@ -270,6 +303,12 @@ export async function runInBootstrapFrame<T>(
       ctx,
       stack: ctx.stateStack,
       threads: new BootstrapThreadStore(),
+      // Seed the canonical store. Bootstrap frames are never inside a
+      // fork branch (init / top-level callback registration / lifecycle
+      // hooks all run outside any per-branch ALS frame), so pointer-
+      // sharing is exactly right: writes done by `__initializeGlobals`
+      // land on the RuntimeContext's store and persist across the run.
+      globals: ctx.globals,
       moduleDir: opts?.moduleDir,
     },
     fn,

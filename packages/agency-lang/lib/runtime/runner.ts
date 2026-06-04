@@ -122,6 +122,12 @@ export class Runner {
           ctx: this.ctx,
           stack: this.stack,
           threads: this.threads,
+          // Propagate the outer frame's `globals` so a Runner spun up
+          // inside a fork branch sees the branch-local clone instead of
+          // the canonical store. Fall back to `ctx.globals` for harness
+          // entries that build a Runner outside any ALS frame (older
+          // tests, direct invocation paths).
+          globals: outer?.globals ?? this.ctx.globals,
           callsite: {
             moduleId: this.moduleId,
             scopeName: this.scopeName,

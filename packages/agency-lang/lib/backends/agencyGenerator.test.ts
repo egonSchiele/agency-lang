@@ -579,3 +579,57 @@ describe("AgencyGenerator - preserveOrder mode", () => {
   });
 });
 
+describe("AgencyGenerator - string escape round-tripping", () => {
+  // For each test we parse a `let s = "<source>"` declaration, emit
+  // it through the generator, parse the emitted output again, and
+  // confirm the second parse produces the same string value as the
+  // first. This guards against codegen producing source that the
+  // parser would mis-interpret (e.g. forgetting to escape `\` so
+  // `"\\"` parses as `\` the first time and as a syntax error the
+  // second time).
+  const cases = [
+    { name: "embedded double-quote",   source: '"a\\"b"',       value: 'a"b' },
+    { name: "embedded backslash",      source: '"a\\\\b"',      value: 'a\\b' },
+    { name: "newline / tab",           source: '"x\\ny\\tz"',   value: 'x\ny\tz' },
+    { name: "escaped interpolation",   source: '"\\${foo}"',    value: '${foo}' },
+    { name: "plain dollar sign",       source: '"$5"',          value: '$5' },
+    { name: "backtick allowed inline", source: '"a`b"',         value: 'a`b' },
+  ];
+
+  cases.forEach(({ name, source, value }) => {
+    it(`round-trips: ${name}`, () => {
+      const input = `let s = ${source}`;
+
+      const r1 = parseAgency(input, {}, false);
+      expect(r1.success, "first parse").toBe(true);
+      if (!r1.success) return;
+
+      const gen = new AgencyGenerator();
+      const emitted = gen.generate(r1.result).output;
+
+      const r2 = parseAgency(emitted, {}, false);
+      expect(r2.success, `second parse of ${JSON.stringify(emitted)}`).toBe(
+        true,
+      );
+      if (!r2.success) return;
+
+      // Extract the string literal from both parses and compare its
+      // text-segment value. The parsed value should match what the
+      // test asked for, both before and after the round trip.
+      const stringOf = (program: { nodes: unknown[] }): string | null => {
+        const assignment = program.nodes.find(
+          (n: any) => n?.type === "assignment",
+        ) as { value?: { type?: string; segments?: { type: string; value?: string }[] } } | undefined;
+        if (assignment?.value?.type !== "string") return null;
+        const segs = assignment.value.segments ?? [];
+        if (segs.length === 0) return "";
+        if (segs.length !== 1 || segs[0].type !== "text") return null;
+        return segs[0].value ?? "";
+      };
+
+      expect(stringOf(r1.result), "first-parse value").toBe(value);
+      expect(stringOf(r2.result), "round-tripped value").toBe(value);
+    });
+  });
+});
+

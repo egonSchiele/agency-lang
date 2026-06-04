@@ -560,6 +560,72 @@ describe("literals parsers", () => {
     });
   });
 
+  describe("stringParser - backslash escapes", () => {
+    const cases: { input: string; value: string }[] = [
+      // Quote character inside the same-quote string. Before escapes
+      // landed, the only way to write `"` in a double-quoted string was
+      // to switch to backticks. Now both forms work.
+      { input: '"\\""', value: '"' },
+      { input: '"`"', value: "`" },        // other quote stays unescaped
+      { input: '"a\\"b"', value: 'a"b' },
+      { input: "`\\``", value: "`" },
+      { input: '`"`', value: '"' },
+
+      // Backslash itself.
+      { input: '"\\\\"', value: "\\" },
+      { input: '"a\\\\b"', value: "a\\b" },
+
+      // Control characters.
+      { input: '"\\n"', value: "\n" },
+      { input: '"\\t"', value: "\t" },
+      { input: '"\\r"', value: "\r" },
+      { input: '"line1\\nline2"', value: "line1\nline2" },
+
+      // Escaping the interpolation start so `${...}` appears literally.
+      { input: '"\\${foo}"', value: "${foo}" },
+      { input: '"price: \\$5"', value: "price: $5" },
+
+      // Unknown escapes are preserved verbatim: `\z` stays as the two
+      // chars `\` and `z` so existing strings that happen to contain a
+      // backslash don't change meaning.
+      { input: '"\\z"', value: "\\z" },
+      { input: '"\\q\\w\\e"', value: "\\q\\w\\e" },
+    ];
+
+    cases.forEach(({ input, value }) => {
+      it(`parses ${JSON.stringify(input)} → ${JSON.stringify(value)}`, () => {
+        const result = stringParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqualWithoutLoc({
+            type: "string",
+            segments: [{ type: "text", value }],
+          });
+        }
+      });
+    });
+
+    it("an escaped ${ does not start interpolation", () => {
+      const result = stringParser('"\\${1 + 1}"');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "string",
+          segments: [{ type: "text", value: "${1 + 1}" }],
+        });
+      }
+    });
+
+    it("an unescaped ${ still starts interpolation", () => {
+      const result = stringParser('"${foo}"');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.segments).toHaveLength(1);
+        expect(result.result.segments[0].type).toBe("interpolation");
+      }
+    });
+  });
+
   describe("stringParser - string concatenation with + operator", () => {
     const testCases = [
       // String + Variable

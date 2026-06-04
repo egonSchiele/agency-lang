@@ -74,6 +74,38 @@ import {
   WildcardPattern,
 } from "@/types/pattern.js";
 
+// Escape the characters that have special meaning inside a `"..."`
+// string literal so the formatter's output round-trips through the
+// parser. Mirror the escapes recognized by `stringTextSegmentParserFor`
+// in `parsers.ts`. Backticks are *not* escaped because Agency strings
+// allow the other quote character to appear unescaped inside.
+function escapeStringText(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    switch (c) {
+      case "\\": out += "\\\\"; break;
+      case '"':  out += '\\"';  break;
+      case "\n": out += "\\n";  break;
+      case "\t": out += "\\t";  break;
+      case "\r": out += "\\r";  break;
+      case "\0": out += "\\0";  break;
+      case "$":
+        // Only `${` starts an interpolation. Escape a bare `$` only
+        // when followed by `{` so a literal `$5` stays as `$5`.
+        if (s[i + 1] === "{") {
+          out += "\\$";
+        } else {
+          out += "$";
+        }
+        break;
+      default:
+        out += c;
+    }
+  }
+  return out;
+}
+
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
   protected generatedStatements: string[] = [];
@@ -781,7 +813,7 @@ export class AgencyGenerator {
     let result = '"';
     for (const segment of node.segments) {
       if (segment.type === "text") {
-        result += segment.value;
+        result += escapeStringText(segment.value);
       } else if (segment.type === "interpolation") {
         // processNode (not expressionToString) so nested function calls with
         // block arguments and quoted string literals round-trip correctly.

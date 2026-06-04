@@ -112,6 +112,44 @@ const negativeSlice = arr[-3:-1] // negativeSlice is [3, 4]
 arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
 ```
 
+### String literals
+
+Strings are delimited by `"` or `` ` ``. The other quote character can appear unescaped inside, so you rarely need to escape anything:
+
+```ts
+const s1 = "she said `hi`"
+const s2 = `she said "hi"`
+```
+
+For cases where the same quote character must appear inside the string, use a backslash escape. The recognized escapes are:
+
+| Escape | Meaning            |
+|--------|--------------------|
+| `\\`   | literal backslash  |
+| `\"`   | literal `"`        |
+| `` \` `` | literal `` ` ``  |
+| `\n`   | newline            |
+| `\t`   | tab                |
+| `\r`   | carriage return    |
+| `\0`   | null character     |
+| `\${`  | literal `${` (no interpolation) |
+
+Any other backslash sequence is left as-is — `"a\zb"` is the four-character string `a\zb`, not an error. Interpolation works inside both quote styles with `${expression}`:
+
+```ts
+const name = "world"
+const greeting = "hello, ${name}!"
+```
+
+Multi-line strings use `"""` triple-quotes and do **not** interpret backslash escapes (so docstrings containing prose like `path\to\file` work as written):
+
+```ts
+const block = """
+  first line
+  second line
+"""
+```
+
 ### Unit literals
 
 Agency supports unit literals for time, cost, and size values. They compile to plain numbers at compile time:

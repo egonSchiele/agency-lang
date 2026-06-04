@@ -74,18 +74,22 @@ import {
   WildcardPattern,
 } from "@/types/pattern.js";
 
-// Escape the characters that have special meaning inside a `"..."`
-// string literal so the formatter's output round-trips through the
-// parser. Mirror the escapes recognized by `stringTextSegmentParserFor`
-// in `parsers.ts`. Backticks are *not* escaped because Agency strings
-// allow the other quote character to appear unescaped inside.
-function escapeStringText(s: string): string {
+// Escape the characters that have special meaning inside a string
+// literal so the formatter's output round-trips through the parser.
+// Mirror the escapes recognized by `stringTextSegmentParserFor` in
+// `parsers.ts`. Only the *same* delimiter is escaped — the other two
+// quote characters are left literal because Agency strings allow them
+// to appear unescaped inside.
+function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    if (c === delim) {
+      out += "\\" + delim;
+      continue;
+    }
     switch (c) {
       case "\\": out += "\\\\"; break;
-      case '"':  out += '\\"';  break;
       case "\n": out += "\\n";  break;
       case "\t": out += "\\t";  break;
       case "\r": out += "\\r";  break;
@@ -810,17 +814,18 @@ export class AgencyGenerator {
   }
 
   private generateStringLiteral(node: StringLiteral): string {
-    let result = '"';
+    const delim = node.delimiter ?? '"';
+    let result = delim;
     for (const segment of node.segments) {
       if (segment.type === "text") {
-        result += escapeStringText(segment.value);
+        result += escapeStringText(segment.value, delim);
       } else if (segment.type === "interpolation") {
         // processNode (not expressionToString) so nested function calls with
         // block arguments and quoted string literals round-trip correctly.
         result += `\${${this.processNode(segment.expression).trim()}}`;
       }
     }
-    result += '"';
+    result += delim;
     return result;
   }
 

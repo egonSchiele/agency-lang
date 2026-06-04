@@ -5,7 +5,7 @@ import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
-import { cwd, env } from "std::system"
+import { cwd, env, isTTY, readStdin } from "std::system"
 import { getCost } from "std::thread"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
@@ -60,10 +60,15 @@ import { researchSysPrompt, researchTools } from "./research.agency"
 // Verbose tool-call tracing, opt-in via `AGENT_DEBUG=1`.
 const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
 
+// Whether the agent is running in interactive (TTY) mode. Set in main()
+// before any tool calls happen, so the callbacks below can suppress
+// scroll-output writes when stdout is destined for a Unix pipe.
+let _isInteractive: boolean = true
+
 callback("onToolCallStart") as data {
-  //if (AGENT_DEBUG) {
-  pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
-  //}
+  if (_isInteractive) {
+    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  }
 }
 
 def truncate(str: string, maxLength: number): string {
@@ -277,6 +282,48 @@ def printHeader() {
 }
 
 node main() {
+  // Non-interactive (piped) invocation: read the whole prompt from
+  // stdin, run one turn of `route()`, write the reply to stdout, and
+  // exit. No banner, no REPL, no slash commands. This lets the agent
+  // behave like a normal Unix filter: `echo "..." | pnpm run agency agent`.
+  if (!isTTY()) {
+    _isInteractive = false
+    const piped = readStdin()
+    if (piped == "" || piped == null) {
+      return
+    }
+    const projectContext = loadAgentsMd(cwd()) with approve
+    _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
+    const handler = cliPolicyHandler({
+      file: policyPath(),
+      fields: ALWAYS_FIELDS
+    })
+    handle {
+      const reply = route(
+        {
+        start: "code",
+        agents: {
+          code: {
+            systemPrompt: codeSysPrompt,
+            tools: codeTools,
+            memory: true
+          },
+          research: {
+            systemPrompt: researchSysPrompt,
+            tools: researchTools,
+            memory: true
+          }
+        },
+        maxHops: 3,
+        context: _context
+      },
+        piped,
+      )
+      print(reply)
+    } with handler
+    return
+  }
+
   printHeader()
 
   // Grounding: the LLM should not have to ask the user where it is

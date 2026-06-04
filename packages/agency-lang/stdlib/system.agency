@@ -1,4 +1,4 @@
-import { _args, _cwd, _dirname, _env, _setEnv, _exit, _openUrl, _screenshot } from "agency-lang/stdlib-lib/system.js"
+import { _args, _cwd, _dirname, _env, _setEnv, _exit, _openUrl, _screenshot, _isTTY, _readStdin } from "agency-lang/stdlib-lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1, allowedPaths: string[] = []) {
   """
@@ -82,6 +82,20 @@ export def setEnv(name: string, value: string): Result {
     value: value
   })
   return try _setEnv(name, value)
+}
+
+export safe def isTTY(): boolean {
+  """
+  Return true if standard input is connected to a terminal. Returns false when stdin is piped or redirected from a file. Use this to detect non-interactive invocations (e.g. `echo "hi" | my-agent`) and adjust output accordingly.
+  """
+  return _isTTY()
+}
+
+export safe def readStdin(): string {
+  """
+  Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program; pair with `isTTY()` to decide whether to read.
+  """
+  return _readStdin()
 }
 
 export def openUrl(url: string): Result {

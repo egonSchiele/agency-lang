@@ -48,6 +48,10 @@ export function formatUnitLiteral(lit: Pick<UnitLiteral, "value" | "unit">): str
 export type StringLiteral = BaseNode & {
   type: "string";
   segments: PromptSegment[];
+  // The delimiter the user wrote: `"`, `'`, or `` ` ``. Absent on
+  // synthesized literals (e.g. parallelDesugar, patternLowering),
+  // in which case the formatter defaults to `"`.
+  delimiter?: '"' | "'" | "`";
 };
 
 export type MultiLineStringLiteral = BaseNode & {

@@ -29,7 +29,6 @@ export function runBundledAgent(
     process.exit(1);
   }
 
-  console.log("---");
   const nodeProcess = spawn(
     process.execPath,
     [...compiledOutputNodeArgs(), runFile, ...args],

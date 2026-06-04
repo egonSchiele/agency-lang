@@ -146,6 +146,30 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L73))
 
+### isTTY
+
+```ts
+isTTY(): boolean
+```
+
+Return true if standard input is connected to a terminal. Returns false when stdin is piped or redirected from a file. Use this to detect non-interactive invocations (e.g. `echo "hi" | my-agent`) and adjust output accordingly.
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L87))
+
+### readStdin
+
+```ts
+readStdin(): string
+```
+
+Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program; pair with `isTTY()` to decide whether to read.
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L94))
+
 ### openUrl
 
 ```ts
@@ -166,4 +190,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L101))

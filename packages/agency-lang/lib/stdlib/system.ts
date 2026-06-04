@@ -35,6 +35,18 @@ export function _exit(code: number): void {
   process.exit(code);
 }
 
+export function _isTTY(): boolean {
+  return process.stdin.isTTY === true;
+}
+
+export async function _readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 export function _setEnv(name: string, value: string): void {
   if (name.length === 0) {
     throw new Error("setEnv: name must not be empty");

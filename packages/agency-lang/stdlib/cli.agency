@@ -1,6 +1,6 @@
 import { _runLineRepl } from "agency-lang/stdlib-lib/cli.js"
 
-/**
+/*
   ## Module: std::cli (line-mode REPL)
 
   Line-mode sibling of `std::ui`. Provides `repl`, `pushMessage`, and

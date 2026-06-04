@@ -77,4 +77,26 @@ export class GlobalStore {
     gs.initializedModules = new Set(json.initializedModules || []);
     return gs;
   }
+
+  /**
+   * Deep-snapshot copy. Used by `runInBranchAlsFrame` so each fork /
+   * parallel / race branch sees its own GlobalStore: at fork time the
+   * branch starts with the parent's values, then reads/writes inside
+   * the branch only touch the clone; the parent is untouched on
+   * branch completion.
+   *
+   * `initializedModules` is preserved so the branch's module guards
+   * (`!__globals()!.isInitialized(...)`) treat every module the
+   * parent already initialized as still initialized — `__initialize
+   * Globals` is a no-op in branches and inherited values stay intact.
+   *
+   * Implementation: round-trip through `toJSON` / `fromJSON`, which
+   * already handles native types (Maps, Sets, Dates) via the shared
+   * `nativeTypeReplacer` / `nativeTypeReviver`. If a perf hotspot
+   * appears, `Stage 4` in the design doc covers a copy-on-write
+   * variant — but for typical agent programs the clone is microseconds.
+   */
+  clone(): GlobalStore {
+    return GlobalStore.fromJSON(this.toJSON());
+  }
 }

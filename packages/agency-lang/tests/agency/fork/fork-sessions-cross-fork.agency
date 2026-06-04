@@ -1,0 +1,29 @@
+import { currentThreadId } from "std::threads"
+
+node main() {
+  // The "sessions are shared across all branches and all forks"
+  // contract from docs/superpowers/ideas/2026-06-04-per-thread-globals.md.
+  // The first fork opens three named sessions (one per city). The
+  // second fork's branches re-open the same session names — they
+  // resume the existing top-level threads via the shared
+  // `sessions` map on the parent's ThreadRegistry, so the recorded
+  // thread ids match the first fork's.
+  let cities = ["SF", "LA", "NY"]
+  let firstPass = fork(cities) as city {
+    let id = ""
+    thread(session: "data-for-${city}") {
+      id = currentThreadId()
+    }
+    return id
+  }
+  let secondPass = fork(cities) as city {
+    let id = ""
+    thread(session: "data-for-${city}") {
+      id = currentThreadId()
+    }
+    return id
+  }
+  // Both passes resolve every session name to the same thread id.
+  let allMatch = (firstPass[0] == secondPass[0]) && (firstPass[1] == secondPass[1]) && (firstPass[2] == secondPass[2])
+  return allMatch
+}

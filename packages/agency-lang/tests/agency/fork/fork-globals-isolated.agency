@@ -1,0 +1,17 @@
+global let counter = 0
+
+def bump(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  // Each branch starts with the parent's snapshot (counter = 0),
+  // mutates its own copy, and returns its final value. The parent's
+  // `counter` global is untouched on join — printing it after the
+  // fork still shows the original value.
+  let results = fork([1, 2, 3]) as _ {
+    return bump()
+  }
+  return [counter, results]
+}

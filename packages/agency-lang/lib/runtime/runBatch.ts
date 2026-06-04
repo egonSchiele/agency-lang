@@ -160,6 +160,21 @@ export type RunBatchOpts<T> = {
    * fields. Used by runPrompt's tool loop where the body manages the
    * real tool result on the branch. */
   recordBranchOutcomes?: boolean;
+  /** When `true` (default), each branch's ALS frame gets its own
+   * snapshot of the parent's `globals` (cloned via `GlobalStore.clone`)
+   * and a per-branch thread view (`ThreadStore.forkBranchView`). This
+   * is the user-facing `fork` / `parallel` / `race` contract — writes
+   * inside a branch stay inside the branch and the active-thread
+   * pointer is branch-local.
+   *
+   * When `false`, branches pointer-share the parent's `globals` and
+   * `threads`. Use this for *implementation-internal* batching that
+   * isn't a user concurrency primitive — most notably `runPrompt`'s
+   * tool-dispatch loop, where tool calls are conceptually sequential
+   * function invocations and any global state they touch (counters,
+   * caches, per-run accumulators) is expected to persist across calls
+   * within the same LLM round and across rounds. */
+  isolateState?: boolean;
   hooks?: BatchHooks;
 };
 
@@ -238,8 +253,9 @@ function startInvoke<T>(
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);
   t.startedAt = performance.now();
+  const isolateState = opts.isolateState ?? true;
   return ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-    runInBranchAlsFrame(ctx, t.branch.stack, () =>
+    runInBranchAlsFrame(ctx, t.branch.stack, isolateState, () =>
       t.child.invoke(t.branch.stack, signal),
     ),
   );
@@ -265,6 +281,7 @@ function startInvoke<T>(
 function runInBranchAlsFrame<T>(
   ctx: RuntimeContext<any>,
   branchStack: StateStack,
+  isolateState: boolean,
   fn: () => Promise<T>,
 ): Promise<T> {
   const parent = agencyStore.getStore();
@@ -273,13 +290,34 @@ function runInBranchAlsFrame<T>(
       {
         ctx: parent.ctx,
         stack: branchStack,
-        threads: parent.threads,
-        // Stage 1: pointer-share the parent's GlobalStore so behavior
-        // is identical to the pre-ALS code (every site that emitted
-        // `__ctx.globals.…` saw the canonical store). Stage 2 swaps
-        // this for `parent.globals.clone()` to give each branch its
-        // own snapshotted globals.
-        globals: parent.globals,
+        // Per-branch ThreadStore view: shares the parent's registry
+        // (`threads` map, `sessions` map, `counter`) so explicit
+        // cross-branch coordination via named sessions and
+        // `thread(continue: id)` keeps working, but carries its own
+        // `activeStack` seeded with a fresh subthread of the parent's
+        // currently-active thread. Unguarded `llm()` /
+        // `userMessage()` writes from the branch land on that
+        // subthread instead of polluting the parent's active thread.
+        //
+        // When `isolateState` is false (runPrompt's tool dispatch),
+        // pointer-share `threads` instead — tool calls are logically
+        // sequential function invocations, not user concurrency
+        // primitives, so threading the active-thread pointer through
+        // matches the pre-Stage-2 behavior. (runPrompt's tool body
+        // also installs its own `freshThreads` override at invoke
+        // time; this share keeps the orphan-subthread leak from
+        // appearing in the shared registry.)
+        threads: isolateState
+          ? parent.threads.forkBranchView()
+          : parent.threads,
+        // Per-branch snapshot of globals when `isolateState` is true:
+        // writes inside the branch never leak out, the parent is
+        // untouched on branch completion. `clone()` preserves
+        // `initializedModules` so module init does not re-run in
+        // branches. When `isolateState` is false, pointer-share so
+        // tool dispatches accumulate global state across calls just
+        // like normal function calls.
+        globals: isolateState ? parent.globals.clone() : parent.globals,
         // Inherit `moduleDir` from the parent so stdlib helpers inside
         // the branch resolve paths relative to the same compiled
         // module that started the run. This frame doesn't spread
@@ -634,8 +672,9 @@ async function runRaceResume<T>(
   hooks?.onBranchStart?.(child.key, winnerIndex);
   let value: T | Interrupt[];
   try {
+    const isolateState = opts.isolateState ?? true;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch.stack, () =>
+      runInBranchAlsFrame(ctx, branch.stack, isolateState, () =>
         child.invoke(branch.stack, signal),
       ),
     );

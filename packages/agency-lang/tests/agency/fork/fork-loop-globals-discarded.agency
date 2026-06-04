@@ -1,0 +1,17 @@
+global let count = 0
+
+node main() {
+  // The "shared accumulator across forks" pattern users will reach
+  // for from JavaScript. Each fork wraps a single branch whose body
+  // increments the global — but that write lives on the branch's
+  // local snapshot, so it is discarded at join. The parent's
+  // `count` stays at 0. The idiomatic replacement is to return the
+  // contribution from each branch and reduce after the join.
+  for (i in [0, 1, 2]) {
+    fork([i]) as _ {
+      count = count + 1
+      return count
+    }
+  }
+  return count
+}

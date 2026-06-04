@@ -1,0 +1,21 @@
+import { currentThreadId } from "std::threads"
+
+node main() {
+  // Each branch's view of the parent's ThreadStore gets a fresh
+  // subthread seeded onto its activeStack at fork time. So
+  // `currentThreadId()` inside each branch reports a different id
+  // from the parent (and from sibling branches). The parent's
+  // active-thread pointer is untouched on join.
+  let parentId = currentThreadId()
+  let branchIds = fork([1, 2, 3]) as _ {
+    return currentThreadId()
+  }
+
+  // Verify: every branch id is different from the parent, every
+  // branch id is unique, and the parent's active thread is still
+  // the original parent thread.
+  let parentStillActive = currentThreadId() == parentId
+  let allDifferentFromParent = (branchIds[0] != parentId) && (branchIds[1] != parentId) && (branchIds[2] != parentId)
+  let allUnique = (branchIds[0] != branchIds[1]) && (branchIds[1] != branchIds[2]) && (branchIds[0] != branchIds[2])
+  return [parentStillActive, allDifferentFromParent, allUnique]
+}

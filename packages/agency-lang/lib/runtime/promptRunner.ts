@@ -184,6 +184,15 @@ export class PromptRunner {
       // would destroy the meaningful tool result that runPrompt needs to
       // read on resume (e.g. line 723 of prompt.ts).
       recordBranchOutcomes: false,
+      // Tool dispatches are NOT a user-facing concurrency primitive —
+      // the user wrote `llm({tools: [foo]})` expecting `foo` to be
+      // called like a normal function. Per-branch globals/threads
+      // isolation would silently drop any global mutation a tool
+      // makes (counters, caches, per-run accumulators) and confine
+      // each tool call's active-thread pointer to its own subthread.
+      // Pointer-share the parent's state instead so tool dispatches
+      // behave like sequential function invocations.
+      isolateState: false,
       children: items.map((item, i) => ({
         key: keyFor(item, i),
         invoke: async () => {

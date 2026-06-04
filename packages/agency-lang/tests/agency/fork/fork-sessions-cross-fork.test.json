@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Sessions are stored in the shared ThreadRegistry, so re-opening the same session name from a later fork's branches resumes the thread created by the first fork.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

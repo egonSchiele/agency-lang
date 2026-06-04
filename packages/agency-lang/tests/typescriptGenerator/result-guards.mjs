@@ -287,7 +287,8 @@ const checkValue = __AgencyFunction.create({
     name: "r",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "checkValue",

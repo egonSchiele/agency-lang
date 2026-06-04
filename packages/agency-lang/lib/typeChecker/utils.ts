@@ -43,6 +43,43 @@ export function isAnyType(t: VariableType): boolean {
 }
 
 /**
+ * Returns true when the parameter's declared type cannot be filled in by an
+ * LLM through a JSON schema — i.e. it is (or contains) a function type.
+ *
+ * Single source of truth used by:
+ *   - the tool-position binding validator (lib/typeChecker/toolBlockBinding.ts)
+ *   - the tool schema generator (lib/backends/typescriptBuilder.ts :: buildToolDefinition)
+ *   - the runtime backstop (validateToolForLLM)
+ *
+ * Rules:
+ *   - A `blockType` (Agency's "(X) => Y") is function-typed.
+ *   - A `unionType` is function-typed if *any* arm is function-typed.
+ *     (Conservative — see docs/superpowers/specs/2026-06-03 §"Out of scope".)
+ *   - A variadic param `...xs: T[]` is function-typed iff the element type
+ *     `T` is function-typed (the LLM cannot fill an array of functions).
+ *   - `any` is NOT function-typed (accepted limitation; see spec §2 "any-typed
+ *     parameters").
+ */
+export function isFunctionTyped(param: FunctionParameter): boolean {
+  const hint = param.typeHint;
+  if (!hint) return false;
+  if (param.variadic) {
+    // For `...xs: T[]`, the typeHint shape is an arrayType wrapping the element.
+    // We check the element type. If the hint isn't an arrayType (e.g. untyped),
+    // it's not function-typed.
+    if (hint.type !== "arrayType") return false;
+    return typeContainsFunction(hint.elementType);
+  }
+  return typeContainsFunction(hint);
+}
+
+function typeContainsFunction(t: VariableType): boolean {
+  if (t.type === "blockType") return true;
+  if (t.type === "unionType") return t.types.some(typeContainsFunction);
+  return false;
+}
+
+/**
  * The `regex` primitive isn't representable in JSON, so an LLM can't return
  * one as structured output. Walk the expected LLM-call type and reject any
  * regex usage with a clear diagnostic, rather than silently emitting a

@@ -289,12 +289,14 @@ const log = __AgencyFunction.create({
     name: "prefix",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "messages",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: true
+    variadic: true,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "log",

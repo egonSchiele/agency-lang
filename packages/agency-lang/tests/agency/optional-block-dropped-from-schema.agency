@@ -1,0 +1,22 @@
+// Spec 2026-06-03 §5.5 #50: a function whose block param is optional
+// (declared with `= null`) is dropped from the LLM tool schema (verified
+// by lib/backends/toolSchemaContribution.test.ts), and when invoked
+// without supplying it the body sees the default value (null).
+//
+// This hand-crafted agency test exercises the body's "did we get a
+// block?" branch — no LLM involved.
+def runWith(label: string, block: () => string = null): string {
+  if (block == null) {
+    return label + "/no-block"
+  }
+  return label + "/" + block()
+}
+
+node main() {
+  let omitted = runWith("a")
+  let supplied = runWith("b", block: \-> "hi")
+  return {
+    omitted: omitted,
+    supplied: supplied
+  }
+}

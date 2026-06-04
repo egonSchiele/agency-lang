@@ -339,7 +339,8 @@ const isPrime = __AgencyFunction.create({
     name: "n",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "isPrime",

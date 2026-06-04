@@ -79,12 +79,14 @@ describe("resolveNamedArgs", () => {
     expect(result).toEqual([num(1)]);
   });
 
-  it("ignores variadic params when matching named args, but accepts block-type params by name", () => {
+  it("ignores variadic when no named arg targets it, and accepts block-type params by name", () => {
     const blockParam = param("blk", {
       typeHint: { type: "blockType" } as unknown as FunctionParameter["typeHint"],
     });
     const variadicParam = param("rest", { variadic: true });
-    // Variadic param is skipped — can't be filled by name.
+    // Variadic param IS now nameable (spec 2026-06-03), but when no named
+    // arg targets it the resolver leaves it empty — the result is just
+    // the supplied positional/named values.
     const result = resolveNamedArgs(
       call([named("a", num(1))]),
       [param("a"), variadicParam],
@@ -99,6 +101,33 @@ describe("resolveNamedArgs", () => {
       true,
     );
     expect(withBlockNamed).toEqual([num(1), num(2)]);
+  });
+
+  // Spec 2026-06-03 §1: named-arg targeting a variadic emits a splat into
+  // the lowered argument list so the runtime's resolvePositional gathers
+  // it back into a single array parameter.
+  it("emits a splat for a named-array variadic binding", () => {
+    const variadicParam = param("rest", { variadic: true });
+    const arr: Expression = { type: "agencyArray", items: [num(2), num(3)] } as any;
+    const result = resolveNamedArgs(
+      call([named("a", num(1)), named("rest", arr)]),
+      [param("a"), variadicParam],
+      true,
+    );
+    expect(result).toEqual([num(1), { type: "splat", value: arr }]);
+  });
+
+  it("rejects positional-after-named-variadic at the compile-time resolver", () => {
+    const variadicParam = param("rest", { variadic: true });
+    const arr: Expression = { type: "agencyArray", items: [num(3)] } as any;
+    // call: foo(1, 2, rest: [3]) — positional "2" past the fixed slot
+    expect(() =>
+      resolveNamedArgs(
+        call([num(1), num(2), named("rest", arr)]),
+        [param("a"), variadicParam],
+        true,
+      ),
+    ).toThrow(/Positional argument cannot feed variadic parameter 'rest'/);
   });
 
   it("throws on non-Agency function call with named args", () => {

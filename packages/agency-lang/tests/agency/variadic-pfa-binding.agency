@@ -1,0 +1,18 @@
+// Spec 2026-06-03 §5.5 #48: PFA-bound variadic produces correct spread.
+// `foo.partial(rest: [1,2])` followed by `bound(a: 10)` must give the
+// body a=10, rest=[1,2].
+def foo(a: number, ...rest: number[]): any {
+  let total = 0
+  for (x in rest) { total = total + x }
+  return {
+    a: a,
+    sum: total,
+    first: rest[0],
+    second: rest[1]
+  }
+}
+
+node main() {
+  let bound = foo.partial(rest: [1, 2])
+  return bound(a: 10)
+}

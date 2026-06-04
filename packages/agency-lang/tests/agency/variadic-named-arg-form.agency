@@ -1,0 +1,15 @@
+// Spec 2026-06-03 §5.5 #43: named-array form matches positional.
+def sum(...xs: number[]): number {
+  let total = 0
+  for (x in xs) { total = total + x }
+  return total
+}
+
+node main() {
+  let positional = sum(1, 2, 3)
+  let named = sum(xs: [1, 2, 3])
+  return {
+    positional: positional,
+    named: named
+  }
+}

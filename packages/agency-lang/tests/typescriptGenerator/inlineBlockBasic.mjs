@@ -295,7 +295,8 @@ const twice = __AgencyFunction.create({
     name: "block",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: true
   }],
   toolDefinition: {
     name: "twice",

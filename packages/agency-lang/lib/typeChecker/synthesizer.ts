@@ -458,6 +458,7 @@ function validateAgencyFunctionMethod(
   expr: ValueAccess,
   element: { kind: "methodCall"; functionCall: { type: "functionCall"; functionName: string; arguments: any[] } },
   methodName: string,
+  scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
   const baseName =
@@ -482,6 +483,7 @@ function validateAgencyFunctionMethod(
     const namedArgs = args.filter(
       (a: any) => "type" in a && a.type === "namedArgument",
     );
+    const typeAliases = ctx.getTypeAliases();
     for (const arg of namedArgs) {
       if (!paramNames.has(arg.name)) {
         ctx.errors.push({
@@ -491,11 +493,27 @@ function validateAgencyFunctionMethod(
         continue;
       }
       const param = params.find((p) => p.name === arg.name);
-      if (param?.variadic) {
-        ctx.errors.push({
-          message: `Variadic parameter '${arg.name}' cannot be bound in .partial().`,
-          loc: expr.loc,
-        });
+      if (!param) continue;
+      // Variadic binding via .partial(rest: [...]) is allowed. The value's
+      // type must match the variadic's array type (T[]), not the element
+      // type T. Non-variadic params are type-checked by the regular call-arg
+      // assignability path; we only validate variadic here because it would
+      // otherwise be invisible to that pass.
+      if (param.variadic) {
+        if (!param.typeHint) continue;
+        const expected: VariableType = param.typeHint.type === "arrayType"
+          ? param.typeHint
+          : { type: "arrayType", elementType: param.typeHint };
+        const actual = synthType(arg.value, scope, ctx);
+        if (actual === "any") continue;
+        if (!isAssignable(actual, expected, typeAliases)) {
+          ctx.errors.push({
+            message: `Argument type '${formatTypeHint(actual)}' is not assignable to parameter type '${formatTypeHint(expected)}' in .partial() call to '${baseName}'.`,
+            expectedType: formatTypeHint(expected),
+            actualType: formatTypeHint(actual),
+            loc: expr.loc,
+          });
+        }
       }
     }
     return;
@@ -550,7 +568,7 @@ export function synthValueAccess(
     if (element.kind === "methodCall") {
       const methodName = element.functionCall.functionName;
       if (methodName === "partial" || methodName === "describe" || methodName === "preapprove") {
-        validateAgencyFunctionMethod(expr, element, methodName, ctx);
+        validateAgencyFunctionMethod(expr, element, methodName, scope, ctx);
         currentType = "any";
         continue;
       }

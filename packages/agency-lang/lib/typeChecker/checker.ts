@@ -47,6 +47,24 @@ function variadicElementType(
   return param.typeHint ?? "any";
 }
 
+/**
+ * Array-typed slot for the named-arg form of a variadic.
+ *
+ * `foo(rest: [1, 2, 3])` binds the whole array, so the slot type is the
+ * array (`T[]`), not the element (`T`). For declarations written as the
+ * conventional `...xs: T[]`, the typeHint is already the array; for the
+ * less-conventional `...xs: T`, we wrap the element type ourselves.
+ * Returns `undefined` when the param is untyped — the caller treats that
+ * as `any`.
+ */
+function variadicNamedSlotType(
+  typeHint: VariableType | undefined,
+): VariableType | undefined {
+  if (!typeHint) return undefined;
+  if (typeHint.type === "arrayType") return typeHint;
+  return { type: "arrayType", elementType: typeHint };
+}
+
 type ParamSlot = {
   type: VariableType | "any" | undefined;
   validated: boolean;
@@ -54,14 +72,36 @@ type ParamSlot = {
   name?: string;
 };
 
+export type SlotRequest =
+  | { kind: "positional"; index: number }
+  | { kind: "named"; name: string };
+
+export type ParamSignature = {
+  minArgs: number;
+  maxArgs: number;
+  /** Declared parameter count (excludes splat pads). Used by splat
+   *  checking to iterate each declared slot once. */
+  paramCount: number;
+  /**
+   * Resolve the slot that an argument fills.
+   *
+   * - `{ kind: "positional", index }` — returns an element-typed slot for a
+   *   variadic, matching the spread calling convention.
+   * - `{ kind: "named", name }` — for variadics, returns a slot whose `type`
+   *   is the *array* form (`T[]`) so the call-site value `foo(rest: [1,2])`
+   *   type-checks against the whole array. Returns undefined for unknown
+   *   names (caught earlier by `checkNamedArgStructure`).
+   *
+   * No consumer should branch on `param.variadic` to pick element-vs-array
+   * itself — that's the rule this resolver encapsulates.
+   */
+  resolveSlot(req: SlotRequest): ParamSlot | undefined;
+};
+
 function paramListSignature(
   params: FunctionParameter[],
   argCount: number,
-): {
-  minArgs: number;
-  maxArgs: number;
-  slots: ParamSlot[];
-} {
+): ParamSignature {
   const lastParam = params[params.length - 1];
   const hasRest = lastParam?.variadic === true;
   // Schema<...> parameters are injection-eligible: the preprocessor's
@@ -76,28 +116,49 @@ function paramListSignature(
   ).length;
   const maxArgs = hasRest ? Infinity : params.length;
 
-  // Only nameable params (not variadic, not block-typed) get a `name` —
-  // matching the backend's nameableParams filter (typescriptBuilder.ts).
-  // Slots without names are unreachable by named-arg lookup, which is
-  // exactly what we want for variadic/block slots.
-  const isNameable = (p: FunctionParameter) =>
-    !p.variadic && p.typeHint?.type !== "blockType";
-  const slots: ParamSlot[] = params.map((p) => ({
+  // Internal positional slot list — variadic gets an element-typed slot.
+  const positionalSlots: ParamSlot[] = params.map((p) => ({
     type: p.typeHint,
     validated: !!p.validated,
-    name: isNameable(p) ? p.name : undefined,
+    name: p.name,
   }));
   if (hasRest) {
     const elementType = variadicElementType(lastParam);
     const restSlot: ParamSlot = {
       type: elementType,
-      validated: slots[slots.length - 1]?.validated ?? false,
-      // Variadic by definition; not nameable.
+      validated: positionalSlots[positionalSlots.length - 1]?.validated ?? false,
+      name: lastParam.name,
     };
-    slots[slots.length - 1] = restSlot;
-    while (slots.length < argCount) slots.push(restSlot);
+    positionalSlots[positionalSlots.length - 1] = restSlot;
+    while (positionalSlots.length < argCount) positionalSlots.push(restSlot);
   }
-  return { minArgs, maxArgs, slots };
+
+  return {
+    minArgs,
+    maxArgs,
+    paramCount: params.length,
+    resolveSlot(req) {
+      if (req.kind === "positional") return positionalSlots[req.index];
+      // Named lookup: find the declared param. For a variadic param, the
+      // named-arg form `foo(rest: [1,2])` binds the whole array, so the
+      // slot type is the array type (T[]) rather than the element type.
+      const idx = params.findIndex((p) => p.name === req.name);
+      if (idx < 0) return undefined;
+      const param = params[idx];
+      if (param.variadic) {
+        return {
+          type: variadicNamedSlotType(param.typeHint),
+          validated: !!param.validated,
+          name: param.name,
+        };
+      }
+      return {
+        type: param.typeHint,
+        validated: !!param.validated,
+        name: param.name,
+      };
+    },
+  };
 }
 
 export function checkScopes(
@@ -193,12 +254,9 @@ function checkSingleFunctionCall(
   if (params) {
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;
-    const { minArgs, maxArgs, slots } = paramListSignature(
-      params,
-      call.arguments.length,
-    );
-    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    checkArgsAgainstParams(call, slots, scope, ctx);
+    const sig = paramListSignature(params, call.arguments.length);
+    if (!checkArity(call, sig.minArgs, sig.maxArgs, hasSplatArg, ctx)) return;
+    checkArgsAgainstParams(call, sig, scope, ctx);
     return;
   }
 
@@ -276,7 +334,19 @@ function checkCallAgainstBuiltinSig(
       slots.push({ type: sig.restParam!, validated: false });
     }
   }
-  checkArgsAgainstParams(call, slots, scope, ctx);
+  // Builtins don't take named args (rejected above) and have no parameter
+  // names. Wrap the flat slot array in a minimal ParamSignature so the
+  // shared `checkArgsAgainstParams` path applies.
+  const builtinSig: ParamSignature = {
+    minArgs,
+    maxArgs,
+    paramCount: sig.params.length,
+    resolveSlot(req) {
+      if (req.kind === "positional") return slots[req.index];
+      return undefined;
+    },
+  };
+  checkArgsAgainstParams(call, builtinSig, scope, ctx);
 }
 
 /**
@@ -403,12 +473,12 @@ function checkNamedArgStructure(
     }
   }
 
-  // Pass 2: validate each named arg against the nameable params. Variadic
-  // params can't be passed by name (a splat is the only way to fill one).
-  // Block-typed params CAN be passed by name — either as a function
-  // reference (`block: fn`) or via the trailing block syntax (`as { ... }`).
-  // The runtime resolver rejects supplying both for the same param.
-  const nameableParams = params.filter((p) => !p.variadic);
+  // Pass 2: validate each named arg against the parameter list. All declared
+  // params — including variadics and block-typed params — can be passed by
+  // name. (For variadic, the named-array form `rest: [1,2]` binds the whole
+  // spread; for block params, `block: fn` works the same as the trailing
+  // `as { ... }` syntax. The runtime resolver rejects supplying both for
+  // the same param.)
   const seen = new Set<string>();
   for (let i = namedStartIdx; i < call.arguments.length; i++) {
     const arg = call.arguments[i];
@@ -420,7 +490,7 @@ function checkNamedArgStructure(
       continue;
     }
     seen.add(arg.name);
-    const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
+    const paramIdx = params.findIndex((p) => p.name === arg.name);
     if (paramIdx < 0) {
       pushErr(
         `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
@@ -429,6 +499,29 @@ function checkNamedArgStructure(
       pushErr(
         `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
       );
+    }
+  }
+
+  // Pass 3: mixed positional + named-variadic rule. If any named arg targets
+  // a variadic parameter, no positional argument may exist past the last
+  // fixed (non-variadic) parameter — i.e. no positional may feed the
+  // variadic when it is also bound by name. See spec §1 "Mixed positional +
+  // named-variadic rule".
+  const variadicParam = params.find((p) => p.variadic);
+  if (variadicParam) {
+    const variadicNamed = call.arguments.find(
+      (a) => a.type === "namedArgument" && a.name === variadicParam.name,
+    );
+    if (variadicNamed) {
+      const fixedCount = params.filter((p) => !p.variadic).length;
+      // Positional args appear before namedStartIdx; any positional at
+      // index >= fixedCount would feed the variadic.
+      const positionalCount = Math.min(namedStartIdx, call.arguments.length);
+      if (positionalCount > fixedCount) {
+        pushErr(
+          `Positional argument cannot feed variadic parameter '${variadicParam.name}' when it is also bound by name in call to '${call.functionName}'.`,
+        );
+      }
     }
   }
 
@@ -479,7 +572,7 @@ function formatArity(minArgs: number, maxArgs: number): string {
  */
 function checkArgsAgainstParams(
   call: FunctionCall,
-  slots: ParamSlot[],
+  sig: ParamSignature,
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
@@ -491,7 +584,7 @@ function checkArgsAgainstParams(
         call,
         arg.value,
         argIndex,
-        slots,
+        sig,
         scope,
         ctx,
       );
@@ -500,12 +593,12 @@ function checkArgsAgainstParams(
     let slot: ParamSlot | undefined;
     let innerArg: AgencyNode;
     if (arg.type === "namedArgument") {
-      // Unknown / variadic / block names are caught upstream in
-      // checkNamedArgStructure; lookup here is best-effort.
-      slot = slots.find((s) => s.name === arg.name);
+      // Unknown names are caught upstream in checkNamedArgStructure; the
+      // resolver returns undefined for them and we skip the check.
+      slot = sig.resolveSlot({ kind: "named", name: arg.name });
       innerArg = arg.value;
     } else {
-      slot = slots[argIndex];
+      slot = sig.resolveSlot({ kind: "positional", index: argIndex });
       innerArg = arg;
     }
     const argType = synthType(innerArg, scope, ctx);
@@ -546,7 +639,7 @@ function checkSplatAgainstRemainingParams(
   call: FunctionCall,
   splatSource: AgencyNode,
   splatIndex: number,
-  slots: ParamSlot[],
+  sig: ParamSignature,
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
@@ -564,7 +657,12 @@ function checkSplatAgainstRemainingParams(
   const elementType = splatType.elementType;
   const elementStr = formatTypeHint(elementType);
   const typeAliases = ctx.getTypeAliases();
-  for (const slot of slots.slice(splatIndex)) {
+  // Check splat element type against each declared param slot from splatIndex
+  // onward. For a variadic-last function, position params.length-1 returns
+  // the element-typed slot, which is the right thing to compare against.
+  for (let i = splatIndex; i < sig.paramCount; i++) {
+    const slot = sig.resolveSlot({ kind: "positional", index: i });
+    if (!slot) continue;
     const paramType = slot.type;
     if (paramType === undefined || paramType === "any") continue;
     if (isAssignable(elementType, paramType, typeAliases)) continue;

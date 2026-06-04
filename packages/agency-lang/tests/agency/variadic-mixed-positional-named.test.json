@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"mixed\":{\"a\":1,\"total\":5,\"first\":2,\"second\":3},\"named\":{\"a\":1,\"total\":5,\"first\":2,\"second\":3}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

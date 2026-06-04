@@ -1,5 +1,4 @@
 ---
-title: "cli"
 name: "cli"
 ---
 

@@ -1,5 +1,4 @@
 ---
-title: "types"
 name: "types"
 ---
 

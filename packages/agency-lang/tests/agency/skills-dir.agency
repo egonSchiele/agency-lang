@@ -46,10 +46,10 @@ node flatFallsBackToTitle(): boolean {
       && d.includes("<location>title-only.md</location>")
 }
 
-node flatFallsBackToFilenameAndMarksMissingFrontmatter(): boolean {
+node flatFallsBackToFilenameWhenNoFrontmatter(): boolean {
   const d = flatDesc()
   return d.includes("<name>no-frontmatter.md</name>")
-      && d.includes("<description>(no frontmatter)</description>")
+      && d.includes("<description></description>")
       && d.includes("<location>no-frontmatter.md</location>")
 }
 

@@ -1,5 +1,4 @@
 ---
-title: "policy"
 name: "policy"
 ---
 

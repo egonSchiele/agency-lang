@@ -162,10 +162,8 @@ function generateDocForFile(
   const constants = collectExportedConstants(program);
 
   const title = path.basename(filePath).replace(/\.agency$/, "");
-  if (/["\\\n]/.test(title)) {
-    throw new Error(`Cannot generate doc for ${filePath}: title ${JSON.stringify(title)} contains characters unsafe for YAML/Markdown.`);
-  }
-  const frontmatter = `---\ntitle: "${title}"\nname: "${title}"\n---`;
+  const safeName = title.replace(/["\\\n]/g, "");
+  const frontmatter = `---\nname: "${safeName}"\n---`;
   const sections: string[] = [frontmatter, heading(1, title)];
 
   // Page-level "View source" link

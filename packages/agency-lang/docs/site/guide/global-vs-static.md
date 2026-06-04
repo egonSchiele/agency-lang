@@ -1,5 +1,4 @@
 ---
-title: Global vs Static Variables
 name: Global vs Static Variables
 description: Per-run isolation of global variables vs static variables that initialize once and persist across runs.
 ---

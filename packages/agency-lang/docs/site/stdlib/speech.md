@@ -1,5 +1,4 @@
 ---
-title: "speech"
 name: "speech"
 ---
 

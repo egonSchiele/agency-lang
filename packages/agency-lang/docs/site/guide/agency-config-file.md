@@ -1,5 +1,4 @@
 ---
-title: Agency config file
 name: Agency config file
 description: Stub page describing how to configure the Agency compiler via a `config.json` file and where to find the full list of options.
 ---

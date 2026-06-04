@@ -1,5 +1,4 @@
 ---
-title: "browser"
 name: "browser"
 ---
 

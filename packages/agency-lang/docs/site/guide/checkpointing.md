@@ -1,5 +1,4 @@
 ---
-title: Checkpointing
 name: Checkpointing
 description: Explains Agency's ability to snapshot and restore execution state via `checkpoint`, `getCheckpoint`, and `restore`, which underpins interrupts, error recovery, forks, and the time-travel debugger.
 ---

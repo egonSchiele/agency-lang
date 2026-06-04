@@ -1,5 +1,4 @@
 ---
-title: "skills"
 name: "skills"
 ---
 
@@ -49,6 +48,11 @@ Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
 renderEntry(entry: SkillEntry): string
 ```
 
+Render one SkillEntry as a `<skill>` XML block. All string fields are
+  XML-escaped because they originate from user-authored frontmatter or
+  filenames, and an unescaped `<` or `&` would corrupt the surrounding
+  `<available_skills>` markup.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -62,29 +66,28 @@ renderEntry(entry: SkillEntry): string
 ### flatEntry
 
 ```ts
-flatEntry(filename: string, fm: Result): SkillEntry
+flatEntry(filename: string, parsedFrontmatter: any): SkillEntry
 ```
 
 Build a SkillEntry for one file in the legacy flat-markdown layout.
-  `name` prefers frontmatter `name`, then `title` (so VitePress-style
-  docs still work), then the filename. `description` defaults to "".
-  Files without parseable frontmatter render as "(no frontmatter)".
+  Prefers frontmatter `name`, then `title` (so VitePress-style docs
+  still work), then the filename. `description` defaults to "".
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | filename | `string` |  |
-| fm | `Result` |  |
+| parsedFrontmatter | `any` |  |
 
 **Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L45))
 
 ### standardEntry
 
 ```ts
-standardEntry(skillPath: string, fm: Result): SkillEntry
+standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry
 ```
 
 Build a SkillEntry for one skill in the standard SKILL.md layout.
@@ -96,11 +99,11 @@ Build a SkillEntry for one skill in the standard SKILL.md layout.
 | Name | Type | Default |
 |---|---|---|
 | skillPath | `string` |  |
-| fm | `Result` |  |
+| parsedFrontmatter | `any` |  |
 
 **Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L58))
 
 ### skillsDir
 
@@ -111,14 +114,15 @@ skillsDir(dir: string, layout: "flat" | "standard")
 Build a skills tool for an LLM over a directory of skills.
 
   @param dir - Directory containing the skills.
-  @param layout - "standard" for subdirectory-per-skill with SKILL.md,
-                  "flat" for a directory of loose Markdown files.
+  @param layout - "standard" (default) for subdirectory-per-skill with
+                  SKILL.md, "flat" for a directory of loose Markdown
+                  files.
 
 * Build a tool that lets an LLM read skill files in `dir`. Supports two
  * layouts:
- *   - "standard": each subdirectory of `dir` is one skill with a
- *     `SKILL.md` entrypoint. Frontmatter `name` / `description` are
- *     read; `name` defaults to the subdirectory name.
+ *   - "standard" (default): each subdirectory of `dir` is one skill
+ *     with a `SKILL.md` entrypoint. Frontmatter `name` / `description`
+ *     are read; `name` defaults to the subdirectory name.
  *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
  *     skill. Frontmatter `name` (or `title`) and `description` are read.
  *
@@ -131,6 +135,6 @@ Build a skills tool for an LLM over a directory of skills.
 | Name | Type | Default |
 |---|---|---|
 | dir | `string` |  |
-| layout | `"flat" \| "standard"` |  |
+| layout | `"flat" \| "standard"` | "standard" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L85))

@@ -1,5 +1,4 @@
 ---
-title: "strategy"
 name: "strategy"
 ---
 

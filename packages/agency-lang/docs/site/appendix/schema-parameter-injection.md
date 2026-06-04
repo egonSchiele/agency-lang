@@ -1,5 +1,4 @@
 ---
-title: Schema parameter injection
 name: Schema parameter injection
 description: Explains how the compiler auto-synthesizes a `schema(T)` argument for functions that take a `Schema<...>` parameter, the mechanism behind structured-output calls like `llm()`.
 ---

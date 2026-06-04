@@ -1,5 +1,4 @@
 ---
-title: "email"
 name: "email"
 ---
 

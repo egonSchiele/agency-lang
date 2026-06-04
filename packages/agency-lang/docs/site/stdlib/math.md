@@ -1,5 +1,4 @@
 ---
-title: "math"
 name: "math"
 ---
 

@@ -1,5 +1,4 @@
 ---
-title: "system"
 name: "system"
 ---
 

@@ -1,5 +1,4 @@
 ---
-title: "syntax"
 name: "syntax"
 ---
 

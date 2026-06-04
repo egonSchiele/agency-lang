@@ -1,5 +1,4 @@
 ---
-title: "thread"
 name: "thread"
 ---
 

@@ -487,7 +487,7 @@ const internal = "not exported"
     expect(output).not.toContain("[source]");
   });
 
-  it("emits YAML frontmatter with quoted title and name at the top", () => {
+  it("emits YAML frontmatter with quoted name at the top", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
     fs.mkdirSync(inputDir, { recursive: true });
@@ -499,7 +499,7 @@ const internal = "not exported"
     generateDoc({}, path.join(inputDir, "array.agency"), outputDir);
     const output = fs.readFileSync(path.join(outputDir, "array.md"), "utf-8");
 
-    expect(output).toMatch(/^---\ntitle: "array"\nname: "array"\n---\n\n# array\n/);
+    expect(output).toMatch(/^---\nname: "array"\n---\n\n# array\n/);
   });
 
   it("emits exactly one frontmatter block, at the very top", () => {
@@ -519,7 +519,7 @@ const internal = "not exported"
     expect(output.indexOf("---\n")).toBe(0);
   });
 
-  it("derives frontmatter title and name from the input filename", () => {
+  it("derives frontmatter name from the input filename", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
     fs.mkdirSync(inputDir, { recursive: true });
@@ -531,6 +531,6 @@ const internal = "not exported"
     generateDoc({}, path.join(inputDir, "ui.agency"), outputDir);
     const output = fs.readFileSync(path.join(outputDir, "ui.md"), "utf-8");
 
-    expect(output).toMatch(/^---\ntitle: "ui"\nname: "ui"\n---\n\n# ui\n/);
+    expect(output).toMatch(/^---\nname: "ui"\n---\n\n# ui\n/);
   });
 });

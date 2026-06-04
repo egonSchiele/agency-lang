@@ -1,5 +1,4 @@
 ---
-title: "schemas"
 name: "schemas"
 ---
 

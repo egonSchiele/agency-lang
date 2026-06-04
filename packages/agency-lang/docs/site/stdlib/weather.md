@@ -1,5 +1,4 @@
 ---
-title: "weather"
 name: "weather"
 ---
 

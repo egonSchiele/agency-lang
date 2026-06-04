@@ -1,5 +1,4 @@
 ---
-title: Destructuring and Pattern Matching
 name: Destructuring and Pattern Matching
 description: Reference for Agency's pattern language used in declarations, the `is` operator, `match` arms, and `for` loops, including array and object destructuring.
 ---

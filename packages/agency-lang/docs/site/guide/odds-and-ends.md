@@ -1,5 +1,4 @@
 ---
-title: Odds and Ends
 name: Odds and Ends
 description: A grab bag of useful Agency features to help you get going quickly, including the standard library, interrupts, and serving agents over HTTP or MCP.
 ---

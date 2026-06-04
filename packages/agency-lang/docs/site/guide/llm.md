@@ -1,5 +1,4 @@
 ---
-title: LLM Calls
 name: LLM Calls
 description: How to make LLM calls in Agency, including structured outputs via type annotations, model and provider configuration, streaming, tool use, and memory.
 ---

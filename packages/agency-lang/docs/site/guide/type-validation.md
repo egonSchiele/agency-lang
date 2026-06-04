@@ -1,5 +1,4 @@
 ---
-title: Type Validation
 name: Type Validation
 description: Describes the `@validate` and related annotations that let you attach arbitrary validation logic to types, used by the bang (`!`) operator and other runtime validators.
 ---

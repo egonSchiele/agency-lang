@@ -1,5 +1,4 @@
 ---
-title: "shell"
 name: "shell"
 ---
 

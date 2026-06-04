@@ -1,5 +1,4 @@
 ---
-title: TypeScript interoperability
 name: TypeScript interoperability
 description: Covers two-way interop between Agency and TypeScript — importing TS functions and modules into Agency code, and importing compiled Agency nodes into TypeScript, along with the limitations of each direction.
 ---

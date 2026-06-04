@@ -1,5 +1,4 @@
 ---
-title: "calendar"
 name: "calendar"
 ---
 

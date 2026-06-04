@@ -1,5 +1,4 @@
 ---
-title: Serving Agency Code
 name: Serving Agency Code
 description: How to expose exported Agency functions and nodes over MCP (stdio) or HTTP REST so external tools and services can invoke your agents.
 ---

@@ -1,5 +1,4 @@
 ---
-title: Built-in Functions
 name: Built-in Functions
 description: Reference table of every user-facing built-in function and language construct available in any `.agency` file without an import, covering LLM calls, checkpointing, interrupts, concurrency, and more.
 ---

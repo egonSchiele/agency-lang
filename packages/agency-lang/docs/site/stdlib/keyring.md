@@ -1,5 +1,4 @@
 ---
-title: "keyring"
 name: "keyring"
 ---
 

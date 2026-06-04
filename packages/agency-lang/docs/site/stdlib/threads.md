@@ -1,5 +1,4 @@
 ---
-title: "threads"
 name: "threads"
 ---
 

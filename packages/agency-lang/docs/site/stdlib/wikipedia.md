@@ -1,5 +1,4 @@
 ---
-title: "wikipedia"
 name: "wikipedia"
 ---
 

@@ -1,5 +1,4 @@
 ---
-title: "path"
 name: "path"
 ---
 

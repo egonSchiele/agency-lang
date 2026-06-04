@@ -1,5 +1,4 @@
 ---
-title: "oauth"
 name: "oauth"
 ---
 

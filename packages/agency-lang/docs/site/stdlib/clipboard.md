@@ -1,5 +1,4 @@
 ---
-title: "clipboard"
 name: "clipboard"
 ---
 

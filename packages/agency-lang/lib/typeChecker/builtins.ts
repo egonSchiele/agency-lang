@@ -161,15 +161,19 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
     params: [anyArray],
     returnType: anyArray,
     acceptsBlock: true,
+    // `shared: true` opts into pointer-sharing globals + active-thread
+    // pointer across all branches. Default is isolated.
+    acceptsNamedArgs: ["shared"],
     description:
-      "Run multiple branches in parallel and wait for all of them to finish. Returns an array of results, one per item. Use as `fork(items) as <name> { ... }`.",
+      "Run multiple branches in parallel and wait for all of them to finish. Returns an array of results, one per item. Use as `fork(items) as <name> { ... }`. Pass `shared: true` to share globals across branches.",
   },
   race: {
     params: [anyArray],
     returnType: "any",
     acceptsBlock: true,
+    acceptsNamedArgs: ["shared"],
     description:
-      "Like `fork`, but returns as soon as the first branch completes and cancels the rest. Use as `race(items) as <name> { ... }`.",
+      "Like `fork`, but returns as soon as the first branch completes and cancels the rest. Use as `race(items) as <name> { ... }`. Pass `shared: true` to share globals across branches.",
   },
 
   callback: {

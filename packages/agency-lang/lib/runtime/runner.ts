@@ -942,6 +942,14 @@ export class Runner {
     ) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
+    // When `true`, branches pointer-share the parent's globals and
+    // active-thread pointer (today's pre-isolation behavior, opted
+    // into by user syntax like `fork(items, shared: true)`). When
+    // `false` (the default), each branch gets an isolated clone of
+    // globals and a fresh subthread of the parent's active thread.
+    // Threads-registry and sessions stay shared in either mode —
+    // `thread(continue: id)` / `thread(session: ...)` keep working.
+    shared: boolean = false,
   ): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return undefined;
@@ -979,10 +987,10 @@ export class Runner {
       // the winner" via the persisted __race_winner_<id> key, so the
       // caller does NOT need to dispatch between them.
       if (mode === "all") {
-        result = await this.runForkAll(id, items, blockFn, stateStack, forkId);
+        result = await this.runForkAll(id, items, blockFn, stateStack, forkId, shared);
         if (hasInterrupts(result)) return result;
       } else {
-        result = await this.runRace(id, items, blockFn, stateStack, forkId);
+        result = await this.runRace(id, items, blockFn, stateStack, forkId, shared);
         if (hasInterrupts(result)) {
           winnerIndex = readWinner();
           return result;
@@ -1036,6 +1044,7 @@ export class Runner {
     ) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
+    shared: boolean,
   ): Promise<any> {
     const result = await runBatch<any>({
       ctx: this.ctx,
@@ -1047,6 +1056,10 @@ export class Runner {
         stepPath: this.stepPath(id),
       },
       mode: "all",
+      // `shared: true` at the user-facing fork/parallel/race site
+      // opts into pointer-sharing the parent's globals/threads with
+      // each branch. Default is isolated.
+      isolateState: !shared,
       children: items.map((item, i) => ({
         key: this.forkBranchKey(id, i),
         invoke: (branchStack) => blockFn(item, i, branchStack),
@@ -1102,6 +1115,7 @@ export class Runner {
     ) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
+    shared: boolean,
   ): Promise<any> {
     const result = await runBatch<any>({
       ctx: this.ctx,
@@ -1113,6 +1127,10 @@ export class Runner {
         stepPath: this.stepPath(id),
       },
       mode: "race",
+      // `shared: true` at the user-facing fork/parallel/race site
+      // opts into pointer-sharing the parent's globals/threads with
+      // each branch. Default is isolated.
+      isolateState: !shared,
       // Keep the existing key shape — changing to stepPath would silently
       // break any in-flight serialized checkpoint stamped before this
       // migration.

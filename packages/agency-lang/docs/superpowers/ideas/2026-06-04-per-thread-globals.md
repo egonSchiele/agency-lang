@@ -52,11 +52,21 @@ made during implementation:
   the user always having `static` as the cross-everything escape
   hatch.
 
+**Done as of 2026-06-04 (third commit):**
+
+- `shared: true` syntax landed for `fork(items, shared: true) as item
+  { ... }`, `race(items, shared: true) as item { ... }`, and
+  `parallel(shared: true) { ... }`. Parser, type checker (allowlist on
+  builtin signatures), preprocessor (`parallelDesugar` forwards
+  `pb.shared` onto the synthesized fork call), and code generator
+  (`processForkCall` strips and forwards the named arg) are all wired
+  up.
+- `Runner.fork` / `runForkAll` / `runRace` take a trailing
+  `shared: boolean` and forward as `RunBatchOpts.isolateState = !shared`.
+- Tests: `fork-shared-globals`, `parallel-shared-globals`.
+
 **TODO before Stage 4 docs work:**
 
-- Add `shared: true` syntax to fork/parallel/race in the parser,
-  preprocessor, and code generator. Wire it through to
-  `RunBatchOpts.isolateState`.
 - Update migration note and worked examples to reflect "default is
   isolated; opt in to shared with `parallel(shared: true)`."
 - Document that today's `runPrompt` carve-out is the runtime side of

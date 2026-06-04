@@ -3565,11 +3565,48 @@ export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(
   ),
 )));
 
-export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(memo(
+/** Parser for the optional `(shared: <expr>)` named-args list after
+ *  `parallel`. Modelled on `_threadNamedArgsParser` but with a smaller
+ *  allowlist. Returns `{ shared: Expression | null }` on success. */
+const _parallelNamedArgsParser: Parser<{ shared: Expression | null }> = (
+  input: string,
+): ParserResult<{ shared: Expression | null }> => {
+  const inner: Parser<any> = seqC(
+    char("("),
+    optionalSpacesOrNewline,
+    capture(
+      sepBy(commaWithNewline, namedArgumentParser),
+      "arguments",
+    ),
+    optional(comma),
+    optionalSpacesOrNewline,
+    char(")"),
+  );
+  const r = inner(input);
+  if (!r.success) return r as ParserResult<{ shared: Expression | null }>;
+  const args: NamedArgument[] = r.result.arguments;
+  const seen: Record<string, Expression> = {};
+  for (const arg of args) {
+    if (arg.name !== "shared") {
+      return failure(
+        `Unknown parallel argument: ${arg.name}. Allowed: shared`,
+        input,
+      );
+    }
+    if (seen[arg.name]) {
+      return failure(`Duplicate parallel argument: ${arg.name}`, input);
+    }
+    seen[arg.name] = arg.value as Expression;
+  }
+  return success({ shared: seen.shared ?? null }, r.rest);
+};
+
+export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(map(memo(
   "parallelBlockParser",
   seqC(
     set("type", "parallelBlock"),
     str("parallel"),
+    capture(optional(_parallelNamedArgsParser), "_args"),
     optionalSpaces,
     captureCaptures(
       parseError(
@@ -3582,7 +3619,15 @@ export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel bloc
       ),
     ),
   ),
-)));
+), (parsed: any): ParallelBlock => {
+  const args = parsed._args as { shared: Expression | null } | null | undefined;
+  const out: any = { ...parsed };
+  delete out._args;
+  if (args && args.shared !== null) {
+    out.shared = args.shared;
+  }
+  return out as ParallelBlock;
+})));
 
 export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(memo(
   "seqBlockParser",

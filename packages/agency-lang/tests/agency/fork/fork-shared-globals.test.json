@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "fork(..., shared: true) opts into pointer-sharing the parent's GlobalStore across all branches. Each branch's bump() lands on the same counter; the parent observes the cumulative result after join.",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

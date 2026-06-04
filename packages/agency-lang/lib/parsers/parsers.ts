@@ -317,11 +317,55 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
 // (the one that opened the string) or `${`. Lets the *other* quote character
 // appear unescaped inside, just like single quotes already do — e.g. a
 // double-quoted string can contain backticks, and vice versa.
+//
+// Supports the following backslash escapes:
+//   \\ → \    \n → newline   \t → tab    \r → carriage return
+//   \" → "    \` → `         \0 → null
+//   \${ → ${ (the only `\$` escape — writes a literal `${` without
+//   starting interpolation; bare `\$` is preserved verbatim so existing
+//   strings like regex patterns are not silently changed).
+//
+// An unrecognized escape (`\x`, where `x` isn't in the list above) is
+// preserved verbatim — both the backslash and the character — so existing
+// strings containing literal `\` followed by non-escape characters are
+// unaffected. This is the same behavior as Python's regular strings.
 const stringTextSegmentParserFor = (delim: '"' | "`"): Parser<TextSegment> =>
-  map(
-    many1Till(or(char(delim), str("${"))),
-    (text) => ({ type: "text", value: text }),
-  );
+  (input: string): ParserResult<TextSegment> => {
+    let i = 0;
+    let value = "";
+    while (i < input.length) {
+      const c = input[i];
+      if (c === delim) break;
+      if (c === "$" && input[i + 1] === "{") break;
+      if (c === "\\" && i + 1 < input.length) {
+        const next = input[i + 1];
+        // `\${` is the only `\$` escape we recognize; bare `\$` falls
+        // through to "unknown escape → preserved verbatim" so existing
+        // strings with literal `\$` (e.g. regex source) keep working.
+        if (next === "$" && input[i + 2] === "{") {
+          value += "${";
+          i += 3;
+          continue;
+        }
+        switch (next) {
+          case "\\": value += "\\"; break;
+          case '"':  value += '"';  break;
+          case "`":  value += "`";  break;
+          case "n":  value += "\n"; break;
+          case "t":  value += "\t"; break;
+          case "r":  value += "\r"; break;
+          case "0":  value += "\0"; break;
+          default:   value += "\\" + next; break;
+        }
+        i += 2;
+        continue;
+      }
+      value += c;
+      i++;
+    }
+    if (i === 0) return failure("expected string text", input);
+    return success({ type: "text" as const, value }, input.slice(i));
+  };
 
 export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
   many1Till(or(str('"""'), str("${"))),

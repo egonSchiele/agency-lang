@@ -16,5 +16,10 @@
   "doc": {
     "outDir": "docs/site/stdlib",
     "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/stdlib"
+  },
+  "coverage": {
+    "exclude": [
+      "tests/agency/topsort/cycles/**"
+    ]
   }
 }

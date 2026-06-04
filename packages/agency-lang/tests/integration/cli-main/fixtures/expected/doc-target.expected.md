@@ -1,3 +1,7 @@
+---
+name: "doc-target"
+---
+
 # doc-target
 
 Helpers used by CLI integration tests.

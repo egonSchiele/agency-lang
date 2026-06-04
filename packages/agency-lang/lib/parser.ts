@@ -8,6 +8,7 @@ import {
   or,
   Parser,
   ParserResult,
+  resetMemos,
   seqC,
   set,
   setInputStr,
@@ -140,6 +141,9 @@ export function _parseAgency(
     );
   }
   setInputStr(normalized);
+  // Clear memo caches so loc info derived from `setInputStr` in a previous
+  // parse (which may have used a different source) doesn't leak through.
+  resetMemos();
   if (config.tarsecTraceHost) {
     setTraceHost("http://localhost:1465");
     setTraceId(nanoid());

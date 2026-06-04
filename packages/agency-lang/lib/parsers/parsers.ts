@@ -28,6 +28,7 @@ import {
   manyTill,
   manyWithJoin,
   map,
+  memo,
   newline,
   noneOf,
   not,
@@ -669,7 +670,7 @@ export const multiLineStringParser: Parser<MultiLineStringLiteral> = (input: str
   return result;
 };
 
-export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", (
+export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", memo("variableNameParser", (
   input: string,
 ) => {
   const parser = seq(
@@ -687,7 +688,7 @@ export const variableNameParser: Parser<VariableNameLiteral> = label("an identif
   );
 
   return parser(input);
-});
+}));
 
 export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: string): ParserResult<BooleanLiteral> => {
   const parser = seqC(
@@ -708,7 +709,7 @@ export const nullParser: Parser<NullLiteral> = label("null", seqC(
   str("null"),
 ));
 
-export const literalParser: Parser<Literal> = or(
+export const literalParser: Parser<Literal> = memo("literalParser", or(
   nullParser,
   booleanParser,
   unitLiteralParser,
@@ -716,7 +717,7 @@ export const literalParser: Parser<Literal> = or(
   multiLineStringParser,
   stringParser,
   variableNameParser,
-);
+));
 
 export const literalParserNoVarName: Parser<Literal> = or(
   nullParser,
@@ -743,7 +744,7 @@ export function simpleLiteralParser(input: string): ParserResult<Literal> {
 // typeHints.ts
 // =============================================================================
 
-export const primitiveTypeParser: Parser<PrimitiveType> = trace(
+export const primitiveTypeParser: Parser<PrimitiveType> = memo(
   "primitiveTypeParser",
   seqC(
     set("type", "primitiveType"),
@@ -793,7 +794,7 @@ const optionalValueArgsParser = optional(
   ),
 );
 
-export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
+export const typeAliasVariableParser: Parser<TypeAliasVariable> = memo(
   "typeAliasVariableParser",
   (input: string): ParserResult<TypeAliasVariable> => {
     const parser = seqC(
@@ -810,7 +811,7 @@ export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
  * `(name | serving_size)[]` or `(string | number)[]` where the union
  * needs to be grouped before the array suffix can apply.
  */
-export const parenthesizedTypeParser: Parser<VariableType> = trace(
+export const parenthesizedTypeParser: Parser<VariableType> = memo(
   "parenthesizedTypeParser",
   map(
     seqC(
@@ -862,7 +863,7 @@ export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
   }
   return result;
 };
-export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace(
+export const angleBracketsArrayTypeParser: Parser<ArrayType> = memo(
   "angleBracketsArrayTypeParser",
   seqC(
     set("type", "arrayType"),
@@ -881,7 +882,7 @@ export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace(
   ),
 );
 
-export const stringLiteralTypeParser: Parser<StringLiteralType> = trace(
+export const stringLiteralTypeParser: Parser<StringLiteralType> = memo(
   "stringLiteralTypeParser",
   seqC(
     set("type", "stringLiteralType"),
@@ -891,7 +892,7 @@ export const stringLiteralTypeParser: Parser<StringLiteralType> = trace(
   ),
 );
 
-export const numberLiteralTypeParser: Parser<NumberLiteralType> = trace(
+export const numberLiteralTypeParser: Parser<NumberLiteralType> = memo(
   "numberLiteralTypeParser",
   seqC(
     set("type", "numberLiteralType"),
@@ -899,7 +900,7 @@ export const numberLiteralTypeParser: Parser<NumberLiteralType> = trace(
   ),
 );
 
-export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = trace(
+export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = memo(
   "booleanLiteralTypeParser",
   seqC(
     set("type", "booleanLiteralType"),
@@ -913,7 +914,7 @@ export const objectPropertyDelimiter = seqR(
   optionalSpacesOrNewline,
 );
 
-export const objectPropertyParser: Parser<ObjectProperty> = trace(
+export const objectPropertyParser: Parser<ObjectProperty> = memo(
   "objectPropertyParser",
   (input: string): ParserResult<ObjectProperty> => {
     const parser = seqC(
@@ -971,7 +972,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = trace(
 );
 
 export const objectPropertyDescriptionParser: Parser<{ description: string }> =
-  trace(
+  memo(
     "objectPropertyDescriptionParser",
     seqC(
       char("#"),
@@ -981,7 +982,7 @@ export const objectPropertyDescriptionParser: Parser<{ description: string }> =
   );
 
 export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> =
-  trace(
+  memo(
     "objectPropertyWithDescriptionParser",
     seqC(
       captureCaptures(objectPropertyParser),
@@ -1001,7 +1002,7 @@ export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> =
  *       email: string
  *     }
  */
-export const taggedObjectPropertyParser: Parser<ObjectProperty> = trace(
+export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
   "taggedObjectPropertyParser",
   (input: string): ParserResult<ObjectProperty> => {
     const parser = seqC(
@@ -1034,7 +1035,7 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = trace(
   },
 );
 
-export const objectTypeParser: Parser<ObjectType> = trace(
+export const objectTypeParser: Parser<ObjectType> = memo(
   "objectTypeParser",
   (input: string): ParserResult<ObjectType> => {
     const parser = seqC(
@@ -1082,7 +1083,7 @@ export const objectTypeParser: Parser<ObjectType> = trace(
   },
 );
 
-export const unionItemParser: Parser<VariableType> = trace(
+export const unionItemParser: Parser<VariableType> = memo(
   "unionItemParser",
   or(
     lazy(() => blockTypeParser),
@@ -1124,14 +1125,14 @@ export const _unionTypeParser: Parser<UnionType> = (
   return result;
 };
 
-export const unionTypeParser: Parser<UnionType> = trace(
+export const unionTypeParser: Parser<UnionType> = memo(
   "unionTypeParser",
   _unionTypeParser,
 );
 
 // Block type: () => string, (number) => any, (string, number) => boolean
 // Params are positional (no names in the type annotation).
-export const blockTypeParser: Parser<BlockType> = trace(
+export const blockTypeParser: Parser<BlockType> = memo(
   "blockTypeParser",
   (input: string): ParserResult<BlockType> => {
     const parser = seqC(
@@ -1168,7 +1169,7 @@ export const blockTypeParser: Parser<BlockType> = trace(
   },
 );
 
-export const resultTypeParser: Parser<ResultType> = trace(
+export const resultTypeParser: Parser<ResultType> = memo(
   "resultTypeParser",
   or(
     // Result<SuccessType, FailureType> — two type params
@@ -1257,7 +1258,7 @@ export const resultTypeParser: Parser<ResultType> = trace(
  * node for `Result<T, E>`) and BEFORE `typeAliasVariableParser` (which
  * greedily matches any identifier).
  */
-export const genericTypeParser: Parser<GenericType> = trace(
+export const genericTypeParser: Parser<GenericType> = memo(
   "genericTypeParser",
   seqC(
     set("type", "genericType"),
@@ -1279,7 +1280,7 @@ export const genericTypeParser: Parser<GenericType> = trace(
   ),
 );
 
-export const variableTypeParser: Parser<VariableType> = trace(
+export const variableTypeParser: Parser<VariableType> = memo(
   "variableTypeParser",
   or(
     blockTypeParser,
@@ -1303,7 +1304,7 @@ export const variableTypeParser: Parser<VariableType> = trace(
  *   T            → { name: "T" }
  *   V = any      → { name: "V", default: { type: "primitiveType", value: "any" } }
  */
-export const typeParamParser: Parser<TypeParam> = trace(
+export const typeParamParser: Parser<TypeParam> = memo(
   "typeParamParser",
   seqC(
     capture(many1WithJoin(varNameChar), "name"),
@@ -1328,7 +1329,7 @@ export const typeParamParser: Parser<TypeParam> = trace(
  * The default expression is restricted to the same statically-known
  * subset as tag arguments (see `staticTagArgParser`).
  */
-export const valueParamParser: Parser<ValueParam> = trace(
+export const valueParamParser: Parser<ValueParam> = memo(
   "valueParamParser",
   seqC(
     capture(many1WithJoin(varNameChar), "name"),
@@ -1349,7 +1350,7 @@ export const valueParamParser: Parser<ValueParam> = trace(
   ),
 );
 
-const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
+const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
   "typeAliasParser",
   seqC(
     set("type", "typeAlias"),
@@ -1625,7 +1626,7 @@ const tagArgsList = map(
 );
 
 // The full tag: @name or @name(args)
-const _tagParserInner = trace(
+const _tagParserInner = memo(
   "tagParser",
   seqC(
     set("type", "tag"),
@@ -1678,7 +1679,7 @@ export const agencyArrayParser: Parser<AgencyArray> = (
   return parser(input);
 };
 
-const agencyObjectComputedKVParser: Parser<AgencyObjectKV> = trace(
+const agencyObjectComputedKVParser: Parser<AgencyObjectKV> = memo(
   "agencyObjectComputedKVParser",
   seqC(
     optionalSpaces,
@@ -1701,7 +1702,7 @@ const agencyObjectComputedKVParser: Parser<AgencyObjectKV> = trace(
   ),
 );
 
-const agencyObjectStaticKVParser: Parser<AgencyObjectKV> = trace(
+const agencyObjectStaticKVParser: Parser<AgencyObjectKV> = memo(
   "agencyObjectStaticKVParser",
   seqC(
     optionalSpaces,
@@ -1741,7 +1742,7 @@ export const agencyObjectParser: Parser<AgencyObject> = seqC(
 // functionCall.ts
 // =============================================================================
 
-const namedArgumentParser: Parser<NamedArgument> = trace(
+const namedArgumentParser: Parser<NamedArgument> = memo(
   "namedArgumentParser",
   seqC(
     set("type", "namedArgument"),
@@ -1755,7 +1756,7 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
 
 // Shared argument list parser: (arg1, arg2, \x -> expr, ...)
 // Used by both _functionCallParser and callChainParser.
-const argumentListParser = seqC(
+const argumentListParser = memo("argumentListParser", seqC(
   char("("),
   optionalSpacesOrNewline,
   capture(
@@ -1773,7 +1774,7 @@ const argumentListParser = seqC(
   optional(comma),
   optionalSpacesOrNewline,
   char(")"),
-);
+));
 
 // Extract inline block from parsed arguments into a separate block field.
 // Returns { arguments, block } or a failure if there are multiple inline blocks,
@@ -1806,7 +1807,7 @@ type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
   arguments: ArgWithBlock[]
 }
 
-export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
+export const _functionCallParser: Parser<FunctionCall> = memo("_functionCallParser", (input: string) => {
   const parser: Parser<FunctionCallWithBlock> = seqC(
     set("type", "functionCall"),
     capture(many1WithJoin(varNameChar), "functionName"),
@@ -1832,7 +1833,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   funcCall.block = extracted.block;
 
   return result as ParserResult<FunctionCall>;
-};
+});
 
 // functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
 export const functionCallParser: Parser<FunctionCall> = label("a function call", _functionCallParser);
@@ -1938,12 +1939,12 @@ const callChainParser: Parser<AccessChainElement> = (input: string) => {
   );
 };
 
-const chainElementParser: Parser<AccessChainElement> = or(
+const chainElementParser: Parser<AccessChainElement> = memo("chainElementParser", or(
   dotMethodCallParser,
   callChainParser,
   sliceChainParser,
   indexChainParser,
-);
+));
 
 /**
  * Parse `( expr ) chain` as a value-access expression. This is what
@@ -1970,7 +1971,7 @@ const parenAccessParser: Parser<ValueAccess> = map(
     }) as ValueAccess,
 );
 
-export const _valueAccessParser = (
+export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | ValueAccess> = memo("_valueAccessParser", (
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
   // First try the parenthesized form so `(expr).chain` and `(expr)[i]`
@@ -2004,7 +2005,7 @@ export const _valueAccessParser = (
       result.rest,
     );
   }
-};
+});
 
 export const asyncValueAccessParser = (
   input: string,
@@ -2130,7 +2131,7 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
 };
 
 // The base atom parser: the smallest unit of an expression.
-export const schemaExpressionParser: Parser<SchemaExpression> = trace(
+export const schemaExpressionParser: Parser<SchemaExpression> = memo(
   "schemaExpressionParser",
   seqC(
     set("type", "schemaExpression"),
@@ -2272,7 +2273,7 @@ const atomWithIs: Parser<Expression> = (input: string) => {
 // Operator table: highest precedence first.
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
-export const exprParser: Parser<Expression> = label("an expression", buildExpressionParser<Expression>(
+export const exprParser: Parser<Expression> = label("an expression", memo("exprParser", buildExpressionParser<Expression>(
   atomWithIs,
   [
     // Precedence 7: exponentiation
@@ -2334,7 +2335,7 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     ],
   ],
   parenParser,
-));
+)));
 
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;
@@ -2453,7 +2454,7 @@ export const binOpParser: Parser<BinOpExpression> = (input: string) => {
 // Parse a single block parameter with optional type annotation:
 //   x         — untyped (types inferred from function signature or default to any)
 //   x: number — explicitly typed
-const blockParamParser: Parser<FunctionParameter> = trace(
+const blockParamParser: Parser<FunctionParameter> = memo(
   "blockParamParser",
   seqC(
     set("type", "functionParameter"),
@@ -2515,7 +2516,7 @@ export const asParser = (input: string): ParserResult<FunctionParameter[]> => {
 // Parse a block argument. Always requires "as" keyword:
 //   as params { body }     — with params
 //   as { body }            — no params
-export const blockArgumentParser: Parser<BlockArgument> = trace(
+export const blockArgumentParser: Parser<BlockArgument> = memo(
   "blockArgumentParser",
   seqC(
     set("type", "blockArgument"),
@@ -2535,7 +2536,7 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
 //   \(x, i) -> x + i      — multiple params
 //   \ -> "hello"           — no params
 // Expression-only: the expression is wrapped in a synthetic return statement.
-export const inlineBlockParser: Parser<BlockArgument> = trace(
+export const inlineBlockParser: Parser<BlockArgument> = memo(
   "inlineBlockParser",
   map(
     seqC(
@@ -2668,7 +2669,7 @@ const quotedPath: Parser<string> = map(
   (res) => res.path,
 );
 
-export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
+export const importNodeStatmentParser: Parser<ImportNodeStatement> = memo(
   "importNodeStatement",
   seqC(
     set("type", "importNodeStatement"),
@@ -2726,7 +2727,7 @@ const safeNameItem = or(
 );
 
 
-const namedImportParser: Parser<NamedImport> = trace(
+const namedImportParser: Parser<NamedImport> = memo(
   "namedImportParser",
   map(
     seqC(
@@ -2755,7 +2756,7 @@ const namedImportParser: Parser<NamedImport> = trace(
   ),
 );
 
-const namespaceImportParser: Parser<NamespaceImport> = trace(
+const namespaceImportParser: Parser<NamespaceImport> = memo(
   "namespaceImportParser",
   seqC(
     many1Till(spaces),
@@ -2767,7 +2768,7 @@ const namespaceImportParser: Parser<NamespaceImport> = trace(
   ),
 );
 
-const defaultImportParser: Parser<DefaultImport> = trace(
+const defaultImportParser: Parser<DefaultImport> = memo(
   "defaultImportParser",
   seqC(
     capture(many1WithJoin(varNameChar), "importedNames"),
@@ -2781,7 +2782,7 @@ const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
 );
 
 export const importStatmentParser: Parser<ImportStatement> = map(
-  trace(
+  memo(
     "importStatement",
     seqC(
       set("type", "importStatement"),
@@ -2843,7 +2844,7 @@ const exportBodyParser = or(namedExportBodyParser, starExportBodyParser);
 // functionParser, graphNodeParser, etc.
 export const exportFromStatementParser: Parser<ExportFromStatement> = withLoc(
   map(
-    trace(
+    memo(
       "exportFromStatement",
       seqC(
         set("type", "exportFromStatement"),
@@ -3148,50 +3149,52 @@ export const staticStatementParser: Parser<StaticStatement> = withLoc(
 // faithfully for the formatter to round-trip.
 export const docStringParser = multiLineStringParser;
 
-export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
-  const bodyNodeParser = or(
-    keywordParser,
-    debug(typeAliasParser, "error in typeAliasParser"),
-    tagParser,
-    // withModifierParser must be tried before returnStatementParser/
-    // assignmentParser so that `return foo() with approve` and
-    // `const x = foo() with approve` don't get partially consumed by
-    // the inner statement parser, which would leave `with approve`
-    // dangling and unparseable.
-    withModifierParser,
-    returnStatementParser,
-    gotoStatementParser,
-    interruptStatementParser,
-    forLoopParser,
-    whileLoopParser,
-    parallelBlockParser,
-    seqBlockParser,
-    matchBlockParser,
-    ifParser,
-    messageThreadParser,
-    handleBlockParser,
-    debuggerParser,
-    multiLineCommentParser,
-    commentParser,
-    skillParser,
-    assignmentParser,
-    binOpParser,
-    booleanParser,
-    valueAccessParser,
-    literalParser,
-    blankLineParser,
-    newLineParser,
-  );
-  const parser = trace(
-    "functionBodyParser",
-    many(
-      map(
-        seqC(capture(bodyNodeParser, "node"), optionalSpacesOrNewline),
-        (result) => result.node,
-      ),
+const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
+  keywordParser,
+  debug(typeAliasParser, "error in typeAliasParser"),
+  tagParser,
+  // withModifierParser must be tried before returnStatementParser/
+  // assignmentParser so that `return foo() with approve` and
+  // `const x = foo() with approve` don't get partially consumed by
+  // the inner statement parser, which would leave `with approve`
+  // dangling and unparseable.
+  lazy(() => withModifierParser),
+  returnStatementParser,
+  gotoStatementParser,
+  interruptStatementParser,
+  lazy(() => forLoopParser),
+  lazy(() => whileLoopParser),
+  lazy(() => parallelBlockParser),
+  lazy(() => seqBlockParser),
+  matchBlockParser,
+  lazy(() => ifParser),
+  lazy(() => messageThreadParser),
+  lazy(() => handleBlockParser),
+  debuggerParser,
+  multiLineCommentParser,
+  commentParser,
+  skillParser,
+  assignmentParser,
+  binOpParser,
+  booleanParser,
+  valueAccessParser,
+  literalParser,
+  blankLineParser,
+  newLineParser,
+));
+
+const _bodyParserImpl: Parser<AgencyNode[]> = memo(
+  "functionBodyParser",
+  many(
+    map(
+      seqC(capture(_bodyNodeParser, "node"), optionalSpacesOrNewline),
+      (result) => result.node,
     ),
-  );
-  return parser(input);
+  ),
+);
+
+export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
+  return _bodyParserImpl(input);
 };
 
 /** Parse optional `(label: ..., summarize: ..., continue: ..., session: ...)`
@@ -3257,7 +3260,7 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
   );
 };
 
-export const _messageThreadParser: Parser<MessageThread> = trace(
+export const _messageThreadParser: Parser<MessageThread> = memo(
   "_messageThreadParser",
   seqC(
     set("type", "messageThread"),
@@ -3281,7 +3284,7 @@ export const _messageThreadParser: Parser<MessageThread> = trace(
     ),
   ),
 );
-export const _submessageThreadParser: Parser<MessageThread> = trace(
+export const _submessageThreadParser: Parser<MessageThread> = memo(
   "_submessageThreadParser",
   seqC(
     set("type", "messageThread"),
@@ -3311,12 +3314,12 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
 const liftThreadArgs = (parsed: any): MessageThread => {
   const args = parsed._args as
     | {
-        label: Expression | null;
-        summarize: Expression | null;
-        continueExpr: Expression | null;
-        sessionExpr: Expression | null;
-        hidden: Expression | null;
-      }
+      label: Expression | null;
+      summarize: Expression | null;
+      continueExpr: Expression | null;
+      sessionExpr: Expression | null;
+      hidden: Expression | null;
+    }
     | null
     | undefined;
   const out: any = { ...parsed };
@@ -3374,7 +3377,7 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   return parser(input);
 };
 
-export const handleBlockParser: Parser<HandleBlock> = withLoc(trace(
+export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
   "handleBlockParser",
   seqC(
     set("type", "handleBlock"),
@@ -3492,7 +3495,7 @@ const _ifParserInner: Parser<IfElse> = (input: string) => {
 };
 export const ifParser: Parser<IfElse> = label("an if statement", withLoc(_ifParserInner));
 
-export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(trace(
+export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(memo(
   "whileLoopParser",
   seqC(
     set("type", "whileLoop"),
@@ -3518,7 +3521,7 @@ export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(
   ),
 )));
 
-export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(trace(
+export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(memo(
   "parallelBlockParser",
   seqC(
     set("type", "parallelBlock"),
@@ -3537,7 +3540,7 @@ export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel bloc
   ),
 )));
 
-export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(trace(
+export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(memo(
   "seqBlockParser",
   seqC(
     set("type", "seqBlock"),
@@ -3556,7 +3559,7 @@ export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(tra
   ),
 )));
 
-export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
+export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
   "forLoopParser",
   seqC(
     set("type", "forLoop"),
@@ -3606,7 +3609,7 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
 )));
 
 // Parses: name, name?, name: type, name?: type, name = default, name? = default, name: type = default
-export const functionParameterParser: Parser<FunctionParameter> = trace(
+export const functionParameterParser: Parser<FunctionParameter> = memo(
   "functionParameterParser",
   map(
     seqC(
@@ -3647,7 +3650,7 @@ export const functionParameterParser: Parser<FunctionParameter> = trace(
 );
 
 // Parses: ...name, ...name: type
-export const variadicParameterParser: Parser<FunctionParameter> = trace(
+export const variadicParameterParser: Parser<FunctionParameter> = memo(
   "variadicParameterParser",
   map(
     seqC(
@@ -3669,7 +3672,7 @@ export const variadicParameterParser: Parser<FunctionParameter> = trace(
   ),
 );
 
-export const functionReturnTypeParser: Parser<VariableType> = trace(
+export const functionReturnTypeParser: Parser<VariableType> = memo(
   "functionReturnTypeParser",
   seqC(
     char(":"),
@@ -3680,7 +3683,7 @@ export const functionReturnTypeParser: Parser<VariableType> = trace(
   ),
 );
 
-const _baseFunctionParser: Parser<any> = trace(
+const _baseFunctionParser: Parser<any> = memo(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
@@ -3799,7 +3802,7 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
 export const functionParser: Parser<FunctionDefinition> = label("a function definition", withLoc(_functionParserInner));
 
 
-export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node definition", withLoc(trace(
+export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node definition", withLoc(memo(
   "graphNodeParser",
   map(
     seqC(
@@ -3933,17 +3936,14 @@ function enforceRestAtEnd<T extends { type: string }>(
 
 // ---- binding pattern parsers ----
 
-const _bindingPatternParser = (input: string): ParserResult<BindingPattern> => {
-  const parser = or(
-    lazy(() => arrayBindingPatternParser),
-    lazy(() => objectBindingPatternParser),
-    restPatternParser,
-    // wildcard MUST come before variableNameParser so `_` doesn't match as identifier
-    wildcardPatternParser,
-    variableNameParser,
-  );
-  return parser(input) as ParserResult<BindingPattern>;
-};
+const _bindingPatternParser: Parser<BindingPattern> = memo("bindingPatternParser", or(
+  lazy(() => arrayBindingPatternParser),
+  lazy(() => objectBindingPatternParser),
+  restPatternParser,
+  // wildcard MUST come before variableNameParser so `_` doesn't match as identifier
+  wildcardPatternParser,
+  variableNameParser,
+) as Parser<BindingPattern>);
 export const bindingPatternParser: Parser<BindingPattern> = _bindingPatternParser;
 
 export const arrayBindingPatternParser: Parser<ArrayPattern> = label(

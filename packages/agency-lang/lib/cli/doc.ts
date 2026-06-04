@@ -195,8 +195,14 @@ function generateDocForFile(
     interruptKindsByFunction,
   );
   if (nodeSection) sections.push(nodeSection);
+  const generatedOutput = sections.join("\n\n") + "\n";
+  fs.writeFileSync(outputPath, postprocessDoc(generatedOutput));
+}
 
-  fs.writeFileSync(outputPath, sections.join("\n\n") + "\n");
+function postprocessDoc(doc: string): string {
+  return doc;
+  // escape < and > for all xml
+  // return doc.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function toPosixPath(p: string): string {

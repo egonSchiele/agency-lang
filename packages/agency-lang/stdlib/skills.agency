@@ -3,9 +3,9 @@ import { frontmatter } from "std::markdown"
 import { glob } from "std::shell"
 
 type SkillEntry = {
-  name: string,
-  description: string,
-  location: string,
+  name: string;
+  description: string;
+  location: string
 }
 
 def xmlEscape(s: string): string {
@@ -15,6 +15,8 @@ def xmlEscape(s: string): string {
   filenames into the `<available_skills>` block — without this, a
   description containing `&` or a closing tag would produce malformed
   markup and could inject extra tags into the prompt.
+
+  @param s - The string to escape.
   """
   let out = s
   out = out.replaceAll("&", "&amp;")
@@ -31,6 +33,8 @@ def renderEntry(entry: SkillEntry): string {
   XML-escaped because they originate from user-authored frontmatter or
   filenames, and an unescaped `<` or `&` would corrupt the surrounding
   `<available_skills>` markup.
+
+  @param entry - The skill entry to render.
   """
   const nameX = xmlEscape(entry.name)
   const descX = xmlEscape(entry.description)
@@ -47,25 +51,31 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
   Build a SkillEntry for one file in the legacy flat-markdown layout.
   Prefers frontmatter `name`, then `title` (so VitePress-style docs
   still work), then the filename. `description` defaults to "".
+
+  @param filename - The skill file path, relative to the skills root.
+  @param parsedFrontmatter - The parsed YAML frontmatter object from the file.
   """
   return {
     name: parsedFrontmatter.name ?? parsedFrontmatter.title ?? filename,
     description: parsedFrontmatter.description ?? "",
-    location: filename,
+    location: filename
   }
 }
 
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
   """
   Build a SkillEntry for one skill in the standard SKILL.md layout.
-  `skillPath` is "<skill-dir>/SKILL.md" relative to the skills root;
-  `name` defaults to the skill's directory name when not in frontmatter.
+  The skill name defaults to the skill's directory name when not in
+  frontmatter.
+
+  @param skillPath - [skill-dir]/SKILL.md relative to the skills root.
+  @param parsedFrontmatter - The parsed YAML frontmatter object from SKILL.md.
   """
   const skillDir = skillPath.replace("/SKILL.md", "")
   return {
     name: parsedFrontmatter.name ?? skillDir,
     description: parsedFrontmatter.description ?? "",
-    location: skillPath,
+    location: skillPath
   }
 }
 
@@ -87,9 +97,7 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   Build a skills tool for an LLM over a directory of skills.
 
   @param dir - Directory containing the skills.
-  @param layout - "standard" (default) for subdirectory-per-skill with
-                  SKILL.md, "flat" for a directory of loose Markdown
-                  files.
+  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
   """
   let pattern = "*/SKILL.md"
   if (layout == "flat") {

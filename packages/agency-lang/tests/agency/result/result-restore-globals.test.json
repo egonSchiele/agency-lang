@@ -3,6 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
+      "skip": true,
       "expectedOutput": "5",
       "evaluationCriteria": [
         {

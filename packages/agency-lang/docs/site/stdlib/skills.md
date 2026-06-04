@@ -32,6 +32,8 @@ Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
   description containing `&` or a closing tag would produce malformed
   markup and could inject extra tags into the prompt.
 
+  @param s - The string to escape.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -53,6 +55,8 @@ Render one SkillEntry as a `<skill>` XML block. All string fields are
   filenames, and an unescaped `<` or `&` would corrupt the surrounding
   `<available_skills>` markup.
 
+  @param entry - The skill entry to render.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -61,7 +65,7 @@ Render one SkillEntry as a `<skill>` XML block. All string fields are
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L30))
 
 ### flatEntry
 
@@ -73,6 +77,9 @@ Build a SkillEntry for one file in the legacy flat-markdown layout.
   Prefers frontmatter `name`, then `title` (so VitePress-style docs
   still work), then the filename. `description` defaults to "".
 
+  @param filename - The skill file path, relative to the skills root.
+  @param parsedFrontmatter - The parsed YAML frontmatter object from the file.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -82,7 +89,7 @@ Build a SkillEntry for one file in the legacy flat-markdown layout.
 
 **Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L49))
 
 ### standardEntry
 
@@ -91,8 +98,11 @@ standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry
 ```
 
 Build a SkillEntry for one skill in the standard SKILL.md layout.
-  `skillPath` is "<skill-dir>/SKILL.md" relative to the skills root;
-  `name` defaults to the skill's directory name when not in frontmatter.
+  The skill name defaults to the skill's directory name when not in
+  frontmatter.
+
+  @param skillPath - [skill-dir]/SKILL.md relative to the skills root.
+  @param parsedFrontmatter - The parsed YAML frontmatter object from SKILL.md.
 
 **Parameters:**
 
@@ -103,7 +113,7 @@ Build a SkillEntry for one skill in the standard SKILL.md layout.
 
 **Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L65))
 
 ### skillsDir
 
@@ -114,9 +124,7 @@ skillsDir(dir: string, layout: "flat" | "standard")
 Build a skills tool for an LLM over a directory of skills.
 
   @param dir - Directory containing the skills.
-  @param layout - "standard" (default) for subdirectory-per-skill with
-                  SKILL.md, "flat" for a directory of loose Markdown
-                  files.
+  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
 
 * Build a tool that lets an LLM read skill files in `dir`. Supports two
  * layouts:
@@ -137,4 +145,4 @@ Build a skills tool for an LLM over a directory of skills.
 | dir | `string` |  |
 | layout | `"flat" \| "standard"` | "standard" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L95))

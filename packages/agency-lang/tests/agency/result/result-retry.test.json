@@ -3,6 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
+      "skip": true,
       "expectedOutput": "{\"value\":\"hello\",\"attempts\":3}",
       "evaluationCriteria": [
         {

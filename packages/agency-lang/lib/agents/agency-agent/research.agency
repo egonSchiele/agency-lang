@@ -27,14 +27,14 @@ import {
 // skills into the returned tool. `static` caches this across runs;
 // `with approve` auto-approves the init-time `glob` and `read`
 // interrupts (the binding itself is the user opt-in).
-static const docSkill = skillsDir("../docs/guide") with approve
+static const docSkill = skillsDir("../docs/guide", "flat") with approve
 
 // Same pattern for the CLI reference (`agency run`, `agency test`,
 // `agency compile`, ...) and the appendix (built-ins, callbacks,
 // advanced types). Each becomes its own tool so the LLM can pick
 // the right corpus instead of grepping a giant blob of docs.
-static const cliSkill = skillsDir("../docs/cli") with approve
-static const appendixSkill = skillsDir("../docs/appendix") with approve
+static const cliSkill = skillsDir("../docs/cli", "flat") with approve
+static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
 
 export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language

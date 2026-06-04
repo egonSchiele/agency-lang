@@ -86,6 +86,10 @@ export class AgencyFunction {
     return this._isPreapproved;
   }
 
+  get description(): string {
+    return this.toolDefinition?.description ?? "";
+  }
+
   get boundArgs(): { indices: number[]; values: unknown[]; originalParams: FuncParam[] } | null {
     if (!this._isBound) return null;
     const indices: number[] = [];

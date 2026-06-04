@@ -3,6 +3,7 @@ import { guardFromJSON } from "../guard.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
+import type { GlobalStoreJSON } from "./globalStore.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
 export type BranchState = {
@@ -33,6 +34,25 @@ export type BranchState = {
   // runBatch.ts to avoid double-prepending on multiple runBatch
   // re-entries in the same run.
   guardsRehydrated?: boolean;
+
+  /** Per-branch GlobalStore snapshot, captured by `runInBranchAlsFrame`
+   *  after the branch body completes (success OR interrupt). Persisted
+   *  on serialization so that on resume the branch sees the same
+   *  globals it had pre-interrupt instead of a fresh clone of the
+   *  parent's (now-possibly-stale) values. Always populated for
+   *  isolated branches; absent for `isolateState: false` callers
+   *  (runPrompt's tool dispatch), which pointer-share the parent's
+   *  globals at every re-entry. */
+  globalsJSON?: GlobalStoreJSON;
+
+  /** Per-branch `activeStack` snapshot, captured alongside
+   *  `globalsJSON`. The threads registry itself is shared across
+   *  branches and serialized once on the top-level frame; only the
+   *  active-thread pointer is per-branch. Restored into a fresh
+   *  `ThreadView` on resume so unguarded `llm()` / `userMessage()`
+   *  calls inside a resumed branch resume against the same subthread
+   *  they were writing to before the interrupt. */
+  activeStack?: string[];
 };
 
 export type BranchStateJSON = {
@@ -40,6 +60,8 @@ export type BranchStateJSON = {
   interruptId?: string;
   interruptData?: any;
   result?: { result: any };
+  globalsJSON?: GlobalStoreJSON;
+  activeStack?: string[];
 };
 
 // the state for each frame (a node, or a function call)
@@ -207,6 +229,15 @@ export class State {
           branchJson.interruptData = branch.interruptData;
         if (branch.result !== undefined)
           branchJson.result = deepClone(branch.result);
+        // Per-branch globals + activeStack snapshots captured by
+        // `runInBranchAlsFrame` so a resumed branch sees its own
+        // pre-interrupt state instead of a freshly-cloned parent.
+        // Absent for `isolateState: false` callers (runPrompt's
+        // tool dispatch), which pointer-share parent state.
+        if (branch.globalsJSON !== undefined)
+          branchJson.globalsJSON = branch.globalsJSON;
+        if (branch.activeStack !== undefined)
+          branchJson.activeStack = branch.activeStack;
         json.branches[key] = branchJson as BranchStateJSON;
       }
     }
@@ -236,6 +267,15 @@ export class State {
         if (branch.interruptData)
           branchState.interruptData = branch.interruptData;
         if (branch.result !== undefined) branchState.result = branch.result;
+        // Per-branch globals + activeStack snapshots captured by
+        // `runInBranchAlsFrame` before the interrupt. On re-entry
+        // the resumed branch restores them instead of cloning fresh
+        // from the parent, so writes made before the interrupt are
+        // preserved across the resume boundary.
+        if (branch.globalsJSON !== undefined)
+          branchState.globalsJSON = branch.globalsJSON;
+        if (branch.activeStack !== undefined)
+          branchState.activeStack = branch.activeStack;
         state.branches[key] = branchState;
       }
     }
@@ -640,19 +680,6 @@ export class StateStack {
       guards: this.guards.slice(this.inheritedGuardCount).map((g) => g.toJSON()),
       inheritedGuardCount: this.inheritedGuardCount,
     };
-  }
-
-  private branchToJSON(branch: BranchState): BranchStateJSON {
-    const json: BranchStateJSON = {
-      stack: branch.stack.toJSON(),
-    };
-    if (branch.interruptId) {
-      json.interruptId = branch.interruptId;
-    }
-    if (branch.interruptData) {
-      json.interruptData = deepClone(branch.interruptData);
-    }
-    return json;
   }
 
   static fromJSON(json: StateStackJSON): StateStack {

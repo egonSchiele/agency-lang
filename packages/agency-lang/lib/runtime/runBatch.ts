@@ -63,7 +63,9 @@
 import { agencyStore } from "./asyncContext.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
+import { GlobalStore } from "./state/globalStore.js";
 import type { BranchState, State, StateStack } from "./state/stateStack.js";
+import type { ThreadStore } from "./state/threadStore.js";
 
 export type BatchChild<T> = {
   /** Stable per-child key. Used for `getOrCreateBranch`. Caller is
@@ -255,7 +257,7 @@ function startInvoke<T>(
   t.startedAt = performance.now();
   const isolateState = opts.isolateState ?? true;
   return ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-    runInBranchAlsFrame(ctx, t.branch.stack, isolateState, () =>
+    runInBranchAlsFrame(ctx, t.branch, isolateState, () =>
       t.child.invoke(t.branch.stack, signal),
     ),
   );
@@ -280,57 +282,76 @@ function startInvoke<T>(
  *  that haven't installed a top-level frame yet. */
 function runInBranchAlsFrame<T>(
   ctx: RuntimeContext<any>,
-  branchStack: StateStack,
+  branch: BranchState,
   isolateState: boolean,
   fn: () => Promise<T>,
 ): Promise<T> {
   const parent = agencyStore.getStore();
-  if (parent) {
-    return agencyStore.run(
-      {
-        ctx: parent.ctx,
-        stack: branchStack,
-        // Per-branch ThreadStore view: shares the parent's registry
-        // (`threads` map, `sessions` map, `counter`) so explicit
-        // cross-branch coordination via named sessions and
-        // `thread(continue: id)` keeps working, but carries its own
-        // `activeStack` seeded with a fresh subthread of the parent's
-        // currently-active thread. Unguarded `llm()` /
-        // `userMessage()` writes from the branch land on that
-        // subthread instead of polluting the parent's active thread.
-        //
-        // When `isolateState` is false (runPrompt's tool dispatch),
-        // pointer-share `threads` instead — tool calls are logically
-        // sequential function invocations, not user concurrency
-        // primitives, so threading the active-thread pointer through
-        // matches the pre-Stage-2 behavior. (runPrompt's tool body
-        // also installs its own `freshThreads` override at invoke
-        // time; this share keeps the orphan-subthread leak from
-        // appearing in the shared registry.)
-        threads: isolateState
-          ? parent.threads.forkBranchView()
-          : parent.threads,
-        // Per-branch snapshot of globals when `isolateState` is true:
-        // writes inside the branch never leak out, the parent is
-        // untouched on branch completion. `clone()` preserves
-        // `initializedModules` so module init does not re-run in
-        // branches. When `isolateState` is false, pointer-share so
-        // tool dispatches accumulate global state across calls just
-        // like normal function calls.
-        globals: isolateState ? parent.globals.clone() : parent.globals,
-        // Inherit `moduleDir` from the parent so stdlib helpers inside
-        // the branch resolve paths relative to the same compiled
-        // module that started the run. This frame doesn't spread
-        // `{ ...parent }`, so the inheritance has to be explicit.
-        moduleDir: parent.moduleDir,
-      },
-      fn,
-    );
+  if (!parent) {
+    // No outer frame — invoke without seeding (the generated
+    // function/node body inside the branch will install its own
+    // scoped frame via the Runner's per-step wrap). No snapshot
+    // capture either: there's no parent state to clone from and no
+    // resume-time restore to feed.
+    return fn();
   }
-  // No outer frame — invoke without seeding (the generated function/node
-  // body inside the branch will install its own scoped frame via the
-  // Runner's per-step wrap).
-  return fn();
+
+  // Build the per-branch globals + threads. On first invocation
+  // these are cloned from the parent. On resume after an interrupt
+  // (`branch.globalsJSON` and/or `branch.activeStack` populated by a
+  // prior capture below, then round-tripped through BranchState
+  // serialization) we restore them so the resumed body sees the
+  // same per-branch state it had pre-interrupt.
+  //
+  // When `isolateState` is false (runPrompt's tool dispatch),
+  // pointer-share both — tool calls are logically sequential function
+  // invocations and any global state they touch should accumulate
+  // across calls.
+  let branchGlobals: GlobalStore;
+  let branchThreads: ThreadStore;
+  if (isolateState) {
+    branchGlobals = branch.globalsJSON
+      ? GlobalStore.fromJSON(branch.globalsJSON)
+      : parent.globals.clone();
+    branchThreads = branch.activeStack
+      ? parent.threads.restoreBranchView(branch.activeStack)
+      : parent.threads.forkBranchView();
+  } else {
+    branchGlobals = parent.globals;
+    branchThreads = parent.threads;
+  }
+
+  return agencyStore.run(
+    {
+      ctx: parent.ctx,
+      stack: branch.stack,
+      threads: branchThreads,
+      globals: branchGlobals,
+      // Inherit `moduleDir` from the parent so stdlib helpers inside
+      // the branch resolve paths relative to the same compiled
+      // module that started the run. This frame doesn't spread
+      // `{ ...parent }`, so the inheritance has to be explicit.
+      moduleDir: parent.moduleDir,
+    },
+    async () => {
+      // Capture-on-return discipline: snapshot the per-branch globals
+      // + active-thread pointer when the body settles (whether the
+      // returned value is a user value OR an Interrupt[]). Throws
+      // naturally skip the capture below and propagate — error-path
+      // branches are torn down rather than resumed, so there's
+      // nothing to persist.
+      //
+      // Only meaningful when `isolateState` is true. Shared-state
+      // branches mutate the parent's globals/threads directly so
+      // there's nothing to snapshot.
+      const value = await fn();
+      if (isolateState) {
+        branch.globalsJSON = branchGlobals.toJSON();
+        branch.activeStack = [...branchThreads.activeStack];
+      }
+      return value;
+    },
+  );
 }
 
 /** Stamp the shared batch-level checkpoint and overwrite every interrupt's
@@ -674,7 +695,7 @@ async function runRaceResume<T>(
   try {
     const isolateState = opts.isolateState ?? true;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch.stack, isolateState, () =>
+      runInBranchAlsFrame(ctx, branch, isolateState, () =>
         child.invoke(branch.stack, signal),
       ),
     );

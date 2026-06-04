@@ -1,5 +1,67 @@
 # Per-Branch Isolation for Globals and Threads
 
+## Status (2026-06-04)
+
+Stages 1 and 2 landed; Stage 3 in progress. Two design refinements
+made during implementation:
+
+1. **Tool dispatch carve-out.** `runPrompt`'s tool-call loop runs
+   through `runBatch` internally but is not a user-facing concurrency
+   primitive — tools are conceptually sequential function calls and
+   need to mutate shared globals (counters, retry budgets, dedup
+   caches). Added `RunBatchOpts.isolateState?: boolean` (default
+   `true`). Promptrunner passes `false`, restoring pointer-share for
+   the tool-dispatch path. User-facing fork/parallel/race continue to
+   default to isolation.
+
+2. **User-facing opt-in to shared state.** The right knob isn't a
+   `Shared<T>` value type or an `@isolated` declaration modifier — it's
+   a call-site option on the fork/parallel/race primitives. Decided
+   API:
+
+   ```
+   parallel { agentA(); agentB() }                // isolated (default)
+   parallel(shared: true) { agentA(); agentB() }  // shared (cooperative)
+   ```
+
+   Rationale: the library author writing `global todos = []` shouldn't
+   have to commit to "this is always shared" or "this is always
+   isolated." The call site has the context — "I'm parallelizing for
+   speed" vs. "these workers are cooperating on one task" — and should
+   decide.
+
+   Default is isolated for the safety property the original design
+   argues for. Stdlib's tool-dispatch carve-out is the same flag wired
+   internally; once `shared: true` lands as syntax, the carve-out is
+   no longer hidden.
+
+   **Threads stay always-isolated regardless of `shared:`.** The
+   active-thread pointer's push/pop discipline is structurally
+   incompatible with concurrent sharing — no semantic interpretation
+   of "shared" makes sense here. Sessions / `thread(continue: id)`
+   remain the explicit cross-branch channel.
+
+**Deferred until real demand:**
+
+- A general `isolate { … }` scope block (useful inside
+  `parallel(shared: true)` bodies and inside tool implementations
+  that don't want their writes to leak). The `shared: true` knob on
+  fork/parallel/race covers the headline use cases; the block
+  primitive can land later as an orthogonal addition.
+- A `Shared<T>` stdlib value type. Subsumed by `shared: true` plus
+  the user always having `static` as the cross-everything escape
+  hatch.
+
+**TODO before Stage 4 docs work:**
+
+- Add `shared: true` syntax to fork/parallel/race in the parser,
+  preprocessor, and code generator. Wire it through to
+  `RunBatchOpts.isolateState`.
+- Update migration note and worked examples to reflect "default is
+  isolated; opt in to shared with `parallel(shared: true)`."
+- Document that today's `runPrompt` carve-out is the runtime side of
+  the same mechanism.
+
 ## The Idea
 
 Make globals and the per-run message-thread state isolated per *branch* instead of per *run*. Today, every concurrent agent run gets its own copy of the globals and its own `ThreadStore` (good), but branches spawned within a single run — via `fork`, `parallel`, `race`, `thread { ... }` — share both with the parent (bad, in different shapes for each). Move the isolation boundary down one level: each branch spawned by a fork/parallel/race primitive sees its own snapshot of the per-run state and any branch-local writes are confined to that branch.

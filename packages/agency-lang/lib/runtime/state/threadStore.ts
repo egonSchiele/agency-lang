@@ -156,6 +156,29 @@ export class ThreadStore {
     return view;
   }
 
+  /**
+   * Build a per-branch view that restores a previously-captured
+   * `activeStack` rather than seeding a fresh subthread. Called by
+   * `runInBranchAlsFrame` on resume after an interrupt inside a fork
+   * branch: the pre-interrupt active-thread pointer was snapshotted
+   * onto `BranchState.activeStack` and serialized; on re-entry we
+   * recreate a branch view aliasing the (now-deserialized) parent's
+   * registry and reinstate the exact same activeStack so the resumed
+   * branch's unguarded `llm()` / `userMessage()` calls land on the
+   * same subthread they were writing to pre-interrupt.
+   *
+   * Does NOT create a new subthread — the subthread that was originally
+   * created at first-fork-time still lives in the shared registry and
+   * its id is in `activeStack`. Statelog is not re-emitted.
+   */
+  restoreBranchView(activeStack: MessageThreadID[]): ThreadStore {
+    const view = new ThreadStore();
+    (view as unknown as { registry: ThreadRegistry }).registry =
+      this.registry;
+    view.activeStack = [...activeStack];
+    return view;
+  }
+
   // Create a store with a default active thread. If `client` is passed,
   // the default thread is logged as a normal threadCreated event so the
   // implicit root thread appears in the trace alongside user-created ones.

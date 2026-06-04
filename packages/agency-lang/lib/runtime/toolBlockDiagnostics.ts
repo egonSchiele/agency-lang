@@ -46,9 +46,13 @@ export function formatOptionalUnboundWarning(
   paramNames: string[],
 ): string {
   const list = paramNames.map((n) => `'${n}'`).join(", ");
+  // "Optional" here means the param declares a default value. When the
+  // LLM omits it, the normal defaulting path fills in that declared
+  // default (often `null`), not `undefined` — so the body must be ready
+  // to run with whatever the default is.
   return (
     `Tool '${toolName}' will be exposed to the LLM without optional ` +
-    `function-typed parameter(s): ${list}. The function body must handle ` +
-    `them as undefined.`
+    `function-typed parameter(s): ${list}. The function body must be ` +
+    `prepared to run with the declared default for each.`
   );
 }

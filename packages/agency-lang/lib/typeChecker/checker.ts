@@ -47,6 +47,24 @@ function variadicElementType(
   return param.typeHint ?? "any";
 }
 
+/**
+ * Array-typed slot for the named-arg form of a variadic.
+ *
+ * `foo(rest: [1, 2, 3])` binds the whole array, so the slot type is the
+ * array (`T[]`), not the element (`T`). For declarations written as the
+ * conventional `...xs: T[]`, the typeHint is already the array; for the
+ * less-conventional `...xs: T`, we wrap the element type ourselves.
+ * Returns `undefined` when the param is untyped — the caller treats that
+ * as `any`.
+ */
+function variadicNamedSlotType(
+  typeHint: VariableType | undefined,
+): VariableType | undefined {
+  if (!typeHint) return undefined;
+  if (typeHint.type === "arrayType") return typeHint;
+  return { type: "arrayType", elementType: typeHint };
+}
+
 type ParamSlot = {
   type: VariableType | "any" | undefined;
   validated: boolean;
@@ -128,18 +146,8 @@ function paramListSignature(
       if (idx < 0) return undefined;
       const param = params[idx];
       if (param.variadic) {
-        // The array type comes straight from the declaration (it's
-        // already `T[]` in the hint); fall back to wrapping the element
-        // type when the user wrote `...xs: T` rather than the
-        // conventional `...xs: T[]`.
-        const arrayType: VariableType | undefined =
-          param.typeHint?.type === "arrayType"
-            ? param.typeHint
-            : param.typeHint
-            ? { type: "arrayType", elementType: param.typeHint }
-            : undefined;
         return {
-          type: arrayType,
+          type: variadicNamedSlotType(param.typeHint),
           validated: !!param.validated,
           name: param.name,
         };

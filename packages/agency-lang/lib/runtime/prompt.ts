@@ -311,20 +311,23 @@ export async function runPrompt(args: {
     }
     return entry;
   });
-  // Runtime backstop for compile-time-undetectable cases (dynamic tool
-  // assembly, hand-written TS). Runs once per tool — before the LLM ever
-  // sees the schema — so failures surface at registration time, not deep
-  // inside an invocation when the missing block is called.
-  for (const fn of agencyFunctions) {
-    fn.validateForLLM();
-  }
-  let tools = agencyFunctions
-    .filter((fn) => fn.toolDefinition)
-    .map((fn) => fn.toolDefinition!)
-    .filter((t) => !removedTools.includes(t.name));
-  let toolFunctions = agencyFunctions.filter(
+  // Drop removed tools first — they're never exposed to the LLM, so they
+  // shouldn't block the call with a backstop error for an unbound block
+  // they wouldn't have been asked to invoke anyway.
+  const exposedFunctions = agencyFunctions.filter(
     (fn) => !removedTools.includes(fn.name),
   );
+  // Runtime backstop for compile-time-undetectable cases (dynamic tool
+  // assembly, hand-written TS). Runs once per exposed tool — before the
+  // LLM ever sees the schema — so failures surface at registration time,
+  // not deep inside an invocation when the missing block is called.
+  for (const fn of exposedFunctions) {
+    fn.validateForLLM();
+  }
+  let tools = exposedFunctions
+    .filter((fn) => fn.toolDefinition)
+    .map((fn) => fn.toolDefinition!);
+  let toolFunctions = exposedFunctions;
 
   // Remove tools key from clientConfig before passing to smoltalk.
   // Also strip `memory` — it's a runtime-only directive that smoltalk

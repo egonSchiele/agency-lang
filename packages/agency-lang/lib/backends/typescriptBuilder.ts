@@ -1415,7 +1415,8 @@ export class TypeScriptBuilder {
 
     if (param.variadic) {
       // For `...xs: T[]`, the typeHint is the array type already; for the
-      // untyped fallback `...xs`, treat as `any[]`.
+      // untyped fallback `...xs`, fall back to `string[]` to match the
+      // historical default for untyped non-variadic params below.
       const elementHint =
         param.typeHint?.type === "arrayType"
           ? param.typeHint.elementType

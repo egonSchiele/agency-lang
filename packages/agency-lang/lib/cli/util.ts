@@ -209,6 +209,10 @@ type ExecuteNodeArgs = {
   // per-call cost / token output. Setting this is equivalent to running
   // with AGENCY_USE_TEST_LLM_PROVIDER=1 for the spawned subprocess only.
   useTestLLMProvider?: boolean;
+  // Extra command-line arguments forwarded to the spawned subprocess.
+  // These land in `process.argv.slice(2)` of the running agent —
+  // primarily for testing std::args and other argv-reading code.
+  argv?: string[];
 };
 
 export async function executeNodeAsync({
@@ -222,6 +226,7 @@ export async function executeNodeAsync({
   signal,
   llmMocks,
   useTestLLMProvider,
+  argv,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -284,7 +289,11 @@ export async function executeNodeAsync({
     const mocksEnv = useDeterministic
       ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
       : {};
-    const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {
+    // Forward `argv` so the spawned subprocess sees them as
+    // `process.argv.slice(2)`. Used by std::args smoke tests and any
+    // other code that reads command-line flags.
+    const nodeArgs = argv !== undefined ? [evaluateFile, ...argv] : [evaluateFile];
+    const { stdout, stderr } = await execFileAsync("node", nodeArgs, {
       maxBuffer: 10 * 1024 * 1024,
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),

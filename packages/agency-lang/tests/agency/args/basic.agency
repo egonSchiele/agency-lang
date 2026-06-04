@@ -1,0 +1,19 @@
+import { parseArgs } from "std::args"
+
+node main() {
+  const args = parseArgs({
+    programName: "basic-test",
+    flags: {
+      name: { type: "string", short: "n", default: "world" },
+      port: { type: "number", default: 3000 },
+      verbose: { type: "boolean", short: "v" },
+    },
+  })
+
+  return {
+    name: args.flags.name,
+    port: args.flags.port,
+    verbose: args.flags.verbose,
+    positionals: args.positionals,
+  }
+}

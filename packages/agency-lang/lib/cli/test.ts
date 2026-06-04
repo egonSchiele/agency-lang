@@ -58,6 +58,11 @@ type TestCase = {
   // OpenAI client on push-to-main CI (where the env var is unset) and
   // become flaky or expensive.
   useTestLLMProvider?: boolean;
+  // Optional process command-line arguments to pass to the spawned
+  // subprocess. These show up as `process.argv.slice(2)` in the running
+  // agent — handy for testing CLI flag parsers (std::args) and any
+  // other code that reads argv. Defaults to no extra args.
+  argv?: string[];
 };
 type Tests = {
   sourceFile?: string;
@@ -574,6 +579,7 @@ async function runSingleTest(
       signal,
       llmMocks: testCase.llmMocks,
       useTestLLMProvider: testCase.useTestLLMProvider,
+      argv: testCase.argv,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");

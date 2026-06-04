@@ -1,5 +1,5 @@
 ---
-title: Cross-thread context sharing
+name: Cross-thread context sharing
 description: Inspect, read, and resume sibling `thread {}` blocks in the same run. Covers `listThreads()`, `getThread()`, and the `thread(label, summarize, continue, session)` named arguments, plus the categorize-and-route worked example.
 ---
 

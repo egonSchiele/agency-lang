@@ -1,3 +1,7 @@
+---
+name: "clipboard"
+---
+
 # clipboard
 
 ## Functions

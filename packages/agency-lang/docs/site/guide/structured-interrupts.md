@@ -1,5 +1,5 @@
 ---
-title: Structured Interrupts
+name: Structured Interrupts
 description: Explains the structured interrupt syntax for tagging interrupts with a `kind`, letting handlers dispatch on different kinds of interrupts.
 ---
 

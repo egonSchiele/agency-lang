@@ -1,5 +1,5 @@
 ---
-title: Imports and packages
+name: Imports and packages
 description: Describes how Agency's JavaScript-style import syntax works for relative paths, npm packages, the `std::` standard library, and the `pkg::` prefix for npm-distributed Agency packages.
 ---
 

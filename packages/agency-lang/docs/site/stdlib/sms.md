@@ -1,3 +1,7 @@
+---
+name: "sms"
+---
+
 # sms
 
 ## Usage

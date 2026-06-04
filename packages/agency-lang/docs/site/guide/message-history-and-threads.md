@@ -1,5 +1,5 @@
 ---
-title: Message history and threads
+name: Message history and threads
 description: Explains how Agency's default shared message history works across LLM calls, and how `thread` and subthread blocks let you create isolated conversations that don't pollute the main history.
 ---
 

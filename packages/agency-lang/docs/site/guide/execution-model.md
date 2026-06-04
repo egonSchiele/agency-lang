@@ -1,5 +1,5 @@
 ---
-title: Agency's execution model
+name: Agency's execution model
 description: Explains how every Agency node call gets isolated state when invoked from TypeScript, and how `static` variables let you share expensive one-time initialization across runs.
 ---
 

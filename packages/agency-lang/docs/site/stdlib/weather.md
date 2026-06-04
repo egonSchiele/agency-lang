@@ -1,3 +1,7 @@
+---
+name: "weather"
+---
+
 # weather
 
 ## Types

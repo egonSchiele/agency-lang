@@ -1,5 +1,5 @@
 ---
-title: Advanced types
+name: Advanced types
 description: Notes on advanced type usage in Agency, including the intentionally-unsound covariance of `Record<K, V>` in both type parameters and the tradeoffs that motivated the choice.
 ---
 

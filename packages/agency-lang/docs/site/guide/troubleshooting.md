@@ -1,5 +1,5 @@
 ---
-title: Troubleshooting
+name: Troubleshooting
 description: Solutions to common issues when using Agency, such as module-not-found errors from global installs and other gotchas.
 ---
 

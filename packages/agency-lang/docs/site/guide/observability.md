@@ -1,5 +1,5 @@
 ---
-title: Observability
+name: Observability
 description: How to enable Agency's structured logging for events like node entry, LLM calls, tool calls, and interrupts, and how to view the resulting JSONL logs.
 ---
 

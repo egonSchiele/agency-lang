@@ -1,5 +1,5 @@
 ---
-title: Handlers
+name: Handlers
 description: Explains how `handle ... with` blocks let agents respond to interrupts — approving, rejecting, or propagating them — using a running example of restricting destructive actions.
 ---
 

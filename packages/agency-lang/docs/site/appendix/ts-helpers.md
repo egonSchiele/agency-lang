@@ -1,5 +1,5 @@
 ---
-title: TypeScript helpers — the `agency.*` namespace
+name: TypeScript helpers — the `agency.*` namespace
 description: Reference for the `agency` namespace exported from `agency-lang/runtime`, which lets TypeScript code participate in an Agency run — reading context, manipulating threads, installing handlers, taking checkpoints, and issuing LLM calls.
 ---
 

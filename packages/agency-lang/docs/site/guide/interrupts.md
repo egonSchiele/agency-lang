@@ -1,5 +1,5 @@
 ---
-title: Interrupts
+name: Interrupts
 description: Introduces Agency's interrupt feature for pausing execution at any step to ask the user for input, with resumption from the exact point of pause — inside loops, conditionals, and tool calls.
 ---
 

@@ -1,3 +1,7 @@
+---
+name: "search"
+---
+
 # search
 
 ## Types

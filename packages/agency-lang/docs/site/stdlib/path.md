@@ -1,3 +1,7 @@
+---
+name: "path"
+---
+
 # path
 
 ## Functions

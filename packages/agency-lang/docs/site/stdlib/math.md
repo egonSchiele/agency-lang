@@ -1,3 +1,7 @@
+---
+name: "math"
+---
+
 # math
 
 ## Functions

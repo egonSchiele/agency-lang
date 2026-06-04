@@ -1,5 +1,5 @@
 ---
-title: Guards
+name: Guards
 description: Documents the `guard` function for capping the cost and/or compute time of a block of work, returning a `Result` that lets you handle budget overruns.
 ---
 

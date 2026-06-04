@@ -34,7 +34,7 @@ static const workspace: Workspace = openDir(cwd())
 // auto-approves the init-time `glob` / `read` interrupts (the user opts
 // in by leaving the binding in place). See `skills/superpowers/
 // ATTRIBUTION.txt` for the upstream MIT license.
-static const superpowersSkill = skillsDir("./skills/superpowers") with approve
+static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
 
 export def setCwd(dir: string): string {
   """

@@ -1,3 +1,7 @@
+---
+name: "email"
+---
+
 # email
 
 ## Usage

@@ -1,3 +1,7 @@
+---
+name: "browser"
+---
+
 # browser
 
 Usage from Agency code:

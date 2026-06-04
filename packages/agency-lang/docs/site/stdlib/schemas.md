@@ -1,3 +1,7 @@
+---
+name: "schemas"
+---
+
 # schemas
 
 Pre-baked `@jsonSchema(...)` fragments for common formats. Spread them

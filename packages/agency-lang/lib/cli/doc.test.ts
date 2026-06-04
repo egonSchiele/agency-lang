@@ -486,4 +486,51 @@ const internal = "not exported"
     expect(output).not.toContain("[View source]");
     expect(output).not.toContain("[source]");
   });
+
+  it("emits YAML frontmatter with quoted name at the top", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "array.agency"),
+      `def foo(): string { return "x" }\n`,
+    );
+
+    generateDoc({}, path.join(inputDir, "array.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "array.md"), "utf-8");
+
+    expect(output).toMatch(/^---\nname: "array"\n---\n\n# array\n/);
+  });
+
+  it("emits exactly one frontmatter block, at the very top", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "shell.agency"),
+      `def bar(): string { return "y" }\n`,
+    );
+
+    generateDoc({}, path.join(inputDir, "shell.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "shell.md"), "utf-8");
+
+    const delimiterCount = (output.match(/^---$/gm) ?? []).length;
+    expect(delimiterCount).toBe(2);
+    expect(output.indexOf("---\n")).toBe(0);
+  });
+
+  it("derives frontmatter name from the input filename", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "ui.agency"),
+      `def baz(): string { return "z" }\n`,
+    );
+
+    generateDoc({}, path.join(inputDir, "ui.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "ui.md"), "utf-8");
+
+    expect(output).toMatch(/^---\nname: "ui"\n---\n\n# ui\n/);
+  });
 });

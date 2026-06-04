@@ -1,5 +1,5 @@
 ---
-title: Agency's Standard Library
+name: Agency's Standard Library
 description: Overview of Agency's standard library — how to import from it with the `std::` prefix and a list of the language-level builtins like `interrupt`, `schema`, `llm`, and `checkpoint`.
 ---
 

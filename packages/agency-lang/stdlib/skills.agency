@@ -2,12 +2,10 @@ import { map } from "std::array"
 import { frontmatter } from "std::markdown"
 import { glob } from "std::shell"
 
-import { _readSkill } from "agency-lang/stdlib-lib/skills.js"
-
-
-export safe def readSkills(dir: string) {
-  const description = "todo"
-  return read.partial(dir: dir).describe(description)
+type SkillEntry = {
+  name: string,
+  description: string,
+  location: string,
 }
 
 def xmlEscape(s: string): string {
@@ -27,63 +25,86 @@ def xmlEscape(s: string): string {
   return out
 }
 
-def describeSkill(filename: string, fm: Result): string {
+def renderEntry(entry: SkillEntry): string {
   """
-  Render one `<skill>` XML block for the skills tool description given
-  a filename and the frontmatter Result returned from `frontmatter(...)`.
-  Falls back gracefully when the file has no frontmatter or is missing
-  one of title/description. All interpolated values are XML-escaped so
-  metacharacters in user-authored titles / descriptions / filenames
-  cannot break the surrounding markup.
+  Render one SkillEntry as a `<skill>` XML block. All string fields are
+  XML-escaped because they originate from user-authored frontmatter or
+  filenames, and an unescaped `<` or `&` would corrupt the surrounding
+  `<available_skills>` markup.
   """
-  const fileX = xmlEscape(filename)
-  if (isFailure(fm)) {
-    return "  <skill>\n    <name>${fileX}</name>\n    <description>(no frontmatter)</description>\n    <location>${fileX}</location>\n  </skill>"
+  const nameX = xmlEscape(entry.name)
+  const descX = xmlEscape(entry.description)
+  const locX = xmlEscape(entry.location)
+  return """  <skill>
+    <name>${nameX}</name>
+    <description>${descX}</description>
+    <location>${locX}</location>
+  </skill>"""
+}
+
+def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
+  """
+  Build a SkillEntry for one file in the legacy flat-markdown layout.
+  Prefers frontmatter `name`, then `title` (so VitePress-style docs
+  still work), then the filename. `description` defaults to "".
+  """
+  return {
+    name: parsedFrontmatter.name ?? parsedFrontmatter.title ?? filename,
+    description: parsedFrontmatter.description ?? "",
+    location: filename,
   }
-  const data = fm.value
-  let title = filename
-  if (data.title != null) {
-    title = data.title
+}
+
+def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
+  """
+  Build a SkillEntry for one skill in the standard SKILL.md layout.
+  `skillPath` is "<skill-dir>/SKILL.md" relative to the skills root;
+  `name` defaults to the skill's directory name when not in frontmatter.
+  """
+  const skillDir = skillPath.replace("/SKILL.md", "")
+  return {
+    name: parsedFrontmatter.name ?? skillDir,
+    description: parsedFrontmatter.description ?? "",
+    location: skillPath,
   }
-  let description = ""
-  if (data.description != null) {
-    description = data.description
-  }
-  const titleX = xmlEscape(title)
-  const descX = xmlEscape(description)
-  return "  <skill>\n    <name>${titleX}</name>\n    <description>${descX}</description>\n    <location>${fileX}</location>\n  </skill>"
 }
 
 /**
- * Build a tool that lets an LLM read any Markdown skill file in `dir`.
+ * Build a tool that lets an LLM read skill files in `dir`. Supports two
+ * layouts:
+ *   - "standard" (default): each subdirectory of `dir` is one skill
+ *     with a `SKILL.md` entrypoint. Frontmatter `name` / `description`
+ *     are read; `name` defaults to the subdirectory name.
+ *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
+ *     skill. Frontmatter `name` (or `title`) and `description` are read.
  *
- * `skillsDir` globs `dir` for `.md` / `.markdown` files, reads each
- * one's frontmatter, and returns `read` partially applied with
- * `dir: dir` and a tool description that lists each skill's filename,
- * title, and description.
- *
- * The LLM only needs to supply a `filename` argument; the description
- * tells it which filenames are available and what each one contains.
+ * The returned tool is `read` partially applied with `dir: dir`. Its
+ * description lists every available skill so the LLM knows which
+ * `location` to pass back as `filename`.
  */
-export def skillsDir(dir: string) {
+export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   """
-  Build a skills tool for an LLM. Scans `dir` for Markdown files
-  (`.md` and `.markdown`), reads each one's frontmatter title and
-  description, and returns the `read` function partially applied with
-  `dir: dir`. The returned tool's description lists every available
-  skill so the LLM knows which filename to pass.
+  Build a skills tool for an LLM over a directory of skills.
 
-  @param dir - Directory containing skill Markdown files
+  @param dir - Directory containing the skills.
+  @param layout - "standard" (default) for subdirectory-per-skill with
+                  SKILL.md, "flat" for a directory of loose Markdown
+                  files.
   """
+  let pattern = "*/SKILL.md"
+  if (layout == "flat") {
+    pattern = "*.{md,markdown}"
+  }
   let lines: string[] = []
-  const pathsResult = glob("*.{md,markdown}", dir)
+  const pathsResult = glob(pattern, dir)
   if (pathsResult is success(paths)) {
-    lines = map(paths) as filename {
-      // `glob` now returns paths relative to `dir`, so `filename` is
-      // ready to hand straight to `read(filename, dir)` — no basename
-      // step needed.
-      const fm = read(filename, dir) |> frontmatter
-      return describeSkill(filename, fm)
+    lines = map(paths) as path {
+      const data = (read(path, dir) |> frontmatter) catch {}
+      let entry = flatEntry(path, data)
+      if (layout == "standard") {
+        entry = standardEntry(path, data)
+      }
+      return renderEntry(entry)
     }
   }
 

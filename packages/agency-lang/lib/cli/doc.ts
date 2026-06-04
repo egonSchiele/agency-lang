@@ -162,7 +162,9 @@ function generateDocForFile(
   const constants = collectExportedConstants(program);
 
   const title = path.basename(filePath).replace(/\.agency$/, "");
-  const sections: string[] = [heading(1, title)];
+  const safeName = title.replace(/["\\\n]/g, "");
+  const frontmatter = `---\nname: "${safeName}"\n---`;
+  const sections: string[] = [frontmatter, heading(1, title)];
 
   // Page-level "View source" link
   if (ctx.baseUrl && ctx.sourceRelPath) {

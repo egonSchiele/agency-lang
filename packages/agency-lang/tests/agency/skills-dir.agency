@@ -1,0 +1,65 @@
+import { skillsDir } from "std::skills"
+
+def stdDesc(): string {
+  const tool = skillsDir("skills-dir-fixture/std", "standard") with approve
+  return tool.description
+}
+
+def flatDesc(): string {
+  const tool = skillsDir("skills-dir-fixture/flat", "flat") with approve
+  return tool.description
+}
+
+def emptyDesc(): string {
+  const tool = skillsDir("skills-dir-fixture/empty", "flat") with approve
+  return tool.description
+}
+
+node standardHasNamedSkill(): boolean {
+  const d = stdDesc()
+  return d.includes("<name>hello-world</name>")
+      && d.includes("<description>Greet the world.</description>")
+      && d.includes("<location>hello-world/SKILL.md</location>")
+}
+
+node standardFallsBackToDirNameWhenNoFrontmatter(): boolean {
+  const d = stdDesc()
+  return d.includes("<name>bare-skill</name>")
+      && d.includes("<location>bare-skill/SKILL.md</location>")
+}
+
+node standardFallsBackToDirNameWhenNameAbsent(): boolean {
+  const d = stdDesc()
+  return d.includes("<name>no-name</name>")
+      && d.includes("<description>This one is missing its name.</description>")
+}
+
+node flatHasNamedSkill(): boolean {
+  const d = flatDesc()
+  return d.includes("<name>greet</name>")
+      && d.includes("<location>greet.md</location>")
+}
+
+node flatFallsBackToTitle(): boolean {
+  const d = flatDesc()
+  return d.includes("<name>vitepress-style</name>")
+      && d.includes("<location>title-only.md</location>")
+}
+
+node flatFallsBackToFilenameWhenNoFrontmatter(): boolean {
+  const d = flatDesc()
+  return d.includes("<name>no-frontmatter.md</name>")
+      && d.includes("<description></description>")
+      && d.includes("<location>no-frontmatter.md</location>")
+}
+
+node flatXmlEscapesDescription(): boolean {
+  const d = flatDesc()
+  return d.includes("Has &lt;angle&gt; brackets &amp; ampersand.")
+      && !d.includes("Has <angle>")
+}
+
+node emptyDirectoryProducesEmptySkillList(): boolean {
+  const d = emptyDesc()
+  return d.includes("<available_skills>\n\n</available_skills>")
+}

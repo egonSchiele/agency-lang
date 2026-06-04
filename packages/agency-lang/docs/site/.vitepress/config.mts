@@ -198,6 +198,7 @@ export default defineConfig({
             { text: "Overview", link: "/stdlib/overview" },
             { text: "agency", link: "/stdlib/agency" },
             { text: "agent", link: "/stdlib/agent" },
+            { text: "args", link: "/stdlib/args" },
             { text: "array", link: "/stdlib/array" },
             { text: "browser", link: "/stdlib/browser" },
             { text: "calendar", link: "/stdlib/calendar" },

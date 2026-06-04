@@ -16,7 +16,7 @@ type Edit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L4))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L4))
 
 ### EditResult
 
@@ -28,7 +28,7 @@ type EditResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L10))
 
 ### PatchResult
 
@@ -39,7 +39,7 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L50))
 
 ### Workspace
 
@@ -75,7 +75,7 @@ export type Workspace = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L139))
 
 ## Functions
 
@@ -107,7 +107,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 
 **Throws:** `std::edit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L16))
 
 ### printDiff
 
@@ -130,7 +130,7 @@ Print a colored, line-based diff of `oldText` vs `newText` to stdout.
 | oldText | `string` |  |
 | newText | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
 
 ### applyPatch
 
@@ -154,7 +154,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L55))
 
 ### mkdir
 
@@ -178,7 +178,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L69))
 
 ### copy
 
@@ -204,7 +204,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L83))
 
 ### move
 
@@ -230,7 +230,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L99))
 
 ### remove
 
@@ -254,7 +254,7 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L115))
 
 ### openDir
 
@@ -306,4 +306,4 @@ Build a Workspace anchored at `dir` — a bundle of file-system tools
 
 **Returns:** [Workspace](#workspace)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L155))

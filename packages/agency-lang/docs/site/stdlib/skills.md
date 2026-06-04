@@ -16,7 +16,7 @@ type SkillEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L5))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L5))
 
 ## Functions
 
@@ -42,7 +42,7 @@ Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L11))
 
 ### renderEntry
 
@@ -65,7 +65,7 @@ Render one SkillEntry as a `<skill>` XML block. All string fields are
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L30))
 
 ### flatEntry
 
@@ -89,7 +89,7 @@ Build a SkillEntry for one file in the legacy flat-markdown layout.
 
 **Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L49))
 
 ### standardEntry
 
@@ -113,7 +113,7 @@ Build a SkillEntry for one skill in the standard SKILL.md layout.
 
 **Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L65))
 
 ### skillsDir
 
@@ -145,4 +145,4 @@ Build a skills tool for an LLM over a directory of skills.
 | dir | `string` |  |
 | layout | `"flat" \| "standard"` | "standard" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L95))

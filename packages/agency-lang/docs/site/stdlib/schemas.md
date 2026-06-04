@@ -29,7 +29,7 @@ export static const emailFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L19))
 
 ### urlFormat
 
@@ -39,7 +39,7 @@ export static const urlFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L22))
 
 ### uuidFormat
 
@@ -49,7 +49,7 @@ export static const uuidFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L25))
 
 ### dateTimeFormat
 
@@ -59,7 +59,7 @@ export static const dateTimeFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L28))
 
 ### dateFormat
 
@@ -69,7 +69,7 @@ export static const dateFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L31))
 
 ### ipv4Format
 
@@ -79,7 +79,7 @@ export static const ipv4Format = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L34))
 
 ### ipv6Format
 
@@ -89,4 +89,4 @@ export static const ipv6Format = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/schemas.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/schemas.agency#L37))

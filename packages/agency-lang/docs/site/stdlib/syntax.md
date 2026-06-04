@@ -12,7 +12,7 @@ name: "syntax"
 export type HighlightMode = "shell" | "web"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/syntax.agency#L5))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L5))
 
 ## Functions
 
@@ -38,4 +38,4 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/syntax.agency#L7))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L7))

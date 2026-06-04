@@ -49,7 +49,7 @@ type EmailResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/email.agency#L39))
 
 ## Functions
 
@@ -95,7 +95,7 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/email.agency#L45))
 
 ### sendWithSendGrid
 
@@ -139,7 +139,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/email.agency#L84))
 
 ### sendWithMailgun
 
@@ -187,4 +187,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/email.agency#L123))

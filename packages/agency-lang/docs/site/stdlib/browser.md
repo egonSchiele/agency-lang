@@ -31,7 +31,7 @@ type BrowserUseResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/browser.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/browser.agency#L17))
 
 ## Functions
 
@@ -67,4 +67,4 @@ Run a browser automation task using natural language via the Browser Use cloud A
 
 **Throws:** `std::browserUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/browser.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/browser.agency#L23))

@@ -15,7 +15,7 @@
   },
   "doc": {
     "outDir": "docs/site/stdlib",
-    "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/stdlib"
+    "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib"
   },
   "coverage": {
     "exclude": [

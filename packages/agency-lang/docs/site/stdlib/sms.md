@@ -31,7 +31,7 @@ type SmsResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/sms.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/sms.agency#L21))
 
 ## Functions
 
@@ -67,4 +67,4 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
 
 **Throws:** `std::sendSms`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/sms.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/sms.agency#L26))

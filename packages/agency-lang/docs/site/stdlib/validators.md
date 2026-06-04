@@ -56,7 +56,7 @@ Returns success if value is a syntactically valid email address,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L36))
 
 ### isUrl
 
@@ -77,7 +77,7 @@ Returns success if value is an http:// or https:// URL,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L46))
 
 ### isUuid
 
@@ -98,7 +98,7 @@ Returns success if value is a canonical UUID string
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L56))
 
 ### isInt
 
@@ -119,7 +119,7 @@ Returns success if value is an integer (no fractional component),
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L66))
 
 ### isPositive
 
@@ -139,7 +139,7 @@ Returns success if value > 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L76))
 
 ### isNegative
 
@@ -159,7 +159,7 @@ Returns success if value < 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L85))
 
 ### min
 
@@ -182,7 +182,7 @@ Returns success if `value >= n`, failure otherwise. Bind `n` via PFA
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L94))
 
 ### max
 
@@ -205,7 +205,7 @@ Returns success if `value <= n`, failure otherwise. Bind `n` via PFA
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L105))
 
 ### minLength
 
@@ -229,7 +229,7 @@ Returns success if `value.length >= n`, failure otherwise. Bind `n`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L116))
 
 ### maxLength
 
@@ -253,7 +253,7 @@ Returns success if `value.length <= n`, failure otherwise. Bind `n`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L128))
 
 ### matches
 
@@ -277,4 +277,4 @@ Returns success if `value` matches the regular expression `pattern`,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validators.agency#L140))

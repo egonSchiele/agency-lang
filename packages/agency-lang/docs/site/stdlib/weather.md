@@ -26,7 +26,7 @@ type WeatherResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L2))
 
 ## Functions
 
@@ -50,7 +50,7 @@ Get current weather for a city name or zip code. Returns temperature, feels-like
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L27))
 
 ### celsiusToFahrenheit
 
@@ -66,7 +66,7 @@ celsiusToFahrenheit(celsius: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L37))
 
 ### fahrenheitToCelsius
 
@@ -82,4 +82,4 @@ fahrenheitToCelsius(fahrenheit: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L41))

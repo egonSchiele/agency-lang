@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parses string, number, and boolean flags from argv",
+      "input": "",
+      "argv": ["--name", "alice", "--port", "8080", "-v", "extra", "positional"],
+      "expectedOutput": "{\"name\":\"alice\",\"port\":8080,\"verbose\":true,\"positionals\":[\"extra\",\"positional\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "description": "Applies defaults when flags are absent",
+      "input": "",
+      "argv": [],
+      "expectedOutput": "{\"name\":\"world\",\"port\":3000,\"verbose\":false,\"positionals\":[]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

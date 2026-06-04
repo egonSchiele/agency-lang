@@ -91,7 +91,7 @@ type Todo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L81))
 
 ### AgentSpec
 
@@ -130,7 +130,7 @@ export type AgentSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L130))
 
 ### RouterConfig
 
@@ -174,7 +174,7 @@ export type RouterConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L152))
 
 ## Functions
 
@@ -194,7 +194,7 @@ Replace the current todo list. Each todo has an id, text, and status (one of 'pe
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L89))
 
 ### todoList
 
@@ -206,7 +206,7 @@ Return the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L97))
 
 ### question
 
@@ -226,7 +226,7 @@ Ask the user a question and wait for their reply. Unlike input(), this raises an
 
 **Throws:** `std::question`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L104))
 
 ### handoff
 
@@ -270,7 +270,7 @@ Re-route the user's current message to a different specialist.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L184))
 
 ### consumeHandoff
 
@@ -289,7 +289,7 @@ Read and clear the pending handoff target. Returns "" when no
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L217))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L217))
 
 ### runOneTurn
 
@@ -312,7 +312,7 @@ Single iteration of route()'s hop loop. Owns the thread block,
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L228))
 
 ### route
 
@@ -365,4 +365,4 @@ Run one user turn through a multi-specialist agent. Owns the hop
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L295))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L295))

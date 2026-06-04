@@ -56,7 +56,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/cli.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L59))
 
 ### clearScreen
 
@@ -64,4 +64,4 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/cli.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L111))

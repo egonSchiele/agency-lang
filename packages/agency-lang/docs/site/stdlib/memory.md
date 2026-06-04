@@ -16,7 +16,7 @@ type ExtractionResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L6))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L6))
 
 ### ForgetResult
 
@@ -27,7 +27,7 @@ type ForgetResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L12))
 
 ### MemoryConfig
 
@@ -41,7 +41,7 @@ export type MemoryConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L22))
 
 ## Functions
 
@@ -63,7 +63,7 @@ Return `true` iff there is an active memory frame on the current
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L48))
 
 ### setMemoryId
 
@@ -91,7 +91,7 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L63))
 
 ### enableMemory
 
@@ -128,7 +128,7 @@ Turn memory on for the current execution branch using `config`.
 |---|---|---|
 | config | [MemoryConfig](#memoryconfig) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L82))
 
 ### disableMemory
 
@@ -147,7 +147,7 @@ Pop the top memory frame from the current branch's stateStack.
   Prefer the block form `memory({...}) as { ... }` for lexical
   scoping, which restores the previous frame on exit.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L110))
 
 ### memory
 
@@ -187,7 +187,7 @@ Run `block` with `config` pushed as the active memory frame; pop
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L126))
 
 ### remember
 
@@ -212,7 +212,7 @@ Extract and store structured facts from the given text into the
 |---|---|---|
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L159))
 
 ### recall
 
@@ -237,7 +237,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L181))
 
 ### forget
 
@@ -261,4 +261,4 @@ Soft-delete facts matching the query from the knowledge graph.
 |---|---|---|
 | query | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L195))

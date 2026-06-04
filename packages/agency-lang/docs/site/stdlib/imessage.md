@@ -30,7 +30,7 @@ type IMessageResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/imessage.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/imessage.agency#L21))
 
 ## Functions
 
@@ -60,4 +60,4 @@ Send an iMessage via the macOS Messages app. Only works on macOS with Messages.a
 
 **Throws:** `std::sendIMessage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/imessage.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/imessage.agency#L25))

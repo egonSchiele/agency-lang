@@ -16,7 +16,7 @@ type SearchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/search.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L3))
 
 ## Functions
 
@@ -50,4 +50,4 @@ Search the web. Returns a list of results with title, url, and description. Set 
 
 **Returns:** `SearchResult[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/search.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L18))

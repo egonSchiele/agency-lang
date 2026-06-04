@@ -45,7 +45,7 @@ export type Email = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L25))
 
 ### URLString
 
@@ -72,7 +72,7 @@ export type URLString = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L31))
 
 ### UUIDString
 
@@ -99,7 +99,7 @@ export type UUIDString = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L37))
 
 ### NumberInRange
 
@@ -130,7 +130,7 @@ export type NumberInRange(low: number, high: number) = number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L44))
 
 ### StringWithLength
 
@@ -157,7 +157,7 @@ export type StringWithLength(min: number, max: number) = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L49))
 
 ### MatchesPattern
 
@@ -182,7 +182,7 @@ export type MatchesPattern(pat: string) = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L54))
 
 ### BoundedArray
 
@@ -206,4 +206,4 @@ export type BoundedArray<T>(min: number, max: number) = T[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/types.agency#L58))

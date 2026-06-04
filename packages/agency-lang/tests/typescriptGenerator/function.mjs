@@ -400,12 +400,14 @@ const add = __AgencyFunction.create({
     name: "a",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "b",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "add",

@@ -299,12 +299,14 @@ const add = __AgencyFunction.create({
     name: "x",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "y",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "add",
@@ -458,7 +460,8 @@ const greet = __AgencyFunction.create({
     name: "name",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "greet",
@@ -618,12 +621,14 @@ const mixed = __AgencyFunction.create({
     name: "count",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "label",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "mixed",
@@ -777,7 +782,8 @@ const processArray = __AgencyFunction.create({
     name: "items",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "processArray",
@@ -931,7 +937,8 @@ const flexible = __AgencyFunction.create({
     name: "value",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "flexible",

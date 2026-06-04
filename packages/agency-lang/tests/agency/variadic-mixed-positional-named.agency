@@ -1,0 +1,21 @@
+// Spec 2026-06-03 §5.5 #44, #45: mixed positional+named and pure named forms
+// with a fixed param and a named variadic.
+def foo(a: number, ...rest: number[]): any {
+  let total = 0
+  for (x in rest) { total = total + x }
+  return {
+    a: a,
+    total: total,
+    first: rest[0],
+    second: rest[1]
+  }
+}
+
+node main() {
+  let mixed = foo(1, rest: [2, 3])
+  let named = foo(a: 1, rest: [2, 3])
+  return {
+    mixed: mixed,
+    named: named
+  }
+}

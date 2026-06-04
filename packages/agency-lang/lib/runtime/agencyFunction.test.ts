@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { AgencyFunction, UNSET } from "./agencyFunction.js";
 import { runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
@@ -245,11 +246,71 @@ describe("partial()", () => {
     expect(() => bound.partial({ a: 10 })).toThrow("already bound");
   });
 
-  it("throws when binding a variadic param", () => {
+  it("binds a variadic param via the named-array form", () => {
     const fn = makeFunction([
       { name: "messages", variadic: true },
     ]);
-    expect(() => fn.partial({ messages: ["hi"] })).toThrow("Variadic parameter");
+    const bound = fn.partial({ messages: ["hi", "there"] });
+    expect(bound.getUnboundParams()).toHaveLength(0);
+  });
+
+  it("rejects binding a variadic to a non-array value", () => {
+    const fn = makeFunction([
+      { name: "messages", variadic: true },
+    ]);
+    expect(() => fn.partial({ messages: "hi" })).toThrow(
+      "Variadic parameter 'messages' must be bound to an array",
+    );
+  });
+
+  // Spec 2026-06-03 §5.5 #47 (runtime half of the test). The type checker
+  // rejects this at compile time; the runtime is a backstop for callers
+  // that bypass the type checker (generated TS, manual runtime usage).
+  it("rejects positional args past the fixed count when variadic is bound by name", async () => {
+    const impl = (a: number, rest: number[]) => [a, rest];
+    const fn = AgencyFunction.create(
+      {
+        name: "foo",
+        module: "test.agency",
+        fn: impl,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "rest", hasDefault: false, defaultValue: undefined, variadic: true },
+        ],
+        toolDefinition: null,
+      },
+      {},
+    );
+    await expect(
+      fn.invoke({
+        type: "named",
+        positionalArgs: [1, 2],
+        namedArgs: { rest: [3] },
+      }),
+    ).rejects.toThrow(/Positional argument cannot feed variadic/);
+  });
+
+  it("accepts named-variadic binding via invoke (runtime mirror of compile-time test)", async () => {
+    const impl = (a: number, rest: number[]) => ({ a, rest });
+    const fn = AgencyFunction.create(
+      {
+        name: "foo",
+        module: "test.agency",
+        fn: impl,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "rest", hasDefault: false, defaultValue: undefined, variadic: true },
+        ],
+        toolDefinition: null,
+      },
+      {},
+    );
+    const out = await fn.invoke({
+      type: "named",
+      positionalArgs: [],
+      namedArgs: { a: 10, rest: [1, 2, 3] },
+    });
+    expect(out).toEqual({ a: 10, rest: [1, 2, 3] });
   });
 
   it("invoke on bound function merges args correctly", async () => {
@@ -327,6 +388,35 @@ describe("partial()", () => {
       namedArgs: { c: 30, b: 20 },
     });
     expect(result).toBe(60);
+  });
+
+  // Spec 2026-06-03 §5.6 #52: after PFA-binding a variadic, the reduced
+  // schema no longer carries the variadic's field.
+  it("removes the variadic field from the reduced schema after PFA binding", () => {
+    const schema = z.object({
+      a: z.number(),
+      rest: z.array(z.number()),
+    });
+    const fn = AgencyFunction.create(
+      {
+        name: "foo",
+        module: "test",
+        fn: () => {},
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "rest", hasDefault: false, defaultValue: undefined, variadic: true },
+        ],
+        toolDefinition: {
+          name: "foo",
+          description: "Adds.",
+          schema,
+        },
+      },
+      {},
+    );
+    const bound = fn.partial({ rest: [1, 2] });
+    const newSchema = bound.toolDefinition!.schema as z.ZodObject<Record<string, z.ZodTypeAny>>;
+    expect(Object.keys(newSchema.shape)).toEqual(["a"]);
   });
 
   it("strips @param lines from tool description", () => {

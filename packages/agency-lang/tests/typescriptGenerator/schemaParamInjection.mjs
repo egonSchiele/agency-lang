@@ -287,12 +287,14 @@ const parseValue = __AgencyFunction.create({
     name: "input",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "s",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "parseValue",

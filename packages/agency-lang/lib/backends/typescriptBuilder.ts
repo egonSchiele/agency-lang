@@ -93,6 +93,7 @@ import {
   hasAnyValidateTag,
 } from "./typescriptGenerator/validationDescriptor.js";
 import { resolveTypeDeep } from "../typeChecker/assignability.js";
+import { isFunctionTyped } from "../typeChecker/utils.js";
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -1389,8 +1390,62 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * Classify a parameter's contribution to a tool's JSON schema.
+   *
+   * Single source of truth for "what does this param contribute?" — consumed
+   * by `buildToolDefinition` (and only by it). Three outcomes:
+   *
+   *   - `drop`   : function-typed, function-union, or variadic-of-function.
+   *                Omitted from the schema entirely. The required-vs-optional
+   *                distinction is enforced separately by the tool-binding
+   *                validator (lib/typeChecker/toolBlockBinding.ts).
+   *   - `scalar` : a regular field — type derived from the declared hint
+   *                (`string` is the historical default for untyped params).
+   *                Optional params get `.nullable().describe("Default: ...")`
+   *                appended so the LLM understands the value can be omitted.
+   *   - `array`  : a variadic param whose element type is non-function. The
+   *                emitted schema is `z.array(<element>)` so the LLM supplies
+   *                the whole spread as a single array via the named-array
+   *                calling convention (`foo(rest: [1,2,3])`).
+   */
+  private paramSchemaContribution(
+    param: FunctionParameter,
+  ): { kind: "drop" } | { kind: "scalar"; zod: string } | { kind: "array"; zod: string } {
+    if (isFunctionTyped(param)) return { kind: "drop" };
+
+    if (param.variadic) {
+      // For `...xs: T[]`, the typeHint is the array type already; for the
+      // untyped fallback `...xs`, treat as `any[]`.
+      const elementHint =
+        param.typeHint?.type === "arrayType"
+          ? param.typeHint.elementType
+          : param.typeHint ?? { type: "primitiveType" as const, value: "string" };
+      const elementZod = this.zodSchemaFor(elementHint);
+      return { kind: "array", zod: `z.array(${elementZod})` };
+    }
+
+    const typeHint = param.typeHint || {
+      type: "primitiveType" as const,
+      value: "string",
+    };
+    let zod = this.zodSchemaFor(typeHint);
+    if (param.defaultValue) {
+      const defaultStr = expressionToString(param.defaultValue);
+      zod += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
+    }
+    return { kind: "scalar", zod };
+  }
+
+  /**
    * Build a tool definition TsNode for an Agency function.
    * Returns ts.id("null") if the function has no parameters (no schema needed for tools).
+   *
+   * Every "should this param appear in the schema?" decision is funneled
+   * through `paramSchemaContribution` — the single classifier that knows
+   * which params are dropped (function-typed, function-union, variadic of
+   * function), which become scalar, and which become array (variadic).
+   * No ad-hoc filter or inline predicate is allowed in this function; the
+   * spec's discipline rule (§4.6 rule #3) is enforced by code review.
    */
   private buildToolDefinition(node: FunctionDefinition): TsNode {
     const { functionName, parameters } = node;
@@ -1402,23 +1457,19 @@ export class TypeScriptBuilder {
       );
     }
 
-    const nonBlockParams = parameters.filter(
-      (p) => !p.typeHint || p.typeHint.type !== "blockType",
-    );
+    const contributions = parameters.map((p) => ({
+      param: p,
+      contribution: this.paramSchemaContribution(p),
+    }));
 
+    // Declaration order is preserved by iterating `parameters` directly;
+    // `properties` is an in-order map of name → zod expression source.
     const properties: Record<string, string> = {};
-    nonBlockParams.forEach((param: FunctionParameter) => {
-      const typeHint = param.typeHint || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
-      let tsType = this.zodSchemaFor(typeHint);
-      if (param.defaultValue) {
-        const defaultStr = expressionToString(param.defaultValue);
-        tsType += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
-      }
-      properties[param.name] = tsType;
-    });
+    for (const { param, contribution } of contributions) {
+      if (contribution.kind === "drop") continue;
+      properties[param.name] = contribution.zod;
+    }
+
     let schema = "";
     for (const [key, value] of Object.entries(properties)) {
       schema += `"${key.replace(/"/g, '\\"')}": ${value}, `;
@@ -1771,13 +1822,17 @@ export class TypeScriptBuilder {
 
     // Build AgencyFunction.create() params metadata
     // Include all params (including block-typed) so .partial() can bind them by name.
-    // Block-typed params are separately excluded from the tool schema (buildToolDefinition).
+    // Block-typed (and any function-typed) params are separately excluded
+    // from the tool schema (buildToolDefinition); the `isFunctionTyped`
+    // flag is forwarded so the runtime backstop (validateForLLM) can
+    // re-check tool arrays it cannot see statically.
     const paramNodes = parameters.map((p) =>
       ts.obj({
         name: ts.str(p.name),
         hasDefault: ts.bool(!!p.defaultValue),
         defaultValue: ts.id("undefined"),
         variadic: ts.bool(!!p.variadic),
+        isFunctionTyped: ts.bool(isFunctionTyped(p)),
       }),
     );
 

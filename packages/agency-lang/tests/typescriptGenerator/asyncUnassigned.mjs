@@ -285,12 +285,14 @@ const append = __AgencyFunction.create({
     name: "sleepTime",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "value",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "append",

@@ -1,0 +1,15 @@
+// Spec 2026-06-03 §5.5 #46: array-of-array variadic. The named-array form
+// passes the *outer* array as the spread; with `...xs: number[][]` and
+// `xs: [[1,2],[3]]`, the body sees two elements (each itself an array of
+// numbers), not one element containing nested arrays.
+def foo(...xs: number[][]): any {
+  return {
+    count: xs.length,
+    first: xs[0],
+    second: xs[1]
+  }
+}
+
+node main() {
+  return foo(xs: [[1, 2], [3]])
+}

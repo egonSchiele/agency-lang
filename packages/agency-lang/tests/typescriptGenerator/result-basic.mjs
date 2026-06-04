@@ -287,7 +287,8 @@ const checkAge = __AgencyFunction.create({
     name: "age",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "checkAge",

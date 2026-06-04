@@ -301,12 +301,14 @@ const mapItems = __AgencyFunction.create({
     name: "items",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }, {
     name: "block",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: true
   }],
   toolDefinition: {
     name: "mapItems",

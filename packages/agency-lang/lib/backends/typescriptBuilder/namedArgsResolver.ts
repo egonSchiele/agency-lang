@@ -56,11 +56,14 @@ export function resolveNamedArgs(
     }
   }
 
-  // Collect named args, checking for duplicates and unknown names.
-  // Variadic params can't be passed by name (a splat fills them). Block-typed
-  // params CAN — they may be passed by name as a function reference, mirroring
-  // the runtime resolver in `agencyFunction.ts`.
+  // Collect named args, checking for duplicates and unknown names. All
+  // declared params — including variadics and block-typed — may be named.
+  // For variadic, the supplied value is the whole spread array (not
+  // element-wise). The mixed-rule (positional cannot feed a named-bound
+  // variadic) is enforced below. Keep in sync with the runtime resolver
+  // in `lib/runtime/agencyFunction.ts :: resolveNamed`.
   const nonVariadicParams = paramList.filter((p) => !p.variadic);
+  const variadicParam = paramList.find((p) => p.variadic);
   const namedArgMap = new Map<string, Expression>();
   for (let i = namedStartIdx; i < args.length; i++) {
     const arg = args[i] as NamedArgument;
@@ -69,18 +72,34 @@ export function resolveNamedArgs(
         `Duplicate named argument '${arg.name}' in call to '${node.functionName}'`,
       );
     }
-    const paramIdx = nonVariadicParams.findIndex((p) => p.name === arg.name);
+    const paramIdx = paramList.findIndex((p) => p.name === arg.name);
     if (paramIdx === -1) {
       throw new Error(
         `Unknown named argument '${arg.name}' in call to '${node.functionName}'`,
       );
     }
-    if (paramIdx < namedStartIdx) {
+    // Conflict check applies to fixed params only; variadic conflicts are
+    // handled below by the mixed-rule check (the wording is more
+    // actionable: "positional cannot feed variadic" vs the generic
+    // "conflicts" message).
+    const isVariadic = variadicParam?.name === arg.name;
+    if (!isVariadic && paramIdx < namedStartIdx) {
       throw new Error(
         `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${node.functionName}'`,
       );
     }
     namedArgMap.set(arg.name, arg.value);
+  }
+
+  // Mixed positional + named-variadic rule: when the variadic is bound by
+  // name, no positional argument may exist past the fixed (non-variadic)
+  // parameter count. Keep in sync with `checkNamedArgStructure`.
+  if (variadicParam && namedArgMap.has(variadicParam.name)) {
+    if (namedStartIdx > nonVariadicParams.length) {
+      throw new Error(
+        `Positional argument cannot feed variadic parameter '${variadicParam.name}' when it is also bound by name in call to '${node.functionName}'`,
+      );
+    }
   }
 
   // Positional args stay in place (unwrapped).
@@ -90,7 +109,7 @@ export function resolveNamedArgs(
     result.push(a.type === "namedArgument" ? a.value : a);
   }
 
-  // Fill remaining parameter slots from named args, in parameter order.
+  // Fill remaining non-variadic parameter slots from named args.
   for (let i = namedStartIdx; i < nonVariadicParams.length; i++) {
     const param = nonVariadicParams[i];
     if (namedArgMap.has(param.name)) {
@@ -113,6 +132,20 @@ export function resolveNamedArgs(
         `Missing required argument '${param.name}' in call to '${node.functionName}'`,
       );
     }
+  }
+
+  // If the variadic was bound by name, splat its value array into the
+  // trailing argument slot. Emit as a SplatExpression so the existing
+  // call-site lowering treats it as a normal spread — the variadic-collect
+  // logic in `agencyFunction.ts :: resolvePositional` then gathers it back
+  // into a single array parameter. This is the simplest way to make the
+  // named-array form work end-to-end without a new emission path.
+  if (variadicParam && namedArgMap.has(variadicParam.name)) {
+    result.push({
+      type: "splat",
+      value: namedArgMap.get(variadicParam.name)!,
+    } as SplatExpression);
+    namedArgMap.delete(variadicParam.name);
   }
 
   return result;

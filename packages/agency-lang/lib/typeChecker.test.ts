@@ -5437,9 +5437,11 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
-    it("named arg targeting a variadic param is rejected as unknown", () => {
-      // def collect(...xs: number[]) {}
-      // collect(xs=1)  ← variadic params can't be named
+    it("named arg targeting a variadic with wrong outer shape is a type error", () => {
+      // Spec 2026-06-03: named-arg form for variadics is allowed, but the
+      // value must be the *array* (spread), not a single element.
+      //   def collect(...xs: number[]) {}
+      //   collect(xs: 1)   ← 1 isn't a number[]
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -5466,7 +5468,10 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /Unknown named argument 'xs'/.test(e.message))).toBe(true);
+      // Should NOT report "unknown named argument" — the variadic IS nameable now.
+      expect(errors.some((e) => /Unknown named argument 'xs'/.test(e.message))).toBe(false);
+      // Should report an assignability error: number is not number[].
+      expect(errors.some((e) => /not assignable/.test(e.message) && /number\[\]/.test(e.message))).toBe(true);
     });
 
     it("named args on a builtin call error with a clear message", () => {
@@ -6610,7 +6615,10 @@ describe("TypeChecker", () => {
       expect(errors[0].message).toContain("Unknown parameter 'z'");
     });
 
-    it("should error when .partial() binds a variadic param", () => {
+    it("should error when .partial() binds a variadic to a non-array value", () => {
+      // After spec 2026-06-03, .partial() may bind a variadic via the
+      // named-array form (`log.partial(msgs: ["a","b"])`). Passing a scalar
+      // string in the bind slot is a type error — the slot is `string[]`.
       const program = partialProgram(
         "log",
         [
@@ -6620,7 +6628,30 @@ describe("TypeChecker", () => {
       );
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].message).toContain("Variadic parameter 'msgs'");
+      expect(errors[0].message).toContain("not assignable");
+      expect(errors[0].expectedType).toBe("string[]");
+    });
+
+    it("should accept .partial() binding a variadic via the named-array form", () => {
+      const program = partialProgram(
+        "log",
+        [
+          { type: "functionParameter", name: "msgs", variadic: true, typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } } },
+        ],
+        [{
+          type: "namedArgument",
+          name: "msgs",
+          value: {
+            type: "agencyArray",
+            items: [
+              { type: "string", segments: [{ type: "text", value: "a" }] },
+              { type: "string", segments: [{ type: "text", value: "b" }] },
+            ],
+          },
+        }],
+      );
+      const { errors } = typeCheck(program);
+      expect(errors).toEqual([]);
     });
 
     it("should error when .partial() uses positional args", () => {

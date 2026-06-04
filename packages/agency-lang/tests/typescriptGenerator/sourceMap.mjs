@@ -290,7 +290,8 @@ const greet = __AgencyFunction.create({
     name: "name",
     hasDefault: false,
     defaultValue: undefined,
-    variadic: false
+    variadic: false,
+    isFunctionTyped: false
   }],
   toolDefinition: {
     name: "greet",

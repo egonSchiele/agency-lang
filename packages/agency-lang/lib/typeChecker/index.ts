@@ -40,6 +40,7 @@ import {
 } from "./interruptAnalysis.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
+import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { validateStaticInit } from "./validateStaticInit.js";
 import { walkNodes } from "../utils/node.js";
@@ -302,6 +303,13 @@ export class TypeChecker {
 
     // 8. Check for undefined variable references (config-controlled severity).
     checkUndefinedVariables(scopes, ctx);
+
+    // 9a. Tool-position binding validator: at every llm(...) call site
+    // with a statically-known tools array, require every function-typed
+    // parameter to be bound (error) or warn when an optional one is left
+    // dropped. See lib/typeChecker/toolBlockBinding.ts for the helpers
+    // and docs/superpowers/specs/2026-06-03-tool-params-blocks-and-variadics-design.md §4.2(e).
+    checkToolBlockBindings(this.program, ctx);
 
     // 9. Validate static initializers + `static <bare>` statements.
     // Direct-only checks against the Phase A surface — per-run-only

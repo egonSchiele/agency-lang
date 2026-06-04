@@ -311,6 +311,13 @@ export async function runPrompt(args: {
     }
     return entry;
   });
+  // Runtime backstop for compile-time-undetectable cases (dynamic tool
+  // assembly, hand-written TS). Runs once per tool — before the LLM ever
+  // sees the schema — so failures surface at registration time, not deep
+  // inside an invocation when the missing block is called.
+  for (const fn of agencyFunctions) {
+    fn.validateForLLM();
+  }
   let tools = agencyFunctions
     .filter((fn) => fn.toolDefinition)
     .map((fn) => fn.toolDefinition!)

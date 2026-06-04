@@ -1,0 +1,10 @@
+// Spec 2026-06-03 §5.5 #49: PFA-bound block parameter is correctly
+// invoked by the function body when the bound function is called.
+def runWith(block: () => number): number {
+  return block()
+}
+
+node main() {
+  let bound = runWith.partial(block: \-> 42)
+  return bound()
+}

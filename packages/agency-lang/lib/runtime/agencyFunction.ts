@@ -2,6 +2,7 @@ import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve } from "./interrupts.js";
 import { agencyStore, withPushedHandler } from "./asyncContext.js";
+import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -10,6 +11,16 @@ export type FuncParam = {
   hasDefault: boolean;
   defaultValue: unknown;
   variadic: boolean;
+  /**
+   * True when the parameter's declared type is (or contains) a function type
+   * — e.g. `block: () => void`, a union with a function arm, or a variadic
+   * whose element type is a function. Set by the codegen from the static
+   * `isFunctionTyped` predicate; consumed by `validateToolForLLM`.
+   *
+   * Defaults to false on legacy/handcrafted FuncParam values so the runtime
+   * backstop fails open (i.e. doesn't block valid tools).
+   */
+  isFunctionTyped?: boolean;
   boundValue?: unknown;
   isBound?: boolean;
 };
@@ -130,7 +141,10 @@ export class AgencyFunction {
   partial(bindings: Record<string, unknown>): AgencyFunction {
     if (Object.keys(bindings).length === 0) return this;
 
-    // Single pass: validate bindings against full param list
+    // Single pass: validate bindings against full param list. Variadic
+    // binding via the named-array form (`.partial(rest: [1,2])`) is allowed;
+    // the supplied value must be an array. Runtime backstop only — the
+    // type checker rejects shape mismatches earlier.
     for (const name of Object.keys(bindings)) {
       const param = this.params.find(p => p.name === name);
       if (!param) {
@@ -139,8 +153,10 @@ export class AgencyFunction {
       if (param.isBound) {
         throw new Error(`Parameter '${name}' is already bound`);
       }
-      if (param.variadic) {
-        throw new Error(`Variadic parameter '${name}' cannot be bound`);
+      if (param.variadic && !Array.isArray(bindings[name])) {
+        throw new Error(
+          `Variadic parameter '${name}' must be bound to an array in .partial(); got ${typeof bindings[name]}`,
+        );
       }
     }
 
@@ -268,17 +284,45 @@ export class AgencyFunction {
     namedArgs: Record<string, unknown>,
     blockArg?: unknown,
   ): unknown[] {
+    // The variadic — if any — is in `_unboundParams` but not in
+    // `_nonVariadicUnbound`. Named lookups search the full unbound list
+    // so `foo(rest: [1,2])` finds the variadic; conflict-with-positional
+    // checks use the non-variadic position index. Keep in sync with the
+    // compile-time resolver in `namedArgsResolver.ts :: resolveNamedArgs`.
+    const variadicParam = this._hasVariadic
+      ? this._unboundParams[this._unboundParams.length - 1]
+      : undefined;
+
     // Validate named args: no unknowns, no conflicts with positional
     for (const name of Object.keys(namedArgs)) {
       const paramIdx = this._nonVariadicUnbound.findIndex(p => p.name === name);
-      if (paramIdx === -1) {
+      const targetsVariadic = variadicParam && variadicParam.name === name;
+      if (paramIdx === -1 && !targetsVariadic) {
         throw new Error(
           `Unknown named argument '${name}' in call to '${this.name}'`,
         );
       }
-      if (paramIdx < positionalArgs.length) {
+      if (paramIdx !== -1 && paramIdx < positionalArgs.length) {
         throw new Error(
           `Named argument '${name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${this.name}'`,
+        );
+      }
+    }
+
+    // Mixed positional + named-variadic rule: when the variadic is bound by
+    // name, no positional may exist past the fixed (non-variadic) param
+    // count. Mirrors the compile-time check; runs as a backstop for
+    // generated TS / direct runtime callers that bypass the type checker.
+    if (variadicParam && Object.hasOwn(namedArgs, variadicParam.name)) {
+      if (positionalArgs.length > this._nonVariadicUnbound.length) {
+        throw new Error(
+          `Positional argument cannot feed variadic parameter '${variadicParam.name}' when it is also bound by name in call to '${this.name}'`,
+        );
+      }
+      const value = namedArgs[variadicParam.name];
+      if (!Array.isArray(value)) {
+        throw new Error(
+          `Variadic parameter '${variadicParam.name}' must be bound to an array; got ${typeof value} in call to '${this.name}'`,
         );
       }
     }
@@ -326,8 +370,33 @@ export class AgencyFunction {
       }
     }
 
+    // If the variadic was bound by name, splat its array into the trailing
+    // slot so resolvePositional gathers it back into a single-array param.
+    // This is the runtime mirror of the typescript builder behavior.
+    if (variadicParam && Object.hasOwn(namedArgs, variadicParam.name)) {
+      const arr = namedArgs[variadicParam.name] as unknown[];
+      for (const v of arr) result.push(v);
+    }
+
     // Apply variadic wrapping and default padding
     return this.resolvePositional(result);
+  }
+
+  /**
+   * Runtime backstop invoked once per tool by `runPrompt` immediately before
+   * issuing the LLM request. Throws if any required function-typed param is
+   * unbound — duplicating (intentionally) the type checker's check at the
+   * `llm(...)` site so dynamically-assembled tool arrays (`tools: [...base,
+   * x]`) are also covered. The error wording uses the same builder as the
+   * compile-time diagnostic so users see one consistent message.
+   */
+  validateForLLM(): void {
+    for (const p of this.params) {
+      if (!p.isFunctionTyped) continue;
+      if (p.isBound) continue;
+      if (p.hasDefault) continue;
+      throw new Error(formatRequiredUnboundRuntimeError(this.name, p.name));
+    }
   }
 
   // Serialization handled by FunctionRefReviver — toJSON() would conflict with the replacer pattern.

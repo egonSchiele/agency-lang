@@ -737,6 +737,69 @@ function _assertLineModeAvailable(name: string): void {
   }
 }
 
+// `__FREETEXT__:` is `_promptsAutocomplete`'s private wire format for
+// smuggling user-typed free-text values out of the autocomplete UI.
+// `_promptsSelect` uses a different mechanism (sentinel value +
+// follow-up text prompt) since `prompts.select` has no `suggest` hook.
+const AUTOCOMPLETE_FREE_TEXT_PREFIX = "__FREETEXT__:";
+
+// Shared cancellation+Result wrapper for every `prompts(...)` call.
+// All four bridges call this; the only differences between them are
+// the question they build and the post-processing they apply to the
+// successful value. `onCancel` returns `false` to suppress prompts'
+// default `process.exit(0)` on Ctrl+C / Escape.
+async function _runPrompt(question: prompts.PromptObject): Promise<any> {
+  let cancelled = false;
+  const answer = await prompts(question, {
+    onCancel: () => {
+      cancelled = true;
+      return false;
+    },
+  });
+  // Real Ctrl+C / Escape triggers onCancel and leaves the answer
+  // object empty. We also treat a null/undefined value as cancel —
+  // none of our bridges legitimately resolve with null (select /
+  // autocomplete return strings, text returns string, confirm
+  // returns boolean), so this is a defensive coverage of the
+  // `prompts.inject([null])` test path and any future edge case.
+  if (cancelled || !("value" in answer) || answer.value == null) {
+    return failure("cancelled");
+  }
+  return success(answer.value);
+}
+
+// Exported for unit tests; do not call from production code.
+export function __suggestForTest(
+  input: string,
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+): Promise<{ title: string; value: string }[]> {
+  return _buildSuggest(items, allowFreeText)(input, []);
+}
+
+function _buildSuggest(
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+): (input: string, choices: any[]) => Promise<{ title: string; value: string }[]> {
+  return async (input: string, _choices: any[]) => {
+    const q = (input ?? "").toLowerCase();
+    const matched = items
+      .filter(
+        (it) =>
+          it.key.toLowerCase().includes(q) ||
+          it.label.toLowerCase().includes(q),
+      )
+      .map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key }));
+    if (allowFreeText && input !== "" && matched.length === 0) {
+      matched.push({
+        title: `→ use as reason: "${input}"`,
+        value: `${AUTOCOMPLETE_FREE_TEXT_PREFIX}${input}`,
+      });
+    }
+    return matched;
+  };
+}
+
 export async function _promptsAutocomplete(
   message: string,
   items: PromptsChoiceItem[],
@@ -744,12 +807,20 @@ export async function _promptsAutocomplete(
   hint: string = "",
 ): Promise<any> {
   _assertLineModeAvailable("autocomplete");
-  // TODO Task 2: replace with real prompts.autocomplete call.
-  void message;
-  void items;
-  void allowFreeText;
-  void hint;
-  return failure("not-implemented");
+  const result = await _runPrompt({
+    type: "autocomplete",
+    name: "value",
+    message,
+    hint: hint || undefined,
+    choices: items.map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key })),
+    suggest: _buildSuggest(items, allowFreeText),
+  });
+  if (isFailure(result)) return result;
+  const raw = String(result.value);
+  if (raw.startsWith(AUTOCOMPLETE_FREE_TEXT_PREFIX)) {
+    return success(raw.slice(AUTOCOMPLETE_FREE_TEXT_PREFIX.length));
+  }
+  return success(raw);
 }
 
 // ---------------------------------------------------------------------------

@@ -25,7 +25,9 @@ import {
   _setSize,
   _uninstallConsoleCapture,
   _promptsAutocomplete,
+  __suggestForTest,
 } from "agency-lang/stdlib-lib/ui.js";
+import prompts from "prompts";
 import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 import { afterEach, beforeEach } from "vitest";
@@ -641,5 +643,96 @@ describe("std::ui — _promptsAutocomplete bridge guards", () => {
     expect((errors[0] as Error).message).toMatch(
       /cannot be used inside an active repl/,
     );
+  });
+});
+
+describe("std::ui — _promptsAutocomplete happy path", () => {
+  beforeEach(() => spoofTty(true));
+  afterEach(() => restoreTty());
+
+  it("returns success with the picked key on resolve", async () => {
+    prompts.inject(["a"]);
+    const result = await _promptsAutocomplete(
+      "pick",
+      [
+        { key: "a", label: "Approve" },
+        { key: "r", label: "Reject" },
+      ],
+      false,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("a");
+  });
+
+  it("returns failure('cancelled') when the user cancels", async () => {
+    prompts.inject([null]);
+    const result = await _promptsAutocomplete(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      false,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("cancelled");
+  });
+
+  it("decodes the __FREETEXT__: prefix on resolve", async () => {
+    prompts.inject(["__FREETEXT__:please don't delete that"]);
+    const result = await _promptsAutocomplete(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("please don't delete that");
+  });
+
+  it("suggest() returns matching items by key or label, substring, case-insensitive", async () => {
+    const matched = await __suggestForTest(
+      "App",
+      [
+        { key: "a", label: "Approve" },
+        { key: "r", label: "Reject" },
+      ],
+      false,
+    );
+    expect(matched.map((m) => m.value)).toEqual(["a"]);
+  });
+
+  it("suggest() appends synthetic free-text row only when allowFreeText && input && no real match", async () => {
+    const noMatch = await __suggestForTest(
+      "xyz",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(noMatch).toHaveLength(1);
+    expect(noMatch[0].value).toBe("__FREETEXT__:xyz");
+    expect(noMatch[0].title).toContain("→");
+    expect(noMatch[0].title).toContain("xyz");
+
+    const withMatch = await __suggestForTest(
+      "app",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(withMatch).toHaveLength(1);
+    expect(withMatch[0].value).toBe("a");
+
+    const empty = await __suggestForTest(
+      "",
+      [{ key: "a", label: "A" }],
+      true,
+    );
+    expect(
+      empty.some((m) => String(m.value).startsWith("__FREETEXT__")),
+    ).toBe(false);
+
+    const off = await __suggestForTest(
+      "xyz",
+      [{ key: "a", label: "A" }],
+      false,
+    );
+    expect(
+      off.some((m) => String(m.value).startsWith("__FREETEXT__")),
+    ).toBe(false);
   });
 });

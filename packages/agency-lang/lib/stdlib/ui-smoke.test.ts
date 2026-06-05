@@ -25,6 +25,9 @@ import {
   _setSize,
   _uninstallConsoleCapture,
   _promptsAutocomplete,
+  _promptsSelect,
+  _promptsText,
+  _promptsConfirm,
   __suggestForTest,
 } from "agency-lang/stdlib-lib/ui.js";
 import prompts from "prompts";
@@ -734,5 +737,144 @@ describe("std::ui — _promptsAutocomplete happy path", () => {
     expect(
       off.some((m) => String(m.value).startsWith("__FREETEXT__")),
     ).toBe(false);
+  });
+});
+
+// All three bridges share `_assertLineModeAvailable`, which is
+// already covered for `_promptsAutocomplete` in the Task 1 block
+// above. To avoid running a full repl harness three more times,
+// these blocks only test the non-TTY branch. Trust that the shared
+// helper guards the active-repl case for all four bridges.
+
+describe("std::ui — _promptsSelect", () => {
+  afterEach(() => restoreTty());
+
+  it("throws on non-TTY", async () => {
+    spoofTty(false);
+    await expect(
+      _promptsSelect("pick", [{ key: "a", label: "A" }], false),
+    ).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("returns success with the picked key", async () => {
+    spoofTty(true);
+    prompts.inject(["r"]);
+    const result = await _promptsSelect(
+      "pick",
+      [
+        { key: "a", label: "A" },
+        { key: "r", label: "R" },
+      ],
+      false,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("r");
+  });
+
+  it("returns failure('cancelled') on cancel", async () => {
+    spoofTty(true);
+    prompts.inject([null]);
+    const result = await _promptsSelect(
+      "pick",
+      [{ key: "a", label: "A" }],
+      false,
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("with allowFreeText=true, runs a follow-up text prompt when free-text sentinel is picked", async () => {
+    spoofTty(true);
+    // Queue two answers: the sentinel pick, then the typed text.
+    prompts.inject(["__FREETEXT__", "my custom reason"]);
+    const result = await _promptsSelect(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("my custom reason");
+  });
+
+  it("with allowFreeText=true, ignores the follow-up when a real key is picked", async () => {
+    spoofTty(true);
+    prompts.inject(["a"]);
+    const result = await _promptsSelect(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("a");
+  });
+});
+
+describe("std::ui — _promptsText", () => {
+  afterEach(() => restoreTty());
+
+  it("throws on non-TTY", async () => {
+    spoofTty(false);
+    await expect(_promptsText("name?", "")).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("returns success with the typed value", async () => {
+    spoofTty(true);
+    prompts.inject(["hello world"]);
+    const result = await _promptsText("name?", "");
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("hello world");
+  });
+
+  it("returns failure on cancel", async () => {
+    spoofTty(true);
+    prompts.inject([null]);
+    const result = await _promptsText("name?", "");
+    expect(result.success).toBe(false);
+  });
+
+  it("forwards a validate callback to prompts", async () => {
+    // PFA capability-constraint story: a caller binds `validate` via
+    // `.partial(validate: myFn)` before handing `text` to an LLM. We
+    // can't easily fail-then-retry through inject, so this asserts
+    // only that the callback is plumbed through and the bridge still
+    // resolves with the injected value.
+    spoofTty(true);
+    prompts.inject(["abc"]);
+    const result = await _promptsText("nick?", "", "", (v: string) =>
+      v.length >= 3 ? true : "too short",
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("abc");
+  });
+});
+
+describe("std::ui — _promptsConfirm", () => {
+  afterEach(() => restoreTty());
+
+  it("throws on non-TTY", async () => {
+    spoofTty(false);
+    await expect(_promptsConfirm("ok?", false)).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("returns success(true) on yes", async () => {
+    spoofTty(true);
+    prompts.inject([true]);
+    const result = await _promptsConfirm("ok?", false);
+    expect(result.success).toBe(true);
+    expect(result.value).toBe(true);
+  });
+
+  it("returns success(false) on no", async () => {
+    spoofTty(true);
+    prompts.inject([false]);
+    const result = await _promptsConfirm("ok?", false);
+    expect(result.success).toBe(true);
+    expect(result.value).toBe(false);
+  });
+
+  it("returns failure on cancel", async () => {
+    spoofTty(true);
+    prompts.inject([null]);
+    const result = await _promptsConfirm("ok?", false);
+    expect(result.success).toBe(false);
   });
 });

@@ -823,6 +823,85 @@ export async function _promptsAutocomplete(
   return success(raw);
 }
 
+// `_promptsSelect`'s free-text mechanism is intentionally different
+// from `_promptsAutocomplete`'s: `prompts.select` has no `suggest`
+// hook to inject a synthetic row's *value*, so we append a marker
+// row and then run a follow-up `prompts.text` call when the user
+// picks it. The two helpers (`SELECT_FREE_TEXT_SENTINEL` and
+// `AUTOCOMPLETE_FREE_TEXT_PREFIX`) are deliberately named differently
+// to make the divergence obvious in greps.
+const SELECT_FREE_TEXT_SENTINEL = "__FREETEXT__";
+
+export async function _promptsSelect(
+  message: string,
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+  hint: string = "",
+): Promise<any> {
+  _assertLineModeAvailable("select");
+  const choices = items.map((it) => ({
+    title: `${it.key}  ${it.label}`,
+    value: it.key,
+  }));
+  if (allowFreeText) {
+    choices.push({ title: "→ enter free text…", value: SELECT_FREE_TEXT_SENTINEL });
+  }
+  const result = await _runPrompt({
+    type: "select",
+    name: "value",
+    message,
+    hint: hint || undefined,
+    choices,
+  });
+  if (isFailure(result)) return result;
+  if (result.value === SELECT_FREE_TEXT_SENTINEL) {
+    // Already Result-shaped; cancel of the follow-up cancels the whole pick.
+    return _promptsText("free text:", "");
+  }
+  return success(String(result.value));
+}
+
+// `validate` is forwarded straight to `prompts`. Per the prompts
+// docs: return `true` for valid; return a string to reject and show
+// the string as the error message. The PFA story: a user binds
+// `validate` via `.partial(validate: myValidator)` before handing
+// `text` to an LLM as a tool, and the LLM cannot override it.
+export async function _promptsText(
+  message: string,
+  initial: string,
+  hint: string = "",
+  validate: ((value: string) => boolean | string) | null = null,
+): Promise<any> {
+  _assertLineModeAvailable("text");
+  const result = await _runPrompt({
+    type: "text",
+    name: "value",
+    message,
+    initial: initial || undefined,
+    hint: hint || undefined,
+    validate: validate ?? undefined,
+  });
+  if (isFailure(result)) return result;
+  return success(String(result.value));
+}
+
+export async function _promptsConfirm(
+  message: string,
+  initial: boolean,
+): Promise<any> {
+  _assertLineModeAvailable("confirm");
+  const result = await _runPrompt({
+    type: "toggle",
+    name: "value",
+    message,
+    initial,
+    active: "yes",
+    inactive: "no",
+  });
+  if (isFailure(result)) return result;
+  return success(Boolean(result.value));
+}
+
 // ---------------------------------------------------------------------------
 // Choice prompts (modal-style overlay inside an active `repl()`)
 //

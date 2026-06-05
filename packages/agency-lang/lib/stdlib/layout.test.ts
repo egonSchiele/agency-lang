@@ -21,7 +21,7 @@ function node(
   return { type, attrs, children };
 }
 
-const { visualWidth, sgr } = _internal;
+const { visualWidth, sgr, _coerceCell, _validateTable } = _internal;
 
 describe("visualWidth", () => {
   test("plain string", () => {
@@ -641,5 +641,337 @@ describe('_render color: "auto"', () => {
   test('explicit color: false ignores env vars', () => {
     process.env.FORCE_COLOR = "1";
     expect(_render(styled, false)).not.toMatch(/\x1b\[/);
+  });
+});
+
+const { stripAnsi } = _internal;
+
+function tableNode(attrs: Record<string, unknown>): LayoutNode {
+  return { type: "table", attrs, children: [] };
+}
+function renderTablePlain(attrs: Record<string, unknown>): string {
+  return stripAnsi(render(tableNode(attrs)));
+}
+
+describe("table — composeTable rendering", () => {
+  test("2-col header + 2-row body, default settings", () => {
+    expect(renderTablePlain({
+      header: ["A", "B"],
+      body: [["1", "2"], ["3", "4"]],
+    })).toBe(
+      "╭───────╮\n" +
+      "│ A │ B │\n" +
+      "│───────│\n" +
+      "│ 1 │ 2 │\n" +
+      "│ 3 │ 4 │\n" +
+      "╰───────╯",
+    );
+  });
+
+  test("body alone (no header / no footer)", () => {
+    expect(renderTablePlain({
+      body: [["1", "2"], ["3", "4"]],
+    })).toBe(
+      "╭───────╮\n" +
+      "│ 1 │ 2 │\n" +
+      "│ 3 │ 4 │\n" +
+      "╰───────╯",
+    );
+  });
+
+  test("header only — no header divider drawn (nothing follows it)", () => {
+    expect(renderTablePlain({ header: ["A", "B"] })).toBe(
+      "╭───────╮\n" +
+      "│ A │ B │\n" +
+      "╰───────╯",
+    );
+  });
+
+  test("wider cell forces both body rows to align", () => {
+    expect(renderTablePlain({
+      header: ["ID", "Name"],
+      body: [
+        ["1", "Alice"],
+        ["22", "Bob"],
+      ],
+    })).toBe(
+      "╭────────────╮\n" +
+      "│ ID │ Name  │\n" +
+      "│────────────│\n" +
+      "│ 1  │ Alice │\n" +
+      "│ 22 │ Bob   │\n" +
+      "╰────────────╯",
+    );
+  });
+
+  test("footer cell forces upstream body columns to widen (cross-section measure)", () => {
+    // Footer's "GRAND TOTAL" should widen column 0 enough that body
+    // row "x" gets the same column width.
+    const out = renderTablePlain({
+      header: ["k", "v"],
+      body: [["x", "1"]],
+      footer: [["GRAND TOTAL", "999"]],
+    });
+    // Column 0 width = 11 ("GRAND TOTAL"); column 1 width = 3 ("999").
+    // inner width = (11+2) + 1 + (3+2) = 19.
+    expect(out).toBe(
+      "╭───────────────────╮\n" +
+      "│ k           │ v   │\n" +
+      "│───────────────────│\n" +
+      "│ x           │ 1   │\n" +
+      "│───────────────────│\n" +
+      "│ GRAND TOTAL │ 999 │\n" +
+      "╰───────────────────╯",
+    );
+  });
+
+  test('columns: align="end" right-aligns content within the column', () => {
+    const out = renderTablePlain({
+      columns: [{ align: "end" }, { align: "start" }],
+      header: ["ID", "Name"],
+      body: [["1", "Alice"], ["22", "Bob"]],
+    });
+    expect(out).toBe(
+      "╭────────────╮\n" +
+      "│ ID │ Name  │\n" +
+      "│────────────│\n" +
+      "│  1 │ Alice │\n" +
+      "│ 22 │ Bob   │\n" +
+      "╰────────────╯",
+    );
+  });
+
+  test("columnDividers: false drops the │ between cells", () => {
+    expect(renderTablePlain({
+      columnDividers: false,
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    })).toBe(
+      "╭──────╮\n" +
+      "│ A  B │\n" +
+      "│──────│\n" +
+      "│ 1  2 │\n" +
+      "╰──────╯",
+    );
+  });
+
+  test("cellPadding: 0 produces a tight table", () => {
+    expect(renderTablePlain({
+      cellPadding: 0,
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    })).toBe(
+      "╭───╮\n" +
+      "│A│B│\n" +
+      "│───│\n" +
+      "│1│2│\n" +
+      "╰───╯",
+    );
+  });
+
+  test("borderStyle: heavy uses thick chars on outer border", () => {
+    const out = renderTablePlain({
+      borderStyle: "heavy",
+      header: ["A"],
+      body: [["1"]],
+    });
+    // Top-left + top-right corners are heavy.
+    expect(out.startsWith("┏")).toBe(true);
+    expect(out.includes("┓")).toBe(true);
+    expect(out.endsWith("┛")).toBe(true);
+  });
+
+  test("caption renders dim + centered below the bottom border", () => {
+    const colored = render(tableNode({
+      caption: "ok",
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    }));
+    // The plain caption text appears below the closing corner.
+    const plain = stripAnsi(colored);
+    const lines = plain.split("\n");
+    expect(lines[lines.length - 1].trim()).toBe("ok");
+    // Caption is wrapped in a dim SGR (code 2).
+    expect(colored).toMatch(/\x1b\[2m[ ]*ok[ ]*\x1b\[0m/);
+  });
+
+  test("rowDividers: true draws a divider between body rows", () => {
+    expect(renderTablePlain({
+      rowDividers: true,
+      body: [["1"], ["2"], ["3"]],
+    })).toBe(
+      "╭───╮\n" +
+      "│ 1 │\n" +
+      "│───│\n" +
+      "│ 2 │\n" +
+      "│───│\n" +
+      "│ 3 │\n" +
+      "╰───╯",
+    );
+  });
+
+  test("header cells are auto-bolded (text-typed only)", () => {
+    const colored = render(tableNode({
+      header: ["Hi"],
+      body: [["x"]],
+    }));
+    // Bold SGR (code 1) wraps "Hi" but NOT "x".
+    expect(colored).toMatch(/\x1b\[1mHi\x1b\[0m/);
+    expect(colored).not.toMatch(/\x1b\[1mx\x1b\[0m/);
+  });
+
+  test("bold: false on a header text cell opts OUT of auto-bold", () => {
+    const colored = render(tableNode({
+      header: [{ type: "text", attrs: { content: "Hi", bold: false }, children: [] }],
+      body: [["x"]],
+    }));
+    expect(colored).not.toMatch(/\x1b\[1mHi\x1b\[0m/);
+  });
+
+  test("minWidth widens a column past its content", () => {
+    const out = renderTablePlain({
+      columns: [{ minWidth: 6 }, {}],
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    });
+    expect(out).toBe(
+      "╭────────────╮\n" +
+      "│ A      │ B │\n" +
+      "│────────────│\n" +
+      "│ 1      │ 2 │\n" +
+      "╰────────────╯",
+    );
+  });
+
+  test("multi-line cell sets row height; siblings vertically padded", () => {
+    const out = renderTablePlain({
+      header: ["k", "v"],
+      body: [["a", "line1\nline2\nline3"]],
+    });
+    expect(out).toBe(
+      "╭───────────╮\n" +
+      "│ k │ v     │\n" +
+      "│───────────│\n" +
+      "│ a │ line1 │\n" +
+      "│   │ line2 │\n" +
+      "│   │ line3 │\n" +
+      "╰───────────╯",
+    );
+  });
+
+  test("wide title widens the table so dividers extend to match", () => {
+    // Title "A wide title" is longer than the cell grid; the section
+    // divider underneath the header must reach the right border.
+    const out = renderTablePlain({
+      title: "A wide title",
+      header: ["k", "v"],
+      body: [["1", "2"]],
+    });
+    const lines = out.split("\n");
+    // Top edge, header row, divider row, body row, bottom edge — all
+    // must be the same visual width.
+    const widths = lines.map((l) => l.length);
+    const w = widths[0];
+    for (const lw of widths) expect(lw).toBe(w);
+    // The divider line should be all-`─` between the side `│`s
+    // (no trailing whitespace).
+    expect(lines[2]).toMatch(/^│─+│$/);
+  });
+
+  test("title in border + caption below — both render", () => {
+    const out = renderTablePlain({
+      title: "T",
+      caption: "note",
+      header: ["A"],
+      body: [["x"]],
+    });
+    expect(out.split("\n")[0].includes("T")).toBe(true);
+    expect(out.split("\n").at(-1)?.trim()).toBe("note");
+  });
+});
+
+describe("table — _coerceCell", () => {
+  test('"hi" becomes a text leaf', () => {
+    const n = _coerceCell("hi");
+    expect(n.type).toBe("text");
+    expect(n.attrs.content).toBe("hi");
+    expect(n.children).toEqual([]);
+  });
+  test("existing LayoutNode passes through unchanged", () => {
+    const original = node("text", { content: "x", bold: true });
+    expect(_coerceCell(original)).toBe(original);
+  });
+  test("number throws a clear error", () => {
+    expect(() => _coerceCell(42)).toThrow(/cell must be string or LayoutNode/);
+  });
+  test("null throws", () => {
+    expect(() => _coerceCell(null)).toThrow(/cell must be string or LayoutNode/);
+  });
+  test("undefined throws", () => {
+    expect(() => _coerceCell(undefined)).toThrow(/cell must be string or LayoutNode/);
+  });
+});
+
+describe("table — _validateTable", () => {
+  test("all-empty throws 'at least one of...'", () => {
+    expect(() => _validateTable({})).toThrow(/at least one of header \/ body \/ footer/);
+  });
+  test("body+footer empty + header undefined throws", () => {
+    expect(() => _validateTable({ body: [], footer: [] }))
+      .toThrow(/at least one of/);
+  });
+  test("header alone is fine", () => {
+    const v = _validateTable({ header: ["A", "B"] });
+    expect(v.columnCount).toBe(2);
+    expect(v.header?.length).toBe(2);
+    expect(v.body).toEqual([]);
+    expect(v.footer).toEqual([]);
+  });
+  test("body alone is fine", () => {
+    const v = _validateTable({ body: [["1", "2"], ["3", "4"]] });
+    expect(v.columnCount).toBe(2);
+    expect(v.body.length).toBe(2);
+  });
+  test("footer alone is fine", () => {
+    const v = _validateTable({ footer: [["x"]] });
+    expect(v.columnCount).toBe(1);
+  });
+  test("columns count overrides header length when both set and match", () => {
+    const v = _validateTable({
+      columns: [{}, {}, {}],
+      header: ["A", "B", "C"],
+    });
+    expect(v.columnCount).toBe(3);
+  });
+  test("columns disagreeing with header throws", () => {
+    expect(() => _validateTable({
+      columns: [{}, {}],
+      header: ["A", "B", "C"],
+    })).toThrow(/header has 3 cells, expected 2/);
+  });
+  test("body row column-count mismatch throws with row index", () => {
+    expect(() => _validateTable({
+      header: ["A", "B", "C"],
+      body: [["1", "2", "3"], ["1", "2"]],
+    })).toThrow(/body row 1 has 2 cells, expected 3/);
+  });
+  test("footer row mismatch throws", () => {
+    expect(() => _validateTable({
+      header: ["A", "B"],
+      footer: [["x", "y", "z"]],
+    })).toThrow(/footer row 0 has 3 cells, expected 2/);
+  });
+  test("empty `columns: []` does NOT override; falls through to header", () => {
+    const v = _validateTable({ columns: [], header: ["A", "B"] });
+    expect(v.columnCount).toBe(2);
+  });
+  test("cells are coerced in the returned sections", () => {
+    const v = _validateTable({
+      header: ["A"],
+      body: [[node("text", { content: "x", bold: true })]],
+    });
+    expect(v.header![0].type).toBe("text");
+    expect(v.header![0].attrs.content).toBe("A");
+    expect((v.body[0][0].attrs as { bold: boolean }).bold).toBe(true);
   });
 });

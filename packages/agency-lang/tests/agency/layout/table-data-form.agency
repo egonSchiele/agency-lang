@@ -1,0 +1,25 @@
+import { table, text } from "std::layout"
+
+// Builds a table via the data form (no trailing block) and returns
+// the LayoutNode. The .test.json fixture pins the full tree shape:
+// every default attr populated, every cell either a string (passed
+// through verbatim — coercion happens at render time, not here) or a
+// pre-built `text` leaf.
+
+node testDataForm() {
+  return table(
+    title: "Employees",
+    caption: "All names are fictitious",
+    columns: [
+      { align: "end" },
+      { align: "start" },
+      { align: "end" },
+    ],
+    header: ["ID", "Name", "Balance"],
+    body: [
+      ["1", "Dave", "100"],
+      ["2", "Alice", text("-50", fgColor: "red")],
+    ],
+    footer: [["", "Total", "50"]],
+  )
+}

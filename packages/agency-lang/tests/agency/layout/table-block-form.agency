@@ -1,0 +1,21 @@
+import { table, text } from "std::layout"
+
+// Builds the same logical table as `table-data-form.agency`, but via
+// the trailing block. The fixture's `expectedOutput` is byte-identical
+// to `table-data-form.test.json`'s — proof that the two construction
+// styles produce structurally identical trees.
+
+node testBlockForm() {
+  const t = table(title: "Employees", caption: "All names are fictitious") as b {
+    b.columns([
+      { align: "end" },
+      { align: "start" },
+      { align: "end" },
+    ])
+    b.header("ID", "Name", "Balance")
+    b.row("1", "Dave", "100")
+    b.row("2", "Alice", text("-50", fgColor: "red"))
+    b.footer("", "Total", "50")
+  }
+  return t
+}

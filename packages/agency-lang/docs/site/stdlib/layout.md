@@ -111,6 +111,81 @@ export type BorderStyle = "rounded" | "heavy" | "double" | "light"
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L85))
 
+### Cell
+
+* A table cell. Either a bare string (auto-coerced to a styled `text`
+ * leaf at render time) or any pre-built LayoutNode (e.g.
+ * `text("-50", fgColor: "red")`).
+
+```ts
+/**
+ * A table cell. Either a bare string (auto-coerced to a styled `text`
+ * leaf at render time) or any pre-built LayoutNode (e.g.
+ * `text("-50", fgColor: "red")`).
+ */
+export type Cell = string | LayoutNode
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L92))
+
+### CellRow
+
+```ts
+export type CellRow = Cell[]
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L97))
+
+### ColumnSpec
+
+* Per-column configuration for a `table`. All fields are optional;
+ * omitted columns default to start-aligned with no minimum width.
+ *
+ * @param align - Horizontal alignment of every cell in this column
+ * @param minWidth - Lower bound on column width; widens narrow columns
+ * @param fgColor - Reserved for future use; currently ignored
+
+```ts
+/**
+ * Per-column configuration for a `table`. All fields are optional;
+ * omitted columns default to start-aligned with no minimum width.
+ *
+ * @param align - Horizontal alignment of every cell in this column
+ * @param minWidth - Lower bound on column width; widens narrow columns
+ * @param fgColor - Reserved for future use; currently ignored
+ */
+export type ColumnSpec = {
+  align?: "start" | "center" | "end";
+  minWidth?: number;
+  fgColor?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L107))
+
+### TableBuilder
+
+* Methods available inside a `table`'s trailing `as t { ... }` block.
+ * `columns` / `caption` set top-level table attrs; `header` / `row` /
+ * `footer` append cell arrays to the corresponding section.
+
+```ts
+/**
+ * Methods available inside a `table`'s trailing `as t { ... }` block.
+ * `columns` / `caption` set top-level table attrs; `header` / `row` /
+ * `footer` append cell arrays to the corresponding section.
+ */
+export type TableBuilder = {
+  columns: any;
+  caption: any;
+  header: any;
+  row: any;
+  footer: any
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L118))
+
 ## Functions
 
 ### text
@@ -149,7 +224,7 @@ text(content: string, fgColor: string, bgColor: string, bold: boolean, italic: b
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L148))
 
 ### raw
 
@@ -177,7 +252,7 @@ raw(content: string, align: Alignment): LayoutNode
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L186))
 
 ### space
 
@@ -198,7 +273,7 @@ space(count: number): LayoutNode
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L203))
 
 ### hline
 
@@ -227,7 +302,7 @@ hline(char: string, length: number, fgColor: string, bold: boolean, dim: boolean
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L223))
 
 ### vline
 
@@ -256,7 +331,7 @@ vline(char: string, length: number, fgColor: string, bold: boolean, dim: boolean
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L253))
 
 ### _addText
 
@@ -280,7 +355,7 @@ _addText(kids: any[], content: string, fgColor: string, bgColor: string, bold: b
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L240))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L279))
 
 ### _addRaw
 
@@ -298,7 +373,7 @@ _addRaw(kids: any[], content: string, align: Alignment): LayoutNode
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L265))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L304))
 
 ### _addSpace
 
@@ -315,7 +390,7 @@ _addSpace(kids: any[], count: number): LayoutNode
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L314))
 
 ### _addHline
 
@@ -336,7 +411,7 @@ _addHline(kids: any[], char: string, length: number, fgColor: string, bold: bool
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L281))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L320))
 
 ### _addVline
 
@@ -357,7 +432,7 @@ _addVline(kids: any[], char: string, length: number, fgColor: string, bold: bool
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L294))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L333))
 
 ### _addRow
 
@@ -377,7 +452,7 @@ _addRow(kids: any[], gap: number, align: Alignment, children: LayoutNode[], bloc
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L307))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L346))
 
 ### _addColumn
 
@@ -397,7 +472,7 @@ _addColumn(kids: any[], gap: number, align: Alignment, children: LayoutNode[], b
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L319))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L358))
 
 ### _addBox
 
@@ -420,7 +495,7 @@ _addBox(kids: any[], title: string, titleColor: string, borderStyle: BorderStyle
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L331))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L370))
 
 ### _makeBuilder
 
@@ -436,7 +511,7 @@ _makeBuilder(kids: any[]): LayoutBuilder
 
 **Returns:** [LayoutBuilder](#layoutbuilder)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L354))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L393))
 
 ### row
 
@@ -462,7 +537,7 @@ row(gap: number, align: Alignment, children: LayoutNode[], block: (LayoutBuilder
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L381))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L420))
 
 ### column
 
@@ -488,7 +563,7 @@ column(gap: number, align: Alignment, children: LayoutNode[], block: (LayoutBuil
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L414))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L453))
 
 ### box
 
@@ -523,7 +598,7 @@ box(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: st
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L453))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L492))
 
 ### render
 
@@ -547,4 +622,189 @@ render(node: LayoutNode, color: "auto" | boolean): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L492))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L531))
+
+### _setTableColumns
+
+```ts
+_setTableColumns(state: any, specs: ColumnSpec[]): any
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `any` |  |
+| specs | `ColumnSpec[]` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L544))
+
+### _setTableCaption
+
+```ts
+_setTableCaption(state: any, text: string): any
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `any` |  |
+| text | `string` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L549))
+
+### _setTableHeader
+
+```ts
+_setTableHeader(state: any, ...cells: Cell[]): any
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `any` |  |
+| cells | `Cell[]` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L554))
+
+### _addTableRow
+
+```ts
+_addTableRow(state: any, ...cells: Cell[]): any
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `any` |  |
+| cells | `Cell[]` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L559))
+
+### _addTableFooter
+
+```ts
+_addTableFooter(state: any, ...cells: Cell[]): any
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `any` |  |
+| cells | `Cell[]` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L564))
+
+### _makeTableBuilder
+
+```ts
+_makeTableBuilder(state: any): TableBuilder
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `any` |  |
+
+**Returns:** [TableBuilder](#tablebuilder)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L569))
+
+### table
+
+```ts
+table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: string, caption: string, cellPadding: number, columns: ColumnSpec[], header: Cell[], body: CellRow[], footer: CellRow[], headerDivider: boolean, footerDivider: boolean, rowDividers: boolean, columnDividers: boolean, block: (TableBuilder) => void): LayoutNode
+```
+
+* Tabular layout. Columns line up across header / body / footer; the
+ * outer box uses the same `BorderStyle` enum as `box`. Two construction
+ * styles, same result:
+ *
+ * - **Data form (LLM-callable, JSON-friendly):** pass `header`, `body`,
+ *   `footer` as nested arrays of strings or `LayoutNode`s.
+ *
+ *   ```ts
+ *   table(
+ *     title: "Employees",
+ *     header: ["ID", "Name", "Balance"],
+ *     body: [
+ *       ["1", "Dave",  "100"],
+ *       ["2", "Alice", text("-50", fgColor: "red")],
+ *     ],
+ *     footer: [["", "Total", "50"]],
+ *   )
+ *   ```
+ *
+ * - **Block form (Agency-author ergonomics):**
+ *
+ *   ```ts
+ *   table(title: "Employees") as t {
+ *     t.header("ID", "Name", "Balance")
+ *     for (item in items) {
+ *       t.row(item.id, item.name, "${item.balance}")
+ *     }
+ *     t.footer("", "Total", "50")
+ *   }
+ *   ```
+ *
+ * At least one of `header`, `body`, `footer` must be present (or set
+ * via the block). Column count must match across every present section
+ * and against `columns.length` if `columns` is set; mismatches throw a
+ * render-time error naming the offending row. Cells that are bare
+ * strings are auto-coerced to `text(s)`. `text`-typed header cells
+ * default to bold unless they specify `bold` explicitly.
+ *
+ * @param title - Text embedded in the top border; box grows to fit
+ * @param titleColor - Color of the title text
+ * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
+ * @param borderColor - Color of the border characters
+ * @param caption - Dim, centered single line drawn BELOW the bottom border
+ * @param cellPadding - Spaces of horizontal padding inside each cell (default 1)
+ * @param columns - Per-column align / minWidth (length must equal column count)
+ * @param header - Optional header row of cells
+ * @param body - Optional body rows
+ * @param footer - Optional footer rows (e.g. totals)
+ * @param headerDivider - Draw `─` between header and body (default true)
+ * @param footerDivider - Draw `─` between body and footer (default true)
+ * @param rowDividers - Draw `─` between every body row (default false)
+ * @param columnDividers - Draw `│` between cells in every row (default true)
+ * @param block - Trailing builder block; appends to any args also passed
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| title | `string` | "" |
+| titleColor | `string` | "" |
+| borderStyle | [BorderStyle](#borderstyle) | "rounded" |
+| borderColor | `string` | "" |
+| caption | `string` | "" |
+| cellPadding | `number` | 1 |
+| columns | `ColumnSpec[]` | null |
+| header | `Cell[]` | null |
+| body | `CellRow[]` | null |
+| footer | `CellRow[]` | null |
+| headerDivider | `boolean` | true |
+| footerDivider | `boolean` | true |
+| rowDividers | `boolean` | false |
+| columnDividers | `boolean` | true |
+| block | `(TableBuilder) => void` | null |
+
+**Returns:** [LayoutNode](#layoutnode)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L634))

@@ -84,6 +84,45 @@ export type Alignment = "start" | "center" | "end"
 
 export type BorderStyle = "rounded" | "heavy" | "double" | "light"
 
+/**
+ * A table cell. Either a bare string (auto-coerced to a styled `text`
+ * leaf at render time) or any pre-built LayoutNode (e.g.
+ * `text("-50", fgColor: "red")`).
+ */
+export type Cell = string | LayoutNode
+
+// Row alias for table body / footer. The parser doesn't currently
+// accept `Cell[][]` directly where `Cell` is a union; aliasing the
+// row type first sidesteps that.
+export type CellRow = Cell[]
+
+/**
+ * Per-column configuration for a `table`. All fields are optional;
+ * omitted columns default to start-aligned with no minimum width.
+ *
+ * @param align - Horizontal alignment of every cell in this column
+ * @param minWidth - Lower bound on column width; widens narrow columns
+ * @param fgColor - Reserved for future use; currently ignored
+ */
+export type ColumnSpec = {
+  align?: "start" | "center" | "end";
+  minWidth?: number;
+  fgColor?: string
+}
+
+/**
+ * Methods available inside a `table`'s trailing `as t { ... }` block.
+ * `columns` / `caption` set top-level table attrs; `header` / `row` /
+ * `footer` append cell arrays to the corresponding section.
+ */
+export type TableBuilder = {
+  columns: any;
+  caption: any;
+  header: any;
+  row: any;
+  footer: any
+}
+
 // ------------------------------------------------------------------
 // Top-level leaf constructors. Each returns a LayoutNode without
 // touching any parent — safe to call from anywhere (Agency code, LLM
@@ -494,4 +533,155 @@ export safe def render(
   color: "auto" | boolean = "auto",
 ): string {
   return _render(node, color)
+}
+
+// ------------------------------------------------------------------
+// Table — builder helpers. Each takes a mutable `state` record as its
+// first param; `_makeTableBuilder` partial-applies `state` so the
+// table block sees zero-argument-state methods.
+// ------------------------------------------------------------------
+
+def _setTableColumns(state: any, specs: ColumnSpec[]): any {
+  state.columns = specs
+  return null
+}
+
+def _setTableCaption(state: any, text: string): any {
+  state.caption = text
+  return null
+}
+
+def _setTableHeader(state: any, ...cells: Cell[]): any {
+  state.header = cells
+  return null
+}
+
+def _addTableRow(state: any, ...cells: Cell[]): any {
+  state.body.push(cells)
+  return null
+}
+
+def _addTableFooter(state: any, ...cells: Cell[]): any {
+  state.footer.push(cells)
+  return null
+}
+
+def _makeTableBuilder(state: any): TableBuilder {
+  return {
+    columns: _setTableColumns.partial(state: state),
+    caption: _setTableCaption.partial(state: state),
+    header: _setTableHeader.partial(state: state),
+    row: _addTableRow.partial(state: state),
+    footer: _addTableFooter.partial(state: state)
+  }
+}
+
+/**
+ * Tabular layout. Columns line up across header / body / footer; the
+ * outer box uses the same `BorderStyle` enum as `box`. Two construction
+ * styles, same result:
+ *
+ * - **Data form (LLM-callable, JSON-friendly):** pass `header`, `body`,
+ *   `footer` as nested arrays of strings or `LayoutNode`s.
+ *
+ *   ```ts
+ *   table(
+ *     title: "Employees",
+ *     header: ["ID", "Name", "Balance"],
+ *     body: [
+ *       ["1", "Dave",  "100"],
+ *       ["2", "Alice", text("-50", fgColor: "red")],
+ *     ],
+ *     footer: [["", "Total", "50"]],
+ *   )
+ *   ```
+ *
+ * - **Block form (Agency-author ergonomics):**
+ *
+ *   ```ts
+ *   table(title: "Employees") as t {
+ *     t.header("ID", "Name", "Balance")
+ *     for (item in items) {
+ *       t.row(item.id, item.name, "${item.balance}")
+ *     }
+ *     t.footer("", "Total", "50")
+ *   }
+ *   ```
+ *
+ * At least one of `header`, `body`, `footer` must be present (or set
+ * via the block). Column count must match across every present section
+ * and against `columns.length` if `columns` is set; mismatches throw a
+ * render-time error naming the offending row. Cells that are bare
+ * strings are auto-coerced to `text(s)`. `text`-typed header cells
+ * default to bold unless they specify `bold` explicitly.
+ *
+ * @param title - Text embedded in the top border; box grows to fit
+ * @param titleColor - Color of the title text
+ * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
+ * @param borderColor - Color of the border characters
+ * @param caption - Dim, centered single line drawn BELOW the bottom border
+ * @param cellPadding - Spaces of horizontal padding inside each cell (default 1)
+ * @param columns - Per-column align / minWidth (length must equal column count)
+ * @param header - Optional header row of cells
+ * @param body - Optional body rows
+ * @param footer - Optional footer rows (e.g. totals)
+ * @param headerDivider - Draw `─` between header and body (default true)
+ * @param footerDivider - Draw `─` between body and footer (default true)
+ * @param rowDividers - Draw `─` between every body row (default false)
+ * @param columnDividers - Draw `│` between cells in every row (default true)
+ * @param block - Trailing builder block; appends to any args also passed
+ */
+export def table(
+  title: string = "",
+  titleColor: string = "",
+  borderStyle: BorderStyle = "rounded",
+  borderColor: string = "",
+  caption: string = "",
+  cellPadding: number = 1,
+  columns: ColumnSpec[] = null,
+  header: Cell[] = null,
+  body: CellRow[] = null,
+  footer: CellRow[] = null,
+  headerDivider: boolean = true,
+  footerDivider: boolean = true,
+  rowDividers: boolean = false,
+  columnDividers: boolean = true,
+  block: (TableBuilder) => void = null,
+): LayoutNode {
+  // Pre-compute defaults outside the object literal — the parser
+  // doesn't accept ternaries directly as object-value expressions.
+  let bodyArr: any = body
+  if (bodyArr == null) { bodyArr = [] }
+  let footerArr: any = footer
+  if (footerArr == null) { footerArr = [] }
+  const state: any = {
+    header: header,
+    body: bodyArr,
+    footer: footerArr,
+    columns: columns,
+    caption: caption
+  }
+  if (block != null) {
+    block(_makeTableBuilder(state))
+  }
+  return {
+    type: "table",
+    attrs: {
+      title: title,
+      titleColor: titleColor,
+      borderStyle: borderStyle,
+      borderColor: borderColor,
+      caption: state.caption,
+      cellPadding: cellPadding,
+      columns: state.columns,
+      header: state.header,
+      body: state.body,
+      footer: state.footer,
+      headerDivider: headerDivider,
+      footerDivider: footerDivider,
+      rowDividers: rowDividers,
+      columnDividers: columnDividers
+    },
+    children: []
+  }
 }

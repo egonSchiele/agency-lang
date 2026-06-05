@@ -1,4 +1,4 @@
-import { box, row, column, text, hline, vline, render } from "std::layout"
+import { box, row, column, text, hline, vline, table, render } from "std::layout"
 
 // Showcases the std::layout module on a single splash-style panel.
 // Run with: pnpm run agency examples/layoutDemo.agency
@@ -54,4 +54,51 @@ node main() {
     b.text("System status nominal.", dim: true)
   }
   print(render(heavy))
+  print("")
+
+  // 5) Simple data table.
+  const inventory = table(
+    title: "Inventory",
+    header: ["SKU", "Item", "Qty"],
+    body: [
+      ["A-1", "Widget",  "12"],
+      ["A-2", "Gadget",  "4"],
+      ["B-9", "Sprocket", "0"],
+    ],
+    footer: [["", "Total", "16"]],
+  )
+  print(render(inventory))
+  print("")
+
+  // 6) Styled cells (red for negatives, green for positives) + caption.
+  const ledger = table(
+    title: "Ledger",
+    caption: "today",
+    columns: [{ align: "start" }, { align: "end" }],
+    header: ["Account", "Change"],
+    body: [
+      ["sales",   text("+450", fgColor: "green")],
+      ["refunds", text("-50",  fgColor: "red")],
+      ["fees",    text("-12",  fgColor: "red")],
+    ],
+    footer: [["net", text("+388", fgColor: "green", bold: true)]],
+  )
+  print(render(ledger))
+  print("")
+
+  // 7) Block form, heavy border, every divider on. Demonstrates the
+  // builder API and a non-default border style.
+  const status = table(
+    title: "Status",
+    titleColor: "red",
+    borderStyle: "heavy",
+    borderColor: "red",
+    rowDividers: true,
+  ) as t {
+    t.header("Service", "Up")
+    t.row("auth",    text("yes", fgColor: "green"))
+    t.row("billing", text("no",  fgColor: "red", bold: true))
+    t.row("search",  text("yes", fgColor: "green"))
+  }
+  print(render(status))
 }

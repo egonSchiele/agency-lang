@@ -38,8 +38,8 @@ importers:
         specifier: ^0.4.0
         version: 0.4.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.0)
       tarsec:
-        specifier: 0.4.5
-        version: 0.4.5
+        specifier: 0.4.6
+        version: 0.4.6
       typestache:
         specifier: ^0.5.0
         version: 0.5.0
@@ -2639,8 +2639,8 @@ packages:
   tarsec@0.2.2:
     resolution: {integrity: sha512-o6C0wNzEq9Mh3lPzWeoyRHTTiY3/j6rURahNHsqsGjcZmdNDelwXbf+7ocN0ojJJuBuKBkerWX8DrIvhpUz6qw==}
 
-  tarsec@0.4.5:
-    resolution: {integrity: sha512-PGUxuzBENrUi1F37u6j0p1o7m/FEz4tqNZryIJb2cWCcT6SAIIFygLEnpZxQmWhB1sBghd3hub2tPrvkxGchhQ==}
+  tarsec@0.4.6:
+    resolution: {integrity: sha512-S9IiRJ4YhhbNVJ1VixJ3RKlptX2ONAivDEACsIijJxZveWiOqtSPQoSleSrDc8L90SKRGMHcyH/FLtuDXjcaGg==}
 
   thenify-all@1.6.0:
     resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
@@ -5514,7 +5514,7 @@ snapshots:
 
   tarsec@0.2.2: {}
 
-  tarsec@0.4.5: {}
+  tarsec@0.4.6: {}
 
   thenify-all@1.6.0:
     dependencies:

@@ -172,3 +172,7 @@ export async function _screenshot(
   const { ctx, stack } = getRuntimeContext();
   return screenshotImpl(ctx, stack, filepath, x, y, width, height, allowedPaths);
 }
+
+export function _setTitle(title: string): void {
+  process.title = title;
+}

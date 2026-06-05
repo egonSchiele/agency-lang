@@ -36,7 +36,7 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
 
 **Throws:** `std::screenshot`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L15))
 
 ### exit
 
@@ -55,7 +55,7 @@ Terminate the process immediately with the given exit code. Use with caution —
 
 **Throws:** `std::exit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L42))
 
 ### args
 
@@ -67,7 +67,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L53))
 
 ### cwd
 
@@ -79,7 +79,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L60))
 
 ### dirname
 
@@ -92,17 +92,17 @@ Return the absolute path of the directory containing the *compiled
   directory as the source `.agency` file. Use this to build paths to
   resources shipped alongside your Agency file (prompts, fixtures, etc.):
 
-      import { dirname } from "std::system"
-      import { join } from "std::path"
-      const promptDir = join(dirname(), "prompts")
-      const prompt = read("system.md", promptDir)
+  import { dirname } from "std::system"
+  import { join } from "std::path"
+  const promptDir = join(dirname(), "prompts")
+  const prompt = read("system.md", promptDir)
 
   Falls back to the current working directory when called outside any
   Agency execution frame (e.g. from non-Agency host code).
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L67))
 
 ### env
 
@@ -120,7 +120,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L85))
 
 ### setEnv
 
@@ -144,7 +144,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Throws:** `std::setEnv`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L92))
 
 ### isTTY
 
@@ -156,7 +156,7 @@ Return true if standard input is connected to a terminal. Returns false when std
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L106))
 
 ### readStdin
 
@@ -168,7 +168,7 @@ Read all of standard input until EOF and return it as a string. Blocks until the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L113))
 
 ### openUrl
 
@@ -190,4 +190,24 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L120))
+
+### setTitle
+
+```ts
+setTitle(title: string): void
+```
+
+Set the process title (as shown in system monitors, `ps` output, and the terminal window). This can help users identify the process, especially when running multiple agents simultaneously.
+
+  @param title - The new process title
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| title | `string` |  |
+
+**Returns:** `void`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L133))

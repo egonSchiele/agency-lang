@@ -1,14 +1,10 @@
-static const prompt = "foo"
-
-def greet(name: string): string {
-  """
-  Returns a greeting message for the given name ${prompt}.
-  """
-
-  return "Hello, ${name}! Welcome to ${prompt}."
-}
+import { highlight } from "std::syntax"
 
 node main() {
-  const greeting = greet("Alice")
-  print(greeting)
+  const file = read("README.md") with approve
+  if (file is success(data)) {
+    print(highlight(data, "markdown"))
+  } else {
+    print("Failed to read file: ${file.error}")
+  }
 }

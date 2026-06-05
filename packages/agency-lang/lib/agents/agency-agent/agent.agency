@@ -7,7 +7,7 @@ import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
-import { cwd, env, isTTY, readStdin } from "std::system"
+import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
@@ -326,6 +326,8 @@ node main() {
   if (args.flags.verbose) {
     VERBOSE = true
   }
+
+  setTitle("Agency Agent")
 
   // Positional args (everything after flags) are joined with spaces to
   // form the one-shot prompt. `--` ends flag parsing if a positional

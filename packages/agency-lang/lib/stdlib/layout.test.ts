@@ -661,7 +661,7 @@ describe("table — composeTable rendering", () => {
     })).toBe(
       "╭───────╮\n" +
       "│ A │ B │\n" +
-      "│───────│\n" +
+      "├───┼───┤\n" +
       "│ 1 │ 2 │\n" +
       "│ 3 │ 4 │\n" +
       "╰───────╯",
@@ -697,7 +697,7 @@ describe("table — composeTable rendering", () => {
     })).toBe(
       "╭────────────╮\n" +
       "│ ID │ Name  │\n" +
-      "│────────────│\n" +
+      "├────┼───────┤\n" +
       "│ 1  │ Alice │\n" +
       "│ 22 │ Bob   │\n" +
       "╰────────────╯",
@@ -717,9 +717,9 @@ describe("table — composeTable rendering", () => {
     expect(out).toBe(
       "╭───────────────────╮\n" +
       "│ k           │ v   │\n" +
-      "│───────────────────│\n" +
+      "├─────────────┼─────┤\n" +
       "│ x           │ 1   │\n" +
-      "│───────────────────│\n" +
+      "├─────────────┼─────┤\n" +
       "│ GRAND TOTAL │ 999 │\n" +
       "╰───────────────────╯",
     );
@@ -734,7 +734,7 @@ describe("table — composeTable rendering", () => {
     expect(out).toBe(
       "╭────────────╮\n" +
       "│ ID │ Name  │\n" +
-      "│────────────│\n" +
+      "├────┼───────┤\n" +
       "│  1 │ Alice │\n" +
       "│ 22 │ Bob   │\n" +
       "╰────────────╯",
@@ -749,7 +749,7 @@ describe("table — composeTable rendering", () => {
     })).toBe(
       "╭──────╮\n" +
       "│ A  B │\n" +
-      "│──────│\n" +
+      "├──────┤\n" +
       "│ 1  2 │\n" +
       "╰──────╯",
     );
@@ -763,7 +763,7 @@ describe("table — composeTable rendering", () => {
     })).toBe(
       "╭───╮\n" +
       "│A│B│\n" +
-      "│───│\n" +
+      "├─┼─┤\n" +
       "│1│2│\n" +
       "╰───╯",
     );
@@ -802,9 +802,9 @@ describe("table — composeTable rendering", () => {
     })).toBe(
       "╭───╮\n" +
       "│ 1 │\n" +
-      "│───│\n" +
+      "├───┤\n" +
       "│ 2 │\n" +
-      "│───│\n" +
+      "├───┤\n" +
       "│ 3 │\n" +
       "╰───╯",
     );
@@ -859,7 +859,7 @@ describe("table — composeTable rendering", () => {
     expect(out).toBe(
       "╭────────────╮\n" +
       "│ A      │ B │\n" +
-      "│────────────│\n" +
+      "├────────┼───┤\n" +
       "│ 1      │ 2 │\n" +
       "╰────────────╯",
     );
@@ -873,7 +873,7 @@ describe("table — composeTable rendering", () => {
     expect(out).toBe(
       "╭───────────╮\n" +
       "│ k │ v     │\n" +
-      "│───────────│\n" +
+      "├───┼───────┤\n" +
       "│ a │ line1 │\n" +
       "│   │ line2 │\n" +
       "│   │ line3 │\n" +
@@ -895,9 +895,9 @@ describe("table — composeTable rendering", () => {
     const widths = lines.map((l) => l.length);
     const w = widths[0];
     for (const lw of widths) expect(lw).toBe(w);
-    // The divider line should be all-`─` between the side `│`s
-    // (no trailing whitespace).
-    expect(lines[2]).toMatch(/^│─+│$/);
+    // The divider line should be bracketed by side tees and span the
+    // inner width with `─` and `┼` junctions.
+    expect(lines[2]).toMatch(/^├[─┼]+┤$/);
   });
 
   test("title in border + caption below — both render", () => {
@@ -909,6 +909,55 @@ describe("table — composeTable rendering", () => {
     });
     expect(out.split("\n")[0].includes("T")).toBe(true);
     expect(out.split("\n").at(-1)?.trim()).toBe("note");
+  });
+
+  test("caption renders even when there are no body rows (header only)", () => {
+    const out = renderTablePlain({
+      caption: "(empty)",
+      header: ["A", "B"],
+    });
+    const lines = out.split("\n");
+    // No header divider drawn (nothing follows the header), but the
+    // caption still appears centred below the bottom border.
+    expect(lines).toEqual([
+      "╭───────╮",
+      "│ A │ B │",
+      "╰───────╯",
+      " (empty)",
+    ]);
+  });
+
+  test("centered caption has no trailing whitespace", () => {
+    const out = renderTablePlain({
+      caption: "x",
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    });
+    const lastLine = out.split("\n").at(-1)!;
+    // Centred to width 9 would naturally leave trailing spaces; the
+    // renderer trims them so the line ends right after the caption text.
+    expect(lastLine).toBe("    x");
+    expect(lastLine).not.toMatch(/\s$/);
+  });
+
+  test("borderColor wraps section-divider lines, not just the outer frame", () => {
+    const colored = render(tableNode({
+      borderColor: "red",
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    }));
+    const lines = colored.split("\n");
+    const red = "\x1b[38;2;205;49;49m";
+    // Every border-bearing line — top edge, header row sides, the
+    // section divider, body row sides, bottom edge — must carry the
+    // red SGR. Pick out the divider specifically (the line containing
+    // ┼) and check it is wrapped.
+    const dividerLine = lines.find((l) => l.includes("┼"));
+    expect(dividerLine).toBeDefined();
+    expect(dividerLine!).toContain(red);
+    // Top + bottom edges too, as a sanity check.
+    expect(lines[0]).toContain(red);
+    expect(lines.at(-1)!).toContain(red);
   });
 });
 

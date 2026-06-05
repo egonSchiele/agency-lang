@@ -102,7 +102,9 @@ export type CellRow = Cell[]
  *
  * @param align - Horizontal alignment of every cell in this column
  * @param minWidth - Lower bound on column width; widens narrow columns
- * @param fgColor - Reserved for future use; currently ignored
+ * @param fgColor - Default foreground color applied to every cell in
+ *   this column that doesn't carry its own `fgColor`. Cell-level
+ *   `fgColor` always wins.
  */
 export type ColumnSpec = {
   align?: Alignment;

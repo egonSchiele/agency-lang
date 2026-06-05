@@ -201,15 +201,27 @@ export function above(top: Block, bottom: Block): Block {
 export type BorderStyle = "rounded" | "heavy" | "double" | "light";
 
 type BorderChars = {
+  // Corners + edges of the outer frame.
   tl: string; tr: string; bl: string; br: string;
-  h: string;  v: string;
+  h:  string; v:  string;
+  // Junction chars for horizontal section dividers crossing vertical
+  // column dividers (`cross`) or the outer side borders (`leftTee` /
+  // `rightTee`). Rounded shares its interior with light, so they use
+  // the same junctions.
+  cross:     string;
+  leftTee:   string;
+  rightTee:  string;
 };
 
 const BORDER_CHARS: Record<BorderStyle, BorderChars> = {
-  rounded: { tl: "╭", tr: "╮", bl: "╰", br: "╯", h: "─", v: "│" },
-  heavy:   { tl: "┏", tr: "┓", bl: "┗", br: "┛", h: "━", v: "┃" },
-  double:  { tl: "╔", tr: "╗", bl: "╚", br: "╝", h: "═", v: "║" },
-  light:   { tl: "┌", tr: "┐", bl: "└", br: "┘", h: "─", v: "│" },
+  rounded: { tl: "╭", tr: "╮", bl: "╰", br: "╯", h: "─", v: "│",
+             cross: "┼", leftTee: "├", rightTee: "┤" },
+  heavy:   { tl: "┏", tr: "┓", bl: "┗", br: "┛", h: "━", v: "┃",
+             cross: "╋", leftTee: "┣", rightTee: "┫" },
+  double:  { tl: "╔", tr: "╗", bl: "╚", br: "╝", h: "═", v: "║",
+             cross: "╬", leftTee: "╠", rightTee: "╣" },
+  light:   { tl: "┌", tr: "┐", bl: "└", br: "┘", h: "─", v: "│",
+             cross: "┼", leftTee: "├", rightTee: "┤" },
 };
 
 const warnedUnknownStyles = new Set<string>();
@@ -395,9 +407,6 @@ function _coerceCell(cell: unknown): LayoutNode {
 }
 
 type ValidatedTable = {
-  // `header` is `LayoutNode[]` (empty when absent) — not `[] | null` —
-  // for symmetry with `body` and `footer`. Callers iterate uniformly
-  // without a null guard.
   header: LayoutNode[];
   body:   LayoutNode[][];
   footer: LayoutNode[][];
@@ -544,35 +553,67 @@ const RENDERERS: Record<NodeType, (n: LayoutNode) => Block> = {
 // Table renderer.
 //
 // Pipeline:
-//   1. _validateTable     — structural check + cell coercion
-//   2. _measureColumns    — render every cell once, take max width per column
-//   3. _composeTableRow   — pad each cell to its column width + cellPadding,
-//                            join siblings with vertical divider if enabled
-//   4. composeTable       — stack header / dividers / body rows / footer
-//   5. _wrapTable         — outer border + optional caption below
+//   1. _validateTable          — structural check + cell coercion
+//   2. _computeColumnLayouts   — measure each cell, build per-column
+//                                 layout (width / align / padding / fg)
+//   3. composeTable            — declaratively assemble a section list
+//                                 (row blocks interleaved with dividers),
+//                                 wrap the lot in the outer frame + caption
 //
-// Caveat: section dividers (horizontal rules between header/body/footer
-// and optional row dividers) are emitted as flat `─` runs spanning the
-// inner width. Where a vertical column divider `│` from an adjacent row
-// crosses one of these, no junction char (`┼`) is drawn. v1 keeps this
-// simple; box-drawing junctions are an explicit non-goal of the plan.
-function _measureColumns(
+// `ColumnLayout` is the single source of truth for column geometry and
+// style. Anything that needs to know "how wide is column N including
+// padding?" or "what's the inner width of the cell grid?" derives from
+// it via `_innerTableWidth`. The cell-renderer (`_composeRowBlock`)
+// and the divider-renderer (`_composeDividerLine`) both consume the
+// same `ColumnLayout[]`, so a change to one stays in sync with the
+// other automatically.
+
+type ColumnLayout = {
+  width:       number;   // measured content width (after minWidth)
+  align:       Align;
+  cellPadding: number;
+  fgColor:     string;   // "" = none
+};
+
+// Inject the column's `fgColor` as the cell's `fgColor` only when the
+// cell is a `text` leaf without its own color. Cell-level fg always
+// wins; non-text leaves (raw / row / nested containers) are passed
+// through untouched.
+function _applyColumnFg(c: LayoutNode, colFg: string | undefined): LayoutNode {
+  if (!colFg || c.type !== "text") return c;
+  if (typeof c.attrs.fgColor === "string" && c.attrs.fgColor !== "") return c;
+  return { ...c, attrs: { ...c.attrs, fgColor: colFg } };
+}
+
+function _computeColumnLayouts(
   rows: LayoutNode[][],
   columnCount: number,
   columns: ColumnSpec[],
-): { cellBlocks: Block[][]; columnWidths: number[] } {
-  const cellBlocks: Block[][] = rows.map((row) => row.map(renderNode));
-  const columnWidths: number[] = [];
+  cellPadding: number,
+): { layouts: ColumnLayout[]; cellBlocks: Block[][] } {
+  const styledRows = rows.map((row) =>
+    row.map((cell, c) => _applyColumnFg(cell, columns[c]?.fgColor)),
+  );
+  const cellBlocks = styledRows.map((row) => row.map(renderNode));
+  const layouts: ColumnLayout[] = [];
   for (let c = 0; c < columnCount; c++) {
-    let max = 0;
-    for (const row of cellBlocks) {
-      const w = row[c].width;
-      if (w > max) max = w;
-    }
-    const minW = columns[c]?.minWidth ?? 0;
-    columnWidths.push(Math.max(max, minW));
+    const measured = cellBlocks.reduce(
+      (m, row) => Math.max(m, row[c].width), 0,
+    );
+    const spec = columns[c] ?? {};
+    layouts.push({
+      width:       Math.max(measured, spec.minWidth ?? 0),
+      align:       spec.align ?? "start",
+      cellPadding,
+      fgColor:     spec.fgColor ?? "",
+    });
   }
-  return { cellBlocks, columnWidths };
+  return { layouts, cellBlocks };
+}
+
+function _innerTableWidth(layouts: ColumnLayout[], columnDividers: boolean): number {
+  const cellsW = layouts.reduce((s, l) => s + l.width + 2 * l.cellPadding, 0);
+  return cellsW + (columnDividers ? Math.max(0, layouts.length - 1) : 0);
 }
 
 // Pad a cell to its column's content width with the column's
@@ -580,32 +621,23 @@ function _measureColumns(
 // The two-step pad keeps alignment relative to the *content* width
 // (not the padded width), so `align: "end"` still right-edges at the
 // column boundary, not at the outer cellPadding edge.
-function _padCell(
-  block: Block,
-  contentWidth: number,
-  rowHeight: number,
-  align: Align,
-  cellPadding: number,
-): Block {
-  const aligned = pad(block, contentWidth, rowHeight, align, "start");
-  if (cellPadding <= 0) return aligned;
-  const padStr = " ".repeat(cellPadding);
+function _layoutCell(block: Block, layout: ColumnLayout, rowHeight: number): Block {
+  const aligned = pad(block, layout.width, rowHeight, layout.align, "start");
+  if (layout.cellPadding <= 0) return aligned;
+  const padStr = " ".repeat(layout.cellPadding);
   return Block.of(aligned.lines.map((l) => padStr + l + padStr));
 }
 
-function _composeTableRow(
-  cellBlocks: Block[],
-  columnWidths: number[],
-  columns: ColumnSpec[],
-  cellPadding: number,
+// Build a single row block (cells joined, no outer side borders).
+function _composeRowBlock(
+  cells: Block[],
+  layouts: ColumnLayout[],
   columnDividers: boolean,
   dividerChar: string,
   wrapBorder: (s: string) => string,
 ): Block {
-  const rowHeight = cellBlocks.reduce((m, b) => Math.max(m, b.height), 1);
-  const paddedCells = cellBlocks.map((b, c) =>
-    _padCell(b, columnWidths[c], rowHeight, columns[c]?.align ?? "start", cellPadding),
-  );
+  const rowHeight  = cells.reduce((m, b) => Math.max(m, b.height), 1);
+  const paddedCells = cells.map((b, c) => _layoutCell(b, layouts[c], rowHeight));
   if (!columnDividers || paddedCells.length <= 1) {
     return paddedCells.reduce(beside, Block.empty());
   }
@@ -617,22 +649,31 @@ function _composeTableRow(
   );
 }
 
-function _innerTableWidth(
-  columnWidths: number[],
-  cellPadding: number,
+// Build a horizontal section divider with the proper junction
+// characters: `├` and `┤` on the side borders, `┼` at every column
+// crossing. When `innerWidth` exceeds the natural cell grid (e.g.
+// because a wide title widened the table), the extra width is filled
+// with plain `h` chars on the right.
+function _composeDividerLine(
+  layouts: ColumnLayout[],
   columnDividers: boolean,
-): number {
-  const cellsW = columnWidths.reduce((s, w) => s + w + 2 * cellPadding, 0);
-  return cellsW + (columnDividers ? Math.max(0, columnWidths.length - 1) : 0);
+  innerWidth: number,
+  ch: BorderChars,
+  wrapBorder: (s: string) => string,
+): Block {
+  const runs    = layouts.map((l) => ch.h.repeat(l.width + 2 * l.cellPadding));
+  const inner   = columnDividers ? runs.join(ch.cross) : runs.join("");
+  const padding = ch.h.repeat(Math.max(0, innerWidth - visualWidth(inner)));
+  return Block.of(wrapBorder(ch.leftTee + inner + padding + ch.rightTee));
 }
 
 // Tags that act as explicit opt-outs of header auto-bold. Agency's
 // `text()` constructor always serializes `bold: false` by default, so
 // treating `bold === false` as "set" would mean no `text()` cell ever
-// got the auto-bold — only bare strings would. We only treat
-// `bold === true` as a "do not touch" signal; any other explicit
-// modifier on the leaf (italic / dim / underline / fgColor / bgColor)
-// also opts out — the caller's styling wins.
+// got the auto-bold. We only treat `bold === true` as a "do not touch"
+// signal; any *other* explicit modifier on the leaf (italic / dim /
+// underline / fgColor / bgColor) also opts out — the caller's styling
+// wins.
 function _hasExplicitTextStyle(attrs: Record<string, unknown>): boolean {
   return attrs.bold === true
       || attrs.italic === true
@@ -651,21 +692,72 @@ function _styleHeaderCell(c: LayoutNode): LayoutNode {
   return { ...c, attrs: { ...c.attrs, bold: true } };
 }
 
-function _wrapTable(inner: Block, attrs: Record<string, unknown>): Block {
-  const bordered_ = bordered(inner, {
-    title:       attrs.title       as string | undefined,
-    titleColor:  attrs.titleColor  as string | undefined,
-    borderStyle: attrs.borderStyle as BorderStyle | undefined,
-    borderColor: attrs.borderColor as string | undefined,
-    padding:     0,  // cell padding already in place; no extra inner padding
-  });
-  const caption = (attrs.caption as string | undefined) ?? "";
-  if (caption === "") return bordered_;
-  const captionBlock = styled(
-    pad(Block.of(caption), bordered_.width, 1, "center", "start"),
-    { dim: true },
+// Wrap a row block's lines with the outer `│` side borders, padding
+// to `innerWidth` so the right edge lines up with the rest of the
+// table.
+function _wrapRowSides(
+  rowBlock: Block,
+  innerWidth: number,
+  ch: BorderChars,
+  wrapBorder: (s: string) => string,
+): Block {
+  const side = wrapBorder(ch.v);
+  return Block.of(
+    rowBlock.lines.map((l) => side + padLine(l, innerWidth, "start") + side),
   );
-  return above(bordered_, captionBlock);
+}
+
+// Declarative interleave of `row` and `divider` markers for one
+// section. Returns an empty array if `rows` is empty (so the caller
+// can simply concat the three sections without separator guards).
+type SectionPart = { kind: "row"; cells: Block[] } | { kind: "divider" };
+
+function _interleaveRows(
+  rows: Block[][],
+  rowDividers: boolean,
+): SectionPart[] {
+  return rows.flatMap((cells, i): SectionPart[] => {
+    const row: SectionPart = { kind: "row", cells };
+    if (rowDividers && i < rows.length - 1) {
+      return [row, { kind: "divider" }];
+    }
+    return [row];
+  });
+}
+
+// Glue header / body / footer into a single section list, inserting
+// header- and footer-dividers only where there is something on both
+// sides to separate.
+function _buildSectionParts(
+  header: Block[][],
+  body:   Block[][],
+  footer: Block[][],
+  opts: { headerDivider: boolean; footerDivider: boolean; rowDividers: boolean },
+): SectionPart[] {
+  const sections: SectionPart[][] = [
+    _interleaveRows(header, opts.rowDividers),
+    _interleaveRows(body,   opts.rowDividers),
+    _interleaveRows(footer, opts.rowDividers),
+  ];
+  const useHeaderDivider = opts.headerDivider && header.length > 0 && (body.length + footer.length) > 0;
+  const useFooterDivider = opts.footerDivider && footer.length > 0 && body.length > 0;
+
+  const separators: (SectionPart[] | null)[] = [
+    null,
+    useHeaderDivider ? [{ kind: "divider" }] : null,
+    useFooterDivider ? [{ kind: "divider" }] : null,
+  ];
+  return sections.flatMap((parts, i) => [...(separators[i] ?? []), ...parts]);
+}
+
+// Centered, dim caption row. Returns null when no caption is set.
+// The returned block has its trailing whitespace trimmed; the caller
+// must NOT pass it through `above` (which would re-pad it back out
+// to the table width). Append the lines directly instead.
+function _composeCaption(caption: string, width: number): Block | null {
+  if (caption === "") return null;
+  const centered = padLine(caption, width, "center").trimEnd();
+  return styled(Block.of(centered), { dim: true });
 }
 
 function composeTable(node: LayoutNode): Block {
@@ -680,71 +772,74 @@ function composeTable(node: LayoutNode): Block {
   const borderStyleKey = resolveBorderStyle(
     (attrs.borderStyle as string | undefined) ?? "rounded",
   );
-  const ch = BORDER_CHARS[borderStyleKey];
+  const ch          = BORDER_CHARS[borderStyleKey];
   const borderColor = (attrs.borderColor as string | undefined) ?? "";
+  const titleColor  = (attrs.titleColor  as string | undefined) ?? "";
+  const title       = (attrs.title       as string | undefined) ?? "";
+  const caption     = (attrs.caption     as string | undefined) ?? "";
   const wrapBorder  = styledWrapper(borderColor ? { fgColor: borderColor } : {});
+  const titleStyle: Style = titleColor ? { fgColor: titleColor } : {};
 
-  // Apply default-bold to header text cells.
-  const headerStyled = header.map(_styleHeaderCell);
+  // Apply default-bold to header text cells before measurement so the
+  // bold SGR (zero visual width) doesn't perturb column sizing.
+  const styledHeader = header.map(_styleHeaderCell);
 
-  // One measure pass over every row so columns line up across sections.
+  // Single measure pass over every row so columns line up across
+  // sections. We then slice rendered cells back into sections in the
+  // same order we assembled them.
   const allRows: LayoutNode[][] = [
-    ...(headerStyled.length > 0 ? [headerStyled] : []),
+    ...(styledHeader.length > 0 ? [styledHeader] : []),
     ...body,
     ...footer,
   ];
-  const { cellBlocks, columnWidths } = _measureColumns(
-    allRows, columnCount, columns,
+  const { layouts, cellBlocks } = _computeColumnLayouts(
+    allRows, columnCount, columns, cellPadding,
   );
-
-  // Slice rendered cells back into sections in the same order we
-  // assembled `allRows`.
   let idx = 0;
-  const rowBlock = (cells: Block[]) =>
-    _composeTableRow(cells, columnWidths, columns, cellPadding, columnDividers, ch.v, wrapBorder);
+  const headerCells = styledHeader.length > 0 ? [cellBlocks[idx++]] : [];
+  const bodyCells   = body.map(()   => cellBlocks[idx++]);
+  const footerCells = footer.map(() => cellBlocks[idx++]);
 
-  const headerBlock = headerStyled.length > 0 ? rowBlock(cellBlocks[idx++]) : null;
-  const bodyBlocks  = body.map(() => rowBlock(cellBlocks[idx++]));
-  const footerBlocks = footer.map(() => rowBlock(cellBlocks[idx++]));
-
-  const cellsWidth = _innerTableWidth(columnWidths, cellPadding, columnDividers);
-  // If the title would be wider than the cell grid, every divider line
-  // and `bordered`'s top edge needs to extend to fit. Compute the final
-  // width here so dividers and cell rows agree; `above` pads the
-  // narrower rows out to the wider width automatically.
-  const title       = (attrs.title as string | undefined) ?? "";
-  const innerWidth  = Math.max(
+  // A wide title may grow innerWidth beyond the cell grid; dividers and
+  // row wrappers both honour that final width so everything lines up.
+  const cellsWidth = _innerTableWidth(layouts, columnDividers);
+  const innerWidth = Math.max(
     cellsWidth,
     title !== "" ? minWidthForTitle(title) : 0,
   );
-  const divLine     = Block.of(wrapBorder(ch.h.repeat(innerWidth)));
 
-  // Stack everything. `stack` starts empty; `stackAbove` swallows the
-  // empty case so the first push doesn't add a blank top row.
-  let stack = Block.empty();
-  const stackAbove = (b: Block) => {
-    stack = stack.height === 0 ? b : above(stack, b);
-  };
+  // Build flat declarative list of section parts, then render each
+  // part into a Block in one place.
+  const sectionParts = _buildSectionParts(
+    headerCells, bodyCells, footerCells,
+    { headerDivider, footerDivider, rowDividers },
+  );
+  const renderPart = (part: SectionPart): Block =>
+    part.kind === "divider"
+      ? _composeDividerLine(layouts, columnDividers, innerWidth, ch, wrapBorder)
+      : _wrapRowSides(
+          _composeRowBlock(part.cells, layouts, columnDividers, ch.v, wrapBorder),
+          innerWidth, ch, wrapBorder,
+        );
+  const sectionBlocks = sectionParts.map(renderPart);
 
-  if (headerBlock) {
-    stackAbove(headerBlock);
-    if (headerDivider && (bodyBlocks.length > 0 || footerBlocks.length > 0)) {
-      stackAbove(divLine);
-    }
-  }
-  bodyBlocks.forEach((row, i) => {
-    stackAbove(row);
-    if (rowDividers && i < bodyBlocks.length - 1) stackAbove(divLine);
-  });
-  if (footerBlocks.length > 0) {
-    if (bodyBlocks.length > 0 && footerDivider) stackAbove(divLine);
-    footerBlocks.forEach((row, i) => {
-      stackAbove(row);
-      if (rowDividers && i < footerBlocks.length - 1) stackAbove(divLine);
-    });
-  }
+  // Outer frame (top + bottom edges).
+  const topEdge    = Block.of(
+    buildTopEdge(ch, innerWidth, wrapBorder, title, titleStyle),
+  );
+  const bottomEdge = Block.of(
+    wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br),
+  );
+  const framed = [topEdge, ...sectionBlocks, bottomEdge]
+    .reduce(above, Block.empty());
 
-  return _wrapTable(stack, attrs);
+  // Optional caption below. Append directly via Block construction
+  // (not `above`) — `_composeCaption` returns a trimmed-trailing-space
+  // line, and routing it through `above` would re-pad it back out to
+  // the framed width.
+  const captionBlock = _composeCaption(caption, framed.width);
+  if (captionBlock === null) return framed;
+  return Block.of([...framed.lines, ...captionBlock.lines]);
 }
 
 function composeBox(node: LayoutNode): Block {

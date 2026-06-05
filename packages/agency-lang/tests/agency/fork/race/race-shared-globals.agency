@@ -1,4 +1,4 @@
-global let counter = 0
+let counter = 0
 
 def bump(): number {
   counter = counter + 1

@@ -1,4 +1,4 @@
-global let count = 0
+let count = 0
 
 node main() {
   // The "shared accumulator across forks" pattern users will reach

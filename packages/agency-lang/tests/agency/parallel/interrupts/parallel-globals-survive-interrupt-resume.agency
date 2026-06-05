@@ -1,4 +1,4 @@
-global let counter = 0
+let counter = 0
 
 def bumpThenAsk(n: number): number {
   counter = counter + n

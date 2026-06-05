@@ -1,4 +1,4 @@
-global let leaked = 0
+let leaked = 0
 
 node main() {
   // Mixed-outcome fork: branch 1 finishes synchronously and writes

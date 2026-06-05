@@ -378,7 +378,13 @@ function _coerceCell(cell: unknown): LayoutNode {
   if (typeof cell === "string") {
     return { type: "text", attrs: { content: cell }, children: [] };
   }
-  if (cell && typeof cell === "object" && "type" in cell) {
+  if (
+    cell !== null &&
+    typeof cell === "object" &&
+    Object.prototype.hasOwnProperty.call(cell, "type") &&
+    typeof (cell as { type: unknown }).type === "string" &&
+    Array.isArray((cell as { children: unknown }).children)
+  ) {
     return cell as LayoutNode;
   }
   throw new Error(
@@ -404,9 +410,33 @@ type ValidatedTable = {
 // On success returns the three sections with every cell coerced to a
 // `LayoutNode`, plus the resolved column count.
 function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
-  const header = attrs.header as unknown[] | null | undefined;
-  const body   = (attrs.body   as unknown[][] | null | undefined) ?? [];
-  const footer = (attrs.footer as unknown[][] | null | undefined) ?? [];
+  const rawHeader = attrs.header;
+  const rawBody   = attrs.body   ?? [];
+  const rawFooter = attrs.footer ?? [];
+
+  if (rawHeader != null && !Array.isArray(rawHeader)) {
+    throw new Error(
+      `std::layout.table: header must be an array of cells, got ${typeof rawHeader}`,
+    );
+  }
+  const checkSection = (val: unknown, name: string): unknown[][] => {
+    if (!Array.isArray(val)) {
+      throw new Error(
+        `std::layout.table: ${name} must be an array of rows, got ${typeof val}`,
+      );
+    }
+    val.forEach((row, i) => {
+      if (!Array.isArray(row)) {
+        throw new Error(
+          `std::layout.table: ${name} row ${i} must be an array of cells, got ${typeof row}`,
+        );
+      }
+    });
+    return val as unknown[][];
+  };
+  const header = rawHeader as unknown[] | null | undefined;
+  const body   = checkSection(rawBody,   "body");
+  const footer = checkSection(rawFooter, "footer");
 
   if (!header && body.length === 0 && footer.length === 0) {
     throw new Error(

@@ -4,7 +4,7 @@
 // message against an exact expected substring to lock down validation
 // behaviour without needing try/catch in Agency.
 
-import { render } from "../../dist/lib/stdlib/layout.js";
+import { render } from "agency-lang/stdlib-lib/layout.js";
 
 export function tryRender(node) {
   try {

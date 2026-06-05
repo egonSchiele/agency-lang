@@ -910,6 +910,20 @@ describe("table — _coerceCell", () => {
   test("undefined throws", () => {
     expect(() => _coerceCell(undefined)).toThrow(/cell must be string or LayoutNode/);
   });
+  test("plain object without `type` throws (not silently coerced)", () => {
+    expect(() => _coerceCell({ foo: "bar" })).toThrow(/cell must be string or LayoutNode/);
+  });
+  test("object whose `type` is not a string throws", () => {
+    expect(() => _coerceCell({ type: 42, children: [] })).toThrow(/cell must be string or LayoutNode/);
+  });
+  test("object missing `children` array throws", () => {
+    expect(() => _coerceCell({ type: "text" })).toThrow(/cell must be string or LayoutNode/);
+  });
+  test("inherited `type` (prototype) is not accepted", () => {
+    const proto = { type: "text", children: [] };
+    const child = Object.create(proto);
+    expect(() => _coerceCell(child)).toThrow(/cell must be string or LayoutNode/);
+  });
 });
 
 describe("table — _validateTable", () => {
@@ -964,6 +978,22 @@ describe("table — _validateTable", () => {
   test("empty `columns: []` does NOT override; falls through to header", () => {
     const v = _validateTable({ columns: [], header: ["A", "B"] });
     expect(v.columnCount).toBe(2);
+  });
+  test("header that is not an array throws a clear shape error", () => {
+    expect(() => _validateTable({ header: "abc" as unknown as unknown[] }))
+      .toThrow(/header must be an array of cells, got string/);
+  });
+  test("body that is not an array throws a clear shape error", () => {
+    expect(() => _validateTable({ body: "oops" as unknown as unknown[][] }))
+      .toThrow(/body must be an array of rows, got string/);
+  });
+  test("body row that is not an array throws with row index", () => {
+    expect(() => _validateTable({ header: ["A"], body: ["not a row" as unknown as unknown[]] }))
+      .toThrow(/body row 0 must be an array of cells, got string/);
+  });
+  test("footer that is not an array throws", () => {
+    expect(() => _validateTable({ header: ["A"], footer: 42 as unknown as unknown[][] }))
+      .toThrow(/footer must be an array of rows, got number/);
   });
   test("cells are coerced in the returned sections", () => {
     const v = _validateTable({

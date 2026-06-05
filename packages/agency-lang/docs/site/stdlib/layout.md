@@ -155,7 +155,7 @@ export type CellRow = Cell[]
  * @param fgColor - Reserved for future use; currently ignored
  */
 export type ColumnSpec = {
-  align?: "start" | "center" | "end";
+  align?: Alignment;
   minWidth?: number;
   fgColor?: string
 }

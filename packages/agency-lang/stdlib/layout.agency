@@ -648,16 +648,10 @@ export def table(
   columnDividers: boolean = true,
   block: (TableBuilder) => void = null,
 ): LayoutNode {
-  // Pre-compute defaults outside the object literal — the parser
-  // doesn't accept ternaries directly as object-value expressions.
-  let bodyArr: any = body
-  if (bodyArr == null) { bodyArr = [] }
-  let footerArr: any = footer
-  if (footerArr == null) { footerArr = [] }
   const state: any = {
     header: header,
-    body: bodyArr,
-    footer: footerArr,
+    body: body ?? [],
+    footer: footer ?? [],
     columns: columns,
     caption: caption
   }

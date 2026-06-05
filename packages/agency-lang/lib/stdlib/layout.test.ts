@@ -937,9 +937,14 @@ describe("table — _validateTable", () => {
   test("header alone is fine", () => {
     const v = _validateTable({ header: ["A", "B"] });
     expect(v.columnCount).toBe(2);
-    expect(v.header?.length).toBe(2);
+    expect(v.header.length).toBe(2);
     expect(v.body).toEqual([]);
     expect(v.footer).toEqual([]);
+  });
+
+  test("absent header surfaces as empty array (not null) — symmetry with body/footer", () => {
+    const v = _validateTable({ body: [["1", "2"]] });
+    expect(v.header).toEqual([]);
   });
   test("body alone is fine", () => {
     const v = _validateTable({ body: [["1", "2"], ["3", "4"]] });
@@ -1000,8 +1005,8 @@ describe("table — _validateTable", () => {
       header: ["A"],
       body: [[node("text", { content: "x", bold: true })]],
     });
-    expect(v.header![0].type).toBe("text");
-    expect(v.header![0].attrs.content).toBe("A");
+    expect(v.header[0].type).toBe("text");
+    expect(v.header[0].attrs.content).toBe("A");
     expect((v.body[0][0].attrs as { bold: boolean }).bold).toBe(true);
   });
 });

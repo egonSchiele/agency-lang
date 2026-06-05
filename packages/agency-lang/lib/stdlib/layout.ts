@@ -381,7 +381,7 @@ function _coerceCell(cell: unknown): LayoutNode {
   if (
     cell !== null &&
     typeof cell === "object" &&
-    Object.prototype.hasOwnProperty.call(cell, "type") &&
+    Object.hasOwn(cell, "type") &&
     typeof (cell as { type: unknown }).type === "string" &&
     Array.isArray((cell as { children: unknown }).children)
   ) {
@@ -395,7 +395,10 @@ function _coerceCell(cell: unknown): LayoutNode {
 }
 
 type ValidatedTable = {
-  header: LayoutNode[] | null;
+  // `header` is `LayoutNode[]` (empty when absent) — not `[] | null` —
+  // for symmetry with `body` and `footer`. Callers iterate uniformly
+  // without a null guard.
+  header: LayoutNode[];
   body:   LayoutNode[][];
   footer: LayoutNode[][];
   columnCount: number;
@@ -463,7 +466,7 @@ function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
   footer.forEach((r, i) => checkRow(r, `footer row ${i}`));
 
   return {
-    header: header ? header.map(_coerceCell) : null,
+    header: header ? header.map(_coerceCell) : [],
     body:   body.map(row   => row.map(_coerceCell)),
     footer: footer.map(row => row.map(_coerceCell)),
     columnCount,
@@ -666,13 +669,11 @@ function composeTable(node: LayoutNode): Block {
   const wrapBorder  = styledWrapper(borderColor ? { fgColor: borderColor } : {});
 
   // Apply default-bold to header text cells.
-  const headerStyled: LayoutNode[] | null = header
-    ? header.map(_styleHeaderCell)
-    : null;
+  const headerStyled = header.map(_styleHeaderCell);
 
   // One measure pass over every row so columns line up across sections.
   const allRows: LayoutNode[][] = [
-    ...(headerStyled ? [headerStyled] : []),
+    ...(headerStyled.length > 0 ? [headerStyled] : []),
     ...body,
     ...footer,
   ];
@@ -686,7 +687,7 @@ function composeTable(node: LayoutNode): Block {
   const rowBlock = (cells: Block[]) =>
     _composeTableRow(cells, columnWidths, columns, cellPadding, columnDividers, ch.v, wrapBorder);
 
-  const headerBlock = headerStyled ? rowBlock(cellBlocks[idx++]) : null;
+  const headerBlock = headerStyled.length > 0 ? rowBlock(cellBlocks[idx++]) : null;
   const bodyBlocks  = body.map(() => rowBlock(cellBlocks[idx++]));
   const footerBlocks = footer.map(() => rowBlock(cellBlocks[idx++]));
 

@@ -9,7 +9,8 @@ import {
 import { dirname } from "path";
 import { __call } from "../runtime/call.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-import { RESET, styles } from "@/utils/termcolors.js"
+import { modifiers, RESET, styles } from "@/utils/termcolors.js"
+import { color, colors, bgColors } from "../utils/termcolors.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -701,7 +702,7 @@ export async function _runLineRepl(
   // `COLOR_RESET` immediately after `rl.question` resolves so the
   // agent's reply (and any tool-call output) prints in the default
   // color. No-op on non-TTY so logs / pipes stay free of escape codes.
-  const useColor = process.stdout.isTTY === true;
+  const useColor = process.stdout.isTTY === true && process.env.NO_COLOR !== "1";
   const coloredPrompt = useColor
     ? `${USER_INPUT_COLOR}${prompt}`
     : prompt;

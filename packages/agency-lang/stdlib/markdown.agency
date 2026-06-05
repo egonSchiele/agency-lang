@@ -155,14 +155,13 @@ export type BlockQuote = {
   content: any[]
 }
 
-/** A single item in a list. `sublist` is set when the item contains a nested
-    list (its runtime shape is `List`, but typed as `any` because Agency does
-    not yet support mutual recursion with `List.items: ListItem[]`).
-    `checked` is set for GFM task-list items: `true` for `[x]`/`[X]`,
-    `false` for `[ ]`, absent for plain items. */
+/** A single item in a list. `content` is an array of block nodes — typically
+    a single paragraph, but may include nested lists, code blocks, etc. Typed
+    as `any[]` because Agency does not yet support mutual recursion with
+    `List.items: ListItem[]`. `checked` is set for GFM task-list items:
+    `true` for `[x]`/`[X]`, `false` for `[ ]`, absent for plain items. */
 export type ListItem = {
   content: any[];
-  sublist?: any;
   checked?: boolean
 }
 

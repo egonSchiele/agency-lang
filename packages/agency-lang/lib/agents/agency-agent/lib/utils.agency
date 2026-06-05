@@ -1,0 +1,57 @@
+import { map } from "std::array"
+
+export def formatToolResponse(data: string): string {
+  let _text = ""
+  if (typeof data == "string") {
+    _text = truncate(data)
+  } else if (typeof data == "array") {
+    if (data.length > 15) {
+      _text = truncate(JSON.stringify(data[:15], null, 2)) + "\n... (${data.length} total items)"
+    } else if (data.length > 3) {
+      _text = JSON.stringify(data, null, 2)
+    } else {
+      _text = truncate(JSON.stringify(data))
+    }
+  } else {
+    _text = truncate(JSON.stringify(data))
+  }
+
+  const truncated = _text
+  if (truncated.length < 1) {
+    return ""
+  }
+  const lines = truncated.split("\n")
+  const head = lines[0]
+  const tail = indentStr(lines[1:].join("\n"), 5)
+  const result = ` ⎿  ${head}\n${tail}`
+  return result
+}
+
+export def truncate(str: string, maxLength: number = 100): string {
+  if (str.length <= maxLength) {
+    return str
+  }
+  return str.slice(0, maxLength) + "..."
+}
+
+export def formatArgs(args: Record<string, any>): string {
+  const parts = []
+  for (key in args) {
+    const value = args[key]
+    parts.push("${key}: ${truncate(JSON.stringify(value), 50)}")
+  }
+  return parts.join(", ")
+}
+
+export def indentStr(str: string, amount: number): string {
+  const indent = repeatStr(" ", amount)
+  const lines = str.split("\n")
+  const indentedLines = map(lines) as line {
+    return indent + line
+  }
+  return indentedLines.join("\n")
+}
+
+export def repeatStr(str: string, times: number): string {
+  return Array(times).fill(str).join("")
+}

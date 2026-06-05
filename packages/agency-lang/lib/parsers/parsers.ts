@@ -90,6 +90,7 @@ import {
   NumberLiteralType,
   ObjectProperty,
   ObjectType,
+  ObjectTypeTrivia,
   GenericType,
   PrimitiveType,
   ResultType,
@@ -1090,6 +1091,60 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
   },
 );
 
+type ObjectBodyEntry =
+  | { kind: "prop"; prop: ObjectProperty }
+  | {
+      kind: "trivia";
+      node: AgencyComment | AgencyMultiLineComment | NewLine;
+    };
+
+const objectMemberWithDelimiter: Parser<ObjectBodyEntry> = (input: string) => {
+  const parser = seqC(
+    capture(
+      or(
+        taggedObjectPropertyParser,
+        objectPropertyWithDescriptionParser,
+        objectPropertyParser,
+      ),
+      "prop",
+    ),
+    optional(objectPropertyDelimiter),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success(
+    { kind: "prop" as const, prop: result.result.prop as ObjectProperty },
+    result.rest,
+  );
+};
+
+// Consumes a single trivia entry (blank line, line comment, or multi-line
+// comment) plus any trailing whitespace/newlines so the cursor is left at
+// the start of the next member or trivia entry. `multiLineCommentParser`
+// in particular does NOT eat its trailing newline, so we add it here to
+// keep `many(or(...))` making progress.
+const objectTrivia: Parser<ObjectBodyEntry> = (input: string) => {
+  const parser = seqC(
+    capture(
+      or(blankLineParser, commentParser, multiLineCommentParser),
+      "node",
+    ),
+    optionalSpacesOrNewline,
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success(
+    {
+      kind: "trivia" as const,
+      node: result.result.node as
+        | AgencyComment
+        | AgencyMultiLineComment
+        | NewLine,
+    },
+    result.rest,
+  );
+};
+
 export const objectTypeParser: Parser<ObjectType> = memo(
   "objectTypeParser",
   (input: string): ParserResult<ObjectType> => {
@@ -1097,19 +1152,7 @@ export const objectTypeParser: Parser<ObjectType> = memo(
       set("type", "objectType"),
       char("{"),
       optionalSpacesOrNewline,
-      capture(
-        sepBy(
-          objectPropertyDelimiter,
-          or(
-            taggedObjectPropertyParser,
-            objectPropertyWithDescriptionParser,
-            objectPropertyParser,
-            commentParser,
-            multiLineCommentParser,
-          ),
-        ),
-        "properties",
-      ),
+      capture(many(or(objectTrivia, objectMemberWithDelimiter)), "entries"),
       optionalSpacesOrNewline,
       parseError(
         "Expected `}`. Did you forget to add a comma between object properties?",
@@ -1121,20 +1164,35 @@ export const objectTypeParser: Parser<ObjectType> = memo(
     if (!result.success) {
       return result;
     }
-    // Filter out comment properties from the final result
-    const properties = result.result.properties.filter(
-      (prop): prop is ObjectProperty =>
-        !("type" in prop) ||
-        (prop.type !== "comment" && prop.type !== "multiLineComment"),
-    );
 
-    return success(
-      {
-        type: "objectType",
-        properties,
-      },
-      result.rest,
-    );
+    // Walk the interleaved entries and split into `properties` + `trivia`.
+    // Trivia is anchored to the next property's index. Any trailing trivia
+    // (after the last property) is anchored at `properties.length`.
+    const properties: ObjectProperty[] = [];
+    const trivia: ObjectTypeTrivia[] = [];
+    let pending: (AgencyComment | AgencyMultiLineComment | NewLine)[] = [];
+
+    const entries = result.result.entries as ObjectBodyEntry[];
+    for (const entry of entries) {
+      if (entry.kind === "trivia") {
+        pending.push(entry.node);
+      } else {
+        if (pending.length > 0) {
+          trivia.push({ anchorIndex: properties.length, comments: pending });
+          pending = [];
+        }
+        properties.push(entry.prop);
+      }
+    }
+    if (pending.length > 0) {
+      trivia.push({ anchorIndex: properties.length, comments: pending });
+    }
+
+    const objectType: ObjectType = { type: "objectType", properties };
+    if (trivia.length > 0) {
+      objectType.trivia = trivia;
+    }
+    return success(objectType, result.rest);
   },
 );
 

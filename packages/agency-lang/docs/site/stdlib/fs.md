@@ -71,6 +71,11 @@ export type Workspace = {
   glob: any;
   grep: any;
   bash: any;
+  /**
+   * Every bundled tool as a flat array, in the same order they are
+   * documented above. Designed for splatting straight into a call:
+   * `llm(msg, { tools: [...workspace.tools, otherTool] })`.
+   */
   tools: any[]
 }
 ```

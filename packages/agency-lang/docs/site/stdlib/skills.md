@@ -146,3 +146,110 @@ Build a skills tool for an LLM over a directory of skills.
 | layout | `"flat" \| "standard"` | "standard" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L95))
+
+### stripFm
+
+```ts
+stripFm(raw: string): string
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| raw | `string` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L144))
+
+### commandsDir
+
+```ts
+commandsDir(dir: string): any[]
+```
+
+Discover .md files under `dir` and parse each as a slash-command
+  template. Returns [] if `dir` is missing or empty.
+
+  @param dir - Directory containing command markdown files. Pass an
+    absolute path (e.g. cwd()/.claude/commands) to anchor at the
+    project root rather than the calling module's directory.
+
+* Discover Claude-Code-format slash commands under `dir`. Each `.md`
+ * file becomes one command record `{ name, description, argHint, body }`.
+ *
+ * Pair with `expandSlash(msg, commands)` in your agent's per-turn
+ * handler:
+ *
+ * ```ts
+ * static const commands = commandsDir("${cwd()}/.claude/commands") with approve
+ * def _runTurn(msg: string) {
+ *   const prompt = expandSlash(msg, commands)
+ *   route(..., prompt)
+ * }
+ * ```
+ *
+ * Only the `description` and `argument-hint` frontmatter fields are
+ * read; all other CC fields (`allowed-tools`, `model`, `effort`,
+ * `context: fork`, `disable-model-invocation`, `user-invocable`,
+ * `hooks`, `paths`, `shell`, ...) are silently ignored. `commandsDir`
+ * is a pure prompt-template loader, not an executor.
+ *
+ * Files with no frontmatter still dispatch — `description` and
+ * `argHint` default to `""` (never null/undefined). Missing or empty
+ * `dir` returns `[]`.
+ *
+ * Relative `dir` resolves against the calling module's directory.
+ * For project-level commands (e.g. `.claude/commands` at the project
+ * root), pass an absolute path: `"${cwd()}/.claude/commands"`.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | `string` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L191))
+
+### expandSlash
+
+```ts
+expandSlash(msg: string, commands: any[]): string
+```
+
+Expand a /command in `msg` using a `commandsDir(...)` result.
+  Returns the rendered command body, or `msg` unchanged if no
+  command matches.
+
+  @param msg - The raw input line (may have leading/trailing whitespace or newlines).
+  @param commands - Array returned by `commandsDir(...)`.
+
+* Expand a user-typed slash command against a `commandsDir` result.
+ *
+ * - If `msg` (after trimming) matches `/<name>` with optional
+ *   whitespace + args, returns the rendered command body with
+ *   `$ARGUMENTS` substituted.
+ * - If the body has no `$ARGUMENTS` token and args were passed,
+ *   appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
+ *   (matches Claude Code).
+ * - Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
+ *   through to the LLM as plain text, again matching CC.
+ *
+ * Args are split off at the first whitespace (space, tab, or
+ * newline) after `/<name>`. Leading and trailing whitespace on `msg`
+ * are tolerated so piped invocations (`echo /foo | agency agent`,
+ * yielding `"/foo\n"`) dispatch correctly.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| msg | `string` |  |
+| commands | `any[]` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L244))

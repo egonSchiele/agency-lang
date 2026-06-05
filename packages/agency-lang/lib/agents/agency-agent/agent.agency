@@ -6,6 +6,7 @@ import { today } from "std::date"
 import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
+import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
@@ -191,23 +192,64 @@ def loadAgentsMd(dir: string): string {
 // LLM doesn't have to re-ground each turn. Initialized in `main()`.
 let _context: string = ""
 
+// Project-local slash commands. `cwd()` works at module-init time so
+// we anchor at the user's project root (not the agent's source dir).
+// `with approve` auto-approves the `glob`/`read` during init — the
+// user implicitly opted in by running the agent in this directory.
+static const projectCommands = commandsDir("${cwd()}/.claude/commands") with approve
+
+def builtinPalette(): Record<string, string> {
+  return {
+    "/exit":  "Exit the agent",
+    "/clear": "Clear the conversation transcript",
+    "/help":  "Show available slash commands"
+  }
+}
+
+// Built-ins win over file commands so a user `/clear.md` can't shadow
+// the built-in `/clear`. Build file entries first, then overlay builtins.
+def mergedPalette(): Record<string, string> {
+  let out: Record<string, string> = {}
+  for (cmd in projectCommands) {
+    let label = cmd.description
+    if (cmd.argHint != "") {
+      label = "${cmd.description} ${cmd.argHint}"
+    }
+    out["/${cmd.name}"] = label
+  }
+  const builtins = builtinPalette()
+  for (key in builtins) {
+    out[key] = builtins[key]
+  }
+  return out
+}
+
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
 def _runTurn(msg: string): boolean {
-  if (msg == "") {
+  // Trim once for built-in matching so `"/help\n"` (piped) or
+  // `"  /clear"` behave the same as `"/clear"`. `expandSlash` is
+  // whitespace-tolerant in its own right, but it still receives the
+  // raw `msg` so the LLM sees the exact text the user typed when
+  // nothing matches.
+  const trimmed = msg.trim()
+  if (trimmed == "") {
     return true
   }
-  if (msg == "/exit" || msg == "/quit") {
+  if (trimmed == "/exit" || trimmed == "/quit") {
     return false
   }
-  if (msg == "/clear") {
+  if (trimmed == "/clear") {
     clearMessages()
     return true
   }
-  if (msg == "/help") {
+  if (trimmed == "/help") {
     pushMessage("Commands: /exit, /clear, /help")
     return true
   }
+  // Expand `/foo args` to the rendered command body. Unknown `/foo`
+  // inputs fall through unchanged — matches Claude Code.
+  const prompt = expandSlash(msg, projectCommands)
   const reply = route(
     {
     start: "code",
@@ -226,7 +268,7 @@ def _runTurn(msg: string): boolean {
     maxHops: 3,
     context: _context
   },
-    msg,
+    prompt,
   )
   pushMessage(highlight("${reply}\n", language: "markdown"))
   return true
@@ -341,6 +383,11 @@ node main() {
       fields: ALWAYS_FIELDS
     },
     )
+    // Expand slash commands in one-shot mode too, so
+    // `agency agent -p /foo bar` works the same as typing it in the
+    // REPL. Built-ins (`/exit` etc.) are meaningless without a loop
+    // and aren't checked.
+    const onePrompt = expandSlash(piped, projectCommands)
     handle {
       const reply = route(
         {
@@ -360,7 +407,7 @@ node main() {
         maxHops: 3,
         context: _context
       },
-        piped,
+        onePrompt,
       )
       print(reply)
     } with handler
@@ -397,11 +444,7 @@ node main() {
       prompt: "> ",
       historyFile: historyPath(),
       historyMax: 1000,
-      paletteCommands: {
-      "/exit": "Exit the agent",
-      "/clear": "Clear the conversation transcript",
-      "/help": "Show available slash commands"
-    },
+      paletteCommands: mergedPalette(),
     )
   } with handler
 

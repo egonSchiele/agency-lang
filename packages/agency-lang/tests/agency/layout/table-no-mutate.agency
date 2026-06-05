@@ -1,0 +1,23 @@
+import { table } from "std::layout"
+
+// Regression: `table(body: rows) as t { t.row(...) }` used to push
+// the block-added rows onto the caller's `rows` array, mutating it
+// in place. `table()` now copies body / footer into fresh arrays
+// before the block runs, matching the copy-then-push convention
+// `row()` / `column()` already use for `children`.
+
+node testTableDoesNotMutateBody(): number {
+  const myBody: any[] = [["1", "Dave", "100"]]
+  table(body: myBody) as t {
+    t.row("2", "Alice", "-50")
+  }
+  return myBody.length
+}
+
+node testTableDoesNotMutateFooter(): number {
+  const myFooter: any[] = [["", "Total", "50"]]
+  table(body: [["1", "Dave", "100"]], footer: myFooter) as t {
+    t.footer("", "VAT", "10")
+  }
+  return myFooter.length
+}

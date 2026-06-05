@@ -1,0 +1,21 @@
+import { table, render, text } from "std::layout"
+
+// End-to-end render of a small table covering: title (embedded in
+// the top border), caption (dim line below the bottom border), header
+// + body + footer sections, the default column divider `│`, header
+// divider `─`, footer divider `─`. We render with `color: false` so
+// the comparison is plain ASCII and ignores ANSI noise.
+
+node testRender(): string {
+  const t = table(
+    title: "Books",
+    caption: "(2 entries)",
+    header: ["ID", "Title"],
+    body: [
+      ["1", "Cat"],
+      ["22", "Lion"],
+    ],
+    footer: [["", "2 total"]],
+  )
+  return render(t, color: false)
+}

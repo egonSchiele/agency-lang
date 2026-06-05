@@ -1,0 +1,40 @@
+import { tryRender } from "../../helpers/tryRender.js"
+
+// Validation lives in the TS handler `composeTable` (via
+// `_validateTable`). Each test below builds a bad `table` node by
+// hand (we can't call `table()` itself with bad shapes because the
+// Agency typechecker would reject them statically), then renders it
+// through the JS helper which returns the thrown error message.
+
+def _badTable(attrs: any): any {
+  return { type: "table", attrs: attrs, children: [] }
+}
+
+// No header / body / footer at all.
+node testAllSectionsMissing(): string {
+  return tryRender(_badTable({}))
+}
+
+// Header has 3 cells but a body row has 2.
+node testBodyRowColumnCountMismatch(): string {
+  return tryRender(_badTable({
+    header: ["A", "B", "C"],
+    body: [["1", "2"]]
+  }))
+}
+
+// `columns` declares 2 columns; header carries 3.
+node testColumnsDisagreesWithHeader(): string {
+  return tryRender(_badTable({
+    columns: [{}, {}],
+    header: ["A", "B", "C"]
+  }))
+}
+
+// A non-string, non-LayoutNode cell value (number) — coerceCell throws.
+node testNonCellThrows(): string {
+  return tryRender(_badTable({
+    header: ["A"],
+    body: [[42]]
+  }))
+}

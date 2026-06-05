@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "nodeName": "testBlockForm",
+      "input": "",
+      "expectedOutput": "{\"type\":\"table\",\"attrs\":{\"title\":\"Employees\",\"titleColor\":\"\",\"borderStyle\":\"rounded\",\"borderColor\":\"\",\"caption\":\"All names are fictitious\",\"cellPadding\":1,\"columns\":[{\"align\":\"end\"},{\"align\":\"start\"},{\"align\":\"end\"}],\"header\":[\"ID\",\"Name\",\"Balance\"],\"body\":[[\"1\",\"Dave\",\"100\"],[\"2\",\"Alice\",{\"type\":\"text\",\"attrs\":{\"content\":\"-50\",\"fgColor\":\"red\",\"bgColor\":\"\",\"bold\":false,\"italic\":false,\"dim\":false,\"underline\":false,\"align\":\"start\"},\"children\":[]}]],\"footer\":[[\"\",\"Total\",\"50\"]],\"headerDivider\":true,\"footerDivider\":true,\"rowDividers\":false,\"columnDividers\":true},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

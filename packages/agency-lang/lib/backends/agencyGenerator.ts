@@ -90,10 +90,10 @@ function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
     }
     switch (c) {
       case "\\": out += "\\\\"; break;
-      case "\n": out += "\\n";  break;
-      case "\t": out += "\\t";  break;
-      case "\r": out += "\\r";  break;
-      case "\0": out += "\\0";  break;
+      case "\n": out += "\\n"; break;
+      case "\t": out += "\\t"; break;
+      case "\r": out += "\\r"; break;
+      case "\0": out += "\\0"; break;
       case "$":
         // Only `${` starts an interpolation. Escape a bare `$` only
         // when followed by `{` so a literal `$5` stays as `$5`.
@@ -1177,7 +1177,7 @@ export class AgencyGenerator {
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
     if (node.isDoc) {
       if (node.isModuleDoc) {
-        return this.indentStr(`/** @module\n${node.content}***/`);
+        return this.indentStr(`/** @module${node.content}***/`);
       }
       return this.indentStr(`/**${node.content}*/`);
     }

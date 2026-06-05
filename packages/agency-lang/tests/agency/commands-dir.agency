@@ -10,6 +10,41 @@ node entriesCount(): number {
   return loadFixture().length
 }
 
+node multilineBodyPreserved(): boolean {
+  // stripFm must strip exactly one trailing newline — no more, no
+  // less. If it regresses to "return first line" or "strip everything
+  // after the last newline", this test fails. Single-line fixtures
+  // can't catch that class of bug.
+  for (cmd in loadFixture()) {
+    if (cmd.name == "multiline") {
+      return cmd.body == "Line 1\nLine 2\nLine 3"
+    }
+  }
+  return false
+}
+
+node frontmatterOnlyBodyIsEmpty(): boolean {
+  // A file that's all frontmatter and no body should yield body "".
+  for (cmd in loadFixture()) {
+    if (cmd.name == "frontmatter-only") {
+      return cmd.body == ""
+    }
+  }
+  return false
+}
+
+node unclosedFrontmatterBodyIsEmpty(): boolean {
+  // stripFm contract: unclosed frontmatter → "". Don't try to recover
+  // the malformed file as a body — silently treating malformed input
+  // as valid would mask template-author bugs.
+  for (cmd in loadFixture()) {
+    if (cmd.name == "unclosed-frontmatter") {
+      return cmd.body == ""
+    }
+  }
+  return false
+}
+
 node simpleHasDescription(): boolean {
   for (cmd in loadFixture()) {
     if (cmd.name == "simple") {
@@ -80,6 +115,22 @@ node withArgsMultiArgRawString(): boolean {
   return out == `Greet "alice the great" bob politely.`
 }
 
+node multipleArgumentsTokensAllReplaced(): boolean {
+  // `replaceAll`, not `replace`. If this regresses to single-shot
+  // `replace`, the second `$ARGUMENTS` survives literally and this
+  // test fails. Single-token fixtures can't catch that.
+  const out = expandSlash("/multi-args hello", loadFixture())
+  return out == "First hello, then hello again."
+}
+
+node argumentsTokenEmptyRawArgsSubstitutesEmpty(): boolean {
+  // Documented v1 behavior: empty rawArgs leaves a bare space where
+  // `$ARGUMENTS` was. Locking this in so a future "be clever about
+  // whitespace" tweak doesn't silently break the CC contract.
+  const out = expandSlash("/with-args", loadFixture())
+  return out == "Greet  politely."
+}
+
 node noArgsCommandIgnoresExtraText(): boolean {
   // /simple has no $ARGUMENTS placeholder. Passing args should append
   // `\n\nARGUMENTS: <raw>` so the LLM still sees them. Matches CC.
@@ -132,9 +183,17 @@ node tabDelimitsArgs(): boolean {
 // ---------- defensive contract ----------
 
 node descriptionsAreStringsNotUndefined(): boolean {
+  // Catches the undefined-leak contract by stringifying. If `cmd.argHint`
+  // is `undefined`, `"${cmd.argHint}"` renders `"undefined"` — which is
+  // exactly the bug that produced "undefined undefined" entries in the
+  // palette before the `?? ""` fix in stdlib/skills.agency. A bare
+  // `== null` check would NOT catch this (in Agency `undefined == null`
+  // is false), so don't be tempted to "simplify" it.
   for (cmd in loadFixture()) {
-    if (cmd.description == null) { return false }
-    if (cmd.argHint == null) { return false }
+    if ("${cmd.description}" == "undefined") { return false }
+    if ("${cmd.argHint}" == "undefined") { return false }
+    if ("${cmd.description}" == "null") { return false }
+    if ("${cmd.argHint}" == "null") { return false }
   }
   return true
 }

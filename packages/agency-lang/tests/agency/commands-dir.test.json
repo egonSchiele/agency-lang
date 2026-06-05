@@ -1,6 +1,9 @@
 {
   "tests": [
-    { "nodeName": "entriesCount", "input": "", "expectedOutput": "5", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "entriesCount", "input": "", "expectedOutput": "9", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "multilineBodyPreserved", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "frontmatterOnlyBodyIsEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unclosedFrontmatterBodyIsEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "simpleHasDescription", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "simpleHasEmptyArgHint", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "emptyFrontmatterHasEmptyDefaults", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
@@ -10,6 +13,8 @@
     { "nodeName": "simpleExpandsToBody", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "withArgsSubstitutes", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "withArgsMultiArgRawString", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "multipleArgumentsTokensAllReplaced", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "argumentsTokenEmptyRawArgsSubstitutesEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "noArgsCommandIgnoresExtraText", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "noArgsCommandNoSuffixIfNoArgs", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "unknownCommandReturnsLiteral", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },

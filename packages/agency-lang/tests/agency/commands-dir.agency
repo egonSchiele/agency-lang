@@ -1,0 +1,199 @@
+import { commandsDir, expandSlash } from "std::skills"
+
+def loadFixture() {
+  return commandsDir("commands-dir-fixture") with approve
+}
+
+// ---------- discovery ----------
+
+node entriesCount(): number {
+  return loadFixture().length
+}
+
+node multilineBodyPreserved(): boolean {
+  // stripFm must strip exactly one trailing newline — no more, no
+  // less. If it regresses to "return first line" or "strip everything
+  // after the last newline", this test fails. Single-line fixtures
+  // can't catch that class of bug.
+  for (cmd in loadFixture()) {
+    if (cmd.name == "multiline") {
+      return cmd.body == "Line 1\nLine 2\nLine 3"
+    }
+  }
+  return false
+}
+
+node frontmatterOnlyBodyIsEmpty(): boolean {
+  // A file that's all frontmatter and no body should yield body "".
+  for (cmd in loadFixture()) {
+    if (cmd.name == "frontmatter-only") {
+      return cmd.body == ""
+    }
+  }
+  return false
+}
+
+node unclosedFrontmatterBodyIsEmpty(): boolean {
+  // stripFm contract: unclosed frontmatter → "". Don't try to recover
+  // the malformed file as a body — silently treating malformed input
+  // as valid would mask template-author bugs.
+  for (cmd in loadFixture()) {
+    if (cmd.name == "unclosed-frontmatter") {
+      return cmd.body == ""
+    }
+  }
+  return false
+}
+
+node simpleHasDescription(): boolean {
+  for (cmd in loadFixture()) {
+    if (cmd.name == "simple") {
+      return cmd.description == "A simple command with no args"
+    }
+  }
+  return false
+}
+
+node simpleHasEmptyArgHint(): boolean {
+  for (cmd in loadFixture()) {
+    if (cmd.name == "simple") {
+      return cmd.argHint == ""
+    }
+  }
+  return false
+}
+
+node emptyFrontmatterHasEmptyDefaults(): boolean {
+  for (cmd in loadFixture()) {
+    if (cmd.name == "empty-frontmatter") {
+      // Critical: must be the EMPTY STRING, never null/undefined.
+      // If undefined leaks through, "${cmd.description}" would render
+      // "undefined" and palette would show "undefined undefined".
+      return cmd.description == "" && cmd.argHint == ""
+    }
+  }
+  return false
+}
+
+node noFrontmatterHasEmptyDefaults(): boolean {
+  for (cmd in loadFixture()) {
+    if (cmd.name == "no-frontmatter") {
+      return cmd.description == "" && cmd.argHint == ""
+    }
+  }
+  return false
+}
+
+node descriptionOnlyHasEmptyArgHint(): boolean {
+  for (cmd in loadFixture()) {
+    if (cmd.name == "description-only") {
+      return cmd.description == "No argument hint here" && cmd.argHint == ""
+    }
+  }
+  return false
+}
+
+node missingDirReturnsEmpty(): boolean {
+  const cmds = commandsDir("commands-dir-fixture-does-not-exist") with approve
+  return cmds.length == 0
+}
+
+// ---------- expansion ----------
+
+node simpleExpandsToBody(): boolean {
+  const out = expandSlash("/simple", loadFixture())
+  return out == "Just say hello."
+}
+
+node withArgsSubstitutes(): boolean {
+  const out = expandSlash("/with-args alice", loadFixture())
+  return out == "Greet alice politely."
+}
+
+node withArgsMultiArgRawString(): boolean {
+  const out = expandSlash(`/with-args "alice the great" bob`, loadFixture())
+  return out == `Greet "alice the great" bob politely.`
+}
+
+node multipleArgumentsTokensAllReplaced(): boolean {
+  // `replaceAll`, not `replace`. If this regresses to single-shot
+  // `replace`, the second `$ARGUMENTS` survives literally and this
+  // test fails. Single-token fixtures can't catch that.
+  const out = expandSlash("/multi-args hello", loadFixture())
+  return out == "First hello, then hello again."
+}
+
+node argumentsTokenEmptyRawArgsSubstitutesEmpty(): boolean {
+  // Documented v1 behavior: empty rawArgs leaves a bare space where
+  // `$ARGUMENTS` was. Locking this in so a future "be clever about
+  // whitespace" tweak doesn't silently break the CC contract.
+  const out = expandSlash("/with-args", loadFixture())
+  return out == "Greet  politely."
+}
+
+node noArgsCommandIgnoresExtraText(): boolean {
+  // /simple has no $ARGUMENTS placeholder. Passing args should append
+  // `\n\nARGUMENTS: <raw>` so the LLM still sees them. Matches CC.
+  const out = expandSlash("/simple extra stuff", loadFixture())
+  return out == "Just say hello.\n\nARGUMENTS: extra stuff"
+}
+
+node noArgsCommandNoSuffixIfNoArgs(): boolean {
+  const out = expandSlash("/simple", loadFixture())
+  return out == "Just say hello."
+}
+
+node unknownCommandReturnsLiteral(): boolean {
+  const out = expandSlash("/does-not-exist arg", loadFixture())
+  return out == "/does-not-exist arg"
+}
+
+node nonSlashReturnsLiteral(): boolean {
+  const out = expandSlash("hello world", loadFixture())
+  return out == "hello world"
+}
+
+node emptyInputReturnsLiteral(): boolean {
+  const out = expandSlash("", loadFixture())
+  return out == ""
+}
+
+// ---------- whitespace tolerance ----------
+
+node trailingNewlineDispatches(): boolean {
+  const out = expandSlash("/simple\n", loadFixture())
+  return out == "Just say hello."
+}
+
+node leadingWhitespaceDispatches(): boolean {
+  const out = expandSlash("  /simple", loadFixture())
+  return out == "Just say hello."
+}
+
+node trailingWhitespaceDispatches(): boolean {
+  const out = expandSlash("/simple   ", loadFixture())
+  return out == "Just say hello."
+}
+
+node tabDelimitsArgs(): boolean {
+  const out = expandSlash("/with-args\talice", loadFixture())
+  return out == "Greet alice politely."
+}
+
+// ---------- defensive contract ----------
+
+node descriptionsAreStringsNotUndefined(): boolean {
+  // Catches the undefined-leak contract by stringifying. If `cmd.argHint`
+  // is `undefined`, `"${cmd.argHint}"` renders `"undefined"` — which is
+  // exactly the bug that produced "undefined undefined" entries in the
+  // palette before the `?? ""` fix in stdlib/skills.agency. A bare
+  // `== null` check would NOT catch this (in Agency `undefined == null`
+  // is false), so don't be tempted to "simplify" it.
+  for (cmd in loadFixture()) {
+    if ("${cmd.description}" == "undefined") { return false }
+    if ("${cmd.argHint}" == "undefined") { return false }
+    if ("${cmd.description}" == "null") { return false }
+    if ("${cmd.argHint}" == "null") { return false }
+  }
+  return true
+}

@@ -121,3 +121,163 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   const description = header + lines.join("\n") + footer
   return read.partial(dir: dir).describe(description)
 }
+
+// ============================================================
+// Slash commands
+// ============================================================
+//
+// `commandsDir(dir)` + `expandSlash(msg, commands)` are the
+// command-flavored sibling of `skillsDir`. CC merged custom commands
+// and skills into one file format; we surface both halves from this
+// module.
+//
+// A command is a pure prompt template: the rendered body is the user
+// message. No shell injection, no `$N` positional refs (only
+// `$ARGUMENTS`), no `allowed-tools` pre-approval. Deferred features
+// are tracked in `docs/superpowers/plans/2026-06-05-slash-commands-v2.md`.
+
+// Strip frontmatter + a single trailing newline. Three cases:
+//   - No frontmatter (`---\n` not at start) → return raw less trailing \n
+//   - Frontmatter with no closing fence → return ""
+//   - Frontmatter with closing fence → return everything after, less
+//     trailing \n
+def stripFm(raw: string): string {
+  if (!raw.startsWith("---\n")) {
+    if (raw.endsWith("\n")) {
+      return raw.slice(0, raw.length - 1)
+    }
+    return raw
+  }
+  const idx = raw.indexOf("\n---\n", 4)
+  if (idx == -1) {
+    return ""
+  }
+  let body = raw.slice(idx + 5)
+  if (body.endsWith("\n")) {
+    body = body.slice(0, body.length - 1)
+  }
+  return body
+}
+
+/**
+ * Discover Claude-Code-format slash commands under `dir`. Each `.md`
+ * file becomes one command record `{ name, description, argHint, body }`.
+ *
+ * Pair with `expandSlash(msg, commands)` in your agent's per-turn
+ * handler:
+ *
+ * ```ts
+ * static const commands = commandsDir("${cwd()}/.claude/commands") with approve
+ * def _runTurn(msg: string) {
+ *   const prompt = expandSlash(msg, commands)
+ *   route(..., prompt)
+ * }
+ * ```
+ *
+ * Only the `description` and `argument-hint` frontmatter fields are
+ * read; all other CC fields (`allowed-tools`, `model`, `effort`,
+ * `context: fork`, `disable-model-invocation`, `user-invocable`,
+ * `hooks`, `paths`, `shell`, ...) are silently ignored. `commandsDir`
+ * is a pure prompt-template loader, not an executor.
+ *
+ * Files with no frontmatter still dispatch — `description` and
+ * `argHint` default to `""` (never null/undefined). Missing or empty
+ * `dir` returns `[]`.
+ *
+ * Relative `dir` resolves against the calling module's directory.
+ * For project-level commands (e.g. `.claude/commands` at the project
+ * root), pass an absolute path: `"${cwd()}/.claude/commands"`.
+ */
+export def commandsDir(dir: string): any[] {
+  """
+  Discover .md files under `dir` and parse each as a slash-command
+  template. Returns [] if `dir` is missing or empty.
+
+  @param dir - Directory containing command markdown files. Pass an
+    absolute path (e.g. cwd()/.claude/commands) to anchor at the
+    project root rather than the calling module's directory.
+  """
+  const pathsResult = glob("*.md", dir)
+  if (pathsResult is success(paths)) {
+    return map(paths) as p {
+      const raw = read(p, dir) catch ""
+      // `catch {}` collapses parse failures + a missing frontmatter
+      // block to an empty object so the dot access below is safe.
+      const fm = frontmatter(raw) catch {}
+      // `?? ""` is required here: in Agency `undefined == null` is
+      // false, so the older `!= null` guard let `undefined` through
+      // and stringified it as `"undefined"`. `??` treats both nullish.
+      const descriptionRaw = fm.description ?? ""
+      const argHintRaw = fm["argument-hint"] ?? ""
+      let name = p
+      if (name.endsWith(".md")) {
+        name = name.slice(0, name.length - 3)
+      }
+      return {
+        name: name,
+        description: "${descriptionRaw}",
+        argHint: "${argHintRaw}",
+        body: stripFm(raw)
+      }
+    }
+  }
+  return []
+}
+
+/**
+ * Expand a user-typed slash command against a `commandsDir` result.
+ *
+ * - If `msg` (after trimming) matches `/<name>` with optional
+ *   whitespace + args, returns the rendered command body with
+ *   `$ARGUMENTS` substituted.
+ * - If the body has no `$ARGUMENTS` token and args were passed,
+ *   appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
+ *   (matches Claude Code).
+ * - Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
+ *   through to the LLM as plain text, again matching CC.
+ *
+ * Args are split off at the first whitespace (space, tab, or
+ * newline) after `/<name>`. Leading and trailing whitespace on `msg`
+ * are tolerated so piped invocations (`echo /foo | agency agent`,
+ * yielding `"/foo\n"`) dispatch correctly.
+ */
+export def expandSlash(msg: string, commands: any[]): string {
+  """
+  Expand a /command in `msg` using a `commandsDir(...)` result.
+  Returns the rendered command body, or `msg` unchanged if no
+  command matches.
+
+  @param msg - The raw input line (may have leading/trailing whitespace or newlines).
+  @param commands - Array returned by `commandsDir(...)`.
+  """
+  const trimmed = msg.trim()
+  if (!trimmed.startsWith("/")) {
+    return msg
+  }
+  let nameEnd = trimmed.length
+  let i = 1
+  while (i < trimmed.length) {
+    const c = trimmed[i]
+    if (c == " " || c == "\t" || c == "\n") {
+      nameEnd = i
+      i = trimmed.length
+    } else {
+      i = i + 1
+    }
+  }
+  const name = trimmed.slice(1, nameEnd)
+  let rawArgs = ""
+  if (nameEnd < trimmed.length) {
+    rawArgs = trimmed.slice(nameEnd + 1).trim()
+  }
+  for (cmd in commands) {
+    if (cmd.name == name) {
+      let out = cmd.body.replaceAll("$ARGUMENTS", rawArgs)
+      if (!cmd.body.includes("$ARGUMENTS") && rawArgs != "") {
+        out = out + "\n\nARGUMENTS: ${rawArgs}"
+      }
+      return out
+    }
+  }
+  return msg
+}

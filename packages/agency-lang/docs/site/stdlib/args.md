@@ -47,6 +47,7 @@ name: "args"
     }
   }
   ```
+**
 
 ## Types
 
@@ -79,7 +80,7 @@ type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L57))
 
 ### FlagGroups
 
@@ -99,7 +100,7 @@ type FlagGroups = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L71))
 
 ### ArgsSchema
 
@@ -125,7 +126,7 @@ type ArgsSchema = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L81))
 
 ### ParsedArgs
 
@@ -149,7 +150,7 @@ type ParsedArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L96))
 
 ## Functions
 
@@ -182,4 +183,4 @@ Parse `process.argv` against `schema`.
 
 **Returns:** [ParsedArgs](#parsedargs)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L116))

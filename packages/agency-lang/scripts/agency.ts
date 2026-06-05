@@ -94,6 +94,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .name("agency")
     .description("Agency Language CLI")
+    .enablePositionalOptions()
     .version("0.0.105")
     .option("-v, --verbose", "Enable verbose logging during parsing")
     .option("-c, --config <path>", "Path to agency.json config file");
@@ -725,10 +726,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   program
     .command("agent")
-    .description("Launch the Agency language assistant agent")
-    .action(() => {
+    .description("Launch the Agency language assistant agent (run `agency agent -- --help` for agent flags)")
+    .argument("[args...]", "Arguments forwarded to the agent")
+    .helpOption(false)
+    .allowUnknownOption()
+    .passThroughOptions()
+    .action((args: string[]) => {
       const config = getConfig();
-      agent(config);
+      agent(config, args);
     });
 
   program

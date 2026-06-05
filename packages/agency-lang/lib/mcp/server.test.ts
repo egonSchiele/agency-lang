@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { VERSION } from "../version.js";
+import { VERSION } from "../stdlib/version.js";
 import { handleMcpMessage } from "./server.js";
 
 let tmpDir: string;

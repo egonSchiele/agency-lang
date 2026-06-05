@@ -2,6 +2,8 @@ import { setMemoryId } from "std::memory"
 import { systemMessage } from "std::thread"
 
 /** @module
+
+
   ## Overview
 
   Helpers for building user-facing agents. Three independent
@@ -76,7 +78,7 @@ import { systemMessage } from "std::thread"
   fine; concurrent calls in the **same** program / RuntimeContext
   (e.g. parallel runners inside one process) will race. Not
   supported in v1.
-*/
+*****/
 
 type Todo = {
   id: string;
@@ -237,7 +239,7 @@ def runOneTurn(
   assembly. Returns the LLM's reply (string).
   """
   let reply = ""
-  thread(session: category, label: category, summarize: true) {
+  thread {
     const spec = config.agents[category]
     if (spec.memory == true) {
       setMemoryId(category)

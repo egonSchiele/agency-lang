@@ -14,7 +14,7 @@ type CompiledProgram = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L16))
 
 ### SourceLocation
 
@@ -27,7 +27,7 @@ type SourceLocation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L7))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L20))
 
 ### TypeCheckDiagnostic
 
@@ -42,7 +42,7 @@ type TypeCheckDiagnostic = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L27))
 
 ### TypeCheckReport
 
@@ -53,7 +53,7 @@ type TypeCheckReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L36))
 
 ### FilterImportsResult
 
@@ -64,7 +64,7 @@ type FilterImportsResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L140))
 
 ## Functions
 
@@ -85,7 +85,7 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L41))
 
 ### run
 
@@ -121,7 +121,7 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L49))
 
 ### runFile
 
@@ -163,7 +163,7 @@ Compile and execute an Agency file in a subprocess. The file is read from dir/fi
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L86))
 
 ### typecheck
 
@@ -185,7 +185,7 @@ Type-check Agency source code without compiling or running it. Returns a TypeChe
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L129))
 
 ### parseAST
 
@@ -207,7 +207,7 @@ Parse Agency source code into an abstract syntax tree. Returns the raw AST as a 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L145))
 
 ### writeAST
 
@@ -239,7 +239,7 @@ Format an AST as Agency source and write it to dir/filename. The AST is typicall
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L156))
 
 ### format
 
@@ -261,7 +261,7 @@ Format Agency source code using the standard Agency formatter (the same one used
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L182))
 
 ### formatFile
 
@@ -289,7 +289,7 @@ Format an Agency file in place. Reads dir/filename, formats it with the standard
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L193))
 
 ### walkAST
 
@@ -315,7 +315,7 @@ Walk every node in a deep-cloned copy of the AST, invoking the visitor with each
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L211))
 
 ### getNodesOfType
 
@@ -339,7 +339,7 @@ Parse Agency source code and return all AST nodes whose `type` field matches any
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L229))
 
 ### getImports
 
@@ -359,7 +359,7 @@ Return all import statements in the source (i.e. `import { x } from "..."`).
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L241))
 
 ### getFunctions
 
@@ -379,7 +379,7 @@ Return all function definitions (`def foo(...) { ... }`) in the source.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L250))
 
 ### getGraphNodes
 
@@ -399,7 +399,7 @@ Return all graph node definitions (`node main() { ... }`) in the source. Note: "
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L259))
 
 ### filterImports
 
@@ -410,17 +410,17 @@ filterImports(source: string, allowedPackages: string[], excludedPackages: strin
 Parse Agency source, drop imports that fail the policy, and return the resulting source plus a flag indicating whether anything was dropped.
 
   Imports are classified by `kind`:
-    - "stdlib" — `std::*` (e.g. `std::shell`)
-    - "pkg"    — `pkg::*` (e.g. `pkg::wikipedia`)
-    - "local"  — relative or absolute file paths (e.g. `./util.agency`)
-    - "node"   — bare specifiers resolved by Node (e.g. `fs`, `child_process`)
+  - "stdlib" — `std::*` (e.g. `std::shell`)
+  - "pkg"    — `pkg::*` (e.g. `pkg::wikipedia`)
+  - "local"  — relative or absolute file paths (e.g. `./util.agency`)
+  - "node"   — bare specifiers resolved by Node (e.g. `fs`, `child_process`)
 
   Policy:
-    - `allowedPackages` / `excludedPackages` are glob patterns (picomatch syntax) matched against the raw import path string.
-    - `allowKinds` / `excludeKinds` accept the kind strings above.
-    - Exclude rules always win: if a path matches anything in `excludedPackages` or `excludeKinds`, it is dropped.
-    - When all four lists are empty, every import is allowed (default-allow).
-    - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty — only stdlib passes.
+  - `allowedPackages` / `excludedPackages` are glob patterns (picomatch syntax) matched against the raw import path string.
+  - `allowKinds` / `excludeKinds` accept the kind strings above.
+  - Exclude rules always win: if a path matches anything in `excludedPackages` or `excludeKinds`, it is dropped.
+  - When all four lists are empty, every import is allowed (default-allow).
+  - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty — only stdlib passes.
 
   The returned source is regenerated via the Agency formatter, so whitespace and formatting are canonicalized. Comments are preserved (see writeAST docstring for details).
 
@@ -442,7 +442,7 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L250))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L268))
 
 ### typecheckFile
 
@@ -472,4 +472,16 @@ Type-check an Agency file on disk. The file is read from dir/filename, and relat
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L308))
+
+### getVersion
+
+```ts
+getVersion(): string
+```
+
+Get the current version of the Agency standard library.
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L328))

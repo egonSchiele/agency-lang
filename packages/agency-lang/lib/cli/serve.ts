@@ -17,7 +17,7 @@ import {
 import { startHttpServer } from "../serve/http/adapter.js";
 import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
-import { VERSION } from "../version.js";
+import { VERSION } from "../stdlib/version.js";
 import type { ExportedItem } from "../serve/types.js";
 import type { InterruptKind } from "../symbolTable.js";
 import type { InterruptHandlers } from "../serve/mcp/interruptLoop.js";

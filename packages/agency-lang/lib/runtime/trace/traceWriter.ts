@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import readline from "readline";
-import { VERSION } from "../../version.js";
+import { VERSION } from "../../stdlib/version.js";
 import type { Checkpoint } from "../state/checkpointStore.js";
 import { ContentAddressableStore } from "./contentAddressableStore.js";
 import { CallbackSink, FileSink, type TraceSink } from "./sinks.js";

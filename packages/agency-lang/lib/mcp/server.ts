@@ -7,7 +7,7 @@ import {
   agencyFormat,
   agencyHover,
 } from "./tools.js";
-import { VERSION } from "../version.js";
+import { VERSION } from "../stdlib/version.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 

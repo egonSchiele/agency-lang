@@ -94,7 +94,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .name("agency")
     .description("Agency Language CLI")
-    .enablePositionalOptions()
     .version("0.0.105")
     .option("-v, --verbose", "Enable verbose logging during parsing")
     .option("-c, --config <path>", "Path to agency.json config file");
@@ -726,11 +725,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   program
     .command("agent")
-    .description("Launch the Agency language assistant agent (run `agency agent -- --help` for agent flags)")
+    .description("Launch the Agency language assistant agent (run `agency agent --help` for agent flags)")
     .argument("[args...]", "Arguments forwarded to the agent")
     .helpOption(false)
-    .allowUnknownOption()
-    .passThroughOptions()
     .action((args: string[]) => {
       const config = getConfig();
       agent(config, args);
@@ -1135,7 +1132,53 @@ export async function runCli(
 ): Promise<void> {
   loadEnv();
   const program = createProgram(deps);
-  await program.parseAsync(argv);
+  await program.parseAsync(injectAgentSeparator(argv));
+}
+
+// `agency agent` forwards every remaining argv token to the agent program
+// (which has its own std::args-based flag parser). Insert `--` right after
+// `agent` so commander does not try to interpret the user's agent flags
+// (e.g. `agency agent --foo bar` becomes `agency agent -- --foo bar`).
+// No-op when the user already wrote `--`, or when `agent` is not the
+// subcommand being invoked.
+export function injectAgentSeparator(argv: string[]): string[] {
+  const subcommandIdx = findSubcommandIndex(argv);
+  if (subcommandIdx === -1) return argv;
+  if (argv[subcommandIdx] !== "agent") return argv;
+  if (argv[subcommandIdx + 1] === "--") return argv;
+  return [
+    ...argv.slice(0, subcommandIdx + 1),
+    "--",
+    ...argv.slice(subcommandIdx + 1),
+  ];
+}
+
+// Walk past `node`, the script path, and any leading top-level options
+// (-v/--verbose, -c/--config <path>) to find the index of the subcommand
+// token. Returns -1 if no subcommand is present.
+const TOP_LEVEL_BOOLEAN_FLAGS = ["-v", "--verbose"];
+const TOP_LEVEL_VALUE_FLAGS = ["-c", "--config"];
+
+function findSubcommandIndex(argv: string[]): number {
+  // argv[0] = node, argv[1] = script path. Subcommand search starts at 2.
+  let i = 2;
+  while (i < argv.length) {
+    const token = argv[i];
+    if (TOP_LEVEL_BOOLEAN_FLAGS.includes(token)) {
+      i += 1;
+      continue;
+    }
+    if (TOP_LEVEL_VALUE_FLAGS.includes(token)) {
+      i += 2;
+      continue;
+    }
+    if (token.startsWith("--config=") || token.startsWith("--verbose=")) {
+      i += 1;
+      continue;
+    }
+    return i;
+  }
+  return -1;
 }
 
 const isMain =

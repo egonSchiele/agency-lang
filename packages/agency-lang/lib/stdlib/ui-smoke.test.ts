@@ -24,9 +24,31 @@ import {
   _setOutputTarget,
   _setSize,
   _uninstallConsoleCapture,
+  _promptsAutocomplete,
 } from "agency-lang/stdlib-lib/ui.js";
 import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
+import { afterEach, beforeEach } from "vitest";
+
+// Spoof `process.stdout.isTTY` for tests that need to exercise the
+// TTY-required code path without depending on whether vitest itself
+// is running attached to a real TTY.
+let _restoreTty: (() => void) | null = null;
+function spoofTty(value: boolean): void {
+  const desc = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+  Object.defineProperty(process.stdout, "isTTY", {
+    configurable: true,
+    get: () => value,
+  });
+  _restoreTty = () => {
+    if (desc) Object.defineProperty(process.stdout, "isTTY", desc);
+    else delete (process.stdout as any).isTTY;
+    _restoreTty = null;
+  };
+}
+function restoreTty(): void {
+  if (_restoreTty) _restoreTty();
+}
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore – compiled-by-make Agency module; no .d.ts is emitted
 import { repl, chooseOption } from "../../stdlib/ui.js";
@@ -558,5 +580,66 @@ describe("std::ui — chooseOption line-mode fallback", () => {
     } finally {
       delete (globalThis as any).__agencyInputOverride;
     }
+  });
+});
+
+describe("std::ui — _promptsAutocomplete bridge guards", () => {
+  afterEach(() => {
+    restoreTty();
+  });
+
+  it("throws when stdout is not a TTY", async () => {
+    spoofTty(false);
+    await expect(
+      _promptsAutocomplete("pick", [{ key: "a", label: "A" }], false),
+    ).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("throws when a repl() owns the screen", async () => {
+    spoofTty(true);
+    // `_hasActiveScreen()` returns true only while `_runReplLoop` is
+    // mid-flight. To create that precondition, invoke
+    // `_promptsAutocomplete` from inside a running repl's `onSubmit`
+    // callback — same shape as the modal-path test above.
+    const errors: unknown[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "o" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              try {
+                await _promptsAutocomplete(
+                  "pick",
+                  [{ key: "a", label: "A" }],
+                  false,
+                );
+              } catch (e) {
+                errors.push(e);
+              }
+              return false; // exit the repl
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as Error).message).toMatch(
+      /cannot be used inside an active repl/,
+    );
   });
 });

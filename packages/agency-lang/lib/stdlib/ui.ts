@@ -14,7 +14,8 @@ import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
-import { isFailure } from "../runtime/result.js";
+import { isFailure, success, failure } from "../runtime/result.js";
+import prompts from "prompts";
 
 // ---------------------------------------------------------------------------
 // Declarative TS bridge for `std::ui`. Exposes the existing
@@ -713,6 +714,42 @@ export function _printChoicePromptFallback(
   }
   out.write(blank() + "\n");
   out.write("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Line-mode prompt bridges (backed by the `prompts` package).
+// Used by chooseOption's line-mode branch and exposed as Agency
+// primitives (select / autocomplete / text / confirm). Each raises if
+// invoked while a `repl()` owns the screen, or when stdout is not a
+// TTY — there is no non-TTY fallback by design.
+// ---------------------------------------------------------------------------
+
+type PromptsChoiceItem = { key: string; label: string };
+
+function _assertLineModeAvailable(name: string): void {
+  if (_hasActiveScreen()) {
+    throw new Error(
+      `${name} cannot be used inside an active repl(); use chooseOption for in-TUI prompts`,
+    );
+  }
+  if (!process.stdout.isTTY) {
+    throw new Error(`${name} requires a TTY (stdout is not a TTY)`);
+  }
+}
+
+export async function _promptsAutocomplete(
+  message: string,
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+  hint: string = "",
+): Promise<any> {
+  _assertLineModeAvailable("autocomplete");
+  // TODO Task 2: replace with real prompts.autocomplete call.
+  void message;
+  void items;
+  void allowFreeText;
+  void hint;
+  return failure("not-implemented");
 }
 
 // ---------------------------------------------------------------------------

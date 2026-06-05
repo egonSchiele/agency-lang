@@ -1,3 +1,4 @@
+import { getVersion } from "std::agency"
 import { route } from "std::agent"
 import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl } from "std::cli"
@@ -60,8 +61,8 @@ import { researchSysPrompt, researchTools } from "./research.agency"
 
 // Verbose tool-call tracing. Enabled either by `AGENT_DEBUG=1` (legacy)
 // or by passing `--debug` / `--verbose` on the command line (set in main()).
-let _agentDebug: boolean = env("AGENT_DEBUG") == "1"
-let _agentVerbose: boolean = false
+let AGENT_DEBUG: boolean = env("AGENT_DEBUG") == "1"
+let VERBOSE: boolean = false
 
 // Whether the agent is running in interactive (TTY) mode. Set in main()
 // before any tool calls happen, so the callbacks below can suppress
@@ -69,10 +70,16 @@ let _agentVerbose: boolean = false
 let _isInteractive: boolean = true
 
 callback("onToolCallStart") as data {
-  if (_isInteractive) {
-    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
-  } else if (_agentVerbose) {
-    print(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+}
+
+callback("onToolCallEnd") as data {
+  if (data.result is success(_result)) {
+    pushMessage(color.dim.green("${truncate(_result, 200)}"))
+  } else if (data.result is failure(_error)) {
+    pushMessage(color.dim.red("Error: ${_error}"))
+  } else {
+    pushMessage(color.dim("${truncate(data.result, 200)}"))
   }
 }
 
@@ -93,7 +100,7 @@ def formatArgs(args: Record<string, any>): string {
 }
 
 callback("onToolCallEnd") as data {
-  if (_agentDebug) {
+  if (AGENT_DEBUG) {
     const line = "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms"
     if (_isInteractive) {
       pushMessage(color.yellow(line))
@@ -290,22 +297,34 @@ def printHeader() {
 node main() {
   // Parse CLI flags first — `parseArgs` exits on --help / --version /
   // usage errors, before any handlers or the TUI are installed.
-  const args = parseArgs({
+  const args = parseArgs(
+    {
     programName: "agency agent",
     description: "Agency language assistant — interactive REPL by default; one-shot when piped or passed a query / --print.",
-    version: "0.0.105",
+    version: getVersion(),
     flags: {
-      print:   { type: "boolean", short: "p", description: "Run one-shot: print the reply to stdout and exit (no REPL)" },
-      debug:   { type: "boolean",             description: "Log tool returns (toolName, result, timing). Same as AGENT_DEBUG=1" },
-      verbose: { type: "boolean",             description: "Echo tool-call starts to stdout in non-interactive mode" }
+      print: {
+        type: "boolean",
+        short: "p",
+        description: "Run one-shot: print the reply to stdout and exit (no REPL)"
+      },
+      debug: {
+        type: "boolean",
+        description: "Log tool returns (toolName, result, timing). Same as AGENT_DEBUG=1"
+      },
+      verbose: {
+        type: "boolean",
+        description: "Echo tool-call starts to stdout in non-interactive mode"
+      }
     }
-  })
+  },
+  )
 
   if (args.flags.debug) {
-    _agentDebug = true
+    AGENT_DEBUG = true
   }
   if (args.flags.verbose) {
-    _agentVerbose = true
+    VERBOSE = true
   }
 
   // Positional args (everything after flags) are joined with spaces to
@@ -340,10 +359,12 @@ node main() {
     }
     const projectContext = loadAgentsMd(cwd()) with approve
     _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
-    const handler = cliPolicyHandler({
+    const handler = cliPolicyHandler(
+      {
       file: policyPath(),
       fields: ALWAYS_FIELDS
-    })
+    },
+    )
     handle {
       const reply = route(
         {

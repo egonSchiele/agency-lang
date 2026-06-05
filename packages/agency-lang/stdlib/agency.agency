@@ -1,28 +1,41 @@
-import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _filterImports } from "agency-lang/stdlib-lib/agency.js"
+import {
+  _compile,
+  _compileFile,
+  _typecheck,
+  _typecheckFile,
+  _parseAST,
+  _writeAST,
+  _format,
+  _formatFile,
+  _walkAST,
+  _getNodesOfType,
+  _filterImports,
+ } from "agency-lang/stdlib-lib/agency.js"
+import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
 type CompiledProgram = {
   moduleId: string
 }
 
 type SourceLocation = {
-  line: number,
-  col: number,
-  start: number,
-  end: number,
+  line: number;
+  col: number;
+  start: number;
+  end: number
 }
 
 type TypeCheckDiagnostic = {
-  severity: string,
-  message: string,
-  loc?: SourceLocation,
-  variableName?: string,
-  expectedType?: string,
-  actualType?: string,
+  severity: string;
+  message: string;
+  loc?: SourceLocation;
+  variableName?: string;
+  expectedType?: string;
+  actualType?: string
 }
 
 type TypeCheckReport = {
-  errors: TypeCheckDiagnostic[],
-  warnings: TypeCheckDiagnostic[],
+  errors: TypeCheckDiagnostic[];
+  warnings: TypeCheckDiagnostic[]
 }
 
 export def compile(source: string): Result {
@@ -59,7 +72,12 @@ export def run(
     moduleId: compiled.moduleId,
     node: node,
     args: args,
-    limits: { wallClock: wallClock, memory: memory, ipcPayload: ipcPayload, stdout: stdout }
+    limits: {
+      wallClock: wallClock,
+      memory: memory,
+      ipcPayload: ipcPayload,
+      stdout: stdout
+    }
   })
 
   return try _run(compiled, node, args, wallClock, memory, ipcPayload, stdout)
@@ -120,8 +138,8 @@ export def typecheck(source: string): Result {
 }
 
 type FilterImportsResult = {
-  source: string,
-  filtered: boolean,
+  source: string;
+  filtered: boolean
 }
 
 export def parseAST(source: string): Result {
@@ -258,17 +276,17 @@ export def filterImports(
   Parse Agency source, drop imports that fail the policy, and return the resulting source plus a flag indicating whether anything was dropped.
 
   Imports are classified by `kind`:
-    - "stdlib" — `std::*` (e.g. `std::shell`)
-    - "pkg"    — `pkg::*` (e.g. `pkg::wikipedia`)
-    - "local"  — relative or absolute file paths (e.g. `./util.agency`)
-    - "node"   — bare specifiers resolved by Node (e.g. `fs`, `child_process`)
+  - "stdlib" — `std::*` (e.g. `std::shell`)
+  - "pkg"    — `pkg::*` (e.g. `pkg::wikipedia`)
+  - "local"  — relative or absolute file paths (e.g. `./util.agency`)
+  - "node"   — bare specifiers resolved by Node (e.g. `fs`, `child_process`)
 
   Policy:
-    - `allowedPackages` / `excludedPackages` are glob patterns (picomatch syntax) matched against the raw import path string.
-    - `allowKinds` / `excludeKinds` accept the kind strings above.
-    - Exclude rules always win: if a path matches anything in `excludedPackages` or `excludeKinds`, it is dropped.
-    - When all four lists are empty, every import is allowed (default-allow).
-    - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty — only stdlib passes.
+  - `allowedPackages` / `excludedPackages` are glob patterns (picomatch syntax) matched against the raw import path string.
+  - `allowKinds` / `excludeKinds` accept the kind strings above.
+  - Exclude rules always win: if a path matches anything in `excludedPackages` or `excludeKinds`, it is dropped.
+  - When all four lists are empty, every import is allowed (default-allow).
+  - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty — only stdlib passes.
 
   The returned source is regenerated via the Agency formatter, so whitespace and formatting are canonicalized. Comments are preserved (see writeAST docstring for details).
 
@@ -278,7 +296,13 @@ export def filterImports(
   @param allowKinds - Kind strings ("stdlib" | "pkg" | "local" | "node") to allow
   @param excludeKinds - Kind strings to drop
   """
-  return try _filterImports(source, allowedPackages, excludedPackages, allowKinds, excludeKinds)
+  return try _filterImports(
+    source,
+    allowedPackages,
+    excludedPackages,
+    allowKinds,
+    excludeKinds,
+  )
 }
 
 export def typecheckFile(dir: string, filename: string): Result {
@@ -299,4 +323,11 @@ export def typecheckFile(dir: string, filename: string): Result {
     filename: filename
   })
   return try _typecheckFile(dir, filename)
+}
+
+export def getVersion(): string {
+  """
+  Get the current version of the Agency standard library.
+  """
+  return VERSION
 }

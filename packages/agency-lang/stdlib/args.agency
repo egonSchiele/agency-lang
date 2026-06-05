@@ -1,6 +1,7 @@
 import { _parseArgs } from "agency-lang/stdlib-lib/args.js"
 
 /** @module
+
   ## Module: std::args
 
   Parse the program's command-line flags. Thin wrapper over Node's
@@ -44,7 +45,7 @@ import { _parseArgs } from "agency-lang/stdlib-lib/args.js"
     }
   }
   ```
-*/
+***/
 
 /** Description of a single flag.
 
@@ -54,12 +55,12 @@ import { _parseArgs } from "agency-lang/stdlib-lib/args.js"
     case-sensitive values. `hidden` flags still parse but are omitted
     from `--help`. */
 type FlagSpec = {
-  type: "string" | "number" | "boolean"
-  short?: string
-  default?: string | number | boolean
-  required?: boolean
-  description?: string
-  choices?: string[]
+  type: "string" | "number" | "boolean";
+  short?: string;
+  default?: string | number | boolean;
+  required?: boolean;
+  description?: string;
+  choices?: string[];
   hidden?: boolean
 }
 
@@ -68,7 +69,7 @@ type FlagSpec = {
     sets where setting one requires setting all. A flag with a
     `default` counts as "set" for group purposes. */
 type FlagGroups = {
-  exclusive?: string[][]
+  exclusive?: string[][];
   requiredTogether?: string[][]
 }
 
@@ -78,11 +79,11 @@ type FlagGroups = {
     set it explicitly when running under the agency CLI or a bundled
     agent. Setting `version` enables auto-generated `--version` / `-V`. */
 type ArgsSchema = {
-  programName?: string
-  description?: string
-  version?: string
-  epilog?: string
-  flags: Record<string, FlagSpec>
+  programName?: string;
+  description?: string;
+  version?: string;
+  epilog?: string;
+  flags: Record<string, FlagSpec>;
   groups?: FlagGroups
 }
 
@@ -93,7 +94,7 @@ type ArgsSchema = {
     every argv token that wasn't a flag or flag-value, in original
     order, plus everything after `--`. */
 type ParsedArgs = {
-  flags: Record<string, any>
+  flags: Record<string, any>;
   positionals: string[]
 }
 

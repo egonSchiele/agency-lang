@@ -36,13 +36,13 @@ export type BranchState = {
   guardsRehydrated?: boolean;
 
   /** Per-branch GlobalStore snapshot, captured by `runInBranchAlsFrame`
-   *  after the branch body completes (success OR interrupt). Persisted
-   *  on serialization so that on resume the branch sees the same
-   *  globals it had pre-interrupt instead of a fresh clone of the
-   *  parent's (now-possibly-stale) values. Always populated for
-   *  isolated branches; absent for `isolateState: false` callers
-   *  (runPrompt's tool dispatch), which pointer-share the parent's
-   *  globals at every re-entry. */
+   *  when the branch body settles as an `Interrupt[]`. Persisted on
+   *  serialization so that on resume the branch sees the same globals
+   *  it had pre-interrupt instead of a fresh clone of the parent's
+   *  (now-possibly-stale) values. Populated for `shareGlobals: false`
+   *  branches that interrupt; absent for `shareGlobals: true` callers
+   *  (runPrompt's tool dispatch and user `shared: true`), which
+   *  pointer-share the parent's globals at every re-entry. */
   globalsJSON?: GlobalStoreJSON;
 
   /** Per-branch `activeStack` snapshot, captured alongside
@@ -232,8 +232,10 @@ export class State {
         // Per-branch globals + activeStack snapshots captured by
         // `runInBranchAlsFrame` so a resumed branch sees its own
         // pre-interrupt state instead of a freshly-cloned parent.
-        // Absent for `isolateState: false` callers (runPrompt's
-        // tool dispatch), which pointer-share parent state.
+        // Absent for pointer-shared dials: `shareGlobals: true`
+        // (runPrompt tool dispatch + user `shared: true`) skips the
+        // globals snapshot; `shareThreads: true` (runPrompt only)
+        // skips the activeStack snapshot.
         if (branch.globalsJSON !== undefined)
           branchJson.globalsJSON = branch.globalsJSON;
         if (branch.activeStack !== undefined)

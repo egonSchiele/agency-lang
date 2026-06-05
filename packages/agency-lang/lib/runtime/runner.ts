@@ -942,13 +942,15 @@ export class Runner {
     ) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
-    // When `true`, branches pointer-share the parent's globals and
-    // active-thread pointer (today's pre-isolation behavior, opted
-    // into by user syntax like `fork(items, shared: true)`). When
-    // `false` (the default), each branch gets an isolated clone of
-    // globals and a fresh subthread of the parent's active thread.
+    // When `true`, branches pointer-share the parent's `GlobalStore`
+    // (opted into by user syntax like `fork(items, shared: true)`).
+    // The active-thread pointer is ALWAYS branch-local regardless of
+    // `shared` — concurrent push/pop on a shared activeStack would
+    // corrupt the conversation. When `false` (the default), each
+    // branch also gets its own clone of the parent's `GlobalStore`.
     // Threads-registry and sessions stay shared in either mode —
     // `thread(continue: id)` / `thread(session: ...)` keep working.
+    // Forwarded to `runBatch` as `shareGlobals: shared`.
     shared: boolean = false,
   ): Promise<any> {
     this.beforeStep();

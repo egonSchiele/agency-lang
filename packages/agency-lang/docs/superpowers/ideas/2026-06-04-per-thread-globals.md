@@ -9,10 +9,12 @@ made during implementation:
    through `runBatch` internally but is not a user-facing concurrency
    primitive — tools are conceptually sequential function calls and
    need to mutate shared globals (counters, retry budgets, dedup
-   caches). Added `RunBatchOpts.isolateState?: boolean` (default
-   `true`). Promptrunner passes `false`, restoring pointer-share for
-   the tool-dispatch path. User-facing fork/parallel/race continue to
-   default to isolation.
+   caches) AND need to all write into the same active thread (the
+   LLM's conversation). Added two independent dials on
+   `RunBatchOpts`: `shareGlobals?: boolean` and `shareThreads?:
+   boolean` (both default `false` = isolated). Promptrunner sets
+   both `true` for tool dispatch. User-facing fork/parallel/race
+   default to fully isolated.
 
 2. **User-facing opt-in to shared state.** The right knob isn't a
    `Shared<T>` value type or an `@isolated` declaration modifier — it's
@@ -62,7 +64,9 @@ made during implementation:
   (`processForkCall` strips and forwards the named arg) are all wired
   up.
 - `Runner.fork` / `runForkAll` / `runRace` take a trailing
-  `shared: boolean` and forward as `RunBatchOpts.isolateState = !shared`.
+  `shared: boolean` and forward as `RunBatchOpts.shareGlobals = shared`.
+  Threads stay branch-local regardless of `shared` — concurrent push/
+  pop on a shared activeStack would corrupt the conversation.
 - Tests: `fork-shared-globals`, `parallel-shared-globals`.
 
 **TODO before Stage 4 docs work:**

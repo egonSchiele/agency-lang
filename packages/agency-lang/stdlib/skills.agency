@@ -2,6 +2,303 @@ import { map } from "std::array"
 import { frontmatter } from "std::markdown"
 import { glob } from "std::shell"
 
+// ============================================================
+// Slash commands
+// ============================================================
+//
+// `commandsDir(dir)` is the command-flavored sibling of `skillsDir`.
+// CC merged custom commands and skills into one file format but kept
+// two runtime behaviors:
+//   - Skills are model-invoked (lazy, exposed as a tool description)
+//   - Commands are user-typed (eager, body becomes a user message)
+//
+// We expose both halves from this module so users see them together.
+// v1 is intentionally minimal: a command is a pure prompt template.
+// No `!`cmd`` shell injection, no `@<path>` file refs, no
+// `allowed-tools` pre-approval. The rendered body is appended to the
+// thread as a user message — the same as if the user had typed it.
+// See `docs/superpowers/plans/2026-06-04-slash-commands.md`.
+
+// One command parsed from a CC-format markdown file.
+//   name: "/foo" or "/ns:bar" (without the leading slash)
+//   description: from frontmatter, "" if absent
+//   argHint: from frontmatter `argument-hint`, "" if absent
+//   body: rendered-on-dispatch source (frontmatter stripped)
+export type Command = {
+  name: string;
+  description: string;
+  argHint: string;
+  body: string
+}
+
+// Returned by `commandsDir`. `dispatch(input)` is a partial-applied
+// function: (string) => Result<string>. Typed as `any`
+// because Agency record field types don't yet round-trip generic
+// function aliases cleanly.
+export type CommandSet = {
+  entries: Command[];
+  dispatch: any
+}
+
+/* ----- private helpers ----- */
+
+// Split `content` into (frontmatterBlock, body). The frontmatter is
+// only recognized when the file starts with a `---` line and a
+// matching `---` line follows. Otherwise the whole file is the body.
+//
+// We don't use std::markdown's parser here: it gives us the parsed
+// frontmatter data but not the raw body string, and reconstructing
+// the body from the AST loses original formatting (whitespace, fences).
+def splitFrontmatter(content: string): { fm: string; body: string } {
+  const lines = content.split("\n")
+  if (lines.length == 0 || lines[0] != "---") {
+    return { fm: "", body: content }
+  }
+  let i = 1
+  while (i < lines.length) {
+    if (lines[i] == "---") {
+      const fmBlock = lines.slice(0, i + 1).join("\n")
+      const bodyStart = i + 1
+      // Strip a single blank line after the closing `---` if present —
+      // markdown convention, matches CC.
+      let skip = 0
+      if (bodyStart < lines.length && lines[bodyStart] == "") {
+        skip = 1
+      }
+      const body = lines.slice(bodyStart + skip).join("\n")
+      return { fm: fmBlock, body: body }
+    }
+    i = i + 1
+  }
+  // Unterminated frontmatter — treat whole file as body.
+  return { fm: "", body: content }
+}
+
+// Whitespace-and-double-quote tokenizer. Matches Claude Code:
+//   - split on runs of ` `, `\t`, `\n`
+//   - `"..."` groups everything between the quotes into one token
+//   - no single quotes, no backslash escapes, no env expansion
+//   - unterminated `"` consumes to end of input
+def tokenizeArgs(input: string): string[] {
+  const out: string[] = []
+  const n = input.length
+  let i = 0
+  while (i < n) {
+    // skip whitespace
+    while (i < n && (input[i] == " " || input[i] == "\t" || input[i] == "\n")) {
+      i = i + 1
+    }
+    if (i >= n) {
+      return out
+    }
+    let token = ""
+    if (input[i] == `"`) {
+      i = i + 1
+      while (i < n && input[i] != `"`) {
+        token = token + input[i]
+        i = i + 1
+      }
+      if (i < n) {
+        i = i + 1  // consume closing "
+      }
+    } else {
+      while (i < n && input[i] != " " && input[i] != "\t" && input[i] != "\n") {
+        token = token + input[i]
+        i = i + 1
+      }
+    }
+    out.push(token)
+  }
+  return out
+}
+
+// Substitute `$ARGUMENTS`, `$ARGUMENTS[N]`, and `$N` (1-indexed) in
+// `body`. Out-of-range or undefined refs (`$0`, `$99`) are left as
+// literal text — silent empty-string substitution would mask template
+// bugs.
+//
+// If the body has no `$ARGUMENTS` reference at all and the user
+// passed args, the raw arg string is appended as
+// `\n\nARGUMENTS: <raw>`. Matches CC behavior — gives the model the
+// input even if the template author forgot a placeholder. The check
+// is for the literal substring "$ARGUMENTS", so `$ARGUMENTS[N]`
+// counts too.
+def substituteArgs(body: string, rawArgs: string, tokens: string[]): string {
+  let out = body
+  // Longer patterns first so `$ARGUMENTS[1]` is replaced before the
+  // bare `$ARGUMENTS` consumes its prefix.
+  let i = 1
+  while (i <= tokens.length) {
+    out = out.replaceAll("$ARGUMENTS[${i}]", tokens[i - 1])
+    out = out.replaceAll("$${i}", tokens[i - 1])
+    i = i + 1
+  }
+  out = out.replaceAll("$ARGUMENTS", rawArgs)
+
+  const hadArgumentsToken = body.includes("$ARGUMENTS")
+  if (!hadArgumentsToken && rawArgs != "") {
+    out = out + "\n\nARGUMENTS: ${rawArgs}"
+  }
+  return out
+}
+
+// Map a glob-relative path to its slash-command name. Rules:
+//   - `foo.md` → "foo"
+//   - `foo.markdown` → "foo"
+//   - `ns/bar.md` → "ns:bar"
+// One level of nesting only — anything deeper is rejected (returns "").
+def commandNameFromPath(relPath: string): string {
+  let stem = relPath
+  if (stem.endsWith(".markdown")) {
+    stem = stem.slice(0, stem.length - 9)
+  } else if (stem.endsWith(".md")) {
+    stem = stem.slice(0, stem.length - 3)
+  } else {
+    return ""
+  }
+  // Disallow more than one slash (i.e. deeper nesting).
+  const parts = stem.split("/")
+  if (parts.length == 1) {
+    return parts[0]
+  }
+  if (parts.length == 2) {
+    return "${parts[0]}:${parts[1]}"
+  }
+  return ""
+}
+
+// Parse a single command file: read it, split frontmatter, build a
+// Command record. Failures (read error, no body) bubble up as
+// `failure(...)` so the caller can skip them silently.
+def loadCommand(relPath: string, dir: string): Result<Command> {
+  const name = commandNameFromPath(relPath)
+  if (name == "") {
+    return failure("not a valid command path: ${relPath}")
+  }
+  const raw = read(relPath, dir)
+  if (isFailure(raw)) {
+    return failure("read failed: ${relPath}")
+  }
+  const split = splitFrontmatter(raw.value)
+  // Parse the frontmatter block alone — `frontmatter()` wants the
+  // `---` fences to be at the start of input.
+  const fm = frontmatter(split.fm) catch {}
+  let description = ""
+  let argHint = ""
+  if (fm != null && typeof fm == "object") {
+    if (fm.description != null) {
+      description = "${fm.description}"
+    }
+    if (fm["argument-hint"] != null) {
+      argHint = "${fm["argument-hint"]}"
+    }
+  }
+  return success({
+    name: name,
+    description: description,
+    argHint: argHint,
+    body: split.body
+  })
+}
+
+// Try to dispatch `input` against a single command. Returns a body
+// `success` if the input matches `/<name>` (with optional whitespace
+// + args), or `failure("no-match")` otherwise.
+def dispatchOne(input: string, cmd: Command): Result<string> {
+  const prefix = "/" + cmd.name
+  if (input == prefix) {
+    return success(substituteArgs(cmd.body, "", []))
+  }
+  if (!input.startsWith(prefix + " ") && !input.startsWith(prefix + "\t")) {
+    return failure("no-match")
+  }
+  const rawArgs = input.slice(prefix.length + 1).trim()
+  const tokens = tokenizeArgs(rawArgs)
+  return success(substituteArgs(cmd.body, rawArgs, tokens))
+}
+
+def collectCommands(dir: string): Command[] {
+  let out: Command[] = []
+  const flat = glob("*.{md,markdown}", dir)
+  if (flat is success(paths)) {
+    for (p in paths) {
+      const c = loadCommand(p, dir)
+      if (c is success(cmd)) {
+        out.push(cmd)
+      }
+    }
+  }
+  const nested = glob("*/*.{md,markdown}", dir)
+  if (nested is success(paths)) {
+    for (p in paths) {
+      const c = loadCommand(p, dir)
+      if (c is success(cmd)) {
+        out.push(cmd)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Discover slash commands under `dir` (CC-compatible layout) and
+ * return a `CommandSet`. `dispatch(input)` returns
+ * `success(renderedBody)` when `input` matches `/<name>` (with
+ * optional args) and `failure("no-match")` otherwise.
+ *
+ * File layout (matches Claude Code):
+ *   - `<dir>/foo.md` → `/foo`
+ *   - `<dir>/<ns>/<bar>.md` → `/<ns>:<bar>` (one level of nesting only)
+ *   - Both `.md` and `.markdown` extensions are recognized
+ *
+ * Frontmatter fields honored:
+ *   - `description` — surfaced as `Command.description`
+ *   - `argument-hint` — surfaced as `Command.argHint`
+ *
+ * Everything else CC supports (`allowed-tools`, `model`, `effort`,
+ * `context: fork`, `disable-model-invocation`, `user-invocable`,
+ * `hooks`, `paths`, `shell`, ...) is silently ignored in v1. The
+ * command still runs with the agent's defaults.
+ *
+ * Body preprocessing:
+ *   - `$ARGUMENTS` → the raw arg string (quotes preserved)
+ *   - `$ARGUMENTS[N]` and `$N` → the Nth (1-indexed) tokenized arg
+ *   - Tokenizer: whitespace splits + `"..."` grouping. No single
+ *     quotes, no escapes, no env expansion. Matches CC.
+ *   - If the body has no `$ARGUMENTS` ref and args were passed, the
+ *     raw arg string is appended as `\n\nARGUMENTS: <raw>`.
+ *
+ * Notes:
+ *   - `!`cmd`` shell injection, `@<path>` file refs, and
+ *     `allowed-tools` pre-approval are out of scope for v1.
+ *   - Files with parse failures are skipped silently (same posture
+ *     as `skillsDir`).
+ *   - Missing or empty `dir` → `entries: []`, `dispatch` always
+ *     returns `failure("no-match")`.
+ */
+def dispatchCmds(cmds: Command[], input: string): Result<string> {
+  for (cmd in cmds) {
+    const r = dispatchOne(input, cmd)
+    if (r is success(_body)) {
+      return r
+    }
+  }
+  return failure("no-match")
+}
+
+export def commandsDir(dir: string): CommandSet {
+  """
+  Discover CC-format slash commands in `dir` and return a CommandSet.
+
+  @param dir - Directory containing command markdown files.
+  """
+  const cmds = collectCommands(dir)
+  return {
+    entries: cmds,
+    dispatch: dispatchCmds.partial(cmds: cmds)
+  }
+}
+
 type SkillEntry = {
   name: string;
   description: string;

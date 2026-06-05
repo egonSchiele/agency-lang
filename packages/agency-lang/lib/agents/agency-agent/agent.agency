@@ -6,6 +6,7 @@ import { today } from "std::date"
 import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
+import { commandsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin } from "std::system"
 import { getCost } from "std::thread"
@@ -217,8 +218,67 @@ def loadAgentsMd(dir: string): string {
 // LLM doesn't have to re-ground each turn. Initialized in `main()`.
 let _context: string = ""
 
+// User and project slash-command directories. Mirrors Claude Code's
+// layout: `~/.claude/commands/foo.md` → `/foo`, ditto for project.
+// `with approve` auto-approves the `glob`/`read` during module init.
+// `commandsDir` itself does no shell exec in v1, so this is the only
+// policy interaction commands have.
+static const userCommands    = commandsDir("${env("HOME") ?? "."}/.claude/commands") with approve
+static const projectCommands = commandsDir(".claude/commands") with approve
+
+def builtinPalette(): Record<string, string> {
+  return {
+    "/exit":  "Exit the agent",
+    "/clear": "Clear the conversation transcript",
+    "/help":  "Show available slash commands"
+  }
+}
+
+// Final precedence: built-ins > project > user. We add user first
+// then project so project entries overwrite shadowing user ones, then
+// built-ins overwrite anything in either set.
+def mergedPalette(): Record<string, string> {
+  let out: Record<string, string> = {}
+  for (cmd in userCommands.entries) {
+    let label = cmd.description
+    if (cmd.argHint != "") {
+      label = "${label} ${cmd.argHint}"
+    }
+    out["/${cmd.name}"] = label
+  }
+  for (cmd in projectCommands.entries) {
+    let label = cmd.description
+    if (cmd.argHint != "") {
+      label = "${label} ${cmd.argHint}"
+    }
+    out["/${cmd.name}"] = label
+  }
+  for (key in builtinPalette()) {
+    out[key] = builtinPalette()[key]
+  }
+  return out
+}
+
+// Try project then user; return the rendered body if either matches,
+// or `msg` unchanged if neither does. Unknown `/foo` inputs are
+// passed through to `route()` as a literal user message — same as CC.
+def expandCommand(msg: string): string {
+  const proj = projectCommands.dispatch(msg)
+  if (proj is success(body)) {
+    return body
+  }
+  const usr = userCommands.dispatch(msg)
+  if (usr is success(body)) {
+    return body
+  }
+  return msg
+}
+
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
+//
+// Built-ins are checked before file commands so a user-authored
+// `/clear.md` cannot shadow the built-in `/clear`.
 def _runTurn(msg: string): boolean {
   if (msg == "") {
     return true
@@ -234,6 +294,7 @@ def _runTurn(msg: string): boolean {
     pushMessage("Commands: /exit, /clear, /help")
     return true
   }
+  const prompt = expandCommand(msg)
   const reply = route(
     {
     start: "code",
@@ -252,7 +313,7 @@ def _runTurn(msg: string): boolean {
     maxHops: 3,
     context: _context
   },
-    msg,
+    prompt,
   )
   pushMessage(highlight("${reply}\n", language: "markdown"))
   return true
@@ -365,6 +426,11 @@ node main() {
       fields: ALWAYS_FIELDS
     },
     )
+    // Run slash-command expansion in one-shot mode too, so
+    // `agency agent /myCommand foo bar` works the same as typing it
+    // in the REPL. Built-ins (`/exit`, `/clear`, `/help`) are
+    // meaningless without an interactive loop and are not checked.
+    const onePrompt = expandCommand(piped)
     handle {
       const reply = route(
         {
@@ -384,7 +450,7 @@ node main() {
         maxHops: 3,
         context: _context
       },
-        piped,
+        onePrompt,
       )
       print(reply)
     } with handler
@@ -421,11 +487,7 @@ node main() {
       prompt: "> ",
       historyFile: historyPath(),
       historyMax: 1000,
-      paletteCommands: {
-      "/exit": "Exit the agent",
-      "/clear": "Clear the conversation transcript",
-      "/help": "Show available slash commands"
-    },
+      paletteCommands: mergedPalette(),
     )
   } with handler
 

@@ -1,0 +1,87 @@
+import { commandsDir } from "std::skills"
+
+def loadFixture() {
+  return commandsDir("commands-dir-fixture") with approve
+}
+
+node entriesCount(): number {
+  const set = loadFixture()
+  return set.entries.length
+}
+
+node simpleMatches(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch("/simple")
+  if (r is success(body)) {
+    return body.includes("Just say hello.")
+  }
+  return false
+}
+
+node simpleDescriptionLoaded(): boolean {
+  const set = loadFixture()
+  for (cmd in set.entries) {
+    if (cmd.name == "simple") {
+      return cmd.description == "A simple command with no args"
+    }
+  }
+  return false
+}
+
+node argsSubstitution(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch(`/with-args alice "good morning"`)
+  if (r is success(body)) {
+    // $1 → alice, $ARGUMENTS → raw arg string with quotes preserved
+    return body.includes("Greet alice with:") && body.includes(`alice "good morning"`)
+  }
+  return false
+}
+
+node positionalOnlyAppendsSuffix(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch("/positional-only foo bar")
+  if (r is success(body)) {
+    // $1 and $2 substituted; suffix appended because $ARGUMENTS absent
+    return body.includes("First: foo, second: bar.") && body.includes("ARGUMENTS: foo bar")
+  }
+  return false
+}
+
+node noFrontmatterStillDispatches(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch("/no-frontmatter")
+  if (r is success(body)) {
+    return body.includes("Plain body, no frontmatter at all.")
+  }
+  return false
+}
+
+node namespacedDispatches(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch("/ns:scoped")
+  if (r is success(body)) {
+    return body.includes("I live under ns/.")
+  }
+  return false
+}
+
+node unknownReturnsFailure(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch("/does-not-exist")
+  return isFailure(r)
+}
+
+node nonSlashReturnsFailure(): boolean {
+  const set = loadFixture()
+  const r = set.dispatch("hello world")
+  return isFailure(r)
+}
+
+node missingDirEmptyAndFailing(): boolean {
+  const set = commandsDir("commands-dir-fixture-does-not-exist") with approve
+  if (set.entries.length != 0) {
+    return false
+  }
+  return isFailure(set.dispatch("/anything"))
+}

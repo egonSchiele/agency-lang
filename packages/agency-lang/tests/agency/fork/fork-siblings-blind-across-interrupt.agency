@@ -1,0 +1,22 @@
+global let leaked = 0
+
+node main() {
+  // Mixed-outcome fork: branch 1 finishes synchronously and writes
+  // a "loud" value to its own snapshot of `leaked`. Branch 2
+  // interrupts before reading and must still see `leaked = 0` on
+  // resume — its restored snapshot should NOT pick up branch 1's
+  // write.
+  //
+  // If per-branch snapshots got crossed (e.g. all branches restored
+  // from a shared globalsJSON), branch 2 would resume seeing
+  // `leaked = 999` and the test would fail.
+  let results = fork([1, 2]) as i {
+    if (i == 1) {
+      leaked = 999
+      return leaked
+    }
+    interrupt("ok?")
+    return leaked
+  }
+  return results
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Each race branch sees its own snapshot of globals; neither the winner nor any aborted loser leaks writes back to the parent (per-branch isolation, default mode).",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

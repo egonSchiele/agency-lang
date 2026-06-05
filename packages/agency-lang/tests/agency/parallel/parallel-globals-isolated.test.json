@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Each parallel arm sees its own snapshot of globals; writes never leak back to the parent (per-arm isolation, default mode).",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

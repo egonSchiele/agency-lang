@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Shared-mode branch's pre-interrupt write to the parent's GlobalStore survives interrupt/resume. With `shared: true`, no per-branch snapshot is captured/restored — the parent's mutated state is the source of truth across the interrupt boundary.",
+      "input": "",
+      "expectedOutput": "101",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

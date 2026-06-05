@@ -1,0 +1,17 @@
+global let counter = 0
+
+def bump(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  // Each race branch starts with the parent's snapshot (counter = 0)
+  // and mutates its own copy. Regardless of which branch wins and
+  // which are aborted, none of their writes reach the parent. After
+  // join, the parent's `counter` is still 0.
+  race([1, 2, 3]) as _ {
+    return bump()
+  }
+  return counter
+}

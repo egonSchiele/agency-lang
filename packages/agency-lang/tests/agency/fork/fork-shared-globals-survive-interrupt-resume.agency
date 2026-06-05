@@ -1,0 +1,24 @@
+global let counter = 0
+
+def bumpThenAsk(): number {
+  counter = counter + 1
+  interrupt("approve counter=${counter}?")
+  // After resume, the pre-interrupt write to the SHARED parent
+  // GlobalStore must still be intact — no restore should overwrite
+  // it. The post-interrupt increment lands on the same shared
+  // counter.
+  counter = counter + 100
+  return counter
+}
+
+node main() {
+  // `shared: true` branches mutate the parent's globals directly.
+  // When an interrupt fires inside the branch, the runtime must NOT
+  // restore a per-branch snapshot on resume (there shouldn't be
+  // one to begin with) — the parent's mutated state must survive.
+  // Single branch keeps the increment ordering deterministic.
+  fork([1], shared: true) as _ {
+    return bumpThenAsk()
+  }
+  return counter
+}

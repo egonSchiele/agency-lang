@@ -1,0 +1,21 @@
+global let counter = 0
+
+def bump(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  // With `shared: true` race branches pointer-share the parent's
+  // GlobalStore, so at least the winning branch's bump() lands on
+  // the parent's counter. Whether losers complete their increment
+  // before being aborted is non-deterministic, so we only assert
+  // that the parent observes a non-zero value — proving the
+  // shared-state path is wired through `race`.
+  //
+  // Without `shared: true` the parent would always observe 0.
+  race([1, 2, 3], shared: true) as _ {
+    return bump()
+  }
+  return counter > 0
+}

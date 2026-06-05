@@ -227,17 +227,23 @@ def mergedPalette(): Record<string, string> {
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
 def _runTurn(msg: string): boolean {
-  if (msg == "") {
+  // Trim once for built-in matching so `"/help\n"` (piped) or
+  // `"  /clear"` behave the same as `"/clear"`. `expandSlash` is
+  // whitespace-tolerant in its own right, but it still receives the
+  // raw `msg` so the LLM sees the exact text the user typed when
+  // nothing matches.
+  const trimmed = msg.trim()
+  if (trimmed == "") {
     return true
   }
-  if (msg == "/exit" || msg == "/quit") {
+  if (trimmed == "/exit" || trimmed == "/quit") {
     return false
   }
-  if (msg == "/clear") {
+  if (trimmed == "/clear") {
     clearMessages()
     return true
   }
-  if (msg == "/help") {
+  if (trimmed == "/help") {
     pushMessage("Commands: /exit, /clear, /help")
     return true
   }

@@ -49,7 +49,7 @@ async function callFn(fn: unknown, node: Node): Promise<Node> {
   })) as Node;
 }
 
-async function walkInlines(nodes: unknown[], fn: unknown): Promise<unknown[]> {
+async function walkChildren(nodes: unknown[], fn: unknown): Promise<unknown[]> {
   const out: unknown[] = [];
   for (const n of nodes) {
     if (n == null || typeof n !== "object") {
@@ -72,11 +72,10 @@ async function walkListItems(
       continue;
     }
     const item = { ...(raw as Node) };
+    // ListItem.content is now an array of Blocks (was inline nodes before
+    // tarsec's nested-blocks change). Walk each entry as a node either way.
     if (Array.isArray(item.content)) {
-      item.content = await walkInlines(item.content as unknown[], fn);
-    }
-    if (item.sublist != null && typeof item.sublist === "object") {
-      item.sublist = await walkNode(item.sublist as Node, fn);
+      item.content = await walkChildren(item.content as unknown[], fn);
     }
     out.push(item);
   }
@@ -90,7 +89,7 @@ async function walkNode(node: Node, fn: unknown): Promise<Node> {
   }
   const out: Node = { ...transformed };
   if (Array.isArray(out.content)) {
-    out.content = await walkInlines(out.content as unknown[], fn);
+    out.content = await walkChildren(out.content as unknown[], fn);
   }
   if (Array.isArray(out.items)) {
     out.items = await walkListItems(out.items as unknown[], fn);
@@ -275,10 +274,25 @@ function renderBlock(b: unknown, indent: string = ""): string {
         } else {
           marker = ordered ? `${n}. ` : "• ";
         }
-        const text = renderInline((item.content as unknown[]) ?? []);
-        out += indent + BULLET(marker) + text + "\n";
-        if (item.sublist != null && typeof item.sublist === "object") {
-          out += renderBlock(item.sublist, indent + "  ");
+        // ListItem.content is an array of blocks. Render the first
+        // paragraph's inlines on the bullet line; remaining blocks
+        // (including nested lists) get indented underneath.
+        const blocks = (item.content as unknown[]) ?? [];
+        let firstLine = "";
+        let rest: unknown[] = blocks;
+        const first = blocks[0];
+        if (
+          first != null && typeof first === "object" &&
+          (first as Node).type === "paragraph"
+        ) {
+          firstLine = renderInline(
+            ((first as Node).content as unknown[]) ?? [],
+          );
+          rest = blocks.slice(1);
+        }
+        out += indent + BULLET(marker) + firstLine + "\n";
+        for (const child of rest) {
+          out += renderBlock(child, indent + "  ");
         }
         n++;
       }

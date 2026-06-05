@@ -169,3 +169,11 @@ tests/integration/stdlib-sandbox/credential/browser.test.json skipped, need to g
 ---
 
 memory layer should use agency.llm, also add a new fun agency.embed that it can use for embeddings?
+
+---
+
+DOesn't work:
+
+```
+const indent = " ".repeat(amount)
+```

@@ -1,4 +1,4 @@
-import { AgencyMultiLineComment } from "../types.js";
+import { AgencyComment, AgencyMultiLineComment, NewLine } from "../types.js";
 import type { FunctionParameter } from "./function.js";
 import { BaseNode } from "./base.js";
 import type { Tag } from "./tag.js";
@@ -172,9 +172,37 @@ export type ObjectProperty = {
   tags?: Tag[];
 };
 
+/**
+ * Formatter-only trivia attached to an `ObjectType`. Each entry anchors
+ * one or more comments / blank lines at a position in `properties`:
+ *
+ *   - `anchorIndex: 0` — appears before the first property
+ *   - `anchorIndex: N` (0 < N < properties.length) — appears between
+ *     properties N-1 and N
+ *   - `anchorIndex: properties.length` — appears after the last property
+ *
+ * Multiple consecutive comments at the same anchor live as multiple
+ * elements of `comments`, in source order, each retaining its original
+ * node type (`comment` vs. `multiLineComment`). The formatter dispatches
+ * on `node.type` and emits each in its original `//` or `/* * /` syntax.
+ *
+ * Trivia is *not* semantic — no consumer outside the agency formatter
+ * should read it.
+ */
+export type ObjectTypeTrivia = {
+  anchorIndex: number;
+  comments: (AgencyComment | AgencyMultiLineComment | NewLine)[];
+};
+
 export type ObjectType = {
   type: "objectType";
   properties: ObjectProperty[];
+  /**
+   * Optional comment / blank-line trivia between properties, preserved
+   * for the formatter. Sorted by `anchorIndex` ascending; at most one
+   * entry per anchor.
+   */
+  trivia?: ObjectTypeTrivia[];
   tags?: Tag[];
 };
 

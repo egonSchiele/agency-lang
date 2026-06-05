@@ -11,6 +11,7 @@ import {
   MultiLineStringLiteral,
   NewLine,
   ObjectProperty,
+  ObjectTypeTrivia,
   ParallelBlock,
   Scope,
   ScopeType,
@@ -649,18 +650,25 @@ export class AgencyGenerator {
   protected aliasedTypeToString(aliasedType: VariableType): string {
     if (aliasedType.type === "objectType") {
       this.increaseIndent();
-      let result =
-        "{\n" +
-        aliasedType.properties
-          .map((prop) => {
-            return this.indentStr(this.stringifyProp(prop));
-          })
-          .join(";\n") +
-        "\n";
-
+      const byAnchor: Record<number, ObjectTypeTrivia> = {};
+      for (const t of aliasedType.trivia ?? []) byAnchor[t.anchorIndex] = t;
+      const lines: string[] = [];
+      const emit = (i: number) => {
+        for (const n of byAnchor[i]?.comments ?? []) {
+          if (n.type === "newLine") lines.push("");
+          else if (n.type === "comment") lines.push(this.processComment(n));
+          else lines.push(this.processMultiLineComment(n));
+        }
+      };
+      const props = aliasedType.properties;
+      for (let i = 0; i < props.length; i++) {
+        emit(i);
+        const sep = i === props.length - 1 ? "" : ";";
+        lines.push(this.indentStr(this.stringifyProp(props[i])) + sep);
+      }
+      emit(props.length);
       this.decreaseIndent();
-      result += this.indentStr("}");
-      return result;
+      return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
     }
     return variableTypeToString(aliasedType, this.typeAliases, true);
   }

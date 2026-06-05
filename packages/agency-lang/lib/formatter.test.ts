@@ -169,6 +169,76 @@ describe("formatSource", () => {
     });
   });
 
+  describe("comments inside record types", () => {
+    it("preserves a leading // comment before the first property", () => {
+      const input =
+        "type Foo = {\n  // leading\n  name: string,\n  age: number\n}\n";
+      const formatted = formatSource(input);
+      expect(formatted).toContain("// leading\n  name: string");
+    });
+
+    it("preserves a // comment between two properties", () => {
+      const input =
+        "type Foo = {\n  name: string,\n  // between\n  age: number\n}\n";
+      const formatted = formatSource(input);
+      expect(formatted).toContain("// between\n  age: number");
+    });
+
+    it("preserves a trailing // comment after the last property", () => {
+      const input =
+        "type Foo = {\n  name: string,\n  age: number,\n  // trailing\n}\n";
+      const formatted = formatSource(input);
+      expect(formatted).toMatch(/age: number\s*\n\s*\/\/ trailing\s*\n}/);
+    });
+
+    it("preserves a /* */ block comment", () => {
+      const input =
+        "type Foo = {\n  /* block leading */\n  name: string\n}\n";
+      const formatted = formatSource(input);
+      expect(formatted).toContain("/* block leading */\n  name: string");
+    });
+
+    it("preserves multiple consecutive comments without converting syntax", () => {
+      const input =
+        "type Foo = {\n  // first\n  /* second */\n  name: string\n}\n";
+      const formatted = formatSource(input);
+      expect(formatted).toContain("// first\n");
+      expect(formatted).toContain("/* second */\n");
+    });
+
+    it("preserves a blank line between properties", () => {
+      const input =
+        "type Foo = {\n  name: string,\n\n  age: number\n}\n";
+      const formatted = formatSource(input);
+      expect(formatted).toMatch(/name: string;\s*\n\n\s*age: number/);
+    });
+
+    it("is idempotent for every record-comment shape", () => {
+      const inputs = [
+        "type A = {\n  // leading\n  name: string\n}\n",
+        "type B = {\n  name: string,\n  // between\n  age: number\n}\n",
+        "type C = {\n  name: string,\n  age: number,\n  // trailing\n}\n",
+        "type D = {\n  /* doc */\n  name: string\n}\n",
+        "type E = {\n  // a\n  // b\n  name: string\n}\n",
+        "type F = {\n  name: string,\n\n  age: number\n}\n",
+      ];
+      for (const input of inputs) {
+        const f1 = formatSource(input);
+        const f2 = formatSource(f1!);
+        expect(f2).toBe(f1);
+      }
+    });
+
+    // Known limitation: comments inside inline (non-aliased) record types
+    // — e.g. `def f(x: { /* c */ a: number }) { ... }` — are dropped by the
+    // formatter today. The trivia survives in the AST (the parser captures
+    // it everywhere `objectTypeParser` runs), but the renderer for inline
+    // types lives in `variableTypeToString` (typescriptGenerator/) which
+    // flattens objectType to `{ a: number; b: string }` regardless. Fixing
+    // it requires threading indent context through `variableTypeToString`,
+    // which is shared with TS / Zod code generation — out of scope.
+  });
+
   describe("export-from re-export round-trip", () => {
     it.each([
       'export { foo } from "./tools.agency"',

@@ -1,7 +1,7 @@
 import { highlight } from "std::syntax"
 
 node main() {
-  const file = read("README.md") with approve
+  const file = read("example.md") with approve
   if (file is success(data)) {
     print(highlight(data, "markdown"))
   } else {

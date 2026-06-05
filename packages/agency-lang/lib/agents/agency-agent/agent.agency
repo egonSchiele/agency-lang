@@ -12,6 +12,7 @@ import { getCost } from "std::thread"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { figs, title } from "./images/images.agency"
+import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
 
 
@@ -75,38 +76,11 @@ callback("onToolCallStart") as data {
 
 callback("onToolCallEnd") as data {
   if (data.result is success(_result)) {
-    pushMessage(color.dim.green("${truncate(_result, 200)}"))
+    pushMessage(color.dim.green("${formatToolResponse(_result)}"))
   } else if (data.result is failure(_error)) {
-    pushMessage(color.dim.red("Error: ${_error}"))
+    pushMessage(color.red(" ⎿  Error: ${_error}"))
   } else {
-    pushMessage(color.dim("${truncate(data.result, 200)}"))
-  }
-}
-
-def truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) {
-    return str
-  }
-  return str.slice(0, maxLength) + "..."
-}
-
-def formatArgs(args: Record<string, any>): string {
-  const parts = []
-  for (key in args) {
-    const value = args[key]
-    parts.push("${key}: ${truncate(JSON.stringify(value), 50)}")
-  }
-  return parts.join(", ")
-}
-
-callback("onToolCallEnd") as data {
-  if (AGENT_DEBUG) {
-    const line = "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms"
-    if (_isInteractive) {
-      pushMessage(color.yellow(line))
-    } else {
-      print(color.yellow(line))
-    }
+    pushMessage(color.dim("${formatToolResponse(data.result)}"))
   }
 }
 

@@ -1,6 +1,7 @@
 import { highlight, Theme } from "cli-highlight";
 import { color } from "@/utils/termcolors.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
+import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
 // VS Code Dark+ color palette
 const blue = color.hex("#569CD6");
@@ -103,7 +104,7 @@ function highlightMarkdown(code: string): string {
   if (!parsed.success) {
     console.error(
       `[std::syntax.highlight] Markdown parse failed; returning raw text. ` +
-        `error=${JSON.stringify(parsed.error)}`,
+      `error=${JSON.stringify(parsed.error)}`,
     );
     return code;
   }
@@ -116,27 +117,44 @@ function highlightMarkdown(code: string): string {
     const preview = parsed.rest.slice(0, 80).replace(/\n/g, "\\n");
     console.error(
       `[std::syntax.highlight] Markdown parser left ${parsed.rest.length} ` +
-        `chars unconsumed; returning raw text to avoid truncating output. ` +
-        `Trigger preview: ${JSON.stringify(preview)}`,
+      `chars unconsumed; returning raw text to avoid truncating output. ` +
+      `Trigger preview: ${JSON.stringify(preview)}`,
     );
     return code;
   }
-  const transformed = parsed.blocks.map((b: unknown) => {
-    if (
-      b != null &&
-      typeof b === "object" &&
-      (b as Record<string, unknown>).type === "code-block"
-    ) {
-      const block = b as { content?: string; language?: string | null };
+  const transformed = parsed.blocks.map(mapMarkdownBlock);
+  return _renderMarkdownForCli(transformed);
+}
+
+function mapMarkdownBlock(block: Block): Block {
+  if (
+    block != null &&
+    typeof block === "object"
+
+  ) {
+    const someBlock = (block as Record<string, unknown>)
+    if (someBlock.type === "code-block") {
+      const codeBlock = block as CodeBlock;
       return {
-        ...block,
+        ...codeBlock,
         content: syntaxHighlight(
-          block.content ?? "",
-          block.language ?? "plaintext",
+          codeBlock.content ?? "",
+          codeBlock.language ?? "plaintext",
         ),
       };
+    } else if (someBlock.type === "list") {
+      const listBlock = block as List;
+      const items = listBlock.items.map((listItem) => {
+        return {
+          ...listItem,
+          content: listItem.content.map(mapMarkdownBlock)
+        }
+      });
+      return {
+        ...listBlock,
+        items,
+      };
     }
-    return b;
-  });
-  return _renderMarkdownForCli(transformed);
+  }
+  return block;
 }

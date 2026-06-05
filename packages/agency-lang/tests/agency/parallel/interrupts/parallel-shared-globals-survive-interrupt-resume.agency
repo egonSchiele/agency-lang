@@ -1,0 +1,24 @@
+global let counter = 0
+
+def bumpThenAsk(): number {
+  counter = counter + 1
+  interrupt("approve counter=${counter}?")
+  counter = counter + 100
+  return counter
+}
+
+node main() {
+  // parallel(shared: true) + interrupt: the single arm mutates the
+  // parent's GlobalStore directly. Pre-interrupt write must survive
+  // resume (no per-branch snapshot/restore should clobber it). On
+  // resume the post-interrupt increment lands on the same shared
+  // counter. Final value: 0 + 1 + 100 = 101.
+  //
+  // Mirrors `fork-shared-globals-survive-interrupt-resume` but
+  // exercises the parallelDesugar path. Single arm keeps the
+  // increment ordering deterministic.
+  parallel(shared: true) {
+    let a = bumpThenAsk()
+  }
+  return counter
+}

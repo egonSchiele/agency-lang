@@ -1,0 +1,25 @@
+global let counter = 0
+
+def bumpThenAsk(n: number): number {
+  counter = counter + n
+  interrupt("approve counter=${counter}?")
+  counter = counter + 100
+  return counter
+}
+
+node main() {
+  // Per-arm isolation through interrupt resume via the
+  // parallel-block syntax (not the fork iteration form). Each arm
+  // mutates its own snapshot of `counter` before and after an
+  // interrupt; on resume each arm's snapshot must be restored
+  // independently. The parent's `counter` stays 0.
+  //
+  // Mirrors `fork-globals-survive-interrupt-resume` but exercises
+  // the parallelDesugar -> processForkCall codegen path.
+  parallel {
+    let a = bumpThenAsk(1)
+    let b = bumpThenAsk(2)
+    let c = bumpThenAsk(3)
+  }
+  return counter
+}

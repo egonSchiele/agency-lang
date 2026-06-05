@@ -162,21 +162,31 @@ export type RunBatchOpts<T> = {
    * fields. Used by runPrompt's tool loop where the body manages the
    * real tool result on the branch. */
   recordBranchOutcomes?: boolean;
-  /** When `true` (default), each branch's ALS frame gets its own
-   * snapshot of the parent's `globals` (cloned via `GlobalStore.clone`)
-   * and a per-branch thread view (`ThreadStore.forkBranchView`). This
-   * is the user-facing `fork` / `parallel` / `race` contract — writes
-   * inside a branch stay inside the branch and the active-thread
-   * pointer is branch-local.
+  /** When `true`, the branch's ALS frame pointer-shares the parent's
+   * `GlobalStore`. Writes inside the branch land on the parent's store;
+   * siblings see them; the parent observes them after join. User
+   * `fork(..., shared: true)` / `parallel(shared: true)` /
+   * `race(..., shared: true)` opts into this. `runPrompt`'s tool-
+   * dispatch loop also enables it (tool calls are conceptually
+   * sequential function invocations and any global state should
+   * persist across calls).
    *
-   * When `false`, branches pointer-share the parent's `globals` and
-   * `threads`. Use this for *implementation-internal* batching that
-   * isn't a user concurrency primitive — most notably `runPrompt`'s
-   * tool-dispatch loop, where tool calls are conceptually sequential
-   * function invocations and any global state they touch (counters,
-   * caches, per-run accumulators) is expected to persist across calls
-   * within the same LLM round and across rounds. */
-  isolateState?: boolean;
+   * When `false` (default), each branch gets a clone of the parent's
+   * `GlobalStore` (via `GlobalStore.clone`). Writes stay branch-local
+   * and are discarded at join. */
+  shareGlobals?: boolean;
+  /** When `true`, the branch's ALS frame pointer-shares the parent's
+   * `ThreadStore` (and its `activeStack`). Reserved for
+   * implementation-internal batching — most notably `runPrompt`'s
+   * tool-dispatch loop, where multiple tool calls in one LLM round
+   * must all write into the same active thread.
+   *
+   * When `false` (default), the branch gets a `forkBranchView` of the
+   * parent's `ThreadStore` (shared registry, branch-local
+   * `activeStack` seeded with a fresh subthread). User-facing
+   * `shared: true` does NOT set this — concurrent branches pushing/
+   * popping the same active thread would corrupt the conversation. */
+  shareThreads?: boolean;
   hooks?: BatchHooks;
 };
 
@@ -255,9 +265,10 @@ function startInvoke<T>(
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);
   t.startedAt = performance.now();
-  const isolateState = opts.isolateState ?? true;
+  const shareGlobals = opts.shareGlobals ?? false;
+  const shareThreads = opts.shareThreads ?? false;
   return ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-    runInBranchAlsFrame(ctx, t.branch, isolateState, () =>
+    runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, () =>
       t.child.invoke(t.branch.stack, signal),
     ),
   );
@@ -283,7 +294,8 @@ function startInvoke<T>(
 function runInBranchAlsFrame<T>(
   ctx: RuntimeContext<any>,
   branch: BranchState,
-  isolateState: boolean,
+  shareGlobals: boolean,
+  shareThreads: boolean,
   fn: () => Promise<T>,
 ): Promise<T> {
   const parent = agencyStore.getStore();
@@ -296,30 +308,28 @@ function runInBranchAlsFrame<T>(
     return fn();
   }
 
-  // Build the per-branch globals + threads. On first invocation
-  // these are cloned from the parent. On resume after an interrupt
-  // (`branch.globalsJSON` and/or `branch.activeStack` populated by a
-  // prior capture below, then round-tripped through BranchState
-  // serialization) we restore them so the resumed body sees the
-  // same per-branch state it had pre-interrupt.
+  // Build the per-branch globals + threads. Two independent dials:
+  //   - `shareGlobals=false` (default): clone parent's GlobalStore,
+  //     restore from `branch.globalsJSON` if present (resume after
+  //     interrupt). `shareGlobals=true`: pointer-share parent's store.
+  //   - `shareThreads=false` (default): build a `forkBranchView`,
+  //     restore from `branch.activeStack` if present.
+  //     `shareThreads=true`: pointer-share parent's ThreadStore
+  //     (reserved for runPrompt tool dispatch — see opts docstring).
   //
-  // When `isolateState` is false (runPrompt's tool dispatch),
-  // pointer-share both — tool calls are logically sequential function
-  // invocations and any global state they touch should accumulate
-  // across calls.
-  let branchGlobals: GlobalStore;
-  let branchThreads: ThreadStore;
-  if (isolateState) {
-    branchGlobals = branch.globalsJSON
+  // User-facing `shared: true` sets `shareGlobals: true` ONLY. Threads
+  // stay isolated regardless of `shared` — concurrent push/pop on a
+  // shared activeStack would corrupt the conversation.
+  const branchGlobals: GlobalStore = shareGlobals
+    ? parent.globals
+    : branch.globalsJSON
       ? GlobalStore.fromJSON(branch.globalsJSON)
       : parent.globals.clone();
-    branchThreads = branch.activeStack
+  const branchThreads: ThreadStore = shareThreads
+    ? parent.threads
+    : branch.activeStack
       ? parent.threads.restoreBranchView(branch.activeStack)
       : parent.threads.forkBranchView();
-  } else {
-    branchGlobals = parent.globals;
-    branchThreads = parent.threads;
-  }
 
   return agencyStore.run(
     {
@@ -334,20 +344,19 @@ function runInBranchAlsFrame<T>(
       moduleDir: parent.moduleDir,
     },
     async () => {
-      // Capture-on-return discipline: snapshot the per-branch globals
-      // + active-thread pointer when the body settles (whether the
-      // returned value is a user value OR an Interrupt[]). Throws
-      // naturally skip the capture below and propagate — error-path
-      // branches are torn down rather than resumed, so there's
-      // nothing to persist.
+      // Capture-on-INTERRUPT discipline: snapshot the per-branch
+      // globals + active-thread pointer only when the body settles
+      // as an `Interrupt[]`. Successful returns are discarded at
+      // join, so capturing then is pure waste (a JSON round-trip per
+      // branch). Throws naturally skip the capture and propagate —
+      // error-path branches are torn down rather than resumed.
       //
-      // Only meaningful when `isolateState` is true. Shared-state
-      // branches mutate the parent's globals/threads directly so
-      // there's nothing to snapshot.
+      // Only meaningful for the corresponding isolated dial.
+      // Pointer-shared dials have nothing to snapshot.
       const value = await fn();
-      if (isolateState) {
-        branch.globalsJSON = branchGlobals.toJSON();
-        branch.activeStack = [...branchThreads.activeStack];
+      if (hasInterrupts(value)) {
+        if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
+        if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
       }
       return value;
     },
@@ -693,9 +702,10 @@ async function runRaceResume<T>(
   hooks?.onBranchStart?.(child.key, winnerIndex);
   let value: T | Interrupt[];
   try {
-    const isolateState = opts.isolateState ?? true;
+    const shareGlobals = opts.shareGlobals ?? false;
+    const shareThreads = opts.shareThreads ?? false;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch, isolateState, () =>
+      runInBranchAlsFrame(ctx, branch, shareGlobals, shareThreads, () =>
         child.invoke(branch.stack, signal),
       ),
     );

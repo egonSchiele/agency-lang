@@ -1057,9 +1057,11 @@ export class Runner {
       },
       mode: "all",
       // `shared: true` at the user-facing fork/parallel/race site
-      // opts into pointer-sharing the parent's globals/threads with
-      // each branch. Default is isolated.
-      isolateState: !shared,
+      // opts into pointer-sharing the parent's `GlobalStore` with
+      // each branch (writes accumulate). Threads stay branch-local
+      // regardless — concurrent push/pop on a shared activeStack
+      // would corrupt the conversation. Default is fully isolated.
+      shareGlobals: shared,
       children: items.map((item, i) => ({
         key: this.forkBranchKey(id, i),
         invoke: (branchStack) => blockFn(item, i, branchStack),
@@ -1128,9 +1130,11 @@ export class Runner {
       },
       mode: "race",
       // `shared: true` at the user-facing fork/parallel/race site
-      // opts into pointer-sharing the parent's globals/threads with
-      // each branch. Default is isolated.
-      isolateState: !shared,
+      // opts into pointer-sharing the parent's `GlobalStore` with
+      // each branch (writes accumulate). Threads stay branch-local
+      // regardless — concurrent push/pop on a shared activeStack
+      // would corrupt the conversation. Default is fully isolated.
+      shareGlobals: shared,
       // Keep the existing key shape — changing to stepPath would silently
       // break any in-flight serialized checkpoint stamped before this
       // migration.

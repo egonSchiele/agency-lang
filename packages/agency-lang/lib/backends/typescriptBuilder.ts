@@ -2322,7 +2322,9 @@ export class TypeScriptBuilder {
         // TypeError deep inside the fork machinery.
         ts.raw("getRuntimeContext().stack"),
         // Trailing `shared` boolean — defaults to false (isolated).
-        // Forwarded as `RunBatchOpts.isolateState = !shared`.
+        // Forwarded as `RunBatchOpts.shareGlobals = shared`. Threads
+        // stay branch-local regardless (concurrent push/pop on a
+        // shared activeStack would corrupt the conversation).
         sharedNode,
       ])
       .await()

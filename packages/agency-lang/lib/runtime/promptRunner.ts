@@ -190,9 +190,10 @@ export class PromptRunner {
       // isolation would silently drop any global mutation a tool
       // makes (counters, caches, per-run accumulators) and confine
       // each tool call's active-thread pointer to its own subthread.
-      // Pointer-share the parent's state instead so tool dispatches
-      // behave like sequential function invocations.
-      isolateState: false,
+      // Pointer-share BOTH state slots so tool dispatches behave
+      // like sequential function invocations.
+      shareGlobals: true,
+      shareThreads: true,
       children: items.map((item, i) => ({
         key: keyFor(item, i),
         invoke: async () => {

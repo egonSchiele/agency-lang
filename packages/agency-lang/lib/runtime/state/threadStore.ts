@@ -135,21 +135,12 @@ export class ThreadStore {
 
     const parentActiveId = this.activeId();
     if (parentActiveId !== undefined) {
-      // Inline the subthread-creation steps from `createSubthread` so
-      // we write the new id onto the *branch's* activeStack instead
-      // of the parent's. Goes through the shared registry, so the
-      // subthread is visible to `listThreads()` from any branch and
-      // to the parent after join.
-      const id = (this.registry.counter++).toString();
-      const parentThread = this.registry.threads[parentActiveId];
-      const child = parentThread.newSubthreadChild();
-      child.parentId = parentActiveId;
-      this.registry.threads[id] = child;
-      this.registry.statelogClient?.threadCreated({
-        threadId: id,
-        threadType: "subthread",
-        parentThreadId: parentActiveId,
-      });
+      // Create the branch-local subthread on the shared registry,
+      // then seed the view's activeStack with its id. Uses the same
+      // helper as `createSubthread()` — the only difference is we
+      // push the new id onto the *view's* activeStack rather than
+      // `this.activeStack`.
+      const id = this.createSubthreadOf(parentActiveId);
       view.activeStack.push(id);
     }
 
@@ -207,15 +198,23 @@ export class ThreadStore {
 
   // Create a subthread that inherits from the current active thread
   createSubthread(): MessageThreadID {
-    const parentId = this.activeId();
-    const id = (this.counter++).toString();
-    const child = this.threads[parentId!].newSubthreadChild();
-    child.parentId = parentId ?? null;
-    this.threads[id] = child;
-    this.statelogClient?.threadCreated({
+    return this.createSubthreadOf(this.activeId()!);
+  }
+
+  /** Registry-only subthread creation: build a subthread that
+   *  inherits from the thread at `parentRegistryId`, log it, and
+   *  return its new registry id. Does NOT touch `activeStack` —
+   *  callers decide where (if anywhere) to push the new id. Used by
+   *  `createSubthread()` (which pushes onto `this.activeStack`) and
+   *  `forkBranchView()` (which pushes onto the view's activeStack). */
+  createSubthreadOf(parentRegistryId: MessageThreadID): MessageThreadID {
+    const id = (this.registry.counter++).toString();
+    const parentThread = this.registry.threads[parentRegistryId];
+    this.registry.threads[id] = parentThread.newSubthreadChild(parentRegistryId);
+    this.registry.statelogClient?.threadCreated({
       threadId: id,
       threadType: "subthread",
-      parentThreadId: parentId,
+      parentThreadId: parentRegistryId,
     });
     return id;
   }

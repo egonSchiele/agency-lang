@@ -72,8 +72,14 @@ export class MessageThread {
     return child;
   }
 
-  newSubthreadChild(): MessageThread {
+  /** Build a subthread child seeded with a clone of this thread's
+   *  messages. Caller passes the parent's registry id so the child
+   *  knows where it descended from — used by `ThreadStore` to
+   *  link subthreads back into the registry and by
+   *  `agency.threads.list()` to surface the parent relationship. */
+  newSubthreadChild(parentRegistryId: string | null): MessageThread {
     const child = new MessageThread(this.cloneMessages());
+    child.parentId = parentRegistryId;
     return child;
   }
 

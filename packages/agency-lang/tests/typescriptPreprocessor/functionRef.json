@@ -28,7 +28,8 @@
                 "type": "text",
                 "value": "hi"
               }
-            ]
+            ],
+            "delimiter": "\""
           },
           "loc": {
             "line": 1,
@@ -89,7 +90,8 @@
                     "type": "text",
                     "value": "Bob"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

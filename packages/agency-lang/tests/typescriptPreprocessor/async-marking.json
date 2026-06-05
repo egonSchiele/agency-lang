@@ -86,7 +86,8 @@
                       "end": 105
                     }
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -154,7 +155,8 @@
                     "type": "text",
                     "value": "hello"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -188,7 +190,8 @@
                     "type": "text",
                     "value": "world"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -270,7 +273,8 @@
                       "end": 259
                     }
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

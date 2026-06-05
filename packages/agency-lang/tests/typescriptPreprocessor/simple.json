@@ -27,7 +27,8 @@
                     "type": "text",
                     "value": "Hello, {name}!"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

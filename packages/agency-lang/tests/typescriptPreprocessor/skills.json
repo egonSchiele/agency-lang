@@ -26,7 +26,8 @@
                     "type": "text",
                     "value": "Analyze this data"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -64,7 +65,8 @@
                     "type": "text",
                     "value": "No skills here"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

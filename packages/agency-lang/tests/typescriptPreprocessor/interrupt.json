@@ -52,7 +52,8 @@
                       "end": 95
                     }
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -98,7 +99,8 @@
                   "end": 128
                 }
               }
-            ]
+            ],
+            "delimiter": "\""
           },
           "loc": {
             "line": 2,
@@ -162,7 +164,8 @@
                 "type": "text",
                 "value": " done"
               }
-            ]
+            ],
+            "delimiter": "\""
           },
           "loc": {
             "line": 6,
@@ -204,7 +207,8 @@
                     "type": "text",
                     "value": "Do something risky and something safe"
                   }
-                ]
+                ],
+                "delimiter": "\""
               },
               {
                 "type": "agencyObject",

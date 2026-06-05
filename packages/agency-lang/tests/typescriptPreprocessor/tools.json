@@ -67,7 +67,8 @@
                       "end": 125
                     }
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -140,7 +141,8 @@
                 "type": "text",
                 "value": " degrees"
               }
-            ]
+            ],
+            "delimiter": "\""
           },
           "loc": {
             "line": 7,
@@ -182,7 +184,8 @@
                     "type": "text",
                     "value": "What is the weather in NYC?"
                   }
-                ]
+                ],
+                "delimiter": "\""
               },
               {
                 "type": "agencyObject",
@@ -255,7 +258,8 @@
                     "type": "text",
                     "value": "Summarize the forecast"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

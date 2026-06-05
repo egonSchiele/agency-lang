@@ -54,7 +54,8 @@
                       "end": 77
                     }
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -126,7 +127,8 @@
                     "type": "text",
                     "value": "First async task"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -164,7 +166,8 @@
                     "type": "text",
                     "value": "Second async task"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -234,7 +237,8 @@
                   "end": 235
                 }
               }
-            ]
+            ],
+            "delimiter": "\""
           },
           "loc": {
             "line": 8,

@@ -30,7 +30,8 @@
                         "type": "text",
                         "value": "What is 2 + 2?"
                       }
-                    ]
+                    ],
+                    "delimiter": "\""
                   }
                 ],
                 "loc": {
@@ -68,7 +69,8 @@
                         "type": "text",
                         "value": "And what is that times 3?"
                       }
-                    ]
+                    ],
+                    "delimiter": "\""
                   }
                 ],
                 "loc": {
@@ -119,7 +121,8 @@
                     "type": "text",
                     "value": "Unrelated question"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

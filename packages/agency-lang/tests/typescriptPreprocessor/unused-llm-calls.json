@@ -30,7 +30,8 @@
                     "type": "text",
                     "value": "Give me a greeting"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -96,7 +97,8 @@
                     "type": "text",
                     "value": "Give me a farewell"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {
@@ -132,7 +134,8 @@
                     "type": "text",
                     "value": "Final answer"
                   }
-                ]
+                ],
+                "delimiter": "\""
               }
             ],
             "loc": {

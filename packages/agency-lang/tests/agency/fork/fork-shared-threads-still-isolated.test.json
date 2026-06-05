@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "shared: true shares globals but threads stay branch-local. Each branch still gets a fresh subthread (via forkBranchView); siblings don't see each other's activeStack and the parent's activeId is untouched.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

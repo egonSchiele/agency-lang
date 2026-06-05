@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Per-branch globals snapshot survives interrupt/resume. Each fork branch increments its OWN snapshot of `counter` before an interrupt; on resume, the post-interrupt increment must see the pre-interrupt value (not a freshly-cloned 0). Parent's `counter` is untouched.",
+      "input": "",
+      "expectedOutput": "[0,[101,102,103]]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

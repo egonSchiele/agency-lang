@@ -23,7 +23,7 @@ import {
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -143,17 +143,17 @@ async function __initializeGlobals(__ctx) {
   __ctx.globals.set("arrayAndObject.agency", "nums", [1, 2, 3, 4, 5])
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "nums")]
+    args: [__globals()!.get("arrayAndObject.agency", "nums")]
   })
   __ctx.globals.set("arrayAndObject.agency", "names", [`Alice`, `Bob`, `Charlie`])
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "names")]
+    args: [__globals()!.get("arrayAndObject.agency", "names")]
   })
   __ctx.globals.set("arrayAndObject.agency", "matrix", [[1, 2], [3, 4], [5, 6]])
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "matrix")]
+    args: [__globals()!.get("arrayAndObject.agency", "matrix")]
   })
   __ctx.globals.set("arrayAndObject.agency", "person", {
     "name": `Alice`,
@@ -161,7 +161,7 @@ async function __initializeGlobals(__ctx) {
   })
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "person")]
+    args: [__globals()!.get("arrayAndObject.agency", "person")]
   })
   __ctx.globals.set("arrayAndObject.agency", "address", {
     "street": `123 Main St`,
@@ -170,7 +170,7 @@ async function __initializeGlobals(__ctx) {
   })
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "address")]
+    args: [__globals()!.get("arrayAndObject.agency", "address")]
   })
   __ctx.globals.set("arrayAndObject.agency", "user", {
     "name": `Bob`,
@@ -178,7 +178,7 @@ async function __initializeGlobals(__ctx) {
   })
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "user")]
+    args: [__globals()!.get("arrayAndObject.agency", "user")]
   })
   __ctx.globals.set("arrayAndObject.agency", "users", [{
     "name": `Alice`,
@@ -189,7 +189,7 @@ async function __initializeGlobals(__ctx) {
   }])
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "users")]
+    args: [__globals()!.get("arrayAndObject.agency", "users")]
   })
   __ctx.globals.set("arrayAndObject.agency", "config", {
     "server": {
@@ -200,17 +200,17 @@ async function __initializeGlobals(__ctx) {
   })
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "config")]
+    args: [__globals()!.get("arrayAndObject.agency", "config")]
   })
-  __ctx.globals.set("arrayAndObject.agency", "firstNum", getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "nums")[0])
+  __ctx.globals.set("arrayAndObject.agency", "firstNum", __globals()!.get("arrayAndObject.agency", "nums")[0])
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "firstNum")]
+    args: [__globals()!.get("arrayAndObject.agency", "firstNum")]
   })
-  __ctx.globals.set("arrayAndObject.agency", "personName", getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "person").name)
+  __ctx.globals.set("arrayAndObject.agency", "personName", __globals()!.get("arrayAndObject.agency", "person").name)
   await __call(print, {
     type: "positional",
-    args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "personName")]
+    args: [__globals()!.get("arrayAndObject.agency", "personName")]
   })
 }
 __registerGlobalsInit("arrayAndObject.agency", __initializeGlobals);

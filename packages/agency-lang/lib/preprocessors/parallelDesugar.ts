@@ -376,11 +376,23 @@ function ifStmt(cond: Expression, body: AgencyNode[]): IfElse {
   return { type: "ifElse", condition: cond, thenBody: body };
 }
 
-function forkCall(items: Expression[], block: BlockArgument): FunctionCall {
+function forkCall(
+  items: Expression[],
+  block: BlockArgument,
+  shared?: Expression,
+): FunctionCall {
+  const args: FunctionCall["arguments"] = [arrayLit(items)];
+  if (shared !== undefined) {
+    args.push({
+      type: "namedArgument",
+      name: "shared",
+      value: shared,
+    });
+  }
   return {
     type: "functionCall",
     functionName: "fork",
-    arguments: [arrayLit(items)],
+    arguments: args,
     block,
   };
 }
@@ -503,14 +515,20 @@ function desugarOneParallel(pb: ParallelBlock): AgencyNode[] {
     );
   }
 
-  // Build the fork call.
+  // Build the fork call. `pb.shared` (from `parallel(shared: true)
+  // { ... }`) is forwarded onto the synthesized `fork` as a named arg
+  // so per-branch isolation can be opted out of at the call site.
   const armNames = arms.map((_, i) => strLit(`arm_${i}`));
-  const fork = forkCall(armNames, {
-    type: "blockArgument",
-    inline: false,
-    params: [{ type: "functionParameter", name: armParam }],
-    body: ifChainBody,
-  });
+  const fork = forkCall(
+    armNames,
+    {
+      type: "blockArgument",
+      inline: false,
+      params: [{ type: "functionParameter", name: armParam }],
+      body: ifChainBody,
+    },
+    pb.shared,
+  );
 
   const out: AgencyNode[] = [letAssign(armsVar, fork)];
 

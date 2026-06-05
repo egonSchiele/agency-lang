@@ -1624,13 +1624,19 @@ export class TypeScriptBuilder {
         ctx: ts.raw("getRuntimeContext().ctx"),
       }),
 
-      // Ensure this module's globals are initialized on the current ctx.
-      // Runs BEFORE the `withAlsFrame` wrap installs the per-scope ALS
-      // frame, so `__ctx` here is the setupEnv-emitted local — not the
-      // `__ctx()` accessor (which would return undefined).
+      // Ensure this module's globals are initialized on the
+      // current per-scope view. Runs BEFORE this function's own
+      // `withAlsFrame` wrap, but the caller's ALS frame is still
+      // active (every entry to a generated function body comes from
+      // a Runner step body, runNode's top-level frame, or a fork
+      // branch frame — all of which seed `globals`). Reading via
+      // `__globals()!` means a branch checks its own clone — whose
+      // `initializedModules` set was snapshotted at fork time — so
+      // already-initialized modules skip init without touching the
+      // canonical store.
       ts.if(
         ts.raw(
-          `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
+          `!__globals()!.isInitialized(${JSON.stringify(this.moduleId)})`,
         ),
         ts.await(ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")])),
       ),
@@ -2240,9 +2246,31 @@ export class TypeScriptBuilder {
     const paramName = block.params[0]?.name ?? "_";
     const id = this.steps.currentId();
 
+    // Pull off the `shared: true` named argument if present. Defaults
+    // to false (each branch isolates its globals + active-thread
+    // pointer). When the user writes `fork(items, shared: true)` or
+    // `race(items, shared: true)` they opt back into pointer-sharing
+    // — used for cooperative-worker patterns where branches really do
+    // want to mutate the same global state. Any other named arg is a
+    // user error and gets reported.
+    let sharedNode: TsNode = ts.bool(false);
+    const positionalArgs: typeof node.arguments = [];
+    for (const arg of node.arguments) {
+      if (arg.type === "namedArgument") {
+        if (arg.name !== "shared") {
+          throw new Error(
+            `${node.functionName}(): unknown named argument '${arg.name}'. Only 'shared: true' is supported.`,
+          );
+        }
+        sharedNode = this.processCallArg(arg);
+      } else {
+        positionalArgs.push(arg);
+      }
+    }
+
     const itemsNode =
-      node.arguments.length > 0
-        ? this.processCallArg(node.arguments[0])
+      positionalArgs.length > 0
+        ? this.processCallArg(positionalArgs[0])
         : ts.arr([]);
 
     const blockName = this.steps.nextBlockName();
@@ -2293,6 +2321,11 @@ export class TypeScriptBuilder {
         // throws the actionable error instead of producing a generic
         // TypeError deep inside the fork machinery.
         ts.raw("getRuntimeContext().stack"),
+        // Trailing `shared` boolean — defaults to false (isolated).
+        // Forwarded as `RunBatchOpts.shareGlobals = shared`. Threads
+        // stay branch-local regardless (concurrent push/pop on a
+        // shared activeStack would corrupt the conversation).
+        sharedNode,
       ])
       .await()
       .done();

@@ -1,0 +1,22 @@
+let counter = 0
+
+def bumpThenAsk(n: number): number {
+  counter = counter + n
+  interrupt("approve counter=${counter}?")
+  // After the interrupt resumes, the branch's pre-interrupt write
+  // (`counter = counter + n`) must still be visible — otherwise the
+  // second increment lands on a freshly-cloned `0` and the returned
+  // value will be wrong.
+  counter = counter + 100
+  return counter
+}
+
+node main() {
+  // Each branch mutates its own snapshot of `counter` before and
+  // after an interrupt. Pre-interrupt write must survive serialize/
+  // resume; parent's `counter` must remain 0.
+  let results = fork([1, 2, 3]) as n {
+    return bumpThenAsk(n)
+  }
+  return [counter, results]
+}

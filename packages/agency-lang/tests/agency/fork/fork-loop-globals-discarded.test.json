@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork-loop pitfall: per-branch globals are discarded at join. The 'shared accumulator' pattern emits 0, not 3.",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

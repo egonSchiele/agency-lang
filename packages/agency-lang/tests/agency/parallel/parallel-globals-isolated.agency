@@ -1,0 +1,19 @@
+let counter = 0
+
+def bump(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  // Each parallel arm starts with the parent's snapshot (counter = 0)
+  // and mutates its own copy. After join, the parent's `counter`
+  // is still 0. Without per-arm isolation, the three bump() calls
+  // would all hit the same counter and the parent would observe 3.
+  parallel {
+    let a = bump()
+    let b = bump()
+    let c = bump()
+  }
+  return counter
+}

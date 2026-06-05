@@ -122,6 +122,12 @@ export class Runner {
           ctx: this.ctx,
           stack: this.stack,
           threads: this.threads,
+          // Propagate the outer frame's `globals` so a Runner spun up
+          // inside a fork branch sees the branch-local clone instead of
+          // the canonical store. Fall back to `ctx.globals` for harness
+          // entries that build a Runner outside any ALS frame (older
+          // tests, direct invocation paths).
+          globals: outer?.globals ?? this.ctx.globals,
           callsite: {
             moduleId: this.moduleId,
             scopeName: this.scopeName,
@@ -936,6 +942,16 @@ export class Runner {
     ) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
+    // When `true`, branches pointer-share the parent's `GlobalStore`
+    // (opted into by user syntax like `fork(items, shared: true)`).
+    // The active-thread pointer is ALWAYS branch-local regardless of
+    // `shared` — concurrent push/pop on a shared activeStack would
+    // corrupt the conversation. When `false` (the default), each
+    // branch also gets its own clone of the parent's `GlobalStore`.
+    // Threads-registry and sessions stay shared in either mode —
+    // `thread(continue: id)` / `thread(session: ...)` keep working.
+    // Forwarded to `runBatch` as `shareGlobals: shared`.
+    shared: boolean = false,
   ): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return undefined;
@@ -973,10 +989,10 @@ export class Runner {
       // the winner" via the persisted __race_winner_<id> key, so the
       // caller does NOT need to dispatch between them.
       if (mode === "all") {
-        result = await this.runForkAll(id, items, blockFn, stateStack, forkId);
+        result = await this.runForkAll(id, items, blockFn, stateStack, forkId, shared);
         if (hasInterrupts(result)) return result;
       } else {
-        result = await this.runRace(id, items, blockFn, stateStack, forkId);
+        result = await this.runRace(id, items, blockFn, stateStack, forkId, shared);
         if (hasInterrupts(result)) {
           winnerIndex = readWinner();
           return result;
@@ -1030,6 +1046,7 @@ export class Runner {
     ) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
+    shared: boolean,
   ): Promise<any> {
     const result = await runBatch<any>({
       ctx: this.ctx,
@@ -1041,6 +1058,12 @@ export class Runner {
         stepPath: this.stepPath(id),
       },
       mode: "all",
+      // `shared: true` at the user-facing fork/parallel/race site
+      // opts into pointer-sharing the parent's `GlobalStore` with
+      // each branch (writes accumulate). Threads stay branch-local
+      // regardless — concurrent push/pop on a shared activeStack
+      // would corrupt the conversation. Default is fully isolated.
+      shareGlobals: shared,
       children: items.map((item, i) => ({
         key: this.forkBranchKey(id, i),
         invoke: (branchStack) => blockFn(item, i, branchStack),
@@ -1096,6 +1119,7 @@ export class Runner {
     ) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
+    shared: boolean,
   ): Promise<any> {
     const result = await runBatch<any>({
       ctx: this.ctx,
@@ -1107,6 +1131,12 @@ export class Runner {
         stepPath: this.stepPath(id),
       },
       mode: "race",
+      // `shared: true` at the user-facing fork/parallel/race site
+      // opts into pointer-sharing the parent's `GlobalStore` with
+      // each branch (writes accumulate). Threads stay branch-local
+      // regardless — concurrent push/pop on a shared activeStack
+      // would corrupt the conversation. Default is fully isolated.
+      shareGlobals: shared,
       // Keep the existing key shape — changing to stepPath would silently
       // break any in-flight serialized checkpoint stamped before this
       // migration.

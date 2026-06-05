@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Branch's active-thread pointer (activeStack) is captured on body settle and restored on resume — the branch sees the same currentThreadId() before and after an interrupt. Without activeStack restoration the resumed body would land on a freshly-forked subthread with a different id.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

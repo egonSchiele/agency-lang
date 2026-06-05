@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "parallel(shared: true) + interrupt: pre-interrupt write to parent's GlobalStore survives resume. Verifies the parallelDesugar path correctly threads `shareGlobals: true` through to the runtime even when an interrupt fires mid-body.",
+      "input": "",
+      "expectedOutput": "101",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

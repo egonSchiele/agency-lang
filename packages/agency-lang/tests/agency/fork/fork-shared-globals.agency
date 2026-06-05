@@ -1,0 +1,21 @@
+let counter = 0
+
+def bump(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  // With `shared: true` each branch pointer-shares the parent's
+  // GlobalStore, so the three `bump()` calls all hit the same
+  // counter and the parent's `counter` ends up at 3.
+  //
+  // Each branch returns `counter` immediately after its own
+  // increment. Under concurrent execution those reads race, so
+  // their observed values are non-deterministic. We only check the
+  // parent's final value here.
+  let results = fork([1, 2, 3], shared: true) as _ {
+    return bump()
+  }
+  return counter
+}

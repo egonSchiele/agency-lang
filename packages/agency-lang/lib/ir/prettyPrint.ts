@@ -273,14 +273,22 @@ export function printTs(node: TsNode, indent = 0): string {
         // Two receivers depending on emission site:
         //   - `topLevel` true (set on subtrees emitted as part of
         //     eager-evaluated tool description docstrings): use
-        //     `__globalCtx`. The eager tool-registration object
-        //     literal runs at module load, before any ALS frame is
-        //     installed, so the strict accessor would throw.
+        //     `__globalCtx.globals` directly. The eager tool-
+        //     registration object literal runs at module load, before
+        //     any ALS frame is installed, so the accessor would throw.
+        //     The canonical store on `__globalCtx` is also the right
+        //     read target there — tool descriptions are computed once
+        //     at module load, not per-branch.
         //   - default (inside any function/node body, under the
-        //     `withAlsFrame` wrap): use the strict accessor — a
-        //     missing frame indicates a real bug.
-        const ctxRef = node.topLevel ? "__globalCtx" : "getRuntimeContext().ctx";
-        return `${ctxRef}.globals.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
+        //     `withAlsFrame` wrap): use `__globals()!`, the per-
+        //     scope accessor. Routing through the ALS slot is what
+        //     gives per-branch isolation in Stage 2: the branch's
+        //     cloned GlobalStore is read here instead of the
+        //     canonical one.
+        const receiver = node.topLevel
+          ? "__globalCtx.globals"
+          : "__globals()!";
+        return `${receiver}.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
       }
       if (node.scope === "static") {
         // Wrap static reads in `__readStatic` so that reading a static

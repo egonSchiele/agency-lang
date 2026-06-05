@@ -14,29 +14,160 @@ export type ThreadStoreJSON = {
 
 export type MessageThreadID = string;
 
-export class ThreadStore {
-  threads: Record<MessageThreadID, MessageThread> = {};
-  counter: number = 0;
-  activeStack: MessageThreadID[] = [];
+/**
+ * Long-lived state that is shared between a parent `ThreadStore` and
+ * every per-branch view forked from it. See `ThreadStore.forkBranchView`
+ * for the rationale. Holding these fields in a single object lets the
+ * branch view alias them by reference: writes to the registry (new
+ * threads, new messages on existing threads, new sessions, counter
+ * increments) are visible across all sibling branches and the parent.
+ *
+ * Per-branch state — currently just `activeStack` — lives on the
+ * `ThreadStore` instance itself, not in the registry.
+ */
+type ThreadRegistry = {
+  threads: Record<MessageThreadID, MessageThread>;
+  counter: number;
   /** session-name → thread-id. See ThreadStoreJSON.sessions for docs.
    *  Backed by `Object.create(null)` so user-supplied session names
    *  like `"__proto__"` or `"constructor"` cannot mutate the
    *  Object prototype (prototype pollution). */
-  sessions: Record<string, MessageThreadID> = Object.create(null);
-  private statelogClient?: StatelogClient;
+  sessions: Record<string, MessageThreadID>;
+  statelogClient?: StatelogClient;
+};
+
+export class ThreadStore {
+  /**
+   * Shared long-lived registry (threads/sessions/counter). The
+   * top-level per-run ThreadStore owns its registry; branch views
+   * built via `forkBranchView()` alias the parent's registry so
+   * `threads`, `sessions`, and `counter` reads/writes from any
+   * branch are visible everywhere. Per-branch divergence lives in
+   * `activeStack` (a plain instance field below).
+   */
+  private registry: ThreadRegistry;
+
+  /** Per-branch active-thread stack. Each branch view has its own
+   *  copy seeded by `forkBranchView` so a branch's `pushActive` /
+   *  `popActive` / `llm()` calls write to a branch-local subthread
+   *  instead of the parent's currently-active thread. */
+  activeStack: MessageThreadID[] = [];
 
   constructor() {
-    this.threads = {};
-    this.counter = 0;
+    this.registry = {
+      threads: {},
+      counter: 0,
+      sessions: Object.create(null),
+    };
     this.activeStack = [];
-    this.sessions = Object.create(null);
+  }
+
+  // ── Registry-backed accessors ───────────────────────────────────
+  // Preserved as public getters so existing call sites that do
+  // `store.threads[id]`, `store.sessions["x"]`, and `store.counter`
+  // keep working without touching the registry directly.
+
+  get threads(): Record<MessageThreadID, MessageThread> {
+    return this.registry.threads;
+  }
+
+  set threads(value: Record<MessageThreadID, MessageThread>) {
+    this.registry.threads = value;
+  }
+
+  get sessions(): Record<string, MessageThreadID> {
+    return this.registry.sessions;
+  }
+
+  set sessions(value: Record<string, MessageThreadID>) {
+    this.registry.sessions = value;
+  }
+
+  get counter(): number {
+    return this.registry.counter;
+  }
+
+  set counter(value: number) {
+    this.registry.counter = value;
+  }
+
+  private get statelogClient(): StatelogClient | undefined {
+    return this.registry.statelogClient;
   }
 
   // Set after construction. Most callers should pass the client to
   // `withDefaultActive(client)` instead so the initial default thread
   // is logged consistently with subsequent thread/subthread blocks.
   setStatelogClient(client: StatelogClient): void {
-    this.statelogClient = client;
+    this.registry.statelogClient = client;
+  }
+
+  /**
+   * Build a per-branch view of this store. Used by `runInBranchAlsFrame`
+   * so each fork / parallel / race branch gets its own active-thread
+   * pointer without losing access to the shared registry — explicit
+   * cross-branch coordination via `thread(session: ...)` or
+   * `thread(continue: id)` keeps working because both still consult
+   * the same `threads` / `sessions` maps.
+   *
+   * The returned view:
+   *   - Aliases this store's `ThreadRegistry` by reference. New
+   *     threads created in the branch (`create`, `createSubthread`,
+   *     session opens) land in the shared registry. The counter is
+   *     also shared so branch-created ids never collide.
+   *   - Has a fresh `activeStack` seeded with a new subthread of this
+   *     store's currently-active thread (if any). Unguarded `llm()` /
+   *     `userMessage()` calls inside the branch write to that
+   *     subthread rather than the parent's active thread.
+   *
+   * If this store has no active thread (rare — typically only true
+   * for fresh `new ThreadStore()` outside a run), the view starts
+   * with an empty `activeStack` and any unguarded thread access in
+   * the branch will throw the usual "no active thread" error.
+   */
+  forkBranchView(): ThreadStore {
+    const view = new ThreadStore();
+    // Alias the shared registry. Casting through `unknown` avoids
+    // declaring `registry` as readonly-public; the field stays
+    // private to the class while letting us share by reference.
+    (view as unknown as { registry: ThreadRegistry }).registry =
+      this.registry;
+
+    const parentActiveId = this.activeId();
+    if (parentActiveId !== undefined) {
+      // Create the branch-local subthread on the shared registry,
+      // then seed the view's activeStack with its id. Uses the same
+      // helper as `createSubthread()` — the only difference is we
+      // push the new id onto the *view's* activeStack rather than
+      // `this.activeStack`.
+      const id = this.createSubthreadOf(parentActiveId);
+      view.activeStack.push(id);
+    }
+
+    return view;
+  }
+
+  /**
+   * Build a per-branch view that restores a previously-captured
+   * `activeStack` rather than seeding a fresh subthread. Called by
+   * `runInBranchAlsFrame` on resume after an interrupt inside a fork
+   * branch: the pre-interrupt active-thread pointer was snapshotted
+   * onto `BranchState.activeStack` and serialized; on re-entry we
+   * recreate a branch view aliasing the (now-deserialized) parent's
+   * registry and reinstate the exact same activeStack so the resumed
+   * branch's unguarded `llm()` / `userMessage()` calls land on the
+   * same subthread they were writing to pre-interrupt.
+   *
+   * Does NOT create a new subthread — the subthread that was originally
+   * created at first-fork-time still lives in the shared registry and
+   * its id is in `activeStack`. Statelog is not re-emitted.
+   */
+  restoreBranchView(activeStack: MessageThreadID[]): ThreadStore {
+    const view = new ThreadStore();
+    (view as unknown as { registry: ThreadRegistry }).registry =
+      this.registry;
+    view.activeStack = [...activeStack];
+    return view;
   }
 
   // Create a store with a default active thread. If `client` is passed,
@@ -67,15 +198,23 @@ export class ThreadStore {
 
   // Create a subthread that inherits from the current active thread
   createSubthread(): MessageThreadID {
-    const parentId = this.activeId();
-    const id = (this.counter++).toString();
-    const child = this.threads[parentId!].newSubthreadChild();
-    child.parentId = parentId ?? null;
-    this.threads[id] = child;
-    this.statelogClient?.threadCreated({
+    return this.createSubthreadOf(this.activeId()!);
+  }
+
+  /** Registry-only subthread creation: build a subthread that
+   *  inherits from the thread at `parentRegistryId`, log it, and
+   *  return its new registry id. Does NOT touch `activeStack` —
+   *  callers decide where (if anywhere) to push the new id. Used by
+   *  `createSubthread()` (which pushes onto `this.activeStack`) and
+   *  `forkBranchView()` (which pushes onto the view's activeStack). */
+  createSubthreadOf(parentRegistryId: MessageThreadID): MessageThreadID {
+    const id = (this.registry.counter++).toString();
+    const parentThread = this.registry.threads[parentRegistryId];
+    this.registry.threads[id] = parentThread.newSubthreadChild(parentRegistryId);
+    this.registry.statelogClient?.threadCreated({
       threadId: id,
       threadType: "subthread",
-      parentThreadId: parentId,
+      parentThreadId: parentRegistryId,
     });
     return id;
   }

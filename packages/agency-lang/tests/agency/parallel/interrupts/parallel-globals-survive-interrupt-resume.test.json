@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Per-arm isolation across interrupts via the parallel-block syntax. Each arm mutates its own snapshot, interrupts, and resumes — the parent's `counter` stays 0 regardless. Catches any regression in the parallelDesugar -> processForkCall path where isolation could be lost specifically through the parallel-block codegen.",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

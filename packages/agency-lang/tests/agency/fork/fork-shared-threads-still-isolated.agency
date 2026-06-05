@@ -1,0 +1,22 @@
+import { currentThreadId } from "std::threads"
+
+node main() {
+  // `shared: true` opts into pointer-sharing the parent's GlobalStore,
+  // but the active-thread pointer MUST stay branch-local regardless.
+  // Otherwise concurrent branches' pushActive / popActive calls would
+  // race on the parent's activeStack and corrupt the conversation
+  // (e.g. an llm() in branch A could write into the thread branch B
+  // just pushed onto the shared stack).
+  //
+  // Test: even in shared mode, each branch should see its OWN
+  // fresh subthread (a fork of the parent's active thread), so
+  // currentThreadId() inside each branch differs from the parent's
+  // active thread id.
+  let parentId = currentThreadId()
+  let branchIds = fork([1, 2], shared: true) as _ {
+    return currentThreadId()
+  }
+  let differentFromParent = (branchIds[0] != parentId) && (branchIds[1] != parentId)
+  let differentFromEachOther = branchIds[0] != branchIds[1]
+  return differentFromParent && differentFromEachOther
+}

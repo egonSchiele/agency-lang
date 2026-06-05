@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "race(..., shared: true) opts into pointer-sharing the parent's GlobalStore across all branches. The winning branch's bump() lands on the parent's counter; the parent observes a non-zero value after join (deterministic boolean assertion since loser completion ordering is non-deterministic).",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

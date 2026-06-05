@@ -1,12 +1,17 @@
-// Detects a bug where a non-interrupting arm gets re-executed on resume.
-// The "cached" arm increments a global counter and produces its return
-// value from that counter. The "interrupting" arm interrupts once. After
-// the resume cycle, the counter must be exactly 1 — if the cached arm
-// ran again, the counter would be 2 and the test fails.
+// Under per-branch globals isolation (see
+// docs/superpowers/ideas/2026-06-04-per-thread-globals.md), a parallel
+// arm's writes to a `global let` no longer leak back to the parent —
+// each arm runs against its own snapshot clone. That breaks the
+// original detection trick this test used (incrementing a shared
+// counter and observing it in the parent). The cached arm's side
+// effect now lands in the discarded clone whether the arm re-ran on
+// resume or not.
 //
-// This is the gap noted in tests/agency/fork/multi-cycle/partial-cycle-cached:
-// re-execution of a non-interrupting branch is invisible if the branch
-// is pure. Adding a side effect (counter increment) lets us see it.
+// What this test verifies under the new semantics: the cached arm's
+// return value is consistent across the resume cycle (i.e., the
+// completed arm's `BranchState.result` is reused on resume, not
+// recomputed). The asserted `counter:0` is also part of the contract
+// — branch writes to `counter` never leak to the parent.
 
 let counter = 0
 

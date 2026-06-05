@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "parallel(shared: true) { ... } opts each arm into pointer-sharing the parent's GlobalStore. All three bump() calls hit the same counter; parent observes 3 after join.",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

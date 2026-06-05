@@ -1401,7 +1401,12 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    return this.indentStr(`parallel {\n${bodyCodeStr}${this.indentStr("}")}`);
+    const sharedSuffix = node.shared
+      ? `(shared: ${this.processNode(node.shared).trim()})`
+      : "";
+    return this.indentStr(
+      `parallel${sharedSuffix} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
   }
 
   protected processSeqBlock(node: SeqBlock): string {

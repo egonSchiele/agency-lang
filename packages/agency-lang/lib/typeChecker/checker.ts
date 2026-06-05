@@ -304,12 +304,47 @@ function checkCallAgainstBuiltinSig(
   ctx: TypeCheckerContext,
   hasSplatArg: boolean,
 ): void {
-  if (call.arguments.some((a) => a.type === "namedArgument")) {
-    ctx.errors.push({
-      message: `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`,
-      loc: call.loc,
-    });
-    return;
+  const allowedNamed = sig.acceptsNamedArgs ?? {};
+  const allowedNames = Object.keys(allowedNamed);
+  const seenNamed = new Set<string>();
+  const typeAliases = ctx.getTypeAliases();
+  for (const a of call.arguments) {
+    if (a.type !== "namedArgument") continue;
+    if (!(a.name in allowedNamed)) {
+      ctx.errors.push({
+        message:
+          allowedNames.length === 0
+            ? `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`
+            : `'${call.functionName}' does not accept the named argument '${a.name}'. Allowed: ${allowedNames.join(", ")}.`,
+        loc: call.loc,
+      });
+      return;
+    }
+    // Duplicate named arg (Copilot #3) — mirrors the
+    // checkNamedArgStructure behavior for Agency-defined functions.
+    if (seenNamed.has(a.name)) {
+      ctx.errors.push({
+        message: `Duplicate named argument '${a.name}' in call to '${call.functionName}'.`,
+        loc: call.loc,
+      });
+      return;
+    }
+    seenNamed.add(a.name);
+    // Validate the named-arg value's type against the declared one
+    // (Copilot #4). Skip when the allowlist entry is `"any"`.
+    const expected = allowedNamed[a.name];
+    if (expected !== "any") {
+      const actual = synthType(a.value, scope, ctx);
+      if (actual !== "any" && !isAssignable(actual, expected, typeAliases)) {
+        ctx.errors.push({
+          message: `Named argument '${a.name}' on '${call.functionName}' expects type '${formatTypeHint(expected)}', got '${formatTypeHint(actual)}'.`,
+          expectedType: formatTypeHint(expected),
+          actualType: formatTypeHint(actual),
+          loc: call.loc,
+        });
+        return;
+      }
+    }
   }
   if (call.block && !sig.acceptsBlock) {
     ctx.errors.push({
@@ -324,19 +359,32 @@ function checkCallAgainstBuiltinSig(
   if (sig.acceptsBlock) {
     maxArgs += 1;
   }
-  if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
+  // Recognized named args (e.g. `shared: true` on fork/race) don't
+  // count toward arity since they don't fill a positional slot.
+  // Strip them out of a shallow call copy before the arity check and
+  // the positional-args walk.
+  const positionalCall: FunctionCall =
+    allowedNames.length === 0
+      ? call
+      : {
+          ...call,
+          arguments: call.arguments.filter(
+            (a) => a.type !== "namedArgument",
+          ),
+        };
+  if (!checkArity(positionalCall, minArgs, maxArgs, hasSplatArg, ctx)) return;
   const slots: ParamSlot[] = sig.params.map((type) => ({
     type,
     validated: false,
   }));
   if (hasRest) {
-    while (slots.length < call.arguments.length) {
+    while (slots.length < positionalCall.arguments.length) {
       slots.push({ type: sig.restParam!, validated: false });
     }
   }
-  // Builtins don't take named args (rejected above) and have no parameter
-  // names. Wrap the flat slot array in a minimal ParamSignature so the
-  // shared `checkArgsAgainstParams` path applies.
+  // Builtins (apart from the recognized named args allowlist above)
+  // have no parameter names. Wrap the flat slot array in a minimal
+  // ParamSignature so the shared `checkArgsAgainstParams` path applies.
   const builtinSig: ParamSignature = {
     minArgs,
     maxArgs,
@@ -346,7 +394,7 @@ function checkCallAgainstBuiltinSig(
       return undefined;
     },
   };
-  checkArgsAgainstParams(call, builtinSig, scope, ctx);
+  checkArgsAgainstParams(positionalCall, builtinSig, scope, ctx);
 }
 
 /**

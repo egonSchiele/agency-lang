@@ -103,6 +103,48 @@ cached-branch short-circuit — `branch.result` being set no longer
 means "the body is fully done." Idempotency is the caller's
 responsibility.
 
+## `shareGlobals` / `shareThreads` (per-branch state isolation)
+
+Two independent dials, both default `false` (isolated):
+
+- **`shareGlobals: false` (default)**: each child runs inside its own
+  ALS frame seeded with a clone of the parent's `GlobalStore`
+  (`GlobalStore.clone`). Writes inside a branch stay branch-local.
+- **`shareGlobals: true`**: the branch's ALS frame pointer-shares
+  the parent's `GlobalStore`. Writes accumulate; siblings see them;
+  the parent observes them after join. User syntax `fork(items,
+  shared: true)` / `parallel(shared: true)` / `race(items, shared:
+  true)` opts into this.
+- **`shareThreads: false` (default)**: the branch gets a
+  `ThreadStore.forkBranchView` — the registry is aliased so threads
+  created in the branch are visible to siblings and the parent, but
+  the `activeStack` is branch-local and seeded with a fresh subthread
+  of the parent's active thread.
+- **`shareThreads: true`**: the branch's ALS frame pointer-shares
+  the parent's `ThreadStore` (and its `activeStack`). Reserved for
+  `runPrompt`'s tool-dispatch loop, where parallel tool calls in one
+  LLM round must all write into the same active thread. User
+  `shared: true` does NOT set this — concurrent push/pop on a shared
+  activeStack would corrupt the conversation.
+
+`fork` / `parallel` / `race` use defaults for both (fully isolated)
+or `shareGlobals: true` only when the user writes `shared: true`.
+`runPrompt`'s tool dispatch sets both `shareGlobals: true` and
+`shareThreads: true`.
+
+Per-branch state survives interrupt resume via
+`BranchState.globalsJSON` and `BranchState.activeStack`. The
+capture only happens when the body settles as `Interrupt[]`
+(`hasInterrupts(value)`); successful returns are discarded at join
+so capturing then would be wasted work. Restoration on re-entry
+uses `GlobalStore.fromJSON` and `ThreadStore.restoreBranchView`.
+
+Implementation lives in `runInBranchAlsFrame` (top of `runBatch.ts`):
+it picks the seed values per dial, installs the frame with
+`agencyStore.run`, and (when the corresponding dial is isolated)
+captures-on-Interrupt to write back to `BranchState`. Errors skip
+the capture (error branches are torn down, not resumed).
+
 ## What `runBatch` deliberately does NOT touch
 
 Per commit `c72b9c1574` (which removed the buggy `isForked` approach

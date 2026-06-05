@@ -173,16 +173,22 @@ export async function withResumableScope<T>(
   };
 
   try {
+    const outer = agencyStore.getStore();
     const bodyResult = await agencyStore.run(
       {
         ctx,
         stack: stateStack,
         threads,
+        // Inherit `globals` from any outer ALS frame so a resumable
+        // scope nested inside a fork branch sees the branch-local
+        // clone instead of the canonical store. Fall back to
+        // `ctx.globals` when no outer frame exists.
+        globals: outer?.globals ?? ctx.globals,
         callsite: { moduleId, scopeName: opts.name, stepPath: "" },
         // Inherit moduleDir from any outer ALS frame so stdlib helpers
         // inside the resumable scope body resolve paths against the
         // same compiled module that started the run.
-        moduleDir: agencyStore.getStore()?.moduleDir,
+        moduleDir: outer?.moduleDir,
       },
       () => body(scope),
     );

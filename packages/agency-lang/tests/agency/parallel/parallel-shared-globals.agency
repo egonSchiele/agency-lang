@@ -1,0 +1,23 @@
+let counter = 0
+
+def bump(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  // `parallel(shared: true)` opts each arm into pointer-sharing the
+  // parent's GlobalStore. The three `bump()` calls all hit the same
+  // counter; after join the parent observes counter=3. Without
+  // `shared: true` each arm would see its own snapshot and the
+  // parent would still see 0.
+  //
+  // Per-arm returned values race on the global (non-deterministic),
+  // so we only assert the parent's final view.
+  parallel(shared: true) {
+    let a = bump()
+    let b = bump()
+    let c = bump()
+  }
+  return counter
+}

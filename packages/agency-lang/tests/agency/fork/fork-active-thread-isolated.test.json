@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Each fork branch gets its own activeStack seeded with a fresh subthread; the parent's active-thread pointer is untouched on join.",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

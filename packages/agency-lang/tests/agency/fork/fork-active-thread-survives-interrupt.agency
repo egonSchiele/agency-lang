@@ -1,0 +1,22 @@
+import { currentThreadId } from "std::threads"
+
+node main() {
+  // Each fork branch is seeded with a fresh subthread on its
+  // activeStack. When the branch interrupts, that activeStack must
+  // be snapshotted onto BranchState.activeStack and restored on
+  // resume — otherwise the resumed body would see a brand-new
+  // subthread id (from a fresh forkBranchView call) and lose its
+  // thread context.
+  //
+  // We capture the branch's active thread id before and after an
+  // interrupt and assert they're equal. Without activeStack
+  // restoration the second read would return a different id and
+  // this test would fail.
+  let results = fork([1]) as _ {
+    let beforeId = currentThreadId()
+    interrupt("ok?")
+    let afterId = currentThreadId()
+    return beforeId == afterId
+  }
+  return results[0]
+}

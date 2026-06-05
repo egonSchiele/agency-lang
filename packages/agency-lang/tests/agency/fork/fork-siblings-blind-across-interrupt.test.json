@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Mixed-outcome fork across an interrupt boundary: each branch's snapshot stays independent. Branch 1 finishes (snapshot leaked=999), branch 2 interrupts (snapshot leaked=0); on resume branch 2 sees its own snapshot, not the sibling's writes.",
+      "input": "",
+      "expectedOutput": "[999,0]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

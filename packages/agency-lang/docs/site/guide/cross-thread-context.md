@@ -130,6 +130,34 @@ node main() {
 
 Sessions are always **top-level threads** — they cannot map to subthreads. If you want a subthread inside a session, open the session normally and put a `subthread {}` block inside.
 
+### Sessions across concurrent branches
+
+The session map is **per-run** and **shared across all branches** of `parallel`, `fork`, and `race`. This is what makes the cooperative-fork pattern work without any extra plumbing — multiple forks can each open the same session name and the second one auto-resumes the first:
+
+```ts
+const cities = ["SF", "LA", "NY"]
+
+const popData = fork(cities) as city {
+  thread(session: "data-for-${city}") {
+    return llm("What's the population of ${city}?")
+  }
+}
+
+const sizeData = fork(cities) as city {
+  thread(session: "data-for-${city}") {
+    return llm("What's the size of ${city}?")
+  }
+}
+// The SF thread now contains both the population Q/A and the size Q/A,
+// because the sessions map is shared across branches and across forks.
+// The first popData branch for SF creates "data-for-SF"; the second
+// fork's SF branch resumes it.
+```
+
+The same goes for `thread(continue: id)` — capture a thread id with `currentThreadId()` in the parent, then have fork branches `continue:` into it to write messages back. If two branches do that simultaneously the messages interleave non-deterministically — same as two branches concurrently appending to a shared array.
+
+> Note: unguarded `llm()` and `userMessage()` calls inside a fork branch write to a **branch-local** subthread, not the parent's active thread. The branch-local subthread is discarded on join. Sessions and `thread(continue: id)` are the explicit channels for messages that should outlive the branch.
+
 ## The marquee example: categorize and route
 
 Putting the pieces together — here's a router that classifies each user message, then dispatches to a per-category thread that auto-resumes if the user circles back:

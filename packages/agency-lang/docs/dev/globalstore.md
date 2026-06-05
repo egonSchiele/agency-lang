@@ -38,31 +38,39 @@ The `GlobalStore` reserves a special module ID, `GlobalStore.INTERNAL_MODULE` (`
 
 ### Writing globals
 
-When the preprocessor marks a variable assignment as `scope: "global"`, the builder emits a `__ctx.globals.set()` call instead of a normal assignment:
+When the preprocessor marks a variable assignment as `scope: "global"`, the builder emits a `__globals()!.set()` call instead of a normal assignment:
 
 ```typescript
 // Agency source:
 // counter = 0
 //
 // Generated:
-__ctx.globals.set("foo.agency", "counter", 0);
+__globals()!.set("foo.agency", "counter", 0);
 ```
 
-This is produced by the `ts.globalSet(moduleId, varName, value)` IR builder, which emits `__ctx.globals.set(moduleId, varName, value)`.
+This is produced by the `ts.globalSet(moduleId, varName, value)` IR builder, which emits `__globals()!.set(moduleId, varName, value)`. `__globals()` is an AsyncLocalStorage accessor that returns the GlobalStore on the active ALS frame (see [async-context.md](./async-context.md)). The `!` is a non-null assertion — generated user code always runs inside a frame.
 
 ### Reading globals
 
-When the preprocessor marks a variable reference as `scope: "global"`, the pretty printer emits a `__ctx.globals.get()` call:
+When the preprocessor marks a variable reference as `scope: "global"`, the pretty printer emits a `__globals()!.get()` call:
 
 ```typescript
 // Agency source:
 // return counter
 //
 // Generated:
-return __ctx.globals.get("foo.agency", "counter");
+return __globals()!.get("foo.agency", "counter");
 ```
 
-This is produced by the `ts.scopedVar(name, "global", moduleId)` IR node, which the pretty printer renders as `__ctx.globals.get(moduleId, name)`.
+This is produced by the `ts.scopedVar(name, "global", moduleId)` IR node, which the pretty printer renders as `__globals()!.get(moduleId, name)`.
+
+### Top-level reads (`scope: "topLevel"`)
+
+There's one exception: eager tool-description docstrings that run at module-load time before any ALS frame is installed. Those emit `__globalCtx.globals.get(...)` against the bootstrap context directly — the `__globals()` accessor would throw a "no active frame" error in that context.
+
+### `__initializeGlobals` writes against the param
+
+Inside `__initializeGlobals(__ctx)` itself, top-level global-assignment statements emit `__ctx.globals.set(...)` (using the function param, not the ALS accessor) so writes land deterministically on the canonical store regardless of any outer per-branch frame that might exist when the function happens to be invoked.
 
 ### Global initialization
 
@@ -112,6 +120,9 @@ class GlobalStore {
   // Deserialize from JSON (for interrupt resume)
   static fromJSON(json: GlobalStoreJSON): GlobalStore;
 
+  // Deep copy via toJSON/fromJSON round-trip (used for per-branch isolation)
+  clone(): GlobalStore;
+
   // Create a new store with zeroed token stats
   static withTokenStats(): GlobalStore;
 
@@ -122,6 +133,38 @@ class GlobalStore {
 
 ## Where GlobalStore lives at runtime
 
-The `GlobalStore` instance is held on the `RuntimeContext` as `ctx.globals`. The `RuntimeContext` is created once per execution and threaded through all nodes and functions. In the generated code, the runtime context is accessible as `__ctx`, so all global variable access goes through `__ctx.globals`.
+The canonical `GlobalStore` instance is held on the `RuntimeContext` as `ctx.globals`. The `RuntimeContext` is created once per execution and threaded through all nodes and functions.
 
-Stdlib TS helpers that need `ctx.globals` (or any other runtime field) read `ctx` from the active `AsyncLocalStorage` frame via `getRuntimeContext()` instead of taking it as a parameter — see [async-context.md](./async-context.md).
+At runtime, generated code reads/writes the `GlobalStore` on the **active ALS frame** via `__globals()` — NOT directly from `ctx.globals`. The frame's `globals` slot points at `ctx.globals` in most code paths (so behavior is identical to reading `ctx.globals`), but is replaced by a per-branch clone inside fork/parallel/race branches (see below).
+
+Stdlib TS helpers that need the `GlobalStore` (or any other runtime field) read from the ALS frame via `getRuntimeContext()` instead of taking it as a parameter — see [async-context.md](./async-context.md).
+
+## Per-branch isolation
+
+Each branch of a user-facing concurrency primitive (`fork`, `parallel`, `race`) gets its own snapshot of the parent's GlobalStore by default. The mechanism:
+
+1. **At fork time**, `runInBranchAlsFrame` (in `lib/runtime/runBatch.ts`) installs a new ALS frame for the branch body. The frame's `globals` slot is seeded with `parent.globals.clone()` — a fresh `GlobalStore` round-tripped through `toJSON`/`fromJSON` so Maps, Sets, and Dates copy correctly. `initializedModules` is preserved so `__initializeGlobals` is a no-op in branches.
+
+2. **During branch execution**, the branch body reads and writes its own clone via `__globals()`. Sibling branches and the parent are invisible — writes only land on the branch's local copy.
+
+3. **At join time**, the branch's GlobalStore is discarded. Only branch return values cross the join boundary.
+
+### Interrupt resume
+
+When an interrupt fires inside a branch body, `runInBranchAlsFrame`'s capture-on-return wrapper snapshots the branch's GlobalStore onto `BranchState.globalsJSON` before the interrupt propagates up. The snapshot rides along through the normal `BranchStateJSON` serialization path. On resume, `runInBranchAlsFrame` checks for an existing `globalsJSON` on the branch and uses `GlobalStore.fromJSON()` to restore it instead of cloning fresh from the parent. This ensures any global writes a branch made before the interrupt are still visible after resume.
+
+### `shared: true` opt-out
+
+Users can opt back into pointer-sharing the parent's GlobalStore with the `shared: true` named argument:
+
+```ts
+parallel(shared: true) { ... }
+fork(items, shared: true) as item { ... }
+race(items, shared: true) as item { ... }
+```
+
+When set, `runInBranchAlsFrame` skips the clone and seeds the branch's frame with `parent.globals` directly. Writes in the branch land on the parent's store; siblings see them; the parent observes them after join. Use for cooperative-worker patterns (shared todo lists, progress meters, dedup caches).
+
+### Stdlib tool dispatch
+
+`runPrompt`'s tool-dispatch loop uses `runBatch` internally to run multiple tool calls per LLM round, but those branches are NOT a user-facing concurrency primitive — tools are conceptually sequential function calls and any global state they touch (counters, retry budgets, dedup caches) should persist across calls. The runtime forces `isolateState: false` for that path via `promptRunner.ts`, which has the same effect as `shared: true`.

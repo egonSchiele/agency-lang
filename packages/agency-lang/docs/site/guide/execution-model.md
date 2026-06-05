@@ -96,6 +96,19 @@ Global variables make it easy to store state, but can lead to spaghetti code. If
 
 Agency bans exporting global variables. You cannot export a global variable. You can export functions that set and set those variables, though. This makes code easier to reason about.
 
+## Isolation across concurrent branches
+
+The same isolation property extends one level deeper. Each **branch** of a `parallel`, `fork`, or `race` block gets its own copy of globals too, snapshotted from the parent at the moment the fork runs. Writes a branch makes never leak back to the parent. This means you can confidently wrap two existing agents in `parallel` without worrying about them corrupting each other's internal state:
+
+```ts
+parallel {
+  researchAgentA()   // each agent sees its own snapshot of any globals
+  researchAgentB()   // they touch — writes don't leak to each other or the parent
+}
+```
+
+If you actively *want* branches to cooperate on shared state, pass `shared: true` — see the [concurrency guide](./concurrency#state-isolation-across-branches) for details.
+
 ## State in TypeScript
 This isolated state model only applies to state defined in agency. Any state that you define in TypeScript will not get this kind of state isolation, unless you explicitly code it to. In the agent code above, if the `log` array lived in TypeScript code, then the requests wouldn't have state isolation:
 

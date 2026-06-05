@@ -103,6 +103,35 @@ cached-branch short-circuit — `branch.result` being set no longer
 means "the body is fully done." Idempotency is the caller's
 responsibility.
 
+## `isolateState` (per-branch globals + active-thread)
+
+Default `true`: each child runs inside its own ALS frame seeded with a
+clone of the parent's `GlobalStore` and a fresh active-thread pointer
+(`forkBranchView`). Branches see/mutate their own state; siblings and
+the parent are invisible. On a clean return, the per-branch state is
+captured to `BranchState.globalsJSON` and `BranchState.activeStack`
+so it survives serialization through an interrupt and is restored
+on resume (via `GlobalStore.fromJSON` + `ThreadStore.restoreBranchView`).
+This is what `fork` / `parallel` / `race` use by default.
+
+`false`: the branch's ALS frame pointer-shares the parent's
+`GlobalStore` and `ThreadStore`. Used by `runPrompt`'s tool-dispatch
+loop because tool calls are conceptually sequential function
+invocations and any global state they touch (counters, retry budgets,
+dedup caches) should accumulate across calls. No per-branch capture
+either — nothing to snapshot.
+
+Users can opt into shared state at the call site via `shared: true`
+(parsed by `parallelDesugar`, plumbed through `processForkCall`), which
+threads `isolateState: false` into the `runBatch` call.
+
+Implementation lives in `runInBranchAlsFrame` (top of `runBatch.ts`):
+it picks the seed values, installs the frame with `agencyStore.run`,
+and (when isolated) wraps the body in capture-on-return logic that
+writes `globalsJSON` / `activeStack` after the body settles —
+including settling-as-`Interrupt[]`. Errors skip the capture (error
+branches are torn down, not resumed).
+
 ## What `runBatch` deliberately does NOT touch
 
 Per commit `c72b9c1574` (which removed the buggy `isForked` approach

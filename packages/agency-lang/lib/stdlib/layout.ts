@@ -626,12 +626,28 @@ function _innerTableWidth(
   return cellsW + (columnDividers ? Math.max(0, columnWidths.length - 1) : 0);
 }
 
+// Tags that act as explicit opt-outs of header auto-bold. Agency's
+// `text()` constructor always serializes `bold: false` by default, so
+// treating `bold === false` as "set" would mean no `text()` cell ever
+// got the auto-bold — only bare strings would. We only treat
+// `bold === true` as a "do not touch" signal; any other explicit
+// modifier on the leaf (italic / dim / underline / fgColor / bgColor)
+// also opts out — the caller's styling wins.
+function _hasExplicitTextStyle(attrs: Record<string, unknown>): boolean {
+  return attrs.bold === true
+      || attrs.italic === true
+      || attrs.dim === true
+      || attrs.underline === true
+      || (typeof attrs.fgColor === "string" && attrs.fgColor !== "")
+      || (typeof attrs.bgColor === "string" && attrs.bgColor !== "");
+}
+
 function _styleHeaderCell(c: LayoutNode): LayoutNode {
-  // Only auto-bold `text` cells that did not already opt in or out.
-  // Pre-built nodes (`raw`, `row`, styled `text` with explicit `bold`)
-  // are passed through verbatim — the caller's styling wins.
+  // Only auto-bold `text` cells with no explicit modifier.
+  // Pre-built nodes (`raw`, `row`) and `text` with any explicit style
+  // modifier are passed through verbatim — the caller's styling wins.
   if (c.type !== "text") return c;
-  if (c.attrs.bold != null) return c;
+  if (_hasExplicitTextStyle(c.attrs)) return c;
   return { ...c, attrs: { ...c.attrs, bold: true } };
 }
 

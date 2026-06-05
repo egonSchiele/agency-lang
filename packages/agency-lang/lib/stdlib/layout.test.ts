@@ -820,12 +820,34 @@ describe("table — composeTable rendering", () => {
     expect(colored).not.toMatch(/\x1b\[1mx\x1b\[0m/);
   });
 
-  test("bold: false on a header text cell opts OUT of auto-bold", () => {
+  test("explicit `bold: false` does NOT opt out of header auto-bold", () => {
+    // Agency's `text()` constructor always serialises `bold: false` by
+    // default, so treating `bold === false` as an opt-out would mean no
+    // `text()` cell ever gets the header auto-bold — only bare strings
+    // would. The auto-bold treats `bold === false` the same as unset.
+    // Any *other* explicit modifier on the leaf (italic / dim /
+    // underline / fgColor / bgColor / explicit `bold: true`) opts out.
     const colored = render(tableNode({
       header: [{ type: "text", attrs: { content: "Hi", bold: false }, children: [] }],
       body: [["x"]],
     }));
-    expect(colored).not.toMatch(/\x1b\[1mHi\x1b\[0m/);
+    expect(colored).toMatch(/\x1b\[1mHi\x1b\[0m/);
+  });
+
+  test("any other explicit modifier on a header text cell opts OUT of auto-bold", () => {
+    // A text leaf carrying italic / dim / underline / fgColor / bgColor
+    // is treated as "the caller already styled this" and the auto-bold
+    // is skipped.
+    const withItalic = render(tableNode({
+      header: [{ type: "text", attrs: { content: "Hi", italic: true }, children: [] }],
+      body: [["x"]],
+    }));
+    expect(withItalic).not.toMatch(/\x1b\[1mHi/);
+    const withFg = render(tableNode({
+      header: [{ type: "text", attrs: { content: "Hi", fgColor: "red" }, children: [] }],
+      body: [["x"]],
+    }));
+    expect(withFg).not.toMatch(/\x1b\[1mHi/);
   });
 
   test("minWidth widens a column past its content", () => {

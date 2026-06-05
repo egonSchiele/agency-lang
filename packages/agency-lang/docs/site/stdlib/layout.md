@@ -770,8 +770,14 @@ table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: 
  * via the block). Column count must match across every present section
  * and against `columns.length` if `columns` is set; mismatches throw a
  * render-time error naming the offending row. Cells that are bare
- * strings are auto-coerced to `text(s)`. `text`-typed header cells
- * default to bold unless they specify `bold` explicitly.
+ * strings are auto-coerced to `text(s)`.
+ *
+ * `text`-typed header cells default to bold. To opt out, set any
+ * other style modifier on the leaf — `italic`, `dim`, `underline`,
+ * `fgColor`, `bgColor`, or explicit `bold: true`. Note: explicit
+ * `bold: false` does NOT opt out (Agency's `text()` constructor
+ * emits it by default, so treating it as "set" would mean no
+ * `text()` header cell ever got the auto-bold).
  *
  * @param title - Text embedded in the top border; box grows to fit
  * @param titleColor - Color of the title text
@@ -811,4 +817,4 @@ table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: 
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L636))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L642))

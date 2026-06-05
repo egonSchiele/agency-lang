@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "testTableDoesNotMutateBody",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testTableDoesNotMutateFooter",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

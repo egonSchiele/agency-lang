@@ -614,8 +614,14 @@ def _makeTableBuilder(state: any): TableBuilder {
  * via the block). Column count must match across every present section
  * and against `columns.length` if `columns` is set; mismatches throw a
  * render-time error naming the offending row. Cells that are bare
- * strings are auto-coerced to `text(s)`. `text`-typed header cells
- * default to bold unless they specify `bold` explicitly.
+ * strings are auto-coerced to `text(s)`.
+ *
+ * `text`-typed header cells default to bold. To opt out, set any
+ * other style modifier on the leaf — `italic`, `dim`, `underline`,
+ * `fgColor`, `bgColor`, or explicit `bold: true`. Note: explicit
+ * `bold: false` does NOT opt out (Agency's `text()` constructor
+ * emits it by default, so treating it as "set" would mean no
+ * `text()` header cell ever got the auto-bold).
  *
  * @param title - Text embedded in the top border; box grows to fit
  * @param titleColor - Color of the title text
@@ -650,10 +656,26 @@ export def table(
   columnDividers: boolean = true,
   block: (TableBuilder) => void = null,
 ): LayoutNode {
+  // Copy body / footer into fresh arrays before the block runs.
+  // The builder's `t.row(...)` / `t.footer(...)` push onto these,
+  // and we don't want to mutate the caller's input — matches the
+  // copy-then-push convention `row()` / `column()` use for `children`.
+  const bodyArr: any[] = []
+  if (body != null) {
+    for (r in body) {
+      bodyArr.push(r)
+    }
+  }
+  const footerArr: any[] = []
+  if (footer != null) {
+    for (r in footer) {
+      footerArr.push(r)
+    }
+  }
   const state: any = {
     header: header,
-    body: body ?? [],
-    footer: footer ?? [],
+    body: bodyArr,
+    footer: footerArr,
     columns: columns,
     caption: caption
   }

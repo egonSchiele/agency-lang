@@ -27,17 +27,30 @@ import { renderNode } from "./render.js";
 
 export { Cell, ColumnSpec };
 
+// LayoutNode shape — `type: string`, `attrs: non-null object`,
+// `children: array`. All three must be own properties so we don't
+// accept prototype-chain leakage from `Object.create(...)` etc.
+// Without the `attrs` check a malformed object-with-a-type passed by
+// an LLM tool call would surface inside a leaf renderer as a generic
+// "cannot read property 'content' of undefined" instead of throwing a
+// clear `std::layout.table` boundary error.
+function _looksLikeLayoutNode(cell: object): boolean {
+  if (!Object.hasOwn(cell, "type") || !Object.hasOwn(cell, "attrs") || !Object.hasOwn(cell, "children")) {
+    return false;
+  }
+  const c = cell as { type: unknown; attrs: unknown; children: unknown };
+  return (
+    typeof c.type === "string" &&
+    c.attrs !== null && typeof c.attrs === "object" &&
+    Array.isArray(c.children)
+  );
+}
+
 export function _coerceCell(cell: unknown): LayoutNode {
   if (typeof cell === "string") {
     return { type: "text", attrs: { content: cell }, children: [] };
   }
-  if (
-    cell !== null &&
-    typeof cell === "object" &&
-    Object.hasOwn(cell, "type") &&
-    typeof (cell as { type: unknown }).type === "string" &&
-    Array.isArray((cell as { children: unknown }).children)
-  ) {
+  if (cell !== null && typeof cell === "object" && _looksLikeLayoutNode(cell)) {
     return cell as LayoutNode;
   }
   throw new Error(
@@ -100,12 +113,24 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
     );
   }
 
-  const columns = attrs.columns as ColumnSpec[] | null | undefined;
+  const rawColumns = attrs.columns;
+  if (rawColumns != null && !Array.isArray(rawColumns)) {
+    throw new Error(
+      `std::layout.table: columns must be an array, got ${typeof rawColumns}`,
+    );
+  }
+  const columns = rawColumns as ColumnSpec[] | null | undefined;
   let columnCount: number;
   if (columns && columns.length > 0) columnCount = columns.length;
   else if (header)                   columnCount = header.length;
   else if (body.length > 0)          columnCount = body[0].length;
   else                                columnCount = footer[0].length;
+
+  if (columnCount === 0) {
+    throw new Error(
+      "std::layout.table: at least one column is required (header / body / footer / columns must have length > 0)",
+    );
+  }
 
   const checkRow = (row: unknown[], label: string) => {
     if (row.length !== columnCount) {
@@ -292,10 +317,14 @@ function _buildSectionParts(
   footer: Block[][],
   opts: { headerDivider: boolean; footerDivider: boolean; rowDividers: boolean },
 ): SectionPart[] {
+  // `rowDividers` is documented as drawing a divider between every
+  // *body* row — header and footer are always treated as single blocks
+  // (multi-row footers like `["", "Total", "50"]` + `["", "VAT", "10"]`
+  // should sit flush, not get carved up).
   const sections: SectionPart[][] = [
-    _interleaveRows(header, opts.rowDividers),
+    _interleaveRows(header, false),
     _interleaveRows(body,   opts.rowDividers),
-    _interleaveRows(footer, opts.rowDividers),
+    _interleaveRows(footer, false),
   ];
   const useHeaderDivider = opts.headerDivider && header.length > 0 && (body.length + footer.length) > 0;
   const useFooterDivider = opts.footerDivider && footer.length > 0 && body.length > 0;
@@ -321,7 +350,13 @@ function _composeCaption(caption: string, width: number): Block | null {
 export function composeTable(node: LayoutNode): Block {
   const { header, body, footer, columnCount } = _validateTable(node.attrs);
   const attrs = node.attrs;
-  const cellPadding    = (attrs.cellPadding    as number)  ?? 1;
+  // Clamp to a non-negative integer. `_innerTableWidth` and the
+  // divider line both use `cellPadding` in width arithmetic; a
+  // negative value would shrink dividers below the cell grid and
+  // misalign the right border, while a fractional value would break
+  // `" ".repeat(...)`.
+  const cellPaddingRaw = (attrs.cellPadding as number | undefined) ?? 1;
+  const cellPadding    = Math.max(0, Math.floor(Number.isFinite(cellPaddingRaw) ? cellPaddingRaw : 1));
   const columns        = (attrs.columns        as ColumnSpec[] | null) ?? [];
   const columnDividers = (attrs.columnDividers as boolean) ?? true;
   const headerDivider  = (attrs.headerDivider  as boolean) ?? true;

@@ -810,6 +810,53 @@ describe("table — composeTable rendering", () => {
     );
   });
 
+  test("rowDividers: true does NOT carve up multi-row footers", () => {
+    // A user with multiple summary rows in the footer (e.g.
+    // ["", "Total", "50"], ["", "VAT", "10"]) expects them to render
+    // flush, with only the body-rows / footer separator carrying a
+    // section divider. rowDividers applies to body rows only.
+    expect(renderTablePlain({
+      rowDividers: true,
+      body:   [["1"], ["2"]],
+      footer: [["a"], ["b"]],
+    })).toBe(
+      "╭───╮\n" +
+      "│ 1 │\n" +
+      "├───┤\n" +
+      "│ 2 │\n" +
+      "├───┤\n" +
+      "│ a │\n" +
+      "│ b │\n" +
+      "╰───╯",
+    );
+  });
+
+  test("cellPadding < 0 is clamped to 0", () => {
+    // A negative cellPadding would otherwise shrink dividers below the
+    // cell grid and misalign the right border.
+    expect(renderTablePlain({
+      cellPadding: -3,
+      header: ["A", "B"],
+      body: [["1", "2"]],
+    })).toBe(
+      "╭───╮\n" +
+      "│A│B│\n" +
+      "├─┼─┤\n" +
+      "│1│2│\n" +
+      "╰───╯",
+    );
+  });
+
+  test("cellPadding 1.7 is floored to 1", () => {
+    // Fractional cellPadding would otherwise break `" ".repeat(...)`
+    // (which rejects non-integers).
+    expect(() => renderTablePlain({
+      cellPadding: 1.7,
+      header: ["A"],
+      body: [["1"]],
+    })).not.toThrow();
+  });
+
   test("header cells are auto-bolded (text-typed only)", () => {
     const colored = render(tableNode({
       header: ["Hi"],
@@ -990,6 +1037,16 @@ describe("table — _coerceCell", () => {
   test("object missing `children` array throws", () => {
     expect(() => _coerceCell({ type: "text" })).toThrow(/cell must be string or LayoutNode/);
   });
+  test("object missing own `attrs` object throws (boundary error, not later TypeError)", () => {
+    // Without the attrs check, a malformed LayoutNode-like would slip
+    // through and crash inside the text renderer at `n.attrs.content`.
+    expect(() => _coerceCell({ type: "text", children: [] }))
+      .toThrow(/cell must be string or LayoutNode/);
+    expect(() => _coerceCell({ type: "text", attrs: null, children: [] }))
+      .toThrow(/cell must be string or LayoutNode/);
+    expect(() => _coerceCell({ type: "text", attrs: "not-an-object", children: [] }))
+      .toThrow(/cell must be string or LayoutNode/);
+  });
   test("inherited `type` (prototype) is not accepted", () => {
     const proto = { type: "text", children: [] };
     const child = Object.create(proto);
@@ -1070,6 +1127,20 @@ describe("table — _validateTable", () => {
   test("footer that is not an array throws", () => {
     expect(() => _validateTable({ header: ["A"], footer: 42 as unknown as unknown[][] }))
       .toThrow(/footer must be an array of rows, got number/);
+  });
+  test("columns that is not an array throws a clear shape error", () => {
+    expect(() => _validateTable({
+      columns: "bad" as unknown as undefined,
+      header: ["A"],
+    })).toThrow(/columns must be an array, got string/);
+  });
+  test("zero-column table (empty header) throws instead of rendering a degenerate frame", () => {
+    expect(() => _validateTable({ header: [] }))
+      .toThrow(/at least one column is required/);
+  });
+  test("zero-column table (empty body row) throws", () => {
+    expect(() => _validateTable({ body: [[]] }))
+      .toThrow(/at least one column is required/);
   });
   test("cells are coerced in the returned sections", () => {
     const v = _validateTable({

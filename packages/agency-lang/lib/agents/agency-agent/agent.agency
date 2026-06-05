@@ -1,4 +1,5 @@
 import { route } from "std::agent"
+import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl } from "std::cli"
 import { today } from "std::date"
 import { box, render } from "std::layout"
@@ -57,8 +58,10 @@ import { researchSysPrompt, researchTools } from "./research.agency"
  *   editing `.agency` files.
  */
 
-// Verbose tool-call tracing, opt-in via `AGENT_DEBUG=1`.
-const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
+// Verbose tool-call tracing. Enabled either by `AGENT_DEBUG=1` (legacy)
+// or by passing `--debug` / `--verbose` on the command line (set in main()).
+let _agentDebug: boolean = env("AGENT_DEBUG") == "1"
+let _agentVerbose: boolean = false
 
 // Whether the agent is running in interactive (TTY) mode. Set in main()
 // before any tool calls happen, so the callbacks below can suppress
@@ -68,6 +71,8 @@ let _isInteractive: boolean = true
 callback("onToolCallStart") as data {
   if (_isInteractive) {
     pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  } else if (_agentVerbose) {
+    print(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
   }
 }
 
@@ -88,12 +93,13 @@ def formatArgs(args: Record<string, any>): string {
 }
 
 callback("onToolCallEnd") as data {
-  if (AGENT_DEBUG) {
-    pushMessage(
-      color.yellow(
-      "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms",
-    ),
-    )
+  if (_agentDebug) {
+    const line = "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms"
+    if (_isInteractive) {
+      pushMessage(color.yellow(line))
+    } else {
+      print(color.yellow(line))
+    }
   }
 }
 
@@ -282,14 +288,54 @@ def printHeader() {
 }
 
 node main() {
+  // Parse CLI flags first — `parseArgs` exits on --help / --version /
+  // usage errors, before any handlers or the TUI are installed.
+  const args = parseArgs({
+    programName: "agency agent",
+    description: "Agency language assistant — interactive REPL by default; one-shot when piped or passed a query / --print.",
+    version: "0.0.105",
+    flags: {
+      print:   { type: "boolean", short: "p", description: "Run one-shot: print the reply to stdout and exit (no REPL)" },
+      debug:   { type: "boolean",             description: "Log tool returns (toolName, result, timing). Same as AGENT_DEBUG=1" },
+      verbose: { type: "boolean",             description: "Echo tool-call starts to stdout in non-interactive mode" }
+    }
+  })
+
+  if (args.flags.debug) {
+    _agentDebug = true
+  }
+  if (args.flags.verbose) {
+    _agentVerbose = true
+  }
+
+  // Positional args (everything after flags) are joined with spaces to
+  // form the one-shot prompt. `--` ends flag parsing if a positional
+  // would otherwise look like a flag.
+  const positionalQuery = args.positionals.join(" ")
+  const hasQuery = positionalQuery != ""
+
   // Non-interactive (piped) invocation: read the whole prompt from
   // stdin, run one turn of `route()`, write the reply to stdout, and
   // exit. No banner, no REPL, no slash commands. This lets the agent
   // behave like a normal Unix filter: `echo "..." | pnpm run agency agent`.
-  if (!isTTY()) {
+  //
+  // Also entered when `--print` / `-p` is passed, or when a positional
+  // query is given. In those cases stdin isn't read — the prompt comes
+  // from the positional.
+  const forceOneShot = args.flags.print || hasQuery
+  if (forceOneShot || !isTTY()) {
     _isInteractive = false
-    const piped = readStdin()
-    if (piped == "" || piped == null) {
+    let piped: string = ""
+    if (hasQuery) {
+      piped = positionalQuery
+    } else {
+      const fromStdin = readStdin()
+      if (fromStdin == null || fromStdin == "") {
+        return
+      }
+      piped = fromStdin
+    }
+    if (piped == "") {
       return
     }
     const projectContext = loadAgentsMd(cwd()) with approve

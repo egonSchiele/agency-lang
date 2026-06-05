@@ -85,9 +85,17 @@ const callsite = (): CallsiteLocation | undefined => agencyStore.getStore()?.cal
 
 /** Read a module-scoped global. Same semantics as the Agency-level
  *  `globals.get(moduleId, name)`. `moduleId` defaults to `""`
- *  (the bare/anonymous module). */
+ *  (the bare/anonymous module).
+ *
+ *  Reads from the active ALS frame's `globals` slot — the same source
+ *  generated user code reads via `__globals()`. Inside a `fork` /
+ *  `parallel` / `race` branch this is the branch's per-branch
+ *  snapshot, NOT the parent's canonical `ctx.globals`. Outside any
+ *  branch (top-level node bodies, function calls) the frame's slot
+ *  pointer-shares `ctx.globals`, so behavior is identical to the
+ *  pre-isolation reads. */
 const global_ = <T = unknown>(name: string, moduleId = ""): T =>
-  ctx().globals.get(moduleId, name) as T;
+  getRuntimeContext().globals.get(moduleId, name) as T;
 
 // ---- Thread subnamespace ----------------------------------------------
 

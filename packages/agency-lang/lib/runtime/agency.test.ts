@@ -87,6 +87,35 @@ describe("agency.global", () => {
       expect(agency.global("bareKey")).toBe("bareVal");
     });
   });
+
+  it("reads from the frame's globals slot (per-branch view), not ctx.globals", () => {
+    // Mirrors the per-branch isolation invariant: inside a fork
+    // branch the ALS frame's `globals` slot points at a clone of
+    // the parent's store. `agency.global` must read from THAT slot
+    // (same as user code's `__globals()`), not from the canonical
+    // `ctx.globals`. Otherwise a TS helper called from a branch
+    // would see the parent's globals while user Agency code in the
+    // same branch sees the branch's snapshot — an isolation hole.
+    const env = setup();
+    env.ctx.globals.set("", "k", "parent-value");
+    const branchClone = env.ctx.globals.clone();
+    branchClone.set("", "k", "branch-value");
+    // Install a frame whose `globals` slot points at the clone,
+    // simulating what `runInBranchAlsFrame` does for a fork branch.
+    agencyStore.run(
+      {
+        ctx: env.ctx,
+        stack: env.stack,
+        threads: env.threads,
+        globals: branchClone,
+      },
+      () => {
+        expect(agency.global("k")).toBe("branch-value");
+        // And the canonical store is untouched.
+        expect(env.ctx.globals.get("", "k")).toBe("parent-value");
+      },
+    );
+  });
 });
 
 describe("agency.thread (subnamespace)", () => {

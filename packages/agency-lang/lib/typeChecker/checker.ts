@@ -304,18 +304,46 @@ function checkCallAgainstBuiltinSig(
   ctx: TypeCheckerContext,
   hasSplatArg: boolean,
 ): void {
-  const allowedNamed = sig.acceptsNamedArgs ?? [];
+  const allowedNamed = sig.acceptsNamedArgs ?? {};
+  const allowedNames = Object.keys(allowedNamed);
+  const seenNamed = new Set<string>();
+  const typeAliases = ctx.getTypeAliases();
   for (const a of call.arguments) {
     if (a.type !== "namedArgument") continue;
-    if (!allowedNamed.includes(a.name)) {
+    if (!(a.name in allowedNamed)) {
       ctx.errors.push({
         message:
-          allowedNamed.length === 0
+          allowedNames.length === 0
             ? `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`
-            : `'${call.functionName}' does not accept the named argument '${a.name}'. Allowed: ${allowedNamed.join(", ")}.`,
+            : `'${call.functionName}' does not accept the named argument '${a.name}'. Allowed: ${allowedNames.join(", ")}.`,
         loc: call.loc,
       });
       return;
+    }
+    // Duplicate named arg (Copilot #3) — mirrors the
+    // checkNamedArgStructure behavior for Agency-defined functions.
+    if (seenNamed.has(a.name)) {
+      ctx.errors.push({
+        message: `Duplicate named argument '${a.name}' in call to '${call.functionName}'.`,
+        loc: call.loc,
+      });
+      return;
+    }
+    seenNamed.add(a.name);
+    // Validate the named-arg value's type against the declared one
+    // (Copilot #4). Skip when the allowlist entry is `"any"`.
+    const expected = allowedNamed[a.name];
+    if (expected !== "any") {
+      const actual = synthType(a.value, scope, ctx);
+      if (actual !== "any" && !isAssignable(actual, expected, typeAliases)) {
+        ctx.errors.push({
+          message: `Named argument '${a.name}' on '${call.functionName}' expects type '${formatTypeHint(expected)}', got '${formatTypeHint(actual)}'.`,
+          expectedType: formatTypeHint(expected),
+          actualType: formatTypeHint(actual),
+          loc: call.loc,
+        });
+        return;
+      }
     }
   }
   if (call.block && !sig.acceptsBlock) {
@@ -336,7 +364,7 @@ function checkCallAgainstBuiltinSig(
   // Strip them out of a shallow call copy before the arity check and
   // the positional-args walk.
   const positionalCall: FunctionCall =
-    allowedNamed.length === 0
+    allowedNames.length === 0
       ? call
       : {
           ...call,

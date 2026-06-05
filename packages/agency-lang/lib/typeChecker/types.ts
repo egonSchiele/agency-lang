@@ -47,13 +47,16 @@ export type BuiltinSignature = {
   /** If true, the typechecker allows a block argument on calls to this
    *  builtin. Used by language-construct builtins like `fork` / `race`. */
   acceptsBlock?: boolean;
-  /** Allowlist of named arguments this builtin recognizes. Empty/absent
-   *  means "no named args allowed" (today's default — builtins have no
-   *  parameter names, so the backend can't bind arbitrary kwargs).
-   *  Concurrency builtins use this to permit `fork(items, shared: true)`
-   *  / `race(items, shared: true)` without opening the door to typos
-   *  silently going through. */
-  acceptsNamedArgs?: string[];
+  /** Allowlist of named arguments this builtin recognizes, mapped to
+   *  the expected value type. Empty/absent means "no named args
+   *  allowed" (today's default — builtins have no parameter names,
+   *  so the backend can't bind arbitrary kwargs). Concurrency
+   *  builtins use this to permit `fork(items, shared: true)` /
+   *  `race(items, shared: true)` without opening the door to typos
+   *  silently going through. Values are typechecked against the
+   *  declared type; duplicates are rejected. Use `"any"` to skip
+   *  value validation. */
+  acceptsNamedArgs?: Record<string, VariableType | "any">;
 };
 
 export type TypeCheckerContext = {

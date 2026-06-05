@@ -153,6 +153,22 @@ describe("formatSource", () => {
     expect(formatSource(formatted!)).toBe(formatted);
   });
 
+  describe("comments inside match blocks", () => {
+    it("preserves a leading comment before the first case", () => {
+      const input =
+        'node main() {\n  let x = 1\n  match (x) {\n    // a comment\n    1 => "one"\n    2 => "two"\n  }\n}\n';
+      const formatted = formatSource(input);
+      expect(formatted).toContain('// a comment\n    1 => "one"');
+    });
+
+    it("preserves a comment between two cases", () => {
+      const input =
+        'node main() {\n  let x = 1\n  match (x) {\n    1 => "one"\n    // between\n    2 => "two"\n  }\n}\n';
+      const formatted = formatSource(input);
+      expect(formatted).toContain('// between\n    2 => "two"');
+    });
+  });
+
   describe("export-from re-export round-trip", () => {
     it.each([
       'export { foo } from "./tools.agency"',

@@ -1065,7 +1065,7 @@ export class AgencyGenerator {
 
     for (const caseNode of node.cases) {
       if (caseNode.type === "comment") {
-        result += this.processComment(caseNode);
+        result += this.processComment(caseNode) + "\n";
         continue;
       }
 

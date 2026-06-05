@@ -78,7 +78,14 @@ function promptCompletionChildren(
   const messages = Array.isArray(leaf.event!.data.messages)
     ? leaf.event!.data.messages
     : [];
-  const convoLines = formatConversation(messages);
+  const completionMessage = [];
+  if (leaf.event!.data.completion?.output) {
+    completionMessage.push({
+      role: "assistant",
+      content: leaf.event!.data.completion.output,
+    });
+  }
+  const convoLines = formatConversation([...messages, ...completionMessage]);
   // renderRowText prefixes each row with `marker` (2 chars) + indent
   // (`depth * 2` chars) before the convoLine summary. Subtract both
   // so wrapped chunks fit without triggering the TUI clipper.

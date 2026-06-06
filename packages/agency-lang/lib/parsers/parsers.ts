@@ -3899,7 +3899,7 @@ const _baseFunctionParser: Parser<any> = memo(
     // top-level alternatives list and dumping every possible statement
     // form the user might have meant.
     parseError(
-      "expected `,` between parameters or `)` to close the parameter list (note: parameters are separated by `,`, not `;`)",
+      "expected `,` between parameters or `)` to close the parameter list",
       char(")"),
     ),
     optionalSpaces,

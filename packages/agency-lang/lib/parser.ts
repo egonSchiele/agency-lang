@@ -138,6 +138,26 @@ export type ParserFailureWithPos = {
   rightmostPos?: number;
 };
 
+/**
+ * Raw parse entry point. Normalizes the source, primes tarsec's
+ * input-string / memo state, runs the top-level `agencyParser`, and
+ * returns the result with an optional `rightmostPos` so callers can
+ * recover an editor-coordinate location for recoverable failures.
+ *
+ * Difference vs `parseAgency`:
+ *   - `_parseAgency` is the **raw** parse. It does NOT wrap the source
+ *     in the CLI template prelude, does NOT run the pattern-lowering
+ *     pass, and does NOT catch `TarsecError` / `PatternLoweringError`
+ *     — those exceptions propagate to the caller as-is.
+ *   - `parseAgency` is the **user-facing** layer. It optionally renders
+ *     the template (which prepends stdlib imports the CLI auto-injects),
+ *     runs the lowering pass on success, and converts thrown errors
+ *     into a structured `ParseAgencyResult` with `errorData` populated
+ *     so the LSP / CLI can render a useful diagnostic.
+ *
+ * Exported because `scripts/agency.ts diagnostics` calls it directly
+ * to get raw tarsec error data without the higher-level wrapping.
+ */
 export function _parseAgency(
   input: string,
   config: AgencyConfig = {},
@@ -196,6 +216,39 @@ export type ParseAgencyResult =
   | { success: true; result: AgencyProgram; rest: string }
   | { success: false; message?: string; rest: string; errorData?: ParseAgencyErrorData };
 
+/**
+ * Build a structured `ParseAgencyErrorData` from a tarsec
+ * rightmost-failure offset (or a fallback `{line, column, length}` if
+ * one isn't available). When `rightmostPos` is provided we recompute
+ * line/col from the absolute offset via `offsetToPosition` —
+ * deliberately ignoring any line/col tarsec might have computed
+ * itself, because tarsec's `getDiagnostics` undercounts `\n`
+ * separators when walking its line table and that drifts columns
+ * right by the number of preceding newlines once the template wrapper
+ * is applied. Used by both the recoverable-failure branch and the
+ * `TarsecError` branch in `parseAgency`.
+ */
+function buildErrorData(
+  input: string,
+  rightmostPos: number | null,
+  offset: number,
+  fallback: { line: number; column: number; length: number },
+  message: string,
+  prettyMessage: string,
+): ParseAgencyErrorData {
+  if (rightmostPos != null) {
+    const pos = offsetToPosition(buildLineTable(input), rightmostPos);
+    return {
+      line: pos.line - offset,
+      column: pos.column,
+      length: fallback.length,
+      message,
+      prettyMessage,
+    };
+  }
+  return { ...fallback, message, prettyMessage };
+}
+
 export function parseAgency(
   input: string,
   config: AgencyConfig = {},
@@ -229,54 +282,49 @@ export function parseAgency(
     // diagnostics layer only has the message string to go on, and the
     // location info embedded in that string ("Line X, col Y: ...") is
     // never extracted.
-    if ("rightmostPos" in result && typeof result.rightmostPos === "number") {
-      const lineTable = buildLineTable(input);
-      const pos = offsetToPosition(lineTable, result.rightmostPos);
+    const rightmostPos =
+      "rightmostPos" in result && typeof result.rightmostPos === "number"
+        ? result.rightmostPos
+        : null;
+    if (rightmostPos != null) {
       // Strip the "Line X, col Y: " prefix that getErrorMessage prepends
       // so the LSP / CLI can render the location separately without
       // duplicating it inside the message body.
-      const message = result.message.replace(/^Line \d+, col \d+: /, "");
+      const cleanMessage = result.message.replace(/^Line \d+, col \d+: /, "");
       return {
         success: false,
         message: result.message,
         rest: input,
-        errorData: {
-          line: pos.line - offset,
-          column: pos.column,
-          length: 1,
-          message,
-          prettyMessage: result.message,
-        },
+        errorData: buildErrorData(
+          input,
+          rightmostPos,
+          offset,
+          { line: 0, column: 0, length: 1 },
+          cleanMessage,
+          result.message,
+        ),
       };
     }
     return { success: false, message: result.message, rest: result.rest };
   } catch (error) {
     if (error instanceof TarsecError) {
-      // Prefer the rightmost-failure offset over tarsec's own
-      // line/column. tarsec's `getDiagnostics` line/col computation
-      // ignores `\n` separators when walking the line table, which
-      // makes columns drift right by the number of preceding
-      // newlines once the template is applied. Recomputing from
-      // the absolute offset avoids that drift entirely.
       const rightmost = getRightmostFailure();
-      let line = error.data.line - offset;
-      let column = error.data.column;
-      if (rightmost) {
-        const pos = offsetToPosition(buildLineTable(input), rightmost.pos);
-        line = pos.line - offset;
-        column = pos.column;
-      }
       return {
         success: false,
         message: error.message,
         rest: input,
-        errorData: {
-          line,
-          column,
-          length: error.data.length,
-          message: error.data.message,
-          prettyMessage: error.data.prettyMessage,
-        },
+        errorData: buildErrorData(
+          input,
+          rightmost ? rightmost.pos : null,
+          offset,
+          // Fallback line is already in templated coordinates; subtract
+          // the template offset here so the user sees user-source lines
+          // either way (the rightmost-offset path subtracts inside the
+          // helper).
+          { line: error.data.line - offset, column: error.data.column, length: error.data.length },
+          error.data.message,
+          error.data.prettyMessage,
+        ),
       };
     } else if (error instanceof PatternLoweringError) {
       // Compile-time error from the lowering pass (e.g. shorthand binder in

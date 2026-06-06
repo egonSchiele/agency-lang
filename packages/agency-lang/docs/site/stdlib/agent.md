@@ -81,18 +81,6 @@ name: "agent"
 
 ## Types
 
-### Todo
-
-```ts
-type Todo = {
-  id: string;
-  text: string;
-  status: "pending" | "in_progress" | "completed"
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L81))
-
 ### PromptSpec
 
 * Configuration for one specialist registered with `route`.

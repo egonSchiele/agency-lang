@@ -306,7 +306,7 @@ function generateTypeSection(
   if (aliases.length === 0) return null;
   return section(
     heading(2, "Types"),
-    ...aliases.map((a) => formatTypeAlias(a, ctx)),
+    ...aliases.filter(a => a.exported).map((a) => formatTypeAlias(a, ctx)),
   );
 }
 
@@ -401,7 +401,8 @@ function generateFunctionSection(
   interruptKindsByFunction: Record<string, InterruptKind[]>,
 ): string | null {
   if (fns.length === 0) return null;
-  const parts = fns.map((fn) => {
+  const _parts = fns.map((fn) => {
+    if (fn.exported === false) return null; // skip non-exported functions
     const sig = formatSignature(fn.functionName, fn.parameters, fn.returnType);
     return section(
       heading(3, fn.functionName),
@@ -416,6 +417,7 @@ function generateFunctionSection(
       sourceLink(fn.loc, ctx),
     );
   });
+  const parts = _parts.filter((p): p is string => p !== null);
   return section(heading(2, "Functions"), ...parts);
 }
 

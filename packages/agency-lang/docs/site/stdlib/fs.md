@@ -6,41 +6,6 @@ name: "fs"
 
 ## Types
 
-### Edit
-
-```ts
-type Edit = {
-  oldText: string;
-  newText: string;
-  replaceAll: boolean
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L4))
-
-### EditResult
-
-```ts
-type EditResult = {
-  replacements: number;
-  path: string;
-  edits: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L10))
-
-### PatchResult
-
-```ts
-type PatchResult = {
-  applied: number;
-  files: string[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L50))
-
 ### Workspace
 
 * A bundle of file-system tools anchored to a single directory. Every

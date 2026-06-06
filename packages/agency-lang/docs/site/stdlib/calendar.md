@@ -108,22 +108,6 @@ name: "calendar"
 
 ## Types
 
-### CalendarEvent
-
-```ts
-type CalendarEvent = {
-  id: string;
-  summary: string;
-  description: string;
-  location: string;
-  start: string;
-  end: string;
-  htmlLink: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L107))
-
 ## Functions
 
 ### authorizeCalendar

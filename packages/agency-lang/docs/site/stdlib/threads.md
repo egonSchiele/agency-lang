@@ -67,16 +67,6 @@ export type ThreadInfo = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/threads.agency#L48))
 
-### SummaryResult
-
-```ts
-type SummaryResult = {
-  summary: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/threads.agency#L58))
-
 ## Functions
 
 ### summarize

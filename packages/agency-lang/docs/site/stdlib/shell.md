@@ -6,56 +6,6 @@ name: "shell"
 
 ## Types
 
-### ExecResult
-
-```ts
-type ExecResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L12))
-
-### LsEntry
-
-```ts
-type LsEntry = {
-  name: string;
-  path: string;
-  type: "file" | "dir" | "symlink" | "other";
-  size: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L109))
-
-### GrepMatch
-
-```ts
-type GrepMatch = {
-  file: string;
-  line: number;
-  text: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L136))
-
-### StatInfo
-
-```ts
-type StatInfo = {
-  exists: boolean;
-  type: "file" | "dir" | "symlink" | "other" | "missing";
-  size: number;
-  modifiedMs: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L199))
-
 ## Functions
 
 ### exec

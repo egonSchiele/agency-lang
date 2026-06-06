@@ -6,29 +6,6 @@ name: "memory"
 
 ## Types
 
-### ExtractionResult
-
-```ts
-type ExtractionResult = {
-  entities: { name: string; type: string; observations: string[] }[];
-  relations: { from: string; to: string; type: string }[];
-  expirations: { entityName: string; observationContent: string }[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L23))
-
-### ForgetResult
-
-```ts
-type ForgetResult = {
-  observations: { entityName: string; observationContent: string }[];
-  relations: { fromName: string; toName: string; type: string }[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L29))
-
 ### MemoryConfig
 
 ```ts

@@ -6,18 +6,6 @@ name: "skills"
 
 ## Types
 
-### SkillEntry
-
-```ts
-type SkillEntry = {
-  name: string;
-  description: string;
-  location: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L5))
-
 ## Functions
 
 ### xmlEscape

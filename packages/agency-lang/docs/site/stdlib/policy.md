@@ -315,43 +315,6 @@ export type ScopedRuleFields = Record<InterruptKind, ScopedField[]>
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L218))
 
-### CliPolicyOpts
-
-```ts
-type CliPolicyOpts = {
-  file: string;
-  fields: ScopedRuleFields
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L220))
-
-### AskUserResult
-
-* Result returned by `askUser`. When the user picks a known key,
- * `action` is the corresponding `Decision` and `reason` is null.
- * When `allowFreeText` lets the user type a free-form rejection
- * reason, `action` is `"reject"` and `reason` is the typed text —
- * the handler uses it as the reject reason directly, skipping the
- * follow-up "Why are you rejecting?" prompt.
-
-```ts
-/**
- * Result returned by `askUser`. When the user picks a known key,
- * `action` is the corresponding `Decision` and `reason` is null.
- * When `allowFreeText` lets the user type a free-form rejection
- * reason, `action` is `"reject"` and `reason` is the typed text —
- * the handler uses it as the reject reason directly, skipping the
- * follow-up "Why are you rejecting?" prompt.
- */
-type AskUserResult = {
-  action: Decision;
-  reason: string | null
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L543))
-
 ## Functions
 
 ### checkPolicy

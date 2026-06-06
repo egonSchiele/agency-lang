@@ -6,18 +6,6 @@ name: "search"
 
 ## Types
 
-### SearchResult
-
-```ts
-type SearchResult = {
-  title: string;
-  url: string;
-  description: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L3))
-
 ## Functions
 
 ### search

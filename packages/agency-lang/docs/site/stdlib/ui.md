@@ -104,67 +104,6 @@ export type Builder = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L204))
 
-### ReplInputState
-
-```ts
-type ReplInputState = {
-  buffer: string;
-  history: string[];
-  historyIdx: number;
-  prompt: string;
-  historyFile: string;
-  historyMax: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L905))
-
-### ReplPaletteState
-
-```ts
-type ReplPaletteState = {
-  open: boolean;
-  filter: string;
-  cursor: number;
-  commands: any
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L914))
-
-### ReplTranscriptState
-
-```ts
-type ReplTranscriptState = {
-  messages: string[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L921))
-
-### ReplSubmitState
-
-```ts
-type ReplSubmitState = {
-  busy: boolean;
-  label: string;
-  startedAtMs: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L925))
-
-### ReplConfigState
-
-```ts
-type ReplConfigState = {
-  status: any;
-  onSubmit: any
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L931))
-
 ### ChoiceItem
 
 * One option in a `chooseOption()` modal. `key` is the value the
@@ -184,37 +123,6 @@ export type ChoiceItem = {
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L941))
-
-### ReplChoiceState
-
-```ts
-type ReplChoiceState = {
-  title: string;
-  body: string;
-  items: ChoiceItem[];
-  filter: string;
-  cursor: number;
-  allowFreeText: boolean
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L951))
-
-### ReplState
-
-```ts
-type ReplState = {
-  input: ReplInputState;
-  palette: ReplPaletteState;
-  transcript: ReplTranscriptState;
-  submit: ReplSubmitState;
-  config: ReplConfigState;
-  choice: ReplChoiceState | null;
-  done: boolean
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L960))
 
 ## Functions
 

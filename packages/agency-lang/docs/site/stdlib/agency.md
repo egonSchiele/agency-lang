@@ -6,66 +6,6 @@ name: "agency"
 
 ## Types
 
-### CompiledProgram
-
-```ts
-type CompiledProgram = {
-  moduleId: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L16))
-
-### SourceLocation
-
-```ts
-type SourceLocation = {
-  line: number;
-  col: number;
-  start: number;
-  end: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L20))
-
-### TypeCheckDiagnostic
-
-```ts
-type TypeCheckDiagnostic = {
-  severity: string;
-  message: string;
-  loc?: SourceLocation;
-  variableName?: string;
-  expectedType?: string;
-  actualType?: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L27))
-
-### TypeCheckReport
-
-```ts
-type TypeCheckReport = {
-  errors: TypeCheckDiagnostic[];
-  warnings: TypeCheckDiagnostic[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L36))
-
-### FilterImportsResult
-
-```ts
-type FilterImportsResult = {
-  source: string;
-  filtered: boolean
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L140))
-
 ## Functions
 
 ### compile

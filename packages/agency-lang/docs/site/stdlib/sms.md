@@ -22,17 +22,6 @@ name: "sms"
 
 ## Types
 
-### SmsResult
-
-```ts
-type SmsResult = {
-  sid: string;
-  status: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/sms.agency#L21))
-
 ## Functions
 
 ### sendSms

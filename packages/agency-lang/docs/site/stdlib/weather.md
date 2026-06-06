@@ -6,28 +6,6 @@ name: "weather"
 
 ## Types
 
-### WeatherResult
-
-```ts
-type WeatherResult = {
-  location: string;
-  country: string;
-  latitude: number;
-  longitude: number;
-  temperature: number;
-  feelsLike: number;
-  humidity: number;
-  description: string;
-  windSpeed: number;
-  windDirection: number;
-  precipitation: number;
-  cloudCover: number;
-  units: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L2))
-
 ## Functions
 
 ### weather

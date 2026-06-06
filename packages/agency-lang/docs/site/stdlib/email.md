@@ -40,17 +40,6 @@ name: "email"
 
 ## Types
 
-### EmailResult
-
-```ts
-type EmailResult = {
-  id: string;
-  provider: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/email.agency#L39))
-
 ## Functions
 
 ### sendWithResend

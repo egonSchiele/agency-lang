@@ -22,16 +22,6 @@ name: "imessage"
 
 ## Types
 
-### IMessageResult
-
-```ts
-type IMessageResult = {
-  sent: boolean
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/imessage.agency#L21))
-
 ## Functions
 
 ### sendIMessage

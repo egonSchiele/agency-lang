@@ -21,18 +21,6 @@ Usage from Agency code:
 
 ## Types
 
-### BrowserUseResult
-
-```ts
-type BrowserUseResult = {
-  output: string;
-  status: string;
-  sessionId: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/browser.agency#L17))
-
 ## Functions
 
 ### browserUse

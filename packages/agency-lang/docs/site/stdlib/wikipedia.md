@@ -6,43 +6,6 @@ name: "wikipedia"
 
 ## Types
 
-### WikiSearchResult
-
-```ts
-type WikiSearchResult = {
-  title: string;
-  description: string;
-  excerpt: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L3))
-
-### WikiSummary
-
-```ts
-type WikiSummary = {
-  title: string;
-  description: string;
-  extract: string;
-  url: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L9))
-
-### WikiArticle
-
-```ts
-type WikiArticle = {
-  title: string;
-  text: string;
-  url: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L16))
-
 ## Functions
 
 ### search

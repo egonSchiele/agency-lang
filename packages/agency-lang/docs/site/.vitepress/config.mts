@@ -4,6 +4,7 @@ export default defineConfig({
   title: "Agency",
   description: "A language for creating agents.",
   themeConfig: {
+    outline: "deep",
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },

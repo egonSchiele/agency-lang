@@ -720,6 +720,19 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
   };
   process.stdin.on("data", onStdinData);
 
+  // `prompts` creates its own readline interface on `process.stdin`
+  // and calls `rl.close()` when the prompt resolves. Node's
+  // `readline.Interface.close()` calls `input.pause()`, which pauses
+  // *the shared* `process.stdin` — silently killing the outer
+  // readline interface in `_runLineRepl` (its `rl.question()` will
+  // never fire another keypress, the await hangs, Node sees an empty
+  // event loop, and the agent exits with code 13 / "unsettled
+  // top-level await"). Snapshot the paused state on entry and
+  // restore it on exit so we don't leave the outer REPL dead.
+  // (If stdin was already paused — e.g. running standalone with no
+  // REPL — we leave it paused so the process can still exit cleanly.)
+  const wasPaused = process.stdin.isPaused();
+
   // Wrap any caller-supplied `onState` so we always get a shot at
   // detecting Escape, without clobbering custom state hooks.
   const userOnState = (question as any).onState;
@@ -764,6 +777,9 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
     return success(answer.value);
   } finally {
     process.stdin.off("data", onStdinData);
+    if (!wasPaused && process.stdin.isPaused()) {
+      process.stdin.resume();
+    }
   }
 }
 

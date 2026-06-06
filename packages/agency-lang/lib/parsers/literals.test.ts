@@ -240,14 +240,14 @@ describe("literals parsers", () => {
         input: "-.5",
         expected: { success: true, result: { type: "number", value: "-.5" } },
       },
-      {
-        input: "-",
-        expected: { success: true, result: { type: "number", value: "-" } },
-      },
-      {
-        input: ".",
-        expected: { success: true, result: { type: "number", value: "." } },
-      },
+      // A bare `-`, `.`, or `_` (no digits) must NOT parse as a number.
+      // Otherwise constructs like `"-".repeat(5)` get a stray `.` consumed
+      // as a number node and downstream parsing produces nonsense AST.
+      { input: "-", expected: { success: false } },
+      { input: ".", expected: { success: false } },
+      { input: "_", expected: { success: false } },
+      { input: "--", expected: { success: false } },
+      { input: "..", expected: { success: false } },
 
       // Underscores as separators
       {

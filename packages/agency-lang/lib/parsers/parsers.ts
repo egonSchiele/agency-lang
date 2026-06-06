@@ -448,7 +448,16 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
     set("type", "number"),
     capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
   );
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) return result;
+  // Require at least one digit. Without this check, bare runs of `-`, `.`,
+  // and `_` (e.g. `.`, `-`, `--`, `..`, `_`) all parse as "numbers" with
+  // no digits, which then leak into surrounding parses as nonsense AST
+  // (e.g. `"-".repeat(5)` parses `.` as a number node).
+  if (!/[0-9]/.test(result.result.value)) {
+    return failure("expected a number with at least one digit", input);
+  }
+  return result;
 });
 
 // --- Unit literal parser ---

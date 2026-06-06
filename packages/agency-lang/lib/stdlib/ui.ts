@@ -16,6 +16,7 @@ import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import prompts from "prompts";
+import { color } from "@/utils/termcolors.js";
 
 // ---------------------------------------------------------------------------
 // Declarative TS bridge for `std::ui`. Exposes the existing
@@ -677,17 +678,28 @@ const AUTOCOMPLETE_FREE_TEXT_PREFIX = "__FREETEXT__:";
 // Three side-effects beyond just calling prompts:
 //
 //   1. `onCancel` returns `false` to suppress prompts' default
-//      `process.exit(0)` on Ctrl+C / Escape, so we can return a
-//      Result.failure instead. (Callers loop on cancel to preserve
-//      `chooseOption`'s must-answer contract.)
+//      `process.exit(0)` on Ctrl+C, so we can return a Result.failure
+//      instead. (Callers loop on cancel to preserve `chooseOption`'s
+//      must-answer contract.)
 //
-//   2. Before opening the prompt, we call `globalThis.__agencyStopSpinner`
+//   2. `onState` on the question detects Escape on `autocomplete` /
+//      `select`. Those prompts treat Escape as "exit" — the promise
+//      resolves with the currently-highlighted value rather than
+//      firing onCancel. Without this hook, pressing Escape in the
+//      slash palette or interrupt menu silently submits whatever's
+//      under the cursor (see prompts/lib/elements/autocomplete.js
+//      `exit()` and util/action.js `key.name === 'escape'` → 'exit').
+//      `state.exited === true && state.aborted === false` ⇒ Escape;
+//      flip our local `cancelled` flag so the resolve path below
+//      returns `failure("cancelled")`.
+//
+//   3. Before opening the prompt, we call `globalThis.__agencyStopSpinner`
 //      if the line-mode REPL (`lib/stdlib/cli.ts`) has registered one.
 //      This pauses the "Thinking" timer while the user is being asked
 //      something — otherwise the timer keeps ticking over an open
 //      policy interrupt menu. No-op outside line-mode REPL.
 //
-//   3. We attach a stdin `data` listener that detects the Ctrl+C byte
+//   4. We attach a stdin `data` listener that detects the Ctrl+C byte
 //      (`0x03`) and calls `process.exit(130)` immediately after the
 //      prompt resolves. Without this, `prompts` swallows Ctrl+C as an
 //      abort and our caller's retry loop reprompts forever, leaving
@@ -708,10 +720,28 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
   };
   process.stdin.on("data", onStdinData);
 
+  // Wrap any caller-supplied `onState` so we always get a shot at
+  // detecting Escape, without clobbering custom state hooks.
+  const userOnState = (question as any).onState;
+  (question as any).onState = (state: {
+    value: unknown;
+    aborted: boolean;
+    exited: boolean;
+  }) => {
+    // `exited` = Escape; `aborted` = Ctrl+C / Ctrl+D. Either way the
+    // user said "back out", so don't return the currently-highlighted
+    // choice.
+    if (state.exited || state.aborted) cancelled = true;
+    if (typeof userOnState === "function") userOnState(state);
+  };
+
   try {
     const answer = await prompts(question, {
       onCancel: () => {
         cancelled = true;
+        // Returning false here keeps `prompts` from exiting the
+        // process so we can surface failure("cancelled") to the
+        // caller's retry loop.
         return false;
       },
     });
@@ -723,12 +753,11 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
       process.exit(130);
     }
 
-    // Real Ctrl+C / Escape triggers onCancel and leaves the answer
-    // object empty. We also treat a null/undefined value as cancel —
-    // none of our bridges legitimately resolve with null (select /
-    // autocomplete return strings, text returns string, confirm
-    // returns boolean), so this is a defensive coverage of the
-    // `prompts.inject([null])` test path and any future edge case.
+    // Cancellation paths:
+    //  - `cancelled` flag set by onState (Escape) or onCancel (Ctrl+C/D).
+    //  - Missing/null value (defensive — covers `prompts.inject([null])`
+    //    and any future edge case where the prompt resolves with no
+    //    answer).
     if (cancelled || !("value" in answer) || answer.value == null) {
       return failure("cancelled");
     }
@@ -763,7 +792,7 @@ function _buildSuggest(
     // rendered title, so they're not flying blind.
     const matched = items
       .filter((it) => it.key.toLowerCase().includes(q))
-      .map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key }));
+      .map((it) => ({ title: `${color.cyan(it.key)} - ${it.label}`, value: it.key }));
     if (allowFreeText && input !== "" && matched.length === 0) {
       matched.push({
         title: `→ use as reason: "${input}"`,
@@ -786,10 +815,11 @@ export async function _promptsAutocomplete(
     name: "value",
     message,
     hint: hint || undefined,
-    choices: items.map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key })),
+    choices: items.map((it) => ({ title: `${color.cyan(it.key)} - ${it.label}`, value: it.key })),
     suggest: _buildSuggest(items, allowFreeText),
   });
   if (isFailure(result)) return result;
+
   const raw = String(result.value);
   if (raw.startsWith(AUTOCOMPLETE_FREE_TEXT_PREFIX)) {
     return success(raw.slice(AUTOCOMPLETE_FREE_TEXT_PREFIX.length));

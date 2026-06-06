@@ -1,7 +1,7 @@
 import { getVersion } from "std::agency"
 import { route } from "std::agent"
 import { parseArgs } from "std::args"
-import { clearMessages, pushMessage, repl } from "std::cli"
+import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
 import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
@@ -9,7 +9,7 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost } from "std::thread"
+import { getCost, getTokens } from "std::thread"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { figs, title } from "./images/images.agency"
@@ -200,9 +200,10 @@ static const projectCommands = commandsDir("${cwd()}/.claude/commands") with app
 
 def builtinPalette(): Record<string, string> {
   return {
-    "/exit":  "Exit the agent",
+    "/exit": "Exit the agent",
     "/clear": "Clear the conversation transcript",
-    "/help":  "Show available slash commands"
+    "/cost": "Show cumulative LLM cost and tokens",
+    "/help": "Show available slash commands"
   }
 }
 
@@ -244,7 +245,12 @@ def _runTurn(msg: string): boolean {
     return true
   }
   if (trimmed == "/help") {
-    pushMessage("Commands: /exit, /clear, /help")
+    pushMessage("Commands: /exit, /clear, /cost, /help")
+    return true
+  }
+  if (trimmed == "/cost") {
+    pushMessage("Cost:   $${getCost().toFixed(4)}")
+    pushMessage("Tokens: ${getTokens()}")
     return true
   }
   // Expand `/foo args` to the rendered command body. Unknown `/foo`
@@ -344,7 +350,7 @@ node main() {
   }
 
   setTitle("Agency Agent")
-
+  clearScreen()
   // Positional args (everything after flags) are joined with spaces to
   // form the one-shot prompt. `--` ends flag parsing if a positional
   // would otherwise look like a flag.
@@ -378,10 +384,8 @@ node main() {
     const projectContext = loadAgentsMd(cwd()) with approve
     _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
     const handler = cliPolicyHandler(
-      {
       file: policyPath(),
       fields: ALWAYS_FIELDS
-    },
     )
     // Expand slash commands in one-shot mode too, so
     // `agency agent -p /foo bar` works the same as typing it in the
@@ -428,10 +432,10 @@ node main() {
 
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
-  const handler = cliPolicyHandler({
+  const handler = cliPolicyHandler(
     file: policyPath(),
     fields: ALWAYS_FIELDS
-  })
+  )
 
   // The `repl()` widget owns the runloop; every Enter dispatches into
   // `_runTurn` which calls `route()`. Interrupts raised inside

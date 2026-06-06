@@ -45,6 +45,7 @@ export function runBundledAgent(
 
   nodeProcess.on("exit", (code) => {
     if (code !== 0) {
+      console.error(`${agentName} exited with code ${code}.`);
       process.exit(code || 1);
     }
   });

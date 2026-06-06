@@ -109,6 +109,16 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
     description: "Check whether a `Result` is a failure.",
   },
 
+  // `throw("message")` lowers to `throw new Error("message")` (see
+  // processFunctionCall in typescriptBuilder.ts). Registered here so the
+  // undefined-function diagnostic doesn't warn on legitimate usage.
+  throw: {
+    params: ["any"],
+    returnType: voidT,
+    description:
+      "Raise an exception. Unwinds the current function/node. Argument is coerced to a string for the Error message.",
+  },
+
   // --- Checkpoint / rewind ---
   restore: {
     params: ["any", "any"],

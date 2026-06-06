@@ -18,7 +18,10 @@ import {
   _resolveChoice,
   _cancelChoice,
   _peekReplExitSignal,
-  _printChoicePromptFallback,
+  _promptsSelect,
+  _promptsAutocomplete,
+  _promptsText,
+  _promptsConfirm,
  } from "agency-lang/stdlib-lib/ui.js"
 
 
@@ -42,6 +45,16 @@ import {
     buffer into the output pane. Backed by Layer 1; integrates with
     `std::policy.cliPolicyHandler` so interrupt prompts render
     through the active screen instead of fighting with the input bar.
+  - **Line-mode prompts — `select` / `autocomplete` / `prompt` /
+    `confirm`.** Thin wrappers over the `prompts` package for quick
+    one-off questions in plain line-buffered output (no alt-screen).
+    Use these when you do not have a `repl()` running and just need
+    to ask the user a single question. They throw if invoked inside
+    a `repl()` or when stdout is not a TTY. `prompt` (free-form text
+    input) accepts a `validate` callback designed for partial-
+    application capability constraint when handing the function to
+    an LLM as a tool. Note: named `prompt` rather than `text` to
+    avoid colliding with the Layer 1 `text` element builder above.
 
   ### See also
 
@@ -104,6 +117,39 @@ import {
       repl(status: status, onSubmit: onSubmitPrompt,
            paletteCommands: { "/exit": "Exit" })
     } with handler
+  }
+  ```
+
+  ## Usage: line-mode prompts
+
+  ```ts
+  import { select, prompt, confirm } from "std::ui"
+  import { isFailure, isSuccess } from "std::result"
+
+  node main() {
+    const pickResult = select(
+      message: "Pick a database",
+      items: [
+        { key: "pg",    label: "Postgres" },
+        { key: "mysql", label: "MySQL" },
+      ],
+    )
+    if (isFailure(pickResult)) { return }
+
+    // PFA capability constraint: bind `validate` before exposing
+    // `prompt` as an LLM tool so the LLM cannot override it.
+    const askName = prompt.partial(
+      validate: def(v: string): any {
+        if (v.length < 1) { return "name required" }
+        return true
+      },
+    )
+    const nameResult = askName(message: "Your name?")
+
+    const ok = confirm(message: "Proceed?")
+    if (isSuccess(ok) && ok.value) {
+      // ...go...
+    }
   }
   ```
 */
@@ -964,6 +1010,107 @@ export def clearMessages() {
   _triggerRender()
 }
 
+export def select(
+  message: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  hint: string = "",
+): Result<string, string> {
+  """
+  Line-mode arrow-key picker, backed by the `prompts` package. Returns
+  `success(key)` with the picked item's `key`, or `failure("cancelled")`
+  if the user pressed Ctrl+C / Escape. Unlike `autocomplete`, there is
+  no type-to-filter — only arrow-key navigation. When `allowFreeText`
+  is true, an extra `→ enter free text…` row is appended; picking it
+  triggers a follow-up text prompt whose value is returned instead of
+  a key.
+
+  Raises if called while a `repl()` owns the screen (use `chooseOption`
+  for in-TUI prompts) or if `process.stdout.isTTY` is false (non-TTY
+  output has no fallback; the caller must script around it).
+
+  @param message - The question shown above the choices
+  @param items - The {key, label} rows
+  @param allowFreeText - Append a free-text sentinel row
+  @param hint - Dim hint shown after the message
+  """
+  return _promptsSelect(message, items, allowFreeText, hint)
+}
+
+export def autocomplete(
+  message: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  hint: string = "",
+): Result<string, string> {
+  """
+  Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
+  Same return shape as `select`: `success(key)` on resolve,
+  `failure("cancelled")` on Ctrl+C / Escape. The filter matches each
+  item's `key` OR `label` (substring, case-insensitive). When
+  `allowFreeText` is true and the typed input matches nothing, a
+  synthetic `→ use as reason: "<input>"` row appears; picking it
+  returns the typed text verbatim instead of a key.
+
+  Raises on active `repl()` or non-TTY (see `select` for the same
+  contract).
+
+  @param message - The question shown above the choices
+  @param items - The {key, label} rows
+  @param allowFreeText - Allow returning the typed input verbatim when no item matches
+  @param hint - Dim hint shown after the message
+  """
+  return _promptsAutocomplete(message, items, allowFreeText, hint)
+}
+
+export def prompt(
+  message: string,
+  initial: string = "",
+  hint: string = "",
+  validate: any = null,
+): Result<string, string> {
+  """
+  Line-mode free-form text prompt, backed by `prompts.text`. Returns
+  `success(typed)` or `failure("cancelled")`. The empty string is a
+  legitimate value; check the Result tag, not truthiness.
+
+  Named `prompt` rather than `text` to avoid colliding with the
+  Layer 1 `text` element builder. Mental model: "prompt the user".
+
+  Raises on active `repl()` or non-TTY.
+
+  `validate`, when supplied, is `(value: string) => boolean | string`.
+  Return `true` to accept; return a string to reject and show that
+  string as the error message; `prompts` re-asks until the user
+  submits a valid value or cancels. Designed for partial-application
+  capability constraint: bind `validate` before handing `prompt` to
+  an LLM as a tool so the LLM cannot override it.
+
+  @param message - The question shown to the user
+  @param initial - Pre-filled value
+  @param hint - Dim hint shown after the message
+  @param validate - Optional `(value) => true | "error message"` validator
+  """
+  return _promptsText(message, initial, hint, validate)
+}
+
+export def confirm(
+  message: string,
+  initial: boolean = false,
+): Result<boolean, string> {
+  """
+  Line-mode yes/no toggle, backed by `prompts.toggle`. Returns
+  `success(true)` / `success(false)` / `failure("cancelled")`. Use the
+  Result tag — there are three outcomes, not two.
+
+  Raises on active `repl()` or non-TTY.
+
+  @param message - The question shown to the user
+  @param initial - Default position (false = "no")
+  """
+  return _promptsConfirm(message, initial)
+}
+
 export def chooseOption(
   title: string,
   body: string,
@@ -1006,37 +1153,36 @@ export def chooseOption(
     },
     )
   }
-  // No-REPL fallback: render the prompt block via the styled bridge
-  // helper, then loop on `input()` until the answer matches one of
-  // the item keys. The bridge call replaces what used to be a
-  // sequence of plain `print()` lines; it draws a dim background
-  // block with bold-yellow title + cyan keys when stdout is a TTY,
-  // and falls back to the original plain-print rendering when piped
-  // (so log files stay free of ANSI). The retry loop and answer
-  // contract are unchanged.
-  _printChoicePromptFallback(title, body, items)
-  let validKeys: string[] = []
-  for (item in items) {
-    validKeys.push(item.key)
+  // No-REPL fallback. Print the title/body banner ourselves, then
+  // delegate to the new `autocomplete` primitive. We loop on
+  // `failure("cancelled")` to preserve chooseOption's "must answer"
+  // contract — safety-critical callers like std::policy depend on
+  // Escape never letting the user skip the prompt. The non-TTY
+  // throw lives inside `autocomplete()` (in TS); we don't need to
+  // repeat it here.
+  if (title != "") {
+    print(title)
   }
-  const optsHint = "(one of ${validKeys.join("/")})"
-  let answer = ""
-  let valid = false
-  while (!valid) {
-    answer = input("> ").trim()
-    if (validKeys.includes(answer)) {
-      valid = true
-    } else if (allowFreeText && answer != "") {
-      // Free-text path: any non-empty input that doesn't match a key
-      // is returned verbatim so the caller can treat it as a reason
-      // (or similar). Empty input still reprompts so accidental Enter
-      // doesn't get interpreted as a free-text answer.
-      valid = true
-    } else {
-      print(optsHint)
+  if (body != "") {
+    print(body)
+  }
+  while (true) {
+    const result = autocomplete(message: "", items: items, allowFreeText: allowFreeText)
+    if (!isFailure(result)) {
+      return result.value
     }
+    // Agency wraps thrown errors from the TS bridge as Result.failure
+    // (see compiled chooseOption / autocomplete try-catch wrappers).
+    // Only re-prompt on an explicit user-cancel; anything else
+    // (e.g. "requires a TTY") gets surfaced via throw so chooseOption
+    // doesn't loop forever in non-interactive environments.
+    if (result.error != "cancelled") {
+      throw(result.error)
+    }
+    print("(answer required)")
   }
-  return answer
+  // unreachable; satisfies the type checker
+  return ""
 }
 
 def _entryKey(entry: any): string {

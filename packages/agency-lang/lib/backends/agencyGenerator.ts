@@ -1185,7 +1185,7 @@ export class AgencyGenerator {
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
     if (node.isDoc) {
       if (node.isModuleDoc) {
-        return this.indentStr(`/** @module${node.content}***/`);
+        return this.indentStr(`/** @module${node.content}*/`);
       }
       return this.indentStr(`/**${node.content}*/`);
     }
@@ -1400,8 +1400,32 @@ export class AgencyGenerator {
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
     const threadType = node.threadType;
+    const params = [];
+    /*     label?: Expression | null;
+    summarize?: Expression | null;
+    continueExpr?: Expression | null;
+    sessionExpr?: Expression | null;
+    hidden?: Expression | null;
+*/
+
+    const paramConfig = {
+      label: node.label,
+      summarize: node.summarize,
+      continue: node.continueExpr,
+      session: node.sessionExpr,
+      hidden: node.hidden,
+    }
+
+    for (const [key, value] of Object.entries(paramConfig)) {
+      if (value) {
+        params.push(`${key}: ${this.processNode(value).trim()}`);
+      }
+    }
+
+    const paramsStr = params.length > 0 ? `(${params.join(", ")})` : "";
+
     return this.indentStr(
-      `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
+      `${threadType}${paramsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
   }
 

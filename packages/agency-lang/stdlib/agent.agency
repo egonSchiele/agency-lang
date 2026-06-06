@@ -2,8 +2,6 @@ import { setMemoryId } from "std::memory"
 import { systemMessage } from "std::thread"
 
 /** @module
-
-
   ## Overview
 
   Helpers for building user-facing agents. Three independent
@@ -78,7 +76,7 @@ import { systemMessage } from "std::thread"
   fine; concurrent calls in the **same** program / RuntimeContext
   (e.g. parallel runners inside one process) will race. Not
   supported in v1.
-*****/
+*/
 
 type Todo = {
   id: string;
@@ -129,10 +127,16 @@ export def question(prompt: string): string {
  *   specialist's `remember`/`recall` lands in a per-specialist graph.
  *   You must `enableMemory(...)` separately for this to do anything.
  */
-export type AgentSpec = {
+export type PromptSpec = {
+  type: "prompt";
   systemPrompt: string;
   tools: any[];
   memory?: boolean
+}
+
+export type AgentSpec = {
+  type: "agent";
+  agent: any
 }
 
 /**
@@ -140,8 +144,8 @@ export type AgentSpec = {
  *
  * - `start` — the category to dispatch the user's message to first.
  *   Must be a key of `agents`.
- * - `agents` — map of category name → `AgentSpec`. Every key is a
- *   potential handoff target.
+ * - `agents` — map of category name → `PromptSpec | AgentSpec`.
+     Every key is a potential handoff target.
  * - `maxHops` — bound on per-turn handoffs (specialist A → B → A → …).
  *   When the cap is reached, the next LLM call drops the `handoff`
  *   tool so the agent is forced to answer in place. 3 is a sensible
@@ -153,7 +157,7 @@ export type AgentSpec = {
  */
 export type RouterConfig = {
   start: string;
-  agents: Record<string, AgentSpec>;
+  agents: Record<string, PromptSpec | AgentSpec>;
   maxHops: number;
   context?: string
 }
@@ -234,12 +238,48 @@ def runOneTurn(
   allowHandoff: boolean,
 ): string {
   """
+  Single iteration of route()'s hop loop. If user has given an agent,
+  runs the agent. Else runs the prompt.
+  """
+  const spec = config.agents[category]
+  if (spec.type === "agent") {
+    return runOneTurnAgent(category, userMsg, config, allowHandoff)
+  } else {
+    return runOneTurnPrompt(category, userMsg, config, allowHandoff)
+  }
+}
+
+def runOneTurnAgent(
+  category: string,
+  userMsg: string,
+  config: RouterConfig,
+  allowHandoff: boolean,
+): string {
+  """
+  Single iteration of route()'s hop loop. This version runs
+  a custom agent instead of a prompt+tool specialist. The agent
+  is expected to handle its own system prompt, tools, memory, and
+  handoffs internally. It should return a string reply.
+  """
+  let reply = ""
+  const spec = config.agents[category]
+  const reply = spec.agent(userMsg, allowHandoff)
+  return reply
+}
+
+def runOneTurnPrompt(
+  category: string,
+  userMsg: string,
+  config: RouterConfig,
+  allowHandoff: boolean,
+): string {
+  """
   Single iteration of route()'s hop loop. Owns the thread block,
   memory scoping, first-entry system-message seeding, and tool-array
   assembly. Returns the LLM's reply (string).
   """
   let reply = ""
-  thread {
+  thread(label: category, summarize: true, session: category) {
     const spec = config.agents[category]
     if (spec.memory == true) {
       setMemoryId(category)

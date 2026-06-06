@@ -78,7 +78,6 @@ name: "agent"
   fine; concurrent calls in the **same** program / RuntimeContext
   (e.g. parallel runners inside one process) will race. Not
   supported in v1.
-****
 
 ## Types
 
@@ -92,9 +91,9 @@ type Todo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L81))
 
-### AgentSpec
+### PromptSpec
 
 * Configuration for one specialist registered with `route`.
  *
@@ -124,14 +123,26 @@ type Todo = {
  *   specialist's `remember`/`recall` lands in a per-specialist graph.
  *   You must `enableMemory(...)` separately for this to do anything.
  */
-export type AgentSpec = {
+export type PromptSpec = {
+  type: "prompt";
   systemPrompt: string;
   tools: any[];
   memory?: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L130))
+
+### AgentSpec
+
+```ts
+export type AgentSpec = {
+  type: "agent";
+  agent: any
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L137))
 
 ### RouterConfig
 
@@ -139,8 +150,8 @@ export type AgentSpec = {
  *
  * - `start` — the category to dispatch the user's message to first.
  *   Must be a key of `agents`.
- * - `agents` — map of category name → `AgentSpec`. Every key is a
- *   potential handoff target.
+ * - `agents` — map of category name → `PromptSpec | AgentSpec`.
+     Every key is a potential handoff target.
  * - `maxHops` — bound on per-turn handoffs (specialist A → B → A → …).
  *   When the cap is reached, the next LLM call drops the `handoff`
  *   tool so the agent is forced to answer in place. 3 is a sensible
@@ -156,8 +167,8 @@ export type AgentSpec = {
  *
  * - `start` — the category to dispatch the user's message to first.
  *   Must be a key of `agents`.
- * - `agents` — map of category name → `AgentSpec`. Every key is a
- *   potential handoff target.
+ * - `agents` — map of category name → `PromptSpec | AgentSpec`.
+     Every key is a potential handoff target.
  * - `maxHops` — bound on per-turn handoffs (specialist A → B → A → …).
  *   When the cap is reached, the next LLM call drops the `handoff`
  *   tool so the agent is forced to answer in place. 3 is a sensible
@@ -169,13 +180,13 @@ export type AgentSpec = {
  */
 export type RouterConfig = {
   start: string;
-  agents: Record<string, AgentSpec>;
+  agents: Record<string, PromptSpec | AgentSpec>;
   maxHops: number;
   context?: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L158))
 
 ## Functions
 
@@ -195,7 +206,7 @@ Replace the current todo list. Each todo has an id, text, and status (one of 'pe
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L89))
 
 ### todoList
 
@@ -207,7 +218,7 @@ Return the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L97))
 
 ### question
 
@@ -227,7 +238,7 @@ Ask the user a question and wait for their reply. Unlike input(), this raises an
 
 **Throws:** `std::question`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L104))
 
 ### handoff
 
@@ -271,7 +282,7 @@ Re-route the user's current message to a different specialist.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L190))
 
 ### consumeHandoff
 
@@ -290,12 +301,58 @@ Read and clear the pending handoff target. Returns "" when no
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L223))
 
 ### runOneTurn
 
 ```ts
 runOneTurn(category: string, userMsg: string, config: RouterConfig, allowHandoff: boolean): string
+```
+
+Single iteration of route()'s hop loop. If user has given an agent,
+  runs the agent. Else runs the prompt.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| category | `string` |  |
+| userMsg | `string` |  |
+| config | [RouterConfig](#routerconfig) |  |
+| allowHandoff | `boolean` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L234))
+
+### runOneTurnAgent
+
+```ts
+runOneTurnAgent(category: string, userMsg: string, config: RouterConfig, allowHandoff: boolean): string
+```
+
+Single iteration of route()'s hop loop. This version runs
+  a custom agent instead of a prompt+tool specialist. The agent
+  is expected to handle its own system prompt, tools, memory, and
+  handoffs internally. It should return a string reply.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| category | `string` |  |
+| userMsg | `string` |  |
+| config | [RouterConfig](#routerconfig) |  |
+| allowHandoff | `boolean` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L252))
+
+### runOneTurnPrompt
+
+```ts
+runOneTurnPrompt(category: string, userMsg: string, config: RouterConfig, allowHandoff: boolean): string
 ```
 
 Single iteration of route()'s hop loop. Owns the thread block,
@@ -313,7 +370,7 @@ Single iteration of route()'s hop loop. Owns the thread block,
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L270))
 
 ### route
 
@@ -366,4 +423,4 @@ Run one user turn through a multi-specialist agent. Owns the hop
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L337))

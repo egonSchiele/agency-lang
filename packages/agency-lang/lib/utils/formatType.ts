@@ -35,8 +35,22 @@ export function formatTypeHint(
     case "typeAliasVariable":
       return vt.aliasName;
     case "blockType": {
-      const params = vt.params.map((p) => recurse(p.typeAnnotation)).join(", ");
-      return `(${params}) => ${recurse(vt.returnType)}`;
+      // Use `primitiveAliases` (defined ⇒ codegen target) as the signal
+      // for which dialect to emit:
+      //   - Agency source (no aliases): `(name: T) -> R`, names surfaced.
+      //   - TypeScript codegen (aliases present): `(T) => R`, names
+      //     dropped. TS does accept names, but `typescriptBuilder.ts`
+      //     synthesizes parameter names downstream and emitting them
+      //     here would risk double-naming.
+      const isTsTarget = primitiveAliases !== undefined;
+      const arrow = isTsTarget ? "=>" : "->";
+      const params = vt.params
+        .map((p) => {
+          const t = recurse(p.typeAnnotation);
+          return !isTsTarget && p.name ? `${p.name}: ${t}` : t;
+        })
+        .join(", ");
+      return `(${params}) ${arrow} ${recurse(vt.returnType)}`;
     }
     case "resultType": {
       const s = recurse(vt.successType);

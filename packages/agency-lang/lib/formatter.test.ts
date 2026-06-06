@@ -153,6 +153,29 @@ describe("formatSource", () => {
     expect(formatSource(formatted!)).toBe(formatted);
   });
 
+  // Locks in the `=>` → `->` migration and the named-param round-trip
+  // added in the block-type-named-params change. Both must reformat
+  // exactly as below so users can rely on `fmt` to silently migrate
+  // legacy `=>` arrows and surface param names in formatted output.
+  it("block-types: migrates `=>` to `->` and surfaces param names", () => {
+    const input =
+`type AgentSpec = {
+  agent: (userMsg: string) => string;
+  cb: (string) => void
+}
+`;
+    const expected =
+`type AgentSpec = {
+  agent: (userMsg: string) -> string;
+  cb: (string) -> void
+}
+`;
+    const formatted = formatSource(input);
+    expect(formatted).toBe(expected);
+    // Idempotent on the migrated output.
+    expect(formatSource(formatted!)).toBe(expected);
+  });
+
   describe("comments inside match blocks", () => {
     it("preserves a leading comment before the first case", () => {
       const input =

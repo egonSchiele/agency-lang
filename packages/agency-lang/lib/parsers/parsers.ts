@@ -1243,8 +1243,35 @@ export const unionTypeParser: Parser<UnionType> = memo(
   _unionTypeParser,
 );
 
-// Block type: () => string, (number) => any, (string, number) => boolean
-// Params are positional (no names in the type annotation).
+// Block type: () -> string, (number) -> any, (string, number) -> boolean
+// Params may be named or unnamed: (userMsg: string) -> string, (string) -> string.
+// Both `->` (preferred, matches inline-block lambda syntax) and `=>` (legacy)
+// are accepted; the formatter rewrites `=>` to `->` on next save.
+const blockTypeParam: Parser<{ name: string; typeAnnotation: VariableType }> =
+  or(
+    // Named param: `ident : type`. Try this alternative first — once we
+    // see `ident :` we're committed (no other grammar produces that shape
+    // inside a block-type param list).
+    map(
+      seqC(
+        capture(many1WithJoin(varNameChar), "name"),
+        optionalSpaces,
+        char(":"),
+        optionalSpaces,
+        capture(lazy(() => variableTypeParser), "typeAnnotation"),
+      ),
+      (r) => ({
+        name: r.name as string,
+        typeAnnotation: r.typeAnnotation as VariableType,
+      }),
+    ),
+    // Unnamed (legacy): bare type. The AST keeps `name: ""` as a marker.
+    map(
+      lazy(() => variableTypeParser),
+      (t) => ({ name: "", typeAnnotation: t }),
+    ),
+  );
+
 export const blockTypeParser: Parser<BlockType> = memo(
   "blockTypeParser",
   (input: string): ParserResult<BlockType> => {
@@ -1255,14 +1282,14 @@ export const blockTypeParser: Parser<BlockType> = memo(
       capture(
         sepBy(
           seqR(optionalSpaces, char(","), optionalSpaces),
-          lazy(() => variableTypeParser),
+          blockTypeParam,
         ),
-        "paramTypes",
+        "params",
       ),
       optionalSpaces,
       char(")"),
       optionalSpaces,
-      str("=>"),
+      or(str("->"), str("=>")),
       optionalSpaces,
       capture(lazy(() => variableTypeParser), "returnType"),
     );
@@ -1271,10 +1298,10 @@ export const blockTypeParser: Parser<BlockType> = memo(
     return success(
       {
         type: "blockType" as const,
-        params: result.result.paramTypes.map((t: VariableType) => ({
-          name: "",
-          typeAnnotation: t,
-        })),
+        params: result.result.params as {
+          name: string;
+          typeAnnotation: VariableType;
+        }[],
         returnType: result.result.returnType,
       },
       result.rest,

@@ -1,0 +1,3 @@
+<fixtures>/interrupts/single-file.agency:3  interrupt of kind std::read
+  Possible enclosing handlers:
+    handle via fn approve at <fixtures>/interrupts/single-file.agency:2

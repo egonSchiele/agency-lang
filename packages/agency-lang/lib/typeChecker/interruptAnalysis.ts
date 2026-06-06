@@ -1,11 +1,30 @@
 import type { InterruptKind } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
-import { walkNodes } from "../utils/node.js";
+import { walkNodes, type WalkAncestor } from "../utils/node.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 import type { Scope } from "./scope.js";
 import { isInsideHandler } from "./checker.js";
+import type { HandleBlock } from "../types/handleBlock.js";
+import type { InterruptStatement } from "../types/interruptStatement.js";
+
+export type TaggedHandler = { block: HandleBlock; file: string };
+
+export type CallGraphFunction = {
+  /** Absolute path to the .agency file this function/node is defined in. */
+  file: string;
+  callEdges: { calleeName: string; enclosingHandlers: TaggedHandler[] }[];
+  interruptSites: {
+    site: InterruptStatement;
+    /** Same as the function's `file`. Carried explicitly so consumers don't
+     *  have to look it up. */
+    file: string;
+    enclosingHandlers: TaggedHandler[];
+  }[];
+};
+
+export type InterruptCallGraph = Record<string, CallGraphFunction>;
 
 /** Per-function analysis: what it directly interrupts and what it calls. */
 type FunctionProfile = {
@@ -169,6 +188,76 @@ function functionNamesFromType(t: VariableType | "any", out: string[]): void {
 
 function addUnique(arr: string[], value: string): void {
   if (!arr.includes(value)) arr.push(value);
+}
+
+/**
+ * Build a per-function call graph that, for each call edge and each
+ * `interruptStatement`, records the list of `handle` blocks in the
+ * enclosing function body that lexically wrap it. Each handler is
+ * tagged with its file so the file survives propagation in the
+ * downstream handler-set analyzer.
+ *
+ * Unlike `analyzeInterruptsFromScopes` this does NOT propagate kinds
+ * transitively — it only records direct, per-function structural facts.
+ * The propagation lives in `lib/analysis/interrupts.ts`.
+ */
+export function buildInterruptCallGraph(
+  scopes: ScopeInfo[],
+  ctx: TypeCheckerContext,
+): InterruptCallGraph {
+  const out: InterruptCallGraph = {};
+  for (const info of scopes) {
+    if (!info.name || info.name === "top-level") continue;
+    const file = info.file;
+    const entry: CallGraphFunction = { file, callEdges: [], interruptSites: [] };
+    ctx.withScope(info.scopeKey, () => {
+      for (const { node, ancestors } of walkNodes(info.body)) {
+        const enclosing = enclosingHandleBlocks(ancestors, file);
+        if (node.type === "interruptStatement") {
+          entry.interruptSites.push({
+            site: node,
+            file,
+            enclosingHandlers: enclosing,
+          });
+        } else if (node.type === "functionCall") {
+          entry.callEdges.push({
+            calleeName: node.functionName,
+            enclosingHandlers: enclosing,
+          });
+          for (const refName of functionRefsInArgs(node.arguments, info.scope, ctx)) {
+            entry.callEdges.push({
+              calleeName: refName,
+              enclosingHandlers: enclosing,
+            });
+          }
+        } else if (node.type === "gotoStatement") {
+          entry.callEdges.push({
+            calleeName: node.nodeCall.functionName,
+            enclosingHandlers: enclosing,
+          });
+        }
+      }
+    });
+    out[info.name] = entry;
+  }
+  return out;
+}
+
+/** Return the `handle` block ancestors of a walked node, tagged with the
+ *  file they live in (always the enclosing function's file). `walkNodes`
+ *  yields `WalkAncestor[]` (a union including `BlockArgument`), so the
+ *  filter narrows by `type === "handleBlock"`. */
+function enclosingHandleBlocks(
+  ancestors: WalkAncestor[],
+  file: string,
+): TaggedHandler[] {
+  const out: TaggedHandler[] = [];
+  for (const a of ancestors) {
+    if (a.type === "handleBlock") {
+      out.push({ block: a, file });
+    }
+  }
+  return out;
 }
 
 /**

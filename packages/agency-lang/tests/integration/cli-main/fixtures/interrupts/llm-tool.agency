@@ -1,0 +1,9 @@
+def deleteEmails() {
+  interrupt std::write("delete?")
+}
+
+node main() {
+  handle {
+    let _: string = llm("do work", { tools: [deleteEmails] })
+  } with approve
+}

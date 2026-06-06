@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -396,6 +397,58 @@ try {
     join(dir, "src/fmt-stdout.agency"),
     join(fixtureDir, "project", "src", "fmt-input.agency"),
   );
+
+  // interrupts
+
+  console.log("--- interrupts ---");
+
+  // Copy the interrupts fixtures into the temp project.
+  cpSync(
+    join(fixtureDir, "interrupts"),
+    join(dir, "interrupts"),
+    { recursive: true },
+  );
+
+  const interruptCases = [
+    { name: "single-file", entryFile: "interrupts/single-file.agency" },
+    { name: "cross-file", entryFile: "interrupts/cross-file/main.agency" },
+    { name: "llm-tool", entryFile: "interrupts/llm-tool.agency" },
+    { name: "recursion", entryFile: "interrupts/recursion.agency" },
+    { name: "no-handler", entryFile: "interrupts/no-handler.agency" },
+  ];
+
+  // IMPORTANT: keep this normalization in sync with the matching block in
+  // scripts/regenerate-fixtures.ts (regenerateInterruptFixtures). If one
+  // changes, the snapshots will drift and these tests will fail spuriously.
+  //
+  // On macOS, `/tmp` and `/var/folders/...` are symlinks to
+  // `/private/tmp` and `/private/var/folders/...`. Node's path.resolve
+  // does not follow symlinks, but the agency CLI ends up surfacing the
+  // realpath-resolved form, so we normalize both the original temp dir
+  // and its realpath to the same token.
+  const interruptsDir = join(dir, "interrupts");
+  const interruptsDirReal = realpathSync(interruptsDir);
+  function normalizeInterruptOutput(s) {
+    return s
+      .replaceAll(interruptsDirReal, "<fixtures>/interrupts")
+      .replaceAll(interruptsDir, "<fixtures>/interrupts")
+      .replaceAll(/\\/g, "/");
+  }
+
+  for (const c of interruptCases) {
+    const actualOutput = runAgency(
+      `interrupts-${c.name}`,
+      ["interrupts", c.entryFile],
+    );
+    const normalized = normalizeInterruptOutput(actualOutput);
+    const actualPath = join(logsDir, `interrupts-${c.name}.actual.txt`);
+    writeFileSync(actualPath, normalized);
+    assertFileEquals(
+      actualPath,
+      join(expectedDir, `interrupts-${c.name}.txt`),
+      { normalizeTrailingNewline: true },
+    );
+  }
 
   // parse
 

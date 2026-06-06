@@ -1,0 +1,3 @@
+<fixtures>/interrupts/no-handler.agency:2  interrupt of kind std::read
+  Possible enclosing handlers:
+    (none)

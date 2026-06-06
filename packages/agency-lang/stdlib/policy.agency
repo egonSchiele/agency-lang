@@ -428,7 +428,7 @@ export def parsePolicyFile(path: string): Policy {
   if (!exists(name, dir)) {
     return {}
   }
-  const readResult = read(name, dir)
+  const readResult = read(name, dir) with approve
   if (isFailure(readResult)) {
     print("Could not read ${path}: ${readResult.error}")
     return {}

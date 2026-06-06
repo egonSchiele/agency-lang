@@ -75,10 +75,6 @@ export def setMemoryId(id: string) {
 
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
-  return interrupt std::memory::setMemoryId("Are you sure you want to change the memory scope id?", {
-    id: id
-  })
-
   _setMemoryId(id)
 }
 

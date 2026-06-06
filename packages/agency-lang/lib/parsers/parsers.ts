@@ -3890,7 +3890,18 @@ const _baseFunctionParser: Parser<any> = memo(
     ),
     optional(comma),
     optionalSpacesOrNewline,
-    char(")"),
+    // Once we've consumed `def NAME (` plus parameters, we're committed
+    // to a function definition. Anything other than `,` (another param)
+    // or `)` (end of list) is a user mistake — most commonly using `;`
+    // to separate params. Surface a targeted error via `parseError`
+    // (which throws a TarsecError, bypassing `or(...)` backtracking and
+    // `label(...)` suppression) instead of falling through to the
+    // top-level alternatives list and dumping every possible statement
+    // form the user might have meant.
+    parseError(
+      "expected `,` between parameters or `)` to close the parameter list",
+      char(")"),
+    ),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
     capture(optional(map(str("!"), () => true)), "returnTypeValidated"),

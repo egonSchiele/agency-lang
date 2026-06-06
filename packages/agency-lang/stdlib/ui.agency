@@ -1,5 +1,6 @@
 import { filter, map } from "std::array"
 
+import { _termWidth } from "agency-lang/stdlib-lib/cli.js"
 import {
   _runLoop,
   _runReplLoop,
@@ -1015,7 +1016,7 @@ export def select(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   hint: string = "",
-): Result<string, string> {
+): Result<string> {
   """
   Line-mode arrow-key picker, backed by the `prompts` package. Returns
   `success(key)` with the picked item's `key`, or `failure("cancelled")`
@@ -1042,7 +1043,7 @@ export def autocomplete(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   hint: string = "",
-): Result<string, string> {
+): Result<string> {
   """
   Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
   Same return shape as `select`: `success(key)` on resolve,
@@ -1068,7 +1069,7 @@ export def prompt(
   initial: string = "",
   hint: string = "",
   validate: any = null,
-): Result<string, string> {
+): Result<string> {
   """
   Line-mode free-form text prompt, backed by `prompts.text`. Returns
   `success(typed)` or `failure("cancelled")`. The empty string is a
@@ -1094,10 +1095,7 @@ export def prompt(
   return _promptsText(message, initial, hint, validate)
 }
 
-export def confirm(
-  message: string,
-  initial: boolean = false,
-): Result<boolean, string> {
+export def confirm(message: string, initial: boolean = false): Result<boolean> {
   """
   Line-mode yes/no toggle, backed by `prompts.toggle`. Returns
   `success(true)` / `success(false)` / `failure("cancelled")`. Use the
@@ -1109,6 +1107,12 @@ export def confirm(
   @param initial - Default position (false = "no")
   """
   return _promptsConfirm(message, initial)
+}
+
+def indent(str: string): string {
+  const lines = str.split("\n")
+  const res = map(lines, \line -> "    ${line}")
+  return res.join("\n")
 }
 
 export def chooseOption(
@@ -1160,14 +1164,21 @@ export def chooseOption(
   // Escape never letting the user skip the prompt. The non-TTY
   // throw lives inside `autocomplete()` (in TS); we don't need to
   // repeat it here.
+  print("\n")
+  hline()
   if (title != "") {
-    print(title)
+    print(color.cyan(title), "\n")
   }
   if (body != "") {
-    print(body)
+    print(indent(body))
   }
+  print("\n")
   while (true) {
-    const result = autocomplete(message: "", items: items, allowFreeText: allowFreeText)
+    const result = autocomplete(
+      message: "Do you want to continue?",
+      items: items,
+      allowFreeText: allowFreeText,
+    )
     if (!isFailure(result)) {
       return result.value
     }
@@ -1915,4 +1926,13 @@ export def repl(
 export def clearScreen() {
   // ANSI escape code to clear the screen and move the cursor to the top-left.
   print("\\x1b[2J\\x1b[H")
+}
+
+export def termWidth(): number {
+  return _termWidth()
+}
+
+export def hline(char: string = "─", width: number = null): string {
+  let _width = width || termWidth()
+  print(color.cyan(char.repeat(_width)))
 }

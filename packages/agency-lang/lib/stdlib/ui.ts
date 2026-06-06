@@ -16,6 +16,7 @@ import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import prompts from "prompts";
+import { color } from "@/utils/termcolors.js";
 
 // ---------------------------------------------------------------------------
 // Declarative TS bridge for `std::ui`. Exposes the existing
@@ -293,12 +294,12 @@ function formatConsoleArgs(args: unknown[]): string {
         : arg instanceof Error
           ? arg.stack ?? arg.message
           : (() => {
-              try {
-                return JSON.stringify(arg);
-              } catch {
-                return String(arg);
-              }
-            })(),
+            try {
+              return JSON.stringify(arg);
+            } catch {
+              return String(arg);
+            }
+          })(),
     )
     .join(" ");
 }
@@ -485,12 +486,12 @@ export function _beginSubmit(
               : typeof err === "string"
                 ? err
                 : (() => {
-                    try {
-                      return JSON.stringify(err);
-                    } catch {
-                      return String(err);
-                    }
-                  })();
+                  try {
+                    return JSON.stringify(err);
+                  } catch {
+                    return String(err);
+                  }
+                })();
           state.transcript.messages.push(`{red-fg}Error{/red-fg} ${message}`);
           return;
         }
@@ -710,7 +711,9 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
 
   try {
     const answer = await prompts(question, {
-      onCancel: () => {
+      onCancel: (prompt, answers) => {
+        console.log("Prompt cancelled.", JSON.stringify({ prompt, answers }));
+
         cancelled = true;
         return false;
       },
@@ -763,7 +766,7 @@ function _buildSuggest(
     // rendered title, so they're not flying blind.
     const matched = items
       .filter((it) => it.key.toLowerCase().includes(q))
-      .map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key }));
+      .map((it) => ({ title: `${it.key} -  ${it.label}`, value: it.key }));
     if (allowFreeText && input !== "" && matched.length === 0) {
       matched.push({
         title: `→ use as reason: "${input}"`,
@@ -786,10 +789,11 @@ export async function _promptsAutocomplete(
     name: "value",
     message,
     hint: hint || undefined,
-    choices: items.map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key })),
+    choices: items.map((it) => ({ title: `${color.cyan(it.key)} - ${it.label}`, value: it.key })),
     suggest: _buildSuggest(items, allowFreeText),
   });
   if (isFailure(result)) return result;
+
   const raw = String(result.value);
   if (raw.startsWith(AUTOCOMPLETE_FREE_TEXT_PREFIX)) {
     return success(raw.slice(AUTOCOMPLETE_FREE_TEXT_PREFIX.length));

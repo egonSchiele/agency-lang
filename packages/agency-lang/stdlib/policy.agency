@@ -1,3 +1,4 @@
+import { table, render, text } from "std::layout"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { chooseOption, ChoiceItem } from "std::ui"
@@ -216,9 +217,14 @@ export type ScopedField = {
  */
 export type ScopedRuleFields = Record<InterruptKind, ScopedField[]>
 
+type CliPolicyOpts = {
+  file: string;
+  fields: ScopedRuleFields
+}
+
 // Internal state for `cliPolicyHandler`. Singleton — calling
 // `cliPolicyHandler` more than once silently overwrites these.
-let _opts: { file: string; fields: ScopedRuleFields } = {
+let globalCliPolicyOpts: CliPolicyOpts = {
   file: "",
   fields: {}
 }
@@ -473,9 +479,9 @@ export def writePolicyFile(
 // docs/site/guide/handlers.md §"Fixing it".
 def maybeLoad() {
   if (!_loaded) {
-    _loaded = true
     // flip FIRST
-    _policy = parsePolicyFile(_opts.file) with approve
+    _loaded = true
+    _policy = parsePolicyFile(globalCliPolicyOpts.file) with approve
   }
 }
 
@@ -486,9 +492,9 @@ def maybeLoad() {
 // may not flush — `flushPolicy()` is the escape hatch for that.
 def maybeFlush() {
   if (_pendingSave) {
-    _pendingSave = false
     // flip FIRST
-    writePolicyFile(_opts.file, _policy, []) with approve
+    _pendingSave = false
+    writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
   }
 }
 
@@ -506,7 +512,7 @@ def maybeFlush() {
 export def flushPolicy() {
   if (_pendingSave) {
     _pendingSave = false
-    writePolicyFile(_opts.file, _policy, []) with approve
+    writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
   }
 }
 
@@ -514,7 +520,7 @@ export def flushPolicy() {
 // produce — shown next to the (ap) prompt so the user sees the
 // exact rule they're agreeing to before they say yes.
 def describeScopedMatch(intr: any): string {
-  const match = buildScopedMatch(intr, _opts.fields)
+  const match = buildScopedMatch(intr, globalCliPolicyOpts.fields)
   const ks = keys(match)
   if (ks.length == 0) {
     return "(no scoped fields)"
@@ -539,9 +545,25 @@ type AskUserResult = {
   reason: string | null
 }
 
+def prettyPrintInterruptData(data: any): string {
+  if (typeof data == "string") {
+    return data
+  }
+  if (typeof data == "object") {
+    const inventory = table() as t {
+      for (key in data) {
+        t.row(text(key, bold: true), text(String(data[key])))
+      }
+    }
+    return render(inventory)
+  }
+  return JSON.stringify(data)
+}
+
 // Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
 // return the user's choice as an `AskUserResult`. `(ap)` is offered
-// only when `_opts.fields` has an entry for `intr.kind`. Renders as a
+// only when `globalCliPolicyOpts.fields` has an entry for `intr.kind`.
+//Renders as a
 // modal over the active repl(); falls back to plain print + input
 // when no REPL is running (e.g. headless agent runs).
 //
@@ -552,13 +574,13 @@ def askUser(intr: any): AskUserResult {
   // `!= null` compiles to `!== null` (Agency strict equality), so an
   // undefined entry would slip through. Use the explicit existence check.
   let kindFields: ScopedField[] = []
-  if (_opts.fields[intr.kind] != undefined) {
-    kindFields = _opts.fields[intr.kind]
+  if (globalCliPolicyOpts.fields[intr.kind] != undefined) {
+    kindFields = globalCliPolicyOpts.fields[intr.kind]
   }
   const scopedAvailable = kindFields.length > 0
 
-  const title = "Interrupt: ${intr.kind}"
-  const body = "${intr.message}\ndata: ${JSON.stringify(intr.data)}"
+  const title = intr.message
+  const body = prettyPrintInterruptData(intr.data)
 
   let items: ChoiceItem[] = [
     {
@@ -641,7 +663,7 @@ export def _handler(intr: any): any {
     return approve()
   }
   if (answer.action == "approve-always-here") {
-    _policy = recordScopedRule(_policy, intr, _opts.fields)
+    _policy = recordScopedRule(_policy, intr, globalCliPolicyOpts.fields)
     _pendingSave = true
     return approve()
   }
@@ -721,9 +743,7 @@ export def _handler(intr: any): any {
  * @param opts.fields - Per-kind config controlling the (ap) prompt
  *   option. Kinds not present here don't offer (ap).
  */
-export def cliPolicyHandler(
-  opts: { file: string; fields: ScopedRuleFields },
-): any {
+export def cliPolicyHandler(file: string, fields: ScopedRuleFields): any {
   """
   CLI sugar for an interactive policy handler. Owns load + save +
   prompt + record + return approve/reject. Install on the outermost
@@ -739,6 +759,9 @@ export def cliPolicyHandler(
   @param opts.file - Path to the on-disk policy file
   @param opts.fields - Per-kind config controlling the "approve-always-here" option
   """
-  _opts = opts
+  globalCliPolicyOpts = {
+    file: file,
+    fields: fields
+  }
   return _handler
 }

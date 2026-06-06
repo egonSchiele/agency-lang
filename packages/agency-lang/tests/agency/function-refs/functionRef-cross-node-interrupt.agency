@@ -5,14 +5,14 @@ def check(label: string): string {
   return "approved ${label}"
 }
 
-def inner(fn: (string) => string): string {
+def inner(fn: (string) -> string): string {
   log.push("inner-start")
   const result = fn("deep")
   log.push("inner-end")
   return result
 }
 
-def outer(fn: (string) => string): string {
+def outer(fn: (string) -> string): string {
   log.push("outer-start")
   const result = inner(fn)
   log.push("outer-end")
@@ -23,5 +23,8 @@ node main() {
   log.push("main-start")
   const result = outer(check)
   log.push("main-end")
-  return { result: result, log: log }
+  return {
+    result: result,
+    log: log
+  }
 }

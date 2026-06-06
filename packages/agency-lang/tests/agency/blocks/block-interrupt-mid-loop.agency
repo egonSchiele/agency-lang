@@ -1,6 +1,6 @@
 const log = []
 
-def map(items: any[], block: (any) => any): any[] {
+def map(items: any[], block: (any) -> any): any[] {
   const results: any[] = []
   for (item in items) {
     let result = block(item)

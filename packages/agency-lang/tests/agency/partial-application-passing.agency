@@ -6,7 +6,7 @@ def multiply(a: number, b: number): number {
   return a * b
 }
 
-def applyToAll(items: number[], transform: (number) => number): number[] {
+def applyToAll(items: number[], transform: (number) -> number): number[] {
   const result: number[] = []
   for (item in items) {
     result.push(transform(item))

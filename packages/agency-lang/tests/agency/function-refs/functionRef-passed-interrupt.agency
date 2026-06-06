@@ -5,7 +5,7 @@ def check(label: string): string {
   return "done"
 }
 
-def callIt(fn: (string) => string, label: string): string {
+def callIt(fn: (string) -> string, label: string): string {
   log.push("before-call")
   const result = fn(label)
   log.push("after-call")
@@ -16,5 +16,8 @@ node main() {
   log.push("start")
   const result = callIt(check, "test")
   log.push("end")
-  return { result: result, log: log }
+  return {
+    result: result,
+    log: log
+  }
 }

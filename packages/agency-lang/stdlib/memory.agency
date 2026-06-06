@@ -3,30 +3,6 @@
 // the type annotation on `llm()`, so structured-output enforcement
 // flows through the same path as user-defined typed prompts.
 
-type ExtractionResult = {
-  entities: { name: string, type: string, observations: string[] }[]
-  relations: { from: string, to: string, type: string }[]
-  expirations: { entityName: string, observationContent: string }[]
-}
-
-type ForgetResult = {
-  observations: { entityName: string, observationContent: string }[]
-  relations: { fromName: string, toName: string, type: string }[]
-}
-
-// User-facing memory config shape. Mirrors the `memory:` block in
-// `agency.json` so the same fields work whether you configure memory
-// declaratively or in code. Every nested field is optional because
-// the runtime provides defaults for each one (matching the shape of
-// `MemoryConfig` in `lib/runtime/memory/types.ts`).
-export type MemoryConfig = {
-  dir: string,
-  model?: string,
-  autoExtract?: { interval?: number },
-  compaction?: { trigger?: "token" | "messages", threshold?: number },
-  embeddings?: { model?: string }
-}
-
 // `_*` exports read ctx from AsyncLocalStorage (see
 // `lib/runtime/asyncContext.ts`); no `__ctx` arg is plumbed at the
 // call site. The deprecated `__internal_*` exports remain in
@@ -43,7 +19,30 @@ import {
   _disableMemory,
   _pushMemoryFrame,
   _popMemoryFrame,
-} from "agency-lang/stdlib-lib/memory.js"
+ } from "agency-lang/stdlib-lib/memory.js"
+type ExtractionResult = {
+  entities: { name: string; type: string; observations: string[] }[];
+  relations: { from: string; to: string; type: string }[];
+  expirations: { entityName: string; observationContent: string }[]
+}
+
+type ForgetResult = {
+  observations: { entityName: string; observationContent: string }[];
+  relations: { fromName: string; toName: string; type: string }[]
+}
+
+// User-facing memory config shape. Mirrors the `memory:` block in
+// `agency.json` so the same fields work whether you configure memory
+// declaratively or in code. Every nested field is optional because
+// the runtime provides defaults for each one (matching the shape of
+// `MemoryConfig` in `lib/runtime/memory/types.ts`).
+export type MemoryConfig = {
+  dir: string;
+  model?: string;
+  autoExtract?: { interval: number | undefined };
+  compaction?: { trigger: "token" | "messages" | undefined; threshold: number | undefined };
+  embeddings?: { model: string | undefined }
+}
 
 export def isMemoryActive(): boolean {
   """
@@ -123,7 +122,7 @@ export def disableMemory() {
   _disableMemory()
 }
 
-export def memory(config: MemoryConfig, block: () => any = null): Result {
+export def memory(config: MemoryConfig, block: () -> any = null): Result {
   """
   Run `block` with `config` pushed as the active memory frame; pop
   the frame when the block returns (or fails). Mirrors the `guard()`
@@ -141,9 +140,9 @@ export def memory(config: MemoryConfig, block: () => any = null): Result {
   holds an error from inside the block). Same convention as `guard()`.
 
   Example:
-    const r = memory({ dir: "./mem-user-a" }) as {
-      remember("alice's favorite color is blue")
-    }
+  const r = memory({ dir: "./mem-user-a" }) as {
+  remember("alice's favorite color is blue")
+  }
 
   @param config - Memory configuration with `dir` required
   @param block - The code to run with the frame active

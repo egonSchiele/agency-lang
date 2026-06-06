@@ -6,10 +6,7 @@
 // call where the block landed in slot 0, binding to `gap`. The real
 // `block` parameter stayed `null` so the block body never executed.
 
-def column(
-  gap: number = 0,
-  block: (number) => void = null,
-): number {
+def column(gap: number = 0, block: (number) -> void = null): number {
   if (block != null) {
     block(gap)
   }
@@ -19,7 +16,7 @@ def column(
 def row(
   gap: number = 0,
   align: string = "start",
-  block: (number) => void = null,
+  block: (number) -> void = null,
 ): string {
   if (block != null) {
     block(gap)
@@ -34,7 +31,8 @@ node testNoArgs() {
   column() as g {
     captured = g
   }
-  return captured  // 0, the default for `gap`
+  return captured
+  // 0, the default for `gap`
 }
 
 node testNoArgsMultipleOptional() {
@@ -43,7 +41,8 @@ node testNoArgsMultipleOptional() {
   row() as g {
     captured = g
   }
-  return captured  // 0
+  return captured
+  // 0
 }
 
 node testOneArgThenBlock() {
@@ -53,7 +52,8 @@ node testOneArgThenBlock() {
   row(7) as g {
     captured = g
   }
-  return captured  // 7
+  return captured
+  // 7
 }
 
 node testNamedArgThenBlock() {
@@ -63,5 +63,6 @@ node testNamedArgThenBlock() {
   row(gap: 3) as g {
     captured = g
   }
-  return captured  // 3
+  return captured
+  // 3
 }

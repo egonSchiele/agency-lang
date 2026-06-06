@@ -13,7 +13,7 @@ def greet(person: Person): string {
   return "hello ${person.name}"
 }
 
-def wrap(value: number, block: (number) => number): number {
+def wrap(value: number, block: (number) -> number): number {
   const next = block(value)
   return next
 }

@@ -837,6 +837,30 @@ export class AgencyGenerator {
     return result;
   }
 
+  /**
+   * Render a docstring body for re-emission under the formatter's
+   * current indent level. Strips the common leading indentation
+   * ("dedent") rather than every line's leading whitespace, so inner
+   * structure — ```code fences```, indented bullet sub-items, sample
+   * snippets — survives a round-trip. The caller wraps the returned
+   * lines in `"""` ... `"""` and re-indents.
+   */
+  private formatDocStringLines(content: string): string[] {
+    // Drop leading/trailing blank lines but PRESERVE indentation on
+    // the lines themselves — `.trim()` would strip the first line's
+    // leading spaces and skew the min-indent measurement below.
+    const stripped = content.replace(/^\n+|\s+$/g, "");
+    const rawLines = stripped.split("\n");
+    const minIndent = rawLines
+      .filter((l) => l.trim() !== "")
+      .reduce((min, l) => {
+        const leading = l.match(/^[ \t]*/)?.[0].length ?? 0;
+        return leading < min ? leading : min;
+      }, Infinity);
+    const stripBy = minIndent === Infinity ? 0 : minIndent;
+    return rawLines.map((l) => (l.trim() === "" ? "" : l.slice(stripBy)));
+  }
+
   private generateMultiLineStringLiteral(node: MultiLineStringLiteral): string {
     let result = '"""';
     for (const segment of node.segments) {
@@ -894,14 +918,7 @@ export class AgencyGenerator {
           content += `\${${this.processNode(seg.expression).trim()}}`;
         }
       }
-      // Strip outer whitespace so docstrings format consistently —
-      // the parser preserves raw source verbatim, including the
-      // leading newline + indentation typical of multi-line docstrings.
-      const lines = content
-        .trim()
-        .split("\n")
-        .map((l) => l.trim());
-      const docLines = [`"""`, ...lines, `"""`];
+      const docLines = [`"""`, ...this.formatDocStringLines(content), `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
     }
@@ -1351,14 +1368,7 @@ export class AgencyGenerator {
           content += `\${${this.processNode(seg.expression).trim()}}`;
         }
       }
-      // Strip outer whitespace so docstrings format consistently —
-      // the parser preserves raw source verbatim, including the
-      // leading newline + indentation typical of multi-line docstrings.
-      const lines = content
-        .trim()
-        .split("\n")
-        .map((l) => l.trim());
-      const docLines = [`"""`, ...lines, `"""`];
+      const docLines = [`"""`, ...this.formatDocStringLines(content), `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
     }

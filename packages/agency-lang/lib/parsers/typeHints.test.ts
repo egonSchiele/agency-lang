@@ -2729,6 +2729,121 @@ describe("blockTypeParser", () => {
     const result = blockTypeParser("");
     expect(result.success).toBe(false);
   });
+
+  // ----- `->` arrow (preferred; matches inline-block lambda syntax) -----
+
+  it("parses (number) -> any with `->` arrow", () => {
+    const result = blockTypeParser("(number) -> any");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [{ name: "", typeAnnotation: { type: "primitiveType", value: "number" } }],
+        returnType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses () -> void with `->` arrow", () => {
+    const result = blockTypeParser("() -> void");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [],
+        returnType: { type: "primitiveType", value: "void" },
+      });
+    }
+  });
+
+  // ----- Named params -----
+
+  it("parses (userMsg: string) -> string with named param", () => {
+    const result = blockTypeParser("(userMsg: string) -> string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [{ name: "userMsg", typeAnnotation: { type: "primitiveType", value: "string" } }],
+        returnType: { type: "primitiveType", value: "string" },
+      });
+    }
+  });
+
+  it("parses (userMsg: string) => string with named param + legacy arrow", () => {
+    // Names are independent of arrow choice — both arrows accept names.
+    const result = blockTypeParser("(userMsg: string) => string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [{ name: "userMsg", typeAnnotation: { type: "primitiveType", value: "string" } }],
+        returnType: { type: "primitiveType", value: "string" },
+      });
+    }
+  });
+
+  it("parses (a: string, b: number) -> boolean with multiple named params", () => {
+    const result = blockTypeParser("(a: string, b: number) -> boolean");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [
+          { name: "a", typeAnnotation: { type: "primitiveType", value: "string" } },
+          { name: "b", typeAnnotation: { type: "primitiveType", value: "number" } },
+        ],
+        returnType: { type: "primitiveType", value: "boolean" },
+      });
+    }
+  });
+
+  it("parses (a: string, number, c: boolean) -> any with mixed named/unnamed params", () => {
+    const result = blockTypeParser("(a: string, number, c: boolean) -> any");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [
+          { name: "a", typeAnnotation: { type: "primitiveType", value: "string" } },
+          { name: "", typeAnnotation: { type: "primitiveType", value: "number" } },
+          { name: "c", typeAnnotation: { type: "primitiveType", value: "boolean" } },
+        ],
+        returnType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  // ----- Disambiguation against parenthesizedType -----
+  //
+  // `(string)` alone is a parenthesized type. With the new named-param
+  // alternative we have to be sure the parser doesn't speculatively
+  // commit to a block-type and fail if the arrow is missing — and that
+  // `(name: type)` outside a block-type context is still a parse error
+  // (it always was; we just want a regression guard).
+
+  it("variableTypeParser routes `(string)` to parenthesizedType, not blockType-missing-arrow", () => {
+    const result = variableTypeParser("(string)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).not.toBe("blockType");
+    }
+  });
+
+  it("variableTypeParser routes `(string) -> string` to blockType", () => {
+    const result = variableTypeParser("(string) -> string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("blockType");
+    }
+  });
+
+  it("variableTypeParser rejects `(name: type)` (no arrow follows)", () => {
+    // `name: type` is only valid as a block-type param. Without a
+    // trailing arrow, it shouldn't parse as a type at all.
+    const result = variableTypeParser("(name: string)");
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("parenthesized type", () => {

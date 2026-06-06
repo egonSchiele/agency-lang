@@ -27,7 +27,7 @@ def withDefaults(x: number, y: number = 10) {
   return add(x, y)
 }
 
-def withBlock(items: string[], block: (string) => string): string[] {
+def withBlock(items: string[], block: (string) -> string): string[] {
   const result = []
   for (item in items) {
     result.push(block(item))

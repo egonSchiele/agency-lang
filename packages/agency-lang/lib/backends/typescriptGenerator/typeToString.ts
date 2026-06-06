@@ -144,11 +144,22 @@ export function variableTypeToString(
   } else if (variableType.type === "typeAliasVariable") {
     return `${variableType.aliasName}${formatValueArgs(variableType.valueArgs)}`;
   } else if (variableType.type === "blockType") {
+    // Dialect-keyed arrow: `->` for Agency source, `=>` for TypeScript
+    // codegen. Param names are surfaced in both dialects when present
+    // (TS function types accept named params).
+    const arrow = forFormatting ? "->" : "=>";
     const params = variableType.params
-      .map((p) => variableTypeToString(p.typeAnnotation, typeAliases, forFormatting))
+      .map((p) => {
+        const t = variableTypeToString(
+          p.typeAnnotation,
+          typeAliases,
+          forFormatting,
+        );
+        return p.name ? `${p.name}: ${t}` : t;
+      })
       .join(", ");
     const ret = variableTypeToString(variableType.returnType, typeAliases, forFormatting);
-    return `(${params}) => ${ret}`;
+    return `(${params}) ${arrow} ${ret}`;
   } else if (variableType.type === "resultType") {
     const s = variableTypeToString(variableType.successType, typeAliases, forFormatting);
     const f = variableTypeToString(variableType.failureType, typeAliases, forFormatting);

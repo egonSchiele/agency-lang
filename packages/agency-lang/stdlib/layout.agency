@@ -350,7 +350,7 @@ def _addRow(
   gap: number = 0,
   align: Alignment = "start",
   children: LayoutNode[] = null,
-  block: (LayoutBuilder) => void = null,
+  block: (LayoutBuilder) -> void = null,
 ): LayoutNode {
   const n = row(gap: gap, align: align, children: children, block: block)
   kids.push(n)
@@ -362,7 +362,7 @@ def _addColumn(
   gap: number = 0,
   align: Alignment = "start",
   children: LayoutNode[] = null,
-  block: (LayoutBuilder) => void = null,
+  block: (LayoutBuilder) -> void = null,
 ): LayoutNode {
   const n = column(gap: gap, align: align, children: children, block: block)
   kids.push(n)
@@ -377,7 +377,7 @@ def _addBox(
   borderColor: string = "",
   padding: number = 1,
   children: LayoutNode[] = null,
-  block: (LayoutBuilder) => void = null,
+  block: (LayoutBuilder) -> void = null,
 ): LayoutNode {
   const n = box(
     title: title,
@@ -423,7 +423,7 @@ export def row(
   gap: number = 0,
   align: Alignment = "start",
   children: LayoutNode[] = null,
-  block: (LayoutBuilder) => void = null,
+  block: (LayoutBuilder) -> void = null,
 ): LayoutNode {
   const kids: any[] = []
   if (children != null) {
@@ -456,7 +456,7 @@ export def column(
   gap: number = 0,
   align: Alignment = "start",
   children: LayoutNode[] = null,
-  block: (LayoutBuilder) => void = null,
+  block: (LayoutBuilder) -> void = null,
 ): LayoutNode {
   const kids: any[] = []
   if (children != null) {
@@ -498,7 +498,7 @@ export def box(
   borderColor: string = "",
   padding: number = 1,
   children: LayoutNode[] = null,
-  block: (LayoutBuilder) => void = null,
+  block: (LayoutBuilder) -> void = null,
 ): LayoutNode {
   const kids: any[] = []
   if (children != null) {
@@ -654,7 +654,7 @@ export def table(
   footerDivider: boolean = true,
   rowDividers: boolean = false,
   columnDividers: boolean = true,
-  block: (TableBuilder) => void = null,
+  block: (TableBuilder) -> void = null,
 ): LayoutNode {
   // Copy body / footer into fresh arrays before the block runs.
   // The builder's `t.row(...)` / `t.footer(...)` push onto these,

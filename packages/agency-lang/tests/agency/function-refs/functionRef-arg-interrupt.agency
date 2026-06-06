@@ -2,7 +2,7 @@ def double(x: number): number {
   return x * 2
 }
 
-def useTransform(transform: (number) => number) {
+def useTransform(transform: (number) -> number) {
   const before = transform(5)
   return interrupt("confirm")
   const after = transform(10)

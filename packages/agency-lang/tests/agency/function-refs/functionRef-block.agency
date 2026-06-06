@@ -1,4 +1,4 @@
-def twice(block: () => string): string[] {
+def twice(block: () -> string): string[] {
   let a: string = block()
   let b: string = block()
   return [a, b]

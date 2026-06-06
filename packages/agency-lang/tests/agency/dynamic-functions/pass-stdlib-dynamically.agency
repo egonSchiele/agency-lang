@@ -1,4 +1,4 @@
-def applyFn(fn: (number) => number, x: number): number {
+def applyFn(fn: (number) -> number, x: number): number {
   return fn(x)
 }
 

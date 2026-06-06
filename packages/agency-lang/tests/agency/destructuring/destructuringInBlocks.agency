@@ -2,11 +2,11 @@
 // lowering only recursed into function/graphNode bodies, so a destructure
 // inside a trailing-as block argument would reach the TS builder with the
 // pattern still attached, never emitting actual bindings.
-def withResult(block: () => any): any {
+def withResult(block: () -> any): any {
   return block()
 }
 
-def mapItems(items: any[], block: (any) => any): any[] {
+def mapItems(items: any[], block: (any) -> any): any[] {
   let result: any[] = []
   for (item in items) {
     result.push(block(item))

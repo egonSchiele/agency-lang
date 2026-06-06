@@ -1,4 +1,4 @@
-def mapItems(items: any[], block: (any) => any): any[] {
+def mapItems(items: any[], block: (any) -> any): any[] {
   let results: any[] = []
   for (item in items) {
     let result = block(item)

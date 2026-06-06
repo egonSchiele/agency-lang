@@ -1,9 +1,37 @@
 /**Module docs for formatter fixture.*/
 // leading comment
-type Person={name:string,meta:{active:boolean}}
+type Person = {
+  name: string;
+  meta: { active: boolean }
+}
 /* block comment before function */
-def double(x:number):number{return x*2}
+def double(x: number): number {
+  return x * 2
+}
 /**Build a greeting.*/
-def greet(person:Person):string{return "hello "+person.name}
-def wrap(value:number,block:(number)=>number):number{const next=block(value);return next}
-node main(){const person:Person={name:"Ada",meta:{active:true}};const mapped=wrap(3) as value {const doubled=value |> double;return doubled};print(greet(person));return {person:person,mapped:mapped}}
+def greet(person: Person): string {
+  return "hello ${person.name}"
+}
+
+def wrap(value: number, block: (number) -> number): number {
+  const next = block(value)
+  return next
+}
+
+node main() {
+  const person: Person = {
+    name: "Ada",
+    meta: {
+      active: true
+    }
+  }
+  const mapped = wrap(3) as value {
+    const doubled = value |> double
+    return doubled
+  }
+  print(greet(person))
+  return {
+    person: person,
+    mapped: mapped
+  }
+}

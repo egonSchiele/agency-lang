@@ -538,10 +538,10 @@ Walk a Markdown AST top-down, calling `block` on every block and inline
   ```ts
   const result = parse(input)
   const transformed = walk(result.blocks) as node {
-    if (node.type == "code-block") {
-      return { ...node, content: highlight(node.content, node.language) }
-    }
-    return node
+  if (node.type == "code-block") {
+  return { ...node, content: highlight(node.content, node.language) }
+  }
+  return node
   }
   ```
 

@@ -1,4 +1,4 @@
-export def sample(n: number, block: () => any): any[] {
+export def sample(n: number, block: () -> any): any[] {
   """
   Run a block n times in parallel. Returns an array of all results.
 
@@ -10,7 +10,7 @@ export def sample(n: number, block: () => any): any[] {
   }
 }
 
-export def consensus(n: number, block: () => any): any {
+export def consensus(n: number, block: () -> any): any {
   """
   Run a block n times in parallel and return the most common result (majority vote).
 
@@ -21,7 +21,7 @@ export def consensus(n: number, block: () => any): any {
   return mostCommon(results)
 }
 
-export def retry(n: number, test: (any) => boolean, block: () => any): any {
+export def retry(n: number, test: (any) -> boolean, block: () -> any): any {
   """
   Run a block up to n times. Returns the first result that passes the test function. Returns null if all attempts fail.
 
@@ -39,7 +39,11 @@ export def retry(n: number, test: (any) => boolean, block: () => any): any {
   return null
 }
 
-export def retryWithFeedback(n: number, test: (any) => boolean, block: (any, number) => any): any {
+export def retryWithFeedback(
+  n: number,
+  test: (any) -> boolean,
+  block: (any, number) -> any,
+): any {
   """
   Run a block up to n times. Each attempt receives the previous result and the attempt number (starting from 1). Returns the first result that passes the test, or the last result if all fail.
 
@@ -59,7 +63,11 @@ export def retryWithFeedback(n: number, test: (any) => boolean, block: (any, num
   return prev
 }
 
-export def firstValid(variants: any[], test: (any) => boolean, block: (any) => any): any {
+export def firstValid(
+  variants: any[],
+  test: (any) -> boolean,
+  block: (any) -> any,
+): any {
   """
   Run a block for each variant in parallel, then return the first result that passes the test. Returns null if none pass.
 

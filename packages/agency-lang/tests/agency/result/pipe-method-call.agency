@@ -7,8 +7,8 @@
 // way.
 
 type Math = {
-  factor: number,
-  multiply: (number) => Result
+  factor: number;
+  multiply: (number) -> Result
 }
 
 def multiplyBy(factor: number, x: number): Result {

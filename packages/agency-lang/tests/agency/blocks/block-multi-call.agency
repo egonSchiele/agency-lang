@@ -1,4 +1,4 @@
-def callTwice(block: () => number): number[] {
+def callTwice(block: () -> number): number[] {
   let a = block()
   let b = block()
   return [a, b]

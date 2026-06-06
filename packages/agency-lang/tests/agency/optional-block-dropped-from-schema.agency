@@ -5,7 +5,7 @@
 //
 // This hand-crafted agency test exercises the body's "did we get a
 // block?" branch — no LLM involved.
-def runWith(label: string, block: () => string = null): string {
+def runWith(label: string, block: () -> string = null): string {
   if (block == null) {
     return label + "/no-block"
   }

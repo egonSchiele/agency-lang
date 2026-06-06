@@ -1,4 +1,4 @@
-def withApproval(block: () => string): string {
+def withApproval(block: () -> string): string {
   let result = block()
   return result
 }

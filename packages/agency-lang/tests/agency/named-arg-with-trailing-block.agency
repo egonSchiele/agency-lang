@@ -9,12 +9,12 @@
 //  - mixed positional + named + trailing block
 //  - typed block param + trailing block
 
-def withBlock(label: string, block: () => any): string {
-  return label + ": " + block()
+def withBlock(label: string, block: () -> any): string {
+  return label + ": ${block()}"
 }
 
-def withMixed(prefix: string, suffix: string, block: () => number): string {
-  return prefix + " " + block() + " " + suffix
+def withMixed(prefix: string, suffix: string, block: () -> number): string {
+  return prefix + " ${block()} ${suffix}"
 }
 
 node singleNamedArg() {

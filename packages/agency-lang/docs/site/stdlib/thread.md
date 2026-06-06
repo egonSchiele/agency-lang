@@ -98,9 +98,9 @@ Get the cumulative cost (USD, floating point) of all LLM calls
   happened and cost real money).
 
   To measure a specific section, capture getCost() before and after:
-    const before = getCost()
-    // ... do work ...
-    const sectionCost = getCost() - before
+  const before = getCost()
+  // ... do work ...
+  const sectionCost = getCost() - before
 
 **Returns:** `number`
 
@@ -133,11 +133,11 @@ Run a block under a cost limit, a time limit, or both. The block
   variables are scoped to the block — only the block's return value
   is observable from the caller. Use isFailure(result) to branch on
   the trip; inspect `result.error.type` to distinguish:
-    - "guardFailure" — cumulative LLM cost exceeded `cost`. Read
-      `result.error.maxCost` and `result.error.actualCost`.
-    - "timeoutFailure" — compute time inside the block exceeded
-      `time`. Read `result.error.maxTime` and `result.error.actualTime`
-      (milliseconds).
+  - "guardFailure" — cumulative LLM cost exceeded `cost`. Read
+  `result.error.maxCost` and `result.error.actualCost`.
+  - "timeoutFailure" — compute time inside the block exceeded
+  `time`. Read `result.error.maxTime` and `result.error.actualTime`
+  (milliseconds).
 
   Time semantics are compute-time: wall clock only ticks while a
   Runner is actively executing inside the guarded scope. Time spent
@@ -167,16 +167,16 @@ Run a block under a cost limit, a time limit, or both. The block
   @param block - The work to run under the guard.
 
   Example:
-    const result = guard(cost: $2.0, time: 30s) as {
-      const a = llm("step 1")
-      const b = llm("step 2")
-      return a + b
-    }
-    if (isFailure(result)) {
-      print("Guard tripped: " + result.error.type)
-    } else {
-      print(result.value)
-    }
+  const result = guard(cost: $2.0, time: 30s) as {
+  const a = llm("step 1")
+  const b = llm("step 2")
+  return a + b
+  }
+  if (isFailure(result)) {
+  print("Guard tripped: " + result.error.type)
+  } else {
+  print(result.value)
+  }
 
 **Parameters:**
 

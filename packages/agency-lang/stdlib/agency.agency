@@ -208,7 +208,7 @@ export def formatFile(dir: string, filename: string): Result {
   return try _formatFile(dir, filename)
 }
 
-export def walkAST(ast: any, visitor: (any, any) => any): any {
+export def walkAST(ast: any, visitor: (any, any) -> any): any {
   """
   Walk every node in a deep-cloned copy of the AST, invoking the visitor with each (node, ancestors) pair. The visitor may mutate the node in place; mutations land in the returned AST. The original AST passed in is never modified.
 

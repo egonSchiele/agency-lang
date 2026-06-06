@@ -15,8 +15,8 @@
 */
 
 type Multiplier = {
-  factor: number,
-  multiply: (number) => Result
+  factor: number;
+  multiply: (number) -> Result
 }
 
 type Container = {
@@ -35,7 +35,9 @@ def makeMultiplier(f: number): Multiplier {
 }
 
 def makeContainer(f: number): Container {
-  return { inner: makeMultiplier(f) }
+  return {
+    inner: makeMultiplier(f)
+  }
 }
 
 node main() {
@@ -47,7 +49,9 @@ node main() {
   let r1 = success(5) |> makeContainer(3).inner.multiply
 
   // Chained receivers across multiple pipe stages.
-  let r2 = success(10) |> makeContainer(2).inner.multiply |> makeContainer(4).inner.multiply
+  let r2 = success(10)
+  |> makeContainer(2).inner.multiply
+  |> makeContainer(4).inner.multiply
 
   // Optional-chain receiver lowering is covered by the codegen
   // assertion in lib/backends/typescriptBuilder/pipeReceiverCodegen.test.ts
@@ -57,6 +61,6 @@ node main() {
 
   return {
     r1: r1.value,
-    r2: r2.value,
+    r2: r2.value
   }
 }

@@ -1,4 +1,4 @@
-export def mapValues(obj: any, func: (any, string) => any): any {
+export def mapValues(obj: any, func: (any, string) -> any): any {
   """
   Return a new object with the same keys, but with each value transformed by the function. The function receives (value, key).
 
@@ -12,7 +12,7 @@ export def mapValues(obj: any, func: (any, string) => any): any {
   return result
 }
 
-export def mapEntries(obj: any, func: (any, string) => any): any {
+export def mapEntries(obj: any, func: (any, string) -> any): any {
   """
   Return a new object by applying the function to each entry. The function receives (value, key) and should return { key, value }.
 
@@ -27,7 +27,7 @@ export def mapEntries(obj: any, func: (any, string) => any): any {
   return result
 }
 
-export def filterEntries(obj: any, func: (any, string) => boolean): any {
+export def filterEntries(obj: any, func: (any, string) -> boolean): any {
   """
   Return a new object containing only the entries for which the function returns true. The function receives (value, key).
 
@@ -43,7 +43,7 @@ export def filterEntries(obj: any, func: (any, string) => boolean): any {
   return result
 }
 
-export def everyEntry(obj: any, func: (any, string) => boolean): boolean {
+export def everyEntry(obj: any, func: (any, string) -> boolean): boolean {
   """
   Return true if the function returns true for every entry in the object. The function receives (value, key).
 
@@ -58,7 +58,7 @@ export def everyEntry(obj: any, func: (any, string) => boolean): boolean {
   return true
 }
 
-export def someEntry(obj: any, func: (any, string) => boolean): boolean {
+export def someEntry(obj: any, func: (any, string) -> boolean): boolean {
   """
   Return true if the function returns true for at least one entry in the object. The function receives (value, key).
 

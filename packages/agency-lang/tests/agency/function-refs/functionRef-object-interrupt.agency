@@ -12,7 +12,10 @@ def check() {
 }
 
 node main() {
-  const transforms: { a: (number) => number, b: (number) => number } = { a: double, b: triple }
+  const transforms: { a: (number) -> number; b: (number) -> number } = {
+    a: double,
+    b: triple
+  }
   const before = transforms.a(5)
   const r = check()
   const after = transforms.b(5)

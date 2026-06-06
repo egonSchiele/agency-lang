@@ -419,7 +419,7 @@ export def column(
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null,
+  block: (Builder) -> void = null,
 ): Element {
   """
   Build a vertical container. Children stack top-to-bottom. Pass a
@@ -483,7 +483,7 @@ export def row(
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null,
+  block: (Builder) -> void = null,
 ): Element {
   """
   Build a horizontal container. Children stack left-to-right. Pass a
@@ -541,7 +541,7 @@ export def box(
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null,
+  block: (Builder) -> void = null,
 ): Element {
   """
   Build a direction-neutral container. Use when you want to apply
@@ -599,7 +599,7 @@ def _addRow(
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null,
+  block: (Builder) -> void = null,
 ): Element {
   const elem = row(
     flex: flex,
@@ -630,7 +630,7 @@ def _addColumn(
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null,
+  block: (Builder) -> void = null,
 ): Element {
   const elem = column(
     flex: flex,
@@ -661,7 +661,7 @@ def _addBox(
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null,
+  block: (Builder) -> void = null,
 ): Element {
   const elem = box(
     flex: flex,
@@ -1768,5 +1768,5 @@ export def repl(
 
 export def clearScreen() {
   // ANSI escape code to clear the screen and move the cursor to the top-left.
-  print("\x1b[2J\x1b[H")
+  print("\\x1b[2J\\x1b[H")
 }

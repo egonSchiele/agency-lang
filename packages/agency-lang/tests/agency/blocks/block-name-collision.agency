@@ -1,4 +1,4 @@
-def apply(block: (number) => number): number {
+def apply(block: (number) -> number): number {
   return block(5)
 }
 

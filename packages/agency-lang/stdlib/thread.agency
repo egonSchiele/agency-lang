@@ -12,7 +12,7 @@ import {
   _getTokens,
   _pushGuard,
   _popGuard,
-} from "agency-lang/stdlib-lib/thread.js"
+ } from "agency-lang/stdlib-lib/thread.js"
 
 export def systemMessage(msg: string) {
   """
@@ -59,9 +59,9 @@ export safe def getCost(): number {
   happened and cost real money).
 
   To measure a specific section, capture getCost() before and after:
-    const before = getCost()
-    // ... do work ...
-    const sectionCost = getCost() - before
+  const before = getCost()
+  // ... do work ...
+  const sectionCost = getCost() - before
   """
   return _getCost()
 }
@@ -75,18 +75,22 @@ export safe def getTokens(): number {
 }
 
 export type GuardFailureData = {
-  type: string,
-  maxCost: number | null,
-  actualCost: number | null,
-  maxTime: number | null,
-  actualTime: number | null,
+  type: string;
+  maxCost: number | null;
+  actualCost: number | null;
+  maxTime: number | null;
+  actualTime: number | null
 }
 
 // Block has `= null` so the parser accepts trailing optional params.
 // The block is ALWAYS supplied via `guard(...) as { ... }` trailing-
 // block syntax; the default is only there to satisfy the parser's
 // requirement that defaults trail.
-export def guard(cost: (number | null) = null, time: (number | null) = null, block: () => any = null): Result {
+export def guard(
+  cost: number | null = null,
+  time: number | null = null,
+  block: () -> any = null,
+): Result {
   """
   Run a block under a cost limit, a time limit, or both. The block
   aborts as soon as either limit is exceeded; whichever fires first
@@ -96,11 +100,11 @@ export def guard(cost: (number | null) = null, time: (number | null) = null, blo
   variables are scoped to the block — only the block's return value
   is observable from the caller. Use isFailure(result) to branch on
   the trip; inspect `result.error.type` to distinguish:
-    - "guardFailure" — cumulative LLM cost exceeded `cost`. Read
-      `result.error.maxCost` and `result.error.actualCost`.
-    - "timeoutFailure" — compute time inside the block exceeded
-      `time`. Read `result.error.maxTime` and `result.error.actualTime`
-      (milliseconds).
+  - "guardFailure" — cumulative LLM cost exceeded `cost`. Read
+  `result.error.maxCost` and `result.error.actualCost`.
+  - "timeoutFailure" — compute time inside the block exceeded
+  `time`. Read `result.error.maxTime` and `result.error.actualTime`
+  (milliseconds).
 
   Time semantics are compute-time: wall clock only ticks while a
   Runner is actively executing inside the guarded scope. Time spent
@@ -130,16 +134,16 @@ export def guard(cost: (number | null) = null, time: (number | null) = null, blo
   @param block - The work to run under the guard.
 
   Example:
-    const result = guard(cost: $2.0, time: 30s) as {
-      const a = llm("step 1")
-      const b = llm("step 2")
-      return a + b
-    }
-    if (isFailure(result)) {
-      print("Guard tripped: " + result.error.type)
-    } else {
-      print(result.value)
-    }
+  const result = guard(cost: $2.0, time: 30s) as {
+  const a = llm("step 1")
+  const b = llm("step 2")
+  return a + b
+  }
+  if (isFailure(result)) {
+  print("Guard tripped: " + result.error.type)
+  } else {
+  print(result.value)
+  }
   """
   const count = _pushGuard(cost, time)
   const result = try block()

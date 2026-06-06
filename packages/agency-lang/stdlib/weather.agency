@@ -31,6 +31,11 @@ export safe def weather(location: string, units: string = "imperial"): Result {
   @param location - City name or zip code
   @param units - "imperial" for Fahrenheit or "metric" for Celsius
   """
+  return interrupt std::weather("Are you sure you want to fetch the weather from Open-Meteo?", {
+    location: location,
+    units: units
+  })
+
   return try _weather(location, units)
 }
 

@@ -133,6 +133,8 @@ Build a skills tool for an LLM over a directory of skills.
 | dir | `string` |  |
 | layout | `"flat" \| "standard"` | "standard" |
 
+**Throws:** `std::skills::skillsDir`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L95))
 
 ### stripFm
@@ -149,7 +151,7 @@ stripFm(raw: string): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L149))
 
 ### commandsDir
 
@@ -200,7 +202,9 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L191))
+**Throws:** `std::skills::commandsDir`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L196))
 
 ### expandSlash
 
@@ -240,4 +244,4 @@ Expand a /command in `msg` using a `commandsDir(...)` result.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L253))

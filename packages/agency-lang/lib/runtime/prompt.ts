@@ -405,68 +405,68 @@ export async function runPrompt(args: {
 
   let shouldPop = true;
   try {
-  // Initial LLM call wrapped in pr.step so it's idempotent on resume
-  // (re-entries after a later tool-batch bailout skip this step).
-  await pr.step("initialLlmCall", async () => {
-    let injectedFactsContent: string | null = null;
-    const recallManager = ctx.getActiveMemoryManager();
-    if (memoryOption && recallManager) {
+    // Initial LLM call wrapped in pr.step so it's idempotent on resume
+    // (re-entries after a later tool-batch bailout skip this step).
+    await pr.step("initialLlmCall", async () => {
+      let injectedFactsContent: string | null = null;
+      const recallManager = ctx.getActiveMemoryManager();
+      if (memoryOption && recallManager) {
+        try {
+          const facts = await recallManager.recallForInjection(prompt);
+          if (facts) {
+            injectedFactsContent = `Relevant context from memory:\n${facts}`;
+            messages.push(smoltalk.systemMessage(injectedFactsContent));
+          }
+        } catch (err) {
+          // Guard trips are signals, not best-effort failures — let
+          // them bubble to the surrounding `withCostGuard` scope.
+          if (isGuardExceededError(err)) throw err;
+          createLogger(ctx.logLevel).warn(
+            `[memory] recall injection failed: ${(err as Error).message}`,
+          );
+        }
+      }
+      messages.push(smoltalk.userMessage(prompt));
+      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+      let result: RunPromptResult;
       try {
-        const facts = await recallManager.recallForInjection(prompt);
-        if (facts) {
-          injectedFactsContent = `Relevant context from memory:\n${facts}`;
-          messages.push(smoltalk.systemMessage(injectedFactsContent));
-        }
-      } catch (err) {
-        // Guard trips are signals, not best-effort failures — let
-        // them bubble to the surrounding `withCostGuard` scope.
-        if (isGuardExceededError(err)) throw err;
-        createLogger(ctx.logLevel).warn(
-          `[memory] recall injection failed: ${(err as Error).message}`,
-        );
+        result = await _runPrompt({
+          ctx,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+        });
+      } catch (e) {
+        closeLlmSpan();
+        throw e;
       }
-    }
-    messages.push(smoltalk.userMessage(prompt));
-    currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-    let result: RunPromptResult;
-    try {
-      result = await _runPrompt({
-        ctx,
-        messages,
-        tools: tools || [],
-        prompt,
-        responseFormat,
-        clientConfig,
-        stateStack,
-      });
-    } catch (e) {
-      closeLlmSpan();
-      throw e;
-    }
-    messages = result.messages;
-    toolCalls = result.toolCalls;
-    if (injectedFactsContent !== null) {
-      const all = messages.getMessages();
-      for (let i = all.length - 1; i >= 0; i--) {
-        if (
-          all[i].role === "system" &&
-          all[i].content === injectedFactsContent
-        ) {
-          messages.setMessages([...all.slice(0, i), ...all.slice(i + 1)]);
-          break;
+      messages = result.messages;
+      toolCalls = result.toolCalls;
+      if (injectedFactsContent !== null) {
+        const all = messages.getMessages();
+        for (let i = all.length - 1; i >= 0; i--) {
+          if (
+            all[i].role === "system" &&
+            all[i].content === injectedFactsContent
+          ) {
+            messages.setMessages([...all.slice(0, i), ...all.slice(i + 1)]);
+            break;
+          }
         }
       }
-    }
-    self.messagesJSON = messages.toJSON().messages;
-    self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-  });
+      self.messagesJSON = messages.toJSON().messages;
+      self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+    });
 
-  // After resume (initialLlmCall skipped), make sure there's an open
-  // llmCall span if we have pending tool calls — the tool loop expects
-  // one to be open so toolExecution spans nest correctly.
-  if (toolCalls.length > 0 && currentLlmSpanId === undefined) {
-    currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-  }
+    // After resume (initialLlmCall skipped), make sure there's an open
+    // llmCall span if we have pending tool calls — the tool loop expects
+    // one to be open so toolExecution spans nest correctly.
+    if (toolCalls.length > 0 && currentLlmSpanId === undefined) {
+      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+    }
 
     // Inner helper for the per-branch tool invocation. Extracted from
     // the pr.parallel branchFn so that arrow stays within the
@@ -484,11 +484,11 @@ export async function runPrompt(args: {
     }): Promise<{
       toolResult: any;
       invokeOutcome:
-        | "success"
-        | "failed"
-        | "rejected"
-        | "interrupted"
-        | "crashed";
+      | "success"
+      | "failed"
+      | "rejected"
+      | "interrupted"
+      | "crashed";
       interrupts?: any[];
     }> => {
       const { handler, toolCall, namedArgs, branchKey, branchStack } = args;
@@ -520,9 +520,9 @@ export async function runPrompt(args: {
           });
         toolResult = parentFrame
           ? await agencyStore.run(
-              { ...parentFrame, threads: freshThreads },
-              invokeAsTool,
-            )
+            { ...parentFrame, threads: freshThreads },
+            invokeAsTool,
+          )
           : await invokeAsTool();
       } catch (error: unknown) {
         const errorMessage =
@@ -638,11 +638,6 @@ export async function runPrompt(args: {
     // Handle tool calls
     while (toolCalls.length > 0) {
       if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
-      if (self.toolCallRound >= maxToolCallRounds) {
-        throw new Error(
-          `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
-        );
-      }
       // Capture round BEFORE incrementing so pr.step keys are stable
       // across resume. The actual increment happens inside the
       // `nextLlmCall` step body, after a successful LLM round — that
@@ -691,6 +686,22 @@ export async function runPrompt(args: {
             );
             return;
           }
+
+          if (self.toolCallRound >= maxToolCallRounds) {
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.tooManyRounds`,
+              async () => {
+                messages.push(
+                  smoltalk.toolMessage(
+                    `Error: Maximum number of tool call rounds (${maxToolCallRounds}) exceeded. This tool call will not be executed.`,
+                    { tool_call_id: toolCall.id, name: toolCall.name },
+                  ),
+                );
+              },
+            );
+            return;
+          }
+
 
           // Gated start (strategy B): if the tool is already in
           // removedTools (either from a prior round or from an earlier

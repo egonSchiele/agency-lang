@@ -25,6 +25,8 @@ Search Wikipedia for articles matching the given query. Returns up to limit resu
 
 **Returns:** `WikiSearchResult[]`
 
+**Throws:** `std::wikipedia::search`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L22))
 
 ### summary
@@ -43,7 +45,9 @@ Get a summary of a Wikipedia article by its title. Returns the title, descriptio
 
 **Returns:** [WikiSummary](#wikisummary)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L29))
+**Throws:** `std::wikipedia::summary`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L34))
 
 ### article
 
@@ -61,4 +65,6 @@ Get the full text of a Wikipedia article by its title. Returns the title, full p
 
 **Returns:** [WikiArticle](#wikiarticle)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L36))
+**Throws:** `std::wikipedia::article`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L45))

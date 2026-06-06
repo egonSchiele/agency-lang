@@ -38,4 +38,6 @@ Search the web. Returns a list of results with title, url, and description. Set 
 
 **Returns:** `SearchResult[]`
 
+**Throws:** `std::search`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L18))

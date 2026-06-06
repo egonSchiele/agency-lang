@@ -99,6 +99,11 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   @param dir - Directory containing the skills.
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
   """
+  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
+    dir: dir,
+    layout: layout
+  })
+
   let pattern = "*/SKILL.md"
   if (layout == "flat") {
     pattern = "*.{md,markdown}"
@@ -197,6 +202,10 @@ export def commandsDir(dir: string): any[] {
     absolute path (e.g. cwd()/.claude/commands) to anchor at the
     project root rather than the calling module's directory.
   """
+  return interrupt std::skills::commandsDir("Are you sure you want to scan this directory for slash command files?", {
+    dir: dir
+  })
+
   const pathsResult = glob("*.md", dir)
   if (pathsResult is success(paths)) {
     return map(paths) as p {

@@ -22,7 +22,7 @@ export safe def search(
   country: string = "",
   searchLang: string = "",
   safesearch: string = "",
-  freshness: string = ""
+  freshness: string = "",
 ): SearchResult[] {
   """
   Search the web. Returns a list of results with title, url, and description. Set BRAVE_API_KEY env var or pass apiKey directly. Backed by the Brave Search API (https://brave.com/search/api/).
@@ -35,12 +35,23 @@ export safe def search(
   @param safesearch - Safe search level ("off", "moderate", "strict")
   @param freshness - Time-based filter ("pd" past day, "pw" past week, "pm" past month, "py" past year)
   """
-  return _search(query, {
+  return interrupt std::search("Are you sure you want to perform this web search?", {
+    query: query,
+    count: count,
+    country: country,
+    searchLang: searchLang,
+    safesearch: safesearch,
+    freshness: freshness
+  })
+  return _search(
+    query,
+    {
     count: count,
     apiKey: apiKey,
     country: country,
     searchLang: searchLang,
     safesearch: safesearch,
     freshness: freshness
-  })
+  },
+  )
 }

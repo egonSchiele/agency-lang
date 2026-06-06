@@ -75,6 +75,10 @@ export def setMemoryId(id: string) {
 
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
+  return interrupt std::memory::setMemoryId("Are you sure you want to change the memory scope id?", {
+    id: id
+  })
+
   _setMemoryId(id)
 }
 
@@ -103,6 +107,10 @@ export def enableMemory(config: MemoryConfig) {
 
   @param config - Memory configuration with `dir` required
   """
+  return interrupt std::memory::enableMemory("Are you sure you want to enable memory at this directory?", {
+    dir: config.dir
+  })
+
   _enableMemory(config)
 }
 
@@ -119,6 +127,8 @@ export def disableMemory() {
   Prefer the block form `memory({...}) as { ... }` for lexical
   scoping, which restores the previous frame on exit.
   """
+  return interrupt std::memory::disableMemory("Are you sure you want to disable memory (pop the top memory frame)?", {})
+
   _disableMemory()
 }
 
@@ -147,6 +157,10 @@ export def memory(config: MemoryConfig, block: () -> any = null): Result {
   @param config - Memory configuration with `dir` required
   @param block - The code to run with the frame active
   """
+  return interrupt std::memory::memory("Are you sure you want to push a memory frame for this directory?", {
+    dir: config.dir
+  })
+
   const pushed = _pushMemoryFrame(config)
   const result = try block()
   if (pushed) {
@@ -169,6 +183,10 @@ export def remember(content: string) {
   @param content - Natural language text containing facts to remember
   """
   if (_shouldRunMemory()) {
+    return interrupt std::memory::remember("Are you sure you want to extract and persist facts to memory?", {
+      contentLength: content.length
+    })
+
     thread {
       const prompt = _buildExtractionPrompt(content)
       const result: ExtractionResult = llm(prompt)
@@ -204,6 +222,10 @@ export def forget(query: string) {
   @param query - A natural language description of what to forget
   """
   if (_shouldRunMemory()) {
+    return interrupt std::memory::forget("Are you sure you want to soft-delete facts matching this query from memory?", {
+      query: query
+    })
+
     thread {
       const prompt = _buildForgetPrompt(query)
       const result: ForgetResult = llm(prompt)

@@ -23,6 +23,11 @@ export safe def search(query: string, limit: number = 5): WikiSearchResult[] {
   """
   Search Wikipedia for articles matching the given query. Returns up to limit results (default 5).
   """
+  return interrupt std::wikipedia::search("Are you sure you want to search Wikipedia?", {
+    query: query,
+    limit: limit
+  })
+
   return _search(query, limit)
 }
 
@@ -30,6 +35,10 @@ export safe def summary(title: string): WikiSummary {
   """
   Get a summary of a Wikipedia article by its title. Returns the title, description, intro extract, and URL.
   """
+  return interrupt std::wikipedia::summary("Are you sure you want to fetch this Wikipedia article summary?", {
+    title: title
+  })
+
   return _summary(title)
 }
 
@@ -37,5 +46,9 @@ export safe def article(title: string): WikiArticle {
   """
   Get the full text of a Wikipedia article by its title. Returns the title, full plain text content, and URL.
   """
+  return interrupt std::wikipedia::article("Are you sure you want to fetch this Wikipedia article?", {
+    title: title
+  })
+
   return _article(title)
 }

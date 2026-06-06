@@ -68,6 +68,8 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
+**Throws:** `std::memory::setMemoryId`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L62))
 
 ### enableMemory
@@ -105,7 +107,9 @@ Turn memory on for the current execution branch using `config`.
 |---|---|---|
 | config | [MemoryConfig](#memoryconfig) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L81))
+**Throws:** `std::memory::enableMemory`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L85))
 
 ### disableMemory
 
@@ -124,7 +128,9 @@ Pop the top memory frame from the current branch's stateStack.
   Prefer the block form `memory({...}) as { ... }` for lexical
   scoping, which restores the previous frame on exit.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L109))
+**Throws:** `std::memory::disableMemory`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L117))
 
 ### memory
 
@@ -164,7 +170,9 @@ Run `block` with `config` pushed as the active memory frame; pop
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L125))
+**Throws:** `std::memory::memory`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L135))
 
 ### remember
 
@@ -189,7 +197,9 @@ Extract and store structured facts from the given text into the
 |---|---|---|
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L158))
+**Throws:** `std::memory::remember`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L172))
 
 ### recall
 
@@ -214,7 +224,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L180))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L198))
 
 ### forget
 
@@ -238,4 +248,6 @@ Soft-delete facts matching the query from the knowledge graph.
 |---|---|---|
 | query | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L194))
+**Throws:** `std::memory::forget`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L212))

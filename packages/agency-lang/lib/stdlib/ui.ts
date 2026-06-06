@@ -14,7 +14,8 @@ import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
-import { isFailure } from "../runtime/result.js";
+import { isFailure, success, failure } from "../runtime/result.js";
+import prompts from "prompts";
 
 // ---------------------------------------------------------------------------
 // Declarative TS bridge for `std::ui`. Exposes the existing
@@ -640,79 +641,246 @@ export function _writeScrollLine(text: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Styled fallback for `chooseOption()` — the line-mode / no-REPL path.
-//
-// When no `repl()` owns the screen (line mode, scripted runs), the
-// Agency-side `chooseOption()` calls `_printChoicePromptFallback`
-// here to render the interrupt menu as a visually-separated block
-// before kicking off the `input()` retry loop. The TUI's modal
-// renderer (`_openChoicePrompt`) is unaffected — this is purely the
-// fallback path that prior to this used four plain `print()` calls.
-//
-// TTY detection: piped output (e.g. `agency-agent | tee log.txt`)
-// gets the original plain rendering so log files stay free of ANSI
-// escape sequences.
+// Line-mode prompt bridges (backed by the `prompts` package).
+// Used by chooseOption's line-mode branch and exposed as Agency
+// primitives (select / autocomplete / prompt / confirm — note the
+// Agency wrapper renames `_promptsText` to `prompt` to avoid colliding
+// with the Layer 1 `text` element builder). Each raises if invoked
+// while a `repl()` owns the screen, or when stdout is not a TTY —
+// there is no non-TTY fallback by design.
 // ---------------------------------------------------------------------------
 
-/**
- * Render an interrupt-style choice prompt to stdout: blank line,
- * dim-gray background block with bold yellow `⚠ Title`, body lines,
- * and aligned `key  label` rows; blank line trailing. The `input("> ")`
- * loop that captures the answer stays on the Agency side.
- *
- * On a non-TTY stdout, falls through to plain `console.log` lines
- * matching the pre-styling output so piped logs stay clean.
- */
-export function _printChoicePromptFallback(
-  title: string,
-  body: string,
-  items: ChoiceItem[],
-): void {
-  const out = process.stdout;
-  if (!out.isTTY) {
-    if (title) console.log(title);
-    if (body) console.log(body);
-    for (const it of items) {
-      console.log(`  ${it.key}  ${it.label}`);
-    }
-    return;
-  }
-  const BG = "\x1b[48;5;236m";
-  const RESET = "\x1b[0m";
-  const EOL = "\x1b[K"; // clear-to-end-of-line; keeps current bg
-  const WARN = "\x1b[1;33m"; // bold yellow
-  const KEY = "\x1b[1;96m"; // bold bright cyan, for the choice keys
-  const row = (content: string): string =>
-    `${BG}  ${content}${EOL}${RESET}`;
-  const blank = (): string => `${BG} ${EOL}${RESET}`;
+type PromptsChoiceItem = { key: string; label: string };
 
-  out.write("\n");
-  out.write(blank() + "\n");
-  if (title) {
-    out.write(row(`${WARN}⚠  ${title}${RESET}${BG}`) + "\n");
+function _assertLineModeAvailable(name: string): void {
+  if (_hasActiveScreen()) {
+    throw new Error(
+      `${name} cannot be used inside an active repl(); use chooseOption for in-TUI prompts`,
+    );
   }
-  if (body) {
-    if (title) out.write(blank() + "\n");
-    for (const line of body.split("\n")) {
-      out.write(row(line) + "\n");
-    }
+  if (!process.stdout.isTTY) {
+    throw new Error(`${name} requires a TTY (stdout is not a TTY)`);
   }
-  if (items.length > 0) {
-    out.write(blank() + "\n");
-    // Pad keys so labels align in a column.
-    let maxKey = 0;
-    for (const it of items) {
-      if (it.key.length > maxKey) maxKey = it.key.length;
-    }
-    for (const it of items) {
-      const padded = it.key.padEnd(maxKey, " ");
-      out.write(
-        row(`${KEY}${padded}${RESET}${BG}  ${it.label}`) + "\n",
-      );
-    }
+}
+
+// `__FREETEXT__:` is `_promptsAutocomplete`'s private wire format for
+// smuggling user-typed free-text values out of the autocomplete UI.
+// `_promptsSelect` uses a different mechanism (sentinel value +
+// follow-up text prompt) since `prompts.select` has no `suggest` hook.
+const AUTOCOMPLETE_FREE_TEXT_PREFIX = "__FREETEXT__:";
+
+// Shared cancellation+Result wrapper for every `prompts(...)` call.
+// All four bridges call this; the only differences between them are
+// the question they build and the post-processing they apply to the
+// successful value.
+//
+// Three side-effects beyond just calling prompts:
+//
+//   1. `onCancel` returns `false` to suppress prompts' default
+//      `process.exit(0)` on Ctrl+C / Escape, so we can return a
+//      Result.failure instead. (Callers loop on cancel to preserve
+//      `chooseOption`'s must-answer contract.)
+//
+//   2. Before opening the prompt, we call `globalThis.__agencyStopSpinner`
+//      if the line-mode REPL (`lib/stdlib/cli.ts`) has registered one.
+//      This pauses the "Thinking" timer while the user is being asked
+//      something — otherwise the timer keeps ticking over an open
+//      policy interrupt menu. No-op outside line-mode REPL.
+//
+//   3. We attach a stdin `data` listener that detects the Ctrl+C byte
+//      (`0x03`) and calls `process.exit(130)` immediately after the
+//      prompt resolves. Without this, `prompts` swallows Ctrl+C as an
+//      abort and our caller's retry loop reprompts forever, leaving
+//      the user with no way to quit. 130 = 128 + SIGINT, the standard
+//      shell convention for "killed by Ctrl+C".
+async function _runPrompt(question: prompts.PromptObject): Promise<any> {
+  const stopSpinner = (globalThis as any).__agencyStopSpinner;
+  if (typeof stopSpinner === "function") {
+    stopSpinner();
   }
-  out.write(blank() + "\n");
-  out.write("\n");
+
+  let cancelled = false;
+  let ctrlC = false;
+  const onStdinData = (chunk: Buffer): void => {
+    // 0x03 = Ctrl+C. Any chunk containing it counts (pastes can't
+    // legitimately include 0x03 in raw mode, so this is unambiguous).
+    if (chunk && chunk.includes(0x03)) ctrlC = true;
+  };
+  process.stdin.on("data", onStdinData);
+
+  try {
+    const answer = await prompts(question, {
+      onCancel: () => {
+        cancelled = true;
+        return false;
+      },
+    });
+
+    if (ctrlC) {
+      // Ctrl+C escapes the entire prompt session. Drop straight out
+      // of the process — even if the surrounding agency code has a
+      // retry loop, the user has signalled "quit, not retry."
+      process.exit(130);
+    }
+
+    // Real Ctrl+C / Escape triggers onCancel and leaves the answer
+    // object empty. We also treat a null/undefined value as cancel —
+    // none of our bridges legitimately resolve with null (select /
+    // autocomplete return strings, text returns string, confirm
+    // returns boolean), so this is a defensive coverage of the
+    // `prompts.inject([null])` test path and any future edge case.
+    if (cancelled || !("value" in answer) || answer.value == null) {
+      return failure("cancelled");
+    }
+    return success(answer.value);
+  } finally {
+    process.stdin.off("data", onStdinData);
+  }
+}
+
+// Exported for unit tests; do not call from production code.
+export function __suggestForTest(
+  input: string,
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+): Promise<{ title: string; value: string }[]> {
+  return _buildSuggest(items, allowFreeText)(input, []);
+}
+
+function _buildSuggest(
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+): (input: string, choices: any[]) => Promise<{ title: string; value: string }[]> {
+  return async (input: string, _choices: any[]) => {
+    const q = (input ?? "").toLowerCase();
+    // Match against `key` only (substring, case-insensitive), not
+    // against `label`. Policy interrupt labels routinely contain "r"
+    // (in "approve" and "reject") and "a" (in "always"), so a label
+    // substring match would never narrow anything — typing `r` would
+    // still show every row. Key-only matching produces the expected
+    // behavior: `r` shows just the `r` row, `ap` narrows to `ap` /
+    // `approve`-prefixed keys, etc. Users still see the label in the
+    // rendered title, so they're not flying blind.
+    const matched = items
+      .filter((it) => it.key.toLowerCase().includes(q))
+      .map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key }));
+    if (allowFreeText && input !== "" && matched.length === 0) {
+      matched.push({
+        title: `→ use as reason: "${input}"`,
+        value: `${AUTOCOMPLETE_FREE_TEXT_PREFIX}${input}`,
+      });
+    }
+    return matched;
+  };
+}
+
+export async function _promptsAutocomplete(
+  message: string,
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+  hint: string = "",
+): Promise<any> {
+  _assertLineModeAvailable("autocomplete");
+  const result = await _runPrompt({
+    type: "autocomplete",
+    name: "value",
+    message,
+    hint: hint || undefined,
+    choices: items.map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key })),
+    suggest: _buildSuggest(items, allowFreeText),
+  });
+  if (isFailure(result)) return result;
+  const raw = String(result.value);
+  if (raw.startsWith(AUTOCOMPLETE_FREE_TEXT_PREFIX)) {
+    return success(raw.slice(AUTOCOMPLETE_FREE_TEXT_PREFIX.length));
+  }
+  return success(raw);
+}
+
+// `_promptsSelect`'s free-text mechanism is intentionally different
+// from `_promptsAutocomplete`'s: `prompts.select` has no `suggest`
+// hook to inject a synthetic row's *value*, so we append a marker
+// row and then run a follow-up `prompts.text` call when the user
+// picks it. The two helpers (`SELECT_FREE_TEXT_SENTINEL` and
+// `AUTOCOMPLETE_FREE_TEXT_PREFIX`) are deliberately named differently
+// to make the divergence obvious in greps.
+const SELECT_FREE_TEXT_SENTINEL = "__FREETEXT__";
+
+export async function _promptsSelect(
+  message: string,
+  items: PromptsChoiceItem[],
+  allowFreeText: boolean,
+  hint: string = "",
+): Promise<any> {
+  _assertLineModeAvailable("select");
+  const choices = items.map((it) => ({
+    title: `${it.key}  ${it.label}`,
+    value: it.key,
+  }));
+  if (allowFreeText) {
+    choices.push({ title: "→ enter free text…", value: SELECT_FREE_TEXT_SENTINEL });
+  }
+  const result = await _runPrompt({
+    type: "select",
+    name: "value",
+    message,
+    hint: hint || undefined,
+    choices,
+  });
+  if (isFailure(result)) return result;
+  if (result.value === SELECT_FREE_TEXT_SENTINEL) {
+    // Already Result-shaped; cancel of the follow-up cancels the whole pick.
+    return _promptsText("free text:", "");
+  }
+  return success(String(result.value));
+}
+
+// Backs the Agency-side `prompt(...)` primitive (renamed from `text`
+// to avoid colliding with the Layer 1 `text` element builder; see the
+// banner comment above this section).
+//
+// `validate` is forwarded straight to `prompts`. Per the prompts
+// docs: return `true` for valid; return a string to reject and show
+// the string as the error message. The PFA story: a user binds
+// `validate` via `.partial(validate: myValidator)` before handing
+// `prompt` to an LLM as a tool, and the LLM cannot override it.
+export async function _promptsText(
+  message: string,
+  initial: string,
+  hint: string = "",
+  validate: ((value: string) => boolean | string) | null = null,
+): Promise<any> {
+  // "prompt" (the user-facing Agency primitive) rather than "text"
+  // (the internal `_promptsText` name) so thrown error messages
+  // match what the user typed: `prompt requires a TTY ...`.
+  _assertLineModeAvailable("prompt");
+  const result = await _runPrompt({
+    type: "text",
+    name: "value",
+    message,
+    initial: initial || undefined,
+    hint: hint || undefined,
+    validate: validate ?? undefined,
+  });
+  if (isFailure(result)) return result;
+  return success(String(result.value));
+}
+
+export async function _promptsConfirm(
+  message: string,
+  initial: boolean,
+): Promise<any> {
+  _assertLineModeAvailable("confirm");
+  const result = await _runPrompt({
+    type: "toggle",
+    name: "value",
+    message,
+    initial,
+    active: "yes",
+    inactive: "no",
+  });
+  if (isFailure(result)) return result;
+  return success(Boolean(result.value));
 }
 
 // ---------------------------------------------------------------------------

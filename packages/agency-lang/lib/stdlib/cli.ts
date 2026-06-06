@@ -737,6 +737,17 @@ export async function _runLineRepl(
     });
   };
 
+  // Register a global "stop spinner" hook for the line-mode prompt
+  // bridges in `lib/stdlib/ui.ts` (select / autocomplete / prompt /
+  // confirm). They bypass `__agencyInputOverride` (they don't use
+  // readline) but still need to pause the "Thinking" timer while the
+  // user is being asked something — otherwise the timer keeps ticking
+  // over an open policy interrupt menu. Same lifecycle as
+  // `__agencyInputOverride`: install on entry, restore on exit.
+  const stopSpinnerKey = "__agencyStopSpinner";
+  const prevStopSpinner = (globalThis as any)[stopSpinnerKey];
+  (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
+
   // Live slash-command popup. Renders matching commands below the
   // prompt as the user types `/...`, with cursor save/restore so
   // readline keeps drawing in the right column. Teardown happens in
@@ -811,6 +822,7 @@ export async function _runLineRepl(
   } finally {
     teardownHints();
     (globalThis as any)[overrideKey] = prevOverride;
+    (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
     // Persist whatever entries readline accumulated. The `history`
     // property is undocumented-ish but stable across Node versions
     // we support and is the only way to read it back.

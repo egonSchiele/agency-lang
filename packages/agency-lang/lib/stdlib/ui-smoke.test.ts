@@ -24,9 +24,36 @@ import {
   _setOutputTarget,
   _setSize,
   _uninstallConsoleCapture,
+  _promptsAutocomplete,
+  _promptsSelect,
+  _promptsText,
+  _promptsConfirm,
+  __suggestForTest,
 } from "agency-lang/stdlib-lib/ui.js";
+import prompts from "prompts";
 import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
+import { afterEach, beforeEach } from "vitest";
+
+// Spoof `process.stdout.isTTY` for tests that need to exercise the
+// TTY-required code path without depending on whether vitest itself
+// is running attached to a real TTY.
+let _restoreTty: (() => void) | null = null;
+function spoofTty(value: boolean): void {
+  const desc = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+  Object.defineProperty(process.stdout, "isTTY", {
+    configurable: true,
+    get: () => value,
+  });
+  _restoreTty = () => {
+    if (desc) Object.defineProperty(process.stdout, "isTTY", desc);
+    else delete (process.stdout as any).isTTY;
+    _restoreTty = null;
+  };
+}
+function restoreTty(): void {
+  if (_restoreTty) _restoreTty();
+}
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore – compiled-by-make Agency module; no .d.ts is emitted
 import { repl, chooseOption } from "../../stdlib/ui.js";
@@ -483,80 +510,416 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
   });
 });
 
-describe("std::ui — chooseOption line-mode fallback", () => {
-  it("returns free text verbatim when allowFreeText is true and input is not a known key", async () => {
-    // No active repl() → chooseOption hits the `print + input` loop.
-    // Inject `__agencyInputOverride` to feed a free-form rejection
-    // reason; with `allowFreeText: true` it should be returned
-    // verbatim instead of reprompting.
-    const fed: string[] = [];
-    (globalThis as any).__agencyInputOverride = async (_prompt: string) => {
-      const text = "please don't delete that file";
-      fed.push(text);
-      return text;
-    };
+describe("std::ui — chooseOption line-mode (prompts-backed)", () => {
+  afterEach(() => restoreTty());
+
+  it("returns the picked key on a clean select", async () => {
+    spoofTty(true);
+    prompts.inject(["a"]);
     const ctx = makeTestCtx();
-    try {
-      const answer = await runInTestContext(
-        ctx,
-        new StateStack(),
-        new ThreadStore(),
-        () =>
-          __call(chooseOption, {
-            type: "named",
-            positionalArgs: [],
-            namedArgs: {
-              title: "Pick one",
-              body: "",
-              items: [
-                { key: "a", label: "approve" },
-                { key: "r", label: "reject" },
-              ],
-              allowFreeText: true,
-            },
-          }),
-      );
-      expect(answer).toBe("please don't delete that file");
-      expect(fed).toEqual(["please don't delete that file"]);
-    } finally {
-      delete (globalThis as any).__agencyInputOverride;
-    }
+    const answer = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [
+            { key: "a", label: "approve" },
+            { key: "r", label: "reject" },
+          ],
+        },
+      }),
+    );
+    expect(answer).toBe("a");
   });
 
-  it("reprompts until a known key is entered when allowFreeText is false (default)", async () => {
-    // Default behavior unchanged: a non-key answer loops; only an
-    // exact key match terminates the prompt.
-    const answers = ["nope", "still no", "a"];
-    let calls = 0;
-    (globalThis as any).__agencyInputOverride = async (_prompt: string) => {
-      const next = answers[calls];
-      calls += 1;
-      return next;
-    };
+  it("returns free text verbatim with allowFreeText", async () => {
+    // CAVEAT — encoding leakage: this test hardcodes the
+    // `AUTOCOMPLETE_FREE_TEXT_PREFIX` (`__FREETEXT__:`) that
+    // `_promptsAutocomplete` uses internally between its `suggest`
+    // callback and its resolver. `prompts.inject` skips the suggest
+    // step and feeds the resolved value directly, so we have to
+    // simulate "user picked the synthetic row" by manually emitting
+    // the prefixed value. Production callers never see this prefix.
+    // If you change `AUTOCOMPLETE_FREE_TEXT_PREFIX` in ui.ts, update
+    // this string too.
+    spoofTty(true);
+    prompts.inject(["__FREETEXT__:please don't delete that"]);
+    const ctx = makeTestCtx();
+    const answer = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [
+            { key: "a", label: "approve" },
+            { key: "r", label: "reject" },
+          ],
+          allowFreeText: true,
+        },
+      }),
+    );
+    expect(answer).toBe("please don't delete that");
+  });
+
+  it("re-prompts on cancel to preserve the must-answer contract", async () => {
+    // First inject(null) cancels → bridge returns failure("cancelled").
+    // chooseOption loops; second answer resolves with "a".
+    spoofTty(true);
+    prompts.inject([null, "a"]);
+    const ctx = makeTestCtx();
+    const answer = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [{ key: "a", label: "approve" }],
+        },
+      }),
+    );
+    expect(answer).toBe("a");
+  });
+
+  it("surfaces non-TTY as a failure rather than looping", async () => {
+    // chooseOption is declared `: string`, but Agency's runtime wraps
+    // any thrown error as a `failure(...)` Result before returning.
+    // So callers see a Result-shaped object whose `error` contains
+    // the TTY message, not a JS exception. The important contract
+    // here is "does NOT loop forever" — the test would hang if the
+    // chooseOption loop didn't break out on non-cancel failures.
+    spoofTty(false);
+    const ctx = makeTestCtx();
+    const result: any = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [{ key: "a", label: "approve" }],
+        },
+      }),
+    );
+    expect(result?.success).toBe(false);
+    expect(String(result?.error)).toMatch(/requires a TTY/);
+  });
+});
+
+describe("std::ui — _promptsAutocomplete bridge guards", () => {
+  afterEach(() => {
+    restoreTty();
+  });
+
+  it("throws when stdout is not a TTY", async () => {
+    spoofTty(false);
+    await expect(
+      _promptsAutocomplete("pick", [{ key: "a", label: "A" }], false),
+    ).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("throws when a repl() owns the screen", async () => {
+    spoofTty(true);
+    // `_hasActiveScreen()` returns true only while `_runReplLoop` is
+    // mid-flight. To create that precondition, invoke
+    // `_promptsAutocomplete` from inside a running repl's `onSubmit`
+    // callback — same shape as the modal-path test above.
+    const errors: unknown[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "o" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
     const ctx = makeTestCtx();
     try {
-      const answer = await runInTestContext(
-        ctx,
-        new StateStack(),
-        new ThreadStore(),
-        () =>
-          __call(chooseOption, {
-            type: "named",
-            positionalArgs: [],
-            namedArgs: {
-              title: "Pick one",
-              body: "",
-              items: [
-                { key: "a", label: "approve" },
-                { key: "r", label: "reject" },
-              ],
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              try {
+                await _promptsAutocomplete(
+                  "pick",
+                  [{ key: "a", label: "A" }],
+                  false,
+                );
+              } catch (e) {
+                errors.push(e);
+              }
+              return false; // exit the repl
             },
-          }),
+            paletteCommands: {},
+          },
+        }),
       );
-      expect(answer).toBe("a");
-      expect(calls).toBe(3);
     } finally {
-      delete (globalThis as any).__agencyInputOverride;
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
     }
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as Error).message).toMatch(
+      /cannot be used inside an active repl/,
+    );
+  });
+});
+
+describe("std::ui — _promptsAutocomplete happy path", () => {
+  beforeEach(() => spoofTty(true));
+  afterEach(() => restoreTty());
+
+  it("returns success with the picked key on resolve", async () => {
+    prompts.inject(["a"]);
+    const result = await _promptsAutocomplete(
+      "pick",
+      [
+        { key: "a", label: "Approve" },
+        { key: "r", label: "Reject" },
+      ],
+      false,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("a");
+  });
+
+  it("returns failure('cancelled') when the user cancels", async () => {
+    prompts.inject([null]);
+    const result = await _promptsAutocomplete(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      false,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("cancelled");
+  });
+
+  it("decodes the __FREETEXT__: prefix on resolve", async () => {
+    prompts.inject(["__FREETEXT__:please don't delete that"]);
+    const result = await _promptsAutocomplete(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("please don't delete that");
+  });
+
+  it("suggest() matches by key substring (case-insensitive), ignores label", async () => {
+    // Key-only matching is intentional: policy interrupt labels
+    // contain "approve" / "reject" / "always", so a label-substring
+    // match would never narrow anything (every label contains "r"
+    // and "a"). See _buildSuggest in ui.ts for rationale.
+    const items = [
+      { key: "a", label: "Approve once" },
+      { key: "r", label: "Reject once" },
+      { key: "aa", label: "Approve always" },
+      { key: "ap", label: "Approve always here" },
+    ];
+
+    // `r` matches only the row whose key contains "r".
+    expect(
+      (await __suggestForTest("r", items, false)).map((m) => m.value),
+    ).toEqual(["r"]);
+
+    // `a` matches every key containing "a" (case-insensitive).
+    expect(
+      (await __suggestForTest("A", items, false)).map((m) => m.value),
+    ).toEqual(["a", "aa", "ap"]);
+
+    // Pure-label substring does NOT match — "App" would match
+    // "Approve" if we were filtering by label, but we're not.
+    expect(
+      (await __suggestForTest("App", items, false)).map((m) => m.value),
+    ).toEqual([]);
+  });
+
+  it("suggest() appends synthetic free-text row only when allowFreeText && input && no real match", async () => {
+    const noMatch = await __suggestForTest(
+      "xyz",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(noMatch).toHaveLength(1);
+    expect(noMatch[0].value).toBe("__FREETEXT__:xyz");
+    expect(noMatch[0].title).toContain("→");
+    expect(noMatch[0].title).toContain("xyz");
+
+    // A typed key prefix that matches an existing key returns the
+    // real item (no synthetic row appended).
+    const withMatch = await __suggestForTest(
+      "a",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(withMatch).toHaveLength(1);
+    expect(withMatch[0].value).toBe("a");
+
+    const empty = await __suggestForTest(
+      "",
+      [{ key: "a", label: "A" }],
+      true,
+    );
+    expect(
+      empty.some((m) => String(m.value).startsWith("__FREETEXT__")),
+    ).toBe(false);
+
+    const off = await __suggestForTest(
+      "xyz",
+      [{ key: "a", label: "A" }],
+      false,
+    );
+    expect(
+      off.some((m) => String(m.value).startsWith("__FREETEXT__")),
+    ).toBe(false);
+  });
+});
+
+// All three bridges share `_assertLineModeAvailable`, which is
+// already covered for `_promptsAutocomplete` in the Task 1 block
+// above. To avoid running a full repl harness three more times,
+// these blocks only test the non-TTY branch. Trust that the shared
+// helper guards the active-repl case for all four bridges.
+
+describe("std::ui — _promptsSelect", () => {
+  afterEach(() => restoreTty());
+
+  it("throws on non-TTY", async () => {
+    spoofTty(false);
+    await expect(
+      _promptsSelect("pick", [{ key: "a", label: "A" }], false),
+    ).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("returns success with the picked key", async () => {
+    spoofTty(true);
+    prompts.inject(["r"]);
+    const result = await _promptsSelect(
+      "pick",
+      [
+        { key: "a", label: "A" },
+        { key: "r", label: "R" },
+      ],
+      false,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("r");
+  });
+
+  it("returns failure('cancelled') on cancel", async () => {
+    spoofTty(true);
+    prompts.inject([null]);
+    const result = await _promptsSelect(
+      "pick",
+      [{ key: "a", label: "A" }],
+      false,
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("with allowFreeText=true, runs a follow-up text prompt when free-text sentinel is picked", async () => {
+    spoofTty(true);
+    // Queue two answers: the sentinel pick, then the typed text.
+    prompts.inject(["__FREETEXT__", "my custom reason"]);
+    const result = await _promptsSelect(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("my custom reason");
+  });
+
+  it("with allowFreeText=true, ignores the follow-up when a real key is picked", async () => {
+    spoofTty(true);
+    prompts.inject(["a"]);
+    const result = await _promptsSelect(
+      "pick",
+      [{ key: "a", label: "Approve" }],
+      true,
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("a");
+  });
+});
+
+describe("std::ui — _promptsText", () => {
+  afterEach(() => restoreTty());
+
+  it("throws on non-TTY", async () => {
+    spoofTty(false);
+    await expect(_promptsText("name?", "")).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("returns success with the typed value", async () => {
+    spoofTty(true);
+    prompts.inject(["hello world"]);
+    const result = await _promptsText("name?", "");
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("hello world");
+  });
+
+  it("returns failure on cancel", async () => {
+    spoofTty(true);
+    prompts.inject([null]);
+    const result = await _promptsText("name?", "");
+    expect(result.success).toBe(false);
+  });
+
+  it("forwards a validate callback to prompts", async () => {
+    // PFA capability-constraint story: a caller binds `validate` via
+    // `.partial(validate: myFn)` before handing `text` to an LLM. We
+    // can't easily fail-then-retry through inject, so this asserts
+    // only that the callback is plumbed through and the bridge still
+    // resolves with the injected value.
+    spoofTty(true);
+    prompts.inject(["abc"]);
+    const result = await _promptsText("nick?", "", "", (v: string) =>
+      v.length >= 3 ? true : "too short",
+    );
+    expect(result.success).toBe(true);
+    expect(result.value).toBe("abc");
+  });
+});
+
+describe("std::ui — _promptsConfirm", () => {
+  afterEach(() => restoreTty());
+
+  it("throws on non-TTY", async () => {
+    spoofTty(false);
+    await expect(_promptsConfirm("ok?", false)).rejects.toThrow(/requires a TTY/);
+  });
+
+  it("returns success(true) on yes", async () => {
+    spoofTty(true);
+    prompts.inject([true]);
+    const result = await _promptsConfirm("ok?", false);
+    expect(result.success).toBe(true);
+    expect(result.value).toBe(true);
+  });
+
+  it("returns success(false) on no", async () => {
+    spoofTty(true);
+    prompts.inject([false]);
+    const result = await _promptsConfirm("ok?", false);
+    expect(result.success).toBe(true);
+    expect(result.value).toBe(false);
+  });
+
+  it("returns failure on cancel", async () => {
+    spoofTty(true);
+    prompts.inject([null]);
+    const result = await _promptsConfirm("ok?", false);
+    expect(result.success).toBe(false);
   });
 });

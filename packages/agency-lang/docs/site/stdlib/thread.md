@@ -167,16 +167,19 @@ Run a block under a cost limit, a time limit, or both. The block
   @param block - The work to run under the guard.
 
   Example:
+
+  ```ts
   const result = guard(cost: $2.0, time: 30s) as {
-  const a = llm("step 1")
-  const b = llm("step 2")
-  return a + b
+    const a = llm("step 1")
+    const b = llm("step 2")
+    return a + b
   }
   if (isFailure(result)) {
-  print("Guard tripped: " + result.error.type)
+    print("Guard tripped: " + result.error.type)
   } else {
-  print(result.value)
+    print(result.value)
   }
+  ```
 
 **Parameters:**
 

@@ -1251,20 +1251,15 @@ const blockTypeParam: Parser<{ name: string; typeAnnotation: VariableType }> =
   or(
     // Named param: `ident : type`. Try this alternative first — once we
     // see `ident :` we're committed (no other grammar produces that shape
-    // inside a block-type param list).
-    map(
-      seqC(
-        capture(many1WithJoin(varNameChar), "name"),
-        optionalSpaces,
-        char(":"),
-        optionalSpaces,
-        capture(lazy(() => variableTypeParser), "typeAnnotation"),
-      ),
-      (r) => ({
-        name: r.name as string,
-        typeAnnotation: r.typeAnnotation as VariableType,
-      }),
-    ),
+    // inside a block-type param list). `seqC` + `capture` already yields
+    // `{ name, typeAnnotation }`, no `map` wrapper needed.
+    seqC(
+      capture(many1WithJoin(varNameChar), "name"),
+      optionalSpaces,
+      char(":"),
+      optionalSpaces,
+      capture(lazy(() => variableTypeParser), "typeAnnotation"),
+    ) as Parser<{ name: string; typeAnnotation: VariableType }>,
     // Unnamed (legacy): bare type. The AST keeps `name: ""` as a marker.
     map(
       lazy(() => variableTypeParser),

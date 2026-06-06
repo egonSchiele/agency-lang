@@ -153,6 +153,33 @@ describe("formatSource", () => {
     expect(formatSource(formatted!)).toBe(formatted);
   });
 
+  // Regression: docstrings used to be naïvely `.trim()`ed on every
+  // line, which collapsed `  ```code\n  block\n  ```` ` to flush-left
+  // and lost the inner indentation. The fmt now dedents by the
+  // common leading indent only, so the relative structure of code
+  // fences / sub-bullets survives a round-trip.
+  it("docstrings: preserves indentation inside ```code``` fences", () => {
+    const input =
+`def example() {
+  """
+  Example:
+
+  \`\`\`ts
+  if (true) {
+    print("hi")
+  }
+  \`\`\`
+  """
+  return 1
+}
+`;
+    const formatted = formatSource(input);
+    expect(formatted).toContain("    print(\"hi\")");
+    expect(formatted).toContain("  if (true) {");
+    // Idempotent.
+    expect(formatSource(formatted!)).toBe(formatted);
+  });
+
   // Locks in the `=>` → `->` migration and the named-param round-trip
   // added in the block-type-named-params change. Both must reformat
   // exactly as below so users can rely on `fmt` to silently migrate

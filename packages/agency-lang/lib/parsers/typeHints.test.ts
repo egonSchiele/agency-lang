@@ -2840,21 +2840,9 @@ describe("blockTypeParser", () => {
 
   it("variableTypeParser rejects `(name: type)` (no arrow follows)", () => {
     // `name: type` is only valid as a block-type param. Without a
-    // trailing arrow, it shouldn't parse — and shouldn't fall through
-    // and be misread as some other type form.
+    // trailing arrow, it shouldn't parse as a type at all.
     const result = variableTypeParser("(name: string)");
-    if (result.success) {
-      // If by some accident it parsed, at least confirm it didn't
-      // produce a blockType (which would be a hard regression).
-      expect(result.result.type).not.toBe("blockType");
-      // And it shouldn't have consumed the `name:` half as a typeAlias either.
-      // The safest check: it shouldn't be a primitiveType named "name".
-      if (result.result.type === "primitiveType") {
-        expect(result.result.value).not.toBe("name");
-      }
-    } else {
-      expect(result.success).toBe(false);
-    }
+    expect(result.success).toBe(false);
   });
 });
 

@@ -6,17 +6,29 @@ export const TS_PRIMITIVE_ALIASES: Record<string, string> = {
 };
 
 /**
+ * Output dialect for `formatTypeHint`. Drives surface-syntax choices
+ * such as the block-type arrow (`->` vs `=>`) — anything where Agency
+ * and TS use different glyphs for the same semantic construct.
+ */
+export type FormatTarget = "agency" | "ts";
+
+/**
  * Format a VariableType for display.
  *
  * Pass `primitiveAliases` (e.g. for codegen) to substitute Agency-only
  * primitive names with target-language equivalents. Default omits the map
  * so diagnostics, LSP hover, and CLI prompts show source-level keywords.
+ *
+ * `target` controls dialect-specific surface syntax independent of
+ * `primitiveAliases` — pass `"ts"` for TypeScript codegen (uses `=>`),
+ * default `"agency"` for everything else (uses `->`).
  */
 export function formatTypeHint(
   vt: VariableType,
   primitiveAliases?: Record<string, string>,
+  target: FormatTarget = "agency",
 ): string {
-  const recurse = (v: VariableType) => formatTypeHint(v, primitiveAliases);
+  const recurse = (v: VariableType) => formatTypeHint(v, primitiveAliases, target);
   switch (vt.type) {
     case "primitiveType":
       return primitiveAliases?.[vt.value] ?? vt.value;
@@ -35,19 +47,17 @@ export function formatTypeHint(
     case "typeAliasVariable":
       return vt.aliasName;
     case "blockType": {
-      // Use `primitiveAliases` (defined ⇒ codegen target) as the signal
-      // for which dialect to emit:
-      //   - Agency source (no aliases): `(name: T) -> R`, names surfaced.
-      //   - TypeScript codegen (aliases present): `(T) => R`, names
-      //     dropped. TS does accept names, but `typescriptBuilder.ts`
-      //     synthesizes parameter names downstream and emitting them
-      //     here would risk double-naming.
-      const isTsTarget = primitiveAliases !== undefined;
-      const arrow = isTsTarget ? "=>" : "->";
+      // Dialect-keyed arrow: `->` for Agency, `=>` for TypeScript.
+      // Param names are surfaced in both dialects when present; TS
+      // function types accept named params (`(a: string) => string`)
+      // and the call sites that hand a `blockType` here pass it as a
+      // *type* (e.g. a parameter's typeHint), not as a declaration
+      // list, so there's no risk of double-naming.
+      const arrow = target === "ts" ? "=>" : "->";
       const params = vt.params
         .map((p) => {
           const t = recurse(p.typeAnnotation);
-          return !isTsTarget && p.name ? `${p.name}: ${t}` : t;
+          return p.name ? `${p.name}: ${t}` : t;
         })
         .join(", ");
       return `(${params}) ${arrow} ${recurse(vt.returnType)}`;
@@ -76,5 +86,5 @@ export function formatTypeHint(
 
 /** Convenience wrapper for codegen contexts. */
 export function formatTypeHintTs(vt: VariableType): string {
-  return formatTypeHint(vt, TS_PRIMITIVE_ALIASES);
+  return formatTypeHint(vt, TS_PRIMITIVE_ALIASES, "ts");
 }

@@ -144,9 +144,9 @@ export function variableTypeToString(
   } else if (variableType.type === "typeAliasVariable") {
     return `${variableType.aliasName}${formatValueArgs(variableType.valueArgs)}`;
   } else if (variableType.type === "blockType") {
-    // Source-level Agency output uses `->` and surfaces param names.
-    // TS codegen uses `=>` (TS syntax) and drops names; downstream
-    // typescriptBuilder.ts already injects names where it needs them.
+    // Dialect-keyed arrow: `->` for Agency source, `=>` for TypeScript
+    // codegen. Param names are surfaced in both dialects when present
+    // (TS function types accept named params).
     const arrow = forFormatting ? "->" : "=>";
     const params = variableType.params
       .map((p) => {
@@ -155,7 +155,7 @@ export function variableTypeToString(
           typeAliases,
           forFormatting,
         );
-        return forFormatting && p.name ? `${p.name}: ${t}` : t;
+        return p.name ? `${p.name}: ${t}` : t;
       })
       .join(", ");
     const ret = variableTypeToString(variableType.returnType, typeAliases, forFormatting);

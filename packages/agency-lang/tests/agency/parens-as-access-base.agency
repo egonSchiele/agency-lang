@@ -10,7 +10,7 @@
 // same — only the receiver flavor changed.
 
 type Counter = {
-  n: number;
+  n: number,
   bump: () -> number
 }
 
@@ -32,19 +32,19 @@ node main(): number[] {
   let b = 2
 
   // (var).field
-  let len1 = s.length
+  let len1 = (s).length
   // (binop).field
-  let len2 = "foobar".length
+  let len2 = ("foo" + "bar").length
   // (var)[i]
-  let first = arr[0]
+  let first = (arr)[0]
   // (var)[expr]
-  let second = arr[0 + 1]
+  let second = (arr)[0 + 1]
   // (binop)[i] — index into the result of a string concatenation
-  let charCode = "abcd"[2].charCodeAt(0)
+  let charCode = ("ab" + "cd")[2].charCodeAt(0)
   // (objectLiteral-via-call).method()
-  let bumped = makeCounter(5).bump()
+  let bumped = (makeCounter(5)).bump()
   // (call()).method() — separate variable to exercise the call-then-method shape twice
-  let bumped2 = makeCounter(10).bump()
+  let bumped2 = (makeCounter(10)).bump()
 
   return [len1, len2, first, second, charCode, bumped, bumped2]
 }

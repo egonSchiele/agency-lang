@@ -228,8 +228,7 @@ let globalCliPolicyOpts: CliPolicyOpts = {
   file: "",
   fields: {}
 }
-let _policy: Policy = {}
-let _loaded: boolean = false
+let _policy: Policy|null = null
 let _pendingSave: boolean = false
 
 /**
@@ -261,7 +260,7 @@ export def checkPolicy(
  * Call before persisting user-supplied or hand-edited policy data;
  * `writePolicyFile` calls this internally before writing.
  */
-export def validatePolicy(policy: Record<string, any>) {
+export def validatePolicy(policy: Record<string, any>): Result<void, string> {
   """
   Validate that a policy object is well-formed. Returns { success: true } if valid, or { success: false, error: "..." } with a description of the problem.
   """
@@ -404,6 +403,17 @@ export def recordScopedRule(
   return next
 }
 
+export type ParsePolicyFailureStatus =
+  | "doesnt-exist"
+  | "read-error"
+  | "malformed-json"
+  | "policy-not-valid"
+
+export type ParsePolicyFailure = {
+  status: ParsePolicyFailureStatus;
+  error?: string
+}
+
 /**
  * Read + JSON-parse + validate a policy file from disk. Returns `{}`
  * (an empty policy) on any failure — missing file, unreadable
@@ -415,37 +425,44 @@ export def recordScopedRule(
  * whether the read is approved); the CLI handler auto-approves
  * this via `with approve`.
  */
-export def parsePolicyFile(path: string): Policy {
+export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
   """
   Read + parse + validate a policy file from disk. Returns {} on any
   failure (missing, unreadable, malformed JSON, invalid schema) with a
-  warning to the user. Raises std::read.
+  warning to the user.
 
   @param path - The policy file path
   """
+  print("Reading policy from ${path}...")
   const dir = dirname(path)
   const name = basename(path)
   if (!exists(name, dir)) {
-    return {}
+    return failure({ status: "doesnt-exist" })
   }
   const readResult = read(name, dir) with approve
   if (isFailure(readResult)) {
-    print("Could not read ${path}: ${readResult.error}")
-    return {}
+    return failure({ status: "read-error", error: readResult.error })
   }
   const parsed = try parseJSON(readResult.value)
   if (isFailure(parsed)) {
-    print("Malformed JSON in ${path}; ignoring and starting fresh.")
-    return {}
+    return failure({ status: "malformed-json" })
   }
   const valid = validatePolicy(parsed.value)
   if (!valid.success) {
-    print(
-      "Invalid policy in ${path} (${valid.error}); ignoring and starting fresh.",
-    )
-    return {}
+    return failure({ status: "policy-not-valid", error: valid.error })
   }
-  return parsed.value
+  return parsed
+}
+
+/**
+  * Set the policy to be used with the CLI handler
+  * returned by `cliPolicyHandler`. The handler's internal state
+  * is module-level, so this sets the policy for the handler
+  * to consult on every interrupt. Call this after loading a policy
+  * with `parsePolicyFile` or constructing one by hand.
+  */
+export def setPolicy(policy: Policy) {
+  _policy = policy
 }
 
 /**
@@ -471,18 +488,6 @@ export def writePolicyFile(
   @param allowedPaths - Only allow writing under these path prefixes
   """
   return try _writePolicyFile(path, policy, allowedPaths)
-}
-
-// Lazy-load the on-disk policy on first handler invocation. Uses
-// flip-flag-first so the std::read interrupt's chain re-entry sees
-// `_loaded == true` and returns without recursing. See
-// docs/site/guide/handlers.md §"Fixing it".
-def maybeLoad() {
-  if (!_loaded) {
-    // flip FIRST
-    _loaded = true
-    _policy = parsePolicyFile(globalCliPolicyOpts.file) with approve
-  }
 }
 
 // Persist any pending policy changes. Same flip-flag-first pattern
@@ -650,8 +655,10 @@ def askUser(intr: any): AskUserResult {
  * Do not call directly; use `cliPolicyHandler` to construct one.
  */
 export def _handler(intr: any): any {
-  maybeFlush()
-  maybeLoad()
+  if (_policy == null) {
+    print("Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.")
+    return reject()
+  }
 
   const decision = checkPolicy(_policy, intr)
   if (decision.type == "approve") {

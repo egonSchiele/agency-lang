@@ -153,10 +153,6 @@ export def memory(config: MemoryConfig, block: () -> any = null): Result {
   @param config - Memory configuration with `dir` required
   @param block - The code to run with the frame active
   """
-  return interrupt std::memory::memory("Are you sure you want to push a memory frame for this directory?", {
-    dir: config.dir
-  })
-
   const pushed = _pushMemoryFrame(config)
   const result = try block()
   if (pushed) {
@@ -202,6 +198,10 @@ export safe def recall(query: string): string {
 
   @param query - A natural language query describing what to recall
   """
+  return interrupt std::memory::recall("Are you sure you want to recall memories based on this query?", {
+    query: query
+  })
+
   return _recall(query)
 }
 

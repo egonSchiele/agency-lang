@@ -1,0 +1,49 @@
+export def oneShotAgent(): string {
+  return "not implemented yet"
+ /*    _isInteractive = false
+    let piped: string = ""
+    if (hasQuery) {
+      piped = positionalQuery
+    } else {
+      const fromStdin = readStdin()
+      if (fromStdin == null || fromStdin == "") {
+        return
+      }
+      piped = fromStdin
+    }
+    if (piped == "") {
+      return
+    }
+    const projectContext = loadAgentsMd(cwd()) with approve
+    _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
+    const handler = cliPolicyHandler(file: policyPath(), fields: ALWAYS_FIELDS)
+    // Expand slash commands in one-shot mode too, so
+    // `agency agent -p /foo bar` works the same as typing it in the
+    // REPL. Built-ins (`/exit` etc.) are meaningless without a loop
+    // and aren't checked.
+    const onePrompt = expandSlash(piped, projectCommands)
+    handle {
+      const reply = route(
+        {
+        start: "code",
+        agents: {
+          code: {
+            systemPrompt: codeSysPrompt,
+            tools: codeTools,
+            memory: true
+          },
+          research: {
+            systemPrompt: researchSysPrompt,
+            tools: researchTools,
+            memory: true
+          }
+        },
+        maxHops: 3,
+        context: _context
+      },
+        onePrompt,
+      )
+      print(reply)
+    } with handler
+    return */
+}

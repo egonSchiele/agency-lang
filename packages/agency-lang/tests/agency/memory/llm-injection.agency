@@ -22,7 +22,7 @@ callback("onLLMCallStart") as data {
 
 node main(): boolean {
   setMemoryId("llm-injection-test")
-  remember("Mom likes pottery")
+  remember("Mom likes pottery") with approve
   // Use a short query so structuredLookup's substring match matches
   // "Mom" deterministically without needing live embeddings.
   llm("mom", { memory: true })

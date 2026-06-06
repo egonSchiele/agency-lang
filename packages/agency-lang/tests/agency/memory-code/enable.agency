@@ -10,11 +10,11 @@ import { enableMemory, disableMemory, recall, setMemoryId, isMemoryActive } from
 //     trusting that both silently no-op'd.
 node main(): boolean {
   const before: boolean = isMemoryActive()
-  enableMemory({ dir: ".agency-tmp/memory-code-enable-test" })
+  enableMemory({ dir: ".agency-tmp/memory-code-enable-test" }) with approve
   setMemoryId("enable-test")
   const active: boolean = isMemoryActive()
-  const r: string = recall("anything")
-  disableMemory()
+  const r: string = recall("anything") with approve
+  disableMemory() with approve
   const after: boolean = isMemoryActive()
   return before == false && active == true && r == "" && after == false
 }

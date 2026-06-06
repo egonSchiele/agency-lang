@@ -38,7 +38,8 @@ export type ScopeInfo = {
   scopeKey: string;
   /** Absolute path to the .agency file this scope's body lives in. Empty
    *  for the synthetic top-level scope that spans the whole compilation
-   *  unit. Populated from the symbol table via `findFileForName`. */
+   *  unit. Populated from `TypeCheckerContext.currentFile`, which itself
+   *  comes from `CompilationUnit.fromFile`. */
   file: string;
   returnType?: VariableType | null;
 };
@@ -80,11 +81,16 @@ export type TypeCheckerContext = {
   inferringReturnType: Set<string>;
   config: AgencyConfig;
   /** Optional symbol table threaded through from `buildCompilationUnit`.
-   *  Used by `buildScopes` to populate `ScopeInfo.file` via
-   *  `SymbolTable.findFileForName`. Optional because callers that
-   *  construct a TypeCheckerContext directly (e.g. in legacy tests) may
-   *  not have a symbol table. */
+   *  Used by the interrupt call-graph analysis to resolve cross-file
+   *  callee identities for `${file}:${name}`-keyed propagation. Optional
+   *  because callers that construct a TypeCheckerContext directly (e.g.
+   *  in legacy tests) may not have a symbol table. */
   symbolTable?: SymbolTable;
+  /** Absolute path of the file currently being typechecked. Populated
+   *  from `CompilationUnit.fromFile` so scope/file tagging (and the
+   *  interrupt call-graph analysis) can use a reliable per-file
+   *  identity instead of looking names up in the global symbol table. */
+  currentFile?: string;
   getTypeAliases(): Record<string, TypeAliasEntry>;
   withScope<T>(key: string, fn: () => T): T;
   inferReturnTypeFor(

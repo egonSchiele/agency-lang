@@ -9,6 +9,7 @@ import { getStdlibDir } from "@/importPaths.js";
 import type { AgencyConfig } from "@/config.js";
 import type {
   InterruptCallGraph,
+  QualifiedKey,
   TaggedHandler,
 } from "@/typeChecker/interruptAnalysis.js";
 import type { InterruptStatement } from "@/types/interruptStatement.js";
@@ -75,9 +76,11 @@ export function analyzeInterrupts(
 // `scopes`; imported functions live in `importedFunctions` (signatures
 // only, no body). To analyze interrupt sites across the import tree we
 // build the symbol table once and then run the typechecker on every
-// reachable .agency file, merging the resulting call graphs. Names
-// collide across files only on duplication, and the symbol table
-// already throws on that.
+// reachable .agency file, merging the resulting call graphs. Each
+// call-graph entry is keyed by its `${file}:${name}` `QualifiedKey`,
+// so two files that happen to declare the same top-level name produce
+// distinct entries and `Object.assign` cannot accidentally overwrite
+// one with the other.
 
 function loadCallGraph(rootFile: string, config: AgencyConfig): InterruptCallGraph {
   const absPath = path.resolve(rootFile);
@@ -128,7 +131,8 @@ function collectAllSites(cg: InterruptCallGraph): Map<SiteId, SiteRecord> {
 // at f. Inner map keyed by HandleBlock object identity for dedup.
 
 type HandlerSet = Map<unknown, TaggedHandler>;
-type ReachableHandlers = Record<string, Record<SiteId, HandlerSet>>;
+/** Keyed by the caller's `QualifiedKey` → siteKey → handler set. */
+type ReachableHandlers = Record<QualifiedKey, Record<SiteId, HandlerSet>>;
 
 function propagateHandlers(cg: InterruptCallGraph): ReachableHandlers {
   const state = seedFromDirectSites(cg);
@@ -138,10 +142,10 @@ function propagateHandlers(cg: InterruptCallGraph): ReachableHandlers {
 
 function seedFromDirectSites(cg: InterruptCallGraph): ReachableHandlers {
   const state: ReachableHandlers = {};
-  for (const fnName of Object.keys(cg)) state[fnName] = {};
-  for (const [fnName, fn] of Object.entries(cg)) {
+  for (const key of Object.keys(cg)) state[key] = {};
+  for (const [key, fn] of Object.entries(cg)) {
     for (const entry of fn.interruptSites) {
-      state[fnName][siteKey(entry.file, entry.site)] = handlerSetFrom(entry.enclosingHandlers);
+      state[key][siteKey(entry.file, entry.site)] = handlerSetFrom(entry.enclosingHandlers);
     }
   }
   return state;
@@ -151,9 +155,9 @@ function runFixedPoint(state: ReachableHandlers, cg: InterruptCallGraph): void {
   let changed = true;
   while (changed) {
     changed = false;
-    for (const [fnName, fn] of Object.entries(cg)) {
+    for (const [key, fn] of Object.entries(cg)) {
       for (const edge of fn.callEdges) {
-        if (propagateEdge(state, fnName, edge, cg)) changed = true;
+        if (propagateEdge(state, key, edge)) changed = true;
       }
     }
   }
@@ -161,24 +165,23 @@ function runFixedPoint(state: ReachableHandlers, cg: InterruptCallGraph): void {
 
 function propagateEdge(
   state: ReachableHandlers,
-  fnName: string,
+  callerKey: QualifiedKey,
   edge: InterruptCallGraph[string]["callEdges"][number],
-  _cg: InterruptCallGraph,
 ): boolean {
-  const calleeState = state[edge.calleeName];
+  const calleeState = state[edge.calleeKey];
   if (!calleeState) return false;
   let grew = false;
   for (const [sid, calleeHandlers] of Object.entries(calleeState)) {
-    // Reaching a new site for `fnName` is itself growth — even if the
-    // merged handler set is empty, we now know `fnName` can reach `sid`,
-    // which means callers of `fnName` will see this site on the next
+    // Reaching a new site for `callerKey` is itself growth — even if the
+    // merged handler set is empty, we now know `callerKey` can reach
+    // `sid`, which means its callers will see this site on the next
     // pass. Without this, a chain `main → a1 → shared` where `shared`
     // has an unhandled interrupt fails to propagate, because the empty
     // handler set on each hop would otherwise be reported as "not grown".
-    const isNewSite = !(sid in state[fnName]);
-    const merged = mergeHandlers(state[fnName][sid], calleeHandlers, edge.enclosingHandlers);
+    const isNewSite = !(sid in state[callerKey]);
+    const merged = mergeHandlers(state[callerKey][sid], calleeHandlers, edge.enclosingHandlers);
     if (isNewSite || merged.grew) {
-      state[fnName][sid] = merged.set;
+      state[callerKey][sid] = merged.set;
       grew = true;
     }
   }
@@ -203,20 +206,22 @@ function mergeHandlers(
 
 // -- Phase 4: Entry detection + union across entries --
 //
-// An entry is a function/node with no incoming call edges. Stdlib
-// functions are filtered out so their own interrupt sites don't pollute
-// the report when they aren't actually reached from user code. Stdlib
-// functions can still be CALLEES — when reached from a user entry, their
-// sites propagate normally through the graph.
+// Every non-stdlib function/node in the merged call graph is treated as
+// an "entry" — i.e. its reachable handler state contributes to the final
+// per-site union. We deliberately do NOT restrict to scopes with no
+// incoming call edges: that definition would drop mutually-recursive
+// groups (every member has an incoming edge from within the cycle) and
+// other disconnected components whose external caller hasn't yet been
+// added to the graph, silently omitting their interrupt sites from the
+// report. Filtering by stdlib is sufficient to keep stdlib-only sites
+// out of the output. Stdlib functions can still be CALLEES — when
+// reached from a user entry, their sites propagate normally through
+// the graph.
 
-function collectEntries(cg: InterruptCallGraph): string[] {
-  const calledBySomeone = new Set(
-    Object.values(cg).flatMap((fn) => fn.callEdges.map((e) => e.calleeName)),
-  );
+function collectEntries(cg: InterruptCallGraph): QualifiedKey[] {
   const stdlibDir = getStdlibDir();
-  return Object.keys(cg).filter((fn) => {
-    if (calledBySomeone.has(fn)) return false;
-    const file = cg[fn].file;
+  return Object.keys(cg).filter((key) => {
+    const file = cg[key].file;
     if (file && isInStdlib(file, stdlibDir)) return false;
     return true;
   });
@@ -229,7 +234,7 @@ function isInStdlib(filePath: string, stdlibDir: string): boolean {
 
 function unionAcrossEntries(
   reachable: ReachableHandlers,
-  entries: string[],
+  entries: QualifiedKey[],
 ): Map<SiteId, HandlerSet> {
   const perSite = new Map<SiteId, HandlerSet>();
   for (const entry of entries) {

@@ -14,7 +14,7 @@ node main(): boolean {
   memory({ dir: ".agency-tmp/memory-code-block-test" }) as {
     inside = isMemoryActive()
     // recall on a fresh, empty graph returns "" without an LLM call.
-    recallInside = recall("anything")
+    recallInside = recall("anything") with approve
   }
   // After the block: frame popped, memory off again.
   const after: boolean = isMemoryActive()

@@ -347,4 +347,125 @@ node main() {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("resolves an aliased import (`import { foo as bar }`) to the right callee", () => {
+    // Regression for PR #272: previously the call edge stored `calleeName
+    // === "bar"` while the callee scope was keyed under `foo`, so the
+    // imported handler-bearing function's interrupt site was orphaned in
+    // propagation.
+    const dir = mkdtempSync(path.join(os.tmpdir(), "agency-int-"));
+    try {
+      const helperFile = path.join(dir, "helper.agency");
+      writeFileSync(
+        helperFile,
+        `
+def helper() {
+  interrupt std::read("hi")
+}
+`,
+      );
+      const mainFile = path.join(dir, "main.agency");
+      writeFileSync(
+        mainFile,
+        `
+import { helper as renamed } from "./helper.agency"
+
+node main() {
+  handle {
+    renamed()
+  } with approve
+}
+`,
+      );
+      const result = analyzeInterrupts(mainFile, {});
+      expect(result.sites).toHaveLength(1);
+      expect(result.sites[0].site.file).toBe(path.resolve(helperFile));
+      // The aliased call still reaches the imported handler.
+      expect(result.sites[0].handlers).toHaveLength(1);
+      expect(result.sites[0].handlers[0].file).toBe(path.resolve(mainFile));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not let same-name functions in two files collide in the merged call graph", () => {
+    // Regression for PR #272: when both files defined a top-level
+    // `helper` (different bodies), the per-file call graphs were merged
+    // with `Object.assign` keyed by bare name, so the later file's
+    // entry silently overwrote the earlier file's. With qualified
+    // (`${file}:${name}`) keys both entries survive and propagation
+    // resolves each call site to the right one.
+    const dir = mkdtempSync(path.join(os.tmpdir(), "agency-int-"));
+    try {
+      const aFile = path.join(dir, "a.agency");
+      writeFileSync(
+        aFile,
+        `
+def helper() {
+  interrupt std::read("from-a")
+}
+`,
+      );
+      const bFile = path.join(dir, "b.agency");
+      writeFileSync(
+        bFile,
+        `
+def helper() {
+  interrupt std::write("from-b")
+}
+`,
+      );
+      const mainFile = path.join(dir, "main.agency");
+      writeFileSync(
+        mainFile,
+        `
+import { helper as fromA } from "./a.agency"
+import { helper as fromB } from "./b.agency"
+
+node main() {
+  fromA()
+  fromB()
+}
+`,
+      );
+      const result = analyzeInterrupts(mainFile, {});
+      // Both same-named helpers are reported with their own interrupt
+      // sites; neither overwrites the other in the merged graph.
+      const kinds = result.sites.map((s) => s.site.kind).sort();
+      expect(kinds).toEqual(["std::read", "std::write"]);
+      const files = new Set(result.sites.map((s) => s.site.file));
+      expect(files).toEqual(
+        new Set([path.resolve(aFile), path.resolve(bFile)]),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports interrupt sites in a mutually-recursive group with no external caller", () => {
+    // Regression for PR #272: `collectEntries` used to skip every
+    // function with an incoming edge, which drops every member of a
+    // mutually-recursive cycle (each has an incoming edge from another
+    // cycle member). The expected behaviour is that every non-stdlib
+    // scope is treated as an entry, so the interrupt site is still
+    // reported.
+    withSingleFile(
+      `
+def a() {
+  b()
+}
+
+def b() {
+  interrupt std::read("hi")
+  a()
+}
+`,
+      (file) => {
+        const result = analyzeInterrupts(file, {});
+        expect(result.sites).toHaveLength(1);
+        expect(result.sites[0].site.kind).toBe("std::read");
+        expect(result.sites[0].site.file).toBe(file);
+      },
+    );
+  });
 });

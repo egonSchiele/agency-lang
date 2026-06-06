@@ -11,10 +11,38 @@ import type { InterruptStatement } from "../types/interruptStatement.js";
 
 export type TaggedHandler = { block: HandleBlock; file: string };
 
+/** Stable cross-file identity for a function/node, of the form
+ *  `${file}:${name}`. Used as the key in `InterruptCallGraph` and on
+ *  every call edge so that propagation works correctly when the same
+ *  top-level name is defined in two modules or when an import is
+ *  aliased locally (`import { foo as bar } …`). */
+export type QualifiedKey = string;
+
+export function qualifyName(file: string, name: string): QualifiedKey {
+  return `${file}:${name}`;
+}
+
+export type CallEdge = {
+  /** Local name used at the call site, e.g. `bar` for
+   *  `import { foo as bar } …; bar()`. Preserved for diagnostics and
+   *  tests; the propagation graph uses `calleeKey`. */
+  calleeName: string;
+  /** Resolved cross-file identity of the callee. For locally defined
+   *  symbols this is `${currentFile}:${name}`. For imports it's
+   *  `${originFile}:${originalName}`. For unresolved names (builtins,
+   *  unknown identifiers) it falls back to `${currentFile}:${name}`. */
+  calleeKey: QualifiedKey;
+  enclosingHandlers: TaggedHandler[];
+};
+
 export type CallGraphFunction = {
+  /** Local (unqualified) name of the function/node — what users wrote
+   *  in the source. Stable within a single file. The outer map's key is
+   *  the qualified `${file}:${name}` form. */
+  name: string;
   /** Absolute path to the .agency file this function/node is defined in. */
   file: string;
-  callEdges: { calleeName: string; enclosingHandlers: TaggedHandler[] }[];
+  callEdges: CallEdge[];
   interruptSites: {
     site: InterruptStatement;
     /** Same as the function's `file`. Carried explicitly so consumers don't
@@ -24,7 +52,11 @@ export type CallGraphFunction = {
   }[];
 };
 
-export type InterruptCallGraph = Record<string, CallGraphFunction>;
+/** Cross-file call graph keyed by `QualifiedKey`. Built per-file by
+ *  `buildInterruptCallGraph` and merged across files in
+ *  `lib/analysis/interrupts.ts` (where the qualified keys are what make
+ *  the merge collision-free). */
+export type InterruptCallGraph = Record<QualifiedKey, CallGraphFunction>;
 
 /** Per-function analysis: what it directly interrupts and what it calls. */
 type FunctionProfile = {
@@ -206,10 +238,23 @@ export function buildInterruptCallGraph(
   ctx: TypeCheckerContext,
 ): InterruptCallGraph {
   const out: InterruptCallGraph = {};
+  const resolveCallee = makeCalleeResolver(ctx);
   for (const info of scopes) {
     if (!info.name || info.name === "top-level") continue;
     const file = info.file;
-    const entry: CallGraphFunction = { file, callEdges: [], interruptSites: [] };
+    const entry: CallGraphFunction = {
+      name: info.name,
+      file,
+      callEdges: [],
+      interruptSites: [],
+    };
+    const addEdge = (calleeName: string, enclosing: TaggedHandler[]) => {
+      entry.callEdges.push({
+        calleeName,
+        calleeKey: resolveCallee(calleeName, file),
+        enclosingHandlers: enclosing,
+      });
+    };
     ctx.withScope(info.scopeKey, () => {
       for (const { node, ancestors } of walkNodes(info.body)) {
         const enclosing = enclosingHandleBlocks(ancestors, file);
@@ -220,27 +265,63 @@ export function buildInterruptCallGraph(
             enclosingHandlers: enclosing,
           });
         } else if (node.type === "functionCall") {
-          entry.callEdges.push({
-            calleeName: node.functionName,
-            enclosingHandlers: enclosing,
-          });
+          addEdge(node.functionName, enclosing);
           for (const refName of functionRefsInArgs(node.arguments, info.scope, ctx)) {
-            entry.callEdges.push({
-              calleeName: refName,
-              enclosingHandlers: enclosing,
-            });
+            addEdge(refName, enclosing);
           }
         } else if (node.type === "gotoStatement") {
-          entry.callEdges.push({
-            calleeName: node.nodeCall.functionName,
-            enclosingHandlers: enclosing,
-          });
+          addEdge(node.nodeCall.functionName, enclosing);
         }
       }
     });
-    out[info.name] = entry;
+    out[qualifyName(file, info.name)] = entry;
   }
   return out;
+}
+
+/**
+ * Build a resolver that maps a local callee name (as written at a call
+ * site in `currentFile`) to its qualified `${originFile}:${originalName}`
+ * key:
+ *
+ *  - If the name is defined locally (`ctx.functionDefs` / `ctx.nodeDefs`),
+ *    the key is `${currentFile}:${name}`.
+ *  - If the name is imported (`ctx.importedFunctions[name]`), the key is
+ *    `${originFile}:${originalName}` — which is what the corresponding
+ *    `CallGraphFunction` entry will be keyed under after `buildInterruptCallGraph`
+ *    runs over the origin file.
+ *  - If the name is an imported node from an `import node …` statement,
+ *    the symbol table is consulted for the origin file. Node imports
+ *    don't permit aliasing, so the originalName equals the local name.
+ *  - Otherwise (builtins, unknown names), fall back to
+ *    `${currentFile}:${name}` so the edge is at least keyed consistently;
+ *    the propagation just won't find any matching callee state.
+ */
+function makeCalleeResolver(
+  ctx: TypeCheckerContext,
+): (calleeName: string, currentFile: string) => QualifiedKey {
+  // Pre-resolve `import node … from …` statements once per typecheck pass
+  // so per-edge resolution is a single map lookup.
+  const importedNodeOrigins: Record<string, { file: string; originalName: string }> = {};
+  if (ctx.symbolTable && ctx.currentFile) {
+    for (const node of ctx.programNodes) {
+      if (node.type !== "importNodeStatement") continue;
+      for (const r of ctx.symbolTable.resolveImportedNodes(node, ctx.currentFile)) {
+        importedNodeOrigins[r.localName] = { file: r.file, originalName: r.originalName };
+      }
+    }
+  }
+  return (calleeName, currentFile) => {
+    const importedFn = ctx.importedFunctions[calleeName];
+    if (importedFn?.originFile && importedFn.originalName) {
+      return qualifyName(importedFn.originFile, importedFn.originalName);
+    }
+    const importedNode = importedNodeOrigins[calleeName];
+    if (importedNode) {
+      return qualifyName(importedNode.file, importedNode.originalName);
+    }
+    return qualifyName(currentFile, calleeName);
+  };
 }
 
 /** Return the `handle` block ancestors of a walked node, tagged with the

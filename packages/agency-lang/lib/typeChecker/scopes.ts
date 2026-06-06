@@ -67,7 +67,12 @@ function buildDefScope(
     body: def.body,
     name,
     scopeKey: sk,
-    file: ctx.symbolTable?.findFileForName(name) ?? "",
+    // Use the file currently being typechecked (threaded through ctx from
+    // CompilationUnit.fromFile). A global name lookup would tag the wrong
+    // file when the same top-level name is defined in two modules, which
+    // then cascades into incorrect handler/site locations in the
+    // interrupt call graph.
+    file: ctx.currentFile ?? "",
     returnType: def.returnType,
   };
 }

@@ -1,0 +1,60 @@
+export static const minimalAutoApprovePolicy = {
+  "std::memory::remember": [{
+    action: "approve"
+  }],
+  "std::memory::forget": [{
+    action: "approve"
+  }],
+  "std::memory::enableMemory": [{
+    action: "approve"
+  }],
+  "std::memory::disableMemory": [{
+    action: "approve"
+  }]
+}
+
+export static const recommendedAutoApprovePolicy = {
+  ...minimalAutoApprovePolicy,
+  "std::read": [{
+    action: "approve"
+  }],
+  "std::readImage": [{
+    action: "approve"
+  }],
+  "std::ls": [{
+    action: "approve"
+  }],
+  "std::glob": [{
+    action: "approve"
+  }],
+  "std::grep": [{
+    action: "approve"
+  }],
+  "std::wikipedia::search": [{
+    action: "approve"
+  }],
+  "std::wikipedia::summary": [{
+    action: "approve"
+  }],
+  "std::wikipedia::article": [{
+    action: "approve"
+  }],
+  "std::weather": [{
+    action: "approve"
+  }],
+  "std::search": [{
+    action: "approve"
+  }],
+  "std::skills::skillsDir": [{
+    action: "approve"
+  }],
+  "std::skills::commandsDir": [{
+    action: "approve"
+  }],
+  "std::notify": [{
+    action: "approve"
+  }],
+  "std::clipboardCopy": [{
+    action: "approve"
+  }]
+}

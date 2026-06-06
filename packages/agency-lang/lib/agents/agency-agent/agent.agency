@@ -4,7 +4,7 @@ import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
 import { box, render } from "std::layout"
-import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
+import { ScopedRuleFields, cliPolicyHandler, parsePolicyFile, setPolicy } from "std::policy"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
@@ -13,7 +13,12 @@ import { getCost, getTokens } from "std::thread"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { figs, title } from "./images/images.agency"
+import {
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+ } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
+import { oneShotAgent } from "./subagents/oneShot.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
 
 
@@ -367,55 +372,9 @@ node main() {
   // from the positional.
   const forceOneShot = args.flags.print || hasQuery
   if (forceOneShot || !isTTY()) {
-    _isInteractive = false
-    let piped: string = ""
-    if (hasQuery) {
-      piped = positionalQuery
-    } else {
-      const fromStdin = readStdin()
-      if (fromStdin == null || fromStdin == "") {
-        return
-      }
-      piped = fromStdin
-    }
-    if (piped == "") {
-      return
-    }
-    const projectContext = loadAgentsMd(cwd()) with approve
-    _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
-    const handler = cliPolicyHandler(
-      file: policyPath(),
-      fields: ALWAYS_FIELDS
-    )
-    // Expand slash commands in one-shot mode too, so
-    // `agency agent -p /foo bar` works the same as typing it in the
-    // REPL. Built-ins (`/exit` etc.) are meaningless without a loop
-    // and aren't checked.
-    const onePrompt = expandSlash(piped, projectCommands)
-    handle {
-      const reply = route(
-        {
-        start: "code",
-        agents: {
-          code: {
-            systemPrompt: codeSysPrompt,
-            tools: codeTools,
-            memory: true
-          },
-          research: {
-            systemPrompt: researchSysPrompt,
-            tools: researchTools,
-            memory: true
-          }
-        },
-        maxHops: 3,
-        context: _context
-      },
-        onePrompt,
-      )
-      print(reply)
-    } with handler
-    return
+    const result = oneShotAgent()
+    print(result)
+    process.exit(0)
   }
 
   printHeader()
@@ -430,12 +389,23 @@ node main() {
   const projectContext = loadAgentsMd(cwd()) with approve
   _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
 
+  const policy = parsePolicyFile(policyPath())
+  if (policy is failure(f)) {
+    const {status, error} = f
+    print(f, status, error)
+    if (status == "doesnt-exist") {
+      print(color.yellow("No existing policy found at ${policyPath()}. Starting with a blank slate."))
+      setPolicy(minimalAutoApprovePolicy)
+    } else {
+    print(color.red("Failed to load policy: ${JSON.stringify(error)}"))
+    process.exit(1)
+    }
+  } else {
+    setPolicy(policy.value)
+  }
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
-  const handler = cliPolicyHandler(
-    file: policyPath(),
-    fields: ALWAYS_FIELDS
-  )
+  const handler = cliPolicyHandler(file: policyPath(), fields: ALWAYS_FIELDS)
 
   // The `repl()` widget owns the runloop; every Enter dispatches into
   // `_runTurn` which calls `route()`. Interrupts raised inside

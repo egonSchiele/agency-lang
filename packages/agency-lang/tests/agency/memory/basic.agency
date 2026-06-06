@@ -11,8 +11,8 @@ import { today } from "std::date"
 node main(): boolean {
   const stamp: string = today()
   setMemoryId("basic-test-" + stamp)
-  remember("Mom likes pottery")
-  const result: string = recall("mom")
+  remember("Mom likes pottery") with approve
+  const result: string = recall("mom") with approve
   const idx: number = result.indexOf("Mom")
   return idx >= 0
 }

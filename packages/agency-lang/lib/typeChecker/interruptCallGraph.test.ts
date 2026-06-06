@@ -7,6 +7,10 @@ import { SymbolTable } from "../symbolTable.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { liftCallbackBlocks } from "../preprocessors/liftCallbacks.js";
 import { typeCheck } from "./index.js";
+import type {
+  CallGraphFunction,
+  InterruptCallGraph,
+} from "./interruptAnalysis.js";
 
 function callGraphFrom(source: string) {
   const file = path.join(
@@ -27,6 +31,21 @@ function callGraphFrom(source: string) {
   }
 }
 
+/** Look up a call graph entry by unqualified name. The call graph is
+ *  keyed by `${file}:${name}` so plain `cg["main"]` no longer works;
+ *  the test fixtures use a single tmp file, so a single name should
+ *  match exactly one entry. */
+function entry(cg: InterruptCallGraph, name: string): CallGraphFunction {
+  const matches = Object.values(cg).filter((e) => e.name === name);
+  if (matches.length === 0) {
+    throw new Error(`No call graph entry for '${name}' (have: ${Object.values(cg).map((e) => e.name).join(", ")})`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Multiple call graph entries for '${name}'`);
+  }
+  return matches[0];
+}
+
 describe("buildInterruptCallGraph", () => {
   it("records an interrupt site with enclosing handle blocks, including the right block identity", () => {
     const cg = callGraphFrom(`
@@ -36,7 +55,7 @@ node main() {
   } with approve
 }
 `);
-    const main = cg["main"];
+    const main = entry(cg, "main");
     expect(main).toBeDefined();
     expect(main.file).toMatch(/\.agency$/);
     expect(main.interruptSites).toHaveLength(1);
@@ -63,12 +82,14 @@ node main() {
   } with approve
 }
 `);
-    const main = cg["main"];
+    const main = entry(cg, "main");
     const edge = main.callEdges.find((e) => e.calleeName === "helper");
     expect(edge).toBeDefined();
     expect(edge!.enclosingHandlers).toHaveLength(1);
     // 0-indexed line 6 ≡ 1-indexed line 7 (the `handle {` line).
     expect(edge!.enclosingHandlers[0].block.loc?.line).toBe(6);
+    // Local callee → calleeKey is `${currentFile}:helper`.
+    expect(edge!.calleeKey).toBe(`${main.file}:helper`);
   });
 
   it("records a call edge with NO enclosing handlers when the call is bare", () => {
@@ -81,7 +102,7 @@ node main() {
   helper()
 }
 `);
-    const main = cg["main"];
+    const main = entry(cg, "main");
     const edge = main.callEdges.find((e) => e.calleeName === "helper");
     expect(edge).toBeDefined();
     expect(edge!.enclosingHandlers).toHaveLength(0);
@@ -99,7 +120,7 @@ node main() {
   } with approve
 }
 `);
-    const main = cg["main"];
+    const main = entry(cg, "main");
     const synthetic = main.callEdges.find((e) => e.calleeName === "deleteEmails");
     expect(synthetic).toBeDefined();
     // Critical: the synthetic edge must inherit the handlers from the
@@ -118,11 +139,13 @@ node main() {
   goto finish()
 }
 `);
-    const main = cg["main"];
-    expect(main.callEdges.some((e) => e.calleeName === "finish")).toBe(true);
+    const main = entry(cg, "main");
+    const edge = main.callEdges.find((e) => e.calleeName === "finish");
+    expect(edge).toBeDefined();
+    expect(edge!.calleeKey).toBe(`${main.file}:finish`);
   });
 
-  it("populates CallGraphFunction.file from the symbol table lookup", () => {
+  it("populates CallGraphFunction.file from the file currently being typechecked", () => {
     const cg = callGraphFrom(`
 def helper() {}
 
@@ -130,18 +153,23 @@ node main() {
   helper()
 }
 `);
-    expect(cg["main"].file).toMatch(/\.agency$/);
-    expect(cg["helper"].file).toBe(cg["main"].file);
+    const main = entry(cg, "main");
+    const helper = entry(cg, "helper");
+    expect(main.file).toMatch(/\.agency$/);
+    expect(helper.file).toBe(main.file);
   });
 
-  it("skips the top-level scope", () => {
+  it("skips the top-level scope and keys entries by `${file}:${name}`", () => {
     const cg = callGraphFrom(`
 node main() {
   interrupt std::read("hi")
 }
 `);
-    expect(cg["top-level"]).toBeUndefined();
-    expect(Object.keys(cg)).toEqual(["main"]);
+    // There is no synthetic `top-level` key in the qualified-key graph.
+    expect(Object.values(cg).some((e) => e.name === "top-level")).toBe(false);
+    expect(Object.values(cg).map((e) => e.name)).toEqual(["main"]);
+    const main = entry(cg, "main");
+    expect(Object.keys(cg)).toEqual([`${main.file}:main`]);
   });
 
   it("records every distinct interrupt site in one function", () => {
@@ -151,7 +179,8 @@ node main() {
   interrupt std::write("bye")
 }
 `);
-    expect(cg["main"].interruptSites).toHaveLength(2);
-    expect(cg["main"].interruptSites.map((s) => s.site.kind)).toEqual(["std::read", "std::write"]);
+    const main = entry(cg, "main");
+    expect(main.interruptSites).toHaveLength(2);
+    expect(main.interruptSites.map((s) => s.site.kind)).toEqual(["std::read", "std::write"]);
   });
 });

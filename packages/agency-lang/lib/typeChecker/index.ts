@@ -63,6 +63,7 @@ export class TypeChecker {
   private jsImportedNames: Record<string, true> = {};
   private interruptKindsByFunction: Record<string, InterruptKind[]> = {};
   private symbolTable?: SymbolTable;
+  private currentFile?: string;
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
@@ -85,6 +86,7 @@ export class TypeChecker {
     this.jsImportedNames = { ...resolved.jsImportedNames };
     this.interruptKindsByFunction = resolved.interruptKindsByFunction ?? {};
     this.symbolTable = resolved.symbolTable;
+    this.currentFile = resolved.fromFile;
     this.sourceText = resolved.sourceText;
   }
 
@@ -113,6 +115,7 @@ export class TypeChecker {
       jsImportedNames: this.jsImportedNames,
       interruptKindsByFunction: this.interruptKindsByFunction,
       symbolTable: this.symbolTable,
+      currentFile: this.currentFile,
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,

@@ -88,6 +88,11 @@ export type ImportedFunctionSignature = {
    * resolve type aliases referenced by the signature in the right module
    * (so a type-name collision across files picks the right one). */
   originFile?: string;
+  /** Name of the symbol as declared in its origin file, before any
+   *  `import { foo as bar }` aliasing rewrote it locally. Used by the
+   *  interrupt call-graph analysis to build a stable cross-file identity
+   *  (`${originFile}:${originalName}`) for resolved call edges. */
+  originalName?: string;
 };
 
 /**
@@ -124,6 +129,12 @@ export type CompilationUnit = {
    *  in-process callers that build a unit from a raw program (no entry
    *  file) don't have one. */
   symbolTable?: SymbolTable;
+  /** Absolute path of the file this compilation unit was built from.
+   *  Forwarded so downstream consumers (e.g. the typechecker) can tag
+   *  scopes with the file they came from without re-running a name
+   *  lookup against the symbol table. Undefined when callers build a
+   *  unit from a raw program with no entry file. */
+  fromFile?: string;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -254,6 +265,7 @@ export function buildCompilationUnit(
             parameters: r.symbol.parameters,
             returnType,
             originFile: r.file,
+            originalName: r.originalName,
           };
           for (const p of r.symbol.parameters) {
             // eslint-disable-next-line max-depth -- collecting alias seeds from imported function params
@@ -311,6 +323,7 @@ export function buildCompilationUnit(
     }
     unit.interruptKindsByFunction = interruptKindsByFunction;
     unit.symbolTable = symbolTable;
+    unit.fromFile = fromFile;
   }
 
   return unit;

@@ -715,16 +715,33 @@ describe("std::ui — _promptsAutocomplete happy path", () => {
     expect(result.value).toBe("please don't delete that");
   });
 
-  it("suggest() returns matching items by key or label, substring, case-insensitive", async () => {
-    const matched = await __suggestForTest(
-      "App",
-      [
-        { key: "a", label: "Approve" },
-        { key: "r", label: "Reject" },
-      ],
-      false,
-    );
-    expect(matched.map((m) => m.value)).toEqual(["a"]);
+  it("suggest() matches by key substring (case-insensitive), ignores label", async () => {
+    // Key-only matching is intentional: policy interrupt labels
+    // contain "approve" / "reject" / "always", so a label-substring
+    // match would never narrow anything (every label contains "r"
+    // and "a"). See _buildSuggest in ui.ts for rationale.
+    const items = [
+      { key: "a", label: "Approve once" },
+      { key: "r", label: "Reject once" },
+      { key: "aa", label: "Approve always" },
+      { key: "ap", label: "Approve always here" },
+    ];
+
+    // `r` matches only the row whose key contains "r".
+    expect(
+      (await __suggestForTest("r", items, false)).map((m) => m.value),
+    ).toEqual(["r"]);
+
+    // `a` matches every key containing "a" (case-insensitive).
+    expect(
+      (await __suggestForTest("A", items, false)).map((m) => m.value),
+    ).toEqual(["a", "aa", "ap"]);
+
+    // Pure-label substring does NOT match — "App" would match
+    // "Approve" if we were filtering by label, but we're not.
+    expect(
+      (await __suggestForTest("App", items, false)).map((m) => m.value),
+    ).toEqual([]);
   });
 
   it("suggest() appends synthetic free-text row only when allowFreeText && input && no real match", async () => {
@@ -738,8 +755,10 @@ describe("std::ui — _promptsAutocomplete happy path", () => {
     expect(noMatch[0].title).toContain("→");
     expect(noMatch[0].title).toContain("xyz");
 
+    // A typed key prefix that matches an existing key returns the
+    // real item (no synthetic row appended).
     const withMatch = await __suggestForTest(
-      "app",
+      "a",
       [{ key: "a", label: "Approve" }],
       true,
     );

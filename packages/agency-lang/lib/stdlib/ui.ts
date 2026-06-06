@@ -670,26 +670,70 @@ const AUTOCOMPLETE_FREE_TEXT_PREFIX = "__FREETEXT__:";
 // Shared cancellation+Result wrapper for every `prompts(...)` call.
 // All four bridges call this; the only differences between them are
 // the question they build and the post-processing they apply to the
-// successful value. `onCancel` returns `false` to suppress prompts'
-// default `process.exit(0)` on Ctrl+C / Escape.
+// successful value.
+//
+// Three side-effects beyond just calling prompts:
+//
+//   1. `onCancel` returns `false` to suppress prompts' default
+//      `process.exit(0)` on Ctrl+C / Escape, so we can return a
+//      Result.failure instead. (Callers loop on cancel to preserve
+//      `chooseOption`'s must-answer contract.)
+//
+//   2. Before opening the prompt, we call `globalThis.__agencyStopSpinner`
+//      if the line-mode REPL (`lib/stdlib/cli.ts`) has registered one.
+//      This pauses the "Thinking" timer while the user is being asked
+//      something — otherwise the timer keeps ticking over an open
+//      policy interrupt menu. No-op outside line-mode REPL.
+//
+//   3. We attach a stdin `data` listener that detects the Ctrl+C byte
+//      (`0x03`) and calls `process.exit(130)` immediately after the
+//      prompt resolves. Without this, `prompts` swallows Ctrl+C as an
+//      abort and our caller's retry loop reprompts forever, leaving
+//      the user with no way to quit. 130 = 128 + SIGINT, the standard
+//      shell convention for "killed by Ctrl+C".
 async function _runPrompt(question: prompts.PromptObject): Promise<any> {
-  let cancelled = false;
-  const answer = await prompts(question, {
-    onCancel: () => {
-      cancelled = true;
-      return false;
-    },
-  });
-  // Real Ctrl+C / Escape triggers onCancel and leaves the answer
-  // object empty. We also treat a null/undefined value as cancel —
-  // none of our bridges legitimately resolve with null (select /
-  // autocomplete return strings, text returns string, confirm
-  // returns boolean), so this is a defensive coverage of the
-  // `prompts.inject([null])` test path and any future edge case.
-  if (cancelled || !("value" in answer) || answer.value == null) {
-    return failure("cancelled");
+  const stopSpinner = (globalThis as any).__agencyStopSpinner;
+  if (typeof stopSpinner === "function") {
+    stopSpinner();
   }
-  return success(answer.value);
+
+  let cancelled = false;
+  let ctrlC = false;
+  const onStdinData = (chunk: Buffer): void => {
+    // 0x03 = Ctrl+C. Any chunk containing it counts (pastes can't
+    // legitimately include 0x03 in raw mode, so this is unambiguous).
+    if (chunk && chunk.includes(0x03)) ctrlC = true;
+  };
+  process.stdin.on("data", onStdinData);
+
+  try {
+    const answer = await prompts(question, {
+      onCancel: () => {
+        cancelled = true;
+        return false;
+      },
+    });
+
+    if (ctrlC) {
+      // Ctrl+C escapes the entire prompt session. Drop straight out
+      // of the process — even if the surrounding agency code has a
+      // retry loop, the user has signalled "quit, not retry."
+      process.exit(130);
+    }
+
+    // Real Ctrl+C / Escape triggers onCancel and leaves the answer
+    // object empty. We also treat a null/undefined value as cancel —
+    // none of our bridges legitimately resolve with null (select /
+    // autocomplete return strings, text returns string, confirm
+    // returns boolean), so this is a defensive coverage of the
+    // `prompts.inject([null])` test path and any future edge case.
+    if (cancelled || !("value" in answer) || answer.value == null) {
+      return failure("cancelled");
+    }
+    return success(answer.value);
+  } finally {
+    process.stdin.off("data", onStdinData);
+  }
 }
 
 // Exported for unit tests; do not call from production code.
@@ -707,12 +751,16 @@ function _buildSuggest(
 ): (input: string, choices: any[]) => Promise<{ title: string; value: string }[]> {
   return async (input: string, _choices: any[]) => {
     const q = (input ?? "").toLowerCase();
+    // Match against `key` only (substring, case-insensitive), not
+    // against `label`. Policy interrupt labels routinely contain "r"
+    // (in "approve" and "reject") and "a" (in "always"), so a label
+    // substring match would never narrow anything — typing `r` would
+    // still show every row. Key-only matching produces the expected
+    // behavior: `r` shows just the `r` row, `ap` narrows to `ap` /
+    // `approve`-prefixed keys, etc. Users still see the label in the
+    // rendered title, so they're not flying blind.
     const matched = items
-      .filter(
-        (it) =>
-          it.key.toLowerCase().includes(q) ||
-          it.label.toLowerCase().includes(q),
-      )
+      .filter((it) => it.key.toLowerCase().includes(q))
       .map((it) => ({ title: `${it.key}  ${it.label}`, value: it.key }));
     if (allowFreeText && input !== "" && matched.length === 0) {
       matched.push({

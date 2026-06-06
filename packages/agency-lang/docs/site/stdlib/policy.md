@@ -712,21 +712,21 @@ CLI sugar for an interactive policy handler. Owns load + save +
   Users of this helper should bind the returned handler to a variable
   before using it with `handle ... with`, e.g.:
 
-  const handler = cliPolicyHandler({ file: ..., fields: ... })
+  const handler = cliPolicyHandler(file: ..., fields: ...)
   handle { ... } with handler
 
-  @param opts.file - Path to the on-disk policy file
-  @param opts.fields - Per-kind config controlling the "approve-always-here" option
+  @param file - Path to the on-disk policy file
+  @param fields - Per-kind config controlling the "approve-always-here" option
 
 * Drop-in policy handler for interactive CLI agents. Returns a
  * function ref you bind to a local variable and install on a `handle`
  * block:
  *
  * ```ts
- * const handler = cliPolicyHandler({
+ * const handler = cliPolicyHandler(
  *   file: "${env("HOME")}/.myapp/policy.json",
  *   fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
- * })
+ * )
  * handle {
  *   // every interrupt raised here is filtered through the handler
  * } with handler
@@ -763,9 +763,9 @@ CLI sugar for an interactive policy handler. Owns load + save +
  * functionRef names — runtime safety is provided by the
  * flip-flag-first pattern inside the handler.
  *
- * @param opts.file - Path to the on-disk policy file. Created on
- *   first save; the containing directory must already exist.
- * @param opts.fields - Per-kind config controlling the (ap) prompt
+ * @param file - Path to the on-disk policy file. Created on first
+ *   save; the containing directory must already exist.
+ * @param fields - Per-kind config controlling the (ap) prompt
  *   option. Kinds not present here don't offer (ap).
 
 **Parameters:**

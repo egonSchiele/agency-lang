@@ -1,7 +1,7 @@
 import { getVersion } from "std::agency"
 import { route } from "std::agent"
 import { parseArgs } from "std::args"
-import { clearMessages, pushMessage, repl, clearScreen, hline } from "std::cli"
+import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
 import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"

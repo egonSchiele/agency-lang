@@ -1165,7 +1165,15 @@ export def chooseOption(
   // throw lives inside `autocomplete()` (in TS); we don't need to
   // repeat it here.
   print("\n")
-  hline()
+  // Cyan rule across the terminal as a visual divider before the
+  // title/body banner. Inlined to avoid duplicating an exported
+  // `hline` here — the public one lives in `std::cli`, and
+  // re-importing it would introduce a std::ui ↔ std::cli cycle.
+  // The string literal is bound to a `const` first because the
+  // parser doesn't accept method calls directly on a string literal
+  // ("─".repeat(...) fails; see TODO.md).
+  const rule = "─"
+  print(color.cyan(rule.repeat(_termWidth())))
   if (title != "") {
     print(color.cyan(title), "\n")
   }
@@ -1923,16 +1931,7 @@ export def repl(
   _activeRepl = null
 }
 
-export def clearScreen() {
-  // ANSI escape code to clear the screen and move the cursor to the top-left.
-  print("\\x1b[2J\\x1b[H")
-}
-
-export def termWidth(): number {
-  return _termWidth()
-}
-
-export def hline(char: string = "─", width: number = null): string {
-  let _width = width || termWidth()
-  print(color.cyan(char.repeat(_width)))
-}
+// `clearScreen`, `termWidth`, and `hline` live in `std::cli` (the
+// single canonical home). Importing them from there inside this
+// module would create a std::ui ↔ std::cli cycle, so internal use
+// inlines `_termWidth()` from the TS bridge above.

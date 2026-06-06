@@ -510,81 +510,107 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
   });
 });
 
-describe("std::ui — chooseOption line-mode fallback", () => {
-  it("returns free text verbatim when allowFreeText is true and input is not a known key", async () => {
-    // No active repl() → chooseOption hits the `print + input` loop.
-    // Inject `__agencyInputOverride` to feed a free-form rejection
-    // reason; with `allowFreeText: true` it should be returned
-    // verbatim instead of reprompting.
-    const fed: string[] = [];
-    (globalThis as any).__agencyInputOverride = async (_prompt: string) => {
-      const text = "please don't delete that file";
-      fed.push(text);
-      return text;
-    };
+describe("std::ui — chooseOption line-mode (prompts-backed)", () => {
+  afterEach(() => restoreTty());
+
+  it("returns the picked key on a clean select", async () => {
+    spoofTty(true);
+    prompts.inject(["a"]);
     const ctx = makeTestCtx();
-    try {
-      const answer = await runInTestContext(
-        ctx,
-        new StateStack(),
-        new ThreadStore(),
-        () =>
-          __call(chooseOption, {
-            type: "named",
-            positionalArgs: [],
-            namedArgs: {
-              title: "Pick one",
-              body: "",
-              items: [
-                { key: "a", label: "approve" },
-                { key: "r", label: "reject" },
-              ],
-              allowFreeText: true,
-            },
-          }),
-      );
-      expect(answer).toBe("please don't delete that file");
-      expect(fed).toEqual(["please don't delete that file"]);
-    } finally {
-      delete (globalThis as any).__agencyInputOverride;
-    }
+    const answer = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [
+            { key: "a", label: "approve" },
+            { key: "r", label: "reject" },
+          ],
+        },
+      }),
+    );
+    expect(answer).toBe("a");
   });
 
-  it("reprompts until a known key is entered when allowFreeText is false (default)", async () => {
-    // Default behavior unchanged: a non-key answer loops; only an
-    // exact key match terminates the prompt.
-    const answers = ["nope", "still no", "a"];
-    let calls = 0;
-    (globalThis as any).__agencyInputOverride = async (_prompt: string) => {
-      const next = answers[calls];
-      calls += 1;
-      return next;
-    };
+  it("returns free text verbatim with allowFreeText", async () => {
+    // CAVEAT — encoding leakage: this test hardcodes the
+    // `AUTOCOMPLETE_FREE_TEXT_PREFIX` (`__FREETEXT__:`) that
+    // `_promptsAutocomplete` uses internally between its `suggest`
+    // callback and its resolver. `prompts.inject` skips the suggest
+    // step and feeds the resolved value directly, so we have to
+    // simulate "user picked the synthetic row" by manually emitting
+    // the prefixed value. Production callers never see this prefix.
+    // If you change `AUTOCOMPLETE_FREE_TEXT_PREFIX` in ui.ts, update
+    // this string too.
+    spoofTty(true);
+    prompts.inject(["__FREETEXT__:please don't delete that"]);
     const ctx = makeTestCtx();
-    try {
-      const answer = await runInTestContext(
-        ctx,
-        new StateStack(),
-        new ThreadStore(),
-        () =>
-          __call(chooseOption, {
-            type: "named",
-            positionalArgs: [],
-            namedArgs: {
-              title: "Pick one",
-              body: "",
-              items: [
-                { key: "a", label: "approve" },
-                { key: "r", label: "reject" },
-              ],
-            },
-          }),
-      );
-      expect(answer).toBe("a");
-      expect(calls).toBe(3);
-    } finally {
-      delete (globalThis as any).__agencyInputOverride;
-    }
+    const answer = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [
+            { key: "a", label: "approve" },
+            { key: "r", label: "reject" },
+          ],
+          allowFreeText: true,
+        },
+      }),
+    );
+    expect(answer).toBe("please don't delete that");
+  });
+
+  it("re-prompts on cancel to preserve the must-answer contract", async () => {
+    // First inject(null) cancels → bridge returns failure("cancelled").
+    // chooseOption loops; second answer resolves with "a".
+    spoofTty(true);
+    prompts.inject([null, "a"]);
+    const ctx = makeTestCtx();
+    const answer = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [{ key: "a", label: "approve" }],
+        },
+      }),
+    );
+    expect(answer).toBe("a");
+  });
+
+  it("surfaces non-TTY as a failure rather than looping", async () => {
+    // chooseOption is declared `: string`, but Agency's runtime wraps
+    // any thrown error as a `failure(...)` Result before returning.
+    // So callers see a Result-shaped object whose `error` contains
+    // the TTY message, not a JS exception. The important contract
+    // here is "does NOT loop forever" — the test would hang if the
+    // chooseOption loop didn't break out on non-cancel failures.
+    spoofTty(false);
+    const ctx = makeTestCtx();
+    const result: any = await runInTestContext(
+      ctx, new StateStack(), new ThreadStore(),
+      () => __call(chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [{ key: "a", label: "approve" }],
+        },
+      }),
+    );
+    expect(result?.success).toBe(false);
+    expect(String(result?.error)).toMatch(/requires a TTY/);
   });
 });
 

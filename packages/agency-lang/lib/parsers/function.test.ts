@@ -1395,18 +1395,27 @@ describe("functionParser", () => {
         },
       },
     },
-    // Failure cases for type hints
+    // Failure cases for type hints / parameter separators.
+    // These now throw TarsecError instead of returning a recoverable
+    // failure: once `def NAME (` is consumed, the parameter list is
+    // wrapped in a `parseError` that fires fatally on anything other
+    // than `,` or `)`. That's what produces the targeted "expected `,`
+    // between parameters or `)` …" message in the LSP/CLI instead of a
+    // junk dump of every top-level alternative.
     {
       input: "def bad(x:) { x }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "def bad(: number) { x }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "def bad(x: number y: string) { x }",
       expected: { success: false },
+      throws: true,
     },
     // Functions with return types - primitive types
     {

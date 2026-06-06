@@ -191,6 +191,53 @@ describe("parseAgency structured errors", () => {
       expect(result.message).toBeDefined();
     }
   });
+
+  // Without this, the LSP fell back to anchoring the squiggle at line 0,
+  // col 0 for any error that wasn't surfaced via `parseError(...)` —
+  // even though the formatted message ("Line X, col Y: …") contained
+  // the right position. The structured `errorData` is what the LSP
+  // actually reads, so we have to populate it from the tarsec
+  // rightmost-failure offset.
+  it("returns errorData with the right line/col for recoverable parse failures", () => {
+    const source = "def greet(name: string; greeting: string) { }";
+    const result = parseAgency(source, {}, false);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errorData).toBeDefined();
+    expect(result.errorData!.line).toBe(0);
+    // `def greet(name: string` is 22 chars; `;` is at col 22.
+    expect(result.errorData!.column).toBe(22);
+  });
+
+  it("subtracts the template offset from recoverable-failure line numbers", () => {
+    const source = "def greet(name: string; greeting: string) { }";
+    const result = parseAgency(source, {}, true);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errorData).toBeDefined();
+    // Same source, but rendered through the template — line should
+    // still be 0 in the user's coordinates.
+    expect(result.errorData!.line).toBe(0);
+    expect(result.errorData!.column).toBe(22);
+  });
+
+  // Pins the targeted message produced by the `parseError` wrapper
+  // around `def`'s parameter-list close-paren. Before this, the same
+  // input dumped the full top-level alternatives list ("expected
+  // 'break', 'continue', 'import', ..., a function definition, ...")
+  // which made the actual mistake nearly invisible.
+  it("produces a targeted message when params are separated by `;`", () => {
+    const source = "def greet(name: string; greeting: string) { }";
+    const result = parseAgency(source, {}, false);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errorData?.message).toMatch(
+      /expected `,` between parameters or `\)` to close the parameter list/,
+    );
+    expect(result.errorData?.message).toMatch(
+      /parameters are separated by `,`, not `;`/,
+    );
+  });
 });
 
 describe("parseAgency loc.line invariant", () => {

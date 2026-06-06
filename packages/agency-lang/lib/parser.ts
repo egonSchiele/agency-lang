@@ -1,10 +1,12 @@
 import {
+  buildLineTable,
   capture,
   eof,
-  failure,
   getErrorMessage,
+  getRightmostFailure,
   many,
   map,
+  offsetToPosition,
   or,
   Parser,
   ParserResult,
@@ -126,10 +128,20 @@ export function replaceBlankLines(input: string): string {
   );
 }
 
+/** Failure result enriched with the tarsec rightmost-failure position so
+ *  the LSP can surface a real squiggle range instead of falling back to
+ *  line 0, col 0. `pos` is a byte offset into the normalized input. */
+export type ParserFailureWithPos = {
+  success: false;
+  message: string;
+  rest: string;
+  rightmostPos?: number;
+};
+
 export function _parseAgency(
   input: string,
   config: AgencyConfig = {},
-): ParserResult<AgencyProgram> {
+): ParserResult<AgencyProgram> | ParserFailureWithPos {
   const normalized = normalizeCode(input);
   if (normalized.trim().length === 0) {
     return success(
@@ -151,8 +163,22 @@ export function _parseAgency(
   const result = agencyParser(normalized);
   if (!result.success) {
     const betterMessage = getErrorMessage();
+    const rightmost = getRightmostFailure();
     if (betterMessage) {
-      return failure(betterMessage, normalized);
+      return {
+        success: false,
+        message: betterMessage,
+        rest: normalized,
+        ...(rightmost ? { rightmostPos: rightmost.pos } : {}),
+      };
+    }
+    if (rightmost) {
+      return {
+        success: false,
+        message: result.message ?? "Parse error",
+        rest: normalized,
+        rightmostPos: rightmost.pos,
+      };
     }
   }
   return result;
@@ -187,22 +213,66 @@ export function parseAgency(
   setTemplateOffset(offset);
   try {
     const result = _parseAgency(input, config);
-    if (result.success && lower) {
-      // Apply pattern lowering pass: transforms destructuring/pattern syntax
-      // into existing AST constructs. The format path opts out by passing
-      // `lower: false` so it can print patterns back as patterns.
-      result.result.nodes = lowerPatterns(result.result.nodes);
+    if (result.success) {
+      if (lower) {
+        // Apply pattern lowering pass: transforms destructuring/pattern syntax
+        // into existing AST constructs. The format path opts out by passing
+        // `lower: false` so it can print patterns back as patterns.
+        result.result.nodes = lowerPatterns(result.result.nodes);
+      }
+      return result;
     }
-    return result;
+    // Recoverable parse failure (no TarsecError thrown). Convert the
+    // tarsec rightmost-failure offset into editor-coordinate line/col
+    // so the LSP can anchor its squiggle on the actual error site
+    // instead of falling back to line 0, col 0. Without this, the
+    // diagnostics layer only has the message string to go on, and the
+    // location info embedded in that string ("Line X, col Y: ...") is
+    // never extracted.
+    if ("rightmostPos" in result && typeof result.rightmostPos === "number") {
+      const lineTable = buildLineTable(input);
+      const pos = offsetToPosition(lineTable, result.rightmostPos);
+      // Strip the "Line X, col Y: " prefix that getErrorMessage prepends
+      // so the LSP / CLI can render the location separately without
+      // duplicating it inside the message body.
+      const message = result.message.replace(/^Line \d+, col \d+: /, "");
+      return {
+        success: false,
+        message: result.message,
+        rest: input,
+        errorData: {
+          line: pos.line - offset,
+          column: pos.column,
+          length: 1,
+          message,
+          prettyMessage: result.message,
+        },
+      };
+    }
+    return { success: false, message: result.message, rest: result.rest };
   } catch (error) {
     if (error instanceof TarsecError) {
+      // Prefer the rightmost-failure offset over tarsec's own
+      // line/column. tarsec's `getDiagnostics` line/col computation
+      // ignores `\n` separators when walking the line table, which
+      // makes columns drift right by the number of preceding
+      // newlines once the template is applied. Recomputing from
+      // the absolute offset avoids that drift entirely.
+      const rightmost = getRightmostFailure();
+      let line = error.data.line - offset;
+      let column = error.data.column;
+      if (rightmost) {
+        const pos = offsetToPosition(buildLineTable(input), rightmost.pos);
+        line = pos.line - offset;
+        column = pos.column;
+      }
       return {
         success: false,
         message: error.message,
         rest: input,
         errorData: {
-          line: error.data.line - offset,
-          column: error.data.column,
+          line,
+          column,
           length: error.data.length,
           message: error.data.message,
           prettyMessage: error.data.prettyMessage,

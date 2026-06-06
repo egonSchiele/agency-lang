@@ -1924,6 +1924,14 @@ export class TypeScriptBuilder {
       return this.processFunctionCall(node);
     }
 
+    // `throw(...)` lowers to a `throw new Error(...)` *statement*, not
+    // an expression. Skip the interrupt-result wrapper below — it
+    // would try to assign the throw to `const __funcResult = ...`,
+    // which esbuild rejects (`Unexpected "throw"`).
+    if (node.functionName === "throw") {
+      return this.processFunctionCall(node);
+    }
+
     const callNode = this.processFunctionCall(node);
     const scope = this.scopes.current();
 

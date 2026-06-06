@@ -372,7 +372,16 @@ return;
   });
 return runner.halted ? runner.haltResult : undefined;
 } finally {
-__ctx.stateStack.pop();
+// Pop the SAME stack `setupFunction` pushed onto (the ALS-current
+// stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
+// block runs inside a parallel/fork/race branch (e.g. as a callback
+// fired from `onToolCallEnd` during runPrompt's tool dispatch), the
+// ALS stack is the branch stack — distinct from `__ctx.stateStack`.
+// Popping `__ctx.stateStack` would corrupt the parent's frame chain
+// (the parent's runPrompt frame disappears, the next iteration's
+// `pr.parallel` reads `lastFrame()` as undefined, and crashes with
+// "Cannot read properties of undefined (reading 'getOrCreateBranch')").
+__bsetup.stateStack.pop();
 }
           }, params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         });

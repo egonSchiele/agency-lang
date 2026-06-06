@@ -165,21 +165,23 @@ function synthTryExpression(
 const BOOLEAN_OPS = new Set([
   "==",
   "!=",
+  "===",
+  "!==",
   "=~",
   "!~",
   "<",
   ">",
   "<=",
   ">=",
-  "&&",
-  "||",
   // Unary `!` is desugared by the parser into a binOpExpression of the form
   // `{ op: "!", left: true, right: x }` (see unaryNotParser in parsers.ts).
   // It always yields a boolean.
   "!",
 ]);
 
-const DIMENSION_CHECK_OPS = new Set(["+", "-", ">", "<", ">=", "<=", "==", "!="]);
+const DIMENSION_CHECK_OPS = new Set([
+  "+", "-", ">", "<", ">=", "<=", "==", "!=", "===", "!==",
+]);
 
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
@@ -190,6 +192,7 @@ function synthBinOp(
   if (op === "catch") return synthCatch(expr, scope, ctx);
   if (op === "|>") return synthPipe(expr, scope, ctx);
   if (op === "??") return synthNullishCoalesce(expr, scope, ctx);
+  if (op === "||" || op === "&&") return synthLogical(expr, scope, ctx);
 
   // Dimension mismatch check: only when both sides are direct unit literals
   if (DIMENSION_CHECK_OPS.has(op) &&
@@ -214,6 +217,38 @@ function synthBinOp(
     }
   }
   return NUMBER_T;
+}
+
+/**
+ * `lhs || rhs` returns lhs if it is truthy, otherwise rhs. Type is the
+ * union of left and right (deduped). Same shape for `&&` — returns lhs if
+ * falsy, otherwise rhs — so the runtime value also comes from one side or
+ * the other.
+ *
+ * If either side is `any`, the result is `any`. If left and right
+ * structurally collapse to a single type, return that type.
+ */
+function synthLogical(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const left = synthType(expr.left, scope, ctx);
+  const right = synthType(expr.right, scope, ctx);
+  if (left === "any" || right === "any") return "any";
+  const seen = new Map<string, VariableType>();
+  const collect = (t: VariableType) => {
+    if (t.type === "unionType") {
+      for (const m of t.types) seen.set(JSON.stringify(m), m);
+    } else {
+      seen.set(JSON.stringify(t), t);
+    }
+  };
+  collect(left);
+  collect(right);
+  const unique = Array.from(seen.values());
+  if (unique.length === 1) return unique[0];
+  return { type: "unionType", types: unique };
 }
 
 /**

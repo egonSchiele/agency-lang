@@ -1,4 +1,8 @@
-import { _runLineRepl } from "agency-lang/stdlib-lib/cli.js"
+import {
+  _runLineRepl,
+  _clearScreen,
+  _termWidth,
+ } from "agency-lang/stdlib-lib/cli.js"
 
 /*
   ## Module: std::cli (line-mode REPL)
@@ -109,6 +113,14 @@ export def repl(
 }
 
 export def clearScreen() {
-  // ANSI escape code to clear the screen and move the cursor to the top-left.
-  print("\x1b[2J\x1b[H")
+  _clearScreen()
+}
+
+export def termWidth(): number {
+  return _termWidth()
+}
+
+export def hline(char: string = "─", width: number = null): string {
+  let _width = width || termWidth()
+  return char.repeat(_width)
 }

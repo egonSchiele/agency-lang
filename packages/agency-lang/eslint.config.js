@@ -80,4 +80,10 @@ export default [
       "@typescript-eslint/no-unsafe-function-type": "off",
     },
   },
+  {
+    files: ["lib/backends/agencyGenerator.ts"],
+    rules: {
+      "max-lines": "off",
+    }
+  }
 ];

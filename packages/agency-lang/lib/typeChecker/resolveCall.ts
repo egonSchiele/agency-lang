@@ -87,7 +87,13 @@ export const RESERVED_FUNCTION_NAMES = new Set<string>([
  */
 export type JsRegistryEntry =
   | { kind: "callable"; sig?: BuiltinSignature }
-  | { kind: "namespace"; members: Record<string, JsRegistryEntry> };
+  | {
+      kind: "namespace";
+      members: Record<string, JsRegistryEntry>;
+      /** When set, this namespace is ALSO directly callable (e.g.
+       * `String(x)` coerces to string, `Number(x)` to number). */
+      callableSig?: BuiltinSignature;
+    };
 
 const callable = (sig?: BuiltinSignature): JsRegistryEntry => ({
   kind: "callable",
@@ -95,9 +101,11 @@ const callable = (sig?: BuiltinSignature): JsRegistryEntry => ({
 });
 const namespace = (
   members: Record<string, JsRegistryEntry>,
+  callableSig?: BuiltinSignature,
 ): JsRegistryEntry => ({
   kind: "namespace",
   members,
+  callableSig,
 });
 
 // Common single-number-arg, returns-number signature (Math.floor / ceil / round / abs / sqrt / sign / trunc / cbrt etc.).
@@ -186,25 +194,36 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     from: callable(),
     of: callable(),
   }),
-  String: namespace({
-    fromCharCode: callable({ params: [], restParam: NUMBER_T, returnType: STRING_T }),
-    raw: callable(),
-  }),
-  Number: namespace({
-    isInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
-    isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
-    isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
-    isSafeInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
-    parseFloat: callable({
-      params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
-      returnType: NUMBER_T,
-    }),
-    parseInt: callable({
-      params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }, NUMBER_T],
-      minParams: 1,
-      returnType: NUMBER_T,
-    }),
-  }),
+  // `String(x)` coerces any value to a string; `String.fromCharCode(...)`
+  // and `String.raw` are also members of the same global.
+  String: namespace(
+    {
+      fromCharCode: callable({ params: [], restParam: NUMBER_T, returnType: STRING_T }),
+      raw: callable(),
+    },
+    { params: ["any"], minParams: 0, returnType: STRING_T },
+  ),
+  // `Number(x)` coerces to a number; the rest are member helpers.
+  Number: namespace(
+    {
+      isInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+      isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
+      isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
+      isSafeInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+      parseFloat: callable({
+        params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
+        returnType: NUMBER_T,
+      }),
+      parseInt: callable({
+        params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }, NUMBER_T],
+        minParams: 1,
+        returnType: NUMBER_T,
+      }),
+    },
+    { params: ["any"], minParams: 0, returnType: NUMBER_T },
+  ),
+  // `Boolean(x)` coerces any value to a boolean.
+  Boolean: callable({ params: ["any"], minParams: 0, returnType: BOOLEAN_T }),
   Date: namespace({
     now: callable({ params: [], returnType: NUMBER_T }),
     parse: callable({ params: [STRING_T], returnType: NUMBER_T }),
@@ -401,6 +420,9 @@ export function resolveCall(
   if (has(JS_GLOBALS, name)) {
     const jsEntry = JS_GLOBALS[name];
     if (jsEntry.kind === "callable") return { kind: "jsGlobal" };
+    // Some namespaces are also directly callable (e.g. `String(x)`).
+    if (jsEntry.kind === "namespace" && jsEntry.callableSig)
+      return { kind: "jsGlobal" };
   }
   return { kind: "unresolved" };
 }

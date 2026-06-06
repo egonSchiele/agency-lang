@@ -11,6 +11,8 @@ import { __call } from "../runtime/call.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js"
 import { color, colors, bgColors } from "../utils/termcolors.js";
+import { _promptsAutocomplete } from "./ui.js";
+import { isFailure } from "../runtime/result.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -330,246 +332,77 @@ function buildCompleter(
 }
 
 /**
- * Strip the most common ANSI CSI sequences (SGR, cursor movement,
- * line clears) to compute the visible width of a styled string.
- * Used so the slash-hint renderer can put the cursor back at the
- * correct *display* column even when the prompt itself carries
- * color codes like `\x1b[94m`.
+ * Open the `prompts.autocomplete` modal preloaded with the slash
+ * palette. Returns the picked command key (e.g. `/cost`) on success,
+ * or `null` if the user cancelled (Ctrl+C / Escape).
+ *
+ * Replaces the old inline `installSlashHints` popup. Triggered when
+ * the user presses `/` at an empty prompt (see `installSlashTrigger`)
+ * — we hand off to the same `prompts` machinery the interrupt UI
+ * uses, so the palette and the policy interrupt picker look and feel
+ * identical.
+ *
+ * No-op (returns null) when the palette is empty.
  */
-function visibleLength(s: string): number {
-  // CSI = ESC `[` then any digits/semicolons then one final byte.
-  // Covers SGR (`m`), cursor moves (`A`-`G`), and clears (`J`, `K`).
-  return s.replace(/\x1b\[[\d;]*[A-Za-z]/g, "").length;
+async function openSlashPalette(
+  entries: [string, string][],
+): Promise<string | null> {
+  if (entries.length === 0) return null;
+  const items = entries.map(([key, label]) => ({ key, label }));
+  const result = await _promptsAutocomplete(
+    "Slash command:",
+    items,
+    false,
+    "press Esc to close",
+  );
+  if (isFailure(result)) return null;
+  return String(result.value);
 }
 
 /**
- * Live slash-command popup. After every keystroke (via the
- * `keypress` event), if the current input buffer starts with `/`,
- * renders matching commands as dim hint rows *below* the prompt
- * row, then explicitly repositions the cursor back to the input row
- * + column so readline keeps drawing the next keystroke at the
- * right spot.
+ * Intercept `/` at an empty readline buffer and synthesize a submit
+ * so the loop's slash-trigger fires immediately — no Enter required.
+ * When the buffer is non-empty (e.g. typing `/etc/foo` after some
+ * other text), the keystroke passes through normally. Returns a
+ * teardown that restores the original `_ttyWrite`.
  *
- * Earlier versions used `\x1b[s` / `\x1b[u` (DECSC / DECRC) for
- * save/restore but several terminals (notably macOS Terminal.app
- * and certain iTerm2 setups) either ignore the sequences, restore
- * to stale absolute coordinates after scroll, or have them
- * intercepted by readline's own redraw. The result was hints
- * stacking below each other and the cursor drifting onto a hint
- * row. We now compute the target column from `visibleLength(prompt)
- * + rl.cursor` and emit explicit `\r` + `\x1b[<n>C` to land on it.
- *
- * Capped at `MAX_HINT_ROWS` so very long palettes can't push the
- * prompt off-screen. No-op on non-TTY or empty palette.
- *
- * Old hints aren't actively cleared when the user submits a line:
- * they become part of scrollback as a "what you could have typed"
- * trail, and the next prompt iteration starts fresh below them.
+ * Overriding `_ttyWrite` is the standard pattern for layered key
+ * handling on top of readline (used by inquirer, enquirer, etc.).
+ * No-op on non-TTY or empty palette.
  */
-const MAX_HINT_ROWS = 8;
-
-// High-contrast style for the currently selected hint row. ANSI 44 =
-// blue background; 97 = bright white foreground; 1 = bold. Combined
-// with the `▶ ` prefix this stands out clearly even on terminals
-// that render dim text faintly.
-const SELECTED_HINT_BG = styles.bgCyan;
-const SELECTED_HINT_FG = styles.black;
-const BOLD = styles.bold
-
-/**
- * Live slash-command popup with arrow-key navigation.
- *
- * **Rendering** (after every keystroke, via `setImmediate` over the
- * `keypress` event): if the input buffer starts with `/`, draws the
- * matching commands as hint rows below the prompt and explicitly
- * repositions the cursor back to `visibleLength(prompt) + rl.cursor`
- * so readline keeps drawing at the right column on the next keypress.
- *
- * **Selection** (Up / Down / Enter): we override `rl._ttyWrite`,
- * readline's per-key dispatcher, so when the popup is open Up/Down
- * scroll through the visible matches (highlighting one with a blue
- * background + bold white text + `▶ ` prefix) instead of triggering
- * readline's history navigation. Enter with an active selection
- * substitutes the selected command into the readline buffer and
- * submits — equivalent to the user having typed it then pressed
- * Enter. Without a selection, Enter behaves normally (submits the
- * typed buffer as-is).
- *
- * Overriding `_ttyWrite` is a private API but the standard pattern
- * used by `inquirer`, `enquirer`, etc. for layered key handling on
- * top of readline.
- *
- * Capped at `MAX_HINT_ROWS`. No-op on non-TTY or empty palette.
- */
-function installSlashHints(
+function installSlashTrigger(
   rl: readline.Interface,
   entries: [string, string][],
-  prompt: string,
   useTTY: boolean,
 ): () => void {
   if (!useTTY || entries.length === 0) return () => { };
-  const visiblePromptLen = visibleLength(prompt);
-
-  let renderedRows = 0;
-  // The list of matches currently displayed in the popup. Updated
-  // by `recomputeMatches()` whenever the input buffer changes.
-  let currentMatches: [string, string][] = [];
-  // Index into `currentMatches`. `-1` means no selection (Enter
-  // submits the typed buffer as-is); `>= 0` means a hint is
-  // highlighted and Enter will substitute it.
-  let selectedIdx = -1;
-
-  // Put the cursor at the input row, column `col`. `\r` snaps to
-  // col 0; `\x1b[<n>C` then moves right.
-  const repositionTo = (col: number): void => {
-    const out = process.stdout;
-    out.write("\r");
-    if (col > 0) out.write(`\x1b[${col}C`);
-  };
-
-  const clearAndReposition = (inputCol: number): void => {
-    if (renderedRows === 0) {
-      repositionTo(inputCol);
-      return;
-    }
-    const out = process.stdout;
-    for (let i = 0; i < renderedRows; i++) {
-      out.write("\x1b[1B\r\x1b[K");
-    }
-    out.write(`\x1b[${renderedRows}A`);
-    repositionTo(inputCol);
-    renderedRows = 0;
-  };
-
-  // Refresh `currentMatches` for the current buffer. Always resets
-  // `selectedIdx` to -1 — typing or backspacing should drop any
-  // arrow-key selection, since the visible list just changed.
-  const recomputeMatches = (): void => {
-    const buf = (rl as unknown as { line?: string }).line ?? "";
-    if (!buf.startsWith("/")) {
-      currentMatches = [];
-      selectedIdx = -1;
-      return;
-    }
-    const filter = buf.toLowerCase();
-    currentMatches = entries
-      .filter(([k]) => k.toLowerCase().startsWith(filter))
-      .slice(0, MAX_HINT_ROWS);
-    selectedIdx = -1;
-  };
-
-  const formatHintRow = (
-    key: string,
-    desc: string,
-    selected: boolean,
-    maxKey: number,
-  ): string => {
-    const padded = key.padEnd(maxKey, " ");
-    const descPart = desc ? `  ${desc}` : "";
-    if (selected) {
-      // Bracket the row with a space on each side so the blue
-      // background extends past the text instead of hugging the
-      // letters. Trailing `\x1b[K` would also fill to EOL but we
-      // skip it here so the highlight stops at the description's
-      // end — cleaner against the terminal background.
-      return `${SELECTED_HINT_BG}${SELECTED_HINT_FG}${BOLD} ▶ ${padded}${descPart} ${COLOR_RESET}`;
-    }
-    return `${DIM}   ${padded}${descPart}${COLOR_RESET}`;
-  };
-
-  const renderHints = (): void => {
-    const rlAny = rl as unknown as { line?: string; cursor?: number };
-    const buf = rlAny.line ?? "";
-    const cursorPos = rlAny.cursor ?? buf.length;
-    const inputCol = visiblePromptLen + cursorPos;
-
-    clearAndReposition(inputCol);
-
-    if (currentMatches.length === 0) return;
-
-    const maxKey = currentMatches.reduce(
-      (m, [k]) => Math.max(m, k.length),
-      0,
-    );
-    const out = process.stdout;
-    for (let i = 0; i < currentMatches.length; i++) {
-      const [key, desc] = currentMatches[i];
-      const row = formatHintRow(key, desc, i === selectedIdx, maxKey);
-      out.write(`\n\r\x1b[K${row}`);
-    }
-    out.write(`\x1b[${currentMatches.length}A`);
-    repositionTo(inputCol);
-    renderedRows = currentMatches.length;
-  };
-
-  // ---- _ttyWrite override: arrow-key navigation + Enter substitution
-  // Wraps readline's per-keystroke dispatcher. When the popup is
-  // active we own Up/Down/Enter; for everything else we delegate to
-  // the original, then re-render hints once readline has updated
-  // its buffer.
   const rlAny = rl as unknown as {
-    _ttyWrite: (s: unknown, key: { name?: string }) => void;
+    _ttyWrite: (s: unknown, key: { name?: string; sequence?: string }) => void;
     line: string;
     cursor: number;
-    _refreshLine?: () => void;
   };
   const originalTtyWrite = rlAny._ttyWrite;
-
   rlAny._ttyWrite = function (
     this: typeof rlAny,
     s: unknown,
-    key: { name?: string },
+    key: { name?: string; sequence?: string },
   ): void {
-    const popupActive = (this.line ?? "").startsWith("/");
-
-    if (popupActive && key && currentMatches.length > 0) {
-      if (key.name === "up") {
-        selectedIdx =
-          selectedIdx <= 0 ? currentMatches.length - 1 : selectedIdx - 1;
-        renderHints();
-        return;
-      }
-      if (key.name === "down") {
-        selectedIdx =
-          selectedIdx < 0 || selectedIdx >= currentMatches.length - 1
-            ? 0
-            : selectedIdx + 1;
-        renderHints();
-        return;
-      }
-      if (
-        key.name === "return" &&
-        selectedIdx >= 0 &&
-        selectedIdx < currentMatches.length
-      ) {
-        // Substitute the selected command into the buffer, clear
-        // the popup, and let readline's Enter handler submit.
-        const selectedCmd = currentMatches[selectedIdx][0];
-        currentMatches = [];
-        selectedIdx = -1;
-        renderHints(); // clears hints from screen
-        this.line = selectedCmd;
-        this.cursor = selectedCmd.length;
-        if (typeof this._refreshLine === "function") this._refreshLine();
-        originalTtyWrite.call(this, s, key);
-        return;
-      }
+    const isSlash = key && (key.sequence === "/" || key.name === "slash");
+    if (isSlash && (this.line ?? "") === "") {
+      // Substitute `/` into the buffer and synthesize Enter so the
+      // pending `rl.question` resolves with "/". The main loop sees
+      // it, opens `openSlashPalette`, and we never echo the `/`
+      // ourselves — readline's Enter handler does its normal line
+      // termination, which writes the trailing newline.
+      this.line = "/";
+      this.cursor = 1;
+      originalTtyWrite.call(this, "\r", { name: "return" });
+      return;
     }
-
-    // Default path: hand off to readline, then re-render hints once
-    // readline has updated its buffer.
     originalTtyWrite.call(this, s, key);
-    setImmediate(() => {
-      recomputeMatches();
-      renderHints();
-    });
   };
-
   return (): void => {
-    // Restore original _ttyWrite so the readline interface behaves
-    // normally if anything else still uses it after this REPL exits.
     rlAny._ttyWrite = originalTtyWrite;
-    clearAndReposition(visiblePromptLen);
   };
 }
 
@@ -689,10 +522,10 @@ export async function _runLineRepl(
     history: initialHistory,
     historySize: historyMax,
     removeHistoryDuplicates: true,
-    // Tab completion fallback for the slash-command palette. The
-    // live popup (`installSlashHints`) is the discovery surface; the
-    // completer is the "Tab to fill" mechanism for users who prefer
-    // the shell idiom.
+    // Tab completion fallback for the slash-command palette.
+    // Submitting a bare `/` opens the `prompts.autocomplete` picker
+    // (see `openSlashPalette`); the completer is the "Tab to fill"
+    // mechanism for users who prefer the shell idiom.
     completer: buildCompleter(palette),
   });
 
@@ -702,7 +535,12 @@ export async function _runLineRepl(
   // `COLOR_RESET` immediately after `rl.question` resolves so the
   // agent's reply (and any tool-call output) prints in the default
   // color. No-op on non-TTY so logs / pipes stay free of escape codes.
-  const useColor = process.stdout.isTTY === true && process.env.NO_COLOR !== "1";
+  // Split the two: `useTTY` gates terminal-interactive features (the
+  // `/` slash-trigger override on readline, the "Thinking" spinner)
+  // and must NOT depend on `NO_COLOR`. `useColor` additionally
+  // suppresses SGR sequences when the user has opted out of color.
+  const useTTY = process.stdout.isTTY === true;
+  const useColor = useTTY && process.env.NO_COLOR !== "1";
   const coloredPrompt = useColor
     ? `${USER_INPUT_COLOR}${prompt}`
     : prompt;
@@ -748,12 +586,9 @@ export async function _runLineRepl(
   const prevStopSpinner = (globalThis as any)[stopSpinnerKey];
   (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
 
-  // Live slash-command popup. Renders matching commands below the
-  // prompt as the user types `/...`, with cursor save/restore so
-  // readline keeps drawing in the right column. Teardown happens in
-  // the outer `finally` so we don't leave a stray `keypress` handler
-  // on stdin if the loop throws.
-  const teardownHints = installSlashHints(rl, palette, coloredPrompt, useColor);
+  // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
+  // in the loop body fires immediately and opens the palette modal.
+  const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
 
   try {
     while (true) {
@@ -772,8 +607,22 @@ export async function _runLineRepl(
       // Reset SGR so the agent's reply prints in the default color;
       // see comment on `USER_INPUT_COLOR` above for why.
       if (useColor) process.stdout.write(COLOR_RESET);
-      const trimmed = line.trim();
+      let trimmed = line.trim();
       if (trimmed.length === 0) continue;
+
+      // Bare `/` opens the slash-command palette via
+      // `prompts.autocomplete` — the same modal the interrupt UI
+      // uses, so palette and policy menus look and feel identical.
+      // The `/` key fires this branch immediately (no Enter needed)
+      // via `installSlashTrigger`'s `_ttyWrite` hook above; users can
+      // also type `/` + Enter manually. The picked command is fed
+      // back through the normal onSubmit path; cancel just reprompts.
+      if (trimmed === "/" && palette.length > 0) {
+        const picked = await openSlashPalette(palette);
+        if (picked == null) continue;
+        line = picked;
+        trimmed = picked;
+      }
 
       let reply: unknown;
       // Snapshot wall-clock and the cumulative token counters before
@@ -783,7 +632,7 @@ export async function _runLineRepl(
       // is missing, so the footer never breaks a working turn.
       const turnStartMs = Date.now();
       const tokensBefore = readTokenSnapshot();
-      activeStopSpinner = startSpinner(useColor);
+      activeStopSpinner = startSpinner(useTTY);
       try {
         reply = await callBridgeFn(onSubmit, line);
       } catch (err: any) {
@@ -820,7 +669,7 @@ export async function _runLineRepl(
       });
     }
   } finally {
-    teardownHints();
+    teardownSlashTrigger();
     (globalThis as any)[overrideKey] = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
     // Persist whatever entries readline accumulated. The `history`
@@ -845,4 +694,14 @@ function askLine(rl: readline.Interface, prompt: string): Promise<string> {
       resolve(answer);
     });
   });
+}
+
+export function _clearScreen(): void {
+  // ANSI escape code to clear the screen and move the cursor to the top-left.
+  //  process.stdout.write("\033[H\033[2J");
+  process.stdout.write('\x1B[2J\x1B[H');
+}
+
+export function _termWidth(): number {
+  return process.stdout.columns || 80;
 }

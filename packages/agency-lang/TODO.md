@@ -177,3 +177,5 @@ DOesn't work:
 ```
 const indent = " ".repeat(amount)
 ```
+
+`;` in function params should give a better parser error

@@ -286,6 +286,16 @@ function checkSingleFunctionCall(
     if (entry.kind === "callable" && entry.sig) {
       checkCallAgainstBuiltinSig(call, entry.sig, scope, ctx, hasSplatArg);
     }
+    // A namespace global may also be directly callable (e.g. `String(x)`).
+    if (entry.kind === "namespace" && entry.callableSig) {
+      checkCallAgainstBuiltinSig(
+        call,
+        entry.callableSig,
+        scope,
+        ctx,
+        hasSplatArg,
+      );
+    }
   }
 }
 

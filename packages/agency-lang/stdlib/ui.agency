@@ -1,5 +1,7 @@
 import { filter, map } from "std::array"
 
+import { _termWidth } from "agency-lang/stdlib-lib/cli.js"
+import { _isTTY } from "agency-lang/stdlib-lib/system.js"
 import {
   _runLoop,
   _runReplLoop,
@@ -112,7 +114,7 @@ import {
   }
 
   node main() {
-    const handler = cliPolicyHandler({ file: ".policy.json", fields: {} })
+    const handler = cliPolicyHandler(file: ".policy.json", fields: {})
     handle {
       repl(status: status, onSubmit: onSubmitPrompt,
            paletteCommands: { "/exit": "Exit" })
@@ -1015,7 +1017,7 @@ export def select(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   hint: string = "",
-): Result<string, string> {
+): Result<string> {
   """
   Line-mode arrow-key picker, backed by the `prompts` package. Returns
   `success(key)` with the picked item's `key`, or `failure("cancelled")`
@@ -1042,7 +1044,7 @@ export def autocomplete(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   hint: string = "",
-): Result<string, string> {
+): Result<string> {
   """
   Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
   Same return shape as `select`: `success(key)` on resolve,
@@ -1068,7 +1070,7 @@ export def prompt(
   initial: string = "",
   hint: string = "",
   validate: any = null,
-): Result<string, string> {
+): Result<string> {
   """
   Line-mode free-form text prompt, backed by `prompts.text`. Returns
   `success(typed)` or `failure("cancelled")`. The empty string is a
@@ -1094,10 +1096,7 @@ export def prompt(
   return _promptsText(message, initial, hint, validate)
 }
 
-export def confirm(
-  message: string,
-  initial: boolean = false,
-): Result<boolean, string> {
+export def confirm(message: string, initial: boolean = false): Result<boolean> {
   """
   Line-mode yes/no toggle, backed by `prompts.toggle`. Returns
   `success(true)` / `success(false)` / `failure("cancelled")`. Use the
@@ -1109,6 +1108,12 @@ export def confirm(
   @param initial - Default position (false = "no")
   """
   return _promptsConfirm(message, initial)
+}
+
+def indent(str: string): string {
+  const lines = str.split("\n")
+  const res = map(lines, \line -> "    ${line}")
+  return res.join("\n")
 }
 
 export def chooseOption(
@@ -1153,6 +1158,32 @@ export def chooseOption(
     },
     )
   }
+  // Non-TTY fallback: the `autocomplete` primitive below throws
+  // when stdout isn't a TTY (e.g. piped output, agency-js tests
+  // that script answers via `__agencyInputOverride`). Route through
+  // a plain `input()` loop in that case so tests can mock answers
+  // and the "must answer" contract is still preserved.
+  if (!_isTTY()) {
+    if (title != "") {
+      print(title)
+    }
+    if (body != "") {
+      print(body)
+    }
+    const validKeys = map(items, _entryKey)
+    while (true) {
+      const answer = input("> ").trim()
+      if (validKeys.includes(answer)) {
+        return answer
+      }
+      if (allowFreeText && answer != "") {
+        return answer
+      }
+      print("(answer required)")
+    }
+    // unreachable
+    return ""
+  }
   // No-REPL fallback. Print the title/body banner ourselves, then
   // delegate to the new `autocomplete` primitive. We loop on
   // `failure("cancelled")` to preserve chooseOption's "must answer"
@@ -1160,14 +1191,29 @@ export def chooseOption(
   // Escape never letting the user skip the prompt. The non-TTY
   // throw lives inside `autocomplete()` (in TS); we don't need to
   // repeat it here.
+  print("\n")
+  // Cyan rule across the terminal as a visual divider before the
+  // title/body banner. Inlined to avoid duplicating an exported
+  // `hline` here — the public one lives in `std::cli`, and
+  // re-importing it would introduce a std::ui ↔ std::cli cycle.
+  // The string literal is bound to a `const` first because the
+  // parser doesn't accept method calls directly on a string literal
+  // ("─".repeat(...) fails; see TODO.md).
+  const rule = "─"
+  print(color.cyan(rule.repeat(_termWidth())))
   if (title != "") {
-    print(title)
+    print(color.cyan(title), "\n")
   }
   if (body != "") {
-    print(body)
+    print(indent(body))
   }
+  print("\n")
   while (true) {
-    const result = autocomplete(message: "", items: items, allowFreeText: allowFreeText)
+    const result = autocomplete(
+      message: "Do you want to continue?",
+      items: items,
+      allowFreeText: allowFreeText,
+    )
     if (!isFailure(result)) {
       return result.value
     }
@@ -1912,7 +1958,7 @@ export def repl(
   _activeRepl = null
 }
 
-export def clearScreen() {
-  // ANSI escape code to clear the screen and move the cursor to the top-left.
-  print("\\x1b[2J\\x1b[H")
-}
+// `clearScreen`, `termWidth`, and `hline` live in `std::cli` (the
+// single canonical home). Importing them from there inside this
+// module would create a std::ui ↔ std::cli cycle, so internal use
+// inlines `_termWidth()` from the TS bridge above.

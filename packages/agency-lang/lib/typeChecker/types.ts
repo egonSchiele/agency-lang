@@ -12,7 +12,8 @@ import type {
   ImportedFunctionSignature,
   ScopedTypeAliases,
 } from "../compilationUnit.js";
-import type { InterruptKind } from "../symbolTable.js";
+import type { InterruptKind, SymbolTable } from "../symbolTable.js";
+import type { InterruptCallGraph } from "./interruptAnalysis.js";
 
 export type TypeCheckError = {
   message: string;
@@ -27,6 +28,7 @@ export type TypeCheckResult = {
   errors: TypeCheckError[];
   scopes: ScopeInfo[];
   interruptKindsByFunction: Record<string, InterruptKind[]>;
+  interruptCallGraph: InterruptCallGraph;
 };
 
 export type ScopeInfo = {
@@ -34,6 +36,10 @@ export type ScopeInfo = {
   body: AgencyNode[];
   name: string;
   scopeKey: string;
+  /** Absolute path to the .agency file this scope's body lives in. Empty
+   *  for the synthetic top-level scope that spans the whole compilation
+   *  unit. Populated from the symbol table via `findFileForName`. */
+  file: string;
   returnType?: VariableType | null;
 };
 
@@ -73,6 +79,12 @@ export type TypeCheckerContext = {
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;
   config: AgencyConfig;
+  /** Optional symbol table threaded through from `buildCompilationUnit`.
+   *  Used by `buildScopes` to populate `ScopeInfo.file` via
+   *  `SymbolTable.findFileForName`. Optional because callers that
+   *  construct a TypeCheckerContext directly (e.g. in legacy tests) may
+   *  not have a symbol table. */
+  symbolTable?: SymbolTable;
   getTypeAliases(): Record<string, TypeAliasEntry>;
   withScope<T>(key: string, fn: () => T): T;
   inferReturnTypeFor(

@@ -33,6 +33,7 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
     body: ctx.programNodes,
     name: "top-level",
     scopeKey: GLOBAL_SCOPE_KEY,
+    file: "",
   });
 
   for (const def of [
@@ -66,6 +67,7 @@ function buildDefScope(
     body: def.body,
     name,
     scopeKey: sk,
+    file: ctx.symbolTable?.findFileForName(name) ?? "",
     returnType: def.returnType,
   };
 }

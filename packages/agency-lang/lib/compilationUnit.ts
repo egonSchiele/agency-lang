@@ -118,6 +118,12 @@ export type CompilationUnit = {
   sourceText?: string;
   /** Transitive interrupt kinds per function/node, populated from the symbol table. */
   interruptKindsByFunction?: Record<string, InterruptKind[]>;
+  /** Symbol table used to build this unit. Forwarded so downstream
+   *  consumers (e.g. the typechecker) can use it for cross-file lookups
+   *  like resolving the file a function/node lives in. Optional because
+   *  in-process callers that build a unit from a raw program (no entry
+   *  file) don't have one. */
+  symbolTable?: SymbolTable;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -304,6 +310,7 @@ export function buildCompilationUnit(
       }
     }
     unit.interruptKindsByFunction = interruptKindsByFunction;
+    unit.symbolTable = symbolTable;
   }
 
   return unit;

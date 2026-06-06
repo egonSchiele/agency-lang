@@ -1,0 +1,27 @@
+import { map } from "std::array"
+
+def interruptTool(): string {
+  interrupt("approve")
+  return "tool result"
+}
+
+def noopTool(): string {
+  return "ok"
+}
+
+// onToolCallEnd uses a block-style call (`as n { ... }`). With the
+// old buggy blockSetup template, the block's `finally` popped
+// `__ctx.stateStack` instead of the ALS-current stack (the branch's
+// stack). That popped the parent runPrompt frame off the global stack.
+// After all callbacks fired, the parent runPrompt's frame was gone —
+// and the NEXT LLM round's `pr.parallel` crashed with "Cannot read
+// properties of undefined (reading 'getOrCreateBranch')".
+callback("onToolCallEnd") as data {
+  let _: number[] = map([1, 2, 3]) as n {
+    return n + 1
+  }
+}
+
+node main() {
+  return llm("call tools", { tools: [interruptTool, noopTool] })
+}

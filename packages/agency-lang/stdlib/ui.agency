@@ -1181,7 +1181,8 @@ export def chooseOption(
     }
     print("(answer required)")
   }
-  return ""  // unreachable; satisfies the type checker
+  // unreachable; satisfies the type checker
+  return ""
 }
 
 def _entryKey(entry: any): string {

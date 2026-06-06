@@ -643,9 +643,11 @@ export function _writeScrollLine(text: string): void {
 // ---------------------------------------------------------------------------
 // Line-mode prompt bridges (backed by the `prompts` package).
 // Used by chooseOption's line-mode branch and exposed as Agency
-// primitives (select / autocomplete / text / confirm). Each raises if
-// invoked while a `repl()` owns the screen, or when stdout is not a
-// TTY — there is no non-TTY fallback by design.
+// primitives (select / autocomplete / prompt / confirm — note the
+// Agency wrapper renames `_promptsText` to `prompt` to avoid colliding
+// with the Layer 1 `text` element builder). Each raises if invoked
+// while a `repl()` owns the screen, or when stdout is not a TTY —
+// there is no non-TTY fallback by design.
 // ---------------------------------------------------------------------------
 
 type PromptsChoiceItem = { key: string; label: string };
@@ -833,18 +835,25 @@ export async function _promptsSelect(
   return success(String(result.value));
 }
 
+// Backs the Agency-side `prompt(...)` primitive (renamed from `text`
+// to avoid colliding with the Layer 1 `text` element builder; see the
+// banner comment above this section).
+//
 // `validate` is forwarded straight to `prompts`. Per the prompts
 // docs: return `true` for valid; return a string to reject and show
 // the string as the error message. The PFA story: a user binds
 // `validate` via `.partial(validate: myValidator)` before handing
-// `text` to an LLM as a tool, and the LLM cannot override it.
+// `prompt` to an LLM as a tool, and the LLM cannot override it.
 export async function _promptsText(
   message: string,
   initial: string,
   hint: string = "",
   validate: ((value: string) => boolean | string) | null = null,
 ): Promise<any> {
-  _assertLineModeAvailable("text");
+  // "prompt" (the user-facing Agency primitive) rather than "text"
+  // (the internal `_promptsText` name) so thrown error messages
+  // match what the user typed: `prompt requires a TTY ...`.
+  _assertLineModeAvailable("prompt");
   const result = await _runPrompt({
     type: "text",
     name: "value",

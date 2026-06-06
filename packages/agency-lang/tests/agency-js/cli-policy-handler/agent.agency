@@ -5,7 +5,7 @@ const FIELDS: ScopedRuleFields = {
 }
 
 node main(args: { policyFile: string }): string {
-  const handler = cliPolicyHandler({ file: args.policyFile, fields: FIELDS })
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     // Three interrupts of distinct shapes; consume 3 scripted answers.
     interrupt myapp::deploy("first", { env: "prod" })

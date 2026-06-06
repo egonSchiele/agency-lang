@@ -47,10 +47,10 @@ name: "policy"
   node main() {
     // Bind to a local variable so `handle ... with handler` parses
     // (the `with` clause only accepts an identifier).
-    const handler = cliPolicyHandler({
+    const handler = cliPolicyHandler(
       file: "${env("HOME")}/.myapp/policy.json",
       fields: FIELDS,
-    })
+    )
     handle {
       // Every interrupt the inner code raises is filtered through the
       // policy. New kinds prompt the user; "aa" / "ap" decisions are
@@ -675,7 +675,7 @@ askUser(intr: any): AskUserResult
 
 **Returns:** [AskUserResult](#askuserresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L573))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L578))
 
 ### _handler
 
@@ -696,7 +696,7 @@ _handler(intr: any): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L647))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L652))
 
 ### cliPolicyHandler
 
@@ -777,4 +777,4 @@ CLI sugar for an interactive policy handler. Owns load + save +
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L746))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L751))

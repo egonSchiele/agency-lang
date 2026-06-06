@@ -1,6 +1,7 @@
 import { filter, map } from "std::array"
 
 import { _termWidth } from "agency-lang/stdlib-lib/cli.js"
+import { _isTTY } from "agency-lang/stdlib-lib/system.js"
 import {
   _runLoop,
   _runReplLoop,
@@ -113,7 +114,7 @@ import {
   }
 
   node main() {
-    const handler = cliPolicyHandler({ file: ".policy.json", fields: {} })
+    const handler = cliPolicyHandler(file: ".policy.json", fields: {})
     handle {
       repl(status: status, onSubmit: onSubmitPrompt,
            paletteCommands: { "/exit": "Exit" })
@@ -1156,6 +1157,32 @@ export def chooseOption(
       allowFreeText: allowFreeText
     },
     )
+  }
+  // Non-TTY fallback: the `autocomplete` primitive below throws
+  // when stdout isn't a TTY (e.g. piped output, agency-js tests
+  // that script answers via `__agencyInputOverride`). Route through
+  // a plain `input()` loop in that case so tests can mock answers
+  // and the "must answer" contract is still preserved.
+  if (!_isTTY()) {
+    if (title != "") {
+      print(title)
+    }
+    if (body != "") {
+      print(body)
+    }
+    const validKeys = map(items, _entryKey)
+    while (true) {
+      const answer = input("> ").trim()
+      if (validKeys.includes(answer)) {
+        return answer
+      }
+      if (allowFreeText && answer != "") {
+        return answer
+      }
+      print("(answer required)")
+    }
+    // unreachable
+    return ""
   }
   // No-REPL fallback. Print the title/body banner ourselves, then
   // delegate to the new `autocomplete` primitive. We loop on

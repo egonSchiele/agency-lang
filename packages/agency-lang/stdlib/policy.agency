@@ -54,10 +54,10 @@ import {
   node main() {
     // Bind to a local variable so `handle ... with handler` parses
     // (the `with` clause only accepts an identifier).
-    const handler = cliPolicyHandler({
+    const handler = cliPolicyHandler(
       file: "${env("HOME")}/.myapp/policy.json",
       fields: FIELDS,
-    })
+    )
     handle {
       // Every interrupt the inner code raises is filtered through the
       // policy. New kinds prompt the user; "aa" / "ap" decisions are
@@ -546,6 +546,12 @@ type AskUserResult = {
 }
 
 def prettyPrintInterruptData(data: any): string {
+  // `null` is reported as `typeof == "object"` by JS, so guard
+  // explicitly — otherwise `for (key in data)` would throw and crash
+  // the interrupt prompt.
+  if (data == null) {
+    return ""
+  }
   if (typeof data == "string") {
     return data
   }
@@ -563,9 +569,8 @@ def prettyPrintInterruptData(data: any): string {
 // Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
 // return the user's choice as an `AskUserResult`. `(ap)` is offered
 // only when `globalCliPolicyOpts.fields` has an entry for `intr.kind`.
-//Renders as a
-// modal over the active repl(); falls back to plain print + input
-// when no REPL is running (e.g. headless agent runs).
+// Renders as a modal over the active repl(); falls back to plain print
+// + input when no REPL is running (e.g. headless agent runs).
 //
 // `allowFreeText: true` is passed to `chooseOption` so the user can
 // type a rejection reason instead of picking a key — that single

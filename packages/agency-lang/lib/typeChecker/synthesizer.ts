@@ -179,7 +179,9 @@ const BOOLEAN_OPS = new Set([
   "!",
 ]);
 
-const DIMENSION_CHECK_OPS = new Set(["+", "-", ">", "<", ">=", "<=", "==", "!="]);
+const DIMENSION_CHECK_OPS = new Set([
+  "+", "-", ">", "<", ">=", "<=", "==", "!=", "===", "!==",
+]);
 
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },

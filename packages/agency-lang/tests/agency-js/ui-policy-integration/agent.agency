@@ -3,7 +3,7 @@ import { cliPolicyHandler, ScopedRuleFields } from "std::policy"
 const FIELDS: ScopedRuleFields = {}
 
 node main(args: { policyFile: string }): string {
-  const handler = cliPolicyHandler({ file: args.policyFile, fields: FIELDS })
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt myapp::test("hi", { x: 1 })
   } with handler

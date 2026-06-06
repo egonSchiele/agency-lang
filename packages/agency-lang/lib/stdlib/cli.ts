@@ -535,7 +535,12 @@ export async function _runLineRepl(
   // `COLOR_RESET` immediately after `rl.question` resolves so the
   // agent's reply (and any tool-call output) prints in the default
   // color. No-op on non-TTY so logs / pipes stay free of escape codes.
-  const useColor = process.stdout.isTTY === true && process.env.NO_COLOR !== "1";
+  // Split the two: `useTTY` gates terminal-interactive features (the
+  // `/` slash-trigger override on readline, the "Thinking" spinner)
+  // and must NOT depend on `NO_COLOR`. `useColor` additionally
+  // suppresses SGR sequences when the user has opted out of color.
+  const useTTY = process.stdout.isTTY === true;
+  const useColor = useTTY && process.env.NO_COLOR !== "1";
   const coloredPrompt = useColor
     ? `${USER_INPUT_COLOR}${prompt}`
     : prompt;
@@ -583,7 +588,7 @@ export async function _runLineRepl(
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal.
-  const teardownSlashTrigger = installSlashTrigger(rl, palette, useColor);
+  const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
 
   try {
     while (true) {
@@ -627,7 +632,7 @@ export async function _runLineRepl(
       // is missing, so the footer never breaks a working turn.
       const turnStartMs = Date.now();
       const tokensBefore = readTokenSnapshot();
-      activeStopSpinner = startSpinner(useColor);
+      activeStopSpinner = startSpinner(useTTY);
       try {
         reply = await callBridgeFn(onSubmit, line);
       } catch (err: any) {

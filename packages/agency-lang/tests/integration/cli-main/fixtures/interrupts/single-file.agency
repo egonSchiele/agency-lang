@@ -1,0 +1,5 @@
+node main() {
+  handle {
+    interrupt std::read("hi")
+  } with approve
+}

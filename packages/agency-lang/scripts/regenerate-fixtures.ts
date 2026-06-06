@@ -6,6 +6,8 @@ import { generateTypeScript } from "../lib/backends/typescriptGenerator.js";
 import { TypescriptPreprocessor } from "../lib/preprocessors/typescriptPreprocessor.js";
 import { parseAgency } from "../lib/parser.js";
 import { buildCompilationUnit } from "../lib/compilationUnit.js";
+import { analyzeInterrupts } from "../lib/analysis/interrupts.js";
+import { renderInterrupts } from "../lib/cli/interrupts.js";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -65,5 +67,48 @@ regenerate(preprocessorFixturesDir, preprocessorTransform);
 
 console.log("\n--- TypeScript Builder Fixtures ---");
 regenerate(builderFixturesDir, generatorTransform);
+
+// IMPORTANT: keep this normalization in sync with the matching block in
+// tests/integration/cli-main/test.mjs (normalizeInterruptOutput). If one
+// changes, the integration snapshots will drift and tests will fail.
+function regenerateInterruptFixtures(): void {
+  const interruptsDir = path.join(
+    __dirname,
+    "../../tests/integration/cli-main/fixtures/interrupts"
+  );
+  const expectedDir = path.join(
+    __dirname,
+    "../../tests/integration/cli-main/fixtures/expected"
+  );
+  // Each entry: { name (for expected/<name>.txt), entryFile (relative to interruptsDir) }
+  const cases = [
+    { name: "single-file", entryFile: "single-file.agency" },
+    { name: "cross-file", entryFile: "cross-file/main.agency" },
+    { name: "llm-tool", entryFile: "llm-tool.agency" },
+    { name: "recursion", entryFile: "recursion.agency" },
+    { name: "no-handler", entryFile: "no-handler.agency" },
+  ];
+  for (const c of cases) {
+    const entryPath = path.join(interruptsDir, c.entryFile);
+    const result = analyzeInterrupts(entryPath, {});
+    // (1) Replace absolute fixture path with a portable token so the
+    //     snapshot is reproducible across machines / CI containers.
+    // (2) Normalize Windows backslashes to forward slashes so the
+    //     snapshot matches regardless of OS.
+    const rendered = renderInterrupts(result)
+      .replace(new RegExp(escapeForRegex(interruptsDir), "g"), "<fixtures>/interrupts")
+      .replace(/\\/g, "/");
+    const outPath = path.join(expectedDir, `interrupts-${c.name}.txt`);
+    fs.writeFileSync(outPath, rendered, "utf-8");
+    console.log(`✓ Updated interrupts-${c.name}.txt`);
+  }
+}
+
+function escapeForRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+console.log("\n--- Interrupts Fixtures ---");
+regenerateInterruptFixtures();
 
 console.log("\nDone!");

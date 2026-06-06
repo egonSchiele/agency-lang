@@ -5,6 +5,7 @@ Agency Language CLI
 Usage:
   agency help                           Show this help message
   agency compile <input> [output]       Compile .agency file or directory to TypeScript
+  agency interrupts <file>              Print every interrupt site and its possible enclosing handlers
   agency run <input> [output]           Compile and run .agency file
   agency format [input]                 Format .agency file or directory (reads from stdin if no input)
   agency format -i <input>              Format .agency file or directory in-place

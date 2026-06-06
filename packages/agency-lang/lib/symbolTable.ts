@@ -222,6 +222,22 @@ export class SymbolTable {
   }
 
   /**
+   * Locate the file path that defines a top-level symbol (function or
+   * node) by name. Returns `undefined` if the name is not defined in any
+   * file in this unit. Used by the interrupt call-graph analysis to tag
+   * each function/node scope with the file it lives in.
+   */
+  findFileForName(name: string): string | undefined {
+    for (const [filePath, fileSymbols] of Object.entries(this.files)) {
+      const sym = fileSymbols[name];
+      if (sym && (sym.kind === "function" || sym.kind === "node")) {
+        return filePath;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Walk every file looking for a type alias with the given name. Returns
    * the first match in iteration order. Used to surface imported type
    * definitions for Zod schema generation.

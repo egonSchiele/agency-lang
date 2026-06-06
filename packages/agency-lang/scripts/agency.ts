@@ -36,6 +36,7 @@ import process from "process";
 import { agent } from "@/cli/agent.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
+import { interruptsCmd } from "@/cli/interrupts.js";
 import {
   scheduleAdd,
   scheduleList,
@@ -1104,6 +1105,15 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action((file: string, options: { output?: string; existing?: string }) => {
       const config = getConfig();
       policyGen(config, file, options);
+    });
+
+  program
+    .command("interrupts")
+    .description("Print every interrupt site and the handle blocks that could enclose it")
+    .argument("<file>", "The .agency file to analyze")
+    .action((file: string) => {
+      const config = getConfig();
+      interruptsCmd(config, file);
     });
 
   addRunOptions(

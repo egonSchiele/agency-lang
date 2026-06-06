@@ -1,0 +1,3 @@
+<fixtures>/interrupts/llm-tool.agency:2  interrupt of kind std::write
+  Possible enclosing handlers:
+    handle via fn approve at <fixtures>/interrupts/llm-tool.agency:6

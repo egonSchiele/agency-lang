@@ -34,10 +34,12 @@ import { inferReturnTypeFor } from "./inference.js";
 import { effectiveReturnType } from "./validation.js";
 import {
   analyzeInterruptsFromScopes,
+  buildInterruptCallGraph,
   checkUnhandledInterruptWarnings,
   checkCallbackBodyInterrupts,
   checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
+import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { checkToolBlockBindings } from "./toolBlockBinding.js";
@@ -60,6 +62,7 @@ export class TypeChecker {
   private importedFunctions: Record<string, ImportedFunctionSignature> = {};
   private jsImportedNames: Record<string, true> = {};
   private interruptKindsByFunction: Record<string, InterruptKind[]> = {};
+  private symbolTable?: SymbolTable;
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
@@ -81,6 +84,7 @@ export class TypeChecker {
     this.importedFunctions = { ...resolved.importedFunctions };
     this.jsImportedNames = { ...resolved.jsImportedNames };
     this.interruptKindsByFunction = resolved.interruptKindsByFunction ?? {};
+    this.symbolTable = resolved.symbolTable;
     this.sourceText = resolved.sourceText;
   }
 
@@ -108,6 +112,7 @@ export class TypeChecker {
       importedFunctions: this.importedFunctions,
       jsImportedNames: this.jsImportedNames,
       interruptKindsByFunction: this.interruptKindsByFunction,
+      symbolTable: this.symbolTable,
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,
@@ -287,6 +292,12 @@ export class TypeChecker {
     // 5. Analyze interrupts using functionRefType
     const interruptKindsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
 
+    // 5a. Build the per-function interrupt call graph used by
+    // `agency interrupts` for static handler-set analysis. The
+    // existing analyzeInterruptsFromScopes pass continues to compute
+    // transitive kinds; this is purely additive structural info.
+    const interruptCallGraph = buildInterruptCallGraph(scopes, ctx);
+
     // 6. Check for unhandled interrupt warnings (uses transitive results)
     checkUnhandledInterruptWarnings(scopes, interruptKindsByFunction, ctx);
 
@@ -324,6 +335,7 @@ export class TypeChecker {
       errors: this.applySuppressions(this.deduplicateErrors()),
       scopes,
       interruptKindsByFunction,
+      interruptCallGraph,
     };
   }
 

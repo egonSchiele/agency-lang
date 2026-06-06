@@ -1,0 +1,3 @@
+node main() {
+  interrupt std::read("hi")
+}

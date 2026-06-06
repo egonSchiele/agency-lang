@@ -1,0 +1,7 @@
+import { helper } from "./helper.agency"
+
+node main() {
+  handle {
+    helper()
+  } with approve
+}

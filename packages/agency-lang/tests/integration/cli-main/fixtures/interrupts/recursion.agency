@@ -1,0 +1,10 @@
+def loop() {
+  loop()
+  interrupt std::read("hi")
+}
+
+node main() {
+  handle {
+    loop()
+  } with approve
+}

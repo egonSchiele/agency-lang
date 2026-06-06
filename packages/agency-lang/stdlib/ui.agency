@@ -1154,37 +1154,35 @@ export def chooseOption(
     },
     )
   }
-  // No-REPL fallback: render the prompt block via the styled bridge
-  // helper, then loop on `input()` until the answer matches one of
-  // the item keys. The bridge call replaces what used to be a
-  // sequence of plain `print()` lines; it draws a dim background
-  // block with bold-yellow title + cyan keys when stdout is a TTY,
-  // and falls back to the original plain-print rendering when piped
-  // (so log files stay free of ANSI). The retry loop and answer
-  // contract are unchanged.
-  _printChoicePromptFallback(title, body, items)
-  let validKeys: string[] = []
-  for (item in items) {
-    validKeys.push(item.key)
+  // No-REPL fallback. Print the title/body banner ourselves, then
+  // delegate to the new `autocomplete` primitive. We loop on
+  // `failure("cancelled")` to preserve chooseOption's "must answer"
+  // contract — safety-critical callers like std::policy depend on
+  // Escape never letting the user skip the prompt. The non-TTY
+  // throw lives inside `autocomplete()` (in TS); we don't need to
+  // repeat it here.
+  if (title != "") {
+    print(title)
   }
-  const optsHint = "(one of ${validKeys.join("/")})"
-  let answer = ""
-  let valid = false
-  while (!valid) {
-    answer = input("> ").trim()
-    if (validKeys.includes(answer)) {
-      valid = true
-    } else if (allowFreeText && answer != "") {
-      // Free-text path: any non-empty input that doesn't match a key
-      // is returned verbatim so the caller can treat it as a reason
-      // (or similar). Empty input still reprompts so accidental Enter
-      // doesn't get interpreted as a free-text answer.
-      valid = true
-    } else {
-      print(optsHint)
+  if (body != "") {
+    print(body)
+  }
+  while (true) {
+    const result = autocomplete(message: "", items: items, allowFreeText: allowFreeText)
+    if (!isFailure(result)) {
+      return result.value
     }
+    // Agency wraps thrown errors from the TS bridge as Result.failure
+    // (see compiled chooseOption / autocomplete try-catch wrappers).
+    // Only re-prompt on an explicit user-cancel; anything else
+    // (e.g. "requires a TTY") gets surfaced via throw so chooseOption
+    // doesn't loop forever in non-interactive environments.
+    if (result.error != "cancelled") {
+      throw(result.error)
+    }
+    print("(answer required)")
   }
-  return answer
+  return ""  // unreachable; satisfies the type checker
 }
 
 def _entryKey(entry: any): string {

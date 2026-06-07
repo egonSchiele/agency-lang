@@ -228,7 +228,7 @@ let globalCliPolicyOpts: CliPolicyOpts = {
   file: "",
   fields: {}
 }
-let _policy: Policy|null = null
+let _policy: Policy | null = null
 let _pendingSave: boolean = false
 
 /**
@@ -260,7 +260,7 @@ export def checkPolicy(
  * Call before persisting user-supplied or hand-edited policy data;
  * `writePolicyFile` calls this internally before writing.
  */
-export def validatePolicy(policy: Record<string, any>): Result<void, string> {
+export def validatePolicy(policy: Record<string, any>): Result<void> {
   """
   Validate that a policy object is well-formed. Returns { success: true } if valid, or { success: false, error: "..." } with a description of the problem.
   """
@@ -433,23 +433,32 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
 
   @param path - The policy file path
   """
-  print("Reading policy from ${path}...")
   const dir = dirname(path)
   const name = basename(path)
   if (!exists(name, dir)) {
-    return failure({ status: "doesnt-exist" })
+    return failure({
+      status: "doesnt-exist"
+    })
   }
   const readResult = read(name, dir) with approve
   if (isFailure(readResult)) {
-    return failure({ status: "read-error", error: readResult.error })
+    return failure({
+      status: "read-error",
+      error: readResult.error
+    })
   }
   const parsed = try parseJSON(readResult.value)
   if (isFailure(parsed)) {
-    return failure({ status: "malformed-json" })
+    return failure({
+      status: "malformed-json"
+    })
   }
   const valid = validatePolicy(parsed.value)
   if (!valid.success) {
-    return failure({ status: "policy-not-valid", error: valid.error })
+    return failure({
+      status: "policy-not-valid",
+      error: valid.error
+    })
   }
   return parsed
 }
@@ -461,8 +470,9 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
   * to consult on every interrupt. Call this after loading a policy
   * with `parsePolicyFile` or constructing one by hand.
   */
-export def setPolicy(policy: Policy) {
+export def setPolicy(path: string, policy: Policy) {
   _policy = policy
+  writePolicyFile(path, policy, []) with approve
 }
 
 /**
@@ -656,7 +666,9 @@ def askUser(intr: any): AskUserResult {
  */
 export def _handler(intr: any): any {
   if (_policy == null) {
-    print("Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.")
+    print(
+      "Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.",
+    )
     return reject()
   }
 

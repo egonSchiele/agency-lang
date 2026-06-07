@@ -10,7 +10,6 @@ build:
 	rm -rf dist/
 	tsc
 	tsc-alias
-	cp -r lib/agents dist/lib
 	mkdir -p dist/lib/cli/runShim
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 	# Bundle the user-facing Agency documentation alongside the shipped
@@ -25,10 +24,15 @@ stdlib:
 	pnpm run agency compile stdlib/
 
 agents:
+	cp -r lib/agents dist/lib && \
 	pnpm run agency compile dist/lib/agents/review/ && \
 	pnpm run agency compile dist/lib/agents/policy/ && \
 	pnpm run agency compile dist/lib/agents/agency-agent/ && \
-	pnpm run agency compile dist/lib/agents/judge.agency
+	pnpm run agency compile dist/lib/agents/judge.agency && \
+	mkdir -p dist/lib/agents/docs
+	cp -r docs/site/guide dist/lib/agents/docs/guide
+	cp -r docs/site/cli dist/lib/agents/docs/cli
+	cp -r docs/site/appendix dist/lib/agents/docs/appendix
 
 test:
 	pnpm run test

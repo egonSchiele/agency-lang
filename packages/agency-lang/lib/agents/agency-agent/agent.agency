@@ -4,12 +4,18 @@ import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
 import { box, render } from "std::layout"
-import { ScopedRuleFields, cliPolicyHandler, parsePolicyFile, setPolicy } from "std::policy"
+import {
+  ScopedRuleFields,
+  cliPolicyHandler,
+  parsePolicyFile,
+  setPolicy,
+ } from "std::policy"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost, getTokens } from "std::thread"
+import { chooseOption, ChoiceItem } from "std::ui"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { figs, title } from "./images/images.agency"
@@ -18,8 +24,8 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { oneShotAgent } from "./subagents/oneShot.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
+import { oneShotAgent } from "./subagents/oneShot.agency"
 
 
 // UI mode select — one-line swap between the alt-screen TUI and the
@@ -321,6 +327,27 @@ def printHeader() {
   print(render(data, color: true))
 }
 
+def givePolicyChoice() {
+  const title = "Welcome to the agency agent. Please pick a policy to start."
+  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${policyPath()} and the agent will use it automatically."
+  let items: ChoiceItem[] = [
+    {
+    key: "minimal",
+    label: "minimal default policy, you do most approvals manually"
+  },
+    {
+    key: "recommended",
+    label: "recommended default policy, allow reading files and browsing the web, no writes"
+  },
+  ]
+
+  const answer = chooseOption(title, body, items, allowFreeText: true)
+  match(answer) {
+    "minimal" => return minimalAutoApprovePolicy
+    "recommended" => return recommendedAutoApprovePolicy
+  }
+}
+
 node main() {
   // Parse CLI flags first — `parseArgs` exits on --help / --version /
   // usage errors, before any handlers or the TUI are installed.
@@ -391,17 +418,18 @@ node main() {
 
   const policy = parsePolicyFile(policyPath())
   if (policy is failure(f)) {
-    const {status, error} = f
+    const { status, error } = f
     print(f, status, error)
     if (status == "doesnt-exist") {
-      print(color.yellow("No existing policy found at ${policyPath()}. Starting with a blank slate."))
-      setPolicy(minimalAutoApprovePolicy)
+      print(color.yellow("No existing policy found at ${policyPath()}."))
+      const choice = givePolicyChoice()
+      setPolicy(policyPath(), choice)
     } else {
-    print(color.red("Failed to load policy: ${JSON.stringify(error)}"))
-    process.exit(1)
+      print(color.red("Failed to load policy: ${JSON.stringify(error)}"))
+      process.exit(1)
     }
   } else {
-    setPolicy(policy.value)
+    setPolicy(policyPath(), policy.value)
   }
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).

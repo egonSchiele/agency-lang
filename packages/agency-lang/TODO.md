@@ -178,4 +178,11 @@ DOesn't work:
 const indent = " ".repeat(amount)
 ```
 
-`;` in function params should give a better parser error
+^ intentional, document.
+
+----
+
+Figure out how you want to set up the agency handler so that if user chooses "always approve", you write that to the policy file. Right now, a write wouldn't be allowed inside the handler, as the write function can throw an interrupt.
+Two options:
+- create specific functions to read and write to the policy file that don't throw interrupts, or
+- create a new std::unsafe module in the agency standard library that exposes a function that takes a block, and automatically typecheck-ignores all the interrupts inside that block. Then that could be used with the handler somehow

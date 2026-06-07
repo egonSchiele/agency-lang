@@ -609,7 +609,7 @@ export async function _runLineRepl(
       if (useColor) process.stdout.write(COLOR_RESET);
       let trimmed = line.trim();
       if (trimmed.length === 0) continue;
-
+      process.stdout.write(color.bgBrightBlack.darkBlack(` User: ${line} \n`));
       // Bare `/` opens the slash-command palette via
       // `prompts.autocomplete` — the same modal the interrupt UI
       // uses, so palette and policy menus look and feel identical.

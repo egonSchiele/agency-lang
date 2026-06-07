@@ -5,6 +5,9 @@ export static const minimalAutoApprovePolicy = {
   "std::memory::forget": [{
     action: "approve"
   }],
+  "std::memory::recall": [{
+    action: "approve"
+  }],
   "std::memory::enableMemory": [{
     action: "approve"
   }],

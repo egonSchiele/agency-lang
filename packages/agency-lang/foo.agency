@@ -1,10 +1,53 @@
 import { highlight } from "std::syntax"
-
+/*
+black: "\x1b[30m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  brightBlack: "\x1b[90m",
+  brightRed: "\x1b[91m",
+  brightGreen: "\x1b[92m",
+  brightYellow: "\x1b[93m",
+  brightBlue: "\x1b[94m",
+  brightMagenta: "\x1b[95m",
+  brightCyan: "\x1b[96m",
+  brightWhite: "\x1b[97m",
+ */
 node main() {
-  const file = read("example.md") with approve
-  if (file is success(data)) {
-    print(highlight(data, "markdown"))
-  } else {
-    print("Failed to read file: ${file.error}")
-  }
+  print(color.bgBlack.white("bgBlack+white"))
+  print(color.bgRed("bgRed"))
+  print(color.bgGreen("bgGreen"))
+  print(color.bgYellow("bgYellow"))
+  print(color.bgBlue("bgBlue"))
+  print(color.bgMagenta("bgMagenta"))
+  print(color.bgCyan("bgCyan"))
+  print(color.bgWhite.black("bgWhite+black"))
+  print(color.bgBrightBlack.white("bgBrightBlack+white"))
+  print(color.bgBrightBlack.bold.black("bgBrightBlack+black"))
+  print(color.darkBlack.bold.bgBrightRed("bgBrightRed"))
+  print(color.darkBlack.bold.bgBrightGreen("bgBrightGreen"))
+  print(color.darkBlack.bold.bgBrightYellow("bgBrightYellow"))
+  print(color.darkBlack.bold.bgBrightBlue("bgBrightBlue"))
+  print(color.darkBlack.bold.bgBrightMagenta("bgBrightMagenta"))
+  print(color.darkBlack.bold.bgBrightCyan("bgBrightCyan"))
+  print(color.darkBlack.bold.bgBrightWhite("bgBrightWhite"))
+  print(color.darkBlack.bold.bgWhite("bgWhite"))
+  print(color.red("red"))
+  print(color.green("green"))
+  print(color.yellow("yellow"))
+  print(color.blue("blue"))
+  print(color.magenta("magenta"))
+  print(color.cyan("cyan"))
+  print(color.white("white"))
+  print(color.brightRed("brightRed"))
+  print(color.brightGreen("brightGreen"))
+  print(color.brightYellow("brightYellow"))
+  print(color.brightBlue("brightBlue"))
+  print(color.brightMagenta("brightMagenta"))
+  print(color.brightCyan("brightCyan"))
+  print(color.brightWhite("brightWhite"))
 }

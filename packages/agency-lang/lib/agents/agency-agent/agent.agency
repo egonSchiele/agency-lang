@@ -24,7 +24,11 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { researchSysPrompt, researchTools } from "./research.agency"
+import {
+  researchSysPrompt,
+  researchTools,
+  researchAgent,
+ } from "./research.agency"
 import { oneShotAgent } from "./subagents/oneShot.agency"
 
 
@@ -93,6 +97,18 @@ callback("onToolCallEnd") as data {
     pushMessage(color.red(" ⎿  Error: ${_error}"))
   } else {
     pushMessage(color.dim("${formatToolResponse(data.result)}"))
+  }
+}
+
+callback("onLLMCallStart") as data {
+  if (AGENT_DEBUG || VERBOSE) {
+    pushMessage(color.green.dim("💬 [${data.model}] ${data.prompt}"))
+  }
+}
+
+callback("onLLMCallEnd") as data {
+  if (AGENT_DEBUG || VERBOSE) {
+    pushMessage(color.green.dim("💬 [${data.model}] ${JSON.stringify(data.result)}"))
   }
 }
 
@@ -272,14 +288,15 @@ def _runTurn(msg: string): boolean {
     start: "code",
     agents: {
       code: {
+        type: "prompt",
         systemPrompt: codeSysPrompt,
         tools: codeTools,
         memory: true
       },
       research: {
-        systemPrompt: researchSysPrompt,
-        tools: researchTools,
-        memory: true
+        type: "agent",
+        name: "research",
+        agent: researchAgent
       }
     },
     maxHops: 3,
@@ -287,7 +304,11 @@ def _runTurn(msg: string): boolean {
   },
     prompt,
   )
-  pushMessage(highlight("${reply}\n", language: "markdown"))
+  if (reply != "" && reply != null && reply != undefined) {
+    pushMessage(highlight("${reply}\n", language: "markdown"))
+  } else {
+    pushMessage(color.red("No reply generated."))
+  }
   return true
 }
 

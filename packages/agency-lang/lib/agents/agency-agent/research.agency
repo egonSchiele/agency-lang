@@ -9,17 +9,22 @@
  * here (not in `shared.agency`) because only the research subagent
  * uses them. `static const` caches the Skill across runs.
  */
-import { todoWrite, todoList } from "std::agent"
+import { todoWrite, todoList, handoff } from "std::agent"
+import { filter } from "std::array"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { remember, recall } from "std::memory"
+import { remember, recall, setMemoryId } from "std::memory"
 import { search } from "std::search"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
+import { systemMessage } from "std::thread"
 import {
   search as wikipediaSearch,
   summary as wikipediaSummary,
   article as wikipediaArticle,
  } from "std::wikipedia"
+
+import { agentNames } from "./lib/common.agency"
+
 
 // Bundled docs live one level above the agent's compiled JS. Built
 // once at module load — `skillsDir` reads + parses every `.md`
@@ -129,3 +134,26 @@ export static const researchTools: any[] = [
   todoWrite,
   todoList,
 ]
+
+// only add system message the first time
+let _first = false
+
+export def researchAgent(userMsg: string, allowHandoff: boolean) {
+  thread(label: "research", summarize: true, session: "research") {
+    setMemoryId("research")
+    if (!_first) {
+      systemMessage(researchSysPrompt)
+      _first = true
+    }
+    const tools = [...researchTools]
+    const otherAgents = filter(agentNames, \name -> name != "research")
+    if (allowHandoff) {
+      tools.push(handoff.partial(validCategories: otherAgents))
+    }
+    reply = llm(userMsg, {
+      memory: true,
+      tools: tools
+    })
+  }
+  return reply
+}

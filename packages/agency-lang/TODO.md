@@ -186,3 +186,13 @@ Figure out how you want to set up the agency handler so that if user chooses "al
 Two options:
 - create specific functions to read and write to the policy file that don't throw interrupts, or
 - create a new std::unsafe module in the agency standard library that exposes a function that takes a block, and automatically typecheck-ignores all the interrupts inside that block. Then that could be used with the handler somehow
+
+----
+
+allow comments inside arrays and objects too
+
+undefined var typecheck not triggering (`handoff` func in research agent not imported)
+
+---
+
+If multiple tool calls in parallel, throw an interrupt, they mess up the display because they are all printing interleaved output to the terminal. I think I need a mutex system for something like this.

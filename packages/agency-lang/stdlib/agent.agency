@@ -136,6 +136,7 @@ export type PromptSpec = {
 
 export type AgentSpec = {
   type: "agent";
+  name: string;
   agent: any
 }
 

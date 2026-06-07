@@ -126,6 +126,7 @@ export type PromptSpec = {
 ```ts
 export type AgentSpec = {
   type: "agent";
+  name: string;
   agent: any
 }
 ```
@@ -174,7 +175,7 @@ export type RouterConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L159))
 
 ## Functions
 
@@ -270,7 +271,7 @@ Re-route the user's current message to a different specialist.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L191))
 
 ### consumeHandoff
 
@@ -289,7 +290,7 @@ Read and clear the pending handoff target. Returns "" when no
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L224))
 
 ### runOneTurn
 
@@ -311,7 +312,7 @@ Single iteration of route()'s hop loop. If user has given an agent,
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L234))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L235))
 
 ### runOneTurnAgent
 
@@ -335,7 +336,7 @@ Single iteration of route()'s hop loop. This version runs
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L252))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L253))
 
 ### runOneTurnPrompt
 
@@ -358,7 +359,7 @@ Single iteration of route()'s hop loop. Owns the thread block,
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L270))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L271))
 
 ### route
 
@@ -411,4 +412,4 @@ Run one user turn through a multi-specialist agent. Owns the hop
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L337))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L338))

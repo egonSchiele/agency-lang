@@ -589,7 +589,7 @@ export async function _runLineRepl(
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal.
   const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
-
+  const userMessageHistory: string[] = [];
   try {
     while (true) {
       let line: string;
@@ -609,7 +609,6 @@ export async function _runLineRepl(
       if (useColor) process.stdout.write(COLOR_RESET);
       let trimmed = line.trim();
       if (trimmed.length === 0) continue;
-      process.stdout.write(color.bgBrightBlack.darkBlack(` User: ${line} \n`));
       // Bare `/` opens the slash-command palette via
       // `prompts.autocomplete` — the same modal the interrupt UI
       // uses, so palette and policy menus look and feel identical.
@@ -624,6 +623,9 @@ export async function _runLineRepl(
         trimmed = picked;
       }
 
+      userMessageHistory.push(line);
+      process.stdout.write(color.bgBrightBlack.darkBlack(` User: ${line} \n`));
+
       let reply: unknown;
       // Snapshot wall-clock and the cumulative token counters before
       // the turn so we can render input/output token deltas + elapsed
@@ -633,6 +635,7 @@ export async function _runLineRepl(
       const turnStartMs = Date.now();
       const tokensBefore = readTokenSnapshot();
       activeStopSpinner = startSpinner(useTTY);
+
       try {
         reply = await callBridgeFn(onSubmit, line);
       } catch (err: any) {
@@ -675,9 +678,7 @@ export async function _runLineRepl(
     // Persist whatever entries readline accumulated. The `history`
     // property is undocumented-ish but stable across Node versions
     // we support and is the only way to read it back.
-    const hist: string[] = ((rl as unknown) as { history?: string[] })
-      .history ?? [];
-    saveHistory(historyFile, hist, historyMax);
+    saveHistory(historyFile, userMessageHistory, historyMax);
     rl.close();
   }
 }

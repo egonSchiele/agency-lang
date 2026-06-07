@@ -17,20 +17,20 @@ import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost, getTokens } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
-import { codeSysPrompt, codeTools } from "./code.agency"
 import { figs, title } from "./images/images.agency"
+import { POLICY_PATH, HISTORY_PATH, ALWAYS_FIELDS } from "./lib/config.agency"
 import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
+import { codeSysPrompt, codeTools, codeAgent } from "./subagents/code.agency"
+import { oneShotAgent } from "./subagents/oneShot.agency"
 import {
   researchSysPrompt,
   researchTools,
   researchAgent,
- } from "./research.agency"
-import { oneShotAgent } from "./subagents/oneShot.agency"
-
+ } from "./subagents/research.agency"
 
 // UI mode select — one-line swap between the alt-screen TUI and the
 // line-mode REPL. Both modules expose the same `repl` / `pushMessage`
@@ -108,94 +108,49 @@ callback("onLLMCallStart") as data {
 
 callback("onLLMCallEnd") as data {
   if (AGENT_DEBUG || VERBOSE) {
-    pushMessage(color.green.dim("💬 [${data.model}] ${JSON.stringify(data.result)}"))
+    pushMessage(
+      color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
+    )
   }
 }
 
-// On-disk policy at `$HOME/.agency-agent/policy.json`. We duplicate the
-// home-dir computation here instead of importing `AGENCY_AGENT_DIR` from
-// `shared.agency` because Agency doesn't guarantee imported static-const
-// init runs before the importer reads it (upstream #232).
-const POLICY_FILE = "policy.json"
-const HISTORY_FILE = "history"
+type ToolCallData = {
+  name: string
+  arguments: any
+}
 
-def policyDir(): string {
-  const home = env("HOME")
-  if (home == null) {
-    return "./.agency-agent"
+type LLMResponse = {
+  output: string | null
+  toolCalls: ToolCallData[]
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    cachedInputTokens: number
   }
-  return "${home}/.agency-agent"
+  cost: {
+    inputCost: number
+    outputCost: number
+    cachedInputCost: number
+    totalCost: number
+    currency: string
+  }
+  model: string
 }
 
-def policyPath(): string {
-  return "${policyDir()}/${POLICY_FILE}"
+def renderLLMCallResponse(data: LLMResponse): string {
+  let response = []
+  if (data.output != "" && data.output != null && data.output != undefined) {
+    response.push(data.output)
+  }
+  if (data.toolCalls && data.toolCalls.length > 0) {
+    for (toolCall of data.toolCalls) {
+      response.push(`${toolCall.name}(${formatArgs(toolCall.arguments)})`)
+    }
+  }
+  return response.join("\n")
 }
 
-def historyPath(): string {
-  return "${policyDir()}/${HISTORY_FILE}"
-}
-
-// Per-kind config driving the "approve-always-here" option. For each
-// kind we list the data fields the scoped rule should pin, plus a
-// flag that turns a directory value into a brace-expanded glob so the
-// rule matches `dir` AND `dir/**`. Kinds not present in this map
-// don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
-const ALWAYS_FIELDS: ScopedRuleFields = {
-  "std::read": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::write": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::edit": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::ls": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::glob": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::grep": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::copy": [
-    {
-    field: "src",
-    matchSubpaths: true
-  },
-    {
-    field: "dest",
-    matchSubpaths: true
-  },
-  ],
-  "std::move": [
-    {
-    field: "src",
-    matchSubpaths: true
-  },
-    {
-    field: "dest",
-    matchSubpaths: true
-  },
-  ],
-  "std::exec": [
-    {
-    field: "command",
-    matchSubpaths: false
-  },
-    {
-    field: "subcommand",
-    matchSubpaths: false
-  },
-  ]
-}
 
 def loadAgentsMd(dir: string): string {
   """
@@ -288,10 +243,9 @@ def _runTurn(msg: string): boolean {
     start: "code",
     agents: {
       code: {
-        type: "prompt",
-        systemPrompt: codeSysPrompt,
-        tools: codeTools,
-        memory: true
+        type: "agent",
+        name: "code",
+        agent: codeAgent
       },
       research: {
         type: "agent",
@@ -350,7 +304,7 @@ def printHeader() {
 
 def givePolicyChoice() {
   const title = "Welcome to the agency agent. Please pick a policy to start."
-  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${policyPath()} and the agent will use it automatically."
+  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${POLICY_PATH} and the agent will use it automatically."
   let items: ChoiceItem[] = [
     {
     key: "minimal",
@@ -437,24 +391,24 @@ node main() {
   const projectContext = loadAgentsMd(cwd()) with approve
   _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
 
-  const policy = parsePolicyFile(policyPath())
+  const policy = parsePolicyFile(POLICY_PATH)
   if (policy is failure(f)) {
     const { status, error } = f
     print(f, status, error)
     if (status == "doesnt-exist") {
-      print(color.yellow("No existing policy found at ${policyPath()}."))
+      print(color.yellow("No existing policy found at ${POLICY_PATH}."))
       const choice = givePolicyChoice()
-      setPolicy(policyPath(), choice)
+      setPolicy(POLICY_PATH, choice)
     } else {
       print(color.red("Failed to load policy: ${JSON.stringify(error)}"))
       process.exit(1)
     }
   } else {
-    setPolicy(policyPath(), policy.value)
+    setPolicy(POLICY_PATH, policy.value)
   }
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
-  const handler = cliPolicyHandler(file: policyPath(), fields: ALWAYS_FIELDS)
+  const handler = cliPolicyHandler(file: POLICY_PATH, fields: ALWAYS_FIELDS)
 
   // The `repl()` widget owns the runloop; every Enter dispatches into
   // `_runTurn` which calls `route()`. Interrupts raised inside
@@ -465,7 +419,7 @@ node main() {
       status: _buildStatus,
       onSubmit: _runTurn,
       prompt: "> ",
-      historyFile: historyPath(),
+      historyFile: HISTORY_PATH,
       historyMax: 1000,
       paletteCommands: mergedPalette(),
     )

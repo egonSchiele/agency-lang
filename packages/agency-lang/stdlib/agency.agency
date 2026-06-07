@@ -126,7 +126,7 @@ export def runFile(
   )
 }
 
-export def typecheck(source: string): Result {
+export def typecheck(source: string): Result<TypeCheckReport> {
   """
   Type-check Agency source code without compiling or running it. Returns a TypeCheckReport with separate `errors` and `warnings` arrays — a successful Result with a non-empty `errors` array means the type-checker ran and found problems. A failure Result means the type-checker could not run at all (parse error or unresolved import).
 

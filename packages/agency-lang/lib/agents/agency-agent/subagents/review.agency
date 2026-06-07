@@ -1,0 +1,140 @@
+import { typecheck } from "std::agency"
+import { map, filter, some } from "std::array"
+import { setMemoryId } from "std::memory"
+import { skillsDir } from "std::skills"
+import { systemMessage } from "std::thread"
+
+import { agentNames } from "../lib/config.agency"
+
+
+static const docSkill = skillsDir("../docs/guide", "flat") with approve
+static const cliSkill = skillsDir("../docs/cli", "flat") with approve
+static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
+
+export static const reviewTools = [_typecheck, docSkill, cliSkill, appendixSkill]
+
+type AgencyCode = {
+  code: string
+}
+
+export type Feedback = {
+  error: boolean;
+  feedback: string;
+  data?: any
+}
+
+/**
+  * Merges two `Result<Feedback[]>` values by concatenating their success
+  * arrays or returning the first failure. Used to combine typecheck
+  * feedback with LLM-generated feedback.
+  */
+def mergeFeedback(
+  a: Result<Feedback[]>,
+  b: Result<Feedback[]>,
+): Result<Feedback[]> {
+  if (a is success(aVal)) {
+    if (b is success(bVal)) {
+      return success([...aVal, ...bVal])
+    } else {
+      return b
+    }
+  } else {
+    return a
+  }
+}
+
+export def renderSingleFeedback(f: Feedback): string {
+  if (f.error) {
+    return `Error: ${f.feedback}`
+  } else {
+    return `Feedback: ${f.feedback}`
+  }
+}
+
+export def renderFeedback(feedback: Result<Feedback[]>): string {
+  if (feedback is success(val)) {
+    return map(val, renderSingleFeedback).join("\n\n")
+  }
+  return feedback.error
+}
+
+export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
+  if (feedback is success(val)) {
+    return some(val, \f -> f.error)
+  }
+  // If the feedback itself is a failure, we can treat that as an error state.
+  return true
+}
+
+/* export def reviewAgent(userMsg: string, allowHandoff: boolean): string { */
+export def review(userMsg: string): Result<Feedback[]> {
+  thread(label: "review", summarize: true, session: "review") {
+    setMemoryId("review")
+
+    const snippets: AgencyCode[] = llm(
+      `Extract any Agency code snippets from the following message: ${userMsg}`,
+    )
+
+    let feedback: Result<Feedback[]> = success([])
+
+    for (codeSnippet in snippets) {
+      const typecheckResult = _typecheck(codeSnippet.code)
+      feedback = mergeFeedback(feedback, typecheckResult)
+    }
+    /*     if (!_first) {
+      systemMessage(reviewSysPrompt)
+      _first = true
+    }
+ */
+    /*     const tools = [...reviewTools]
+    const otherAgents = filter(agentNames, \name -> name != "review")
+    if (allowHandoff) {
+      tools.push(handoff.partial(validCategories: otherAgents))
+    }
+    reply = llm(userMsg, {
+      memory: true,
+      tools: tools
+    }) */
+  }
+  return feedback
+}
+
+def _typecheck(agencyCode: string): Result<Feedback[]> {
+  const result = typecheck(agencyCode)
+  if (result is success(val)) {
+    const { errors, warnings } = val
+    if (errors.length == 0 && warnings.length == 0) {
+      return success(
+        [
+        {
+        error: false,
+        feedback: "Code is valid with no errors or warnings."
+      },
+      ],
+      )
+    }
+    const feedback: Feedback[] = []
+    for (error in errors) {
+      feedback.push(
+        {
+        error: true,
+        feedback: `Error: ${error.message}`,
+        data: error
+      },
+      )
+    }
+    for (warning in warnings) {
+      feedback.push(
+        {
+        error: true,
+        feedback: `Warning: ${warning.message}`,
+        data: warning
+      },
+      )
+    }
+    return success(feedback)
+  }
+  return failure(
+    `Typecheck failed with the following errors:\n\n${JSON.stringify(result.error, null, 2)}`,
+  )
+}

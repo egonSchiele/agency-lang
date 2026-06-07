@@ -108,7 +108,7 @@ Compile and execute an Agency file in a subprocess. The file is read from dir/fi
 ### typecheck
 
 ```ts
-typecheck(source: string): Result
+typecheck(source: string): Result<TypeCheckReport>
 ```
 
 Type-check Agency source code without compiling or running it. Returns a TypeCheckReport with separate `errors` and `warnings` arrays — a successful Result with a non-empty `errors` array means the type-checker ran and found problems. A failure Result means the type-checker could not run at all (parse error or unresolved import).
@@ -123,7 +123,7 @@ Type-check Agency source code without compiling or running it. Returns a TypeChe
 |---|---|---|
 | source | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<TypeCheckReport>`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L129))
 

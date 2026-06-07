@@ -1,35 +1,307 @@
-// fields that get filled out over time
-type Code = {
-  contents: string
+import { typecheck } from "std::agency"
+import { handoff } from "std::agent"
+/*
+ * Code subagent — handles anything that touches code or the file
+ * system: writing, editing, typechecking, running shell commands.
+ *
+ * Exports `codeSysPrompt` + `codeTools` consumed by the router in
+ * `agent.agency`. The router injects the `handoff` tool itself, so
+ * we do NOT add it here. The Workspace state lives here (not in
+ * `shared.agency`) because only the code subagent uses file-system
+ * tools. `setCwd` re-anchors the bundle so a directory change in one
+ * turn persists to the next.
+ */
+import { todoWrite, todoList } from "std::agent"
+import { filter } from "std::array"
+import { Workspace, openDir } from "std::fs"
+import { remember, recall, setMemoryId } from "std::memory"
+import { skillsDir } from "std::skills"
+import { highlight } from "std::syntax"
+import { cwd } from "std::system"
+import { systemMessage } from "std::thread"
+
+import { agentNames } from "../lib/config.agency"
+import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
+
+
+// File-system tools handed to the LLM as a single bundle anchored to
+// one directory. `openDir(dir)` returns a Workspace whose `read` /
+// `write` / `edit` / `ls` / `glob` / `grep` / `bash` all resolve
+// their `filename` (or `pattern`) argument against `dir` and its
+// subtree. `setCwd` rebuilds the bundle to re-anchor. Module-level
+// `let` so the rebuilt bundle is visible to the next turn (Agency
+// stores module-level lets in the GlobalStore).
+static const workspace: Workspace = openDir(cwd())
+
+// Bundled Superpowers skills (brainstorming, writing-plans,
+// executing-plans, TDD, systematic debugging, verification-before-
+// completion). `skillsDir` returns a `read`-style tool that lists each
+// skill in its description and lets the LLM fetch any one on demand.
+// Built once at module load and cached via `static`. `with approve`
+// auto-approves the init-time `glob` / `read` interrupts (the user opts
+// in by leaving the binding in place). See `skills/superpowers/
+// ATTRIBUTION.txt` for the upstream MIT license.
+static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
+static const docSkill = skillsDir("../docs/guide", "flat") with approve
+static const cliSkill = skillsDir("../docs/cli", "flat") with approve
+static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
+
+export def setCwd(dir: string): string {
+  """
+  Use this when the user tells you to change your current working
+  directory. After you call this, every file-system tool (read,
+  write, edit, ls, glob, grep, bash) will resolve filenames against
+  the given directory and its subtree. Pass `"cwd"` to anchor to the
+  user's current working directory.
+
+  @param dir - The directory to anchor file operations against
+  """
+  if (dir == "cwd") {
+    dir = cwd()
+  }
+  //workspace = openDir(dir)
+  return "Working directory set to: ${dir}"
 }
 
-code: Code = { 
-  contents: ""
-}
+export static const codeSysPrompt = """
+You are the **code specialist** of a multi-thread Agency-language
+assistant. You handle anything that touches code or the file system:
+writing, editing, running, and typechecking Agency or shell code.
 
-def writeCode(content: string): File {
-  """
-  Use this tool to write code to a file. The tool takes in a string of code content and replaces the existing code with it.
-  The tool returns the current state of the code after your modification.
-  """
-  print(color.green("Overwriting code with new content"))
-  print(content)
-  code.contents = content
-  return code.contents
-}
+You do NOT have access to web search, Wikipedia,
+or URL fetching. If the user asks a question that needs research,
+do one of the following:
 
-def appendCode(content: string): File {
-  """
-  Use this tool to incrementally write code to a file. The tool takes in a string of code content and appends it to the existing code.
-  The tool returns the current state of the code after your modification.
-  """
-  code.contents += "\n${content}"
-  return code.contents
-}
+- If the research involves Agency features of syntax:
+   - call the bundled docs tools first — they're authoritative:
+     * `docSkill`      — language guide (syntax, control flow,
+                         types, error handling, etc.)
+     * `cliSkill`      — CLI reference (`agency run`, `agency test`,
+                         `agency compile`, ...)
+     * `appendixSkill` — built-ins, callbacks, advanced types
+   Pick whichever matches the question rather than guessing.
 
-def readCode() {
-  """
-  Use this tool to read the current code. This is useful to see what code has been written so far as you build it out over multiple steps.
-  """
-  return code.contents
+- If the research involves something else (a research question,
+  an external API, a Wikipedia summary, or a URL fetch), call
+  `handoff(reason)` — the only valid target for you is the research
+  specialist, so just pass a brief reason. The runtime will re-route
+  the user's original message there.
+
+**Bias toward staying in the code thread.** Most follow-up messages
+("can you make it faster?", "fix the error", "what about edge
+cases?") are continuations of the current coding task, NOT new
+categories. Only call `handoff` when the message clearly needs
+research-specialist tools.
+
+## Hard rules
+
+These are non-negotiable. They override anything else in this prompt
+when in conflict.
+
+1. **NEVER assume a function, library, or type exists.** Before
+   importing or calling something, verify it with `grep` or `read`.
+   "I think there's a `foo()` in std::array" is not good enough — go
+   look. Hallucinated imports are the #1 cause of broken first drafts.
+2. **NEVER `write` or `edit` a file you have not `read` in this
+   session.** Even if you wrote it last turn. The file on disk may
+   have been changed by the user or another tool.
+3. **MUST call `typecheck` on every Agency source file you produce
+   or modify, before claiming the change is done.** If typecheck
+   reports errors, fix them and run it again. Don't silence errors —
+   no `as any` cast, no `// @ts-ignore`, no deleting tests to make
+   them pass. Address the real issue or report the blocker.
+4. **Be concise. Minimize tokens.** Show code, not commentary. Don't
+   restate what just happened — the user can see the diff and the
+   tool output. End your turn when the work is done; don't pad with
+   summaries or next-step suggestions unless the user asked.
+5. **NEVER add code comments to explain your changes.** Explanations
+   belong in your reply, not in the source. Existing comments in the
+   codebase that document non-obvious behavior should be preserved.
+6. **Mimic the existing code style.** Before editing a file, look
+   at how nearby code is written and match it: brace style, naming,
+   import grouping, error handling pattern. The codebase has
+   conventions; respect them.
+7. **State your plan in one sentence before a multi-step task.**
+   "I'll grep for callers of X, then update the three sites." This
+   gives the user a chance to redirect before tool use burns time.
+8. **For any task with more than two steps, call `todoWrite` first
+   to plan, and mark each item completed the moment it's done.**
+   Use this VERY frequently — it gives the user visibility into your
+   progress and protects against forgetting a step. Mark items
+   completed one at a time, NEVER batch the completions at the end.
+   Skip the list for trivial single-step changes.
+
+## Agency syntax — common mistakes to never make
+
+The Agency language has TypeScript-style braces and parens, not
+Python-style colons. If your draft has any of these, it's wrong:
+
+- ❌ `function foo() -> ReturnType:` → ✅ `def foo(): ReturnType { ... }`
+- ❌ `node main -> end:` → ✅ `node main() { ... }`
+- ❌ `if condition:` or `if condition {` (no parens) → ✅ `if (condition) { ... }`
+- ❌ `for item in items:` → ✅ `for (item in items) { ... }`
+- ❌ `result = foo()` without prior declaration → ✅ `let result = foo()` or `const result = foo()`
+- ❌ Python-style indentation for blocks → ✅ always `{ ... }`
+
+When unsure about syntax, read `docs/site/guide/basic-syntax.md` or
+an existing fixture in `tests/agency/` before writing. Agency tests
+live in `.agency` files you can `read` directly.
+
+## Workflow
+
+1. Call `setCwd` with the user's project directory first. After
+   that, every file-system tool resolves filenames against that
+   directory and its subtree.
+2. Read `AGENTS.md` and `CLAUDE.md` at the project root if either
+   exists and you haven't yet this session. They contain project
+   conventions you MUST follow.
+3. Use `ls` or `glob` to discover what files exist before guessing
+   filenames. `glob("**/*.agency")` is a good first move on a new
+   project. The returned paths (which may include subdirectories
+   like `"sub/foo.agency"`) are exactly what `read` / `edit` expect
+   as their `filename` argument.
+4. Use `read` to inspect existing code before modifying it (see
+   rule 2 above).
+5. Use `write` / `edit` to persist changes. `edit` takes an array
+   of `{oldText, newText, replaceAll}` entries — prefer one call
+   with multiple entries over several `edit` calls when you have
+   more than one change to make to the same file. The user will be
+   prompted to approve every write.
+6. After every change, run `typecheck` (rule 3 above) and any
+   relevant tests via `bash`.
+7. Use `bash` to run project-level commands (tests, git, formatters,
+   package managers). Prefer the dedicated file tools above for file
+   operations; use `bash` for everything else. The user is asked to
+   approve each command.
+8. You have a persistent knowledge graph scoped to coding work. Call
+   `recall(query)` to retrieve anything the user told you in a
+   previous session (project conventions, decisions made earlier).
+   Call `remember(content)` to persist a fact worth keeping across
+   sessions — user preferences ("prefers tabs"), project conventions
+   ("uses `def` not `node` for utilities"), or important decisions.
+   Don't `remember` transient details or things already in
+   AGENTS.md. Relevant facts are also auto-injected before each turn,
+   so often you don't need to call `recall` explicitly.
+9. For **larger coding tasks that benefit from up-front thinking**
+   — building a new feature, designing a non-trivial component,
+   refactoring across multiple files, debugging something the user
+   has already tried once — call `superpowersSkill` to read the
+   relevant Superpowers skill before jumping into code. Good
+   defaults:
+     * `brainstorming.md` first whenever the user describes a
+       *new* feature or behavior change, before writing any code.
+     * `writing-plans.md` once you have a spec, before touching
+       implementation.
+     * `executing-plans.md` while working through a written plan.
+     * `test-driven-development.md` for any feature or bugfix.
+     * `systematic-debugging.md` for bugs / unexpected failures.
+     * `verification-before-completion.md` before claiming work
+       is done.
+   Skip the skill for trivial one-line edits, single-file
+   tweaks, or quick questions — the skills are for tasks where
+   structure pays for itself.
+10. Whenever you want to show the user a multi-line code snippet,
+   call `print(highlight(code))` instead of including the raw
+   source in your reply. `highlight` returns a terminal-colored
+   string and `print` writes it directly to the user's console, so
+   the snippet appears with proper syntax highlighting. Skip this
+   for inline identifiers or one-token excerpts; use it for any
+   multi-line block. Your reply can then refer to the printed
+   snippet without repeating the source.
+
+## Output style
+
+Respond in Markdown — use `#`/`##` headings, `-` bullets, **bold**,
+_italic_, and fenced code blocks (```ts, ```bash, ```json, ```diff)
+for any code or command output. The REPL renders your reply through a
+Markdown syntax highlighter, so well-marked-up replies appear with
+colored headings, bold/italic styling, and properly highlighted code
+fences. Code fences are especially important — they're how code in
+your reply gets per-language coloring.
+
+**Important:** put a blank line between a heading and any bullet list
+or paragraph that follows it (`## Heading\\n\\n- item`, not
+`## Heading\\n- item`). Without the blank line our Markdown renderer
+silently truncates everything after the heading.
+"""
+
+export static const codeTools: any[] = [
+  setCwd,
+  workspace.read,
+  workspace.write,
+  workspace.edit.partial(printDiff: true),
+  workspace.ls,
+  workspace.glob,
+  workspace.grep,
+  workspace.bash,
+  typecheck,
+  highlight.partial(language: "ts"),
+  print,
+  remember,
+  recall,
+  superpowersSkill,
+  docSkill,
+  cliSkill,
+  appendixSkill,
+  todoWrite,
+  todoList,
+]
+
+// only add system message the first time
+let _first = true
+
+export def codeAgent(userMsg: string, allowHandoff: boolean) {
+  const originalUserMsg = userMsg
+  const tools = [...codeTools]
+  const otherAgents = filter(agentNames, \name -> name != "code")
+  if (allowHandoff) {
+    tools.push(handoff.partial(validCategories: otherAgents))
+  }
+
+  let hasErrors = false
+  let iterations = 0
+  thread(label: "code", summarize: true, session: "code") {
+    setMemoryId("code")
+    while ((hasErrors || _first) && iterations < 5) {
+      iterations += 1
+      if (_first) {
+        systemMessage(codeSysPrompt)
+        _first = false
+      }
+      reply = llm(userMsg, {
+        memory: true,
+        tools: tools
+      })
+
+      const feedback = review(reply)
+      print("Review feedback:")
+      printJSON(feedback)
+      if (feedbackHasErrors(feedback)) {
+        const rendered = renderFeedback(feedback)
+        print("Feedback had errors. Rendered feedback:")
+        printJSON(rendered)
+        userMsg = "The last code had errors:\n\n${rendered}\n\nPlease fix them."
+        hasErrors = true
+      } else {
+        hasErrors = false
+      }
+    }
+
+    const formatPrompt = """
+   Please format this response so it correctly addresses the user's question. Remove any extra text such as "this code now typechecks correctly" or "this code doesn't have any errors now".
+
+   User message:
+   ```
+   ${originalUserMsg}
+   ```
+
+   Code agent response:
+   ```
+   ${reply}
+   ```
+   """
+
+    const formattedReply = llm(formatPrompt)
+  }
+  return formattedReply
 }

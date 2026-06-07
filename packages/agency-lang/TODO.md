@@ -196,3 +196,23 @@ undefined var typecheck not triggering (`handoff` func in research agent not imp
 ---
 
 If multiple tool calls in parallel, throw an interrupt, they mess up the display because they are all printing interleaved output to the terminal. I think I need a mutex system for something like this.
+
+---
+
+sort imports alphabetically and group them by agency imports, std imports, and other imports.
+
+---
+
+clean up imports in lib/templates/backends/typescriptGenerator/imports.mustache, agency scripts shouldn't be able to access built-in node modules like path/os without explicitly importing them.
+
+---
+
+type checker can't handle pattern match + boolean operators:
+
+```
+// result pattern binder in pure-boolean `is` context has nowhere to bind;
+// use `if (x is success(...))` to introduce variablesagency
+if (a is success(aVal) && b is success(bVal)) {
+  print(aVal, bVal)
+}
+```

@@ -23,7 +23,7 @@ import {
   article as wikipediaArticle,
  } from "std::wikipedia"
 
-import { agentNames } from "./lib/common.agency"
+import { agentNames } from "../lib/config.agency"
 
 
 // Bundled docs live one level above the agent's compiled JS. Built
@@ -136,14 +136,14 @@ export static const researchTools: any[] = [
 ]
 
 // only add system message the first time
-let _first = false
+let _first = true
 
 export def researchAgent(userMsg: string, allowHandoff: boolean) {
   thread(label: "research", summarize: true, session: "research") {
     setMemoryId("research")
-    if (!_first) {
+    if (_first) {
       systemMessage(researchSysPrompt)
-      _first = true
+      _first = false
     }
     const tools = [...researchTools]
     const otherAgents = filter(agentNames, \name -> name != "research")

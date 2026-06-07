@@ -1111,6 +1111,9 @@ export def confirm(message: string, initial: boolean = false): Result<boolean> {
 }
 
 def indent(str: string): string {
+  if (str == "" || str == null || str == undefined) {
+    return ""
+  }
   const lines = str.split("\n")
   const res = map(lines, \line -> "    ${line}")
   return res.join("\n")

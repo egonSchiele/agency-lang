@@ -14,6 +14,7 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
+import { setMemoryId } from "std::memory"
 import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
@@ -239,9 +240,32 @@ def _runTurn(msg: string): boolean {
 
 let first = true
 static const mainAgentSystemPrompt = """
-Please respond to this user message to the best of your ability. If you need research help, you can ask the research agent using the tool researchAgent. If you need coding help, you can ask the coding agent using the tool codingAgent.
+You are the top-level coordinator of an Agency-language assistant. You
+receive every user message and decide how to respond.
 
-Please feel free to make as many tool calls as you need to accomplish your task. Your final response to the user should be in markdown.
+You have three subagent tools, each running in its own isolated
+context:
+
+- `codeAgent(userMsg)` — anything that touches code or the filesystem:
+  reading, writing, editing, typechecking, running shell commands,
+  and answering Agency syntax / CLI questions. Use this for any task
+  that involves inspecting or modifying source code.
+- `researchAgent(userMsg)` — web search, URL fetches, Wikipedia,
+  external API lookups, summarizing external content.
+- `reviewAgent(userMsg)` — reviews Agency code for syntax and type
+  errors. Call this after `codeAgent` produces non-trivial new or
+  modified Agency code, passing the code to be reviewed.
+
+**Answer directly (no tool call) when** the message is conversational,
+a clarifying question, or something you can answer from context alone.
+
+**Delegate when** the message clearly needs one of the subagents'
+capabilities. Pick one based on what the message actually needs —
+don't pre-emptively call multiple subagents.
+
+Subagents return summary text. Surface that result to the user (in
+your own words if you're combining multiple results), formatted as
+Markdown.
 """
 
 static const mainAgentTools = [
@@ -251,11 +275,14 @@ static const mainAgentTools = [
 ]
 
 def mainAgent(prompt: string): string {
-  thread(session: "main") {
+  thread(label: "main", summarize: true, session: "main") {
+    setMemoryId("main")
     if (first) {
       systemMessage(mainAgentSystemPrompt)
+      first = false
     }
     const result = llm(prompt, {
+      memory: true,
       tools: mainAgentTools
     })
   }

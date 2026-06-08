@@ -154,6 +154,8 @@ export def explorerAgent(userMsg: string, allowHandoff: boolean): string {
       {
       tools: explorerTools,
       model: "gpt-5.5",
+      provider: "openai-responses",
+      reasoningEffort: "high",
       thinking: {
         enabled: true
       }

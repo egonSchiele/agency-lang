@@ -1,21 +1,8 @@
-/*
- * oracle subagent — a read-only reasoning helper for hard problems.
- *
- * Called by other agents (typically `codeAgent`) when they want a
- * second opinion: "is this plan sound?", "is there a simpler way?",
- * "is there existing code for this?", "why is this bug happening?".
- *
- * Oracle runs on a stronger reasoning model than the caller and has
- * NO write/edit/bash tools — it can only read the codebase and the
- * Agency docs, then return a written analysis. It cannot hand off to
- * other agents.
- */
 import { typecheck } from "std::agency"
 import { Workspace, openDir } from "std::fs"
 import { skillsDir } from "std::skills"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
-
 
 // Oracle gets its own read-only view of the project. Mirrors the
 // workspace setup in `code.agency` but only the read-side tools are
@@ -117,17 +104,23 @@ export def oracleAgent(userMsg: string, allowHandoff: boolean): string {
 
   @param userMsg - the question, with all the context the oracle
     needs to answer it
+  @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   thread(label: "oracle", summarize: true, session: "oracle") {
     if (first) {
       systemMessage(oracleSysPrompt)
       first = false
     }
-    reply = llm(userMsg, {
+    reply = llm(
+      userMsg,
+      {
       tools: oracleTools,
-      reasoningEffort: "high",
-      thinking: { enabled: true }
-    })
+      model: "gpt-5.5-pro",
+      thinking: {
+        enabled: true
+      }
+    },
+    )
   }
   return reply
 }

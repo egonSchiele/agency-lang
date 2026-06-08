@@ -18,36 +18,11 @@ black: "\x1b[30m",
   brightWhite: "\x1b[97m",
  */
 node main() {
-  print(color.bgBlack.white("bgBlack+white"))
-  print(color.bgRed("bgRed"))
-  print(color.bgGreen("bgGreen"))
-  print(color.bgYellow("bgYellow"))
-  print(color.bgBlue("bgBlue"))
-  print(color.bgMagenta("bgMagenta"))
-  print(color.bgCyan("bgCyan"))
-  print(color.bgWhite.black("bgWhite+black"))
-  print(color.bgBrightBlack.white("bgBrightBlack+white"))
-  print(color.bgBrightBlack.bold.black("bgBrightBlack+black"))
-  print(color.darkBlack.bold.bgBrightRed("bgBrightRed"))
-  print(color.darkBlack.bold.bgBrightGreen("bgBrightGreen"))
-  print(color.darkBlack.bold.bgBrightYellow("bgBrightYellow"))
-  print(color.darkBlack.bold.bgBrightBlue("bgBrightBlue"))
-  print(color.darkBlack.bold.bgBrightMagenta("bgBrightMagenta"))
-  print(color.darkBlack.bold.bgBrightCyan("bgBrightCyan"))
-  print(color.darkBlack.bold.bgBrightWhite("bgBrightWhite"))
-  print(color.darkBlack.bold.bgWhite("bgWhite"))
-  print(color.red("red"))
-  print(color.green("green"))
-  print(color.yellow("yellow"))
-  print(color.blue("blue"))
-  print(color.magenta("magenta"))
-  print(color.cyan("cyan"))
-  print(color.white("white"))
-  print(color.brightRed("brightRed"))
-  print(color.brightGreen("brightGreen"))
-  print(color.brightYellow("brightYellow"))
-  print(color.brightBlue("brightBlue"))
-  print(color.brightMagenta("brightMagenta"))
-  print(color.brightCyan("brightCyan"))
-  print(color.brightWhite("brightWhite"))
+  let x = 10;
+let result = if (x > 5) {
+    "Greater than 5"
+} else {
+    "5 or less"
+}
+print(result);
 }

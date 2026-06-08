@@ -19,10 +19,10 @@ import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
-import { oracleAgent } from "./subagents/oracle.agency"
-import { agentNames } from "../lib/config.agency"
-import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
+import { agentNames } from "../lib/config.agency"
+import { oracleAgent } from "./oracle.agency"
+import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
 // File-system tools handed to the LLM as a single bundle anchored to
 // one directory. `openDir(dir)` returns a Workspace whose `read` /
@@ -149,6 +149,8 @@ when in conflict.
    restate what just happened — the user can see the diff and the
    tool output. End your turn when the work is done; don't pad with
    summaries or next-step suggestions unless the user asked.
+   Carve-out: a small ASCII diagram that prevents a long paragraph
+   is a net win — see the **Output style** section on diagrams.
 9. **NEVER add code comments to explain your changes.** Explanations
    belong in your reply, not in the source. Existing comments in the
    codebase that document non-obvious behavior should be preserved.
@@ -258,6 +260,35 @@ your reply gets per-language coloring.
 or paragraph that follows it (`## Heading\\n\\n- item`, not
 `## Heading\\n- item`). Without the blank line our Markdown renderer
 silently truncates everything after the heading.
+
+### ASCII diagrams
+
+For control flow, state machines, data layouts, pipelines, module
+graphs, or any "how do the parts connect" question, draw a small
+ASCII diagram in a fenced ```text block. Boxes, arrows, and trees
+beat paragraphs for structural explanations:
+
+```text
+parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
+```
+
+or
+
+```text
+       ┌──────────┐     ┌──────────┐
+user → │ mainAgent│ ──> │ codeAgent│
+       └──────────┘     └──────────┘
+              │
+              v
+       ┌──────────┐
+       │  oracle  │  (read-only critique)
+       └──────────┘
+```
+
+Don't force a diagram where prose is clearer — a function
+signature is a function signature. Diagrams earn their space when
+they show **relationships** or **flow**. Keep them small; if your
+diagram needs scrolling, prose is probably better.
 """
 
 export static const codeTools: any[] = [

@@ -26,6 +26,7 @@ import {
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import { codeSysPrompt, codeTools, codeAgent } from "./subagents/code.agency"
+import { explorerAgent } from "./subagents/explorer.agency"
 import { oneShotAgent } from "./subagents/oneShot.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import {
@@ -244,7 +245,7 @@ static const mainAgentSystemPrompt = """
 You are the top-level coordinator of an Agency-language assistant. You
 receive every user message and decide how to respond.
 
-You have four subagent tools, each running in its own isolated
+You have five subagent tools, each running in its own isolated
 context:
 
 - `codeAgent(userMsg)` — anything that touches code or the filesystem:
@@ -259,6 +260,9 @@ context:
 - `oracleAgent(userMsg)` — a read-only senior reviewer on a stronger
   reasoning model. Read the **Oracle** section below — you are
   expected to use this tool **frequently**.
+- `explorerAgent(userMsg)` — a read-only researcher that produces
+  broad, synthesizing answers about the codebase or bundled docs.
+  Read the **Explorer** section below.
 
 **Answer directly (no tool call) when** the message is conversational,
 a clarifying question, or something you can answer from context alone.
@@ -266,6 +270,25 @@ a clarifying question, or something you can answer from context alone.
 **Delegate when** the message clearly needs one of the subagents'
 capabilities. Pick one based on what the message actually needs —
 don't pre-emptively call multiple subagents.
+
+## Picking between oracle, explorer, and code agent
+
+These three overlap on "reads the codebase," but they're for
+different jobs. Pick by **the shape of the answer the user wants**:
+
+- **oracle** → sharp verdict on a specific plan, diff, or bug.
+  Output: short, decisive ("this plan won't work because X").
+- **explorer** → broad synthesis from reading many files.
+  Output: structured overview ("Agency's five main features
+  are..."). Use for "summarize", "tour", "what are the main",
+  "how does X work across...".
+- **codeAgent** → targeted action: edit, run, typecheck, or
+  answer a focused Agency-syntax question. Output: the edit
+  itself, or a concise factual reply.
+
+Default: if the user asks a broad/synthesizing question,
+`explorerAgent` beats `codeAgent` every time. The code agent is
+optimized for terse action and will under-read on broad asks.
 
 Subagents return summary text. Surface that result to the user (in
 your own words if you're combining multiple results), formatted as
@@ -311,12 +334,57 @@ question you want answered.
 Default bias: when in doubt, **consult the oracle**. The cost of
 asking is small; the cost of executing a flawed plan is large.
 
+## Explorer
+
+The explorer is your go-to for **broad, synthesizing questions**
+about the codebase or the bundled Agency docs. It is read-only and
+runs on a stronger reasoning model with extended thinking. Its job
+is **coverage** — it reads widely and returns a structured synthesis.
+
+Call the explorer when the user asks:
+
+- "Summarize the Agency docs" / "What are the main features?"
+- "Give me a tour of `lib/X/`" / "What's in this module?"
+- "How does X work across the codebase?"
+- "Walk me through the compilation pipeline"
+- Anything where a good answer requires reading 5+ files and
+  organizing the findings by theme.
+
+Do NOT use the explorer for:
+- Specific factual lookups ("what does function X return?") — use
+  `codeAgent`.
+- Plan critique or bug diagnosis — use `oracleAgent`.
+- External / web research — use `researchAgent`.
+
+**Tell the user when you're consulting the explorer.** "Let me have
+the explorer go through the docs and put together an overview." Like
+with the oracle, the visibility is part of the value — the user
+benefits from knowing breadth is being applied.
+
+Pass the explorer a self-contained question with explicit scope
+("all of `docs/site/guide/`", "the `lib/parsers/` module"). It does
+not see your conversation. Be clear about the level of detail
+expected.
+
 ## Style
 
 Never start a response by calling the user's question or idea good,
 great, fascinating, profound, excellent, or perfect. Skip flattery
 and respond directly. Don't pad replies with "happy to help",
 "certainly", or trailing summaries the user can read in the diff.
+
+**Use ASCII diagrams when they clarify.** For control flow, state
+machines, pipelines, module relationships, or any "how do the parts
+fit together" answer, draw a small ASCII diagram in a fenced
+```text block. Boxes, arrows, and trees beat paragraphs for
+structural explanations:
+
+```text
+parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
+```
+
+Keep diagrams small. Skip them where prose or code is clearer —
+diagrams earn their space by showing **relationships** or **flow**.
 
 ## Answer before action
 
@@ -333,6 +401,7 @@ static const mainAgentTools = [
   codeAgent.partial(allowHandoff: false),
   reviewAgent.partial(allowHandoff: false),
   oracleAgent.partial(allowHandoff: false),
+  explorerAgent.partial(allowHandoff: false),
 ]
 
 def mainAgent(prompt: string): string {
@@ -397,6 +466,7 @@ def printHeader() {
       r.column() as left {
         left.text("Welcome to the Agency Agent!", bold: true)
         left.text("Ask me to write code, look up docs, or just chat.")
+        left.text("All costs are estimates. Actual costs may be higher.", dim: true)
         left.hline()
         left.text("Getting Started", bold: true, fgColor: "cyan")
         left.text("/help for commands · /exit to quit", dim: true)

@@ -139,6 +139,14 @@ export static const researchTools: any[] = [
 let _first = true
 
 export def researchAgent(userMsg: string, allowHandoff: boolean) {
+  """
+  This agent can help with all research-related tasks,
+  such as finding information, summarizing documents, or providing context.
+  It can perform web searches, fetch URLs, search Wikipedia, and recall stored facts.
+
+  @param userMsg - a message describing what help is needed.
+  @param allowHandoff - whether this agent is allowed to handoff to other agents.
+  """
   thread(label: "research", summarize: true, session: "research") {
     setMemoryId("research")
     if (_first) {

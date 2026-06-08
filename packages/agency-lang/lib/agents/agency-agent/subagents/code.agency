@@ -251,6 +251,15 @@ export static const codeTools: any[] = [
 let _first = true
 
 export def codeAgent(userMsg: string, allowHandoff: boolean) {
+  """
+  This agent can help with all coding-related tasks,
+  such as reading, writing, or editing code. It can also
+  respond to questions about the Agency language,
+  such as questions related to the Agency syntax or CLI tool.
+
+  @param userMsg - a message describing what help is needed.
+  @param allowHandoff - whether this agent is allowed to handoff to other agents.
+  """
   const originalUserMsg = userMsg
   const tools = [...codeTools]
   const otherAgents = filter(agentNames, \name -> name != "code")
@@ -274,12 +283,8 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
       })
 
       const feedback = review(reply)
-      print("Review feedback:")
-      printJSON(feedback)
       if (feedbackHasErrors(feedback)) {
         const rendered = renderFeedback(feedback)
-        print("Feedback had errors. Rendered feedback:")
-        printJSON(rendered)
         userMsg = "The last code had errors:\n\n${rendered}\n\nPlease fix them."
         hasErrors = true
       } else {

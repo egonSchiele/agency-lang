@@ -14,7 +14,7 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost, getTokens } from "std::thread"
+import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
 import { figs, title } from "./images/images.agency"
@@ -31,6 +31,8 @@ import {
   researchTools,
   researchAgent,
  } from "./subagents/research.agency"
+import { reviewAgent } from "./subagents/review.agency"
+
 
 // UI mode select — one-line swap between the alt-screen TUI and the
 // line-mode REPL. Both modules expose the same `repl` / `pushMessage`
@@ -115,26 +117,15 @@ callback("onLLMCallEnd") as data {
 }
 
 type ToolCallData = {
-  name: string
+  name: string;
   arguments: any
 }
 
 type LLMResponse = {
-  output: string | null
-  toolCalls: ToolCallData[]
-  usage: {
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-    cachedInputTokens: number
-  }
-  cost: {
-    inputCost: number
-    outputCost: number
-    cachedInputCost: number
-    totalCost: number
-    currency: string
-  }
+  output: string | null;
+  toolCalls: ToolCallData[];
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
+  cost: { inputCost: number; outputCost: number; cachedInputCost: number; totalCost: number; currency: string };
   model: string
 }
 
@@ -144,13 +135,12 @@ def renderLLMCallResponse(data: LLMResponse): string {
     response.push(data.output)
   }
   if (data.toolCalls && data.toolCalls.length > 0) {
-    for (toolCall of data.toolCalls) {
+    for (toolCall in data.toolCalls) {
       response.push(`${toolCall.name}(${formatArgs(toolCall.arguments)})`)
     }
   }
   return response.join("\n")
 }
-
 
 def loadAgentsMd(dir: string): string {
   """
@@ -238,6 +228,41 @@ def _runTurn(msg: string): boolean {
   // Expand `/foo args` to the rendered command body. Unknown `/foo`
   // inputs fall through unchanged — matches Claude Code.
   const prompt = expandSlash(msg, projectCommands)
+  const reply = mainAgent(prompt)
+  if (reply != "" && reply != null && reply != undefined) {
+    pushMessage(highlight("${reply}\n", language: "markdown"))
+  } else {
+    pushMessage(color.red("No reply generated."))
+  }
+  return true
+}
+
+let first = true
+static const mainAgentSystemPrompt = """
+Please respond to this user message to the best of your ability. If you need research help, you can ask the research agent using the tool researchAgent. If you need coding help, you can ask the coding agent using the tool codingAgent.
+
+Please feel free to make as many tool calls as you need to accomplish your task. Your final response to the user should be in markdown.
+"""
+
+static const mainAgentTools = [
+  researchAgent.partial(allowHandoff: false),
+  codeAgent.partial(allowHandoff: false),
+  reviewAgent.partial(allowHandoff: false),
+]
+
+def mainAgent(prompt: string): string {
+  thread(session: "main") {
+    if (first) {
+      systemMessage(mainAgentSystemPrompt)
+    }
+    const result = llm(prompt, {
+      tools: mainAgentTools
+    })
+  }
+  return result
+}
+
+def routeAgent(prompt: string): string {
   const reply = route(
     {
     start: "code",
@@ -258,12 +283,7 @@ def _runTurn(msg: string): boolean {
   },
     prompt,
   )
-  if (reply != "" && reply != null && reply != undefined) {
-    pushMessage(highlight("${reply}\n", language: "markdown"))
-  } else {
-    pushMessage(color.red("No reply generated."))
-  }
-  return true
+  return reply
 }
 
 def roundedCost(): string {

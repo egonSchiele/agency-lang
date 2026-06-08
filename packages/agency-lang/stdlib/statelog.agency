@@ -18,10 +18,11 @@ export def evalInput(value: any) {
 
   @param value - The value to record. Any JSON-serializable type is
     accepted; stored as `unknown` in the eval record. Top-level
-    `undefined` records as `null`; nested functions, `undefined`,
-    and symbols follow JSON serialization rules; circular references
-    and `bigint` throw at the call site (with your stack), not later
-    inside the log writer.
+    `undefined` records as `null`; top-level functions and symbols
+    throw a TypeError; nested functions, `undefined`, and symbols
+    follow JSON serialization rules; circular references and `bigint`
+    throw at the call site (with your stack), not later inside the
+    log writer.
   """
   _evalInput(value)
 }

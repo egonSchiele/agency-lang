@@ -41,19 +41,21 @@ export type EvalRecord = {
    *  input is not supported. */
   source: string;
 
-  /** Values explicitly recorded via std::statelog.evalInput(). Empty
-   *  if the agent didn't annotate; in that case the extractor falls
-   *  back to a heuristic and populates a single element from the
-   *  last user-role message of the first promptCompletion on the
-   *  top-level thread (warning emitted in `warnings`). */
+  /** Values used as eval inputs. Explicit values recorded via
+   *  std::statelog.evalInput() are preferred; if absent, the
+   *  extractor may synthesize one fallback entry from the last
+   *  user-role message of the first promptCompletion on the top-level
+   *  thread (warning emitted in `warnings`). Empty only when neither
+   *  explicit events nor a heuristic source exists. */
   evalInputs: EvalValue[];
 
-  /** Values explicitly recorded via std::statelog.evalOutput(). Empty
-   *  if the agent didn't annotate; in that case the extractor falls
-   *  back to a heuristic and populates a single element from the last
+  /** Values used as eval outputs. Explicit values recorded via
+   *  std::statelog.evalOutput() are preferred; if absent, the
+   *  extractor may synthesize one fallback entry from the last
    *  promptCompletion's completion on the top-level thread (warning
-   *  emitted in `warnings`). Consumers that want a single answer
-   *  usually consume the last element. */
+   *  emitted in `warnings`). Empty only when neither explicit events
+   *  nor a heuristic source exists. Consumers that want a single
+   *  answer usually consume the last element. */
   evalOutputs: EvalValue[];
 
   /** Every thread observed in the trace. Each `threadCreated` event

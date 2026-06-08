@@ -1,11 +1,15 @@
 import { agencyStore } from "../runtime/asyncContext.js";
 import type { StatelogClient } from "../statelogClient.js";
 
-/** Pick the statelog client method to call for this eval event. */
-type EvalEmit = (
-  client: StatelogClient,
-  payload: { value: unknown; threadId: string | null },
-) => Promise<void>;
+type EvalPayload = {
+  value: unknown;
+  threadId: string | null;
+};
+
+type PreparedEvalEvent = {
+  client: StatelogClient;
+  payload: EvalPayload;
+};
 
 /**
  * std::statelog TS impls. Called from the agency-side wrappers in
@@ -17,16 +21,35 @@ type EvalEmit = (
  * function invoked directly from a test). This is the lenient pattern
  * used by the generated-code accessors in lib/runtime/asyncContext.ts.
  */
-async function emitEvalEvent(emit: EvalEmit, value: unknown): Promise<void> {
+function prepareEvalEvent(value: unknown): PreparedEvalEvent | null {
   const frame = agencyStore.getStore();
-  if (!frame) return;
-  const safeValue = JSON.parse(JSON.stringify(value ?? null));
+  if (!frame) return null;
+  const safeValue = serializeEvalValue(value);
   const threadId = frame.threads.activeId() ?? null;
-  await emit(frame.ctx.statelogClient, { value: safeValue, threadId });
+  return {
+    client: frame.ctx.statelogClient,
+    payload: { value: safeValue, threadId },
+  };
 }
 
-export const _evalInput = (value: unknown) =>
-  emitEvalEvent((c, p) => c.evalInputRecorded(p), value);
+function serializeEvalValue(value: unknown): unknown {
+  const json = JSON.stringify(value ?? null);
+  if (json === undefined) {
+    throw new TypeError(
+      "evalInput/evalOutput value must be JSON-serializable; top-level functions and symbols cannot be recorded",
+    );
+  }
+  return JSON.parse(json);
+}
 
-export const _evalOutput = (value: unknown) =>
-  emitEvalEvent((c, p) => c.evalOutputRecorded(p), value);
+export async function _evalInput(value: unknown): Promise<void> {
+  const prepared = prepareEvalEvent(value);
+  if (!prepared) return;
+  await prepared.client.evalInputRecorded(prepared.payload);
+}
+
+export async function _evalOutput(value: unknown): Promise<void> {
+  const prepared = prepareEvalEvent(value);
+  if (!prepared) return;
+  await prepared.client.evalOutputRecorded(prepared.payload);
+}

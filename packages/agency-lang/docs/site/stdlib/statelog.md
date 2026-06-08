@@ -28,10 +28,11 @@ Record an eval input — a value that should be considered part of
 
   @param value - The value to record. Any JSON-serializable type is
     accepted; stored as `unknown` in the eval record. Top-level
-    `undefined` records as `null`; nested functions, `undefined`,
-    and symbols follow JSON serialization rules; circular references
-    and `bigint` throw at the call site (with your stack), not later
-    inside the log writer.
+    `undefined` records as `null`; top-level functions and symbols
+    throw a TypeError; nested functions, `undefined`, and symbols
+    follow JSON serialization rules; circular references and `bigint`
+    throw at the call site (with your stack), not later inside the
+    log writer.
 
 **Parameters:**
 
@@ -73,4 +74,4 @@ Record an eval output — a value that should be considered the
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L30))

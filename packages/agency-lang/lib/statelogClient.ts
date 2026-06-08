@@ -645,6 +645,34 @@ export class StatelogClient {
     });
   }
 
+  async evalInputRecorded({
+    value,
+    threadId,
+  }: {
+    value: unknown;
+    threadId: string | null;
+  }): Promise<void> {
+    await this.post({
+      type: "evalInputRecorded",
+      value,
+      threadId: threadId ?? null,
+    });
+  }
+
+  async evalOutputRecorded({
+    value,
+    threadId,
+  }: {
+    value: unknown;
+    threadId: string | null;
+  }): Promise<void> {
+    await this.post({
+      type: "evalOutputRecorded",
+      value,
+      threadId: threadId ?? null,
+    });
+  }
+
   async diff({
     itemA,
     itemB,

@@ -13,6 +13,7 @@ import { extractThreads, normalize, type Normalized, type NormalizedEnvelope } f
 import type {
   ErrorEntry,
   EvalRecord,
+  EvalValue,
   IncompleteInvocation,
   InterruptEntry,
   Metrics,
@@ -30,6 +31,12 @@ export type ExtractOptions = {
 type WithWarnings<T> = { result: T; warnings: string[] };
 
 const DEFAULT_PREVIEW_CHARS = 200;
+const DEFAULT_EVAL_MAX_VALUE_BYTES = 100_000;
+const EVAL_MAX_VALUE_BYTES = parseEvalMaxValueBytes();
+const NO_EVAL_INPUT_WARNING =
+  "no evalInput() calls in trace; user input inferred from last user-role message of first promptCompletion on the top-level thread. Call evalInput(prompt) in your agent code to record the actual user input.";
+const NO_EVAL_OUTPUT_WARNING =
+  "no evalOutput() calls in trace; final response inferred from last promptCompletion completion on the top-level thread. Call evalOutput(reply) in your agent code to record the actual user-facing response.";
 
 /** Top-level extractor. Composes pure helpers over the Normalized
  *  form produced by `normalize()`; no shared mutable state, no
@@ -66,19 +73,21 @@ export function extractEvalRecord(
   const incomplete = findIncompleteInvocations(n);
   const metrics = computeMetrics(n);
   const topThreadProms = topLevelPromptCompletions(n, threads);
-  const userMessage = extractUserMessage(topThreadProms);
-  const finalResponse = extractFinalResponse(topThreadProms);
+  const evalInputs =
+    collectExplicit("evalInputRecorded", n) ?? heuristicInputs(topThreadProms);
+  const evalOutputs =
+    collectExplicit("evalOutputRecorded", n) ?? heuristicOutputs(topThreadProms);
 
   const last = n.events[n.events.length - 1];
 
   return {
     traceId,
-    recordVersion: 1,
+    recordVersion: 2,
     formatVersion: events[0].format_version,
     durationMs: last.tMs,
     source,
-    userMessage: userMessage.result,
-    finalResponse: finalResponse.result,
+    evalInputs: capValues(evalInputs.result),
+    evalOutputs: capValues(evalOutputs.result),
     threads,
     events: normalized.result,
     interrupts: interrupts.result,
@@ -92,8 +101,8 @@ export function extractEvalRecord(
       ...errors.warnings,
       ...incomplete.warnings,
       ...metrics.warnings,
-      ...userMessage.warnings,
-      ...finalResponse.warnings,
+      ...evalInputs.warnings,
+      ...evalOutputs.warnings,
     ],
   };
 }
@@ -301,19 +310,115 @@ function topLevelPromptCompletions(
 
 function extractUserMessage(
   prompts: NormalizedEnvelope[],
-): WithWarnings<string | null> {
-  if (prompts.length === 0) return { result: null, warnings: [] };
-  return { result: userMessageOf(prompts[0].raw), warnings: [] };
+): { value: string | null; source: NormalizedEnvelope | null } {
+  if (prompts.length === 0) return { value: null, source: null };
+  return { value: userMessageOf(prompts[0].raw), source: prompts[0] };
 }
 
 function extractFinalResponse(
   prompts: NormalizedEnvelope[],
-): WithWarnings<string | null> {
-  if (prompts.length === 0) return { result: null, warnings: [] };
+): { value: string | null; source: NormalizedEnvelope | null } {
+  if (prompts.length === 0) return { value: null, source: null };
+  const last = prompts[prompts.length - 1];
   return {
-    result: completionOf(prompts[prompts.length - 1].raw),
+    value: completionOf(last.raw),
+    source: last,
+  };
+}
+
+function collectExplicit(
+  eventType: string,
+  n: Normalized,
+): WithWarnings<EvalValue[]> | null {
+  const events = n.byType[eventType] ?? [];
+  if (events.length === 0) return null;
+  return {
+    result: events.map((ev) => ({
+      value: ev.raw.data.value,
+      threadId: ev.threadId,
+      tMs: ev.tMs,
+    })),
     warnings: [],
   };
+}
+
+function heuristicInputs(prompts: NormalizedEnvelope[]): WithWarnings<EvalValue[]> {
+  const extracted = extractUserMessage(prompts);
+  if (extracted.value === null || extracted.source === null) {
+    return { result: [], warnings: [] };
+  }
+  return {
+    result: [
+      {
+        value: extracted.value,
+        threadId: extracted.source.threadId,
+        tMs: extracted.source.tMs,
+      },
+    ],
+    warnings: [NO_EVAL_INPUT_WARNING],
+  };
+}
+
+function heuristicOutputs(prompts: NormalizedEnvelope[]): WithWarnings<EvalValue[]> {
+  const extracted = extractFinalResponse(prompts);
+  if (extracted.value === null || extracted.source === null) {
+    return { result: [], warnings: [] };
+  }
+  return {
+    result: [
+      {
+        value: extracted.value,
+        threadId: extracted.source.threadId,
+        tMs: extracted.source.tMs,
+      },
+    ],
+    warnings: [NO_EVAL_OUTPUT_WARNING],
+  };
+}
+
+function capValues(values: EvalValue[]): EvalValue[] {
+  return values.map((entry) => capValue(entry));
+}
+
+function capValue(entry: EvalValue): EvalValue {
+  const serialized = JSON.stringify(entry.value ?? null);
+  const bytes = Buffer.byteLength(serialized, "utf8");
+  if (bytes <= EVAL_MAX_VALUE_BYTES) return entry;
+  const suffix = `…[truncated ${bytes - EVAL_MAX_VALUE_BYTES} bytes]`;
+  const source = typeof entry.value === "string" ? entry.value : serialized;
+  return {
+    ...entry,
+    value: truncateStringForJsonRecord(source, suffix, EVAL_MAX_VALUE_BYTES),
+    truncated: true,
+  };
+}
+
+function truncateStringForJsonRecord(
+  source: string,
+  suffix: string,
+  maxBytes: number,
+): string {
+  const chars = Array.from(source);
+  let lo = 0;
+  let hi = chars.length;
+  let best = suffix;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const candidate = chars.slice(0, mid).join("") + suffix;
+    if (Buffer.byteLength(JSON.stringify(candidate), "utf8") <= maxBytes) {
+      best = candidate;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
+}
+
+function parseEvalMaxValueBytes(): number {
+  const parsed = Number(process.env.STATELOG_EVAL_MAX_VALUE_BYTES);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return DEFAULT_EVAL_MAX_VALUE_BYTES;
 }
 
 // ────────────────────────────────────────────────────────────────────

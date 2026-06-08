@@ -116,20 +116,31 @@ describe("extractEvalRecord", () => {
       expect(rec.incomplete).toEqual([]);
     });
 
-    it("userMessage / finalResponse populated", () => {
-      expect(rec.userMessage).toBe("do the thing");
-      expect(rec.finalResponse).toBe("done.");
+    it("evalInputs / evalOutputs populated from heuristic", () => {
+      expect(rec.evalInputs.at(-1)?.value).toBe("do the thing");
+      expect(rec.evalInputs.at(-1)?.threadId).toBe("0");
+      expect(rec.evalOutputs.at(-1)?.value).toBe("done.");
+      expect(rec.evalOutputs.at(-1)?.threadId).toBe("0");
+      expect(
+        rec.warnings.some((w) => w.includes("Call evalInput(prompt)")),
+      ).toBe(true);
+      expect(
+        rec.warnings.some((w) => w.includes("Call evalOutput(reply)")),
+      ).toBe(true);
     });
 
     it("traceId / formatVersion / source / recordVersion", () => {
       expect(rec.traceId).toBe("trace-A");
       expect(rec.formatVersion).toBe(1);
       expect(rec.source).toBe("test:A");
-      expect(rec.recordVersion).toBe(1);
+      expect(rec.recordVersion).toBe(2);
     });
 
-    it("no warnings", () => {
-      expect(rec.warnings).toEqual([]);
+    it("only warns about heuristic eval extraction", () => {
+      expect(rec.warnings).toEqual([
+        expect.stringContaining("Call evalInput(prompt)"),
+        expect.stringContaining("Call evalOutput(reply)"),
+      ]);
     });
   });
 
@@ -164,8 +175,10 @@ describe("extractEvalRecord", () => {
       expect(rec.metrics.toolEnds).toBe(0);
     });
 
-    it("warnings empty", () => {
-      expect(rec.warnings).toEqual([]);
+    it("only warns about the heuristic eval input it can extract", () => {
+      expect(rec.warnings).toEqual([
+        expect.stringContaining("Call evalInput(prompt)"),
+      ]);
     });
   });
 
@@ -218,12 +231,14 @@ describe("extractEvalRecord", () => {
       for (const e of toolEvents) expect(e.threadId).toBe("1");
     });
 
-    it("userMessage is the TOP-LEVEL thread's user prompt, not the subagent's", () => {
-      expect(rec.userMessage).toBe("delegate");
+    it("evalInputs uses the TOP-LEVEL thread's user prompt, not the subagent's", () => {
+      expect(rec.evalInputs[0].value).toBe("delegate");
+      expect(rec.evalInputs[0].threadId).toBe("0");
     });
 
-    it("finalResponse is the TOP-LEVEL thread's last completion, not the subagent's", () => {
-      expect(rec.finalResponse).toBe("delegating");
+    it("evalOutputs uses the TOP-LEVEL thread's last completion, not the subagent's", () => {
+      expect(rec.evalOutputs[0].value).toBe("delegating");
+      expect(rec.evalOutputs[0].threadId).toBe("0");
     });
   });
 
@@ -250,9 +265,11 @@ describe("extractEvalRecord", () => {
       expect(rec.warnings.some((w) => /no threadId field/i.test(w))).toBe(true);
     });
 
-    it("falls back to all promptCompletions for userMessage / finalResponse", () => {
-      expect(rec.userMessage).toBe("hello");
-      expect(rec.finalResponse).toBe("hi");
+    it("falls back to all promptCompletions for evalInputs / evalOutputs", () => {
+      expect(rec.evalInputs[0].value).toBe("hello");
+      expect(rec.evalInputs[0].threadId).toBeNull();
+      expect(rec.evalOutputs[0].value).toBe("hi");
+      expect(rec.evalOutputs[0].threadId).toBeNull();
     });
 
     it("attributes tool/LLM events with null threadId", () => {
@@ -328,6 +345,153 @@ describe("extractEvalRecord", () => {
       const rec = extractEvalRecord(events, "test:preview", { previewChars: 0 });
       const end = rec.events.find((e) => e.kind === "tool_end");
       expect((end as any).outputPreview.length).toBeGreaterThan(400);
+    });
+  });
+
+  describe("explicit eval annotation extraction", () => {
+    it("uses explicit evalInputRecorded / evalOutputRecorded events without fallback warnings", () => {
+      resetClock();
+      const events: EventEnvelope[] = [
+        ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+        ev("evalInputRecorded", { threadId: "0", value: { prompt: "real input" } }),
+        ev("evalOutputRecorded", { threadId: "0", value: "real output" }),
+      ];
+      const rec = extractEvalRecord(events, "test:explicit");
+
+      expect(rec.evalInputs).toEqual([
+        { value: { prompt: "real input" }, threadId: "0", tMs: 100 },
+      ]);
+      expect(rec.evalOutputs).toEqual([
+        { value: "real output", threadId: "0", tMs: 200 },
+      ]);
+      expect(rec.warnings).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/Call eval(Input|Output)/)]),
+      );
+    });
+
+    it("preserves chronological order for multiple firings", () => {
+      resetClock();
+      const events: EventEnvelope[] = [
+        ev("evalInputRecorded", { threadId: "0", value: "first in" }),
+        ev("evalOutputRecorded", { threadId: "0", value: "first out" }),
+        ev("evalInputRecorded", { threadId: "0", value: "second in" }),
+        ev("evalOutputRecorded", { threadId: "0", value: "second out" }),
+      ];
+      const rec = extractEvalRecord(events, "test:multiple");
+
+      expect(rec.evalInputs.map((v) => v.value)).toEqual(["first in", "second in"]);
+      expect(rec.evalOutputs.map((v) => v.value)).toEqual([
+        "first out",
+        "second out",
+      ]);
+    });
+
+    it("emits no eval warnings when neither explicit events nor promptCompletions exist", () => {
+      resetClock();
+      const rec = extractEvalRecord([ev("agentStart", { entryNode: "main" })], "test:none");
+
+      expect(rec.evalInputs).toEqual([]);
+      expect(rec.evalOutputs).toEqual([]);
+      expect(rec.warnings).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/eval(Input|Output)\(\)/)]),
+      );
+    });
+
+    it("mixes explicit output with heuristic input", () => {
+      resetClock();
+      const events: EventEnvelope[] = [
+        ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+        ev(
+          "promptCompletion",
+          {
+            threadId: "0",
+            model: "gpt-5",
+            messages: [{ role: "user", content: "heuristic input" }],
+            completion: { output: "raw llm output" },
+          },
+          "span-llm",
+        ),
+        ev("evalOutputRecorded", { threadId: "0", value: "real output" }),
+      ];
+      const rec = extractEvalRecord(events, "test:mixed");
+
+      expect(rec.evalInputs).toEqual([
+        { value: "heuristic input", threadId: "0", tMs: 100 },
+      ]);
+      expect(rec.evalOutputs).toEqual([
+        { value: "real output", threadId: "0", tMs: 200 },
+      ]);
+      expect(rec.warnings).toEqual([
+        expect.stringContaining("Call evalInput(prompt)"),
+      ]);
+    });
+
+    it("truncates oversized explicit values without mutating smaller entries", () => {
+      resetClock();
+      const huge = "x".repeat(100_100);
+      const events: EventEnvelope[] = [
+        ev("evalInputRecorded", { threadId: "0", value: huge }),
+        ev("evalInputRecorded", { threadId: "0", value: "small" }),
+        ev("evalOutputRecorded", { threadId: "0", value: "ok" }),
+      ];
+      const rec = extractEvalRecord(events, "test:truncate");
+
+      expect(rec.evalInputs[0].truncated).toBe(true);
+      expect(typeof rec.evalInputs[0].value).toBe("string");
+      expect(String(rec.evalInputs[0].value)).toContain("[truncated");
+      expect(String(rec.evalInputs[0].value).length).toBeLessThan(huge.length);
+      expect(rec.evalInputs[1]).toEqual({
+        value: "small",
+        threadId: "0",
+        tMs: 100,
+      });
+    });
+
+    it("truncates oversized strings as readable string content", () => {
+      resetClock();
+      const huge = "actual text ".repeat(10_000);
+      const rec = extractEvalRecord(
+        [ev("evalOutputRecorded", { threadId: "0", value: huge })],
+        "test:truncate-string",
+      );
+
+      expect(rec.evalOutputs[0].truncated).toBe(true);
+      expect(String(rec.evalOutputs[0].value).startsWith("actual text ")).toBe(true);
+      expect(String(rec.evalOutputs[0].value).startsWith('"actual text')).toBe(false);
+    });
+
+    it("caps truncated unicode values by UTF-8 bytes", () => {
+      resetClock();
+      const huge = "🙂".repeat(40_000);
+      const rec = extractEvalRecord(
+        [ev("evalOutputRecorded", { threadId: "0", value: huge })],
+        "test:truncate-unicode",
+      );
+
+      const truncated = String(rec.evalOutputs[0].value);
+      expect(rec.evalOutputs[0].truncated).toBe(true);
+      expect(Buffer.byteLength(JSON.stringify(truncated), "utf8")).toBeLessThanOrEqual(
+        100_000,
+      );
+    });
+
+    it("preserves subagent explicit evalOutputRecorded firings", () => {
+      resetClock();
+      const events: EventEnvelope[] = [
+        ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+        ev("threadCreated", {
+          threadId: "1",
+          threadType: "subthread",
+          parentThreadId: "0",
+          label: "worker",
+        }),
+        ev("evalOutputRecorded", { threadId: "1", value: "subagent output" }),
+      ];
+      const rec = extractEvalRecord(events, "test:subagent-explicit");
+
+      expect(rec.evalOutputs).toEqual([
+        { value: "subagent output", threadId: "1", tMs: 200 },
+      ]);
     });
   });
 });

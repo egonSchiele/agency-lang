@@ -1,0 +1,72 @@
+import {
+  ScopedRuleFields
+ } from "std::policy"
+
+export static const agentNames = ["code", "research"]
+export static const POLICY_FILE = "policy.json"
+export static const HISTORY_FILE = "history"
+export static const POLICY_DIR = path.join(os.homedir(), ".agency-agent")
+export static const POLICY_PATH = path.join(POLICY_DIR, POLICY_FILE)
+export static const HISTORY_PATH = path.join(POLICY_DIR, HISTORY_FILE)
+
+// Per-kind config driving the "approve-always-here" option. For each
+// kind we list the data fields the scoped rule should pin, plus a
+// flag that turns a directory value into a brace-expanded glob so the
+// rule matches `dir` AND `dir/**`. Kinds not present in this map
+// don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
+export static const ALWAYS_FIELDS: ScopedRuleFields = {
+  "std::read": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::write": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::edit": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::ls": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::glob": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::grep": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::copy": [
+    {
+    field: "src",
+    matchSubpaths: true
+  },
+    {
+    field: "dest",
+    matchSubpaths: true
+  },
+  ],
+  "std::move": [
+    {
+    field: "src",
+    matchSubpaths: true
+  },
+    {
+    field: "dest",
+    matchSubpaths: true
+  },
+  ],
+  "std::exec": [
+    {
+    field: "command",
+    matchSubpaths: false
+  },
+    {
+    field: "subcommand",
+    matchSubpaths: false
+  },
+  ]
+}

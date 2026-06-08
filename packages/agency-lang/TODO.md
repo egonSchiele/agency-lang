@@ -178,4 +178,41 @@ DOesn't work:
 const indent = " ".repeat(amount)
 ```
 
-`;` in function params should give a better parser error
+^ intentional, document.
+
+----
+
+Figure out how you want to set up the agency handler so that if user chooses "always approve", you write that to the policy file. Right now, a write wouldn't be allowed inside the handler, as the write function can throw an interrupt.
+Two options:
+- create specific functions to read and write to the policy file that don't throw interrupts, or
+- create a new std::unsafe module in the agency standard library that exposes a function that takes a block, and automatically typecheck-ignores all the interrupts inside that block. Then that could be used with the handler somehow
+
+----
+
+allow comments inside arrays and objects too
+
+undefined var typecheck not triggering (`handoff` func in research agent not imported)
+
+---
+
+If multiple tool calls in parallel, throw an interrupt, they mess up the display because they are all printing interleaved output to the terminal. I think I need a mutex system for something like this.
+
+---
+
+sort imports alphabetically and group them by agency imports, std imports, and other imports.
+
+---
+
+clean up imports in lib/templates/backends/typescriptGenerator/imports.mustache, agency scripts shouldn't be able to access built-in node modules like path/os without explicitly importing them.
+
+---
+
+type checker can't handle pattern match + boolean operators:
+
+```
+// result pattern binder in pure-boolean `is` context has nowhere to bind;
+// use `if (x is success(...))` to introduce variablesagency
+if (a is success(aVal) && b is success(bVal)) {
+  print(aVal, bVal)
+}
+```

@@ -350,14 +350,14 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
         }
         switch (next) {
           case "\\": value += "\\"; break;
-          case '"':  value += '"';  break;
-          case "'":  value += "'";  break;
-          case "`":  value += "`";  break;
-          case "n":  value += "\n"; break;
-          case "t":  value += "\t"; break;
-          case "r":  value += "\r"; break;
-          case "0":  value += "\0"; break;
-          default:   value += "\\" + next; break;
+          case '"': value += '"'; break;
+          case "'": value += "'"; break;
+          case "`": value += "`"; break;
+          case "n": value += "\n"; break;
+          case "t": value += "\t"; break;
+          case "r": value += "\r"; break;
+          case "0": value += "\0"; break;
+          default: value += "\\" + next; break;
         }
         i += 2;
         continue;
@@ -1103,9 +1103,9 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
 type ObjectBodyEntry =
   | { kind: "prop"; prop: ObjectProperty }
   | {
-      kind: "trivia";
-      node: AgencyComment | AgencyMultiLineComment | NewLine;
-    };
+    kind: "trivia";
+    node: AgencyComment | AgencyMultiLineComment | NewLine;
+  };
 
 const objectMemberWithDelimiter: Parser<ObjectBodyEntry> = (input: string) => {
   const parser = seqC(
@@ -3756,32 +3756,36 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
     optionalSpaces,
     char("("),
     optionalSpaces,
-    optional(or(str("let"), str("const"))),
-    optionalSpaces,
-    capture(
-      or(
-        lazy(() => arrayBindingPatternParser),
-        lazy(() => objectBindingPatternParser),
-        many1WithJoin(varNameChar),
-      ),
-      "itemVar",
-    ),
-    optional(
-      captureCaptures(
-        seqC(
-          optionalSpaces,
-          char(","),
-          optionalSpaces,
-          capture(many1WithJoin(varNameChar), "indexVar"),
+    captureCaptures(
+      parseError(
+        "expected `(` to open for loop condition",
+        optional(or(str("let"), str("const"))),
+        optionalSpaces,
+        capture(
+          or(
+            lazy(() => arrayBindingPatternParser),
+            lazy(() => objectBindingPatternParser),
+            many1WithJoin(varNameChar),
+          ),
+          "itemVar",
         ),
-      ),
-    ),
-    optionalSpaces,
-    or(str("in"), str("of")),
-    spaces,
-    capture(exprParser, "iterable"),
-    optionalSpaces,
-    char(")"),
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpaces,
+              char(","),
+              optionalSpaces,
+              capture(many1WithJoin(varNameChar), "indexVar"),
+            ),
+          ),
+        ),
+        optionalSpaces,
+        or(str("in"), str("of")),
+        spaces,
+        capture(exprParser, "iterable"),
+        optionalSpaces,
+        char(")"),
+      )),
     optionalSpaces,
     captureCaptures(
       parseError(

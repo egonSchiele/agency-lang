@@ -1,10 +1,28 @@
 import { highlight } from "std::syntax"
-
+/*
+black: "\x1b[30m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  brightBlack: "\x1b[90m",
+  brightRed: "\x1b[91m",
+  brightGreen: "\x1b[92m",
+  brightYellow: "\x1b[93m",
+  brightBlue: "\x1b[94m",
+  brightMagenta: "\x1b[95m",
+  brightCyan: "\x1b[96m",
+  brightWhite: "\x1b[97m",
+ */
 node main() {
-  const file = read("example.md") with approve
-  if (file is success(data)) {
-    print(highlight(data, "markdown"))
-  } else {
-    print("Failed to read file: ${file.error}")
-  }
+  let x = 10;
+let result = if (x > 5) {
+    "Greater than 5"
+} else {
+    "5 or less"
+}
+print(result);
 }

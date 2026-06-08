@@ -19,6 +19,8 @@ export const colors = {
   brightMagenta: "\x1b[95m",
   brightCyan: "\x1b[96m",
   brightWhite: "\x1b[97m",
+  darkBlack: "\x1b[38;5;232m"
+
 } as const;
 
 // Background color codes

@@ -573,7 +573,7 @@ def prettyPrintInterruptData(data: any): string {
   if (typeof data == "object") {
     const inventory = table() as t {
       for (key in data) {
-        t.row(text(key, bold: true), text(String(data[key])))
+        t.row(text(key, bold: true), text(prettyPrintInterruptData(data[key])))
       }
     }
     return render(inventory)

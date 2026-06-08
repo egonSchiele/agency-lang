@@ -47,6 +47,7 @@ export safe def print(...messages) {
   A tool for printing a message to the console.
   """
   _print(...messages)
+  return "Message printed."
 }
 
 export safe def printJSON(obj: any, highlight: boolean = false) {
@@ -58,6 +59,7 @@ export safe def printJSON(obj: any, highlight: boolean = false) {
   } else {
     _print(JSON.stringify(obj, null, 2))
   }
+  return "JSON printed."
 }
 
 export safe def parseJSON(text: string): any {

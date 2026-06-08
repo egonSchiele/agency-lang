@@ -6,6 +6,8 @@
 // payloads — older statelog files may use slightly different shapes
 // for tool calls, content, etc.
 
+import { color } from "@/utils/termcolors.js";
+
 export type ConvoMessage = {
   role?: string;
   content?: unknown;
@@ -57,9 +59,9 @@ function formatMessage(msg: ConvoMessage): string[] {
 function formatRole(role: string, msg: ConvoMessage): string {
   if (role === "tool") {
     const name = msg.name ?? "tool";
-    return `[tool: ${name}]`;
+    return color.green(`[tool: ${name}]`);
   }
-  return `[${role}]`;
+  return color.green(`[${role}]`);
 }
 
 // Content can be a string, null, or (for some providers) a structured

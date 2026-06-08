@@ -4,6 +4,7 @@ import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
 import { box, render } from "std::layout"
+import { setMemoryId } from "std::memory"
 import {
   ScopedRuleFields,
   cliPolicyHandler,
@@ -14,18 +15,26 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost, getTokens } from "std::thread"
+import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
-import { codeSysPrompt, codeTools } from "./code.agency"
 import { figs, title } from "./images/images.agency"
+import { POLICY_PATH, HISTORY_PATH, ALWAYS_FIELDS } from "./lib/config.agency"
 import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { researchSysPrompt, researchTools } from "./research.agency"
+import { codeSysPrompt, codeTools, codeAgent } from "./subagents/code.agency"
+import { explorerAgent } from "./subagents/explorer.agency"
 import { oneShotAgent } from "./subagents/oneShot.agency"
+import { oracleAgent } from "./subagents/oracle.agency"
+import {
+  researchSysPrompt,
+  researchTools,
+  researchAgent,
+ } from "./subagents/research.agency"
+import { reviewAgent } from "./subagents/review.agency"
 
 
 // UI mode select — one-line swap between the alt-screen TUI and the
@@ -96,89 +105,44 @@ callback("onToolCallEnd") as data {
   }
 }
 
-// On-disk policy at `$HOME/.agency-agent/policy.json`. We duplicate the
-// home-dir computation here instead of importing `AGENCY_AGENT_DIR` from
-// `shared.agency` because Agency doesn't guarantee imported static-const
-// init runs before the importer reads it (upstream #232).
-const POLICY_FILE = "policy.json"
-const HISTORY_FILE = "history"
-
-def policyDir(): string {
-  const home = env("HOME")
-  if (home == null) {
-    return "./.agency-agent"
+callback("onLLMCallStart") as data {
+  if (AGENT_DEBUG || VERBOSE) {
+    pushMessage(color.green.dim("💬 [${data.model}] ${data.prompt}"))
   }
-  return "${home}/.agency-agent"
 }
 
-def policyPath(): string {
-  return "${policyDir()}/${POLICY_FILE}"
+callback("onLLMCallEnd") as data {
+  if (AGENT_DEBUG || VERBOSE) {
+    pushMessage(
+      color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
+    )
+  }
 }
 
-def historyPath(): string {
-  return "${policyDir()}/${HISTORY_FILE}"
+type ToolCallData = {
+  name: string;
+  arguments: any
 }
 
-// Per-kind config driving the "approve-always-here" option. For each
-// kind we list the data fields the scoped rule should pin, plus a
-// flag that turns a directory value into a brace-expanded glob so the
-// rule matches `dir` AND `dir/**`. Kinds not present in this map
-// don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
-const ALWAYS_FIELDS: ScopedRuleFields = {
-  "std::read": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::write": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::edit": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::ls": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::glob": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::grep": [{
-    field: "dir",
-    matchSubpaths: true
-  }],
-  "std::copy": [
-    {
-    field: "src",
-    matchSubpaths: true
-  },
-    {
-    field: "dest",
-    matchSubpaths: true
-  },
-  ],
-  "std::move": [
-    {
-    field: "src",
-    matchSubpaths: true
-  },
-    {
-    field: "dest",
-    matchSubpaths: true
-  },
-  ],
-  "std::exec": [
-    {
-    field: "command",
-    matchSubpaths: false
-  },
-    {
-    field: "subcommand",
-    matchSubpaths: false
-  },
-  ]
+type LLMResponse = {
+  output: string | null;
+  toolCalls: ToolCallData[];
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
+  cost: { inputCost: number; outputCost: number; cachedInputCost: number; totalCost: number; currency: string };
+  model: string
+}
+
+def renderLLMCallResponse(data: LLMResponse): string {
+  let response = []
+  if (data.output != "" && data.output != null && data.output != undefined) {
+    response.push(data.output)
+  }
+  if (data.toolCalls && data.toolCalls.length > 0) {
+    for (toolCall in data.toolCalls) {
+      response.push(`${toolCall.name}(${formatArgs(toolCall.arguments)})`)
+    }
+  }
+  return response.join("\n")
 }
 
 def loadAgentsMd(dir: string): string {
@@ -267,19 +231,208 @@ def _runTurn(msg: string): boolean {
   // Expand `/foo args` to the rendered command body. Unknown `/foo`
   // inputs fall through unchanged — matches Claude Code.
   const prompt = expandSlash(msg, projectCommands)
+  const reply = mainAgent(prompt)
+  if (reply != "" && reply != null && reply != undefined) {
+    pushMessage(highlight("${reply}\n", language: "markdown"))
+  } else {
+    pushMessage(color.red("No reply generated."))
+  }
+  return true
+}
+
+let first = true
+static const mainAgentSystemPrompt = """
+You are the top-level coordinator of an Agency-language assistant. You
+receive every user message and decide how to respond.
+
+You have five subagent tools, each running in its own isolated
+context:
+
+- `codeAgent(userMsg)` — anything that touches code or the filesystem:
+  reading, writing, editing, typechecking, running shell commands,
+  and answering Agency syntax / CLI questions. Use this for any task
+  that involves inspecting or modifying source code.
+- `researchAgent(userMsg)` — web search, URL fetches, Wikipedia,
+  external API lookups, summarizing external content.
+- `reviewAgent(userMsg)` — reviews Agency code for syntax and type
+  errors. Call this after `codeAgent` produces non-trivial new or
+  modified Agency code, passing the code to be reviewed.
+- `oracleAgent(userMsg)` — a read-only senior reviewer on a stronger
+  reasoning model. Read the **Oracle** section below — you are
+  expected to use this tool **frequently**.
+- `explorerAgent(userMsg)` — a read-only researcher that produces
+  broad, synthesizing answers about the codebase or bundled docs.
+  Read the **Explorer** section below.
+
+**Answer directly (no tool call) when** the message is conversational,
+a clarifying question, or something you can answer from context alone.
+
+**Delegate when** the message clearly needs one of the subagents'
+capabilities. Pick one based on what the message actually needs —
+don't pre-emptively call multiple subagents.
+
+## Picking between oracle, explorer, and code agent
+
+These three overlap on "reads the codebase," but they're for
+different jobs. Pick by **the shape of the answer the user wants**:
+
+- **oracle** → sharp verdict on a specific plan, diff, or bug.
+  Output: short, decisive ("this plan won't work because X").
+- **explorer** → broad synthesis from reading many files.
+  Output: structured overview ("Agency's five main features
+  are..."). Use for "summarize", "tour", "what are the main",
+  "how does X work across...".
+- **codeAgent** → targeted action: edit, run, typecheck, or
+  answer a focused Agency-syntax question. Output: the edit
+  itself, or a concise factual reply.
+
+Default: if the user asks a broad/synthesizing question,
+`explorerAgent` beats `codeAgent` every time. The code agent is
+optimized for terse action and will under-read on broad asks.
+
+Subagents return summary text. Surface that result to the user (in
+your own words if you're combining multiple results), formatted as
+Markdown.
+
+## Oracle
+
+The oracle is the most powerful tool you have. Use it **FREQUENTLY**.
+It is a read-only senior reviewer running on a stronger reasoning
+model than you. It can read the codebase and the Agency docs but
+cannot write, edit, or run anything. Its job is to **think hard so
+you don't have to guess**.
+
+Call the oracle:
+
+- **Before** dispatching `codeAgent` for any non-trivial task — ask
+  the oracle to sanity-check the plan, find existing code that
+  already solves the problem, or suggest a simpler approach.
+- **After** `codeAgent` produces a non-trivial diff — ask the oracle
+  to review the work for correctness, missed edge cases, and
+  better alternatives.
+- When `codeAgent` reports it's stuck on a bug after one or two
+  attempts — ask the oracle what's actually going on.
+- When the user proposes a plan or approach — ask the oracle
+  whether the plan is sound, **before** you act on it. If the
+  oracle finds a flaw, surface that to the user *before* taking
+  any action.
+- Whenever you're tempted to guess about the codebase ("I think
+  there's probably already a helper for X") — ask the oracle to
+  look.
+
+**Tell the user when you're consulting the oracle.** Say something
+like "Let me ask the oracle to review this plan before we start"
+or "I'll have the oracle look for an existing implementation." The
+visibility is half the value — the user benefits from knowing a
+second opinion is being sought.
+
+Pass the oracle a self-contained question with full context. It
+does not see your conversation. Include the user's request, the
+plan or diff under review, relevant file paths, and the specific
+question you want answered.
+
+Default bias: when in doubt, **consult the oracle**. The cost of
+asking is small; the cost of executing a flawed plan is large.
+
+## Explorer
+
+The explorer is your go-to for **broad, synthesizing questions**
+about the codebase or the bundled Agency docs. It is read-only and
+runs on a stronger reasoning model with extended thinking. Its job
+is **coverage** — it reads widely and returns a structured synthesis.
+
+Call the explorer when the user asks:
+
+- "Summarize the Agency docs" / "What are the main features?"
+- "Give me a tour of `lib/X/`" / "What's in this module?"
+- "How does X work across the codebase?"
+- "Walk me through the compilation pipeline"
+- Anything where a good answer requires reading 5+ files and
+  organizing the findings by theme.
+
+Do NOT use the explorer for:
+- Specific factual lookups ("what does function X return?") — use
+  `codeAgent`.
+- Plan critique or bug diagnosis — use `oracleAgent`.
+- External / web research — use `researchAgent`.
+
+**Tell the user when you're consulting the explorer.** "Let me have
+the explorer go through the docs and put together an overview." Like
+with the oracle, the visibility is part of the value — the user
+benefits from knowing breadth is being applied.
+
+Pass the explorer a self-contained question with explicit scope
+("all of `docs/site/guide/`", "the `lib/parsers/` module"). It does
+not see your conversation. Be clear about the level of detail
+expected.
+
+## Style
+
+Never start a response by calling the user's question or idea good,
+great, fascinating, profound, excellent, or perfect. Skip flattery
+and respond directly. Don't pad replies with "happy to help",
+"certainly", or trailing summaries the user can read in the diff.
+
+**Use ASCII diagrams when they clarify.** For control flow, state
+machines, pipelines, module relationships, or any "how do the parts
+fit together" answer, draw a small ASCII diagram in a fenced
+```text block. Boxes, arrows, and trees beat paragraphs for
+structural explanations:
+
+```text
+parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
+```
+
+Keep diagrams small. Skip them where prose or code is clearer —
+diagrams earn their space by showing **relationships** or **flow**.
+
+## Answer before action
+
+When the user asks a question, asks for an opinion, or asks how to
+plan or approach something, **answer the question first**. Don't
+jump straight into delegating to a subagent or making tool calls
+unless the user has clearly asked for an action ("do X", "fix Y",
+"build Z"). If the user is exploring or thinking out loud, think
+with them — don't sprint to implementation.
+"""
+
+static const mainAgentTools = [
+  researchAgent.partial(allowHandoff: false),
+  codeAgent.partial(allowHandoff: false),
+  reviewAgent.partial(allowHandoff: false),
+  oracleAgent.partial(allowHandoff: false),
+  explorerAgent.partial(allowHandoff: false),
+]
+
+def mainAgent(prompt: string): string {
+  thread(label: "main", summarize: true, session: "main") {
+    setMemoryId("main")
+    if (first) {
+      systemMessage(mainAgentSystemPrompt)
+      first = false
+    }
+    const result = llm(prompt, {
+      memory: true,
+      tools: mainAgentTools
+    })
+  }
+  return result
+}
+
+def routeAgent(prompt: string): string {
   const reply = route(
     {
     start: "code",
     agents: {
       code: {
-        systemPrompt: codeSysPrompt,
-        tools: codeTools,
-        memory: true
+        type: "agent",
+        name: "code",
+        agent: codeAgent
       },
       research: {
-        systemPrompt: researchSysPrompt,
-        tools: researchTools,
-        memory: true
+        type: "agent",
+        name: "research",
+        agent: researchAgent
       }
     },
     maxHops: 3,
@@ -287,8 +440,7 @@ def _runTurn(msg: string): boolean {
   },
     prompt,
   )
-  pushMessage(highlight("${reply}\n", language: "markdown"))
-  return true
+  return reply
 }
 
 def roundedCost(): string {
@@ -314,6 +466,7 @@ def printHeader() {
       r.column() as left {
         left.text("Welcome to the Agency Agent!", bold: true)
         left.text("Ask me to write code, look up docs, or just chat.")
+        left.text("All costs are estimates. Actual costs may be higher.", dim: true)
         left.hline()
         left.text("Getting Started", bold: true, fgColor: "cyan")
         left.text("/help for commands · /exit to quit", dim: true)
@@ -329,7 +482,7 @@ def printHeader() {
 
 def givePolicyChoice() {
   const title = "Welcome to the agency agent. Please pick a policy to start."
-  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${policyPath()} and the agent will use it automatically."
+  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${POLICY_PATH} and the agent will use it automatically."
   let items: ChoiceItem[] = [
     {
     key: "minimal",
@@ -416,24 +569,24 @@ node main() {
   const projectContext = loadAgentsMd(cwd()) with approve
   _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
 
-  const policy = parsePolicyFile(policyPath())
+  const policy = parsePolicyFile(POLICY_PATH)
   if (policy is failure(f)) {
     const { status, error } = f
     print(f, status, error)
     if (status == "doesnt-exist") {
-      print(color.yellow("No existing policy found at ${policyPath()}."))
+      print(color.yellow("No existing policy found at ${POLICY_PATH}."))
       const choice = givePolicyChoice()
-      setPolicy(policyPath(), choice)
+      setPolicy(POLICY_PATH, choice)
     } else {
       print(color.red("Failed to load policy: ${JSON.stringify(error)}"))
       process.exit(1)
     }
   } else {
-    setPolicy(policyPath(), policy.value)
+    setPolicy(POLICY_PATH, policy.value)
   }
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
-  const handler = cliPolicyHandler(file: policyPath(), fields: ALWAYS_FIELDS)
+  const handler = cliPolicyHandler(file: POLICY_PATH, fields: ALWAYS_FIELDS)
 
   // The `repl()` widget owns the runloop; every Enter dispatches into
   // `_runTurn` which calls `route()`. Interrupts raised inside
@@ -444,7 +597,7 @@ node main() {
       status: _buildStatus,
       onSubmit: _runTurn,
       prompt: "> ",
-      historyFile: historyPath(),
+      historyFile: HISTORY_PATH,
       historyMax: 1000,
       paletteCommands: mergedPalette(),
     )

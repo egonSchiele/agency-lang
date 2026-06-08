@@ -550,29 +550,28 @@ export class Runner {
             "they are mutually exclusive.",
         );
       }
+      // Bundle the brand-new-create-path metadata so create() /
+      // openSession() can apply it to the MessageThread AND forward
+      // it to the threadCreated statelog event in one shot. Resumes
+      // (continueId / existing session) bypass this — both are
+      // decided at first-create time, not on every re-entry.
+      const createMeta = {
+        label: opts.label ?? null,
+        hidden: opts.hidden === true,
+      };
       if (opts.continueId !== undefined) {
         const rawId = stripSlug(opts.continueId);
         threads.resumeExisting(rawId);
         tid = rawId;
         isResumption = true;
       } else if (opts.session !== undefined) {
-        const { id: openedId, existed } = threads.openSession(opts.session);
+        const { id: openedId, existed } = threads.openSession(opts.session, createMeta);
         tid = openedId;
         isResumption = existed;
+      } else if (method === "createSubthread") {
+        tid = threads.createSubthread(createMeta);
       } else {
-        tid = threads[method]();
-      }
-      // `hidden` and `label` are set only on the brand-new code paths
-      // (`create` / `createSubthread` / first-time `openSession`).
-      // For `resumeExisting` and existing sessions we leave whatever
-      // value is already on the MessageThread — both are decided at
-      // first-create time, not on every re-entry.
-      if (!isResumption) {
-        const created = threads.get(tid);
-        if (created) {
-          if (opts.hidden === true) created.hidden = true;
-          if (opts.label !== undefined) created.label = opts.label;
-        }
+        tid = threads.create(createMeta);
       }
       this.frame.locals[threadKey] = tid;
       this.frame.locals[resumptionKey] = isResumption;

@@ -307,6 +307,11 @@ export function colorFor(node: TreeNode): string | undefined {
     case "interruptThrown":
     case "interruptResolved":
       return "yellow";
+    case "toolCallStart":
+      // Dim — the matching `toolCall` end event will carry full
+      // duration/output and gets the louder default color. The start
+      // event mostly matters when there is no end (killed mid-call).
+      return "gray";
     case "agentStart":
     case "agentEnd":
       return "cyan";

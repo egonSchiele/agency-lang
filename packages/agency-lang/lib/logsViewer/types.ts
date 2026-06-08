@@ -1,21 +1,9 @@
-// Wire format produced by StatelogClient.post(). Mirrors the envelope
-// shape we read from the JSONL file; do NOT depend on the runtime
-// SpanContext type here — the viewer must compile and run from any
-// JSONL without the runtime loaded.
-export type EventEnvelope = {
-  format_version: number;
-  trace_id: string;
-  project_id: string;
-  span_id: string | null;
-  parent_span_id: string | null;
-  data: EventData;
-};
-
-export type EventData = {
-  type: string;
-  timestamp: string;
-  [key: string]: any;
-};
+// Wire types moved to lib/statelog/wireTypes.ts so the eval module
+// (a peer of this viewer, not a dependent) can import them without
+// pulling in viewer internals. Re-exported here to keep existing
+// imports from `logsViewer/types` working.
+import type { EventEnvelope, EventData } from "../statelog/wireTypes.js";
+export type { EventEnvelope, EventData };
 
 // One node in the visible tree. Spans (have children) and leaf events
 // (no children) share this shape — `nodeKind` discriminates.

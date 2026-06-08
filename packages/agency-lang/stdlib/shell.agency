@@ -113,13 +113,13 @@ type LsEntry = {
   size: number
 }
 
-export def ls(dir: string = ".", recursive: boolean = false, allowedPaths: string[] = []): Result {
+export def ls(
+  dir: string = ".",
+  recursive: boolean = false,
+  allowedPaths: string[] = [],
+): Result {
   """
   List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
-
-  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`grep`), and returned `path` values are relative to `dir` — so results compose with `read(path, dir)` directly.
-
-  Returns every entry under `dir` — large recursive listings can balloon. Narrow `dir`, set `recursive: false`, or use `glob` with a more specific pattern when you only need a subset.
 
   @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
@@ -178,10 +178,6 @@ export def glob(
   """
   Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
 
-  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`ls`/`grep`), and returned paths are relative to `dir` — so results compose with `read(path, dir)` directly.
-
-  Returns at most `maxResults` paths (default 500). If you suspect matches were truncated, narrow `dir` or tighten the glob.
-
   @param pattern - The glob pattern to match
   @param dir - The directory to search in (relative paths resolve against the module directory)
   @param maxResults - Maximum number of results to return
@@ -203,7 +199,11 @@ type StatInfo = {
   modifiedMs: number
 }
 
-export safe def stat(filename: string, dir: string = "", allowedPaths: string[] = []): StatInfo {
+export safe def stat(
+  filename: string,
+  dir: string = "",
+  allowedPaths: string[] = [],
+): StatInfo {
   """
   Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms. Set allowedPaths to restrict which paths may be stat-ed.
 
@@ -216,7 +216,11 @@ export safe def stat(filename: string, dir: string = "", allowedPaths: string[] 
   return _stat(filename, dir, allowedPaths)
 }
 
-export safe def exists(filename: string, dir: string = "", allowedPaths: string[] = []): boolean {
+export safe def exists(
+  filename: string,
+  dir: string = "",
+  allowedPaths: string[] = [],
+): boolean {
   """
   Return true if a file or directory exists at the given path. Set allowedPaths to restrict which paths may be probed; probing outside the allow-list raises an error rather than silently returning false.
 

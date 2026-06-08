@@ -2,7 +2,7 @@ import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { agencyStore, getRuntimeContext } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
@@ -175,6 +175,7 @@ async function _runPrompt({
     cost: completion.cost,
     finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
     stream,
+    threadId: __threads()?.activeId() ?? null,
   });
 
   if (toolCalls.length > 0) {
@@ -770,6 +771,23 @@ export async function runPrompt(args: {
           // on bailout / unexpected throw.
           try {
             const toolCallStartTime = performance.now();
+            // Emit toolCallStart inside the same toolExecution span as
+            // the (later) toolCall end event so consumers can pair the
+            // two by span_id. Wrap in b.step so resume-replay doesn't
+            // duplicate the event. Designed to leave a trace of every
+            // tool that began even when the run is killed before it
+            // completes (the matching toolCall event won't fire).
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.logStart`,
+              async () => {
+                ctx.statelogClient.toolCallStart({
+                  toolName: handler.name,
+                  args: namedArgs,
+                  model: JSON.stringify(clientConfig.model),
+                  threadId: __threads()?.activeId() ?? null,
+                });
+              },
+            );
             // Invoke step: returns the interrupts when the tool halts
             // with them so BranchRunner.step can collect. All other
             // outcomes (success, failure, reject, crash) update outer
@@ -840,6 +858,7 @@ export async function runPrompt(args: {
                   output: toolResult,
                   model: JSON.stringify(clientConfig.model),
                   timeTaken,
+                  threadId: __threads()?.activeId() ?? null,
                 });
               },
             );

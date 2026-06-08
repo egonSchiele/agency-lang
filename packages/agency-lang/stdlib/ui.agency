@@ -1114,6 +1114,19 @@ def indent(str: string): string {
   if (str == "" || str == null || str == undefined) {
     return ""
   }
+  if (typeof str != "string") {
+    // Defensive guard against non-string input; don't attempt to
+    // split/indent it. Coerce to a JSON string so the declared
+    // `string` return type is upheld and the rendered prompt still
+    // shows *something* useful instead of crashing the renderer.
+    print(
+      "Warning: indent() expected a string but got",
+      typeof str,
+      "- rendering without indentation",
+      JSON.stringify(str),
+    )
+    return JSON.stringify(str)
+  }
   const lines = str.split("\n")
   const res = map(lines, \line -> "    ${line}")
   return res.join("\n")

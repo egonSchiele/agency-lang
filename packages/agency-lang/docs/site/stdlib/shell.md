@@ -84,10 +84,6 @@ ls(dir: string, recursive: boolean, allowedPaths: string[]): Result
 
 List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
 
-  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`grep`), and returned `path` values are relative to `dir` — so results compose with `read(path, dir)` directly.
-
-  Returns every entry under `dir` — large recursive listings can balloon. Narrow `dir`, set `recursive: false`, or use `glob` with a more specific pattern when you only need a subset.
-
   @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
   @param allowedPaths - Only allow listing directories under these prefixes
@@ -148,10 +144,6 @@ glob(pattern: string, dir: string, maxResults: number, allowedPaths: string[]): 
 
 Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
 
-  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`ls`/`grep`), and returned paths are relative to `dir` — so results compose with `read(path, dir)` directly.
-
-  Returns at most `maxResults` paths (default 500). If you suspect matches were truncated, narrow `dir` or tighten the glob.
-
   @param pattern - The glob pattern to match
   @param dir - The directory to search in (relative paths resolve against the module directory)
   @param maxResults - Maximum number of results to return
@@ -196,7 +188,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L206))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L202))
 
 ### exists
 
@@ -240,4 +232,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L236))

@@ -175,22 +175,33 @@ async function runHandlerChain(
       } finally {
         ctx.exitToolCall();
       }
+      // Pre-bind the interrupt summary once so all handlerDecision /
+      // interruptResolved events from this dispatch carry the same
+      // {kind, message, data} payload — lets log readers see *what*
+      // is being approved/rejected without needing a separate
+      // interruptThrown event (which doesn't fire for synchronously-
+      // resolved interrupts like `with approve`).
+      const interruptSummary = {
+        kind: interruptObj.kind,
+        message: interruptObj.message,
+        data: interruptObj.data,
+      };
       if (result === undefined) {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none" });
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none", interrupt: interruptSummary });
         continue;
       }
       if (result.type === "reject") {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value });
-        ctx.statelogClient.interruptResolved({ interruptId, outcome: "rejected", resolvedBy: "handler" });
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value, interrupt: interruptSummary });
+        ctx.statelogClient.interruptResolved({ interruptId, outcome: "rejected", resolvedBy: "handler", interrupt: interruptSummary });
         return { kind: "rejected", value: result.value };
       }
       if (result.type === "propagate") {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "propagate" });
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "propagate", interrupt: interruptSummary });
         hasPropagation = true;
         continue;
       }
       if (result.type === "approve") {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value });
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value, interrupt: interruptSummary });
         hasApproval = true;
         approvedValue = result.value;
         continue;
@@ -234,11 +245,13 @@ export async function interruptWithHandlers<T = any>(
       { kind, message, data, origin },
       { propagated: hasPropagation },
     );
+    const interruptSummary = { kind, message, data };
     if (parentDecision.type === "approve") {
       ctx.statelogClient.interruptResolved({
         interruptId,
         outcome: "approved",
         resolvedBy: "ipc",
+        interrupt: interruptSummary,
       });
       return { type: "approve", value: parentDecision.value ?? approvedValue };
     }
@@ -246,6 +259,7 @@ export async function interruptWithHandlers<T = any>(
       interruptId,
       outcome: "rejected",
       resolvedBy: "ipc",
+      interrupt: interruptSummary,
     });
     return { type: "reject", value: parentDecision.value };
   }
@@ -269,6 +283,7 @@ export async function interruptWithHandlers<T = any>(
       interruptId,
       outcome: "approved",
       resolvedBy: "handler",
+      interrupt: { kind, message, data },
     });
     return { type: "approve", value: approvedValue };
   }

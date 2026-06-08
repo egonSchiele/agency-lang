@@ -49,11 +49,15 @@ export function summarize(evt: EventEnvelope): string {
       const tag = d.label
         ? ` "${d.label}"`
         : d.session
-        ? ` session="${d.session}"`
-        : "";
+          ? ` session="${d.session}"`
+          : "";
       const hiddenSuffix = d.hidden ? " hidden" : "";
       return `threadCreated ${d.threadType ?? "?"} #${shortId(d.threadId)}${tag}${hiddenSuffix}`;
     }
+    case "evalInputRecorded":
+      return `evalInputRecorded ${truncate(stringifyValue(d.value), 60)}`;
+    case "evalOutputRecorded":
+      return `evalOutputRecorded ${truncate(stringifyValue(d.value), 60)}`;
     case "agentStart":
       return `agentStart "${d.entryNode ?? "?"}"`;
     case "agentEnd":
@@ -129,6 +133,10 @@ function stripQuotes(s?: string): string {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
+}
+
+function stringifyValue(v: unknown): string {
+  return typeof v === "string" ? v : JSON.stringify(v ?? null) ?? "undefined";
 }
 
 /** Format the optional `{kind, message, data}` interrupt summary

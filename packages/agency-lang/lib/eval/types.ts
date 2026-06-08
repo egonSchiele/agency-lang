@@ -18,6 +18,8 @@
  * | promptCompletion.threadId            | ✗                     | ✓                         |
  * | toolCall.threadId                    | ✗                     | ✓                         |
  * | toolCallStart.threadId               | ✗                     | ✓                         |
+ * | evalInputRecorded                    | ✗                     | only if agent annotates   |
+ * | evalOutputRecorded                   | ✗                     | only if agent annotates   |
  *
  * Legacy traces parse without errors; extraction degrades by leaving
  * the missing fields null and emitting one warning during normalize.
@@ -27,7 +29,7 @@ export type EvalRecord = {
   traceId: string;
   /** Format version of the EvalRecord shape itself (NOT the statelog
    *  format_version). Bump when fields change incompatibly. */
-  recordVersion: 1;
+  recordVersion: 2;
   /** Statelog wire-format version, copied from the source envelope
    *  (`events[0].format_version`). Lets consumers reason about which
    *  optional fields they can expect (label, threadId, etc.). */
@@ -39,19 +41,22 @@ export type EvalRecord = {
    *  input is not supported. */
   source: string;
 
-  /** The user's prompt that drove this run — the user-role message
-   *  from the first chronologically-ordered `promptCompletion` on
-   *  the top-level thread. Hoisted to the top level because both
-   *  the LLM judge and any diff tool need it, and digging it out of
-   *  `events[*].messages` is awkward. Null if the trace has no
-   *  `promptCompletion` events. */
-  userMessage: string | null;
+  /** Values used as eval inputs. Explicit values recorded via
+   *  std::statelog.evalInput() are preferred; if absent, the
+   *  extractor may synthesize one fallback entry from the last
+   *  user-role message of the first promptCompletion on the top-level
+   *  thread (warning emitted in `warnings`). Empty only when neither
+   *  explicit events nor a heuristic source exists. */
+  evalInputs: EvalValue[];
 
-  /** The final assistant-facing reply the user saw — the
-   *  `completion` from the LAST `promptCompletion` on the top-level
-   *  thread. This is what `eval compare` shows to an LLM judge.
-   *  Null if no `promptCompletion` events were captured. */
-  finalResponse: string | null;
+  /** Values used as eval outputs. Explicit values recorded via
+   *  std::statelog.evalOutput() are preferred; if absent, the
+   *  extractor may synthesize one fallback entry from the last
+   *  promptCompletion's completion on the top-level thread (warning
+   *  emitted in `warnings`). Empty only when neither explicit events
+   *  nor a heuristic source exists. Consumers that want a single
+   *  answer usually consume the last element. */
+  evalOutputs: EvalValue[];
 
   /** Every thread observed in the trace. Each `threadCreated` event
    *  becomes one entry. Resumes (`threadResumed`) do NOT create new
@@ -116,30 +121,30 @@ export type NormalizedEventBase = {
 /** One step in the chronological tool-call / LLM-call sequence. */
 export type NormalizedEvent =
   | (NormalizedEventBase & {
-      kind: "llm";
-      model: string;
-      /** Tool names available to this LLM call. Useful for
-       *  fingerprinting an agent when thread labels are absent. */
-      tools: string[];
-      durationMs: number | null;
-      costUsd: number | null;
-      tokensIn: number | null;
-      tokensOut: number | null;
-    })
+    kind: "llm";
+    model: string;
+    /** Tool names available to this LLM call. Useful for
+     *  fingerprinting an agent when thread labels are absent. */
+    tools: string[];
+    durationMs: number | null;
+    costUsd: number | null;
+    tokensIn: number | null;
+    tokensOut: number | null;
+  })
   | (NormalizedEventBase & {
-      kind: "tool_start";
-      /** Sourced from `toolCallStart.data.toolName`. */
-      tool: string;
-      argsPreview: string;
-      model: string | null;
-    })
+    kind: "tool_start";
+    /** Sourced from `toolCallStart.data.toolName`. */
+    tool: string;
+    argsPreview: string;
+    model: string | null;
+  })
   | (NormalizedEventBase & {
-      kind: "tool_end";
-      /** Sourced from `toolCall.data.toolName`. */
-      tool: string;
-      outputPreview: string;
-      durationMs: number | null;
-    });
+    kind: "tool_end";
+    /** Sourced from `toolCall.data.toolName`. */
+    tool: string;
+    outputPreview: string;
+    durationMs: number | null;
+  });
 
 export type InterruptEntry = {
   interruptId: string;
@@ -190,4 +195,19 @@ export type Metrics = {
   /** Count of tool END events (`toolCall`) per tool name. Does NOT
    *  count incomplete `toolCallStart`s — those live in `incomplete`. */
   toolCounts: Record<string, number>;
+};
+
+/** One firing of `evalInput(...)` or `evalOutput(...)` from agent
+ *  code, plus enough provenance for consumers to filter by thread
+ *  (e.g. drop subagent firings) or correlate with the event timeline.
+ *  `tMs` is derived from the envelope timestamp at extract time, not
+ *  emitted on the wire. `value` is whatever the agent passed —
+ *  already JSON-round-tripped at the stdlib boundary, may be
+ *  truncated by the extractor if it exceeds STATELOG_EVAL_MAX_VALUE_BYTES
+ *  (in which case `truncated: true` is set; otherwise omitted). */
+export type EvalValue = {
+  value: unknown;
+  threadId: string | null;
+  tMs: number;
+  truncated?: true;
 };

@@ -1,4 +1,4 @@
-import { typecheck } from "std::agency"
+import { typecheck, parseAST } from "std::agency"
 import { map, filter, some } from "std::array"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
@@ -78,7 +78,9 @@ export def review(userMsg: string): Result<Feedback[]> {
     let feedback: Result<Feedback[]> = success([])
 
     for (codeSnippet in snippets) {
+      const parseResult = _parse(codeSnippet.code)
       const typecheckResult = _typecheck(codeSnippet.code)
+      feedback = mergeFeedback(feedback, parseResult)
       feedback = mergeFeedback(feedback, typecheckResult)
     }
     /*     if (!_first) {
@@ -136,5 +138,23 @@ def _typecheck(agencyCode: string): Result<Feedback[]> {
   }
   return failure(
     `Typecheck failed with the following errors:\n\n${JSON.stringify(result.error, null, 2)}`,
+  )
+}
+
+def _parse(agencyCode: string): Result<Feedback[]> {
+  const result = parseAST(agencyCode)
+  if (result is success(val)) {
+    return success(
+      [
+      {
+      error: false,
+      feedback: "Code is valid with no errors or warnings."
+    },
+    ],
+    )
+  }
+
+  return failure(
+    `Parse failed with the following errors:\n\n${JSON.stringify(result.error, null, 2)}`,
   )
 }

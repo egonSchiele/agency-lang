@@ -102,14 +102,21 @@ export type ThreadEntry = {
   createdAtMs: number;
 };
 
+/** Fields every normalized event carries, regardless of `kind`. Kept
+ *  as a single base type so we don't repeat them across each variant
+ *  and so consumers can write helpers that operate on the common
+ *  shape (e.g. `function timeOf(e: NormalizedEventBase) {...}`). */
+export type NormalizedEventBase = {
+  tMs: number;
+  threadId: string | null;
+  spanId: string | null;
+  parentSpanId: string | null;
+};
+
 /** One step in the chronological tool-call / LLM-call sequence. */
 export type NormalizedEvent =
-  | {
+  | (NormalizedEventBase & {
       kind: "llm";
-      tMs: number;
-      threadId: string | null;
-      spanId: string | null;
-      parentSpanId: string | null;
       model: string;
       /** Tool names available to this LLM call. Useful for
        *  fingerprinting an agent when thread labels are absent. */
@@ -118,29 +125,21 @@ export type NormalizedEvent =
       costUsd: number | null;
       tokensIn: number | null;
       tokensOut: number | null;
-    }
-  | {
+    })
+  | (NormalizedEventBase & {
       kind: "tool_start";
-      tMs: number;
-      threadId: string | null;
-      spanId: string | null;
-      parentSpanId: string | null;
       /** Sourced from `toolCallStart.data.toolName`. */
       tool: string;
       argsPreview: string;
       model: string | null;
-    }
-  | {
+    })
+  | (NormalizedEventBase & {
       kind: "tool_end";
-      tMs: number;
-      threadId: string | null;
-      spanId: string | null;
-      parentSpanId: string | null;
       /** Sourced from `toolCall.data.toolName`. */
       tool: string;
       outputPreview: string;
       durationMs: number | null;
-    };
+    });
 
 export type InterruptEntry = {
   interruptId: string;

@@ -19,7 +19,7 @@ Why a separate format? The raw statelog is a chronological event stream optimize
 
 ```bash
 agency eval extract /tmp/run.statelog.jsonl
-# Wrote eval record to /tmp/run.eval.json (<N> events, <M> threads, <K> incomplete)
+# Wrote eval record to /tmp/run.eval.json (42 events, 3 threads, 0 incomplete)
 ```
 
 By default the record lands next to the input as `<basename>.eval.json` (stripping `.statelog.jsonl` or `.jsonl`). Use `-o` to override.

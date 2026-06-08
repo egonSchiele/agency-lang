@@ -17,6 +17,7 @@ import type {
   InterruptEntry,
   Metrics,
   NormalizedEvent,
+  NormalizedEventBase,
   ThreadEntry,
 } from "./types.js";
 
@@ -106,14 +107,11 @@ function normalizeEvents(
   n: Normalized,
   opts: ExtractOptions,
 ): WithWarnings<NormalizedEvent[]> {
-  const previewChars = opts.previewChars ?? DEFAULT_PREVIEW_CHARS;
+  const previewChars = sanitizePreviewChars(opts.previewChars);
   const llms: NormalizedEvent[] = (n.byType.promptCompletion ?? []).map(
     (e) => ({
+      ...baseOf(e),
       kind: "llm" as const,
-      tMs: e.tMs,
-      threadId: e.threadId,
-      spanId: e.spanId,
-      parentSpanId: e.parentSpanId,
       model: modelOf(e.raw),
       tools: toolsOf(e.raw),
       durationMs: numberOrNull(e.raw.data.timeTaken),
@@ -123,27 +121,43 @@ function normalizeEvents(
     }),
   );
   const starts: NormalizedEvent[] = (n.byType.toolCallStart ?? []).map((e) => ({
+    ...baseOf(e),
     kind: "tool_start" as const,
-    tMs: e.tMs,
-    threadId: e.threadId,
-    spanId: e.spanId,
-    parentSpanId: e.parentSpanId,
     tool: toolNameOf(e.raw),
     argsPreview: preview(e.raw.data.args, previewChars),
-    model: stringOrNull(e.raw.data.model),
+    // Use the same accessor as `llm.model` so any quote-stripping or
+    // shape-normalization stays consistent across event kinds.
+    model: modelOrNull(e.raw),
   }));
   const ends: NormalizedEvent[] = (n.byType.toolCall ?? []).map((e) => ({
+    ...baseOf(e),
     kind: "tool_end" as const,
-    tMs: e.tMs,
-    threadId: e.threadId,
-    spanId: e.spanId,
-    parentSpanId: e.parentSpanId,
     tool: toolNameOf(e.raw),
     outputPreview: preview(e.raw.data.output, previewChars),
     durationMs: numberOrNull(e.raw.data.timeTaken),
   }));
   const merged = [...llms, ...starts, ...ends].sort((a, b) => a.tMs - b.tMs);
   return { result: merged, warnings: [] };
+}
+
+/** Project the four base fields every NormalizedEvent variant shares
+ *  out of a NormalizedEnvelope. One place, not three copies. */
+function baseOf(e: NormalizedEnvelope): NormalizedEventBase {
+  return {
+    tMs: e.tMs,
+    threadId: e.threadId,
+    spanId: e.spanId,
+    parentSpanId: e.parentSpanId,
+  };
+}
+
+/** Clamp `previewChars` to a finite, non-negative integer. Guards
+ *  against `NaN` from `parseInt("foo")` and negative numbers the CLI
+ *  might pass through. 0 is allowed (meaning "no truncation"). */
+function sanitizePreviewChars(v: number | undefined): number {
+  if (v === undefined) return DEFAULT_PREVIEW_CHARS;
+  if (!Number.isFinite(v) || v < 0) return DEFAULT_PREVIEW_CHARS;
+  return Math.floor(v);
 }
 
 function extractInterrupts(n: Normalized): WithWarnings<InterruptEntry[]> {
@@ -317,6 +331,10 @@ function numberOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
-function stringOrNull(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
+/** Model string via the wire accessor (so quote-stripping etc. stays
+ *  centralized), nulled out when empty so `tool_start.model` can be
+ *  `string | null` rather than `""`. */
+function modelOrNull(ev: EventEnvelope): string | null {
+  const m = modelOf(ev);
+  return m.length > 0 ? m : null;
 }

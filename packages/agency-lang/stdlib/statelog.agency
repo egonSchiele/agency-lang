@@ -1,0 +1,52 @@
+import { _evalInput, _evalOutput } from "agency-lang/stdlib-lib/statelog.js"
+
+export def evalInput(value: any) {
+  """
+  Record an eval input — a value that should be considered part of
+  the user-facing input to this agent. Captured in the statelog as
+  an `evalInputRecorded` event and surfaced by `agency eval extract`
+  on the `evalInputs[]` field of the produced record.
+
+  Call this once per discrete user input. May be called multiple
+  times in a single trace; all firings are collected in order. The
+  consuming eval / judge / task definition decides what to do with
+  multiple firings.
+
+  When no eval annotation exists in a trace, `eval extract` falls
+  back to a heuristic (first user-role message of the first LLM
+  call) and emits a warning. Annotating explicitly is preferred.
+
+  @param value - The value to record. Any JSON-serializable type is
+    accepted; stored as `unknown` in the eval record. Top-level
+    `undefined` records as `null`; nested functions, `undefined`,
+    and symbols follow JSON serialization rules; circular references
+    and `bigint` throw at the call site (with your stack), not later
+    inside the log writer.
+  """
+  _evalInput(value)
+}
+
+export def evalOutput(value: any) {
+  """
+  Record an eval output — a value that should be considered the
+  agent's user-facing response. Captured in the statelog as an
+  `evalOutputRecorded` event and surfaced by `agency eval extract`
+  on the `evalOutputs[]` field of the produced record.
+
+  Call this once per discrete user-facing response. May be called
+  multiple times in a single trace; all firings are collected in
+  order. The consuming eval / judge / task definition decides what
+  to do with multiple firings (e.g. a pairwise judge can use the
+  last firing).
+
+  When no eval annotation exists in a trace, `eval extract` falls
+  back to a heuristic (last LLM completion on the top-level thread)
+  and emits a warning. Annotating explicitly is preferred — the
+  heuristic does NOT account for post-LLM processing the agent
+  applies before showing a response to the user.
+
+  @param value - The value to record. Any JSON-serializable type is
+    accepted; same serialization rules as `evalInput`.
+  """
+  _evalOutput(value)
+}

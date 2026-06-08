@@ -36,22 +36,39 @@ The extractor output is deliberately **generic** — it knows nothing about spec
 
 The two semantic anchors the extractor does surface at the top level are:
 
-- `userMessage` — the prompt the user typed (the last user-role message of the first `promptCompletion` on the top-level thread).
-- `finalResponse` — the final reply the user saw (the `completion` of the last `promptCompletion` on the top-level thread).
+- `evalInputs` — chronological values recorded by `evalInput(value)`.
+- `evalOutputs` — chronological values recorded by `evalOutput(value)`.
 
-Both are hoisted because they're load-bearing for the planned `agency eval compare` command (the LLM judge sees these two strings side-by-side across two runs). Everything else — thread tree, per-event sequence, interrupts, errors, incomplete tool calls, aggregated metrics — lives in `events`, `threads`, `interrupts`, `errors`, `incomplete`, and `metrics`.
+Both are hoisted because they're load-bearing for eval consumers and judges. Everything else — thread tree, per-event sequence, interrupts, errors, incomplete tool calls, aggregated metrics — lives in `events`, `threads`, `interrupts`, `errors`, `incomplete`, and `metrics`.
+
+## How to annotate a run
+
+Import `std::statelog` and call `evalInput` / `evalOutput` where values cross the user-facing boundary:
+
+```ts
+import { evalInput, evalOutput } from "std::statelog"
+
+node main(prompt: string): string {
+  evalInput(prompt)
+  const reply = doWork(prompt)
+  evalOutput(reply)
+  return reply
+}
+```
+
+Without annotations, `extract` falls back to approximate trace-level heuristics: the last user-role message of the first top-level `promptCompletion` for `evalInputs`, and the last top-level `promptCompletion` completion for `evalOutputs`. Falling back is supported for backwards compatibility, but the inference is approximate. Annotate your agent for trustworthy evals.
 
 ## Record shape (overview)
 
 ```jsonc
 {
   "traceId": "...",
-  "recordVersion": 1,
+  "recordVersion": 2,
   "formatVersion": 1,
   "durationMs": 12345,
   "source": "/path/to/run.statelog.jsonl",
-  "userMessage": "what the user asked",
-  "finalResponse": "what the agent replied",
+  "evalInputs": [{ "value": "what the user asked", "threadId": "0", "tMs": 120 }],
+  "evalOutputs": [{ "value": "what the agent replied", "threadId": "0", "tMs": 420 }],
   "threads": [{ "threadId": "0", "label": "main", "parentThreadId": null, ... }],
   "events":  [{ "kind": "llm", "threadId": "0", "model": "gpt-5", ... }, ...],
   "interrupts": [...],
@@ -69,6 +86,19 @@ Every entry in `events` is one of three discriminated shapes:
 - `{ kind: "tool_end" }` — one per `toolCall`. Carries `outputPreview` and duration.
 
 All three carry `threadId`, `spanId`, `parentSpanId`, and `tMs` (milliseconds from the start of the run).
+
+Every entry in `evalInputs` and `evalOutputs` has this shape:
+
+```jsonc
+{ "value": unknown, "threadId": "0", "tMs": 420, "truncated": true }
+```
+
+- `value` is the JSON-serializable value passed to `evalInput` / `evalOutput`, or a heuristic fallback value when annotations are missing.
+- `threadId` identifies the active thread that recorded the value, or `null` when unavailable.
+- `tMs` is milliseconds from the trace start, derived from the statelog envelope timestamp.
+- `truncated` is present only when the serialized value exceeded `STATELOG_EVAL_MAX_VALUE_BYTES`. The default cap is 100KB; set that environment variable before running `agency eval extract` to override it. Oversized string values are kept as readable string prefixes; oversized non-string values are converted to JSON-preview strings.
+
+Consumers that need one response typically read `record.evalOutputs.at(-1)?.value`. A pairwise judge compares the last element of `evalOutputs`; without annotations, that value may be the last LLM completion rather than what the user actually saw.
 
 ## Behavioral-flag recipe
 
@@ -94,7 +124,7 @@ If a convention emerges (a set of rules every project wants), it can be promoted
 
 ## Downstream chain
 
-`userMessage` and `finalResponse` are hoisted to the top level specifically because the planned `agency eval compare <a> <b>` will feed them to an LLM judge for pairwise quality comparison across two runs. `threads[*].label` is what consumer behavioral queries grep on. These are the two seams that connect `extract` to its (future) sibling commands.
+`evalInputs` and `evalOutputs` are hoisted to the top level specifically because eval consumers and pairwise judges need the user-facing inputs and outputs without digging through raw `promptCompletion` events. `threads[*].label` is what consumer behavioral queries grep on. These are the two seams that connect `extract` to its sibling commands.
 
 ## Legacy traces
 

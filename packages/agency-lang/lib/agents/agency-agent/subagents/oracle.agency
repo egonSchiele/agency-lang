@@ -115,7 +115,7 @@ export def oracleAgent(userMsg: string, allowHandoff: boolean): string {
       userMsg,
       {
       tools: oracleTools,
-      model: "gpt-5.5-pro",
+      model: "gpt-5.5",
       provider: "openai-responses",
       reasoningEffort: "high",
       thinking: {

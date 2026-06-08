@@ -180,13 +180,24 @@ export class ThreadStore {
     return store;
   }
 
+  /** Optional metadata captured from `thread(...)` opts at creation
+   *  time. Both applied to the new MessageThread (so runtime behavior
+   *  respects them — `hidden`, `label`) AND forwarded to the
+   *  `threadCreated` statelog event (so log consumers can identify
+   *  which subagent each thread corresponds to without fingerprinting). */
   // Create a new empty thread, return its ID
-  create(): MessageThreadID {
+  create(meta?: { label?: string | null; session?: string | null; hidden?: boolean }): MessageThreadID {
     const id = (this.counter++).toString();
-    this.threads[id] = new MessageThread();
+    const thread = new MessageThread();
+    if (meta?.label !== undefined && meta.label !== null) thread.label = meta.label;
+    if (meta?.hidden === true) thread.hidden = true;
+    this.threads[id] = thread;
     this.statelogClient?.threadCreated({
       threadId: id,
       threadType: "thread",
+      label: meta?.label ?? null,
+      session: meta?.session ?? null,
+      hidden: meta?.hidden ?? false,
     });
     return id;
   }
@@ -197,8 +208,8 @@ export class ThreadStore {
   }
 
   // Create a subthread that inherits from the current active thread
-  createSubthread(): MessageThreadID {
-    return this.createSubthreadOf(this.activeId()!);
+  createSubthread(meta?: { label?: string | null; hidden?: boolean }): MessageThreadID {
+    return this.createSubthreadOf(this.activeId()!, meta);
   }
 
   /** Registry-only subthread creation: build a subthread that
@@ -207,14 +218,23 @@ export class ThreadStore {
    *  callers decide where (if anywhere) to push the new id. Used by
    *  `createSubthread()` (which pushes onto `this.activeStack`) and
    *  `forkBranchView()` (which pushes onto the view's activeStack). */
-  createSubthreadOf(parentRegistryId: MessageThreadID): MessageThreadID {
+  createSubthreadOf(
+    parentRegistryId: MessageThreadID,
+    meta?: { label?: string | null; hidden?: boolean },
+  ): MessageThreadID {
     const id = (this.registry.counter++).toString();
     const parentThread = this.registry.threads[parentRegistryId];
-    this.registry.threads[id] = parentThread.newSubthreadChild(parentRegistryId);
+    const subthread = parentThread.newSubthreadChild(parentRegistryId);
+    if (meta?.label !== undefined && meta.label !== null) subthread.label = meta.label;
+    if (meta?.hidden === true) subthread.hidden = true;
+    this.registry.threads[id] = subthread;
     this.registry.statelogClient?.threadCreated({
       threadId: id,
       threadType: "subthread",
       parentThreadId: parentRegistryId,
+      label: meta?.label ?? null,
+      session: null,
+      hidden: meta?.hidden ?? false,
     });
     return id;
   }
@@ -298,13 +318,19 @@ export class ThreadStore {
    *  creates a top-level thread (never a subthread); later entries
    *  resume via `resumeExisting` (which already rejects subthreads —
    *  sessions can only map to top-level threads). */
-  openSession(name: string): { id: MessageThreadID; existed: boolean } {
+  openSession(
+    name: string,
+    meta?: { label?: string | null; hidden?: boolean },
+  ): { id: MessageThreadID; existed: boolean } {
     const existing = this.sessions[name];
     if (existing !== undefined) {
       this.resumeExisting(existing);
       return { id: existing, existed: true };
     }
-    const id = this.create();
+    // First-create of a named session: forward `name` to threadCreated
+    // as `session` so log consumers can see it without correlating
+    // against the sessions map.
+    const id = this.create({ ...meta, session: name });
     this.sessions[name] = id;
     this.activeStack.push(id);
     return { id, existed: false };

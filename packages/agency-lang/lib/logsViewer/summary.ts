@@ -12,16 +12,24 @@ export function summarize(evt: EventEnvelope): string {
   switch (d.type) {
     case "promptCompletion":
       return `promptCompletion ${stripQuotes(d.model)} (${fmtDuration(d.timeTaken)})`;
+    case "toolCallStart":
+      return `toolCallStart "${d.toolName}"`;
     case "toolCall":
       return `toolCall "${d.toolName}" (${fmtDuration(d.timeTaken)})`;
     case "error":
       return `error: ${d.errorType ?? "Error"} "${truncate(d.message ?? "", 60)}"`;
-    case "interruptThrown":
-      return `interruptThrown "${(d.interruptId ?? "").slice(0, 8)}"`;
-    case "interruptResolved":
-      return `interruptResolved ${d.outcome ?? "?"} by ${d.resolvedBy ?? "?"}`;
-    case "handlerDecision":
-      return `handlerDecision #${d.handlerIndex ?? "?"}: ${d.decision ?? "?"}`;
+    case "interruptThrown": {
+      const intrSuffix = formatInterruptSuffix(d.interruptData);
+      return `interruptThrown "${(d.interruptId ?? "").slice(0, 8)}"${intrSuffix}`;
+    }
+    case "interruptResolved": {
+      const intrSuffix = formatInterruptSummary(d.interrupt);
+      return `interruptResolved ${d.outcome ?? "?"} by ${d.resolvedBy ?? "?"}${intrSuffix}`;
+    }
+    case "handlerDecision": {
+      const intrSuffix = formatInterruptSummary(d.interrupt);
+      return `handlerDecision #${d.handlerIndex ?? "?"}: ${d.decision ?? "?"}${intrSuffix}`;
+    }
     case "checkpointCreated":
       return `checkpointCreated #${shortId(d.checkpointId)} (${d.reason ?? "?"})`;
     case "checkpointRestored":
@@ -32,8 +40,20 @@ export function summarize(evt: EventEnvelope): string {
       return `forkBranchEnd #${d.branchIndex} (${d.outcome}, ${fmtDuration(d.timeTaken)})`;
     case "forkEnd":
       return `forkEnd ${d.mode} (${fmtDuration(d.timeTaken)})`;
-    case "threadCreated":
-      return `threadCreated ${d.threadType ?? "?"} #${shortId(d.threadId)}`;
+    case "threadCreated": {
+      // Prefer label > session > nothing as the most informative
+      // single-line tag: label is what the agent author wrote in
+      // `thread(label: "...")`; session is the routing key for
+      // `thread(session: "...")`. Either lets the reader see which
+      // subagent this thread corresponds to at a glance.
+      const tag = d.label
+        ? ` "${d.label}"`
+        : d.session
+        ? ` session="${d.session}"`
+        : "";
+      const hiddenSuffix = d.hidden ? " hidden" : "";
+      return `threadCreated ${d.threadType ?? "?"} #${shortId(d.threadId)}${tag}${hiddenSuffix}`;
+    }
     case "agentStart":
       return `agentStart "${d.entryNode ?? "?"}"`;
     case "agentEnd":
@@ -109,6 +129,35 @@ function stripQuotes(s?: string): string {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
+}
+
+/** Format the optional `{kind, message, data}` interrupt summary
+ *  attached to `handlerDecision` / `interruptResolved` events. The
+ *  runtime started attaching this so log readers can see *what* was
+ *  being approved/rejected without correlating against a separate
+ *  `interruptThrown` event. Returns "" when no summary is present
+ *  (preserves prior format for older traces). */
+function formatInterruptSummary(intr: any): string {
+  if (!intr || typeof intr !== "object") return "";
+  const kind = intr.kind ? String(intr.kind) : null;
+  const msg = intr.message ? truncate(String(intr.message), 50) : null;
+  if (kind && msg) return ` — ${kind}: "${msg}"`;
+  if (kind) return ` — ${kind}`;
+  if (msg) return ` — "${msg}"`;
+  return "";
+}
+
+/** Format the older `interruptData` field on `interruptThrown` events
+ *  (which already shipped before this round of changes). Best-effort
+ *  one-line preview. */
+function formatInterruptSuffix(data: any): string {
+  if (data === undefined || data === null) return "";
+  try {
+    const s = typeof data === "string" ? data : JSON.stringify(data);
+    return ` ${truncate(s, 50)}`;
+  } catch {
+    return "";
+  }
 }
 
 // ---------------------------------------------------------------------------

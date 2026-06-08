@@ -406,6 +406,7 @@ export class StatelogClient {
     cost,
     finishReason,
     stream,
+    threadId,
   }: {
     messages: any[];
     completion: any;
@@ -421,6 +422,12 @@ export class StatelogClient {
     cost?: TokenCost;
     finishReason?: string;
     stream?: boolean;
+    /** Registry id of the thread that issued this LLM call. Stamped
+     *  here so downstream eval / log tools can attribute the call to
+     *  a thread without walking the span tree (which doesn't link
+     *  promptCompletion back to threadCreated). Null when the caller
+     *  has no active thread (rare — only at the very start of a run). */
+    threadId?: string | null;
   }): Promise<void> {
     await this.post({
       type: "promptCompletion",
@@ -434,6 +441,7 @@ export class StatelogClient {
       cost,
       finishReason,
       stream,
+      threadId: threadId ?? null,
     });
   }
 
@@ -578,18 +586,53 @@ export class StatelogClient {
     });
   }
 
+  /** Fired immediately before a tool is invoked. Paired with `toolCall`
+   *  (which fires on tool completion). Consumers can use the pair to
+   *  detect tool calls that started but never finished — e.g. when the
+   *  user cancels the current run mid-tool. The two events share the
+   *  same `span_id` (the toolExecution span). Designed to be
+   *  OTEL-compatible: an OTLP aggregator can merge the start + end
+   *  events into a single span using start_time + end_time. */
+  async toolCallStart({
+    toolName,
+    args,
+    model,
+    threadId,
+  }: {
+    toolName: string;
+    args: any;
+    model?: ModelName;
+    /** Registry id of the thread that issued the LLM call which is
+     *  invoking this tool. Stamped here so downstream tools can
+     *  attribute the tool call to a thread without walking the span
+     *  tree. Null when no active thread is known. */
+    threadId?: string | null;
+  }): Promise<void> {
+    await this.post({
+      type: "toolCallStart",
+      toolName,
+      args,
+      model,
+      threadId: threadId ?? null,
+    });
+  }
+
   async toolCall({
     toolName,
     args,
     output,
     model,
     timeTaken,
+    threadId,
   }: {
     toolName: string;
     args: any;
     output: any;
     model?: ModelName;
     timeTaken?: number;
+    /** Registry id of the thread that issued the LLM call which is
+     *  invoking this tool. See `toolCallStart` for rationale. */
+    threadId?: string | null;
   }): Promise<void> {
     await this.post({
       type: "toolCall",
@@ -598,6 +641,7 @@ export class StatelogClient {
       output,
       model,
       timeTaken,
+      threadId: threadId ?? null,
     });
   }
 
@@ -698,11 +742,18 @@ export class StatelogClient {
     handlerIndex,
     decision,
     value,
+    interrupt,
   }: {
     interruptId: string;
     handlerIndex: number;
     decision: "approve" | "reject" | "propagate" | "none";
     value?: any;
+    /** Optional summary of the interrupt being decided on. Carries
+     *  `kind`, `message`, and `data` so log consumers can see *what*
+     *  was being approved/rejected without having to correlate with
+     *  a separate `interruptThrown` event (which doesn't fire for
+     *  synchronously-resolved interrupts like `with approve`). */
+    interrupt?: { kind: string; message: string; data: any };
   }): Promise<void> {
     await this.post({
       type: "handlerDecision",
@@ -710,6 +761,7 @@ export class StatelogClient {
       handlerIndex,
       decision,
       value,
+      interrupt,
     });
   }
 
@@ -718,11 +770,15 @@ export class StatelogClient {
     outcome,
     resolvedBy,
     timeTaken,
+    interrupt,
   }: {
     interruptId: string;
     outcome: "approved" | "rejected" | "propagated";
     resolvedBy: "handler" | "user" | "policy" | "ipc";
     timeTaken?: number;
+    /** Optional summary of the interrupt being resolved. See
+     *  `handlerDecision.interrupt` for rationale. */
+    interrupt?: { kind: string; message: string; data: any };
   }): Promise<void> {
     await this.post({
       type: "interruptResolved",
@@ -730,6 +786,7 @@ export class StatelogClient {
       outcome,
       resolvedBy,
       timeTaken,
+      interrupt,
     });
   }
 
@@ -837,16 +894,30 @@ export class StatelogClient {
     threadId,
     threadType,
     parentThreadId,
+    label,
+    session,
+    hidden,
   }: {
     threadId: string;
     threadType: "thread" | "subthread";
     parentThreadId?: string;
+    /** User-supplied label from `thread(label: "...") { ... }`. */
+    label?: string | null;
+    /** User-supplied session name from `thread(session: "...") { ... }`.
+     *  Only populated on first-create of a session (later resumes fire
+     *  `threadResumed`, not `threadCreated`). */
+    session?: string | null;
+    /** True when the thread was created with `thread(hidden: true)`. */
+    hidden?: boolean;
   }): Promise<void> {
     await this.post({
       type: "threadCreated",
       threadId,
       threadType,
       parentThreadId,
+      label,
+      session,
+      hidden,
     });
   }
 

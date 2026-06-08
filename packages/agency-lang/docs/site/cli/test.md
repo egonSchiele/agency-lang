@@ -42,12 +42,3 @@ Runs JavaScript integration tests (Agency code paired with `.test.ts` files that
 - `--coverage` — collect step coverage and print a summary report after the run. See [coverage](./coverage.html).
 - `--accumulate` — preserve any existing coverage data instead of cleaning it first (use with `--coverage`).
 
-## Evals
-
-*work in progress*
-
-```
-agency test eval foo.agency:nodeName --args args.json
-```
-
-Runs an evaluation against a node. Arguments are read from a JSON file via `--args`. To resume an interrupted eval run, pass `--results <path>` pointing at the existing results file — the runner will pick up where it left off.

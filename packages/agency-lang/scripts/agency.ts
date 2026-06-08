@@ -15,12 +15,12 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
-import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
+import { evalExtract } from "@/cli/evalExtract.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -252,6 +252,45 @@ export function createProgram(deps: CliDependencies = {}): Command {
       await logsView(file, { follow: options.follow });
     });
 
+  const evalCmd = program
+    .command("eval")
+    .description("Evaluate agent runs against task fixtures");
+
+  evalCmd
+    .command("extract")
+    .description(
+      "Extract a structured eval record from a statelog file. " +
+        "Use this on the trace of one agent run to produce a JSON " +
+        "artifact you can grade with an LLM judge or compare against " +
+        "another run.",
+    )
+    .argument("<file>", "Path to a .statelog.jsonl file")
+    .option(
+      "-o, --out <path>",
+      "Output JSON path (default: <file>.eval.json)",
+    )
+    .option(
+      "--preview-chars <n>",
+      "Max chars for tool args/output previews (default: 200, 0 for full)",
+      (v) => parseInt(v, 10),
+    )
+    .option(
+      "--compact",
+      "Emit compact JSON instead of pretty-printed (pipelines / diffs)",
+    )
+    .action(
+      async (
+        file: string,
+        opts: { out?: string; previewChars?: number; compact?: boolean },
+      ) => {
+        await evalExtract(file, {
+          out: opts.out,
+          previewChars: opts.previewChars,
+          pretty: !opts.compact,
+        });
+      },
+    );
+
   program
     .command("format")
     .alias("fmt")
@@ -348,7 +387,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   const testCmd = program
     .command("test")
-    .description("Run tests (default), or use subcommands: js, fixtures, eval");
+    .description("Run tests (default), or use subcommands: js, fixtures");
 
   testCmd
     .command("run", { isDefault: true })
@@ -445,21 +484,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (target: string | undefined) => {
       await fixtures(getConfig(), target);
     });
-
-  testCmd
-    .command("eval")
-    .description("Run evaluation")
-    .argument("[target]", "Target in file.agency:nodeName format")
-    .option("--args <path>", "Path to eval args JSON file")
-    .option("--results <path>", "Path to existing results file (to resume)")
-    .action(
-      async (
-        target: string | undefined,
-        opts: { args?: string; results?: string },
-      ) => {
-        await evaluate(getConfig(), target, opts.args, opts.results);
-      },
-    );
 
   const coverageCmd = program
     .command("coverage")

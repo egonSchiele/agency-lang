@@ -174,9 +174,6 @@ The test framework validates:
    - Applies handlers in sequence
    - Throws errors for mismatches or missing handlers
 
-4. **`lib/cli/evaluate.ts`**:
-   - Updated `executeNode()` call to pass `undefined` for interrupt handlers
-
 ## Multiple Interrupts
 
 The system supports multiple sequential interrupts. Handlers are applied in the order they appear in the `interruptHandlers` array:

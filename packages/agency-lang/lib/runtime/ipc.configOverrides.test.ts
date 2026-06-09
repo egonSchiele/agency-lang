@@ -109,4 +109,26 @@ describe("subprocess interrupt IPC", () => {
       threshold: 1,
     });
   });
+
+  it("reports interrupt serialization failures as plain errors", async () => {
+    const sent: any[] = [];
+    process.send = vi.fn((msg: any) => {
+      sent.push(msg);
+      return true;
+    }) as any;
+
+    const circular: Record<string, any> = {};
+    circular.self = circular;
+
+    await expect(sendInterruptToParent(
+      { kind: "test", message: "bad", data: circular, origin: "test" },
+      { propagated: false },
+    )).resolves.toEqual({ type: "reject", value: expect.stringContaining("Failed to serialize interrupt payload") });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toEqual({
+      type: "error",
+      error: expect.stringContaining("Failed to serialize interrupt payload"),
+    });
+  });
 });

@@ -203,7 +203,7 @@ export async function sendInterruptToParent(
   const serialized = serializedByteLength(outMsg);
   if (!serialized.ok) {
     const value = `Failed to serialize interrupt payload: ${serialized.error}`;
-    process.send!(buildIpcPayloadLimitError(subprocessIpcPayloadLimit, Infinity, value));
+    process.send!({ type: "error", error: value } satisfies IpcErrorMessage);
     return { type: "reject", value };
   }
   if (serialized.byteLength > subprocessIpcPayloadLimit) {

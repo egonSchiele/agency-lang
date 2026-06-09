@@ -56,6 +56,24 @@ describe("eval run artifacts", () => {
     expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "tasks", "t1", "eval-record.json"));
   });
 
+  it("rejects run ids that escape the runs directory", () => {
+    expect(() => initializeEvalRun({
+      runId: "../escape",
+      runsDir: tmpDir,
+      agent: "agent.agency:main",
+      tasksSource: "tasks.json",
+      tasks: [],
+      continueOnError: true,
+      startedAt: new Date("2026-06-09T14:30:00.000Z"),
+    })).toThrow("Invalid runId");
+  });
+
+  it("rejects task ids that escape the task directory", () => {
+    const state = initializeState();
+
+    expect(() => prepareEvalRunTask(state, { task_id: "../escape", rubric: "rubric", args: {} })).toThrow("Invalid task_id");
+  });
+
   it("copies a fixture working_dir into the task workdir", () => {
     const state = initializeState();
     const fixture = path.join(tmpDir, "fixture");
@@ -66,6 +84,19 @@ describe("eval run artifacts", () => {
 
     expect(fs.readFileSync(path.join(prepared.workdirPath, "input.txt"), "utf-8")).toBe("fixture-data");
     expect(fs.readFileSync(path.join(fixture, "input.txt"), "utf-8")).toBe("fixture-data");
+  });
+
+  it("rejects working_dir values that point to files", () => {
+    const state = initializeState();
+    const fixtureFile = path.join(tmpDir, "fixture.txt");
+    fs.writeFileSync(fixtureFile, "fixture-data");
+
+    expect(() => prepareEvalRunTask(state, {
+      task_id: "t1",
+      rubric: "rubric",
+      args: {},
+      working_dir: fixtureFile,
+    })).toThrow("working_dir must be a directory");
   });
 
   it("records task errors and writes summary", () => {

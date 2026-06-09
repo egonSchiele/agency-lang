@@ -3,6 +3,8 @@ import * as path from "path";
 
 import type { EvalRunTask, EvalRunTaskResult, EvalRunResult } from "./runTypes.js";
 
+const ARTIFACT_ID_RE = /^[A-Za-z0-9._-]+$/;
+
 export type EvalRunState = {
   runId: string;
   runDir: string;
@@ -31,6 +33,7 @@ export function initializeEvalRun(args: {
   continueOnError: boolean;
   startedAt: Date;
 }): EvalRunState {
+  assertArtifactId("runId", args.runId);
   const runDir = path.resolve(args.runsDir, args.runId);
   const tasksDir = path.join(runDir, "tasks");
   fs.mkdirSync(tasksDir, { recursive: true });
@@ -53,10 +56,15 @@ export function initializeEvalRun(args: {
 }
 
 export function prepareEvalRunTask(state: EvalRunState, task: EvalRunTask): PreparedEvalRunTask {
+  assertArtifactId("task_id", task.task_id);
   const taskDir = path.join(state.tasksDir, task.task_id);
   const workdirPath = path.join(taskDir, "workdir");
   fs.mkdirSync(taskDir, { recursive: true });
   if (task.working_dir) {
+    const workingDirStat = fs.statSync(task.working_dir);
+    if (!workingDirStat.isDirectory()) {
+      throw new Error("Eval task working_dir must be a directory");
+    }
     fs.cpSync(task.working_dir, workdirPath, { recursive: true });
   } else {
     fs.mkdirSync(workdirPath, { recursive: true });
@@ -135,4 +143,10 @@ export function writeEvalRunSummary(state: EvalRunState, tasks: EvalRunTaskResul
 
 function writeJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+}
+
+function assertArtifactId(fieldName: "runId" | "task_id", value: string): void {
+  if (!ARTIFACT_ID_RE.test(value)) {
+    throw new Error(`Invalid ${fieldName} "${value}"; use only letters, numbers, '.', '_' and '-'`);
+  }
 }

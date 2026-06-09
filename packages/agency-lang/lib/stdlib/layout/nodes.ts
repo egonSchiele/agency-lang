@@ -5,7 +5,7 @@
 // recurse via `renderNode`; the leaves (text / raw / space / hline /
 // vline) live here.
 
-import { Style } from "./ansi.js";
+import { Style, wrapText } from "./ansi.js";
 import { Align, Block, pad, styled } from "./block.js";
 
 export type NodeType =
@@ -29,8 +29,28 @@ export type Cell = string | LayoutNode;
 export type ColumnSpec = {
   align?: Align;
   minWidth?: number;
+  width?: unknown;
   fgColor?: string;
 };
+
+export type Width =
+  | { kind: "cells"; value: number }
+  | { kind: "full" }
+  | { kind: "percent"; value: number };
+
+export function parseWidth(raw: unknown): Width | null {
+  if (raw == null) return null;
+  if (typeof raw === "number") return { kind: "cells", value: raw };
+  if (raw === "full") return { kind: "full" };
+  if (typeof raw === "string") {
+    const match = raw.match(/^(\d+(?:\.\d+)?)%$/);
+    if (match) return { kind: "percent", value: parseFloat(match[1]) };
+  }
+  throw new Error(
+    `std::layout: invalid width ${JSON.stringify(raw)}. ` +
+    `Expected a number, "full", or "<n>%" (e.g. "50%").`,
+  );
+}
 
 export function styleOf(attrs: Record<string, unknown>): Style {
   const s: Style = {};
@@ -62,9 +82,12 @@ export const LEAF_RENDERERS: Record<
   (n: LayoutNode) => Block
 > = {
   text: (n) => {
-    const content = (n.attrs.content as string) ?? "";
-    const align   = (n.attrs.align as Align) ?? "start";
-    return styled(alignedTextBlock(content, align), styleOf(n.attrs));
+    const content   = (n.attrs.content as string) ?? "";
+    const align     = (n.attrs.align as Align) ?? "start";
+    const wrapWidth = n.attrs.wrapWidth as number | undefined;
+    const lines = wrapWidth !== undefined ? wrapText(content, wrapWidth) : content.split("\n");
+    const block = Block.of(lines);
+    return styled(pad(block, block.width, block.height, align, "start"), styleOf(n.attrs));
   },
   raw: (n) => {
     const content = (n.attrs.content as string) ?? "";

@@ -5,8 +5,8 @@
 // `╭─ Title ───╮`). Title-driven width growth lives here too so
 // callers (box, table) get consistent sizing.
 
-import { Style, styledWrapper, visualWidth } from "./ansi.js";
-import { Align, Block, pad, padLine } from "./block.js";
+import { Style, styledWrapper, visualWidth, wrapText } from "./ansi.js";
+import { Align, Block, above, pad, padLine, styled } from "./block.js";
 
 export type BorderStyle = "rounded" | "heavy" | "double" | "light";
 
@@ -60,6 +60,7 @@ export type BorderOpts = {
   padding?: number;
   title?: string;
   titleColor?: string;
+  targetWidth?: number;
 };
 
 // Minimum inner width required to fit a title embedded in the top edge.
@@ -96,9 +97,23 @@ export function bordered(block: Block, opts: BorderOpts): Block {
   const borderChars = BORDER_CHARS[resolveBorderStyle(opts.borderStyle)];
   const padding     = opts.padding ?? 0;
   const titleText   = opts.title   ?? "";
+  const targetInnerWidth = opts.targetWidth !== undefined
+    ? Math.max(0, opts.targetWidth - 2)
+    : undefined;
 
   const padded = withPaddingApplied(block, padding);
-  const inner  = titleText !== "" ? growToFitTitle(padded, titleText, padding) : padded;
+  if (targetInnerWidth !== undefined) {
+    const titleFitsTop = titleText === "" || minWidthForTitle(titleText) <= targetInnerWidth;
+    const topTitle = titleFitsTop ? titleText : "";
+    const titleBlock = titleFitsTop
+      ? Block.empty()
+      : styled(Block.of(wrapText(titleText, targetInnerWidth)), opts.titleColor ? { fgColor: opts.titleColor } : {});
+    const content = above(titleBlock, padded);
+    const inner = pad(content, targetInnerWidth, content.height, "start", "start");
+    return frameWithBorder(inner, borderChars, targetInnerWidth, opts, topTitle);
+  }
+
+  const inner = titleText !== "" ? growToFitTitle(padded, titleText, padding) : padded;
 
   return frameWithBorder(inner, borderChars, inner.width, opts, titleText);
 }

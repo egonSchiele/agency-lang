@@ -6,6 +6,7 @@
 // asking `stripAnsi` to remove them).
 
 const CSI_RE = /\x1b\[[\d;]*[A-Za-z]/g;
+const CSI_TOKEN_RE = /\x1b\[[\d;]*[A-Za-z]/y;
 
 export function visualWidth(s: string): number {
   return s.replace(CSI_RE, "").length;
@@ -13,6 +14,76 @@ export function visualWidth(s: string): number {
 
 export function stripAnsi(s: string): string {
   return s.replace(CSI_RE, "");
+}
+
+export function wrapText(content: string, width: number): string[] {
+  if (width <= 0) return [];
+  return content.split("\n").flatMap((line) => wrapSingleLine(line, width));
+}
+
+function wrapSingleLine(line: string, width: number): string[] {
+  if (line === "") return [""];
+  if (visualWidth(line) <= width) return [line.trimEnd()];
+
+  const tokens = line.split(/(\s+)/);
+  const out: string[] = [];
+  let current = "";
+
+  for (const token of tokens) {
+    if (token === "") continue;
+    const tentative = current + token;
+    if (visualWidth(tentative) <= width) {
+      current = tentative;
+      continue;
+    }
+    if (current.trim().length > 0) {
+      out.push(current.trimEnd());
+      current = "";
+    }
+    if (token.trim().length === 0) {
+      continue;
+    }
+    if (visualWidth(token) <= width) {
+      current = token;
+      continue;
+    }
+    const chunks = breakLongToken(token, width);
+    out.push(...chunks.slice(0, -1));
+    current = chunks[chunks.length - 1] ?? "";
+  }
+
+  if (current.length > 0) out.push(current.trimEnd());
+  return out;
+}
+
+function breakLongToken(token: string, width: number): string[] {
+  const chunks: string[] = [];
+  let current = "";
+  let currentWidth = 0;
+  let index = 0;
+
+  while (index < token.length) {
+    CSI_TOKEN_RE.lastIndex = index;
+    const escape = CSI_TOKEN_RE.exec(token);
+    if (escape && escape.index === index) {
+      current += escape[0];
+      index = CSI_TOKEN_RE.lastIndex;
+      continue;
+    }
+
+    const char = token[index];
+    if (currentWidth >= width) {
+      chunks.push(current);
+      current = "";
+      currentWidth = 0;
+    }
+    current += char;
+    currentWidth += 1;
+    index += 1;
+  }
+
+  if (current.length > 0) chunks.push(current);
+  return chunks;
 }
 
 export type Style = {

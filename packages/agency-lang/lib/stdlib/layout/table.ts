@@ -16,14 +16,14 @@
 // both consume the same `ColumnLayout[]`, so a change to one stays in
 // sync with the other automatically.
 
-import { Style, styledWrapper, visualWidth } from "./ansi.js";
+import { Style, styledWrapper, visualWidth, wrapText } from "./ansi.js";
 import { Align, Block, above, beside, pad, padLine, styled } from "./block.js";
 import {
   BORDER_CHARS, BorderChars, BorderStyle, buildTopEdge, minWidthForTitle,
   resolveBorderStyle,
 } from "./border.js";
-import { Cell, ColumnSpec, LayoutNode } from "./nodes.js";
-import { renderNode } from "./render.js";
+import { Cell, ColumnSpec, LayoutNode, parseWidth } from "./nodes.js";
+import { growToWidth, renderNode, resolveNode } from "./render.js";
 
 export { Cell, ColumnSpec };
 
@@ -173,6 +173,7 @@ function _computeColumnLayouts(
   columnCount: number,
   columns: ColumnSpec[],
   cellPadding: number,
+  resolvedColumnWidths?: number[],
 ): { layouts: ColumnLayout[]; cellBlocks: Block[][] } {
   const styledRows = rows.map((row) =>
     row.map((cell, c) => _applyColumnFg(cell, columns[c]?.fgColor)),
@@ -184,14 +185,161 @@ function _computeColumnLayouts(
       (m, row) => Math.max(m, row[c].width), 0,
     );
     const spec = columns[c] ?? {};
+    const resolved = resolvedColumnWidths?.[c];
     layouts.push({
-      width:       Math.max(measured, spec.minWidth ?? 0),
+      width:       resolved ?? Math.max(measured, spec.minWidth ?? 0),
       align:       spec.align ?? "start",
       cellPadding,
       fgColor:     spec.fgColor ?? "",
     });
   }
   return { layouts, cellBlocks };
+}
+
+function clampCellPadding(raw: unknown): number {
+  const value = (raw as number | undefined) ?? 1;
+  return Math.max(0, Math.floor(Number.isFinite(value) ? value : 1));
+}
+
+export function _tableChromeWidth(
+  columnCount: number,
+  cellPadding: number,
+  columnDividers: boolean,
+): number {
+  const borders = 2;
+  const padding = columnCount * 2 * cellPadding;
+  const dividers = columnDividers ? Math.max(0, columnCount - 1) : 0;
+  return borders + padding + dividers;
+}
+
+export function _resolveTableWidths(
+  node: LayoutNode,
+  resolvedWidth: number | undefined,
+): LayoutNode {
+  const attrs = node.attrs;
+  const { header, body, footer, columnCount } = _validateTable(attrs);
+  const columns = (attrs.columns as ColumnSpec[] | null | undefined) ?? [];
+  const cellPadding = clampCellPadding(attrs.cellPadding);
+  const columnDividers = (attrs.columnDividers as boolean | undefined) ?? true;
+  const sections = { header, body, footer };
+  const chrome = _tableChromeWidth(columnCount, cellPadding, columnDividers);
+  const resolvedColumnWidths = distributeColumnWidths({
+    columns,
+    columnCount,
+    sections,
+    resolvedWidth,
+    chrome,
+  });
+  const annotated = annotateCellsWithWrap(sections, resolvedColumnWidths);
+
+  return {
+    ...node,
+    attrs: {
+      ...attrs,
+      ...(resolvedWidth !== undefined ? { resolvedWidth } : {}),
+      resolvedColumnWidths,
+      header: attrs.header != null ? annotated.header : attrs.header,
+      body: annotated.body,
+      footer: annotated.footer,
+    },
+  };
+}
+
+function distributeColumnWidths(args: {
+  columns: ColumnSpec[];
+  columnCount: number;
+  sections: { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] };
+  resolvedWidth: number | undefined;
+  chrome: number;
+}): number[] {
+  const { columns, columnCount, sections, resolvedWidth, chrome } = args;
+  const natural = measureNaturalColumnWidths(sections, columnCount);
+  const parsed = Array.from({ length: columnCount }, (_, c) => parseWidth(columns[c]?.width));
+  const available = resolvedWidth !== undefined ? Math.max(0, resolvedWidth - chrome) : undefined;
+
+  for (let c = 0; c < columnCount; c++) {
+    if (parsed[c]?.kind === "full") {
+      throw new Error(
+        `std::layout: column[${c}].width "full" is not allowed. ` +
+        `Use a number or percentage.`,
+      );
+    }
+    if (available === undefined && parsed[c]?.kind === "percent") {
+      throw new Error(
+        `std::layout: column[${c}] uses a percentage width but the table ` +
+        `has no resolved width to take a percentage of. ` +
+        `Set width: on the table or one of its ancestors.`,
+      );
+    }
+  }
+
+  const widths = new Array<number>(columnCount).fill(0);
+  let remaining = available ?? Infinity;
+  for (let c = 0; c < columnCount; c++) {
+    const width = parsed[c];
+    if (width?.kind === "cells") {
+      widths[c] = width.value;
+      remaining -= width.value;
+    } else if (width === null) {
+      widths[c] = natural[c];
+      remaining -= natural[c];
+    }
+  }
+
+  const safeRemaining = Math.max(0, remaining);
+  const percentIndices = parsed
+    .map((width, index) => width?.kind === "percent" ? index : -1)
+    .filter((index) => index >= 0);
+  const totalPct = percentIndices.reduce((sum, index) => {
+    const width = parsed[index];
+    return sum + (width?.kind === "percent" ? width.value : 0);
+  }, 0);
+  for (const index of percentIndices) {
+    const width = parsed[index];
+    const pct = width?.kind === "percent" ? width.value : 0;
+    const share = totalPct > 100 ? pct / totalPct : pct / 100;
+    widths[index] = Math.floor(safeRemaining * share);
+  }
+
+  for (let c = 0; c < columnCount; c++) {
+    const min = columns[c]?.minWidth ?? 0;
+    if (widths[c] < min) widths[c] = min;
+  }
+  return widths;
+}
+
+function measureNaturalColumnWidths(
+  sections: { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] },
+  columnCount: number,
+): number[] {
+  const widths = new Array<number>(columnCount).fill(0);
+  const rows = [
+    ...(sections.header.length > 0 ? [sections.header] : []),
+    ...sections.body,
+    ...sections.footer,
+  ];
+  for (const row of rows) {
+    for (let c = 0; c < columnCount; c++) {
+      widths[c] = Math.max(widths[c], renderNode(row[c]).width);
+    }
+  }
+  return widths;
+}
+
+function annotateCellsWithWrap(
+  sections: { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] },
+  resolvedColumnWidths: number[],
+): { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] } {
+  const annotateCell = (cell: LayoutNode, columnWidth: number): LayoutNode => {
+    if (cell.type === "text") return { ...cell, attrs: { ...cell.attrs, wrapWidth: columnWidth } };
+    if (cell.type === "raw") return cell;
+    return resolveNode(cell, columnWidth);
+  };
+  return {
+    header: sections.header.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0)),
+    body: sections.body.map((row) => row.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0))),
+    footer: sections.footer.map((row) => row.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0))),
+  };
 }
 
 function _innerTableWidth(layouts: ColumnLayout[], columnDividers: boolean): number {
@@ -355,8 +503,7 @@ export function composeTable(node: LayoutNode): Block {
   // negative value would shrink dividers below the cell grid and
   // misalign the right border, while a fractional value would break
   // `" ".repeat(...)`.
-  const cellPaddingRaw = (attrs.cellPadding as number | undefined) ?? 1;
-  const cellPadding    = Math.max(0, Math.floor(Number.isFinite(cellPaddingRaw) ? cellPaddingRaw : 1));
+  const cellPadding    = clampCellPadding(attrs.cellPadding);
   const columns        = (attrs.columns        as ColumnSpec[] | null) ?? [];
   const columnDividers = (attrs.columnDividers as boolean) ?? true;
   const headerDivider  = (attrs.headerDivider  as boolean) ?? true;
@@ -370,6 +517,8 @@ export function composeTable(node: LayoutNode): Block {
   const titleColor  = (attrs.titleColor  as string | undefined) ?? "";
   const title       = (attrs.title       as string | undefined) ?? "";
   const caption     = (attrs.caption     as string | undefined) ?? "";
+  const resolved    = attrs.resolvedWidth as number | undefined;
+  const resolvedColumnWidths = attrs.resolvedColumnWidths as number[] | undefined;
   const wrapBorder  = styledWrapper(borderColor ? { fgColor: borderColor } : {});
   const titleStyle: Style = titleColor ? { fgColor: titleColor } : {};
 
@@ -386,7 +535,7 @@ export function composeTable(node: LayoutNode): Block {
     ...footer,
   ];
   const { layouts, cellBlocks } = _computeColumnLayouts(
-    allRows, columnCount, columns, cellPadding,
+    allRows, columnCount, columns, cellPadding, resolvedColumnWidths,
   );
   let idx = 0;
   const headerCells = styledHeader.length > 0 ? [cellBlocks[idx++]] : [];
@@ -396,10 +545,9 @@ export function composeTable(node: LayoutNode): Block {
   // A wide title may grow innerWidth beyond the cell grid; dividers and
   // row wrappers both honour that final width so everything lines up.
   const cellsWidth = _innerTableWidth(layouts, columnDividers);
-  const innerWidth = Math.max(
-    cellsWidth,
-    title !== "" ? minWidthForTitle(title) : 0,
-  );
+  const titleFloor = resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
+  const resolvedInner = resolved !== undefined ? Math.max(0, resolved - 2) : 0;
+  const innerWidth = Math.max(cellsWidth, titleFloor, resolvedInner);
 
   // Build flat declarative list of section parts, then render each
   // part into a Block in one place.
@@ -414,11 +562,15 @@ export function composeTable(node: LayoutNode): Block {
           _composeRowBlock(part.cells, layouts, columnDividers, ch.v, wrapBorder),
           innerWidth, ch, wrapBorder,
         );
-  const sectionBlocks = sectionParts.map(renderPart);
+  const titleFitsTop = title === "" || resolved === undefined || minWidthForTitle(title) <= innerWidth;
+  const titleRows = titleFitsTop
+    ? []
+    : [_wrapRowSides(styled(Block.of(wrapText(title, innerWidth)), titleStyle), innerWidth, ch, wrapBorder)];
+  const sectionBlocks = [...titleRows, ...sectionParts.map(renderPart)];
 
   // Outer frame (top + bottom edges).
   const topEdge    = Block.of(
-    buildTopEdge(ch, innerWidth, wrapBorder, title, titleStyle),
+    buildTopEdge(ch, innerWidth, wrapBorder, titleFitsTop ? title : "", titleStyle),
   );
   const bottomEdge = Block.of(
     wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br),
@@ -431,6 +583,8 @@ export function composeTable(node: LayoutNode): Block {
   // line, and routing it through `above` would re-pad it back out to
   // the framed width.
   const captionBlock = _composeCaption(caption, framed.width);
-  if (captionBlock === null) return framed;
-  return Block.of([...framed.lines, ...captionBlock.lines]);
+  const withCaption = captionBlock === null
+    ? framed
+    : Block.of([...framed.lines, ...captionBlock.lines]);
+  return resolved !== undefined ? growToWidth(withCaption, resolved) : withCaption;
 }

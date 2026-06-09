@@ -21,6 +21,7 @@ import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
+import { evalJudge } from "@/cli/evalJudge.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -288,6 +289,26 @@ export function createProgram(deps: CliDependencies = {}): Command {
           previewChars: opts.previewChars,
           pretty: !opts.compact,
         });
+      },
+    );
+
+  evalCmd
+    .command("judge")
+    .description("Compare two eval records and decide which better meets a goal")
+    .argument("<recordA>", "Path to first eval record (.eval.json)")
+    .argument("<recordB>", "Path to second eval record (.eval.json)")
+    .requiredOption(
+      "--goal <text>",
+      "Plain-English description of what success looks like",
+    )
+    .option("-o, --out <path>", "Output verdict JSON path")
+    .action(
+      async (
+        recordA: string,
+        recordB: string,
+        opts: { goal: string; out?: string },
+      ) => {
+        await evalJudge(recordA, recordB, { goal: opts.goal, out: opts.out });
       },
     );
 

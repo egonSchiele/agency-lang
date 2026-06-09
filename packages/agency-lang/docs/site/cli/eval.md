@@ -126,6 +126,8 @@ If a convention emerges (a set of rules every project wants), it can be promoted
 
 `evalInputs` and `evalOutputs` are hoisted to the top level specifically because eval consumers and pairwise judges need the user-facing inputs and outputs without digging through raw `promptCompletion` events. `threads[*].label` is what consumer behavioral queries grep on. These are the two seams that connect `extract` to its sibling commands.
 
+Next: use [`agency eval judge`](./eval-judge.md) to compare two eval records against a plain-English goal.
+
 ## Legacy traces
 
 Statelog traces captured before the relevant runtime fields landed (thread labels/sessions, `toolCallStart`, interrupt summaries, per-event `threadId`) still extract without error — fields that aren't present in the source come through as `null` and a single warning is emitted in `record.warnings`. Don't rely on those fields when grading legacy traces; recapture if you can.

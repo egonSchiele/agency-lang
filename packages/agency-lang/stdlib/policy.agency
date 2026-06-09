@@ -229,6 +229,7 @@ let globalCliPolicyOpts: CliPolicyOpts = {
   fields: {}
 }
 let _policy: Policy | null = null
+let _policyLoaded: boolean = false
 let _pendingSave: boolean = false
 
 /**
@@ -472,6 +473,7 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
   */
 export def setPolicy(path: string, policy: Policy) {
   _policy = policy
+  _policyLoaded = true
   writePolicyFile(path, policy, []) with approve
 }
 
@@ -498,6 +500,23 @@ export def writePolicyFile(
   @param allowedPaths - Only allow writing under these path prefixes
   """
   return try _writePolicyFile(path, policy, allowedPaths)
+}
+
+// Lazy-load the on-disk policy on first handler invocation. Uses
+// flip-flag-first so the std::read interrupt's chain re-entry sees
+// `_policyLoaded == true` and returns without recursing. Missing or
+// invalid policy files start from an empty policy; direct callers can
+// inspect `parsePolicyFile` for the exact failure status.
+def maybeLoadPolicy() {
+  if (!_policyLoaded) {
+    _policyLoaded = true
+    const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
+    if (isFailure(loaded)) {
+      _policy = {}
+    } else {
+      _policy = loaded.value
+    }
+  }
 }
 
 // Persist any pending policy changes. Same flip-flag-first pattern
@@ -665,6 +684,9 @@ def askUser(intr: any): AskUserResult {
  * Do not call directly; use `cliPolicyHandler` to construct one.
  */
 export def _handler(intr: any): any {
+  maybeLoadPolicy()
+  maybeFlush()
+
   if (_policy == null) {
     print(
       "Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.",
@@ -787,5 +809,8 @@ export def cliPolicyHandler(file: string, fields: ScopedRuleFields): any {
     file: file,
     fields: fields
   }
+  _policy = null
+  _policyLoaded = false
+  _pendingSave = false
   return _handler
 }

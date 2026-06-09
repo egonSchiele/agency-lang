@@ -22,9 +22,13 @@ describe("generateDoc", () => {
     fs.writeFileSync(
       path.join(inputDir, "test.agency"),
       `
-type User = {
+export type User = {
   name: string # The user's name;
   age: number # The user's age
+}
+
+type Internal = {
+  id: string
 }
 
 def greet(name: string): string {
@@ -57,9 +61,10 @@ node main() {
     // Types section — rendered as code fences via agency generator
     expect(output).toContain("## Types");
     expect(output).toContain("### User");
-    expect(output).toContain("```ts\ntype User =");
+    expect(output).toContain("```ts\nexport type User =");
     expect(output).toContain("name: string # The user's name");
     expect(output).toContain("age: number # The user's age");
+    expect(output).not.toContain("### Internal");
 
     // Functions section — heading is name only, signature in code fence
     expect(output).toContain("## Functions");
@@ -270,7 +275,7 @@ node main() {
     fs.writeFileSync(
       path.join(inputDir, "typedoc.agency"),
       `/** Possible message categories. */
-type Category = "reminder" | "todo"
+export type Category = "reminder" | "todo"
 `,
     );
 
@@ -292,7 +297,7 @@ type Category = "reminder" | "todo"
     fs.writeFileSync(
       path.join(inputDir, "simpletype.agency"),
       `
-type Status = "active" | "inactive"
+export type Status = "active" | "inactive"
 `,
     );
 
@@ -303,7 +308,29 @@ type Status = "active" | "inactive"
     );
 
     expect(output).toContain("### Status");
-    expect(output).toContain('```ts\ntype Status = "active" | "inactive"\n```');
+    expect(output).toContain('```ts\nexport type Status = "active" | "inactive"\n```');
+  });
+
+  it("omits non-exported type aliases", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "internaltype.agency"),
+      `
+type Internal = "hidden"
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "internaltype.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "internaltype.md"),
+      "utf-8",
+    );
+
+    expect(output).not.toContain("### Internal");
+    expect(output).not.toContain('type Internal = "hidden"');
   });
 
   it("generates cross-file type links in directory mode", () => {
@@ -313,7 +340,7 @@ type Status = "active" | "inactive"
 
     fs.writeFileSync(
       path.join(inputDir, "types.agency"),
-      `type User = {
+      `export type User = {
   name: string
   age: number
 }
@@ -322,7 +349,7 @@ type Status = "active" | "inactive"
 
     fs.writeFileSync(
       path.join(inputDir, "funcs.agency"),
-      `type Category = "a" | "b"
+      `export type Category = "a" | "b"
 
 def getCategory(): Category {
   return "a"

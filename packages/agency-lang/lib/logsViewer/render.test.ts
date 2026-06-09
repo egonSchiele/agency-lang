@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderViewerLines, flattenVisibleRows, colorFor, wrapLine } from "./render.js";
 import { TreeNode, ViewerState } from "./types.js";
+import { color } from "@/utils/termcolors.js";
 
 function span(id: string, label: string, children: TreeNode[] = []): TreeNode {
   return {
@@ -170,7 +171,7 @@ describe("promptCompletion expansion", () => {
     // trace, leaf, [user], [assistant], raw-data toggle
     expect(rows).toHaveLength(5);
     expect(rows[2].node.nodeKind).toBe("convoLine");
-    expect(rows[2].node.summary).toBe(`[user] "hi"`);
+    expect(rows[2].node.summary).toBe(`${color.green("[user]")} "hi"`);
     expect(rows[3].node.nodeKind).toBe("convoLine");
     expect(rows[4].node.nodeKind).toBe("rawDataToggle");
     expect(rows[4].node.id).toBe("evt-0:raw");

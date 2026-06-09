@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatConversation } from "./conversation.js";
+import { color } from "@/utils/termcolors.js";
 
 describe("formatConversation", () => {
   it("formats a simple user/assistant exchange", () => {
@@ -7,7 +8,10 @@ describe("formatConversation", () => {
       { role: "user", content: "hi" },
       { role: "assistant", content: "hello" },
     ]);
-    expect(lines).toEqual([`[user] "hi"`, `[assistant] "hello"`]);
+    expect(lines).toEqual([
+      `${color.green("[user]")} "hi"`,
+      `${color.green("[assistant]")} "hello"`,
+    ]);
   });
 
   it("formats an assistant tool call (camelCase shape)", () => {
@@ -22,10 +26,10 @@ describe("formatConversation", () => {
       { role: "assistant", content: "Hello, Alice!" },
     ]);
     expect(lines).toEqual([
-      `[user] "Greet Alice using the greet tool"`,
-      `[assistant] tool call: greet({"name":"Alice"})`,
-      `[tool: greet] "Hello, Alice!"`,
-      `[assistant] "Hello, Alice!"`,
+      `${color.green("[user]")} "Greet Alice using the greet tool"`,
+      `${color.green("[assistant]")} tool call: greet({"name":"Alice"})`,
+      `${color.green("[tool: greet]")} "Hello, Alice!"`,
+      `${color.green("[assistant]")} "Hello, Alice!"`,
     ]);
   });
 
@@ -41,7 +45,9 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([`[assistant] tool call: add({"a":1,"b":2})`]);
+    expect(lines).toEqual([
+      `${color.green("[assistant]")} tool call: add({"a":1,"b":2})`,
+    ]);
   });
 
   it("renders an array content payload as joined text", () => {
@@ -54,11 +60,11 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([`[user] "first second"`]);
+    expect(lines).toEqual([`${color.green("[user]")} "first second"`]);
   });
 
   it("emits a placeholder row for empty turns", () => {
     const lines = formatConversation([{ role: "assistant", content: null }]);
-    expect(lines).toEqual([`[assistant]`]);
+    expect(lines).toEqual([color.green("[assistant]")]);
   });
 });

@@ -3,11 +3,13 @@ import { parsePolicyFile } from "std::policy"
 node main(args: { policyFile: string, missingFile: string }) {
   // Existing valid file → loads.
   const p1 = parsePolicyFile(args.policyFile) with approve
-  if (keys(p1).length == 0) { return "FAIL: existing file did not load" }
+  if (isFailure(p1)) { return "FAIL: existing file did not load" }
+  if (keys(p1.value).length == 0) { return "FAIL: existing file did not load" }
 
-  // Missing file → returns {} (warn-and-return-empty).
+  // Missing file → reports a typed failure.
   const p2 = parsePolicyFile(args.missingFile) with approve
-  if (keys(p2).length != 0) { return "FAIL: missing file should be empty" }
+  if (!isFailure(p2)) { return "FAIL: missing file should fail" }
+  if (p2.error.status != "doesnt-exist") { return "FAIL: missing file status" }
 
   return "pass"
 }

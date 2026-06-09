@@ -186,6 +186,7 @@ describe("forLoopParser", () => {
     {
       input: "for (x xs) {\n  foo = 1\n}",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "",

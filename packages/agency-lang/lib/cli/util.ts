@@ -22,6 +22,7 @@ import {
 } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
+import renderJudgePairwiseEvaluate from "@/templates/cli/judgePairwiseEvaluate.js";
 import { compile } from "./commands.js";
 import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
@@ -383,6 +384,53 @@ type ExecuteJudgeArgs = {
   interruptHandlers?: InterruptHandler[];
 };
 
+type RunAgencyJudgeArgs<TemplateData> = {
+  judgeAgencyFile: string;
+  renderRunner: (
+    data: TemplateData & { judgeFilename: string; resultsFilename: string },
+  ) => string;
+  templateData: TemplateData;
+  agencyFileBaseName: string;
+};
+
+async function runAgencyJudge<TemplateData, RawResult>({
+  judgeAgencyFile,
+  renderRunner,
+  templateData,
+  agencyFileBaseName,
+}: RunAgencyJudgeArgs<TemplateData>): Promise<{
+  raw: RawResult;
+  stdout: string;
+  stderr: string;
+}> {
+  compile({}, judgeAgencyFile);
+  const judgeCompiledFile = judgeAgencyFile.replace(".agency", ".js");
+  const judgeEvaluateFile = `${agencyFileBaseName}.judge_evaluate.js`;
+  const judgeResultsFile = `${agencyFileBaseName}.judge_evaluate.json`;
+  const judgeEvaluateDir = path.dirname(path.resolve(judgeEvaluateFile));
+  const judgeRelativePath = path
+    .relative(judgeEvaluateDir, judgeCompiledFile)
+    .split(path.sep)
+    .join("/");
+  const judgeScript = renderRunner({
+    ...templateData,
+    judgeFilename: judgeRelativePath,
+    resultsFilename: judgeResultsFile,
+  });
+
+  fs.writeFileSync(judgeEvaluateFile, judgeScript);
+  try {
+    const { stdout, stderr } = await execFileAsync("node", [judgeEvaluateFile], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    const results = readFileSync(judgeResultsFile, "utf-8");
+    return { raw: JSON.parse(results).data, stdout, stderr };
+  } finally {
+    safeUnlink(judgeEvaluateFile);
+    safeUnlink(judgeResultsFile);
+  }
+}
+
 export async function executeJudgeAsync(
   agencyFileBaseName: string,
   {
@@ -399,49 +447,97 @@ export async function executeJudgeAsync(
 }> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
   const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+  const { raw, stdout, stderr } = await runAgencyJudge<
+    {
+      actualOutput: string;
+      expectedOutput: string;
+      judgePrompt: string;
+      hasInterruptHandlers: boolean;
+      interruptHandlersJSON?: string;
+    },
+    { score: number; reasoning: string }
+  >({
+    judgeAgencyFile,
+    renderRunner: renderJudgeEvaluate,
+    templateData: {
+      actualOutput: JSON.stringify(actualOutput),
+      expectedOutput: JSON.stringify(expectedOutput),
+      judgePrompt: JSON.stringify(judgePrompt),
+      hasInterruptHandlers: !!interruptHandlers,
+      interruptHandlersJSON: interruptHandlers
+        ? JSON.stringify(interruptHandlers)
+        : undefined,
+    },
+    agencyFileBaseName,
+  });
+  return { score: raw.score, reasoning: raw.reasoning, stdout, stderr };
+}
 
-  // Compile judge to its default location (next to judge.agency).
-  // Don't use a custom output path because compile() caches by source file
-  // and would skip writing a second output for a different test.
-  compile({}, judgeAgencyFile);
-  const judgeCompiledFile = judgeAgencyFile.replace(".agency", ".js");
+type ExecutePairwiseJudgeArgs = {
+  baseName: string;
+  goal: string;
+  responseA: string;
+  responseB: string;
+};
 
-  const judgeEvaluateFile = `${agencyFileBaseName}.judge_evaluate.js`;
-  const judgeResultsFile = `${agencyFileBaseName}.judge_evaluate.json`;
-  const judgeEvaluateDir = path.dirname(path.resolve(judgeEvaluateFile));
-  const judgeRelativePath = path
-    .relative(judgeEvaluateDir, judgeCompiledFile)
-    .split(path.sep)
-    .join("/");
-  const judgeScript = renderJudgeEvaluate({
-    judgeFilename: judgeRelativePath,
-    actualOutput: JSON.stringify(actualOutput),
-    expectedOutput: JSON.stringify(expectedOutput),
-    judgePrompt: JSON.stringify(judgePrompt),
-    hasInterruptHandlers: !!interruptHandlers,
-    interruptHandlersJSON: interruptHandlers
-      ? JSON.stringify(interruptHandlers)
-      : undefined,
-    resultsFilename: judgeResultsFile,
+export async function executeJudgePairwiseAsync({
+  baseName,
+  goal,
+  responseA,
+  responseB,
+}: ExecutePairwiseJudgeArgs): Promise<{
+  winner: "A" | "B" | "tie";
+  confidence: "low" | "medium" | "high";
+  reasoning: string;
+  stdout: string;
+  stderr: string;
+}> {
+  const currentDir = path.dirname(new URL(import.meta.url).pathname);
+  const { raw, stdout, stderr } = await runAgencyJudge<
+    { goal: string; responseA: string; responseB: string },
+    unknown
+  >({
+    judgeAgencyFile: path.resolve(currentDir, "../agents/judgePairwise.agency"),
+    renderRunner: renderJudgePairwiseEvaluate,
+    templateData: {
+      goal: JSON.stringify(goal),
+      responseA: JSON.stringify(responseA),
+      responseB: JSON.stringify(responseB),
+    },
+    agencyFileBaseName: baseName,
   });
 
-  fs.writeFileSync(judgeEvaluateFile, judgeScript);
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      "node",
-      [judgeEvaluateFile],
-      { maxBuffer: 10 * 1024 * 1024 },
+  assertValidPairwiseResult(raw);
+  return { ...raw, stdout, stderr };
+}
+
+export function assertValidPairwiseResult(raw: unknown): asserts raw is {
+  winner: "A" | "B" | "tie";
+  confidence: "low" | "medium" | "high";
+  reasoning: string;
+} {
+  if (raw === null || typeof raw !== "object") {
+    throw new Error("Pairwise judge returned a non-object result");
+  }
+  const result = raw as Record<string, unknown>;
+  if (
+    result.winner !== "A" &&
+    result.winner !== "B" &&
+    result.winner !== "tie"
+  ) {
+    throw new Error(`Pairwise judge returned invalid winner: ${String(result.winner)}`);
+  }
+  if (
+    result.confidence !== "low" &&
+    result.confidence !== "medium" &&
+    result.confidence !== "high"
+  ) {
+    throw new Error(
+      `Pairwise judge returned invalid confidence: ${String(result.confidence)}`,
     );
-    const results = readFileSync(judgeResultsFile, "utf-8");
-    const parsed = JSON.parse(results).data;
-    return { score: parsed.score, reasoning: parsed.reasoning, stdout, stderr };
-  } finally {
-    try {
-      fs.unlinkSync(judgeEvaluateFile);
-    } catch {}
-    try {
-      fs.unlinkSync(judgeResultsFile);
-    } catch {}
+  }
+  if (typeof result.reasoning !== "string") {
+    throw new Error("Pairwise judge returned invalid reasoning");
   }
 }
 

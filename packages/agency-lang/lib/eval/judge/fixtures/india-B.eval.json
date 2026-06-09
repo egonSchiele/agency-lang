@@ -1,0 +1,66 @@
+{
+  "traceId": "WDfpwCHknkigcJgJTpTTT",
+  "recordVersion": 2,
+  "formatVersion": 1,
+  "durationMs": 1080,
+  "source": "/Users/adityabhargava/agency-lang/packages/agency-lang/02.log",
+  "evalInputs": [
+    {
+      "value": "What is the capital of India?",
+      "threadId": "0",
+      "tMs": 1078
+    }
+  ],
+  "evalOutputs": [
+    {
+      "value": "{\"response\":{\"capital\":\"New Delhi\"}}",
+      "threadId": "0",
+      "tMs": 1078
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "0",
+      "threadType": "thread",
+      "parentThreadId": null,
+      "label": null,
+      "session": null,
+      "hidden": false,
+      "createdAtMs": 10
+    }
+  ],
+  "events": [
+    {
+      "tMs": 1078,
+      "threadId": "0",
+      "spanId": "71EAvwkyFN7m",
+      "parentSpanId": "vMdbMQ2WrMff",
+      "kind": "llm",
+      "model": "gpt-4o-mini",
+      "tools": [],
+      "durationMs": 1053.880291,
+      "costUsd": 0.000016,
+      "tokensIn": 61,
+      "tokensOut": 12
+    }
+  ],
+  "interrupts": [],
+  "errors": [],
+  "incomplete": [],
+  "metrics": {
+    "llmCalls": 1,
+    "toolStarts": 0,
+    "toolEnds": 0,
+    "models": [
+      "gpt-4o-mini"
+    ],
+    "tokensInTotal": 61,
+    "tokensOutTotal": 12,
+    "costUsdTotal": 0.000016,
+    "toolCounts": {}
+  },
+  "warnings": [
+    "no evalInput() calls in trace; user input inferred from last user-role message of first promptCompletion on the top-level thread. Call evalInput(prompt) in your agent code to record the actual user input.",
+    "no evalOutput() calls in trace; final response inferred from last promptCompletion completion on the top-level thread. Call evalOutput(reply) in your agent code to record the actual user-facing response."
+  ]
+}

@@ -1,0 +1,14 @@
+import { judgePairwise } from "./{{{judgeFilename:string}}}";
+import { writeFileSync } from "fs";
+
+async function runJudge() {
+  const goal = {{{goal:string}}};
+  const responseA = {{{responseA:string}}};
+  const responseB = {{{responseB:string}}};
+
+  const result = await judgePairwise(goal, responseA, responseB);
+
+  writeFileSync("{{{resultsFilename:string}}}", JSON.stringify(result, null, 2));
+}
+
+runJudge();

@@ -40,7 +40,9 @@ export type Width =
 
 export function parseWidth(raw: unknown): Width | null {
   if (raw == null) return null;
-  if (typeof raw === "number") return { kind: "cells", value: raw };
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return { kind: "cells", value: Math.max(0, Math.floor(raw)) };
+  }
   if (raw === "full") return { kind: "full" };
   if (typeof raw === "string") {
     const match = raw.match(/^(\d+(?:\.\d+)?)%$/);

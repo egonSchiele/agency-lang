@@ -532,8 +532,9 @@ export def column(
  * block with multiple builder calls), the children are stacked in an
  * implicit `column`.
  *
- * @param title - Text embedded in the top border (no truncation; box
- *   grows to fit). Empty string for no title.
+ * @param title - Text embedded in the top border. Without an explicit
+ *   width, the box grows to fit; with width set, over-long titles wrap
+ *   inside the frame. Empty string for no title.
  * @param titleColor - Color of the title text
  * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
  * @param borderColor - Color of the border characters
@@ -686,7 +687,9 @@ def _makeTableBuilder(state: any): TableBuilder {
  * emits it by default, so treating it as "set" would mean no
  * `text()` header cell ever got the auto-bold).
  *
- * @param title - Text embedded in the top border; box grows to fit
+ * @param title - Text embedded in the top border. Without an explicit
+ *   width, the table grows to fit; with width set, over-long titles wrap
+ *   inside the frame.
  * @param titleColor - Color of the title text
  * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
  * @param borderColor - Color of the border characters

@@ -634,8 +634,9 @@ box(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: st
  * block with multiple builder calls), the children are stacked in an
  * implicit `column`.
  *
- * @param title - Text embedded in the top border (no truncation; box
- *   grows to fit). Empty string for no title.
+ * @param title - Text embedded in the top border. Without an explicit
+ *   width, the box grows to fit; with width set, over-long titles wrap
+ *   inside the frame. Empty string for no title.
  * @param titleColor - Color of the title text
  * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
  * @param borderColor - Color of the border characters
@@ -661,7 +662,7 @@ box(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: st
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L547))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L548))
 
 ### render
 
@@ -690,7 +691,7 @@ render(node: LayoutNode, color: "auto" | boolean, cols: number, rows: number): s
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L594))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L595))
 
 ### _setTableColumns
 
@@ -707,7 +708,7 @@ _setTableColumns(state: any, specs: ColumnSpec[]): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L609))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L610))
 
 ### _setTableCaption
 
@@ -724,7 +725,7 @@ _setTableCaption(state: any, text: string): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L614))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L615))
 
 ### _setTableHeader
 
@@ -741,7 +742,7 @@ _setTableHeader(state: any, ...cells: Cell[]): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L619))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L620))
 
 ### _addTableRow
 
@@ -758,7 +759,7 @@ _addTableRow(state: any, ...cells: Cell[]): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L624))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L625))
 
 ### _addTableFooter
 
@@ -775,7 +776,7 @@ _addTableFooter(state: any, ...cells: Cell[]): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L629))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L630))
 
 ### _makeTableBuilder
 
@@ -791,7 +792,7 @@ _makeTableBuilder(state: any): TableBuilder
 
 **Returns:** [TableBuilder](#tablebuilder)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L634))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L635))
 
 ### table
 
@@ -843,7 +844,9 @@ table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: 
  * emits it by default, so treating it as "set" would mean no
  * `text()` header cell ever got the auto-bold).
  *
- * @param title - Text embedded in the top border; box grows to fit
+ * @param title - Text embedded in the top border. Without an explicit
+ *   width, the table grows to fit; with width set, over-long titles wrap
+ *   inside the frame.
  * @param titleColor - Color of the title text
  * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
  * @param borderColor - Color of the border characters
@@ -885,4 +888,4 @@ table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: 
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L708))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/layout.agency#L711))

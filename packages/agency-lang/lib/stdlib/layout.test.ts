@@ -33,6 +33,11 @@ describe("parseWidth", () => {
     expect(_internal.parseWidth(20)).toEqual({ kind: "cells", value: 20 });
   });
 
+  test("normalizes fixed cell widths to non-negative integer cells", () => {
+    expect(_internal.parseWidth(20.9)).toEqual({ kind: "cells", value: 20 });
+    expect(_internal.parseWidth(-5)).toEqual({ kind: "cells", value: 0 });
+  });
+
   test("parses full and percentage widths", () => {
     expect(_internal.parseWidth("full")).toEqual({ kind: "full" });
     expect(_internal.parseWidth("33%")).toEqual({ kind: "percent", value: 33 });
@@ -43,12 +48,22 @@ describe("parseWidth", () => {
     expect(() => _internal.parseWidth("foo")).toThrow(/invalid width/);
     expect(() => _internal.parseWidth("100")).toThrow(/invalid width/);
   });
+
+  test("rejects non-finite fixed cell widths", () => {
+    expect(() => _internal.parseWidth(Number.NaN)).toThrow(/invalid width/);
+    expect(() => _internal.parseWidth(Number.POSITIVE_INFINITY)).toThrow(/invalid width/);
+    expect(() => _internal.parseWidth(Number.NEGATIVE_INFINITY)).toThrow(/invalid width/);
+  });
 });
 
 describe("wrapText", () => {
   test("wraps on word boundaries", () => {
     expect(_internal.wrapText("hello world", 5)).toEqual(["hello", "world"]);
     expect(_internal.wrapText("hello world", 8)).toEqual(["hello", "world"]);
+  });
+
+  test("preserves trailing whitespace when no wrapping is needed", () => {
+    expect(_internal.wrapText("hello  ", 10)).toEqual(["hello  "]);
   });
 
   test("breaks long words", () => {
@@ -106,6 +121,19 @@ describe("resolveSizes", () => {
     const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
     expect(resolved.children[0].attrs.wrapWidth).toBeUndefined();
     expect(resolved.children[1].attrs.wrapWidth).toBeUndefined();
+  });
+
+  test("uses clamped integer padding and gap when resolving child width", () => {
+    const padded = _internal.resolveSizes(node("box", { width: 20, padding: 1.9 }, [
+      node("text", { content: "inside" }),
+    ]), { cols: 80, rows: 24 });
+    expect(padded.children[0].attrs.wrapWidth).toBe(16);
+
+    const negativeGap = _internal.resolveSizes(node("row", { width: 20, gap: -5 }, [
+      node("box", { width: "50%" }, []),
+      node("box", { width: "50%" }, []),
+    ]), { cols: 80, rows: 24 });
+    expect(negativeGap.children.map((child) => child.attrs.resolvedWidth)).toEqual([10, 10]);
   });
 
   test("rejects percentage root and nested full widths", () => {

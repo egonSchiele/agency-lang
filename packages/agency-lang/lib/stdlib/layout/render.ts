@@ -125,14 +125,18 @@ function isContainer(node: LayoutNode): boolean {
 
 function chromeWidth(node: LayoutNode): number {
   if (node.type === "box") {
-    const padding = (node.attrs.padding as number | undefined) ?? 0;
+    const padding = nonNegativeInteger((node.attrs.padding as number | undefined) ?? 0);
     return 2 + 2 * padding;
   }
   if (node.type === "row") {
-    const gap = (node.attrs.gap as number | undefined) ?? 0;
+    const gap = nonNegativeInteger((node.attrs.gap as number | undefined) ?? 0);
     return Math.max(0, node.children.length - 1) * gap;
   }
   return 0;
+}
+
+function nonNegativeInteger(value: number): number {
+  return Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
 }
 
 function annotate(

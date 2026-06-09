@@ -23,7 +23,7 @@ export function wrapText(content: string, width: number): string[] {
 
 function wrapSingleLine(line: string, width: number): string[] {
   if (line === "") return [""];
-  if (visualWidth(line) <= width) return [line.trimEnd()];
+  if (visualWidth(line) <= width) return [line];
 
   const tokens = line.split(/(\s+)/);
   const out: string[] = [];

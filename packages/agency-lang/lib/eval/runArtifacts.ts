@@ -1,9 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { assertEvalRunId, assertEvalTaskId } from "./ids.js";
 import type { EvalRunTask, EvalRunTaskResult, EvalRunResult } from "./runTypes.js";
-
-const ARTIFACT_ID_RE = /^[A-Za-z0-9._-]+$/;
 
 export type EvalRunState = {
   runId: string;
@@ -33,7 +32,7 @@ export function initializeEvalRun(args: {
   continueOnError: boolean;
   startedAt: Date;
 }): EvalRunState {
-  assertArtifactId("runId", args.runId);
+  assertEvalRunId(args.runId);
   const runDir = path.resolve(args.runsDir, args.runId);
   const tasksDir = path.join(runDir, "tasks");
   fs.mkdirSync(tasksDir, { recursive: true });
@@ -56,7 +55,7 @@ export function initializeEvalRun(args: {
 }
 
 export function prepareEvalRunTask(state: EvalRunState, task: EvalRunTask): PreparedEvalRunTask {
-  assertArtifactId("task_id", task.task_id);
+  assertEvalTaskId(task.task_id);
   const taskDir = path.join(state.tasksDir, task.task_id);
   const workdirPath = path.join(taskDir, "workdir");
   fs.mkdirSync(taskDir, { recursive: true });
@@ -143,10 +142,4 @@ export function writeEvalRunSummary(state: EvalRunState, tasks: EvalRunTaskResul
 
 function writeJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
-}
-
-function assertArtifactId(fieldName: "runId" | "task_id", value: string): void {
-  if (!ARTIFACT_ID_RE.test(value)) {
-    throw new Error(`Invalid ${fieldName} "${value}"; use only letters, numbers, '.', '_' and '-'`);
-  }
 }

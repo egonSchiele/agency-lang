@@ -3,9 +3,8 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
+import { assertEvalTaskId } from "./ids.js";
 import type { EvalRunTask } from "./runTypes.js";
-
-const TASK_ID_RE = /^[A-Za-z0-9._-]+$/;
 
 type MakeId = () => string;
 
@@ -82,9 +81,7 @@ function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalRunTa
 function validateTasks(tasks: EvalRunTask[]): EvalRunTask[] {
   const seen: Record<string, true> = {};
   for (const task of tasks) {
-    if (!TASK_ID_RE.test(task.task_id)) {
-      throw new Error(`Invalid task_id "${task.task_id}"; use only letters, numbers, '.', '_' and '-'`);
-    }
+    assertEvalTaskId(task.task_id);
     if (seen[task.task_id]) {
       throw new Error(`Duplicate task_id "${task.task_id}"`);
     }

@@ -46,12 +46,24 @@ export function _prepareEvalRunTask(state: AgencyEvalRunState, task: EvalRunTask
   return prepareEvalRunTask(state, task);
 }
 
-export async function _extractEvalRunTask(_state: AgencyEvalRunState, prepared: PreparedEvalRunTask): Promise<boolean> {
+async function extractEvalRunTask(_state: AgencyEvalRunState, prepared: PreparedEvalRunTask): Promise<boolean> {
   if (!shouldExtractStatelog(prepared.statelogPath)) return false;
   const events = await readAllEvents(prepared.statelogPath);
   const record = extractEvalRecord(events, prepared.statelogPath);
   fs.writeFileSync(prepared.evalRecordPath, JSON.stringify(record, null, 2));
   return true;
+}
+
+export async function _completeEvalRunTask(
+  state: AgencyEvalRunState,
+  prepared: PreparedEvalRunTask,
+  errorMessage: string,
+): Promise<EvalRunTaskResult> {
+  if (errorMessage) {
+    return _recordEvalRunTaskError(state, prepared, errorMessage);
+  }
+  await extractEvalRunTask(state, prepared);
+  return recordEvalRunTaskSuccessInState(state, prepared);
 }
 
 export function _recordEvalRunTaskError(
@@ -64,7 +76,7 @@ export function _recordEvalRunTaskError(
   return result;
 }
 
-export function _recordEvalRunTaskSuccess(
+function recordEvalRunTaskSuccessInState(
   state: AgencyEvalRunState,
   prepared: PreparedEvalRunTask,
 ): EvalRunTaskResult {

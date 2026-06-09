@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  _completeEvalRunTask,
   _finishEvalRun,
   _formatEvalRunFailure,
   _initializeEvalRun,
@@ -34,6 +35,18 @@ describe("agency eval stdlib helpers", () => {
     expect(result.status).toBe("error");
     expect(summary.errorCount).toBe(1);
     expect(fs.existsSync(path.join(state.runDir, "summary.json"))).toBe(true);
+  });
+
+  it("completes prepared tasks with success or error results", async () => {
+    const state = _initializeEvalRun({ moduleId: "agent" }, [{ task_id: "t1", rubric: "r", args: {} }], "main", tmpDir, "r1", true);
+    const prepared = _prepareEvalRunTask(state, state.tasks[0]);
+
+    const success = await _completeEvalRunTask(state, prepared, "");
+    const error = await _completeEvalRunTask(state, prepared, "boom");
+
+    expect(success).toMatchObject({ taskId: "t1", status: "success" });
+    expect(error).toMatchObject({ taskId: "t1", status: "error", errorMessage: "boom" });
+    expect(state.results.map((result) => result.status)).toEqual(["success", "error"]);
   });
 
   it("formats failure-like values", () => {

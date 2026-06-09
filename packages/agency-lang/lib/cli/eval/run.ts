@@ -10,7 +10,7 @@ import { parseTarget } from "@/cli/util.js";
 import { RunStrategy } from "@/importStrategy.js";
 import { extractEvalRecord } from "@/eval/extract.js";
 import { readAllEvents } from "@/eval/parseJsonl.js";
-import type { EvalRunCompiledAgent, EvalRunResult, EvalRunTask } from "@/eval/runTypes.js";
+import type { EvalRunCompiledAgent, EvalRunResult, EvalRunTask, EvalRunTaskResult } from "@/eval/runTypes.js";
 import {
   initializeEvalRun,
   prepareEvalRunTask,
@@ -18,6 +18,8 @@ import {
   recordEvalRunTaskSuccess,
   shouldExtractStatelog,
   writeEvalRunSummary,
+  type EvalRunState,
+  type PreparedEvalRunTask,
 } from "@/eval/runArtifacts.js";
 import { loadTasks, taskFromGoal } from "@/eval/loadTasks.js";
 import { buildForkOptions, buildRunInstruction, subprocessBootstrapPath } from "@/runtime/ipc.js";
@@ -39,6 +41,15 @@ export type EvalRunCliDependencies = {
   compileAgent(args: { config: AgencyConfig; agentFile: string }): Promise<EvalRunCompiledAgent>;
   runTask(args: { compiled: EvalRunCompiledAgent; node: string; args: Record<string, any>; cwd: string; statelogPath: string }): Promise<{ ok: true } | { ok: false; errorMessage: string }>;
   extract(args: { statelogPath: string; outPath: string; task: EvalRunTask }): Promise<void>;
+};
+
+export type ExecuteEvalRunTaskArgs = {
+  state: EvalRunState;
+  task: EvalRunTask;
+  compiled: EvalRunCompiledAgent;
+  defaultNode: string;
+  runTask: EvalRunCliDependencies["runTask"];
+  extract: EvalRunCliDependencies["extract"];
 };
 
 export function resolveEvalRunTarget(target: string): { agentFile: string; node: string; label: string } {
@@ -81,40 +92,47 @@ export async function evalRun(
     continueOnError,
     startedAt: deps.now(),
   });
-  const results = [];
+  const results: EvalRunTaskResult[] = [];
   for (const task of tasks) {
-    let prepared;
-    try {
-      prepared = prepareEvalRunTask(state, task);
-    } catch (err) {
-      results.push(recordEvalRunTaskError(task, (err as Error).message));
-      if (!continueOnError) break;
-      continue;
-    }
-    const runResult = await deps.runTask({
+    const taskResult = await executeEvalRunTask({
+      state,
+      task,
       compiled,
-      node: task.node ?? target.node,
-      args: task.args,
-      cwd: prepared.workdirPath,
-      statelogPath: prepared.statelogPath,
+      defaultNode: target.node,
+      runTask: deps.runTask,
+      extract: deps.extract,
     });
-    if (!runResult.ok) {
-      results.push(recordEvalRunTaskError(prepared, runResult.errorMessage));
-      if (!continueOnError) break;
-      continue;
-    }
-    if (shouldExtractStatelog(prepared.statelogPath)) {
-      try {
-        await deps.extract({ statelogPath: prepared.statelogPath, outPath: prepared.evalRecordPath, task });
-      } catch (err) {
-        results.push(recordEvalRunTaskError(prepared, (err as Error).message));
-        if (!continueOnError) break;
-        continue;
-      }
-    }
-    results.push(recordEvalRunTaskSuccess(prepared));
+    results.push(taskResult);
+    if (taskResult.status === "error" && !continueOnError) break;
   }
   return writeEvalRunSummary(state, results);
+}
+
+export async function executeEvalRunTask(args: ExecuteEvalRunTaskArgs): Promise<EvalRunTaskResult> {
+  let prepared: PreparedEvalRunTask;
+  try {
+    prepared = prepareEvalRunTask(args.state, args.task);
+  } catch (err) {
+    return recordEvalRunTaskError(args.task, (err as Error).message);
+  }
+  const runResult = await args.runTask({
+    compiled: args.compiled,
+    node: args.task.node ?? args.defaultNode,
+    args: args.task.args,
+    cwd: prepared.workdirPath,
+    statelogPath: prepared.statelogPath,
+  });
+  if (!runResult.ok) {
+    return recordEvalRunTaskError(prepared, runResult.errorMessage);
+  }
+  if (shouldExtractStatelog(prepared.statelogPath)) {
+    try {
+      await args.extract({ statelogPath: prepared.statelogPath, outPath: prepared.evalRecordPath, task: args.task });
+    } catch (err) {
+      return recordEvalRunTaskError(prepared, (err as Error).message);
+    }
+  }
+  return recordEvalRunTaskSuccess(prepared);
 }
 
 const defaultEvalRunDependencies: EvalRunCliDependencies = {

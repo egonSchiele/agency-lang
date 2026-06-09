@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import { executeJudgePairwiseAsync } from "@/cli/util.js";
 import type { PairwiseVerdict } from "./types.js";
@@ -23,7 +24,7 @@ export async function judgePairwise(
   if (respB.missing) warnMissing(recordPathB);
 
   const judged = await executeJudgePairwiseAsync({
-    baseName: opts.baseName ?? recordPathA.replace(/\.eval\.json$/, ""),
+    baseName: opts.baseName ?? defaultBaseName(recordPathA, recordPathB),
     goal,
     responseA: respA.text,
     responseB: respB.text,
@@ -41,6 +42,14 @@ export async function judgePairwise(
     reasoning: judged.reasoning,
     generatedAt: new Date().toISOString(),
   };
+}
+
+function defaultBaseName(recordPathA: string, recordPathB: string): string {
+  return `${stem(recordPathA)}.vs.${stem(recordPathB)}`;
+}
+
+function stem(filePath: string): string {
+  return path.basename(filePath).replace(/\.eval\.json$/, "");
 }
 
 function readJson(filePath: string): any {

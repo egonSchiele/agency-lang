@@ -54,6 +54,13 @@ describe("selectFinalResponse", () => {
     });
   });
 
+  it("reports missing for legacy undefined finalResponse", () => {
+    expect(selectFinalResponse({ recordVersion: 1, finalResponse: undefined })).toEqual({
+      text: "",
+      missing: true,
+    });
+  });
+
   it("reports missing when neither supported field is present", () => {
     expect(selectFinalResponse({ recordVersion: 99 })).toEqual({
       text: "",

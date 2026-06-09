@@ -446,7 +446,7 @@ export async function executeJudgeAsync(
   stderr: string;
 }> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
-  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge/score.agency");
   const { raw, stdout, stderr } = await runAgencyJudge<
     {
       actualOutput: string;
@@ -497,7 +497,7 @@ export async function executeJudgePairwiseAsync({
     { goal: string; responseA: string; responseB: string },
     unknown
   >({
-    judgeAgencyFile: path.resolve(currentDir, "../agents/judgePairwise.agency"),
+    judgeAgencyFile: path.resolve(currentDir, "../agents/judge/pairwise.agency"),
     renderRunner: renderJudgePairwiseEvaluate,
     templateData: {
       goal: JSON.stringify(goal),

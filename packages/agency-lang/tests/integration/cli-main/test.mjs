@@ -371,6 +371,34 @@ try {
   assert(Array.isArray(traceEvents), "trace log output should be an array");
   assert(traceEvents.length > 0, "trace log should contain events");
 
+  // eval extract
+
+  console.log("--- eval extract ---");
+  runAgency(
+    "12b-eval-extract",
+    [
+      "eval",
+      "extract",
+      join(fixtureDir, "eval/simple.statelog.jsonl"),
+      "-o",
+      "eval-record.json",
+    ],
+  );
+  assertFile(join(dir, "eval-record.json"), "eval extract should write eval-record.json");
+  const evalRecord = JSON.parse(readText(join(dir, "eval-record.json")));
+  assert(
+    evalRecord.recordVersion === 2,
+    `Expected eval recordVersion 2, got ${evalRecord.recordVersion}`,
+  );
+  assert(
+    evalRecord.evalInputs[0]?.value === "What is the capital of India?",
+    "Expected eval input value",
+  );
+  assert(
+    evalRecord.evalOutputs[0]?.value === "New Delhi",
+    "Expected eval output value",
+  );
+
   // fmt
 
   console.log("--- fmt ---");

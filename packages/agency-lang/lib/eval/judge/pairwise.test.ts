@@ -13,6 +13,7 @@ vi.mock("@/cli/util.js", () => ({
 
 const mockedJudge = vi.mocked(executeJudgePairwiseAsync);
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+const finalResponseFixturesDir = path.join(fixturesDir, "final-response");
 
 describe("judgePairwise", () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
@@ -34,8 +35,8 @@ describe("judgePairwise", () => {
   });
 
   it("returns a verdict for v2 records", async () => {
-    const a = path.join(fixturesDir, "v2-A.eval.json");
-    const b = path.join(fixturesDir, "v2-B.eval.json");
+    const a = path.join(finalResponseFixturesDir, "v2-A.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v2-B.eval.json");
 
     const verdict = await judgePairwise("name the capital of India", a, b, {
       baseName: "test-pairwise",
@@ -60,8 +61,8 @@ describe("judgePairwise", () => {
   });
 
   it("returns a verdict for legacy v1 records", async () => {
-    const a = path.join(fixturesDir, "v1-A.eval.json");
-    const b = path.join(fixturesDir, "v1-B.eval.json");
+    const a = path.join(finalResponseFixturesDir, "v1-A.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v1-B.eval.json");
 
     const verdict = await judgePairwise("name the capital of India", a, b);
 
@@ -74,10 +75,21 @@ describe("judgePairwise", () => {
     ]);
   });
 
+  it("defaults the judge runner base name to a cwd-local pair stem", async () => {
+    const a = path.join(finalResponseFixturesDir, "v2-A.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v2-B.eval.json");
+
+    await judgePairwise("name the capital of India", a, b);
+
+    expect(mockedJudge).toHaveBeenCalledWith(
+      expect.objectContaining({ baseName: "v2-A.vs.v2-B" }),
+    );
+  });
+
   it("warns and judges an empty string when v2 output is missing", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-pairwise-"));
     const a = path.join(dir, "missing.eval.json");
-    const b = path.join(fixturesDir, "v2-B.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v2-B.eval.json");
     fs.writeFileSync(a, JSON.stringify({ recordVersion: 2, evalOutputs: [] }));
 
     const verdict = await judgePairwise("goal", a, b);
@@ -94,7 +106,7 @@ describe("judgePairwise", () => {
   it("warns and judges an empty string when legacy finalResponse is null", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-pairwise-"));
     const a = path.join(dir, "missing-v1.eval.json");
-    const b = path.join(fixturesDir, "v2-B.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v2-B.eval.json");
     fs.writeFileSync(a, JSON.stringify({ recordVersion: 1, finalResponse: null }));
 
     const verdict = await judgePairwise("goal", a, b);
@@ -108,7 +120,7 @@ describe("judgePairwise", () => {
   it("stringifies non-string v2 output values", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-pairwise-"));
     const a = path.join(dir, "object.eval.json");
-    const b = path.join(fixturesDir, "v2-B.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v2-B.eval.json");
     fs.writeFileSync(
       a,
       JSON.stringify({
@@ -128,7 +140,7 @@ describe("judgePairwise", () => {
   it("preserves truncated metadata", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-pairwise-"));
     const a = path.join(dir, "truncated.eval.json");
-    const b = path.join(fixturesDir, "v2-B.eval.json");
+    const b = path.join(finalResponseFixturesDir, "v2-B.eval.json");
     fs.writeFileSync(
       a,
       JSON.stringify({

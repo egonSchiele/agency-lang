@@ -17,7 +17,8 @@ export function selectFinalResponse(record: any): FinalResponse {
 
   if ("finalResponse" in (record ?? {})) {
     const value = record.finalResponse;
-    return { text: value ?? "", missing: value === null };
+    if (value == null) return { text: "", missing: true };
+    return { text: stringify(value), missing: false };
   }
 
   return { text: "", missing: true };

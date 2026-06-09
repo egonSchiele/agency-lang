@@ -5,11 +5,65 @@ description: Documents the `agency eval extract` command for converting a captur
 
 # Evaluating agent runs
 
-`agency eval` is the umbrella for tools that grade, compare, and analyze agent runs from their captured statelog traces. Today it has one subcommand:
+`agency eval` is the umbrella for tools that run, grade, compare, and analyze agent runs from their captured statelog traces. The main subcommands are:
 
 ```
+agency eval run --agent <file>[:<node>] (--tasks <file|dir> | --goal <text>)
 agency eval extract <file>
 ```
+
+## Running a task suite
+
+`agency eval run` executes an Agency agent against one or more eval tasks and writes a structured run directory:
+
+```bash
+agency eval run --agent agent.agency:evalMain --tasks tasks.json --run-id smoke
+```
+
+Task suites can be either a JSON file with `{ "tasks": [...] }` or a directory containing one `.json` file per task. A task has this shape:
+
+```json
+{
+  "task_id": "fizzbuzz-write",
+  "rubric": "Should produce a typechecking fizzbuzz program.",
+  "args": { "prompt": "Write fizzbuzz in Agency" },
+  "node": "evalMain",
+  "working_dir": "./fixtures/empty-project"
+}
+```
+
+`rubric` is required. `args` defaults to `{}`. `task_id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the task workdir before the subprocess runs, so each task can mutate its own isolated fixture copy.
+
+For a single ad-hoc run, use `--goal` instead of `--tasks`:
+
+```bash
+agency eval run --agent agent.agency --goal "Answer with a concise summary"
+```
+
+Options:
+
+- `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
+- `--tasks <file|dir>` — task suite file or directory. Mutually exclusive with `--goal`.
+- `--goal <text>` — create one inline task with this rubric. Mutually exclusive with `--tasks`.
+- `--run-id <id>` — output run id. Defaults to a generated id.
+- `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
+- `--no-continue-on-error` — stop after the first task failure. By default, remaining tasks continue.
+
+Each run writes:
+
+```text
+runs/<run-id>/
+  config.json
+  tasks/<task-id>/
+    task.json
+    statelog.jsonl
+    eval-record.json
+    workdir/
+    error.txt
+  summary.json
+```
+
+`summary.json` contains the run id, agent label, task results, and success/error counts. `eval-record.json` is produced with the same extractor described below whenever the task produced a non-empty statelog.
 
 `extract` is **not** a tool for running the agent. It takes a `.statelog.jsonl` file you've already captured and turns it into a small, normalized JSON artifact — an **eval record** — that downstream tools can grade with an LLM judge, compare against another run, or pattern-match for behavioral assertions.
 

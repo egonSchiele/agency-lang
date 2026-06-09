@@ -1,0 +1,93 @@
+import { run, CompiledProgram } from "std::agency"
+import {
+  _initializeEvalRun,
+  _prepareEvalRunTask,
+  _extractEvalRunTask,
+  _recordEvalRunTaskError,
+  _recordEvalRunTaskSuccess,
+  _formatEvalRunFailure,
+  _finishEvalRun,
+ } from "agency-lang/stdlib-lib/agencyEval.js"
+
+export type EvalRunTask = {
+  task_id: string;
+  rubric: string;
+  args: Record<string, any>;
+  node?: string;
+  working_dir?: string
+}
+
+export type EvalRunTaskResult = {
+  taskId: string;
+  status: "success" | "error";
+  evalRecordPath: string;
+  statelogPath: string;
+  workdirPath: string;
+  errorMessage?: string
+}
+
+export type EvalRunResult = {
+  runId: string;
+  runDir: string;
+  agent: string;
+  tasks: EvalRunTaskResult[];
+  okCount: number;
+  errorCount: number
+}
+
+export def evalRun(
+  compiled: CompiledProgram,
+  tasks: EvalRunTask[],
+  node: string = "main",
+  runsDir: string = "runs/",
+  runId: string = "",
+  continueOnError: boolean = true,
+): EvalRunResult {
+  """
+  Run a compiled Agency program against eval tasks, writing per-task statelog and eval artifacts under runsDir/runId. Subprocess execution goes through std::agency.run so caller handlers still approve subprocess execution and child interrupts.
+
+  @param compiled - Compiled program from std::agency.compile
+  @param tasks - Eval tasks to run sequentially
+  @param node - Default node to invoke when a task does not specify one
+  @param runsDir - Output directory for eval runs
+  @param runId - Optional run id; generated when empty
+  @param continueOnError - Continue remaining tasks after a task error
+  """
+  const runState = _initializeEvalRun(compiled, tasks, node, runsDir, runId, continueOnError)
+  for (task in runState.tasks) {
+    const preparedResult = try _prepareEvalRunTask(runState, task)
+    if (isFailure(preparedResult)) {
+      _recordEvalRunTaskError(runState, task, _formatEvalRunFailure(preparedResult))
+      if (!continueOnError) {
+        return _finishEvalRun(runState)
+      }
+      continue
+    }
+    const prepared = preparedResult.value
+    const taskNode = task.node ?? node
+    const runResult = run(
+      compiled: compiled,
+      node: taskNode,
+      args: task.args,
+      logFile: prepared.statelogPath,
+      cwd: prepared.workdirPath,
+    )
+    if (isFailure(runResult)) {
+      _recordEvalRunTaskError(runState, prepared, _formatEvalRunFailure(runResult))
+      if (!continueOnError) {
+        return _finishEvalRun(runState)
+      }
+    } else {
+      const extracted = try _extractEvalRunTask(runState, prepared)
+      if (isFailure(extracted)) {
+        _recordEvalRunTaskError(runState, prepared, _formatEvalRunFailure(extracted))
+        if (!continueOnError) {
+          return _finishEvalRun(runState)
+        }
+      } else {
+        _recordEvalRunTaskSuccess(runState, prepared)
+      }
+    }
+  }
+  return _finishEvalRun(runState)
+}

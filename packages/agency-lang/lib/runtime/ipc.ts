@@ -8,7 +8,10 @@ import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
+import type { ForkOptions } from "child_process";
 import { rmSync } from "fs";
+import { nanoid } from "nanoid";
+import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext } from "./asyncContext.js";
 import { interruptWithHandlers, isApproved, hasInterrupts } from "./interrupts.js";
 import { failure, type ResultFailure } from "./result.js";
@@ -81,6 +84,35 @@ export function makeLimitFailure(
   });
 }
 
+let subprocessIpcPayloadLimit = Infinity;
+
+export function setSubprocessIpcPayloadLimit(limit: number): void {
+  subprocessIpcPayloadLimit = limit;
+}
+
+function serializedByteLength(value: any): { ok: true; serialized: string; byteLength: number } | { ok: false; error: string } {
+  try {
+    const serialized = JSON.stringify(value);
+    return { ok: true, serialized, byteLength: Buffer.byteLength(serialized, "utf8") };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function buildIpcPayloadLimitError(threshold: number, value: number, samplePrefix = ""): IpcErrorMessage {
+  return {
+    type: "error",
+    error: JSON.stringify({
+      reason: "limit_exceeded",
+      limit: "ipc_payload",
+      threshold,
+      value,
+      message: `IPC payload (${value} bytes) exceeded ipcPayload limit of ${threshold}`,
+      samplePrefix,
+    }),
+  };
+}
+
 // ── IPC Debug Logger ──
 // Toggle with AGENCY_IPC_DEBUG=1. Logs every IPC message to stderr
 // with direction, timestamp, and message type. Truncates large payloads.
@@ -114,6 +146,7 @@ export type SubprocessVotes = {
 
 export type IpcInterruptMessage = {
   type: "interrupt";
+  interruptId: string;
   interrupt: {
     kind: string;
     message: string;
@@ -135,6 +168,7 @@ export type IpcErrorMessage = {
 
 export type IpcDecisionMessage = {
   type: "decision";
+  interruptId: string;
   approved: boolean;
   value: any;
 };
@@ -162,13 +196,29 @@ export async function sendInterruptToParent(
   }
   const outMsg = {
     type: "interrupt",
+    interruptId: nanoid(),
     interrupt: interruptData,
     subprocessVotes: votes,
   } satisfies IpcInterruptMessage;
+  const serialized = serializedByteLength(outMsg);
+  if (!serialized.ok) {
+    const value = `Failed to serialize interrupt payload: ${serialized.error}`;
+    process.send!(buildIpcPayloadLimitError(subprocessIpcPayloadLimit, Infinity, value));
+    return { type: "reject", value };
+  }
+  if (serialized.byteLength > subprocessIpcPayloadLimit) {
+    const errorMsg = buildIpcPayloadLimitError(
+      subprocessIpcPayloadLimit,
+      serialized.byteLength,
+      serialized.serialized.slice(0, 1024),
+    );
+    process.send!(errorMsg);
+    return { type: "reject", value: errorMsg.error };
+  }
   ipcLog("send", outMsg);
   return new Promise((resolve) => {
     const handler = (msg: any) => {
-      if (msg.type === "decision") {
+      if (msg.type === "decision" && msg.interruptId === outMsg.interruptId) {
         process.removeListener("message", handler);
         ipcLog("recv", msg);
         if (msg.approved) {
@@ -202,7 +252,44 @@ type RunSession = {
   wallClockTimer: NodeJS.Timeout | null;
   stdoutBytes: number;
   stoppedForwarding: boolean;
+  configOverrides?: Partial<AgencyConfig>;
 };
+
+export type RunInstruction = {
+  type: "run";
+  scriptPath: string;
+  node: string;
+  args: Record<string, any>;
+  ipcPayload?: number;
+  configOverrides?: Partial<AgencyConfig>;
+};
+
+export function buildRunInstruction(args: {
+  scriptPath: string;
+  node: string;
+  args: Record<string, any>;
+  limits: RunLimits;
+  configOverrides?: Partial<AgencyConfig>;
+}): RunInstruction {
+  return {
+    type: "run",
+    scriptPath: args.scriptPath,
+    node: args.node,
+    args: args.args,
+    ipcPayload: args.limits.ipcPayload,
+    ...(args.configOverrides ? { configOverrides: args.configOverrides } : {}),
+  };
+}
+
+export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): ForkOptions {
+  const memoryMb = Math.max(1, Math.floor(args.limits.memory / (1024 * 1024)));
+  return {
+    stdio: ["pipe", "pipe", "pipe", "ipc"],
+    env: { ...process.env, AGENCY_IPC: "1" },
+    execArgv: [`--max-old-space-size=${memoryMb}`],
+    ...(args.cwd ? { cwd: args.cwd } : {}),
+  };
+}
 
 /**
  * Best-effort delete of the per-run compile output directory.
@@ -312,16 +399,17 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     const handlerResult = await interruptWithHandlers(kind, message, data, origin, s.ctx, s.stateStack);
     let decision: any;
     if (isApproved(handlerResult)) {
-      decision = { type: "decision", approved: true, value: (handlerResult as any).value };
+      decision = { type: "decision", interruptId: msg.interruptId, approved: true, value: (handlerResult as any).value };
     } else if (hasInterrupts(handlerResult)) {
-      decision = { type: "decision", approved: false, value: "Interrupt propagated to user (subprocess slow-path not yet supported)" };
+      decision = { type: "decision", interruptId: msg.interruptId, approved: false, value: "Interrupt propagated to user (subprocess slow-path not yet supported)" };
     } else {
-      decision = { type: "decision", approved: false, value: (handlerResult as any).value };
+      decision = { type: "decision", interruptId: msg.interruptId, approved: false, value: (handlerResult as any).value };
     }
     trySendDecision(s, decision);
   } catch (err) {
     trySendDecision(s, {
       type: "decision",
+      interruptId: msg.interruptId,
       approved: false,
       value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
     });
@@ -353,18 +441,16 @@ async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   // Defensively serialize once: a non-serializable value (circular refs,
   // BigInt) would otherwise throw inside the event handler and leave the
   // session unsettled, hanging _run's Promise.
-  let serialized: string;
-  try {
-    serialized = JSON.stringify(msg);
-  } catch (err) {
+  const serialized = serializedByteLength(msg);
+  if (!serialized.ok) {
     settle(s, s.rejectPromise, new Error(
-      `Failed to serialize subprocess message: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to serialize subprocess message: ${serialized.error}`,
     ));
     return;
   }
-  if (serialized.length > s.limits.ipcPayload) {
-    settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serialized.length, {
-      samplePrefix: serialized.slice(0, 1024),
+  if (serialized.byteLength > s.limits.ipcPayload) {
+    settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serialized.byteLength, {
+      samplePrefix: serialized.serialized.slice(0, 1024),
     });
     return;
   }
@@ -410,13 +496,13 @@ function attachSessionHandlers(s: RunSession, node: string, args: Record<string,
   s.child.on("close", (code, signal) => handleChildClose(s, code, signal));
   s.child.on("error", (err: Error) => settle(s, s.rejectPromise, new Error(`Subprocess error: ${err.message}`)));
 
-  const runMsg = {
-    type: "run",
+  const runMsg = buildRunInstruction({
     scriptPath: s.compiledPath,
     node,
     args,
-    ipcPayload: s.limits.ipcPayload,
-  };
+    limits: s.limits,
+    configOverrides: s.configOverrides,
+  });
   ipcLog("send", runMsg);
   s.child.send(runMsg);
 }
@@ -433,6 +519,8 @@ export async function _run(
   memory: number,
   ipcPayload: number,
   stdout: number,
+  configOverrides?: Partial<AgencyConfig>,
+  cwd?: string,
 ): Promise<any> {
   if (isIpcMode()) {
     throw new Error("Nested subprocess execution is not supported.");
@@ -443,15 +531,10 @@ export async function _run(
   const { ctx, stack: stateStack } = getRuntimeContext();
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
-  const memoryMb = Math.max(1, Math.floor(limits.memory / (1024 * 1024)));
   // stdio fds 1/2 piped (was inherit) so we can byte-count and truncate
   // when stdout limit is exceeded; we still forward bytes through to the
   // parent's own stdout/stderr until the limit hits.
-  const child = fork(subprocessBootstrapPath, [], {
-    stdio: ["pipe", "pipe", "pipe", "ipc"],
-    env: { ...process.env, AGENCY_IPC: "1" },
-    execArgv: [`--max-old-space-size=${memoryMb}`],
-  });
+  const child = fork(subprocessBootstrapPath, [], buildForkOptions({ limits, cwd }));
 
   return new Promise((resolvePromise, rejectPromise) => {
     const session: RunSession = {
@@ -467,6 +550,7 @@ export async function _run(
       wallClockTimer: null,
       stdoutBytes: 0,
       stoppedForwarding: false,
+      configOverrides,
     };
     attachSessionHandlers(session, node, args);
   });

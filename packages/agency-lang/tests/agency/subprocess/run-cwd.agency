@@ -1,0 +1,31 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { exec } from "std::shell"
+
+node main() {
+  const result = exec("pwd")
+  return result.stdout.trim().endsWith("tmp")
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: {},
+      cwd: "/tmp",
+    )
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (data) {
+    return approve()
+  }
+}

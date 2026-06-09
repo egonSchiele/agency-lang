@@ -1,0 +1,32 @@
+import { describe, expect, it } from "vitest";
+
+import { applyRuntimeConfigOverridesToContextArgs } from "./configOverrides.js";
+
+describe("runtime config overrides", () => {
+  it("applies eval run statelog overrides without replacing existing fields", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(
+      {
+        statelogConfig: {
+          host: "https://statelog.example",
+          apiKey: "key",
+          projectId: "project",
+          debugMode: true,
+          observability: false,
+        },
+        smoltalkDefaults: { model: "gpt-4o-mini" },
+        dirname: "/project",
+      },
+      { observability: true, log: { logFile: "/tmp/task.statelog.jsonl" } },
+    );
+
+    expect(result.statelogConfig).toEqual({
+      host: "https://statelog.example",
+      apiKey: "key",
+      projectId: "project",
+      debugMode: true,
+      observability: true,
+      logFile: "/tmp/task.statelog.jsonl",
+    });
+    expect(result.smoltalkDefaults).toEqual({ model: "gpt-4o-mini" });
+  });
+});

@@ -18,7 +18,7 @@ export type EvalRunTask = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L13))
 
 ### EvalRunTaskResult
 
@@ -33,7 +33,7 @@ export type EvalRunTaskResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L21))
 
 ### EvalRunResult
 
@@ -48,7 +48,7 @@ export type EvalRunResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L30))
 
 ### EvalValue
 
@@ -61,7 +61,7 @@ export type EvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L99))
 
 ### EvalRecord
 
@@ -84,7 +84,7 @@ export type EvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L106))
 
 ### PairwiseVerdictInput
 
@@ -96,7 +96,7 @@ export type PairwiseVerdictInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L148))
 
 ### PairwiseVerdict
 
@@ -112,7 +112,54 @@ export type PairwiseVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L154))
+
+### OptimizeDecision
+
+```ts
+export type OptimizeDecision =
+  | "baseline"
+  | "accepted"
+  | "rejected"
+  | "validation-failed"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L198))
+
+### OptimizeIterationResult
+
+```ts
+export type OptimizeIterationResult = {
+  iter: number;
+  agentPath: string;
+  mutationPath?: string;
+  evalRunDir?: string;
+  verdictPath?: string;
+  decision: OptimizeDecision;
+  wins: number;
+  losses: number;
+  ties: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L200))
+
+### OptimizeResult
+
+```ts
+export type OptimizeResult = {
+  runId: string;
+  runDir: string;
+  championIter: number | "baseline";
+  championSource: string;
+  acceptedCount: number;
+  rejectedCount: number;
+  validationFailedCount: number;
+  iterations: OptimizeIterationResult[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L212))
 
 ## Functions
 
@@ -147,7 +194,7 @@ Run a compiled Agency program against eval tasks, writing per-task
 
 **Returns:** [EvalRunResult](#evalrunresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L39))
 
 ### evalExtract
 
@@ -179,7 +226,7 @@ Extract a structured eval record from a statelog file. Equivalent to
 
 **Returns:** [EvalRecord](#evalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L123))
 
 ### evalJudge
 
@@ -218,4 +265,55 @@ Pairwise-judge two eval records against a rubric. Returns a
 
 **Returns:** [PairwiseVerdict](#pairwiseverdict)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L164))
+
+### optimize
+
+```ts
+optimize(config: Record<string, any>, agentSource: string, tasks: EvalRunTask[], goal: string, node: string, iterations: number, judgeSamples: number, acceptThreshold: number, runsDir: string, runId: string, agentFilename: string, workingDir: string, mutatorModel: string): OptimizeResult
+```
+
+Optimize the prompt marked with @optimize(prompt) in agentSource by
+  repeatedly proposing mutations, running the candidate against eval tasks,
+  and accepting candidates whose confident pairwise wins exceed losses by
+  acceptThreshold.
+
+  This stdlib function does not install any approval handler. Callers that
+  want to auto-approve std::agency.run subprocess execution should wrap the
+  call in their own handler; the CLI does this for `agency eval optimize`.
+
+  @param config - Agency config to use for eval compilation and LLM calls
+  @param agentSource - Agency source text containing exactly one target tag
+  @param tasks - Eval tasks to run for each candidate
+  @param goal - Plain-English optimization objective for the mutator
+  @param node - Node containing the @optimize(prompt) target
+  @param iterations - Maximum candidate iterations after the baseline
+  @param judgeSamples - Pairwise judge samples per task
+  @param acceptThreshold - Accept when wins minus losses exceeds this value
+  @param runsDir - Directory where optimization artifacts are written
+  @param runId - Run id; generated by default
+  @param agentFilename - Logical filename used when materializing agentSource
+  @param workingDir - Working directory copied for candidate eval workspaces
+  @param mutatorModel - Optional model override for prompt mutation
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| config | `Record<string, any>` |  |
+| agentSource | `string` |  |
+| tasks | `EvalRunTask[]` |  |
+| goal | `string` |  |
+| node | `string` | "main" |
+| iterations | `number` | 5 |
+| judgeSamples | `number` | 3 |
+| acceptThreshold | `number` | 0 |
+| runsDir | `string` | "runs/optimize" |
+| runId | `string` | "" |
+| agentFilename | `string` | "agent.agency" |
+| workingDir | `string` | "." |
+| mutatorModel | `string` | "" |
+
+**Returns:** [OptimizeResult](#optimizeresult)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L223))

@@ -23,6 +23,7 @@ import {
 import type {
   EvalRunCompiledAgent,
   EvalRunResult,
+  EvalRunTask,
   EvalRunTaskResult,
 } from "@/eval/runTypes.js";
 import {
@@ -36,6 +37,17 @@ export type EvalRunCliOptions = {
   agent: string;
   tasks?: string;
   goal?: string;
+  runId?: string;
+  runsDir?: string;
+  continueOnError?: boolean;
+  verbose?: boolean;
+  config?: AgencyConfig;
+};
+
+export type EvalRunLoadedTasksOptions = {
+  agent: string;
+  tasks: EvalRunTask[];
+  tasksSource: string;
   runId?: string;
   runsDir?: string;
   continueOnError?: boolean;
@@ -104,6 +116,30 @@ export async function evalRun(
       ? [taskFromGoal(opts.goal ?? "", nanoid)]
       : loadTasks(path.resolve(opts.tasks ?? ""), nanoid);
 
+  return evalRunLoadedTasks({
+    agent: opts.agent,
+    tasks,
+    tasksSource:
+      taskSelection === "goal"
+        ? "inline:--goal"
+        : path.resolve(opts.tasks ?? ""),
+    runId: opts.runId,
+    runsDir: opts.runsDir,
+    continueOnError: opts.continueOnError,
+    verbose: opts.verbose,
+    config: opts.config,
+  }, overrides);
+}
+
+export async function evalRunLoadedTasks(
+  opts: EvalRunLoadedTasksOptions,
+  overrides: {
+    runner?: EvalTaskRunner;
+    extractor?: EvalRecordExtractor;
+  } = {},
+): Promise<EvalRunResult> {
+  const target = resolveEvalRunTarget(opts.agent);
+
   const runsDir = path.resolve(
     opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs",
   );
@@ -119,11 +155,8 @@ export async function evalRun(
     runId,
     runsDir,
     agent: target.label,
-    tasksSource:
-      taskSelection === "goal"
-        ? "inline:--goal"
-        : path.resolve(opts.tasks ?? ""),
-    tasks,
+    tasksSource: opts.tasksSource,
+    tasks: opts.tasks,
     continueOnError,
     startedAt: new Date(),
   });
@@ -132,7 +165,7 @@ export async function evalRun(
   const extractor = overrides.extractor ?? defaultEvalRecordExtractor;
 
   const results: EvalRunTaskResult[] = [];
-  for (const task of tasks) {
+  for (const task of opts.tasks) {
     const result = await runEvalTask({
       state,
       task,

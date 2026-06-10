@@ -9,6 +9,7 @@ description: Documents the `agency eval extract` command for converting a captur
 
 ```
 agency eval run --agent <file>[:<node>] (--tasks <file|dir> | --goal <text>)
+agency eval optimize --agent <file>[:<node>] --tasks <file|dir> --goal <text>
 agency eval extract <file>
 ```
 
@@ -64,6 +65,67 @@ runs/<run-id>/
 ```
 
 `summary.json` contains the run id, agent label, task results, and success/error counts. `eval-record.json` is produced with the same extractor described below whenever the task produced a non-empty statelog.
+
+## Optimizing a tagged prompt
+
+`agency eval optimize` runs an eval-driven prompt optimization loop. It looks for exactly one `@optimize(prompt)` tag in the selected node, evaluates the baseline prompt, proposes prompt mutations, evaluates each candidate against the task suite, and accepts candidates that beat the current champion by the configured win/loss margin.
+
+```bash
+agency eval optimize \
+  --agent agent.agency:main \
+  --tasks tasks.json \
+  --goal "Improve factual accuracy without adding verbosity" \
+  --iterations 5
+```
+
+The target node must contain a single optimizable `llm(...)` call:
+
+```ts
+node main(question: string): string {
+  @optimize(prompt)
+  const answer: string = llm("Answer accurately: ${question}")
+  return answer
+}
+```
+
+Bare `@optimize` is treated as `@optimize(prompt)`. Other optimization targets, multiple tags in the same node, or a tag that does not enclose an `llm(...)` prompt are rejected.
+
+Options:
+
+- `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
+- `--tasks <file|dir>` — required task suite file or directory. Unlike `eval run`, optimizer tasks must come from a suite; `--goal` is reserved for the optimization objective.
+- `--goal <text>` — required plain-English objective used by the prompt mutator.
+- `--iterations <n>` — maximum candidate iterations after the baseline. Defaults to `5`.
+- `--judge-samples <n>` — pairwise judge samples per task. Defaults to `3`.
+- `--accept-threshold <n>` — accept when confident candidate wins minus losses is greater than this value. Defaults to `0`.
+- `--mutator-model <model>` — optional model override for proposing prompt mutations.
+- `--run-id <id>` — output run id. Defaults to a generated id.
+- `--runs-dir <path>` — optimizer output root. Defaults to `eval.optimizeRunsDir` in `agency.json`, or `eval.runsDir/optimize`, or `runs/optimize`.
+
+Only judge samples with confidence at least `50` count toward the win/loss margin. Pairwise judge confidence is an integer from `0` to `100`.
+
+Each optimize run writes:
+
+```text
+runs/optimize/<run-id>/
+  config.json
+  iter-0/
+    agent/<agent-filename>
+    workspace/
+    eval-run/<run-id>/summary.json
+  iter-1/
+    agent/<agent-filename>
+    mutation.md
+    verdict.json
+    workspace/
+    eval-run/<run-id>/summary.json
+  champion/
+    agent/<agent-filename>
+    championIter
+  summary.json
+```
+
+The CLI installs an approval handler for the internal `std::agency.run(...)` calls used by eval execution. The stdlib `agency.eval.optimize(...)` function does not install a handler; Agency callers should wrap it in their own handler when they want auto-approval.
 
 `extract` is **not** a tool for running the agent. It takes a `.statelog.jsonl` file you've already captured and turns it into a small, normalized JSON artifact — an **eval record** — that downstream tools can grade with an LLM judge, compare against another run, or pattern-match for behavioral assertions.
 

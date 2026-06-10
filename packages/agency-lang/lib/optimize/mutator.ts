@@ -48,7 +48,7 @@ export async function proposeMutation(args: {
   validationFailure?: string;
   callModel?: MutatorModelCaller;
 }): Promise<MutationProposal> {
-  const model = args.model ?? args.config.client?.defaultModel ?? "gpt-4o-mini";
+  const model = args.model || args.config.client?.defaultModel || "gpt-4o-mini";
   const message = buildMutatorMessage({
     goal: args.goal,
     currentPrompt: args.currentPrompt,

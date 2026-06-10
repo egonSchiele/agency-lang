@@ -118,6 +118,15 @@ export async function optimizeLoop(
 
     const candidateSource = updateSourcePrompt(currentSource, config.node, mutation.prompt);
     const candidateArtifact = artifacts.writeCandidate(iter, candidateSource, { rationale: mutation.rationale });
+
+    const recordRejection = (phase: string, error: unknown): void => {
+      report(deps, `Iteration ${iter}/${config.iterations}: rejected during ${phase} (${errorText(error)})`);
+      artifacts.writeRuntimeRejection(iter, error);
+      rejectedCount += 1;
+      iterations.push(iterationFromArtifact(iter, candidateArtifact, "rejected", 0, 0, normalizedTasks.length));
+      history.push({ iter, decision: "rejected", wins: 0, losses: 0, rationale: mutation.rationale, lossReasons: [errorText(error)] });
+    };
+
     let candidateEval: EvalRunResult;
     try {
       report(deps, `Iteration ${iter}/${config.iterations}: evaluating candidate`);
@@ -125,12 +134,7 @@ export async function optimizeLoop(
       assertEvalRecords(candidateEval);
       assertEvalRecords(champion.evalRun);
     } catch (error) {
-      report(deps, `Iteration ${iter}/${config.iterations}: rejected during eval (${errorText(error)})`);
-      artifacts.writeRuntimeRejection(iter, error);
-      rejectedCount += 1;
-      const iteration = iterationFromArtifact(iter, candidateArtifact, "rejected", 0, 0, normalizedTasks.length);
-      iterations.push(iteration);
-      history.push({ iter, decision: "rejected", wins: 0, losses: 0, rationale: mutation.rationale, lossReasons: [errorText(error)] });
+      recordRejection("eval", error);
       continue;
     }
 
@@ -139,12 +143,7 @@ export async function optimizeLoop(
       report(deps, `Iteration ${iter}/${config.iterations}: judging candidate against champion`);
       perTask = await judgeTasks(deps, normalizedTasks, champion.evalRun, candidateEval, config.judgeSamples);
     } catch (error) {
-      report(deps, `Iteration ${iter}/${config.iterations}: rejected during judging (${errorText(error)})`);
-      artifacts.writeRuntimeRejection(iter, error);
-      rejectedCount += 1;
-      const iteration = iterationFromArtifact(iter, candidateArtifact, "rejected", 0, 0, normalizedTasks.length);
-      iterations.push(iteration);
-      history.push({ iter, decision: "rejected", wins: 0, losses: 0, rationale: mutation.rationale, lossReasons: [errorText(error)] });
+      recordRejection("judging", error);
       continue;
     }
 

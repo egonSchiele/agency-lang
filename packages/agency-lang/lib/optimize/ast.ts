@@ -1,6 +1,3 @@
-import fs from "fs";
-
-import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import { exprParser } from "@/parsers/parsers.js";
 import type { AgencyNode, AgencyProgram, PromptSegment, Tag } from "@/types.js";
 import { expressionToString } from "@/utils/node.js";
@@ -28,12 +25,6 @@ export function updatePrompt(target: OptimizeTarget, newPrompt: string): void {
   if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
     target.llmCall.arguments[0].segments = parsePromptToSegments(newPrompt);
   }
-}
-
-export function writeBack(filename: string, program: AgencyProgram): void {
-  const generator = new AgencyGenerator();
-  const result = generator.generate(program);
-  fs.writeFileSync(filename, result.output);
 }
 
 export function parsePromptToSegments(prompt: string): PromptSegment[] {

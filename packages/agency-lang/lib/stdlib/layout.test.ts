@@ -83,6 +83,17 @@ describe("wrapText", () => {
     expect(_internal.wrapText("\x1b[31mhello\x1b[0m world", 5))
       .toEqual(["\x1b[31mhello\x1b[0m", "world"]);
   });
+
+  test("breaks a long colored word at the column boundary while keeping CSI escapes intact", () => {
+    // The break must happen at a visual-cell boundary (width=4), not
+    // mid-escape. Both pieces of the broken token must keep the
+    // CSI bytes that landed inside their span.
+    expect(_internal.wrapText("\x1b[31mabcdefghij\x1b[0m", 4)).toEqual([
+      "\x1b[31mabcd",
+      "efgh",
+      "ij\x1b[0m",
+    ]);
+  });
 });
 
 describe("resolveSizes", () => {
@@ -171,6 +182,31 @@ describe("resolveSizes", () => {
         { cols: 80, rows: 24 },
       ),
     ).toThrow(/requires a sized ancestor/);
+  });
+
+  test("sizeColumn propagates width to children (unlike row)", () => {
+    // Column children share the column's full width as their default
+    // (so unsized children fill) and as their percent basis. Distinct
+    // from row, which gives children no implicit width.
+    const tree = node("column", { width: 30 }, [
+      node("box", { width: "50%" }),
+      node("text", { content: "x" }),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    expect(resolved.attrs.resolvedWidth).toBe(30);
+    // Inner box's "50%" is taken against the column's own width (30).
+    expect(resolved.children[0].attrs.resolvedWidth).toBe(15);
+    // Unsized text child fills the column → wrapWidth = 30.
+    expect(resolved.children[1].attrs.wrapWidth).toBe(30);
+  });
+
+  test("box padding subtracts both sides from inner width", () => {
+    const tree = node("box", { width: 20, padding: 2 }, [
+      node("text", { content: "inside" }),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // inner = 20 - 2 border - (2 padding * 2 sides) = 14.
+    expect(resolved.children[0].attrs.wrapWidth).toBe(14);
   });
 });
 
@@ -690,7 +726,7 @@ describe("box renderer", () => {
     const tree = node("box", { width: 20 }, [
       node("text", { content: "the quick brown fox jumps" }),
     ]);
-    const lines = render(tree, { viewport: { cols: 80, rows: 24 } }).split("\n");
+    const lines = render(tree, { cols: 80, rows: 24 }).split("\n");
     expect(lines.map(_internal.visualWidth)).toEqual([20, 20, 20, 20]);
     expect(lines).toContain("│the quick brown   │");
     expect(lines).toContain("│fox jumps         │");
@@ -699,7 +735,7 @@ describe("box renderer", () => {
     const tree = node("box", { width: 10 }, [
       node("raw", { content: "ABCDEFGHIJKLMNOP" }),
     ]);
-    const lines = render(tree, { viewport: { cols: 80, rows: 24 } }).split("\n");
+    const lines = render(tree, { cols: 80, rows: 24 }).split("\n");
     expect(_internal.visualWidth(lines[0])).toBe(10);
     expect(lines[1]).toBe("│ABCDEFGHIJKLMNOP│");
   });
@@ -707,7 +743,7 @@ describe("box renderer", () => {
     const tree = node("box", { width: 12, title: "a very long title" }, [
       node("text", { content: "ok" }),
     ]);
-    const lines = render(tree, { viewport: { cols: 80, rows: 24 } }).split("\n");
+    const lines = render(tree, { cols: 80, rows: 24 }).split("\n");
     expect(lines.map(_internal.visualWidth)).toEqual([12, 12, 12, 12, 12]);
     expect(lines[0]).toBe("╭──────────╮");
     expect(lines.slice(1, -1)).toContain("│a very    │");
@@ -860,14 +896,27 @@ describe("table — width resolution", () => {
   });
 
   test("renders fixed-width table and wraps text cells", () => {
+    // available = 24 - 2 border - 2*2*1 padding - 1 divider = 17.
+    // col0 fixed=6; remain=11; col1 "50%" → floor(11*0.5)=5. The
+    // natural cell grid is only 18 cells wide but the table was asked
+    // for 24, so each row is padded out to 24 with trailing space on
+    // the right (inside the right border).
     const lines = renderTablePlain({
       width: 24,
       columns: [{ width: 6 }, { width: "50%" }],
       body: [["abcdef", "the quick brown fox"]],
     }).split("\n");
     expect(lines.map(_internal.visualWidth)).toEqual([24, 24, 24, 24, 24, 24]);
-    expect(lines.some((line) => line.includes("abcdef") && line.includes("the"))).toBe(true);
-    expect(lines.some((line) => line.includes("quick"))).toBe(true);
+    expect(lines[0]).toMatch(/^╭─+╮$/);
+    expect(lines[lines.length - 1]).toMatch(/^╰─+╯$/);
+    // Exact body lines: "the quick brown fox" wraps in the 5-cell
+    // second column over four visual rows; the first column shows the
+    // word only once and is empty on the wrapped lines.
+    const body = lines.slice(1, -1);
+    expect(body[0]).toBe("│ abcdef │ the         │");
+    expect(body[1]).toBe("│        │ quick       │");
+    expect(body[2]).toBe("│        │ brown       │");
+    expect(body[3]).toBe("│        │ fox         │");
   });
 
   test("fixed-width table wraps over-long title inside the frame", () => {
@@ -880,6 +929,66 @@ describe("table — width resolution", () => {
     expect(lines[0]).toBe("╭──────────╮");
     expect(lines).toContain("│a very    │");
     expect(lines).toContain("│long title│");
+  });
+
+  test("minWidth floors a percentage column whose share rounds smaller", () => {
+    // Inner available = 30 - 2 border - 6 padding - 2 dividers = 20.
+    // Col 0 width "10%" → floor(20 * 0.1) = 2, but minWidth: 5 floors
+    // it back up to 5. Col 1/2 unsized → natural ("x" = 1 each).
+    const tree = tableNode({
+      width: 30,
+      columns: [{ width: "10%", minWidth: 5 }, {}, {}],
+      body: [["x", "x", "x"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    expect((resolved.attrs.resolvedColumnWidths as number[])[0]).toBe(5);
+  });
+
+  test("rescales when column percentages sum to more than 100", () => {
+    // Two columns declared "80%" + "40%" → sum 120%. Each should get
+    // its proportional share of `available` (not its literal share).
+    // available = 40 - 2 - 4 - 1 = 33.
+    // share0 = 80/120 = 2/3 → floor(33 * 2/3) = 22.
+    // share1 = 40/120 = 1/3 → floor(33 * 1/3) = 11.
+    const tree = tableNode({
+      width: 40,
+      columns: [{ width: "80%" }, { width: "40%" }],
+      body: [["a", "b"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    expect(resolved.attrs.resolvedColumnWidths).toEqual([22, 11]);
+  });
+
+  test("column width: 'full' behaves as 100% of the remaining space", () => {
+    // One fixed column eats 4 cells; "full" column takes everything
+    // left in `available`.
+    // available = 30 - 2 - 4 - 1 = 23. Col 0 fixed=4. Col 1 "full" = 19.
+    const tree = tableNode({
+      width: 30,
+      columns: [{ width: 4 }, { width: "full" }],
+      body: [["a", "b"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    expect(resolved.attrs.resolvedColumnWidths).toEqual([4, 19]);
+  });
+
+  test("raw cells in a sized column are not annotated with wrapWidth", () => {
+    // Raw content keeps its literal form even when its column has a
+    // resolved width; only text cells get wrapWidth.
+    // available = 20 - 2 border - 2*2*1 padding - 1 divider = 13.
+    // Col 0 fixed=6 (claimed); remain=7; col 1 "50%" → floor(7*0.5)=3.
+    const tree = tableNode({
+      width: 20,
+      columns: [{ width: 6 }, { width: "50%" }],
+      body: [[{ type: "raw", attrs: { content: "ABCDEFGHIJ" }, children: [] }, "text"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    const cell = (resolved.attrs.body as LayoutNode[][])[0][0];
+    expect(cell.type).toBe("raw");
+    expect(cell.attrs.wrapWidth).toBeUndefined();
+    // The neighbouring text cell still gets a wrapWidth.
+    const textCell = (resolved.attrs.body as LayoutNode[][])[0][1];
+    expect(textCell.attrs.wrapWidth).toBe(3);
   });
 });
 

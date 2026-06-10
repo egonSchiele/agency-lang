@@ -487,7 +487,7 @@ export async function executeJudgePairwiseAsync({
   responseB,
 }: ExecutePairwiseJudgeArgs): Promise<{
   winner: "A" | "B" | "tie";
-  confidence: "low" | "medium" | "high";
+  confidence: number;
   reasoning: string;
   stdout: string;
   stderr: string;
@@ -513,7 +513,7 @@ export async function executeJudgePairwiseAsync({
 
 export function assertValidPairwiseResult(raw: unknown): asserts raw is {
   winner: "A" | "B" | "tie";
-  confidence: "low" | "medium" | "high";
+  confidence: number;
   reasoning: string;
 } {
   if (raw === null || typeof raw !== "object") {
@@ -528,9 +528,10 @@ export function assertValidPairwiseResult(raw: unknown): asserts raw is {
     throw new Error(`Pairwise judge returned invalid winner: ${String(result.winner)}`);
   }
   if (
-    result.confidence !== "low" &&
-    result.confidence !== "medium" &&
-    result.confidence !== "high"
+    typeof result.confidence !== "number" ||
+    !Number.isInteger(result.confidence) ||
+    result.confidence < 0 ||
+    result.confidence > 100
   ) {
     throw new Error(
       `Pairwise judge returned invalid confidence: ${String(result.confidence)}`,

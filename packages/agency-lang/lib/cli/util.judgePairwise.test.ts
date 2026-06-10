@@ -7,7 +7,7 @@ describe("assertValidPairwiseResult", () => {
     expect(() =>
       assertValidPairwiseResult({
         winner: "FOO",
-        confidence: "high",
+        confidence: 87,
         reasoning: "",
       }),
     ).toThrow(/FOO/);
@@ -17,17 +17,27 @@ describe("assertValidPairwiseResult", () => {
     expect(() =>
       assertValidPairwiseResult({
         winner: "A",
-        confidence: "certain",
+        confidence: 101,
         reasoning: "",
       }),
-    ).toThrow(/certain/);
+    ).toThrow(/101/);
+  });
+
+  it("throws with a non-integer confidence value", () => {
+    expect(() =>
+      assertValidPairwiseResult({
+        winner: "A",
+        confidence: 42.5,
+        reasoning: "",
+      }),
+    ).toThrow(/42.5/);
   });
 
   it("accepts valid judge output", () => {
     expect(() =>
       assertValidPairwiseResult({
         winner: "tie",
-        confidence: "medium",
+        confidence: 50,
         reasoning: "Both are similar.",
       }),
     ).not.toThrow();

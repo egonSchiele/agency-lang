@@ -1,6 +1,6 @@
 export type PairwiseJudgeResult = {
   winner: "A" | "B" | "tie";
-  confidence: "low" | "medium" | "high";
+  confidence: number;
   reasoning: string;
 };
 
@@ -12,7 +12,7 @@ export type PairwiseVerdict = {
     { path: string; response: string | null; truncated?: true },
   ];
   winner: "A" | "B" | "tie";
-  confidence: "low" | "medium" | "high";
+  confidence: number;
   reasoning: string;
   generatedAt: string;
 };

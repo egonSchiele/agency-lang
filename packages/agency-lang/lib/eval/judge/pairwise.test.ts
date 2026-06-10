@@ -20,7 +20,7 @@ describe("judgePairwise", () => {
   beforeEach(() => {
     mockedJudge.mockResolvedValue({
       winner: "A",
-      confidence: "high",
+      confidence: 87,
       reasoning: "A is more precise.",
       stdout: "",
       stderr: "",
@@ -54,7 +54,7 @@ describe("judgePairwise", () => {
       { path: b, response: "Delhi" },
     ]);
     expect(verdict.winner).toBe("A");
-    expect(verdict.confidence).toBe("high");
+    expect(verdict.confidence).toBe(87);
     expect(verdict.reasoning).toBe("A is more precise.");
     expect(new Date(verdict.generatedAt).toString()).not.toBe("Invalid Date");
   });

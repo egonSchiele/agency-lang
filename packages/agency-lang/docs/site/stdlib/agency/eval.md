@@ -106,7 +106,7 @@ export type PairwiseVerdict = {
   goal: string;
   inputs: PairwiseVerdictInput[];
   winner: string;
-  confidence: string;
+  confidence: number;
   reasoning: string;
   generatedAt: string
 }
@@ -189,7 +189,7 @@ evalJudge(rubric: string, recordPathA: string, recordPathB: string): PairwiseVer
 
 Pairwise-judge two eval records against a rubric. Returns a
   structured verdict naming the winner ("A", "B", or "tie"), the
-  judge's confidence level ("low", "medium", "high"), and the
+  judge's confidence as an integer from 0 to 100, and the
   reasoning the judge produced.
 
   Both record paths must point at JSON files in the EvalRecord shape

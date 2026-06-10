@@ -22,6 +22,7 @@ import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
+import { evalRun } from "@/cli/eval/run.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -256,6 +257,34 @@ export function createProgram(deps: CliDependencies = {}): Command {
   const evalCmd = program
     .command("eval")
     .description("Evaluate agent runs against task fixtures");
+
+  evalCmd
+    .command("run")
+    .description("Run an Agency agent against an eval task suite")
+    .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
+    .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
+    .option("--goal <text>", "Run one inline task with this rubric")
+    .option("--run-id <id>", "Run id / output subdirectory")
+    .option("--runs-dir <path>", "Runs output directory")
+    .option("--continue-on-error", "Continue after task failures", true)
+    .option("--no-continue-on-error", "Stop after first task failure")
+    .option("-v, --verbose", "Log per-task progress to stderr")
+    .action(async (opts: {
+      agent: string;
+      tasks?: string;
+      goal?: string;
+      runId?: string;
+      runsDir?: string;
+      continueOnError?: boolean;
+      verbose?: boolean;
+    }) => {
+      const result = await evalRun({ ...opts, config: getConfig() });
+      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.tasks.length} tasks ok`);
+      console.log(path.join(result.runDir, "summary.json"));
+      if (result.errorCount > 0 && opts.continueOnError === false) {
+        process.exit(2);
+      }
+    });
 
   evalCmd
     .command("extract")

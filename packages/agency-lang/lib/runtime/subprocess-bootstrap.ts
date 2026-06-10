@@ -11,16 +11,9 @@
  */
 
 import { pathToFileURL } from "url";
-import type { IpcResultMessage, IpcErrorMessage } from "./ipc.js";
-import { ipcLog } from "./ipc.js";
-
-type RunInstruction = {
-  type: "run";
-  scriptPath: string;
-  node: string;
-  args: Record<string, any>;
-  ipcPayload?: number;
-};
+import type { IpcResultMessage, IpcErrorMessage, RunInstruction } from "./ipc.js";
+import { ipcLog, setSubprocessIpcPayloadLimit } from "./ipc.js";
+import { setRuntimeConfigOverrides } from "./configOverrides.js";
 
 let ipcPayloadLimit = Infinity;
 
@@ -52,7 +45,8 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): Promise<void> {
  */
 async function sendResultOrLimitError(msg: IpcResultMessage): Promise<void> {
   const serialized = JSON.stringify(msg);
-  if (serialized.length > ipcPayloadLimit) {
+  const byteLength = Buffer.byteLength(serialized, "utf8");
+  if (byteLength > ipcPayloadLimit) {
     const samplePrefix = serialized.slice(0, 1024);
     await sendOrDie({
       type: "error",
@@ -60,8 +54,8 @@ async function sendResultOrLimitError(msg: IpcResultMessage): Promise<void> {
         reason: "limit_exceeded",
         limit: "ipc_payload",
         threshold: ipcPayloadLimit,
-        value: serialized.length,
-        message: `Result payload (${serialized.length} bytes) exceeded ipcPayload limit of ${ipcPayloadLimit}`,
+        value: byteLength,
+        message: `Result payload (${byteLength} bytes) exceeded ipcPayload limit of ${ipcPayloadLimit}`,
         samplePrefix,
       }),
     });
@@ -91,6 +85,8 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   if (typeof msg.ipcPayload === "number") {
     ipcPayloadLimit = msg.ipcPayload;
   }
+  setSubprocessIpcPayloadLimit(ipcPayloadLimit);
+  setRuntimeConfigOverrides(msg.configOverrides);
 
   try {
     const scriptUrl = pathToFileURL(msg.scriptPath).href;

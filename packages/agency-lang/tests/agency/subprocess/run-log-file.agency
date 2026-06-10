@@ -1,0 +1,28 @@
+import { compile, run } from "std::agency"
+import { remove } from "std::fs"
+import { exists } from "std::shell"
+
+node main() {
+  const logFile = "/tmp/agency-run-logfile-test.jsonl"
+  const source = "node main() { return 42 }"
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+
+  handle {
+    remove(logFile)
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: {},
+      logFile: logFile,
+    )
+    if (isFailure(result)) {
+      return false
+    }
+    return exists(logFile)
+  } with (data) {
+    return approve()
+  }
+}

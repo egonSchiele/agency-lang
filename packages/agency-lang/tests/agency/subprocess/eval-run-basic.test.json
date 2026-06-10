@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "std::agency/eval evalRun runs a compiled agent through std::agency.run",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -16,6 +16,16 @@ describe("AgencyConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts eval runsDir config", () => {
+    const result = AgencyConfigSchema.safeParse({
+      eval: { runsDir: "custom-runs" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.eval?.runsDir).toBe("custom-runs");
+    }
+  });
+
   describe("memory block", () => {
     it("accepts a minimal memory block (only `dir`)", () => {
       const result = AgencyConfigSchema.safeParse({

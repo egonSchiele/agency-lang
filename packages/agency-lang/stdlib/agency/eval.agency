@@ -1,0 +1,90 @@
+import { run, CompiledProgram } from "std::agency"
+import {
+  _initEvalRun,
+  _prepareEvalRunTask,
+  _finalizeEvalRunTask,
+  _finishEvalRun,
+  _formatEvalRunFailure,
+} from "agency-lang/stdlib-lib/agencyEval.js"
+
+export type EvalRunTask = {
+  task_id: string;
+  rubric: string;
+  args: Record<string, any>;
+  node?: string;
+  working_dir?: string
+}
+
+export type EvalRunTaskResult = {
+  taskId: string;
+  status: "success" | "error";
+  evalRecordPath: string;
+  statelogPath: string;
+  workdirPath: string;
+  errorMessage?: string
+}
+
+export type EvalRunResult = {
+  runId: string;
+  runDir: string;
+  agent: string;
+  tasks: EvalRunTaskResult[];
+  okCount: number;
+  errorCount: number
+}
+
+export def evalRun(
+  compiled: CompiledProgram,
+  tasks: EvalRunTask[],
+  node: string = "main",
+  runsDir: string = "runs/",
+  runId: string = "",
+  continueOnError: boolean = true,
+): EvalRunResult {
+  """
+  Run a compiled Agency program against eval tasks, writing per-task
+  statelog and eval artifacts under runsDir/runId. Subprocess execution goes
+  through std::agency.run so caller handlers still approve subprocess
+  execution and child interrupts.
+
+  @param compiled - Compiled program from std::agency.compile
+  @param tasks - Eval tasks to run sequentially
+  @param node - Default node to invoke when a task does not specify one
+  @param runsDir - Output directory for eval runs
+  @param runId - Optional run id; generated when empty
+  @param continueOnError - Continue remaining tasks after a task error
+  """
+  const state = _initEvalRun(compiled, tasks, node, runsDir, runId, continueOnError)
+  const results: EvalRunTaskResult[] = []
+  let lastStatus = "success"
+
+  for (task in state.tasks) {
+    const prep = _prepareEvalRunTask(state, task)
+    if (prep.ok) {
+      const prepared = prep.prepared
+      const runResult = run(
+        compiled: compiled,
+        node: task.node ?? node,
+        args: task.args,
+        logFile: prepared.statelogPath,
+        cwd: prepared.workdirPath,
+      )
+      let runError = ""
+      if (isFailure(runResult)) {
+        runError = _formatEvalRunFailure(runResult)
+      }
+      const taskResult = _finalizeEvalRunTask(prepared, runError)
+      results.push(taskResult)
+      lastStatus = taskResult.status
+    } else {
+      results.push(prep.result)
+      lastStatus = prep.result.status
+    }
+
+    if (lastStatus == "error" && !continueOnError) {
+      break
+    }
+  }
+
+  return _finishEvalRun(state, results)
+}

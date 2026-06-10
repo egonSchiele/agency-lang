@@ -1,0 +1,261 @@
+import * as fs from "fs";
+import * as path from "path";
+import { fork } from "child_process";
+
+import { nanoid } from "nanoid";
+
+import type { AgencyConfig } from "@/config.js";
+import { compile } from "@/cli/commands.js";
+import { parseTarget } from "@/cli/util.js";
+import { RunStrategy } from "@/importStrategy.js";
+import { extractEvalRecord } from "@/eval/extract.js";
+import { readAllEvents } from "@/eval/parseJsonl.js";
+import { loadTasks, taskFromGoal } from "@/eval/loadTasks.js";
+import {
+  initializeEvalRun,
+  writeEvalRunSummary,
+} from "@/eval/runArtifacts.js";
+import {
+  runEvalTask,
+  type EvalRecordExtractor,
+  type EvalTaskRunner,
+} from "@/eval/runEvalTask.js";
+import type {
+  EvalRunCompiledAgent,
+  EvalRunResult,
+  EvalRunTaskResult,
+} from "@/eval/runTypes.js";
+import {
+  buildForkOptions,
+  buildRunInstruction,
+  subprocessBootstrapPath,
+  type RunLimits,
+} from "@/runtime/ipc.js";
+
+export type EvalRunCliOptions = {
+  agent: string;
+  tasks?: string;
+  goal?: string;
+  runId?: string;
+  runsDir?: string;
+  continueOnError?: boolean;
+  verbose?: boolean;
+  config?: AgencyConfig;
+};
+
+/**
+ * Per-task resource limits for subprocess invocations driven by `agency eval
+ * run`. Lifted out of the runner so it's obvious where to tune them and so
+ * the runner body isn't cluttered with magic numbers.
+ *
+ * TODO: pipe these through `AgencyConfig.eval.limits` once that field exists.
+ */
+const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
+  wallClock: 60_000,
+  memory: 512 * 1024 * 1024,
+  ipcPayload: 100 * 1024 * 1024,
+  stdout: 1024 * 1024,
+};
+
+export function resolveEvalRunTarget(target: string): {
+  agentFile: string;
+  node: string;
+  label: string;
+} {
+  const parsed = parseTarget(target);
+  const resolved = path.resolve(parsed.filename);
+  const agentFile =
+    fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()
+      ? path.join(resolved, "main.agency")
+      : resolved;
+  const node = parsed.nodeName || "main";
+  return { agentFile, node, label: `${agentFile}:${node}` };
+}
+
+export function validateTaskSelection(opts: {
+  tasks?: string;
+  goal?: string;
+}): "tasks" | "goal" {
+  const count = (opts.tasks ? 1 : 0) + (opts.goal ? 1 : 0);
+  if (count !== 1) {
+    throw new Error("Provide exactly one of --tasks or --goal");
+  }
+  return opts.goal ? "goal" : "tasks";
+}
+
+/**
+ * Run a compiled agent against a task suite and write per-task artifacts.
+ *
+ * The orchestration here is intentionally tiny: build the run state, loop
+ * through tasks calling `runEvalTask` (the shared boundary), write a
+ * summary. All per-task error handling lives inside `runEvalTask`.
+ */
+export async function evalRun(
+  opts: EvalRunCliOptions,
+  overrides: {
+    runner?: EvalTaskRunner;
+    extractor?: EvalRecordExtractor;
+  } = {},
+): Promise<EvalRunResult> {
+  const target = resolveEvalRunTarget(opts.agent);
+  const taskSelection = validateTaskSelection(opts);
+  const tasks =
+    taskSelection === "goal"
+      ? [taskFromGoal(opts.goal ?? "", nanoid)]
+      : loadTasks(path.resolve(opts.tasks ?? ""), nanoid);
+
+  const runsDir = path.resolve(
+    opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs",
+  );
+  const runId = opts.runId ?? nanoid();
+  const continueOnError = opts.continueOnError ?? true;
+
+  const compiled = await compileAgentForEvalRun({
+    config: opts.config ?? {},
+    agentFile: target.agentFile,
+  });
+
+  const state = initializeEvalRun({
+    runId,
+    runsDir,
+    agent: target.label,
+    tasksSource:
+      taskSelection === "goal"
+        ? "inline:--goal"
+        : path.resolve(opts.tasks ?? ""),
+    tasks,
+    continueOnError,
+    startedAt: new Date(),
+  });
+
+  const runner = overrides.runner ?? subprocessEvalTaskRunner;
+  const extractor = overrides.extractor ?? defaultEvalRecordExtractor;
+
+  const results: EvalRunTaskResult[] = [];
+  for (const task of tasks) {
+    const result = await runEvalTask({
+      state,
+      task,
+      compiled,
+      defaultNode: target.node,
+      runner,
+      extractor,
+    });
+    results.push(result);
+    if (result.status === "error" && !continueOnError) break;
+  }
+
+  return writeEvalRunSummary(state, results);
+}
+
+async function compileAgentForEvalRun(args: {
+  config: AgencyConfig;
+  agentFile: string;
+}): Promise<EvalRunCompiledAgent> {
+  const compiledPath = compile(args.config, args.agentFile, undefined, {
+    importStrategy: new RunStrategy(),
+  });
+  if (compiledPath === null) {
+    throw new Error(`Failed to compile ${args.agentFile}`);
+  }
+  return {
+    moduleId: path.basename(compiledPath, ".js"),
+    path: compiledPath,
+  };
+}
+
+const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
+  statelogPath,
+  outPath,
+}) => {
+  const events = await readAllEvents(statelogPath);
+  const record = extractEvalRecord(events, statelogPath);
+  fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
+};
+
+const subprocessEvalTaskRunner: EvalTaskRunner = async ({
+  compiled,
+  node,
+  args,
+  cwd,
+  statelogPath,
+}) => {
+  if (!compiled.path) {
+    return { ok: false, errorMessage: "Compiled agent has no path" };
+  }
+  return runCompiledAgentInSubprocess({
+    compiledPath: compiled.path,
+    node,
+    args,
+    cwd,
+    statelogPath,
+  });
+};
+
+async function runCompiledAgentInSubprocess(args: {
+  compiledPath: string;
+  node: string;
+  args: Record<string, any>;
+  cwd: string;
+  statelogPath: string;
+}): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
+  const limits = DEFAULT_EVAL_RUN_LIMITS;
+  const child = fork(
+    subprocessBootstrapPath,
+    [],
+    buildForkOptions({ limits, cwd: args.cwd }),
+  );
+  const instruction = buildRunInstruction({
+    scriptPath: args.compiledPath,
+    node: args.node,
+    args: args.args,
+    limits,
+    configOverrides: {
+      observability: true,
+      log: { logFile: args.statelogPath },
+    },
+  });
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (
+      value: { ok: true } | { ok: false; errorMessage: string },
+    ) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    child.stdout?.pipe(process.stdout);
+    child.stderr?.pipe(process.stderr);
+
+    child.on("message", (msg: any) => {
+      if (msg?.type === "result") {
+        settle({ ok: true });
+      } else if (msg?.type === "error") {
+        settle({ ok: false, errorMessage: String(msg.error) });
+      } else if (msg?.type === "interrupt") {
+        child.send({
+          type: "decision",
+          interruptId: msg.interruptId,
+          approved: true,
+          value: undefined,
+        });
+      }
+    });
+
+    child.on("error", (err) => settle({ ok: false, errorMessage: err.message }));
+    child.on("close", (code, signal) => {
+      if (code === 0) {
+        settle({ ok: true });
+      } else {
+        settle({
+          ok: false,
+          errorMessage: `Subprocess exited with code ${code}${signal ? ` signal ${signal}` : ""}`,
+        });
+      }
+    });
+
+    child.send(instruction);
+  });
+}

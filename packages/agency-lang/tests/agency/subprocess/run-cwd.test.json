@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "run() executes the subprocess in the supplied cwd",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

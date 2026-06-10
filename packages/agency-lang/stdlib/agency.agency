@@ -13,7 +13,7 @@ import {
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
-type CompiledProgram = {
+export type CompiledProgram = {
   moduleId: string
 }
 
@@ -54,6 +54,8 @@ export def run(
   memory: number = 512mb,
   ipcPayload: number = 100mb,
   stdout: number = 1mb,
+  logFile: string = "",
+  cwd: string = "",
 ): Result {
   """
   Execute a compiled Agency program in a subprocess. The parent's handler chain extends to the subprocess — subprocess interrupts must be approved by both subprocess and parent handlers. Returns the subprocess node's result on success.
@@ -67,7 +69,18 @@ export def run(
   @param memory - Max V8 heap size (default 512mb, max 4gb)
   @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
   @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param logFile - Optional statelog JSONL file path for this subprocess run
+  @param cwd - Optional working directory for this subprocess run
   """
+  let configOverrides = null
+  if (logFile != "") {
+    configOverrides = {
+      observability: true,
+      log: {
+        logFile: logFile
+      }
+    }
+  }
   return interrupt std::run("Running agent-generated code in subprocess", {
     moduleId: compiled.moduleId,
     node: node,
@@ -77,10 +90,12 @@ export def run(
       memory: memory,
       ipcPayload: ipcPayload,
       stdout: stdout
-    }
+    },
+    cwd: cwd,
+    logFile: logFile
   })
 
-  return try _run(compiled, node, args, wallClock, memory, ipcPayload, stdout)
+  return try _run(compiled, node, args, wallClock, memory, ipcPayload, stdout, configOverrides, cwd)
 }
 
 export def runFile(

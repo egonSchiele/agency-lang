@@ -105,6 +105,11 @@ export interface AgencyConfig {
     };
   }>;
 
+  /** Eval command configuration */
+  eval?: {
+    runsDir?: string;
+  };
+
   /** Smoltalk client config */
   client?: Partial<{
     logLevel: "error" | "warn" | "info" | "debug";
@@ -306,6 +311,11 @@ export const AgencyConfigSchema = z
             custom: z.record(z.string(), z.string()),
           })
           .partial(),
+      })
+      .partial(),
+    eval: z
+      .object({
+        runsDir: z.string(),
       })
       .partial(),
     client: z

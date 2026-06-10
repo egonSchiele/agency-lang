@@ -1,0 +1,12 @@
+import { withLock } from "std::concurrency"
+
+let counter = 0
+
+node main() {
+  withLock("resource") as {
+    fork(range(3), shared: true) as _ {
+      counter = counter + 1
+    }
+  }
+  return counter
+}

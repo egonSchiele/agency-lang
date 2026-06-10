@@ -235,6 +235,28 @@ await agency.withCostGuard(0.05, async () => {
 });
 ```
 
+### `agency.withLock(name, fn, opts?)`
+
+Run `fn` while holding a named per-run mutex. Concurrent branches in the same run that use the same lock name execute one at a time; branches using different lock names continue independently. In subprocesses launched through `std::agency.run`, the child delegates acquisition to the parent over IPC so parent and child code share the same lock.
+
+```ts
+await agency.withLock("std::tty", async () => {
+  await renderPromptAndReadAnswer();
+});
+```
+
+Options:
+
+```ts
+type WithLockOptions = {
+  ownerId?: string;     // for diagnostics/reentrancy detection
+  timeoutMs?: number;   // fail before acquisition if waiting too long
+  warnAfterMs?: number; // print a wait diagnostic; default 30s
+};
+```
+
+Locks are non-reentrant for the same `ownerId`. They are released in `finally`, so thrown errors and interrupt unwinds do not leave the mutex held.
+
 ### `agency.addCost(amount)`
 
 Add USD spend to the active branch and bill all guards. Use this when a TS helper wraps its own paid call site (a custom LLM client, a third-party API) and wants the cost to participate in `agency.withCostGuard` / cost reporting the same way `agency.llm` does.

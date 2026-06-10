@@ -3,10 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildRunInstruction,
   buildForkOptions,
+  cleanupSessionLocks,
+  registerSessionLock,
+  sendLockAcquireToParent,
   sendInterruptToParent,
   setSubprocessIpcPayloadLimit,
   type RunLimits,
 } from "./ipc.js";
+import { RuntimeContext } from "./state/context.js";
 
 const limits: RunLimits = {
   wallClock: 1000,
@@ -130,5 +134,87 @@ describe("subprocess interrupt IPC", () => {
       type: "error",
       error: expect.stringContaining("Failed to serialize interrupt payload"),
     });
+  });
+});
+
+describe("subprocess lock IPC", () => {
+  const originalSend = process.send;
+
+  afterEach(() => {
+    process.send = originalSend;
+    vi.restoreAllMocks();
+  });
+
+  it("sends lock acquire and release messages correlated by request id", async () => {
+    const sent: any[] = [];
+    process.send = vi.fn((msg: any) => {
+      sent.push(msg);
+      return true;
+    }) as any;
+
+    const acquired = sendLockAcquireToParent("resource", { timeoutMs: 25 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      type: "lockAcquire",
+      name: "resource",
+      timeoutMs: 25,
+    });
+
+    process.emit("message", {
+      type: "lockGranted",
+      requestId: sent[0].requestId,
+    });
+
+    const release = await acquired;
+    release();
+
+    expect(sent[1]).toEqual({
+      type: "lockRelease",
+      requestId: sent[0].requestId,
+      name: "resource",
+    });
+  });
+
+  it("includes stable lock owner ids on acquire and release when provided", async () => {
+    const sent: any[] = [];
+    process.send = vi.fn((msg: any) => {
+      sent.push(msg);
+      if (msg.type === "lockAcquire") {
+        process.emit("message", {
+          type: "lockGranted",
+          requestId: msg.requestId,
+        });
+      }
+      return true;
+    }) as any;
+
+    const release = await sendLockAcquireToParent("resource", { ownerId: "owner-1" });
+    release();
+
+    expect(sent[0]).toMatchObject({
+      type: "lockAcquire",
+      ownerId: "owner-1",
+    });
+    expect(sent[1]).toMatchObject({
+      type: "lockRelease",
+      ownerId: "owner-1",
+    });
+  });
+
+  it("cleanupSessionLocks releases locks held by a closed child session", async () => {
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    const events: string[] = [];
+    registerSessionLock(ctx, "session-1", "resource\0owner-1", () => {
+      events.push("released");
+    });
+
+    cleanupSessionLocks(ctx, "session-1");
+
+    expect(events).toEqual(["released"]);
+    expect(ctx.lockReleasers["resource\0owner-1"]).toBeUndefined();
   });
 });

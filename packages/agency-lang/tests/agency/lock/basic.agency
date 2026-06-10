@@ -1,0 +1,22 @@
+import { withLock } from "std::concurrency"
+
+let active = false
+let overlaps = 0
+
+def criticalSection() {
+  withLock("resource") as {
+    if (active) {
+      overlaps = overlaps + 1
+    }
+    active = true
+    sleep(20ms)
+    active = false
+  }
+}
+
+node main() {
+  fork(range(5), shared: true) as _ {
+    criticalSection()
+  }
+  return overlaps
+}

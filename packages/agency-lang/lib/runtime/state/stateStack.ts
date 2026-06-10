@@ -320,6 +320,7 @@ export type StateStackJSON = {
 export class StateStack {
   stack: State[] = [];
   mode: "serialize" | "deserialize" = "serialize";
+  lockOwnerId?: string;
 
   other: Record<string, any> = {};
   deserializeStackLength: number = 0;

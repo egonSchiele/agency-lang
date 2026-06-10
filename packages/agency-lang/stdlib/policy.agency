@@ -1,4 +1,5 @@
 import { table, render, text } from "std::layout"
+import { withLock } from "std::concurrency"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { chooseOption, ChoiceItem } from "std::ui"
@@ -648,7 +649,9 @@ def askUser(intr: any): AskUserResult {
     label: "reject always"
   })
 
-  const answer = chooseOption(title, body, items, allowFreeText: true)
+  const answer = withLock("std::tty") as {
+    return chooseOption(title, body, items, allowFreeText: true)
+  }
   match(answer) {
     "a" => return {
       action: "approve",

@@ -56,6 +56,16 @@ describe("parsePromptToSegments", () => {
       expect(segments[1].expression.type).toBe("valueAccess");
     }
   });
+
+  it("uses the Agency string parser for interpolation expressions with nested braces", () => {
+    const segments = parsePromptToSegments("Format: ${format({ value: msg })}");
+
+    expect(segments).toHaveLength(2);
+    expect(segments[1]).toMatchObject({
+      type: "interpolation",
+      expression: { type: "functionCall", functionName: "format" },
+    });
+  });
 });
 
 describe("findOptimizeTargets", () => {
@@ -110,6 +120,35 @@ node main(user: string, topic: string): string {
     const program = preprocess(code);
     const targets = findOptimizeTargets(program, "main");
     expect(targets[0].promptValue).toBe("Hello ${user}, tell me about ${topic}");
+  });
+
+  it("finds optimize targets nested in thread blocks", () => {
+    const code = `
+node main(msg: string): string {
+  thread {
+    @optimize(prompt)
+    const result: string = llm("classify: \${msg}")
+    return result
+  }
+}`;
+    const program = preprocess(code);
+
+    const targets = findOptimizeTargets(program, "main");
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0].promptValue).toBe("classify: ${msg}");
+  });
+
+  it("reports invalid optimize argument locations as 1-indexed", () => {
+    const code = `
+node main(msg: string): string {
+  @optimize("prompt")
+  const result: string = llm("classify: \${msg}")
+  return result
+}`;
+    const program = preprocess(code);
+
+    expect(() => findOptimizeTargets(program, "main")).toThrow(/line 3, col 3/);
   });
 });
 

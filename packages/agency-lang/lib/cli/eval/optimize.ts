@@ -44,7 +44,7 @@ export async function evalOptimize(
   const ctx = new RuntimeContext({
     statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
     smoltalkDefaults: opts.config?.client ?? {},
-    dirname: config.workingDir,
+    dirname: config.target.workingDir,
   });
   return runInBootstrapFrame(ctx, async () => {
     getRuntimeContext().ctx.pushHandler(async () => approve());
@@ -54,7 +54,7 @@ export async function evalOptimize(
     } finally {
       getRuntimeContext().ctx.popHandler();
     }
-  }, { moduleDir: config.workingDir });
+  }, { moduleDir: config.target.workingDir });
 }
 
 function buildOptimizeLoopConfig(
@@ -68,19 +68,24 @@ function buildOptimizeLoopConfig(
   const agentSource = fs.readFileSync(target.agentFile, "utf-8");
   const config = opts.config ?? {};
   return {
-    config,
-    agentSource,
-    node: target.node,
-    tasks,
-    goal: opts.goal,
-    iterations: opts.iterations ?? DEFAULT_ITERATIONS,
-    judgeSamples: opts.judgeSamples ?? DEFAULT_JUDGE_SAMPLES,
-    acceptThreshold: opts.acceptThreshold ?? DEFAULT_ACCEPT_THRESHOLD,
-    runsDir: path.resolve(opts.runsDir ?? config.eval?.optimizeRunsDir ?? path.join(config.eval?.runsDir ?? "runs", "optimize")),
-    runId: opts.runId ?? (deps.makeRunId ?? nanoid)(),
-    agentFilename: path.basename(target.agentFile),
-    workingDir: path.dirname(target.agentFile),
-    mutatorModel: opts.mutatorModel,
-    writebackPath: target.agentFile,
+    runtime: { config, tasks },
+    target: {
+      agentSource,
+      node: target.node,
+      agentFilename: path.basename(target.agentFile),
+      workingDir: path.dirname(target.agentFile),
+      writebackPath: target.agentFile,
+    },
+    policy: {
+      goal: opts.goal,
+      iterations: opts.iterations ?? DEFAULT_ITERATIONS,
+      judgeSamples: opts.judgeSamples ?? DEFAULT_JUDGE_SAMPLES,
+      acceptThreshold: opts.acceptThreshold ?? DEFAULT_ACCEPT_THRESHOLD,
+      mutatorModel: opts.mutatorModel,
+    },
+    artifacts: {
+      runsDir: path.resolve(opts.runsDir ?? config.eval?.optimizeRunsDir ?? path.join(config.eval?.runsDir ?? "runs", "optimize")),
+      runId: opts.runId ?? (deps.makeRunId ?? nanoid)(),
+    },
   };
 }

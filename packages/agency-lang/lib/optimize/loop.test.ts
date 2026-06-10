@@ -23,7 +23,7 @@ describe("optimizeLoop", () => {
     const sourcePath = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(sourcePath, agentSource("old ${text}"));
 
-    const result = await optimizeLoop(baseConfig({ writebackPath: sourcePath }), {
+    const result = await optimizeLoop(baseConfig({ target: { writebackPath: sourcePath } }), {
       mutate: async () => ({ prompt: "new ${text}", rationale: "Clearer." }),
       evalRun: fakeEvalRun(),
       judgeTask: async (): Promise<OptimizeTaskVerdict> => taskVerdict("candidate", 80),
@@ -47,7 +47,7 @@ describe("optimizeLoop", () => {
 
   it("retries validation once, records validation-failed after a second invalid prompt, and continues", async () => {
     const prompts = ["no interpolation", "still no interpolation", "better ${text}"];
-    const result = await optimizeLoop(baseConfig({ iterations: 2 }), {
+    const result = await optimizeLoop(baseConfig({ policy: { iterations: 2 } }), {
       mutate: async () => ({ prompt: prompts.shift() ?? "better ${text}", rationale: "Try." }),
       evalRun: fakeEvalRun(),
       judgeTask: async (): Promise<OptimizeTaskVerdict> => taskVerdict("candidate", 80),
@@ -61,7 +61,7 @@ describe("optimizeLoop", () => {
   it("records runtime rejections and continues when eval or judge fails", async () => {
     let evalCalls = 0;
     let judgeCalls = 0;
-    const result = await optimizeLoop(baseConfig({ iterations: 3 }), {
+    const result = await optimizeLoop(baseConfig({ policy: { iterations: 3 } }), {
       mutate: async () => ({ prompt: "new ${text}", rationale: "Clearer." }),
       evalRun: async (args) => {
         evalCalls += 1;
@@ -94,7 +94,7 @@ describe("optimizeLoop", () => {
   it("throws on writeback hash mismatch after writing artifacts", async () => {
     const sourcePath = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(sourcePath, agentSource("old ${text}"));
-    const config = baseConfig({ writebackPath: sourcePath });
+    const config = baseConfig({ target: { writebackPath: sourcePath } });
     fs.writeFileSync(sourcePath, agentSource("external ${text}"));
 
     await expect(optimizeLoop(config, {
@@ -105,6 +105,16 @@ describe("optimizeLoop", () => {
 
     expect(fs.readFileSync(sourcePath, "utf-8")).toContain("external ${text}");
     expect(fs.existsSync(path.join(tmpDir, "runs", "run", "summary.json"))).toBe(true);
+  });
+
+  it("rejects optimize config keys that are parsed but not supported yet", async () => {
+    await expect(optimizeLoop(baseConfig({
+      target: { agentSource: agentSource("old ${text}", "prompt, temperature") },
+    }), {
+      mutate: async () => ({ prompt: "new ${text}", rationale: "Clearer." }),
+      evalRun: fakeEvalRun(),
+      judgeTask: async (): Promise<OptimizeTaskVerdict> => taskVerdict("candidate", 80),
+    })).rejects.toThrow(/Unsupported @optimize keys: temperature/);
   });
 
   it("reports progress for long-running optimization phases", async () => {
@@ -129,28 +139,40 @@ describe("optimizeLoop", () => {
     ]);
   });
 
-  function baseConfig(overrides: Partial<Parameters<typeof optimizeLoop>[0]>): Parameters<typeof optimizeLoop>[0] {
+  function baseConfig(overrides: {
+    runtime?: Partial<Parameters<typeof optimizeLoop>[0]["runtime"]>;
+    target?: Partial<Parameters<typeof optimizeLoop>[0]["target"]>;
+    policy?: Partial<Parameters<typeof optimizeLoop>[0]["policy"]>;
+    artifacts?: Partial<Parameters<typeof optimizeLoop>[0]["artifacts"]>;
+  }): Parameters<typeof optimizeLoop>[0] {
+    const base: Parameters<typeof optimizeLoop>[0] = {
+      runtime: { config: {}, tasks },
+      target: {
+        agentSource: agentSource("old ${text}"),
+        node: "main",
+        agentFilename: "agent.agency",
+        workingDir: tmpDir,
+      },
+      policy: {
+        goal: "improve accuracy",
+        iterations: 1,
+        judgeSamples: 1,
+        acceptThreshold: 0,
+      },
+      artifacts: { runsDir: path.join(tmpDir, "runs"), runId: "run" },
+    };
     return {
-      config: {},
-      agentSource: agentSource("old ${text}"),
-      node: "main",
-      tasks,
-      goal: "improve accuracy",
-      iterations: 1,
-      judgeSamples: 1,
-      acceptThreshold: 0,
-      runsDir: path.join(tmpDir, "runs"),
-      runId: "run",
-      agentFilename: "agent.agency",
-      workingDir: tmpDir,
-      ...overrides,
+      runtime: { ...base.runtime, ...overrides.runtime },
+      target: { ...base.target, ...overrides.target },
+      policy: { ...base.policy, ...overrides.policy },
+      artifacts: { ...base.artifacts, ...overrides.artifacts },
     };
   }
 });
 
-function agentSource(prompt: string): string {
+function agentSource(prompt: string, optimizeKeys = "prompt"): string {
   return `node main(text: string): string {
-  @optimize(prompt)
+  @optimize(${optimizeKeys})
   const result: string = llm("${prompt}")
   return result
 }\n`;

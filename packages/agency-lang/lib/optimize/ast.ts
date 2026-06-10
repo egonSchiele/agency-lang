@@ -1,6 +1,6 @@
-import { exprParser } from "@/parsers/parsers.js";
-import type { AgencyNode, AgencyProgram, PromptSegment, Tag } from "@/types.js";
-import { expressionToString } from "@/utils/node.js";
+import { stringParser } from "@/parsers/parsers.js";
+import type { AgencyNode, AgencyProgram, PromptSegment, SourceLocation, Tag } from "@/types.js";
+import { expressionToString, walkNodesArray } from "@/utils/node.js";
 
 export type OptimizeTarget = {
   node: AgencyNode;
@@ -28,78 +28,70 @@ export function updatePrompt(target: OptimizeTarget, newPrompt: string): void {
 }
 
 export function parsePromptToSegments(prompt: string): PromptSegment[] {
-  const segments: PromptSegment[] = [];
-  const regex = /\$\{([^}]+)\}/g;
-  let lastIndex = 0;
-  let match;
-  while ((match = regex.exec(prompt)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", value: prompt.slice(lastIndex, match.index) });
-    }
-    const exprStr = match[1].trim();
-    const parsed = exprParser(exprStr);
-    if (!parsed.success) {
-      throw new Error(`Failed to parse interpolation expression: ${exprStr}`);
-    }
-    segments.push({ type: "interpolation", expression: parsed.result });
-    lastIndex = match.index + match[0].length;
+  const parsed = stringParser(JSON.stringify(prompt));
+  if (!parsed.success || parsed.rest.length > 0) {
+    throw new Error("Failed to parse prompt as an Agency string literal");
   }
-  if (lastIndex < prompt.length) {
-    segments.push({ type: "text", value: prompt.slice(lastIndex) });
-  }
-  return segments;
+  return parsed.result.segments;
 }
 
 export function findOptimizeTargets(
   program: AgencyProgram,
   nodeName: string,
 ): OptimizeTarget[] {
-  const targets: OptimizeTarget[] = [];
-  for (const node of program.nodes) {
-    if (node.type === "graphNode" && node.nodeName === nodeName) {
-      collectOptimizeTargets(node.body, targets);
-    }
-  }
-  return targets;
+  const node = program.nodes.find((candidate) => candidate.type === "graphNode" && candidate.nodeName === nodeName);
+  if (!node || node.type !== "graphNode") return [];
+  return walkNodesArray(node.body)
+    .map((item) => buildOptimizeTarget(item.node))
+    .filter((target): target is OptimizeTarget => target !== null);
 }
 
-function collectOptimizeTargets(
-  body: AgencyNode[],
-  targets: OptimizeTarget[],
-): void {
-  for (const node of body) {
-    if (node.type !== "assignment" && node.type !== "functionCall") continue;
-    const tags: Tag[] = node.tags || [];
-    const optimizeTag = tags.find((tag: Tag) => tag.name === "optimize");
-    if (optimizeTag) {
-      let llmCall: AgencyNode | null = null;
+function buildOptimizeTarget(node: AgencyNode): OptimizeTarget | null {
+  if (node.type !== "assignment" && node.type !== "functionCall") return null;
+  const optimizeTag = findOptimizeTag(node);
+  if (!optimizeTag) return null;
 
-      if (
-        node.type === "assignment" &&
-        node.value?.type === "functionCall" &&
-        node.value.functionName === "llm"
-      ) {
-        llmCall = node.value;
-      } else if (node.type === "functionCall" && node.functionName === "llm") {
-        llmCall = node;
-      }
+  const target: OptimizeTarget = {
+    node,
+    llmCall: findTaggedLlmCall(node),
+    tag: optimizeTag,
+    configKeys: readOptimizeConfigKeys(optimizeTag),
+  };
+  target.promptValue = getPromptValue(target);
+  return target;
+}
 
-      const target: OptimizeTarget = { node, llmCall, tag: optimizeTag };
-      target.promptValue = getPromptValue(target);
-      if (optimizeTag.arguments.length === 0) {
-        target.configKeys = ["prompt"];
-      } else {
-        target.configKeys = optimizeTag.arguments.map((argument) => {
-          if (argument.type !== "variableName") {
-            const where = argument.loc ? ` (line ${argument.loc.line}, col ${argument.loc.col})` : "";
-            throw new Error(
-              `@optimize(...) arguments must be plain config-key identifiers${where}; got ${argument.type}.`,
-            );
-          }
-          return argument.value;
-        });
-      }
-      targets.push(target);
-    }
+function findOptimizeTag(node: AgencyNode): Tag | undefined {
+  return tagsOf(node).find((tag: Tag) => tag.name === "optimize");
+}
+
+function tagsOf(node: AgencyNode): Tag[] {
+  return "tags" in node && Array.isArray(node.tags) ? node.tags : [];
+}
+
+function findTaggedLlmCall(node: AgencyNode): AgencyNode | null {
+  if (node.type === "assignment" && node.value?.type === "functionCall" && node.value.functionName === "llm") {
+    return node.value;
   }
+  if (node.type === "functionCall" && node.functionName === "llm") {
+    return node;
+  }
+  return null;
+}
+
+function readOptimizeConfigKeys(tag: Tag): string[] {
+  if (tag.arguments.length === 0) return ["prompt"];
+  return tag.arguments.map((argument) => {
+    if (argument.type !== "variableName") {
+      const where = formatSourceLocation(argument.loc ?? tag.loc);
+      throw new Error(
+        `@optimize(...) arguments must be plain config-key identifiers${where}; got ${argument.type}.`,
+      );
+    }
+    return argument.value;
+  });
+}
+
+function formatSourceLocation(loc?: SourceLocation): string {
+  return loc ? ` (line ${loc.line + 1}, col ${loc.col + 1})` : "";
 }

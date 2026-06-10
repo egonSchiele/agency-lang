@@ -183,20 +183,11 @@ export async function _optimize(
   loop: (config: OptimizeLoopConfig) => Promise<OptimizeResult> = optimizeLoop,
 ): Promise<OptimizeResult> {
   return loop({
-    config,
-    agentSource,
-    node,
-    tasks,
-    goal,
-    iterations,
-    judgeSamples,
-    acceptThreshold,
-    runsDir,
-    runId: runId || nanoid(),
-    agentFilename,
-    workingDir,
-    mutatorModel,
+    runtime: { config, tasks },
+    target: { agentSource, node, agentFilename, workingDir },
+    policy: { goal, iterations, judgeSamples, acceptThreshold, mutatorModel },
+    artifacts: { runsDir, runId: runId || nanoid() },
   });
 }
 
-type AgencyConfigLike = OptimizeLoopConfig["config"];
+type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];

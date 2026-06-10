@@ -65,19 +65,26 @@ export type OptimizeResult = {
 };
 
 export type OptimizeLoopConfig = {
-  config: AgencyConfig;
-  agentSource: string;
-  node: string;
-  tasks: EvalRunTask[];
-  goal: string;
-  iterations: number;
-  judgeSamples: number;
-  acceptThreshold: number;
-  runsDir: string;
-  runId: string;
-  agentFilename: string;
-  workingDir: string;
-  mutatorModel?: string;
-  writebackPath?: string;
-  verbose?: boolean;
+  runtime: {
+    config: AgencyConfig;
+    tasks: EvalRunTask[];
+  };
+  target: {
+    agentSource: string;
+    node: string;
+    agentFilename: string;
+    workingDir: string;
+    writebackPath?: string;
+  };
+  policy: {
+    goal: string;
+    iterations: number;
+    judgeSamples: number;
+    acceptThreshold: number;
+    mutatorModel?: string;
+  };
+  artifacts: {
+    runsDir: string;
+    runId: string;
+  };
 };

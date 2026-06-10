@@ -52,19 +52,25 @@ describe("eval optimize CLI", () => {
     );
 
     expect(capture.loopConfig).toMatchObject({
-      agentSource: "node main() {}\n",
-      node: "main",
-      goal: "improve correctness",
-      iterations: 3,
-      judgeSamples: 2,
-      acceptThreshold: 1,
-      runId: "run",
-      agentFilename: "agent.agency",
-      workingDir: tmpDir,
-      writebackPath: agentFile,
+      target: {
+        agentSource: "node main() {}\n",
+        node: "main",
+        agentFilename: "agent.agency",
+        workingDir: tmpDir,
+        writebackPath: agentFile,
+      },
+      policy: {
+        goal: "improve correctness",
+        iterations: 3,
+        judgeSamples: 2,
+        acceptThreshold: 1,
+      },
+      artifacts: {
+        runId: "run",
+      },
     });
     if (!capture.loopConfig) throw new Error("optimize loop was not called");
-    expect(capture.loopConfig.tasks).toEqual([{ task_id: "first", rubric: "be correct", args: { text: "hi" } }]);
+    expect(capture.loopConfig.runtime.tasks).toEqual([{ task_id: "first", rubric: "be correct", args: { text: "hi" } }]);
     expect(handlerCountDuringLoop).toBe(1);
     expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
   });
@@ -96,13 +102,17 @@ describe("eval optimize CLI", () => {
     );
 
     if (!capture.loopConfig) throw new Error("optimize loop was not called");
-    expect(capture.loopConfig.tasks).toEqual([{ task_id: "task-id", rubric: "inline rubric", args: {} }]);
+    expect(capture.loopConfig.runtime.tasks).toEqual([{ task_id: "task-id", rubric: "inline rubric", args: {} }]);
     expect(capture.loopConfig).toMatchObject({
-      runsDir: path.join(tmpDir, "configured-runs"),
-      runId: "run-id",
-      iterations: 5,
-      judgeSamples: 3,
-      acceptThreshold: 0,
+      artifacts: {
+        runsDir: path.join(tmpDir, "configured-runs"),
+        runId: "run-id",
+      },
+      policy: {
+        iterations: 5,
+        judgeSamples: 3,
+        acceptThreshold: 0,
+      },
     });
   });
 
@@ -117,10 +127,10 @@ describe("eval optimize CLI", () => {
 
 function optimizeResult(config: OptimizeLoopConfig): OptimizeResult {
   return {
-    runId: config.runId,
-    runDir: path.join(config.runsDir, config.runId),
+    runId: config.artifacts.runId,
+    runDir: path.join(config.artifacts.runsDir, config.artifacts.runId),
     championIter: "baseline",
-    championSource: config.agentSource,
+    championSource: config.target.agentSource,
     acceptedCount: 0,
     rejectedCount: 0,
     validationFailedCount: 0,

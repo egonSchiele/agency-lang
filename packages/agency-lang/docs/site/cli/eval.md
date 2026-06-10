@@ -102,7 +102,7 @@ Options:
 - `--run-id <id>` — output run id. Defaults to a generated id.
 - `--runs-dir <path>` — optimizer output root. Defaults to `eval.optimizeRunsDir` in `agency.json`, or `eval.runsDir/optimize`, or `runs/optimize`.
 
-Only judge samples with confidence at least `50` count toward the win/loss margin. Pairwise judge confidence is an integer from `0` to `100`.
+Only task-level verdicts with aggregated confidence at least `50` count toward the win/loss margin. Pairwise judge confidence is an integer from `0` to `100`.
 
 Each optimize run writes:
 

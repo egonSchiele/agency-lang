@@ -101,16 +101,22 @@ describe("agency eval stdlib helpers", () => {
     );
 
     expect(loopConfig).toMatchObject({
-      node: "main",
-      goal: "improve",
-      iterations: 2,
-      judgeSamples: 3,
-      acceptThreshold: 1,
-      runsDir: tmpDir,
-      runId: "run",
-      agentFilename: "agent.agency",
-      workingDir: tmpDir,
-      mutatorModel: "mutator",
+      target: {
+        node: "main",
+        agentFilename: "agent.agency",
+        workingDir: tmpDir,
+      },
+      policy: {
+        goal: "improve",
+        iterations: 2,
+        judgeSamples: 3,
+        acceptThreshold: 1,
+        mutatorModel: "mutator",
+      },
+      artifacts: {
+        runsDir: tmpDir,
+        runId: "run",
+      },
     });
     expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
   });
@@ -118,10 +124,10 @@ describe("agency eval stdlib helpers", () => {
 
 function optimizeResult(config: OptimizeLoopConfig): OptimizeResult {
   return {
-    runId: config.runId,
-    runDir: path.join(config.runsDir, config.runId),
+    runId: config.artifacts.runId,
+    runDir: path.join(config.artifacts.runsDir, config.artifacts.runId),
     championIter: "baseline",
-    championSource: config.agentSource,
+    championSource: config.target.agentSource,
     acceptedCount: 0,
     rejectedCount: 0,
     validationFailedCount: 0,

@@ -1,7 +1,12 @@
-import * as smoltalk from "smoltalk";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { fileURLToPath } from "url";
+
 import { z } from "zod";
 
 import type { AgencyConfig } from "@/config.js";
+import { executeNodeAsync } from "@/cli/util.js";
 
 import type { MutationProposal } from "./types.js";
 
@@ -12,6 +17,11 @@ const MutationProposalSchema = z.object({
 
 export type MutatorModelCaller = (args: {
   message: string;
+  goal: string;
+  currentPrompt: string;
+  history: string;
+  validationFailure?: string;
+  config: AgencyConfig;
   model: string;
 }) => Promise<unknown>;
 
@@ -55,7 +65,15 @@ export async function proposeMutation(args: {
     history: args.history,
     validationFailure: args.validationFailure,
   });
-  const raw = await (args.callModel ?? defaultCallModel)({ message, model });
+  const raw = await (args.callModel ?? defaultCallModel)({
+    message,
+    goal: args.goal,
+    currentPrompt: args.currentPrompt,
+    history: args.history,
+    validationFailure: args.validationFailure,
+    config: args.config,
+    model,
+  });
   const normalized = parseModelOutput(raw);
   const parsed = MutationProposalSchema.safeParse(normalized);
   if (!parsed.success) {
@@ -74,15 +92,43 @@ function parseModelOutput(raw: unknown): unknown {
   }
 }
 
-async function defaultCallModel(args: { message: string; model: string }): Promise<unknown> {
-  const result = await smoltalk.textSync({
-    messages: [smoltalk.userMessage(args.message)],
-    model: args.model,
-    responseFormat: MutationProposalSchema,
-    responseFormatOptions: { strict: true },
-  });
-  if (!result.success) {
-    throw new Error(`Error from LLM during optimization: ${result.error}`);
+async function defaultCallModel(args: {
+  goal: string;
+  currentPrompt: string;
+  history: string;
+  validationFailure?: string;
+  config: AgencyConfig;
+  model: string;
+}): Promise<unknown> {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-mutator-"));
+  try {
+    const config = {
+      ...args.config,
+      client: { ...args.config.client, defaultModel: args.model },
+    };
+    delete config.distDir;
+    const result = await executeNodeAsync({
+      config,
+      agencyFile: path.resolve(currentDir, "../agents/mutatePrompt.agency"),
+      nodeName: "mutatePrompt",
+      hasArgs: true,
+      argsString: [
+        args.goal,
+        args.currentPrompt,
+        args.history,
+        validationFailureMessage(args.validationFailure),
+      ].map((value) => JSON.stringify(value)).join(", "),
+      scratchDir,
+    });
+    return result.data;
+  } finally {
+    fs.rmSync(scratchDir, { recursive: true, force: true });
   }
-  return result.value.output;
+}
+
+function validationFailureMessage(validationFailure?: string): string {
+  return validationFailure
+    ? `Your previous attempt failed validation: ${validationFailure}. Preserve every interpolation placeholder exactly. Try again.`
+    : "";
 }

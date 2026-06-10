@@ -66,4 +66,27 @@ describe("proposeMutation", () => {
       callModel: async () => ({ prompt: "", rationale: "" }),
     })).rejects.toThrow(/missing prompt/i);
   });
+
+  it("runs the bundled mutator agent independently of caller distDir", async () => {
+    const previousMocks = process.env.AGENCY_LLM_MOCKS;
+    process.env.AGENCY_LLM_MOCKS = JSON.stringify([{
+      return: { prompt: "Classify carefully ${text}", rationale: "Added care." },
+    }]);
+    try {
+      const proposal = await proposeMutation({
+        config: { distDir: "/does/not/exist" },
+        goal: "be accurate",
+        currentPrompt: "Classify ${text}",
+        history: "",
+      });
+
+      expect(proposal).toEqual({ prompt: "Classify carefully ${text}", rationale: "Added care." });
+    } finally {
+      if (previousMocks === undefined) {
+        delete process.env.AGENCY_LLM_MOCKS;
+      } else {
+        process.env.AGENCY_LLM_MOCKS = previousMocks;
+      }
+    }
+  });
 });

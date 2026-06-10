@@ -101,4 +101,42 @@ node main() {
     t.row("search",  text("yes", fgColor: "green"))
   }
   print(render(status))
+  print("")
+
+  // 8) Full-width three-column splash, demonstrating top-down sizing
+  // and text wrap inside percentage-width boxes.
+  const splash = box(width: "full", title: "Sized layout", padding: 1) as outer {
+    outer.row(gap: 2) as r {
+      r.box(width: "33%", title: "Commands") as b {
+        b.text("/help shows the help screen")
+        b.text("/exit quits the session")
+      }
+      r.box(width: "33%", title: "Shortcuts") as b {
+        b.text("Ctrl-C interrupts the current operation")
+        b.text("Ctrl-D submits the current input buffer")
+      }
+      r.box(width: "33%", title: "Tips") as b {
+        b.text("Long lines automatically wrap to fit the column width.")
+      }
+    }
+  }
+  print(render(splash))
+  print("")
+
+  // 9) Sized table with a fixed first column and a percentage notes column.
+  const sized = table(
+    title: "Build summary",
+    width: "full",
+    columns: [
+      { width: 2, align: "end" },
+      {},
+      { width: "30%" },
+    ],
+    header: ["#", "file", "notes"],
+    body: [
+      [text("1"), text("lib/foo.ts"), text("renamed; updated callers throughout the codebase")],
+      [text("2"), text("lib/bar.ts"), text("ok")],
+    ],
+  )
+  print(render(sized))
 }

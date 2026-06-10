@@ -8,7 +8,7 @@
 
 import { Align, Block, above, beside, pad } from "./block.js";
 import { LayoutNode } from "./nodes.js";
-import { renderNode } from "./render.js";
+import { growToWidth, renderNode } from "./render.js";
 
 type Axis = "row" | "column";
 
@@ -120,7 +120,9 @@ function composeAxis(node: LayoutNode, axis: Axis): Block {
   const aligned   = rendered.map((b) => ops.alignCross(b, crossSize, childAlign));
 
   const gapBlock = gapCells > 0 ? ops.spaceBlock(gapCells) : null;
-  return joinWithGap(aligned, gapBlock, ops.join);
+  const combined = joinWithGap(aligned, gapBlock, ops.join);
+  const resolved = node.attrs.resolvedWidth as number | undefined;
+  return resolved !== undefined ? growToWidth(combined, resolved) : combined;
 }
 
 export function composeRow(node: LayoutNode):    Block { return composeAxis(node, "row"); }

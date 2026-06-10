@@ -1,0 +1,32 @@
+import { box, render, table, text } from "std::layout"
+
+node testBoxWidthAttr() {
+  return box(width: "full")
+}
+
+node testTableWidthAttr() {
+  return table(width: 24, body: [["x"]])
+}
+
+node testRenderFullWidth(): string {
+  const panel = box(width: "full") as b {
+    b.text("hello")
+  }
+  return render(panel, color: false, cols: 20)
+}
+
+node testRenderWrap(): string {
+  const panel = box(width: 12) as b {
+    b.text("the quick brown fox")
+  }
+  return render(panel, color: false)
+}
+
+node testTableColumnWidth(): string {
+  const t = table(
+    width: 24,
+    columns: [{ width: 6 }, { width: "50%" }],
+    body: [[text("abcdef"), text("the quick brown fox")]],
+  )
+  return render(t, color: false)
+}

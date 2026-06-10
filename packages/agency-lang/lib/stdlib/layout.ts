@@ -18,17 +18,17 @@
 //   * render.ts  — RENDERERS dispatch table + renderNode + render + _render
 
 import { BORDER_CHARS, resolveBorderStyle } from "./layout/border.js";
-import { colorToRgb, sgr, stripAnsi, visualWidth } from "./layout/ansi.js";
+import { colorToRgb, sgr, stripAnsi, visualWidth, wrapText } from "./layout/ansi.js";
 import { padLine } from "./layout/block.js";
-import { RENDERERS } from "./layout/render.js";
-import { _coerceCell, _validateTable } from "./layout/table.js";
-import { styleOf } from "./layout/nodes.js";
+import { RENDERERS, _viewport, growToWidth, resolveSizes } from "./layout/render.js";
+import { _coerceCell, _tableChromeWidth, _validateTable } from "./layout/table.js";
+import { parseWidth, styleOf } from "./layout/nodes.js";
 
-export { Style } from "./layout/ansi.js";
+export { Style, wrapText } from "./layout/ansi.js";
 export { Align, Block, above, beside, pad, styled } from "./layout/block.js";
 export { BorderOpts, BorderStyle, bordered } from "./layout/border.js";
-export { Cell, ColumnSpec, LayoutNode, NodeType } from "./layout/nodes.js";
-export { _render, render, renderNode } from "./layout/render.js";
+export { Cell, ColumnSpec, LayoutNode, NodeType, Width, WidthInput } from "./layout/nodes.js";
+export { SizingContext, Viewport, _render, render, renderNode } from "./layout/render.js";
 
 // Internal exports for tests only — pinned here so the test surface
 // stays at a single import path even as implementation files move.
@@ -36,5 +36,6 @@ export const _internal = {
   visualWidth, sgr, padLine, stripAnsi, colorToRgb,
   BORDER_CHARS, resolveBorderStyle,
   styleOf, RENDERERS,
-  _coerceCell, _validateTable,
+  parseWidth, wrapText, _viewport, resolveSizes, growToWidth,
+  _coerceCell, _validateTable, _tableChromeWidth,
 };

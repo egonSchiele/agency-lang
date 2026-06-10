@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "nodeName": "testBoxWidthAttr",
+      "input": "",
+      "expectedOutput": "{\"type\":\"box\",\"attrs\":{\"title\":\"\",\"titleColor\":\"\",\"borderStyle\":\"rounded\",\"borderColor\":\"\",\"padding\":1,\"width\":\"full\"},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testTableWidthAttr",
+      "input": "",
+      "expectedOutput": "{\"type\":\"table\",\"attrs\":{\"title\":\"\",\"titleColor\":\"\",\"borderStyle\":\"rounded\",\"borderColor\":\"\",\"caption\":\"\",\"cellPadding\":1,\"columns\":null,\"header\":null,\"body\":[[\"x\"]],\"footer\":[],\"headerDivider\":true,\"footerDivider\":true,\"rowDividers\":false,\"columnDividers\":true,\"width\":24},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testRenderFullWidth",
+      "input": "",
+      "expectedOutput": "\"╭──────────────────╮\\n│                  │\\n│ hello            │\\n│                  │\\n╰──────────────────╯\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testRenderWrap",
+      "input": "",
+      "expectedOutput": "\"╭──────────╮\\n│          │\\n│ the      │\\n│ quick    │\\n│ brown    │\\n│ fox      │\\n│          │\\n╰──────────╯\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testTableColumnWidth",
+      "input": "",
+      "expectedOutput": "\"╭──────────────────────╮\\n│ abcdef │ the         │\\n│        │ quick       │\\n│        │ brown       │\\n│        │ fox         │\\n╰──────────────────────╯\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

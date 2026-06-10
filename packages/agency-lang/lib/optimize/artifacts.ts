@@ -4,6 +4,17 @@ import * as path from "path";
 
 import type { OptimizeResult, OptimizeVerdict } from "./types.js";
 
+const WORKSPACE_COPY_EXCLUDED_DIRS = [
+  ".git",
+  ".worktrees",
+  "node_modules",
+  "runs",
+  "dist",
+  ".agency-tmp",
+  ".js-tmp",
+  ".agency-memory",
+];
+
 export type IterationArtifact = {
   iter: number;
   iterDir: string;
@@ -130,6 +141,7 @@ function copyDirectory(sourceDir: string, destDir: string, excludedDir: string):
   for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
     const sourcePath = path.join(sourceDir, entry.name);
     if (isInsideOrSame(sourcePath, excludedDir)) continue;
+    if (entry.isDirectory() && WORKSPACE_COPY_EXCLUDED_DIRS.includes(entry.name)) continue;
     const destPath = path.join(destDir, entry.name);
     if (entry.isDirectory()) {
       fs.mkdirSync(destPath, { recursive: true });

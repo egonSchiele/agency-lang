@@ -64,6 +64,32 @@ describe("createOptimizeArtifacts", () => {
     expect(fs.existsSync(path.join(baseline.workspaceDir, "optimize-runs", "run-1", "should-not-copy", "x.txt"))).toBe(false);
   });
 
+  it("excludes generated and dependency directories from iteration workspaces", () => {
+    fs.writeFileSync(path.join(tmpDir, "helper.agency"), "def helper() {}\n");
+    for (const dir of [".git", ".worktrees", "node_modules", "runs", "dist", ".agency-tmp"]) {
+      fs.mkdirSync(path.join(tmpDir, dir), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, dir, "large.txt"), "x");
+    }
+    const artifacts = createOptimizeArtifacts({
+      runsDir: path.join(tmpDir, "optimize-runs"),
+      runId: "run-1",
+      agentFilename: "agent.agency",
+      workingDir: tmpDir,
+      goal: "goal",
+      iterations: 1,
+      judgeSamples: 1,
+      acceptThreshold: 0,
+      sourceSha256: "abc123",
+    });
+
+    const baseline = artifacts.writeBaseline("node main() {}\n");
+
+    expect(fs.existsSync(path.join(baseline.workspaceDir, "helper.agency"))).toBe(true);
+    for (const dir of [".git", ".worktrees", "node_modules", "runs", "dist", ".agency-tmp"]) {
+      expect(fs.existsSync(path.join(baseline.workspaceDir, dir, "large.txt"))).toBe(false);
+    }
+  });
+
   it("writes candidate, validation failure, runtime rejection, verdict, champion, and summary domain artifacts", () => {
     const artifacts = createOptimizeArtifacts({
       runsDir: path.join(tmpDir, "runs"),

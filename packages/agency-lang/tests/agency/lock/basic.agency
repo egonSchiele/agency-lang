@@ -1,4 +1,4 @@
-import { withLock } from "std::agency"
+import { withLock } from "std::concurrency"
 
 let active = false
 let overlaps = 0

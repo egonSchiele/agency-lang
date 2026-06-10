@@ -27,10 +27,19 @@ function createTimeout(name: string, ms: number): Promise<never> {
   });
 }
 
-function startWarnTimer(name: string, ownerId: string, warnAfterMs: number): NodeJS.Timeout | null {
+function startWarnTimer(
+  ctx: RuntimeContext<any>,
+  name: string,
+  waiterId: string,
+  warnAfterMs: number,
+): NodeJS.Timeout | null {
   if (warnAfterMs <= 0) return null;
   return setTimeout(() => {
-    console.warn(`Still waiting for lock '${name}' after ${warnAfterMs}ms (owner ${ownerId})`);
+    const currentOwner = ctx.lockOwners[name] ?? "<none>";
+    console.warn(
+      `Still waiting for lock '${name}' after ${warnAfterMs}ms ` +
+        `(waiter ${waiterId}, current owner ${currentOwner})`,
+    );
   }, warnAfterMs);
 }
 
@@ -77,7 +86,6 @@ export async function acquireLocalLock(
   ctx.locks[name] = chain;
   rememberWaiter(ctx, name, ownerId);
 
-  let timedOut = false;
   let released = false;
   const release = () => {
     if (released) return;
@@ -90,6 +98,7 @@ export async function acquireLocalLock(
   };
 
   const warnTimer = startWarnTimer(
+    ctx,
     name,
     ownerId,
     opts.warnAfterMs ?? DEFAULT_WARN_AFTER_MS,
@@ -103,17 +112,11 @@ export async function acquireLocalLock(
       await waitForPrevious;
     }
   } catch (err) {
-    timedOut = true;
     forgetWaiter(ctx, name, ownerId);
     previous.finally(release);
     throw err;
   } finally {
     if (warnTimer) clearTimeout(warnTimer);
-  }
-
-  if (timedOut) {
-    release();
-    throw new Error(`Timed out waiting for lock '${name}'`);
   }
 
   ctx.lockOwners[name] = ownerId;

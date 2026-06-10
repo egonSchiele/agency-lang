@@ -1,6 +1,6 @@
 # Runtime locks
 
-`withLock(name) { ... }` is a per-run mutex for serializing access to shared resources such as the interactive TTY prompt. It is intentionally scoped to a single Agency run: separate runs do not coordinate with each other.
+`std::concurrency.withLock(name) { ... }` is a per-run mutex for serializing access to shared resources such as the interactive TTY prompt. It is intentionally scoped to a single Agency run: separate runs do not coordinate with each other.
 
 ## State ownership
 
@@ -24,6 +24,10 @@ These fields are runtime-only. They are not serialized in checkpoints. If execut
 
 The implementation is non-reentrant for a single `ownerId`: attempting to acquire a lock already held by the same owner throws immediately. `timeoutMs` rejects while waiting without force-releasing a live holder; the timed-out queue slot is released after the previous holder exits so later waiters are not blocked. `warnAfterMs` prints a diagnostic if waiting takes too long (default: 30s).
 
+This is not a full deadlock detector. It catches immediate same-owner reentrancy only; multi-lock cycles such as owner A holding `x` while waiting for `y` and owner B holding `y` while waiting for `x` are not detected automatically. Use `timeoutMs` for bounded waits when that risk exists.
+
+Fork branches can run inside a lock if they do not reacquire the same lock. Reacquiring the same lock inside a fork spawned by the lock holder can deadlock: the outer scope waits for the fork to finish while the branch waits for the outer lock to release.
+
 ## Cross-process coordination
 
 Subprocesses created by `std::agency.run` execute with `AGENCY_IPC=1`. In that mode `agency.withLock` sends `lockAcquire` and `lockRelease` messages to the parent process instead of using the child process's local context. The parent arbitrates using the same `acquireLocalLock` primitive as in-process callers, so parent branches and child branches share one mutex chain for the run.
@@ -39,6 +43,6 @@ Every active Agency stack has a stable live `lockOwnerId`; subprocess lock-acqui
 ## Public surfaces
 
 - TypeScript: `agency.withLock(name, fn, opts?)` from `agency-lang/runtime`.
-- Agency stdlib: `withLock(name, timeoutMs?, warnAfterMs?) as { ... }` from `std::agency`.
+- Agency stdlib: `withLock(name, timeoutMs?, warnAfterMs?) as { ... }` from `std::concurrency`.
 
 Use stable, namespaced lock names for shared resources (`"std::tty"`, `"mytool::cache"`). The standard CLI policy handler wraps its prompt in `withLock("std::tty")` so parallel branches do not render overlapping prompts.

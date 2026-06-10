@@ -1,11 +1,12 @@
-import { compile, run, withLock } from "std::agency"
+import { compile, run } from "std::agency"
+import { withLock } from "std::concurrency"
 
 node main() {
   const filename = "agency-withlock-cross-process.txt"
   write(filename, "idle", "/tmp") with approve
 
   const source = """
-import { withLock } from "std::agency"
+import { withLock } from "std::concurrency"
 
 node main() {
   withLock("resource") as {

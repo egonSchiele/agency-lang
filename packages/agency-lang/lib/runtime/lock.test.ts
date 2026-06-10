@@ -107,6 +107,8 @@ describe("runLocalLock", () => {
     await waiting;
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Still waiting for lock 'resource'"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("waiter second"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("current owner first"));
     warn.mockRestore();
   });
 });

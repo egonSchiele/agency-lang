@@ -1,5 +1,5 @@
 import { table, render, text } from "std::layout"
-import { withLock } from "std::agency"
+import { withLock } from "std::concurrency"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { chooseOption, ChoiceItem } from "std::ui"

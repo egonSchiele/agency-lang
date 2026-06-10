@@ -20,8 +20,6 @@ import {
 } from "../types/function.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
-import { __call } from "../runtime/call.js";
-import { agency } from "../runtime/agency.js";
 
 const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
 
@@ -238,22 +236,6 @@ export function _formatFile(dir: string, filename: string): boolean {
     writeFileSync(target, formatted, "utf-8");
   }
   return true;
-}
-
-export async function _withLock(
-  name: string,
-  timeoutMs: number | null,
-  warnAfterMs: number | null,
-  block: unknown,
-): Promise<unknown> {
-  return agency.withLock(
-    name,
-    () => __call(block, { type: "positional", args: [] }),
-    {
-      ...(timeoutMs !== null ? { timeoutMs } : {}),
-      ...(warnAfterMs !== null ? { warnAfterMs } : {}),
-    },
-  );
 }
 
 // ---------------------------------------------------------------------------

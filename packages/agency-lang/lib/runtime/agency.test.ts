@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -545,5 +545,96 @@ describe("agency.memory.*", () => {
         await expect(agency.memory.forget("anything")).resolves.toBeUndefined();
       },
     );
+  });
+});
+
+describe("agency.withLock", () => {
+  const originalSend = process.send;
+  const originalIpc = process.env.AGENCY_IPC;
+
+  afterEach(() => {
+    process.send = originalSend;
+    vi.restoreAllMocks();
+    if (originalIpc === undefined) {
+      delete process.env.AGENCY_IPC;
+    } else {
+      process.env.AGENCY_IPC = originalIpc;
+    }
+  });
+
+  it("runs the callback under the active context lock", async () => {
+    const env = setup();
+    const events: string[] = [];
+
+    await agency.withTestContext(env, async () => {
+      await Promise.all([
+        agency.withLock("resource", async () => {
+          events.push("a:start");
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          events.push("a:end");
+        }),
+        agency.withLock("resource", async () => {
+          events.push("b:start");
+          events.push("b:end");
+        }),
+      ]);
+    });
+
+    expect(events).toEqual(["a:start", "a:end", "b:start", "b:end"]);
+  });
+
+  it("uses parent lock IPC in subprocess mode", async () => {
+    process.env.AGENCY_IPC = "1";
+    const sent: any[] = [];
+    process.send = vi.fn((msg: any) => {
+      sent.push(msg);
+      if (msg.type === "lockAcquire") {
+        queueMicrotask(() => {
+          process.emit("message", {
+            type: "lockGranted",
+            requestId: msg.requestId,
+          });
+        });
+      }
+      return true;
+    }) as any;
+
+    const env = setup();
+    const result = await agency.withTestContext(env, () =>
+      agency.withLock("resource", async () => "done"),
+    );
+
+    expect(result).toBe("done");
+    expect(sent.map((msg) => msg.type)).toEqual(["lockAcquire", "lockRelease"]);
+    expect(sent[0].ownerId).toBeTruthy();
+    expect(sent[1].ownerId).toBe(sent[0].ownerId);
+  });
+
+  it("uses the same lock owner id for nested subprocess-mode acquisitions", async () => {
+    process.env.AGENCY_IPC = "1";
+    const sent: any[] = [];
+    process.send = vi.fn((msg: any) => {
+      sent.push(msg);
+      if (msg.type === "lockAcquire") {
+        queueMicrotask(() => {
+          process.emit("message", {
+            type: "lockGranted",
+            requestId: msg.requestId,
+          });
+        });
+      }
+      return true;
+    }) as any;
+
+    const env = setup();
+    await agency.withTestContext(env, () =>
+      agency.withLock("outer", () =>
+        agency.withLock("inner", async () => "done"),
+      ),
+    );
+
+    const acquires = sent.filter((msg) => msg.type === "lockAcquire");
+    expect(acquires).toHaveLength(2);
+    expect(acquires[0].ownerId).toBe(acquires[1].ownerId);
   });
 });

@@ -75,6 +75,10 @@ export class RuntimeContext<T> {
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   handlers: HandlerFn[];
+  locks: Record<string, Promise<void>>;
+  lockOwners: Record<string, string>;
+  lockWaiters: Record<string, string[]>;
+  lockReleasers: Record<string, () => void>;
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
@@ -202,6 +206,10 @@ export class RuntimeContext<T> {
     this.handlers = [];
     this.callbacks = {};
     this.onStreamLock = false;
+    this.locks = {};
+    this.lockOwners = {};
+    this.lockWaiters = {};
+    this.lockReleasers = {};
     // After a debugger rewind, the first debug step would write a duplicate
     // checkpoint to the trace (the user already saw the rewound checkpoint).
     // rewindFrom sets this flag so the first debugStep trace-write is skipped.
@@ -268,6 +276,10 @@ export class RuntimeContext<T> {
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];
     execCtx.onStreamLock = false;
+    execCtx.locks = {};
+    execCtx.lockOwners = {};
+    execCtx.lockWaiters = {};
+    execCtx.lockReleasers = {};
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;

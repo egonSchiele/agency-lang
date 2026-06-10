@@ -1,0 +1,46 @@
+import { compile, run, withLock } from "std::agency"
+
+node main() {
+  const filename = "agency-withlock-cross-process.txt"
+  write(filename, "idle", "/tmp") with approve
+
+  const source = """
+import { withLock } from "std::agency"
+
+node main() {
+  withLock("resource") as {
+    const before = read("agency-withlock-cross-process.txt", "/tmp") with approve
+    if (before.value == "parent") {
+      write("agency-withlock-cross-process.txt", "overlap", "/tmp") with approve
+    } else {
+      write("agency-withlock-cross-process.txt", "child", "/tmp") with approve
+    }
+  }
+  return true
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed: ${compileResult.error}"
+  }
+
+  handle {
+    fork([0, 1], shared: true) as branch {
+      if (branch == 0) {
+        withLock("resource") as {
+          write(filename, "parent", "/tmp") with approve
+          sleep(200ms)
+          write(filename, "done", "/tmp") with approve
+        }
+      } else {
+        sleep(20ms)
+        run(compiled: compileResult.value, node: "main", args: {}, cwd: "/tmp")
+      }
+    }
+  } with (data) {
+    return approve()
+  }
+
+  const final = read(filename, "/tmp") with approve
+  return final.value
+}

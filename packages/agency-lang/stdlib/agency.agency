@@ -10,6 +10,7 @@ import {
   _walkAST,
   _getNodesOfType,
   _filterImports,
+  _withLock,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
@@ -139,6 +140,30 @@ export def runFile(
     ipcPayload: ipcPayload,
     stdout: stdout,
   )
+}
+
+export def withLock(
+  name: string,
+  timeoutMs: number | null = null,
+  warnAfterMs: number | null = null,
+  block: () -> any = null,
+): any {
+  """
+  Run a block while holding a named per-run mutex. Concurrent branches
+  of the same run that use the same lock name execute this block one
+  at a time; branches using different names can continue concurrently.
+
+  Locks are released automatically when the block returns, throws, or
+  unwinds for an interrupt. In subprocesses launched with run(), the
+  lock is coordinated by the parent process so parent and child code
+  share the same mutex.
+
+  @param name - Lock name. Use stable names like "std::tty" for shared resources.
+  @param timeoutMs - Optional maximum time to wait before failing without acquiring the lock.
+  @param warnAfterMs - Optional wait time before printing a diagnostic warning. Defaults to 30s.
+  @param block - The work to run while holding the lock.
+  """
+  return _withLock(name, timeoutMs, warnAfterMs, block)
 }
 
 export def typecheck(source: string): Result<TypeCheckReport> {

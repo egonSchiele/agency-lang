@@ -136,12 +136,41 @@ describe("resolveSizes", () => {
     expect(negativeGap.children.map((child) => child.attrs.resolvedWidth)).toEqual([10, 10]);
   });
 
-  test("rejects percentage root and nested full widths", () => {
-    expect(() => _internal.resolveSizes(node("box", { width: "50%" }), { cols: 80, rows: 24 }))
-      .toThrow(/root has no parent/);
-    expect(() => _internal.resolveSizes(node("box", { width: 10 }, [
-      node("box", { width: "full" }, []),
-    ]), { cols: 80, rows: 24 })).toThrow(/only valid at the root/);
+  test("treats full and 100% as the same — at root, in children, anywhere", () => {
+    // At the root, both `"full"` and `"100%"` fill the viewport.
+    const full    = node("box", { width: "full" });
+    const hundred = node("box", { width: "100%" });
+    expect(_internal.resolveSizes(full,    { cols: 80, rows: 24 }).attrs.resolvedWidth).toBe(80);
+    expect(_internal.resolveSizes(hundred, { cols: 80, rows: 24 }).attrs.resolvedWidth).toBe(80);
+
+    // A nested `width: "full"` fills the parent's inner space (same as
+    // `width: "100%"` would). It no longer throws.
+    const nested = _internal.resolveSizes(
+      node("box", { width: 10 }, [node("box", { width: "full" })]),
+      { cols: 80, rows: 24 },
+    );
+    // outer inner = 10 - 2 border = 8 (no padding set at the raw-node
+    // level — Agency's `box()` defaults padding to 1, but a hand-built
+    // LayoutNode does not); inner box fills it.
+    expect(nested.children[0].attrs.resolvedWidth).toBe(8);
+
+    // Percentages at root resolve against the viewport.
+    const halfRoot = _internal.resolveSizes(
+      node("box", { width: "50%" }),
+      { cols: 100, rows: 24 },
+    );
+    expect(halfRoot.attrs.resolvedWidth).toBe(50);
+  });
+
+  test("rejects percentage child whose ancestors are all unsized", () => {
+    // Percent inside an unsized box has no basis to take a percentage
+    // of (the outer box does not itself have a resolved width).
+    expect(() =>
+      _internal.resolveSizes(
+        node("box", {}, [node("box", { width: "50%" })]),
+        { cols: 80, rows: 24 },
+      ),
+    ).toThrow(/requires a sized ancestor/);
   });
 });
 

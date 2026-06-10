@@ -63,6 +63,10 @@ export type BorderOpts = {
   targetWidth?: number;
 };
 
+// Number of cells a single `│`-style side border takes (one on each
+// side, so a framed box is `BORDER_CELLS` wider than its inner content).
+export const BORDER_CELLS = 2;
+
 // Minimum inner width required to fit a title embedded in the top edge.
 // The top edge is `tl + h + " Title " + h*N + tr` — so we need at least
 // one `h` before the title, the title text plus two spaces of padding,
@@ -71,6 +75,31 @@ const TITLE_BORDER_OVERHEAD = 4;
 
 export function minWidthForTitle(titleText: string): number {
   return visualWidth(titleText) + TITLE_BORDER_OVERHEAD;
+}
+
+// Decide how to render a title given a fixed inner width.
+//
+// When the title fits on the top edge (`╭─ Title ───╮`), it goes there.
+// When it would overflow, it wraps inside the frame as its own block of
+// rows, and the top edge is drawn plain. This is the rule both `box`
+// (via `bordered`) and `table` (via `composeTable`) use, so it lives
+// here as a single source of truth.
+export type TitlePlacement =
+  | { kind: "top"; title: string }
+  | { kind: "wrapped"; block: Block };
+
+export function placeTitle(
+  title: string,
+  innerWidth: number,
+  titleStyle: Style,
+): TitlePlacement {
+  if (title === "" || minWidthForTitle(title) <= innerWidth) {
+    return { kind: "top", title };
+  }
+  return {
+    kind: "wrapped",
+    block: styled(Block.of(wrapText(title, innerWidth)), titleStyle),
+  };
 }
 
 // Grow `inner` horizontally so a title can fit. Padded children stay
@@ -97,24 +126,20 @@ export function bordered(block: Block, opts: BorderOpts): Block {
   const borderChars = BORDER_CHARS[resolveBorderStyle(opts.borderStyle)];
   const padding     = opts.padding ?? 0;
   const titleText   = opts.title   ?? "";
-  const targetInnerWidth = opts.targetWidth !== undefined
-    ? Math.max(0, opts.targetWidth - 2)
-    : undefined;
+  const padded      = withPaddingApplied(block, padding);
 
-  const padded = withPaddingApplied(block, padding);
-  if (targetInnerWidth !== undefined) {
-    const titleFitsTop = titleText === "" || minWidthForTitle(titleText) <= targetInnerWidth;
-    const topTitle = titleFitsTop ? titleText : "";
-    const titleBlock = titleFitsTop
-      ? Block.empty()
-      : styled(Block.of(wrapText(titleText, targetInnerWidth)), opts.titleColor ? { fgColor: opts.titleColor } : {});
+  if (opts.targetWidth !== undefined) {
+    const innerWidth = Math.max(0, opts.targetWidth - BORDER_CELLS);
+    const titleStyle: Style = opts.titleColor ? { fgColor: opts.titleColor } : {};
+    const placement = placeTitle(titleText, innerWidth, titleStyle);
+    const titleBlock = placement.kind === "wrapped" ? placement.block : Block.empty();
+    const topTitle   = placement.kind === "top"     ? placement.title : "";
     const content = above(titleBlock, padded);
-    const inner = pad(content, targetInnerWidth, content.height, "start", "start");
-    return frameWithBorder(inner, borderChars, targetInnerWidth, opts, topTitle);
+    const inner = pad(content, innerWidth, content.height, "start", "start");
+    return frameWithBorder(inner, borderChars, innerWidth, opts, topTitle);
   }
 
   const inner = titleText !== "" ? growToFitTitle(padded, titleText, padding) : padded;
-
   return frameWithBorder(inner, borderChars, inner.width, opts, titleText);
 }
 

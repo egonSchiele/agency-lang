@@ -16,13 +16,13 @@
 // both consume the same `ColumnLayout[]`, so a change to one stays in
 // sync with the other automatically.
 
-import { Style, styledWrapper, visualWidth, wrapText } from "./ansi.js";
+import { Style, styledWrapper, visualWidth } from "./ansi.js";
 import { Align, Block, above, beside, pad, padLine, styled } from "./block.js";
 import {
-  BORDER_CHARS, BorderChars, BorderStyle, buildTopEdge, minWidthForTitle,
-  resolveBorderStyle,
+  BORDER_CELLS, BORDER_CHARS, BorderChars, BorderStyle, buildTopEdge,
+  minWidthForTitle, placeTitle, resolveBorderStyle,
 } from "./border.js";
-import { Cell, ColumnSpec, LayoutNode, parseWidth } from "./nodes.js";
+import { Cell, ColumnSpec, LayoutNode, Width, parseWidth } from "./nodes.js";
 import { growToWidth, renderNode, resolveNode } from "./render.js";
 
 export { Cell, ColumnSpec };
@@ -206,11 +206,16 @@ export function _tableChromeWidth(
   cellPadding: number,
   columnDividers: boolean,
 ): number {
-  const borders = 2;
   const padding = columnCount * 2 * cellPadding;
   const dividers = columnDividers ? Math.max(0, columnCount - 1) : 0;
-  return borders + padding + dividers;
+  return BORDER_CELLS + padding + dividers;
 }
+
+type TableSections = {
+  header: LayoutNode[];
+  body:   LayoutNode[][];
+  footer: LayoutNode[][];
+};
 
 export function _resolveTableWidths(
   node: LayoutNode,
@@ -221,15 +226,12 @@ export function _resolveTableWidths(
   const columns = (attrs.columns as ColumnSpec[] | null | undefined) ?? [];
   const cellPadding = clampCellPadding(attrs.cellPadding);
   const columnDividers = (attrs.columnDividers as boolean | undefined) ?? true;
-  const sections = { header, body, footer };
+  const sections: TableSections = { header, body, footer };
   const chrome = _tableChromeWidth(columnCount, cellPadding, columnDividers);
-  const resolvedColumnWidths = distributeColumnWidths({
-    columns,
-    columnCount,
-    sections,
-    resolvedWidth,
-    chrome,
-  });
+  const available = resolvedWidth !== undefined ? Math.max(0, resolvedWidth - chrome) : undefined;
+
+  const plan = planColumns(columns, columnCount, sections);
+  const resolvedColumnWidths = computeColumnWidths(plan, available);
   const annotated = annotateCellsWithWrap(sections, resolvedColumnWidths);
 
   return {
@@ -245,100 +247,126 @@ export function _resolveTableWidths(
   };
 }
 
-function distributeColumnWidths(args: {
-  columns: ColumnSpec[];
-  columnCount: number;
-  sections: { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] };
-  resolvedWidth: number | undefined;
-  chrome: number;
-}): number[] {
-  const { columns, columnCount, sections, resolvedWidth, chrome } = args;
+// A single column's sizing inputs, gathered up front so the
+// width-distribution logic can read them as data rather than re-deriving
+// from the raw `ColumnSpec[]` mid-loop.
+type ColumnPlan = {
+  index:    number;
+  parsed:   Width | null;   // parsed `width` attribute, or null for unsized
+  natural:  number;         // measured content width
+  minWidth: number;         // explicit floor from `minWidth`
+};
+
+function planColumns(
+  columns: ColumnSpec[],
+  columnCount: number,
+  sections: TableSections,
+): ColumnPlan[] {
   const natural = measureNaturalColumnWidths(sections, columnCount);
-  const parsed = Array.from({ length: columnCount }, (_, c) => parseWidth(columns[c]?.width));
-  const available = resolvedWidth !== undefined ? Math.max(0, resolvedWidth - chrome) : undefined;
+  return Array.from({ length: columnCount }, (_, index) => ({
+    index,
+    parsed:   parseWidth(columns[index]?.width),
+    natural:  natural[index],
+    minWidth: columns[index]?.minWidth ?? 0,
+  }));
+}
 
-  for (let c = 0; c < columnCount; c++) {
-    if (parsed[c]?.kind === "full") {
-      throw new Error(
-        `std::layout: column[${c}].width "full" is not allowed. ` +
-        `Use a number or percentage.`,
-      );
-    }
-    if (available === undefined && parsed[c]?.kind === "percent") {
-      throw new Error(
-        `std::layout: column[${c}] uses a percentage width but the table ` +
-        `has no resolved width to take a percentage of. ` +
-        `Set width: on the table or one of its ancestors.`,
-      );
-    }
-  }
+// Compute the final width of every column.
+//
+// Allocation order:
+//   1. Fixed-cell columns claim their declared value.
+//   2. Unsized columns claim their natural content width.
+//   3. Percent / "full" columns share whatever is left of `available`.
+//      When their declared percentages sum to > 100, each gets its
+//      proportional share of the remainder; otherwise each gets its
+//      literal share and the slack stays at the right edge.
+//   4. `minWidth` is applied as a floor.
+function computeColumnWidths(
+  plan: ColumnPlan[],
+  available: number | undefined,
+): number[] {
+  assertPercentsHaveBasis(plan, available);
 
-  const widths = new Array<number>(columnCount).fill(0);
-  let remaining = available ?? Infinity;
-  for (let c = 0; c < columnCount; c++) {
-    const width = parsed[c];
-    if (width?.kind === "cells") {
-      widths[c] = width.value;
-      remaining -= width.value;
-    } else if (width === null) {
-      widths[c] = natural[c];
-      remaining -= natural[c];
-    }
-  }
+  const fixed    = plan.map(fixedWidthFor);
+  const claimed  = fixed.reduce<number>((sum, w) => sum + (w ?? 0), 0);
+  const remain   = Math.max(0, (available ?? Infinity) - claimed);
+  const totalPct = sumPercentages(plan);
 
-  const safeRemaining = Math.max(0, remaining);
-  const percentIndices = parsed
-    .map((width, index) => width?.kind === "percent" ? index : -1)
-    .filter((index) => index >= 0);
-  const totalPct = percentIndices.reduce((sum, index) => {
-    const width = parsed[index];
-    return sum + (width?.kind === "percent" ? width.value : 0);
-  }, 0);
-  for (const index of percentIndices) {
-    const width = parsed[index];
-    const pct = width?.kind === "percent" ? width.value : 0;
-    const share = totalPct > 100 ? pct / totalPct : pct / 100;
-    widths[index] = Math.floor(safeRemaining * share);
-  }
+  return plan.map((col, i) => {
+    const own = fixed[i] ?? percentWidthFor(col, remain, totalPct);
+    return Math.max(own, col.minWidth);
+  });
+}
 
-  for (let c = 0; c < columnCount; c++) {
-    const min = columns[c]?.minWidth ?? 0;
-    if (widths[c] < min) widths[c] = min;
-  }
-  return widths;
+function assertPercentsHaveBasis(plan: ColumnPlan[], available: number | undefined): void {
+  if (available !== undefined) return;
+  const percentCol = plan.find((col) => isPercentLike(col.parsed));
+  if (percentCol === undefined) return;
+  throw new Error(
+    `std::layout: column[${percentCol.index}] uses a percentage width ` +
+    `but the table has no resolved width to take a percentage of. ` +
+    `Set width: on the table or one of its ancestors.`,
+  );
+}
+
+// Width for a column whose own size doesn't depend on the leftover
+// space: fixed cells (declared count) or unsized (natural content
+// width). Returns null for percent/full columns, which are sized later.
+function fixedWidthFor(col: ColumnPlan): number | null {
+  if (col.parsed === null)            return col.natural;
+  if (col.parsed.kind === "cells")    return col.parsed.value;
+  return null;
+}
+
+function percentWidthFor(col: ColumnPlan, remaining: number, totalPct: number): number {
+  const pct = pctValue(col.parsed);
+  const share = totalPct > 100 ? pct / totalPct : pct / 100;
+  return Math.floor(remaining * share);
+}
+
+function isPercentLike(w: Width | null): boolean {
+  return w?.kind === "percent" || w?.kind === "full";
+}
+
+function pctValue(w: Width | null): number {
+  if (w?.kind === "percent") return w.value;
+  if (w?.kind === "full")    return 100;
+  return 0;
+}
+
+function sumPercentages(plan: ColumnPlan[]): number {
+  return plan.reduce((sum, col) => sum + pctValue(col.parsed), 0);
 }
 
 function measureNaturalColumnWidths(
-  sections: { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] },
+  sections: TableSections,
   columnCount: number,
 ): number[] {
-  const widths = new Array<number>(columnCount).fill(0);
   const rows = [
     ...(sections.header.length > 0 ? [sections.header] : []),
     ...sections.body,
     ...sections.footer,
   ];
-  for (const row of rows) {
-    for (let c = 0; c < columnCount; c++) {
-      widths[c] = Math.max(widths[c], renderNode(row[c]).width);
-    }
-  }
-  return widths;
+  return Array.from({ length: columnCount }, (_, c) =>
+    rows.reduce((max, row) => Math.max(max, renderNode(row[c]).width), 0),
+  );
 }
 
 function annotateCellsWithWrap(
-  sections: { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] },
+  sections: TableSections,
   resolvedColumnWidths: number[],
-): { header: LayoutNode[]; body: LayoutNode[][]; footer: LayoutNode[][] } {
+): TableSections {
   const annotateCell = (cell: LayoutNode, columnWidth: number): LayoutNode => {
     if (cell.type === "text") return { ...cell, attrs: { ...cell.attrs, wrapWidth: columnWidth } };
-    if (cell.type === "raw") return cell;
-    return resolveNode(cell, columnWidth);
+    if (cell.type === "raw")  return cell;
+    return resolveNode(cell, { defaultWidth: columnWidth, percentBasis: columnWidth });
   };
+  const annotateRow = (row: LayoutNode[]): LayoutNode[] =>
+    row.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0));
   return {
-    header: sections.header.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0)),
-    body: sections.body.map((row) => row.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0))),
-    footer: sections.footer.map((row) => row.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0))),
+    header: annotateRow(sections.header),
+    body:   sections.body.map(annotateRow),
+    footer: sections.footer.map(annotateRow),
   };
 }
 
@@ -544,10 +572,10 @@ export function composeTable(node: LayoutNode): Block {
 
   // A wide title may grow innerWidth beyond the cell grid; dividers and
   // row wrappers both honour that final width so everything lines up.
-  const cellsWidth = _innerTableWidth(layouts, columnDividers);
-  const titleFloor = resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
-  const resolvedInner = resolved !== undefined ? Math.max(0, resolved - 2) : 0;
-  const innerWidth = Math.max(cellsWidth, titleFloor, resolvedInner);
+  const cellsWidth    = _innerTableWidth(layouts, columnDividers);
+  const titleFloor    = resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
+  const resolvedInner = resolved !== undefined ? Math.max(0, resolved - BORDER_CELLS) : 0;
+  const innerWidth    = Math.max(cellsWidth, titleFloor, resolvedInner);
 
   // Build flat declarative list of section parts, then render each
   // part into a Block in one place.
@@ -562,15 +590,22 @@ export function composeTable(node: LayoutNode): Block {
           _composeRowBlock(part.cells, layouts, columnDividers, ch.v, wrapBorder),
           innerWidth, ch, wrapBorder,
         );
-  const titleFitsTop = title === "" || resolved === undefined || minWidthForTitle(title) <= innerWidth;
-  const titleRows = titleFitsTop
-    ? []
-    : [_wrapRowSides(styled(Block.of(wrapText(title, innerWidth)), titleStyle), innerWidth, ch, wrapBorder)];
+  // A title that doesn't fit on the top edge gets wrapped inside the
+  // frame as its own section. Same rule the box renderer uses (via
+  // `placeTitle` in border.ts) — but only when the table has a resolved
+  // width; otherwise the table is free to grow to fit the title.
+  const placement = resolved === undefined
+    ? { kind: "top" as const, title }
+    : placeTitle(title, innerWidth, titleStyle);
+  const titleRows = placement.kind === "wrapped"
+    ? [_wrapRowSides(placement.block, innerWidth, ch, wrapBorder)]
+    : [];
+  const topTitle = placement.kind === "top" ? placement.title : "";
   const sectionBlocks = [...titleRows, ...sectionParts.map(renderPart)];
 
   // Outer frame (top + bottom edges).
   const topEdge    = Block.of(
-    buildTopEdge(ch, innerWidth, wrapBorder, titleFitsTop ? title : "", titleStyle),
+    buildTopEdge(ch, innerWidth, wrapBorder, topTitle, titleStyle),
   );
   const bottomEdge = Block.of(
     wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br),

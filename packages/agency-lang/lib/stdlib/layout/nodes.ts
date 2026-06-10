@@ -26,15 +26,23 @@ export type LayoutNode = {
 // `_coerceCell` (table.ts) at the table-handler boundary.
 export type Cell = string | LayoutNode;
 
+// The on-the-wire `width` value users write in Agency code: a positive
+// number of cells, the literal `"full"`, or a `"<n>%"` string. Validated
+// at runtime by `parseWidth`.
+export type WidthInput = number | "full" | string;
+
 export type ColumnSpec = {
-  align?: Align;
+  align?:    Align;
   minWidth?: number;
-  width?: unknown;
-  fgColor?: string;
+  width?:    WidthInput;
+  fgColor?:  string;
 };
 
+// Result of `parseWidth`: a closed sum type that downstream sizers
+// pattern-match on. `"full"` is preserved as its own kind for clarity
+// at debug time, but the resolver treats it as a synonym for `100%`.
 export type Width =
-  | { kind: "cells"; value: number }
+  | { kind: "cells";   value: number }
   | { kind: "full" }
   | { kind: "percent"; value: number };
 

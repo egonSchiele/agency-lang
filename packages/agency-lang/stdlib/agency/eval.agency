@@ -5,6 +5,8 @@ import {
   _finalizeEvalRunTask,
   _finishEvalRun,
   _formatEvalRunFailure,
+  _evalExtract,
+  _evalJudge,
 } from "agency-lang/stdlib-lib/agencyEval.js"
 
 export type EvalRunTask = {
@@ -87,4 +89,103 @@ export def evalRun(
   }
 
   return _finishEvalRun(state, results)
+}
+
+// ---------------------------------------------------------------------------
+// `eval extract` stdlib binding
+// ---------------------------------------------------------------------------
+
+export type EvalValue = {
+  value: any;
+  threadId?: string;
+  tMs: number;
+  truncated?: boolean
+}
+
+export type EvalRecord = {
+  traceId: string;
+  recordVersion: number;
+  formatVersion: number;
+  durationMs: number;
+  source: string;
+  evalInputs: EvalValue[];
+  evalOutputs: EvalValue[];
+  threads: Record<string, any>[];
+  events: Record<string, any>[];
+  interrupts: Record<string, any>[];
+  errors: Record<string, any>[];
+  incomplete: Record<string, any>[];
+  metrics: Record<string, any>;
+  warnings: string[]
+}
+
+export def evalExtract(statelogPath: string): EvalRecord {
+  """
+  Extract a structured eval record from a statelog file. Equivalent to
+  what `agency eval extract` writes to disk, but returned directly so
+  eval pipelines composed in Agency can inspect or judge without going
+  through a temporary file.
+
+  The shape mirrors the on-disk eval-record format. Top-level fields
+  (traceId, durationMs, evalInputs, evalOutputs, warnings) are the
+  most commonly consumed; nested arrays (threads, events, interrupts,
+  errors, incomplete) are loosely typed because their schemas are
+  large and evolve independently — consumers can JSON-inspect as
+  needed.
+
+  @param statelogPath - Path to a .statelog.jsonl file produced by an
+    agent run (e.g. the file under `runs/<run-id>/tasks/<task-id>/`
+    after `evalRun`).
+  """
+  return _evalExtract(statelogPath)
+}
+
+// ---------------------------------------------------------------------------
+// `eval judge` stdlib binding (pairwise)
+// ---------------------------------------------------------------------------
+
+export type PairwiseVerdictInput = {
+  path: string;
+  response: string;
+  truncated?: boolean
+}
+
+export type PairwiseVerdict = {
+  verdictVersion: number;
+  goal: string;
+  inputs: PairwiseVerdictInput[];
+  winner: string;
+  confidence: string;
+  reasoning: string;
+  generatedAt: string
+}
+
+export def evalJudge(
+  rubric: string,
+  recordPathA: string,
+  recordPathB: string,
+): PairwiseVerdict {
+  """
+  Pairwise-judge two eval records against a rubric. Returns a
+  structured verdict naming the winner ("A", "B", or "tie"), the
+  judge's confidence level ("low", "medium", "high"), and the
+  reasoning the judge produced.
+
+  Both record paths must point at JSON files in the EvalRecord shape
+  produced by `evalExtract` or `agency eval extract`. The judge
+  invokes the bundled `judgePairwise.agency` program in a subprocess,
+  which means a real LLM call happens per invocation — budget
+  accordingly when looping.
+
+  The argument order matters when the caller cares about position
+  bias: judge LLMs slightly prefer one position over the other, so
+  high-precision callers should invoke twice with swapped order and
+  reconcile the verdicts.
+
+  @param rubric - What the judge should grade against. Per-task rubrics
+    from an eval suite are the typical input.
+  @param recordPathA - Path to the first eval record JSON file
+  @param recordPathB - Path to the second eval record JSON file
+  """
+  return _evalJudge(rubric, recordPathA, recordPathB)
 }

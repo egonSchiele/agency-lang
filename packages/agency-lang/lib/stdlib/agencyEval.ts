@@ -3,6 +3,8 @@ import * as fs from "fs";
 import { nanoid } from "nanoid";
 
 import { extractEvalRecord } from "../eval/extract.js";
+import { judgePairwise } from "../eval/judge/pairwise.js";
+import type { PairwiseVerdict } from "../eval/judge/types.js";
 import { readAllEvents } from "../eval/parseJsonl.js";
 import {
   initializeEvalRun,
@@ -20,6 +22,7 @@ import type {
   EvalRunTask,
   EvalRunTaskResult,
 } from "../eval/runTypes.js";
+import type { EvalRecord } from "../eval/types.js";
 
 /**
  * State carried by the Agency-side `evalRun` loop. Note: this is just the
@@ -130,4 +133,29 @@ export function _formatEvalRunFailure(value: any): string {
     value?.value ??
     value;
   return typeof candidate === "string" ? candidate : JSON.stringify(candidate);
+}
+
+/**
+ * Stdlib binding for `eval extract`. Reads a JSONL statelog at
+ * `statelogPath` and returns the structured EvalRecord that
+ * `agency eval extract` would write. Composes the existing extractor
+ * pipeline; no separate logic here.
+ */
+export async function _evalExtract(statelogPath: string): Promise<EvalRecord> {
+  const events = await readAllEvents(statelogPath);
+  return extractEvalRecord(events, statelogPath);
+}
+
+/**
+ * Stdlib binding for `eval judge`. Pairwise-judges two eval records against
+ * a rubric and returns the structured PairwiseVerdict. Delegates to the
+ * existing `judgePairwise` so CLI and stdlib paths share judge behavior
+ * (including the subprocess judge invocation through `runAgencyJudge`).
+ */
+export async function _evalJudge(
+  rubric: string,
+  recordPathA: string,
+  recordPathB: string,
+): Promise<PairwiseVerdict> {
+  return judgePairwise(rubric, recordPathA, recordPathB);
 }

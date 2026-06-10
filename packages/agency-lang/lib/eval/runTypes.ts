@@ -38,19 +38,3 @@ export type EvalRunCompiledAgent = {
   moduleId: string;
   path?: string;
 };
-
-export type EvalRunDependencies = {
-  runTask(args: {
-    compiled: EvalRunCompiledAgent;
-    node: string;
-    args: Record<string, any>;
-    cwd: string;
-    statelogPath: string;
-  }): Promise<{ ok: true } | { ok: false; errorMessage: string }>;
-  extract(args: {
-    statelogPath: string;
-    outPath: string;
-    task: EvalRunTask;
-  }): Promise<void>;
-  now(): Date;
-};

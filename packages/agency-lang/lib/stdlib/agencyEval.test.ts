@@ -5,12 +5,11 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  _completeEvalRunTask,
+  _finalizeEvalRunTask,
   _finishEvalRun,
   _formatEvalRunFailure,
-  _initializeEvalRun,
+  _initEvalRun,
   _prepareEvalRunTask,
-  _recordEvalRunTaskError,
 } from "./agencyEval.js";
 
 describe("agency eval stdlib helpers", () => {
@@ -24,29 +23,50 @@ describe("agency eval stdlib helpers", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("initializes runs with generated ids and records task errors", () => {
-    const state = _initializeEvalRun({ moduleId: "agent" }, [{ task_id: "t1", rubric: "r", args: {} }], "main", tmpDir, "", true);
+  it("initializes runs with generated ids and reports prepare failures", () => {
+    const state = _initEvalRun(
+      { moduleId: "agent" },
+      [{ task_id: "../escape", rubric: "r", args: {} }],
+      "main",
+      tmpDir,
+      "",
+      true,
+    );
     expect(state.runId).not.toBe("");
 
-    const prepared = _prepareEvalRunTask(state, state.tasks[0]);
-    const result = _recordEvalRunTaskError(state, prepared, "boom");
-    const summary = _finishEvalRun(state);
+    const prep = _prepareEvalRunTask(state, state.tasks[0]);
+    expect(prep.ok).toBe(false);
+    if (!prep.ok) {
+      expect(prep.result).toMatchObject({
+        taskId: "../escape",
+        status: "error",
+      });
+    }
 
-    expect(result.status).toBe("error");
+    const summary = _finishEvalRun(state, prep.ok ? [] : [prep.result]);
     expect(summary.errorCount).toBe(1);
     expect(fs.existsSync(path.join(state.runDir, "summary.json"))).toBe(true);
   });
 
-  it("completes prepared tasks with success or error results", async () => {
-    const state = _initializeEvalRun({ moduleId: "agent" }, [{ task_id: "t1", rubric: "r", args: {} }], "main", tmpDir, "r1", true);
-    const prepared = _prepareEvalRunTask(state, state.tasks[0]);
+  it("finalizes prepared tasks with success or error results", async () => {
+    const state = _initEvalRun(
+      { moduleId: "agent" },
+      [{ task_id: "t1", rubric: "r", args: {} }],
+      "main",
+      tmpDir,
+      "r1",
+      true,
+    );
+    const prep = _prepareEvalRunTask(state, state.tasks[0]);
+    expect(prep.ok).toBe(true);
+    if (!prep.ok) return;
 
-    const success = await _completeEvalRunTask(state, prepared, "");
-    const error = await _completeEvalRunTask(state, prepared, "boom");
+    // No statelog file written → finalize skips extraction and succeeds.
+    const success = await _finalizeEvalRunTask(prep.prepared, "");
+    const error = await _finalizeEvalRunTask(prep.prepared, "boom");
 
     expect(success).toMatchObject({ taskId: "t1", status: "success" });
     expect(error).toMatchObject({ taskId: "t1", status: "error", errorMessage: "boom" });
-    expect(state.results.map((result) => result.status)).toEqual(["success", "error"]);
   });
 
   it("formats failure-like values", () => {

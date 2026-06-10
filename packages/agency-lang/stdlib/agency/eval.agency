@@ -1,12 +1,11 @@
 import { run, CompiledProgram } from "std::agency"
 import {
-  _initializeEvalRun,
+  _initEvalRun,
   _prepareEvalRunTask,
-  _completeEvalRunTask,
-  _recordEvalRunTaskError,
-  _formatEvalRunFailure,
+  _finalizeEvalRunTask,
   _finishEvalRun,
- } from "agency-lang/stdlib-lib/agencyEval.js"
+  _formatEvalRunFailure,
+} from "agency-lang/stdlib-lib/agencyEval.js"
 
 export type EvalRunTask = {
   task_id: string;
@@ -43,7 +42,10 @@ export def evalRun(
   continueOnError: boolean = true,
 ): EvalRunResult {
   """
-  Run a compiled Agency program against eval tasks, writing per-task statelog and eval artifacts under runsDir/runId. Subprocess execution goes through std::agency.run so caller handlers still approve subprocess execution and child interrupts.
+  Run a compiled Agency program against eval tasks, writing per-task
+  statelog and eval artifacts under runsDir/runId. Subprocess execution goes
+  through std::agency.run so caller handlers still approve subprocess
+  execution and child interrupts.
 
   @param compiled - Compiled program from std::agency.compile
   @param tasks - Eval tasks to run sequentially
@@ -52,41 +54,37 @@ export def evalRun(
   @param runId - Optional run id; generated when empty
   @param continueOnError - Continue remaining tasks after a task error
   """
-  const runState = _initializeEvalRun(compiled, tasks, node, runsDir, runId, continueOnError)
-  for (task in runState.tasks) {
-    const preparedResult = try _prepareEvalRunTask(runState, task)
-    if (isFailure(preparedResult)) {
-      _recordEvalRunTaskError(runState, task, _formatEvalRunFailure(preparedResult))
-      if (!continueOnError) {
-        return _finishEvalRun(runState)
+  const state = _initEvalRun(compiled, tasks, node, runsDir, runId, continueOnError)
+  const results: EvalRunTaskResult[] = []
+  let lastStatus = "success"
+
+  for (task in state.tasks) {
+    const prep = _prepareEvalRunTask(state, task)
+    if (prep.ok) {
+      const prepared = prep.prepared
+      const runResult = run(
+        compiled: compiled,
+        node: task.node ?? node,
+        args: task.args,
+        logFile: prepared.statelogPath,
+        cwd: prepared.workdirPath,
+      )
+      let runError = ""
+      if (isFailure(runResult)) {
+        runError = _formatEvalRunFailure(runResult)
       }
-      continue
-    }
-    const prepared = preparedResult.value
-    const taskNode = task.node ?? node
-    const runResult = run(
-      compiled: compiled,
-      node: taskNode,
-      args: task.args,
-      logFile: prepared.statelogPath,
-      cwd: prepared.workdirPath,
-    )
-    let errorMessage = ""
-    if (isFailure(runResult)) {
-      errorMessage = _formatEvalRunFailure(runResult)
-    }
-    const completedResult = try _completeEvalRunTask(runState, prepared, errorMessage)
-    if (isFailure(completedResult)) {
-      _recordEvalRunTaskError(runState, prepared, _formatEvalRunFailure(completedResult))
-      if (!continueOnError) {
-        return _finishEvalRun(runState)
-      }
+      const taskResult = _finalizeEvalRunTask(prepared, runError)
+      results.push(taskResult)
+      lastStatus = taskResult.status
     } else {
-      const taskResult = completedResult.value
-      if (taskResult.status == "error" && !continueOnError) {
-        return _finishEvalRun(runState)
-      }
+      results.push(prep.result)
+      lastStatus = prep.result.status
+    }
+
+    if (lastStatus == "error" && !continueOnError) {
+      break
     }
   }
-  return _finishEvalRun(runState)
+
+  return _finishEvalRun(state, results)
 }

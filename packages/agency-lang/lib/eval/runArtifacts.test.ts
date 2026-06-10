@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   initializeEvalRun,
   prepareEvalRunTask,
-  recordEvalRunTaskError,
+  recordEvalRunTaskPrepareFailure,
+  recordEvalRunTaskRunFailure,
   shouldExtractStatelog,
   writeEvalRunSummary,
 } from "./runArtifacts.js";
@@ -99,11 +100,24 @@ describe("eval run artifacts", () => {
     })).toThrow("working_dir must be a directory");
   });
 
-  it("records task errors and writes summary", () => {
+  it("records prepare failures without touching artifact paths", () => {
+    const result = recordEvalRunTaskPrepareFailure("t1", "invalid task_id");
+
+    expect(result).toEqual({
+      taskId: "t1",
+      status: "error",
+      evalRecordPath: "",
+      statelogPath: "",
+      workdirPath: "",
+      errorMessage: "invalid task_id",
+    });
+  });
+
+  it("records run failures and writes error.txt + summary", () => {
     const state = initializeState();
     const prepared = prepareEvalRunTask(state, { task_id: "t1", rubric: "rubric", args: {} });
 
-    const result = recordEvalRunTaskError(prepared, "boom");
+    const result = recordEvalRunTaskRunFailure(prepared, "boom");
     const summary = writeEvalRunSummary(state, [result]);
 
     expect(fs.readFileSync(path.join(state.runDir, "tasks", "t1", "error.txt"), "utf-8")).toBe("boom");

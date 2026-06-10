@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { evalRun, executeEvalRunTask, resolveEvalRunTarget, validateTaskSelection } from "./run.js";
+import { evalRun, resolveEvalRunTarget, validateTaskSelection } from "./run.js";
 
 describe("eval run CLI", () => {
   let tmpDir: string;
@@ -35,7 +35,7 @@ describe("eval run CLI", () => {
     expect(validateTaskSelection({ goal: "goal" })).toBe("goal");
   });
 
-  it("builds a run and invokes each task through dependencies", async () => {
+  it("compiles, runs each task through the injected runner, and writes artifacts", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");
     const runsDir = path.join(tmpDir, "runs");
@@ -49,46 +49,53 @@ describe("eval run CLI", () => {
         continueOnError: true,
       },
       {
-        now: () => new Date("2026-06-09T14:30:00.000Z"),
-        makeId: () => "task1",
-        compileAgent: async () => ({ moduleId: "agent", path: "/compiled/agent.js" }),
-        runTask: async ({ statelogPath }) => {
+        runner: async ({ statelogPath }) => {
           fs.writeFileSync(statelogPath, "{}\n");
           return { ok: true };
         },
-        extract: async ({ outPath }) => { fs.writeFileSync(outPath, "{}"); },
+        extractor: async ({ outPath }) => {
+          fs.writeFileSync(outPath, "{}");
+        },
       },
     );
 
     expect(result).toMatchObject({ runId: "r1", okCount: 1, errorCount: 0 });
-    expect(result.tasks[0]).toMatchObject({ taskId: "task1", status: "success" });
-    expect(fs.existsSync(path.join(runsDir, "r1", "tasks", "task1", "eval-record.json"))).toBe(true);
+    expect(result.tasks[0]).toMatchObject({ status: "success" });
+    expect(fs.existsSync(path.join(runsDir, "r1", "tasks", result.tasks[0].taskId, "eval-record.json"))).toBe(true);
   });
 
-  it("executes one task through artifact, run, and extract dependencies", async () => {
-    const state = {
-      runId: "r1",
-      runDir: path.join(tmpDir, "runs", "r1"),
-      tasksDir: path.join(tmpDir, "runs", "r1", "tasks"),
-      agent: "agent.agency:main",
-      tasksSource: "inline:--goal",
-      continueOnError: true,
-    };
-    fs.mkdirSync(state.tasksDir, { recursive: true });
+  it("stops after the first task error when continueOnError is false", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main() {}\n");
+    const runsDir = path.join(tmpDir, "runs");
+    const tasksFile = path.join(tmpDir, "tasks.json");
+    fs.writeFileSync(tasksFile, JSON.stringify({
+      tasks: [
+        { task_id: "first", rubric: "r1", args: {} },
+        { task_id: "second", rubric: "r2", args: {} },
+      ],
+    }));
 
-    const result = await executeEvalRunTask({
-      state,
-      task: { task_id: "task1", rubric: "do it", args: {} },
-      compiled: { moduleId: "agent", path: "/compiled/agent.js" },
-      defaultNode: "main",
-      runTask: async ({ statelogPath }) => {
-        fs.writeFileSync(statelogPath, "{}\n");
-        return { ok: true };
+    let runs = 0;
+    const result = await evalRun(
+      {
+        agent: agentFile,
+        tasks: tasksFile,
+        runsDir,
+        runId: "stop",
+        continueOnError: false,
       },
-      extract: async ({ outPath }) => { fs.writeFileSync(outPath, "{}"); },
-    });
+      {
+        runner: async () => {
+          runs += 1;
+          return { ok: false, errorMessage: "nope" };
+        },
+        extractor: async () => {},
+      },
+    );
 
-    expect(result).toMatchObject({ taskId: "task1", status: "success" });
-    expect(fs.existsSync(path.join(state.tasksDir, "task1", "eval-record.json"))).toBe(true);
+    expect(runs).toBe(1);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0]).toMatchObject({ taskId: "first", status: "error", errorMessage: "nope" });
   });
 });

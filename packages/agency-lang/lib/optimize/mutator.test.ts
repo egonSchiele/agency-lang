@@ -42,6 +42,21 @@ describe("proposeMutation", () => {
     expect(proposal).toEqual({ prompt: "Classify carefully ${text}", rationale: "Added care." });
   });
 
+  it("parses JSON string structured output from the model", async () => {
+    const proposal = await proposeMutation({
+      config: {},
+      goal: "be accurate",
+      currentPrompt: "Classify ${text}",
+      history: "",
+      callModel: async () => JSON.stringify({
+        prompt: "Classify carefully ${text}",
+        rationale: "Added care.",
+      }),
+    });
+
+    expect(proposal).toEqual({ prompt: "Classify carefully ${text}", rationale: "Added care." });
+  });
+
   it("throws a validation-friendly error for malformed structured output", async () => {
     await expect(proposeMutation({
       config: {},

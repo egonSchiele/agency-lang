@@ -56,12 +56,22 @@ export async function proposeMutation(args: {
     validationFailure: args.validationFailure,
   });
   const raw = await (args.callModel ?? defaultCallModel)({ message, model });
-  const parsed = MutationProposalSchema.safeParse(raw);
+  const normalized = parseModelOutput(raw);
+  const parsed = MutationProposalSchema.safeParse(normalized);
   if (!parsed.success) {
-    const missingPrompt = !raw || typeof raw !== "object" || typeof (raw as { prompt?: unknown }).prompt !== "string" || (raw as { prompt?: string }).prompt?.length === 0;
+    const missingPrompt = !normalized || typeof normalized !== "object" || typeof (normalized as { prompt?: unknown }).prompt !== "string" || (normalized as { prompt?: string }).prompt?.length === 0;
     throw new Error(missingPrompt ? "Mutator response missing prompt" : `Malformed mutator response: ${parsed.error.message}`);
   }
   return parsed.data;
+}
+
+function parseModelOutput(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 }
 
 async function defaultCallModel(args: { message: string; model: string }): Promise<unknown> {
@@ -69,6 +79,7 @@ async function defaultCallModel(args: { message: string; model: string }): Promi
     messages: [smoltalk.userMessage(args.message)],
     model: args.model,
     responseFormat: MutationProposalSchema,
+    responseFormatOptions: { strict: true },
   });
   if (!result.success) {
     throw new Error(`Error from LLM during optimization: ${result.error}`);

@@ -12,6 +12,8 @@ import type {
   EvalRunTask,
   EvalRunTaskResult,
 } from "./runTypes.js";
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  * How to actually invoke the compiled agent for a task. The CLI plugs in a
@@ -78,6 +80,7 @@ export async function runEvalTask(args: {
     return recordEvalRunTaskRunFailure(prepared, runResult.errorMessage);
   }
 
+  materializeFallbackStatelog(prepared);
   if (shouldExtractStatelog(prepared.statelogPath)) {
     try {
       await args.extractor({
@@ -93,6 +96,13 @@ export async function runEvalTask(args: {
   }
 
   return recordEvalRunTaskSuccess(prepared);
+}
+
+function materializeFallbackStatelog(prepared: PreparedEvalRunTask): void {
+  if (shouldExtractStatelog(prepared.statelogPath)) return;
+  const fallbackPath = path.join(prepared.workdirPath, "statelog.log");
+  if (!shouldExtractStatelog(fallbackPath)) return;
+  fs.copyFileSync(fallbackPath, prepared.statelogPath);
 }
 
 function errMessage(err: unknown): string {

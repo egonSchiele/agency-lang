@@ -64,6 +64,39 @@ describe("eval run CLI", () => {
     expect(fs.existsSync(path.join(runsDir, "r1", "tasks", result.tasks[0].taskId, "eval-record.json"))).toBe(true);
   });
 
+  it("extracts from workdir statelog.log when runtime overrides do not redirect the log file", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main() {}\n");
+    const runsDir = path.join(tmpDir, "runs");
+    let extractorStatelogPath = "";
+
+    const result = await evalRun(
+      {
+        agent: agentFile,
+        goal: "do it",
+        runsDir,
+        runId: "fallback",
+        continueOnError: true,
+      },
+      {
+        runner: async ({ cwd }) => {
+          fs.writeFileSync(path.join(cwd, "statelog.log"), "{}\n");
+          return { ok: true };
+        },
+        extractor: async ({ statelogPath, outPath }) => {
+          extractorStatelogPath = statelogPath;
+          fs.writeFileSync(outPath, JSON.stringify({ source: statelogPath }));
+        },
+      },
+    );
+
+    const taskResult = result.tasks[0];
+    expect(taskResult).toMatchObject({ status: "success" });
+    expect(extractorStatelogPath).toBe(taskResult.statelogPath);
+    expect(fs.readFileSync(taskResult.statelogPath, "utf-8")).toBe("{}\n");
+    expect(fs.existsSync(taskResult.evalRecordPath)).toBe(true);
+  });
+
   it("stops after the first task error when continueOnError is false", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");

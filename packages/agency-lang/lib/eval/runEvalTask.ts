@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as path from "path";
+
 import {
   prepareEvalRunTask,
   recordEvalRunTaskPrepareFailure,
@@ -83,6 +86,7 @@ export async function runEvalTask(args: {
   }
 
   const statelogPath = runResult.statelogPath ?? prepared.statelogPath;
+  ensureStatelogAtExpectedPath(prepared, statelogPath);
   if (shouldExtractStatelog(statelogPath)) {
     try {
       await args.extractor({
@@ -98,6 +102,15 @@ export async function runEvalTask(args: {
   }
 
   return recordEvalRunTaskSuccess(prepared);
+}
+
+function ensureStatelogAtExpectedPath(prepared: PreparedEvalRunTask, statelogPath: string): void {
+  if (statelogPath !== prepared.statelogPath || shouldExtractStatelog(statelogPath)) return;
+
+  const fallbackPath = path.join(prepared.workdirPath, "statelog.log");
+  if (shouldExtractStatelog(fallbackPath)) {
+    fs.copyFileSync(fallbackPath, prepared.statelogPath);
+  }
 }
 
 function errMessage(err: unknown): string {

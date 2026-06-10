@@ -64,12 +64,14 @@ describe("createOptimizeArtifacts", () => {
     expect(fs.existsSync(path.join(baseline.workspaceDir, "optimize-runs", "run-1", "should-not-copy", "x.txt"))).toBe(false);
   });
 
-  it("excludes generated and dependency directories from iteration workspaces", () => {
+  it("excludes heavy directories while preserving runtime build output", () => {
     fs.writeFileSync(path.join(tmpDir, "helper.agency"), "def helper() {}\n");
-    for (const dir of [".git", ".worktrees", "node_modules", "runs", "dist", ".agency-tmp"]) {
+    for (const dir of [".git", ".worktrees", "node_modules", "runs", ".agency-tmp"]) {
       fs.mkdirSync(path.join(tmpDir, dir), { recursive: true });
       fs.writeFileSync(path.join(tmpDir, dir, "large.txt"), "x");
     }
+    fs.mkdirSync(path.join(tmpDir, "dist", "lib"), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, "dist", "lib", "index.js"), "export {}\n");
     const artifacts = createOptimizeArtifacts({
       runsDir: path.join(tmpDir, "optimize-runs"),
       runId: "run-1",
@@ -85,7 +87,8 @@ describe("createOptimizeArtifacts", () => {
     const baseline = artifacts.writeBaseline("node main() {}\n");
 
     expect(fs.existsSync(path.join(baseline.workspaceDir, "helper.agency"))).toBe(true);
-    for (const dir of [".git", ".worktrees", "node_modules", "runs", "dist", ".agency-tmp"]) {
+    expect(fs.existsSync(path.join(baseline.workspaceDir, "dist", "lib", "index.js"))).toBe(true);
+    for (const dir of [".git", ".worktrees", "node_modules", "runs", ".agency-tmp"]) {
       expect(fs.existsSync(path.join(baseline.workspaceDir, dir, "large.txt"))).toBe(false);
     }
   });

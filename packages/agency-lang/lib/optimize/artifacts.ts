@@ -9,7 +9,6 @@ const WORKSPACE_COPY_EXCLUDED_DIRS = [
   ".worktrees",
   "node_modules",
   "runs",
-  "dist",
   ".agency-tmp",
   ".js-tmp",
   ".agency-memory",

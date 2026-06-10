@@ -26,6 +26,7 @@ import { validateMutationPrompt } from "./validation.js";
 import { buildOptimizeVerdict } from "./verdict.js";
 
 export type OptimizeLoopDeps = {
+  report?: (message: string) => void;
   mutate?: (args: {
     config: AgencyConfig;
     goal: string;
@@ -64,6 +65,7 @@ export async function optimizeLoop(
 ): Promise<OptimizeResult> {
   validateOptimizeTarget(config.agentSource, config.node);
   const normalizedTasks = normalizeOptimizeTasks(config.tasks, config.workingDir);
+  report(deps, `Run ${config.runId}: writing baseline artifacts`);
   const artifacts = createOptimizeArtifacts({
     runsDir: config.runsDir,
     runId: config.runId,
@@ -77,6 +79,7 @@ export async function optimizeLoop(
     sourceSha256: sha256Text(config.agentSource),
   });
   const baselineArtifact = artifacts.writeBaseline(config.agentSource);
+  report(deps, `Evaluating baseline on ${normalizedTasks.length} task(s)`);
   const baselineEval = await runEval(deps, config, baselineArtifact.workspaceAgentPath, normalizedTasks, "iter-0", path.join(baselineArtifact.iterDir, "eval-run"));
   let champion: ChampionState = {
     iter: "baseline",
@@ -99,10 +102,12 @@ export async function optimizeLoop(
   let validationFailedCount = 0;
 
   for (let iter = 1; iter <= config.iterations; iter += 1) {
+    report(deps, `Iteration ${iter}/${config.iterations}: proposing prompt mutation`);
     const currentSource = fs.readFileSync(champion.agentPath, "utf-8");
     const currentPrompt = promptFromSource(currentSource, config.node);
     const mutation = await proposeValidMutation(config, deps, currentPrompt, buildMutationHistory(history));
     if (!mutation.ok) {
+      report(deps, `Iteration ${iter}/${config.iterations}: validation failed (${mutation.error})`);
       const failure = artifacts.writeValidationFailure(iter, mutation);
       validationFailedCount += 1;
       const iteration = iterationFromArtifact(iter, failure, "validation-failed", 0, 0, 0);
@@ -115,10 +120,12 @@ export async function optimizeLoop(
     const candidateArtifact = artifacts.writeCandidate(iter, candidateSource, { rationale: mutation.rationale });
     let candidateEval: EvalRunResult;
     try {
+      report(deps, `Iteration ${iter}/${config.iterations}: evaluating candidate`);
       candidateEval = await runEval(deps, config, candidateArtifact.workspaceAgentPath, normalizedTasks, `iter-${iter}`, path.join(candidateArtifact.iterDir, "eval-run"));
       assertEvalRecords(candidateEval);
       assertEvalRecords(champion.evalRun);
     } catch (error) {
+      report(deps, `Iteration ${iter}/${config.iterations}: rejected during eval (${errorText(error)})`);
       artifacts.writeRuntimeRejection(iter, error);
       rejectedCount += 1;
       const iteration = iterationFromArtifact(iter, candidateArtifact, "rejected", 0, 0, normalizedTasks.length);
@@ -129,8 +136,10 @@ export async function optimizeLoop(
 
     let perTask: OptimizeTaskVerdict[];
     try {
+      report(deps, `Iteration ${iter}/${config.iterations}: judging candidate against champion`);
       perTask = await judgeTasks(deps, normalizedTasks, champion.evalRun, candidateEval, config.judgeSamples);
     } catch (error) {
+      report(deps, `Iteration ${iter}/${config.iterations}: rejected during judging (${errorText(error)})`);
       artifacts.writeRuntimeRejection(iter, error);
       rejectedCount += 1;
       const iteration = iterationFromArtifact(iter, candidateArtifact, "rejected", 0, 0, normalizedTasks.length);
@@ -150,6 +159,7 @@ export async function optimizeLoop(
     const verdictPath = artifacts.writeVerdict(iter, verdict);
     const iteration = iterationFromArtifact(iter, candidateArtifact, verdict.decision, verdict.wins, verdict.losses, verdict.ties, candidateEval.runDir, verdictPath);
     iterations.push(iteration);
+    report(deps, `Iteration ${iter}/${config.iterations}: ${verdict.decision} (wins ${verdict.wins}, losses ${verdict.losses}, ties ${verdict.ties})`);
     history.push({
       iter,
       decision: verdict.decision,
@@ -166,6 +176,7 @@ export async function optimizeLoop(
     }
   }
 
+  report(deps, "Writing final champion and summary");
   artifacts.writeFinalChampion(champion.source, champion.iter);
   const result: OptimizeResult = {
     runId: config.runId,
@@ -179,7 +190,12 @@ export async function optimizeLoop(
   };
   artifacts.writeSummary(result);
   writeBackIfRequested(config, result);
+  report(deps, `Complete: champion iteration ${champion.iter}, accepted ${acceptedCount}, rejected ${rejectedCount}, validation failed ${validationFailedCount}`);
   return result;
+}
+
+function report(deps: OptimizeLoopDeps, message: string): void {
+  deps.report?.(`[optimize] ${message}`);
 }
 
 async function proposeValidMutation(

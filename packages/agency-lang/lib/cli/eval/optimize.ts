@@ -49,7 +49,8 @@ export async function evalOptimize(
   return runInBootstrapFrame(ctx, async () => {
     getRuntimeContext().ctx.pushHandler(async () => approve());
     try {
-      return await (deps.optimizeLoop ?? optimizeLoop)(config);
+      if (deps.optimizeLoop) return await deps.optimizeLoop(config);
+      return await optimizeLoop(config, { report: (message) => console.error(message) });
     } finally {
       getRuntimeContext().ctx.popHandler();
     }

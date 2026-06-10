@@ -107,6 +107,28 @@ describe("optimizeLoop", () => {
     expect(fs.existsSync(path.join(tmpDir, "runs", "run", "summary.json"))).toBe(true);
   });
 
+  it("reports progress for long-running optimization phases", async () => {
+    const messages: string[] = [];
+
+    await optimizeLoop(baseConfig({}), {
+      report: (message) => messages.push(message),
+      mutate: async () => ({ prompt: "new ${text}", rationale: "Clearer." }),
+      evalRun: fakeEvalRun(),
+      judgeTask: async (): Promise<OptimizeTaskVerdict> => taskVerdict("candidate", 80),
+    });
+
+    expect(messages).toEqual([
+      "[optimize] Run run: writing baseline artifacts",
+      "[optimize] Evaluating baseline on 1 task(s)",
+      "[optimize] Iteration 1/1: proposing prompt mutation",
+      "[optimize] Iteration 1/1: evaluating candidate",
+      "[optimize] Iteration 1/1: judging candidate against champion",
+      "[optimize] Iteration 1/1: accepted (wins 1, losses 0, ties 0)",
+      "[optimize] Writing final champion and summary",
+      "[optimize] Complete: champion iteration 1, accepted 1, rejected 0, validation failed 0",
+    ]);
+  });
+
   function baseConfig(overrides: Partial<Parameters<typeof optimizeLoop>[0]>): Parameters<typeof optimizeLoop>[0] {
     return {
       config: {},

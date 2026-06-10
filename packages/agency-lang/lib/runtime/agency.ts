@@ -26,6 +26,7 @@
  *    `agency.*`.
  */
 import * as smoltalk from "smoltalk";
+import { nanoid } from "nanoid";
 import {
   agencyStore,
   getRuntimeContext,
@@ -51,6 +52,11 @@ import {
   type ResumableScope,
   type ResumableScopeOpts,
 } from "./resumableScope.js";
+import {
+  withLockOnCtx,
+  type WithLockOptions,
+} from "./lock.js";
+import { isIpcMode, sendLockAcquireToParent } from "./ipc.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
@@ -332,6 +338,37 @@ const withTimeGuard = async <T>(
   }
 };
 
+/** Run `fn` while holding a per-run named mutex. Concurrent branches in
+ *  the same run that use the same `name` execute one at a time; different
+ *  lock names do not block each other. The lock is released in `finally`,
+ *  so interrupts and throws unwind safely. */
+const withLock = async <T>(
+  name: string,
+  fn: () => T | Promise<T>,
+  opts: WithLockOptions = {},
+): Promise<T> => {
+  const store = getRuntimeContext();
+  const ownerId = opts.ownerId ?? lockOwnerIdForActiveStack();
+  const lockOpts = { ...opts, ownerId };
+  if (isIpcMode()) {
+    const release = await sendLockAcquireToParent(name, lockOpts);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+  return withLockOnCtx(store.ctx, name, fn, lockOpts);
+};
+
+function lockOwnerIdForActiveStack(): string {
+  const stack = getRuntimeContext().stack;
+  if (!stack.lockOwnerId) {
+    stack.lockOwnerId = `lock-owner:${nanoid()}`;
+  }
+  return stack.lockOwnerId;
+}
+
 /** Add `amount` (USD, float) to the active branch's cost accumulator
  *  and bill every installed guard. Throws `GuardExceededError` if any
  *  guard has tripped.
@@ -426,6 +463,7 @@ export const agency = {
   withHandler,
   withCostGuard,
   withTimeGuard,
+  withLock,
   addCost,
 
   withResumableScope: _withResumableScope,
@@ -454,4 +492,4 @@ export const agency = {
 };
 
 export type { InterruptOpts, ResumableScope, ResumableScopeOpts };
-export type { MemoryConfig };
+export type { MemoryConfig, WithLockOptions };

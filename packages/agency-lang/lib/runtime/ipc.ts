@@ -14,6 +14,12 @@ import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext } from "./asyncContext.js";
 import { interruptWithHandlers, isApproved, hasInterrupts } from "./interrupts.js";
+import {
+  acquireLocalLock,
+  lockReleaserKey,
+  type LockRelease,
+  type WithLockOptions,
+} from "./lock.js";
 import { failure, type ResultFailure } from "./result.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -173,8 +179,79 @@ export type IpcDecisionMessage = {
   value: any;
 };
 
-export type SubprocessToParent = IpcInterruptMessage | IpcResultMessage | IpcErrorMessage;
-export type ParentToSubprocess = IpcDecisionMessage;
+export type IpcLockAcquireMessage = {
+  type: "lockAcquire";
+  requestId: string;
+  name: string;
+  ownerId?: string;
+  timeoutMs?: number;
+  warnAfterMs?: number;
+};
+
+export type IpcLockGrantedMessage = {
+  type: "lockGranted";
+  requestId: string;
+  error?: string;
+};
+
+export type IpcLockReleaseMessage = {
+  type: "lockRelease";
+  requestId: string;
+  name: string;
+  ownerId?: string;
+};
+
+export type SubprocessToParent =
+  | IpcInterruptMessage
+  | IpcResultMessage
+  | IpcErrorMessage
+  | IpcLockAcquireMessage
+  | IpcLockReleaseMessage;
+export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
+
+const sessionLockOwners: Record<string, string[]> = {};
+
+export function registerSessionLock(
+  ctx: { lockReleasers: Record<string, LockRelease> },
+  sessionId: string,
+  releaserKey: string,
+  release: LockRelease,
+): void {
+  ctx.lockReleasers[releaserKey] = release;
+  const releaserKeys = sessionLockOwners[sessionId] ?? [];
+  if (!releaserKeys.includes(releaserKey)) {
+    sessionLockOwners[sessionId] = [...releaserKeys, releaserKey];
+  }
+}
+
+function releaseSessionOwner(
+  ctx: { lockReleasers: Record<string, LockRelease> },
+  sessionId: string,
+  releaserKey: string,
+): void {
+  const release = ctx.lockReleasers[releaserKey];
+  if (release) {
+    release();
+  }
+  delete ctx.lockReleasers[releaserKey];
+  const releaserKeys = sessionLockOwners[sessionId] ?? [];
+  const next = releaserKeys.filter((key) => key !== releaserKey);
+  if (next.length === 0) {
+    delete sessionLockOwners[sessionId];
+  } else {
+    sessionLockOwners[sessionId] = next;
+  }
+}
+
+export function cleanupSessionLocks(
+  ctx: { lockReleasers: Record<string, LockRelease> },
+  sessionId: string,
+): void {
+  const releaserKeys = [...(sessionLockOwners[sessionId] ?? [])];
+  for (const releaserKey of releaserKeys) {
+    releaseSessionOwner(ctx, sessionId, releaserKey);
+  }
+}
 
 /**
  * Send an interrupt to the parent process and await the decision.
@@ -234,12 +311,79 @@ export async function sendInterruptToParent(
   });
 }
 
+export async function sendLockAcquireToParent(
+  name: string,
+  opts: WithLockOptions = {},
+): Promise<LockRelease> {
+  if (typeof process.send !== "function") {
+    throw new Error(
+      "sendLockAcquireToParent called without an IPC channel. This function can only be used inside a forked subprocess (AGENCY_IPC=1).",
+    );
+  }
+  const outMsg = {
+    type: "lockAcquire",
+    requestId: nanoid(),
+    name,
+    ...(opts.ownerId !== undefined ? { ownerId: opts.ownerId } : {}),
+    ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+    ...(opts.warnAfterMs !== undefined ? { warnAfterMs: opts.warnAfterMs } : {}),
+  } satisfies IpcLockAcquireMessage;
+  ipcLog("send", outMsg);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      process.removeListener("message", handler);
+      process.removeListener("disconnect", onDisconnect);
+    };
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+    const handler = (msg: any) => {
+      if (msg.type === "lockGranted" && msg.requestId === outMsg.requestId) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        ipcLog("recv", msg);
+        if (msg.error) {
+          reject(new Error(msg.error));
+          return;
+        }
+        let released = false;
+        resolve(() => {
+          if (released) return;
+          released = true;
+          const releaseMsg = {
+            type: "lockRelease",
+            requestId: outMsg.requestId,
+            name,
+            ...(opts.ownerId !== undefined ? { ownerId: opts.ownerId } : {}),
+          } satisfies IpcLockReleaseMessage;
+          ipcLog("send", releaseMsg);
+          if (typeof process.send === "function" && process.connected !== false) {
+            process.send(releaseMsg);
+          }
+        });
+      }
+    };
+    const onDisconnect = () => {
+      fail(new Error(`IPC channel closed while waiting for lock '${name}'`));
+    };
+    process.on("message", handler);
+    process.once("disconnect", onDisconnect);
+    process.send!(outMsg);
+  });
+}
+
 /**
  * Mutable per-call state shared by all the subprocess event handlers.
  * Bundled into one object so helpers can be extracted to module scope
  * without each one needing 8 closure parameters.
  */
 type RunSession = {
+  sessionId: string;
   child: ReturnType<typeof fork>;
   limits: RunLimits;
   ctx: any;
@@ -330,6 +474,7 @@ function settle(s: RunSession, fn: (v: any) => void, value: any): void {
   if (s.settled) return;
   s.settled = true;
   clearTimer(s);
+  cleanupSessionLocks(s.ctx, s.sessionId);
   cleanupTempDir(s.compiledPath);
   fn(value);
 }
@@ -416,6 +561,33 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
   }
 }
 
+async function handleLockAcquireMessage(s: RunSession, msg: IpcLockAcquireMessage): Promise<void> {
+  const ownerId = `ipc:${s.sessionId}:${msg.ownerId ?? msg.requestId}`;
+  try {
+    const release = await acquireLocalLock(s.ctx, msg.name, {
+      ownerId,
+      ...(msg.timeoutMs !== undefined ? { timeoutMs: msg.timeoutMs } : {}),
+      ...(msg.warnAfterMs !== undefined ? { warnAfterMs: msg.warnAfterMs } : {}),
+    });
+    registerSessionLock(s.ctx, s.sessionId, lockReleaserKey(msg.name, ownerId), release);
+    trySendDecision(s, {
+      type: "lockGranted",
+      requestId: msg.requestId,
+    } satisfies IpcLockGrantedMessage);
+  } catch (err) {
+    trySendDecision(s, {
+      type: "lockGranted",
+      requestId: msg.requestId,
+      error: err instanceof Error ? err.message : String(err),
+    } satisfies IpcLockGrantedMessage);
+  }
+}
+
+function handleLockReleaseMessage(s: RunSession, msg: IpcLockReleaseMessage): void {
+  const ownerId = `ipc:${s.sessionId}:${msg.ownerId ?? msg.requestId}`;
+  releaseSessionOwner(s.ctx, s.sessionId, lockReleaserKey(msg.name, ownerId));
+}
+
 /**
  * Subprocess sent a structured `error` message; if it parses as a
  * limit_exceeded payload, surface it as the same Result.failure shape that
@@ -460,6 +632,10 @@ async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
     settle(s, s.resolvePromise, msg.value);
   } else if (msg.type === "error") {
     handleErrorMessage(s, msg);
+  } else if (msg.type === "lockAcquire") {
+    await handleLockAcquireMessage(s, msg);
+  } else if (msg.type === "lockRelease") {
+    handleLockReleaseMessage(s, msg);
   }
 }
 
@@ -538,6 +714,7 @@ export async function _run(
 
   return new Promise((resolvePromise, rejectPromise) => {
     const session: RunSession = {
+      sessionId: nanoid(),
       child,
       limits,
       ctx,

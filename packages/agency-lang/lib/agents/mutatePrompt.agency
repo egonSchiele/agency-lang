@@ -1,0 +1,30 @@
+type MutationProposal = {
+  prompt: string;
+  rationale: string
+}
+
+node mutatePrompt(
+  goal: string,
+  currentPrompt: string,
+  history: string,
+  validationFailure: string = "",
+): MutationProposal {
+  const prompt = """
+  GOAL:
+  ${goal}
+
+  CURRENT PROMPT:
+  ${currentPrompt}
+
+  ${history}
+
+  YOUR TASK:
+  Propose a new prompt that better achieves the goal. Return JSON with:
+  - "prompt": the new prompt text. Must preserve every interpolation placeholder that the current prompt uses (no drops, no additions).
+  - "rationale": 2-4 sentences explaining what you changed and why.
+
+  ${validationFailure}
+  """
+  const proposal: MutationProposal = llm(prompt)
+  return proposal
+}

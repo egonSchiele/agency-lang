@@ -9,8 +9,10 @@ import {
   _finishEvalRun,
   _formatEvalRunFailure,
   _initEvalRun,
+  _optimize,
   _prepareEvalRunTask,
 } from "./agencyEval.js";
+import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
 
 describe("agency eval stdlib helpers", () => {
   let tmpDir: string;
@@ -74,4 +76,61 @@ describe("agency eval stdlib helpers", () => {
     expect(_formatEvalRunFailure({ error: { message: "boom" } })).toBe("boom");
     expect(_formatEvalRunFailure("plain")).toBe("plain");
   });
+
+  it("delegates optimize requests to the core loop without installing handlers", async () => {
+    let loopConfig: OptimizeLoopConfig | null = null;
+
+    const result = await _optimize(
+      {},
+      "node main() {}\n",
+      "main",
+      [{ task_id: "t1", rubric: "r", args: {} }],
+      "improve",
+      2,
+      3,
+      1,
+      tmpDir,
+      "run",
+      "agent.agency",
+      tmpDir,
+      "mutator",
+      async (config) => {
+        loopConfig = config;
+        return optimizeResult(config);
+      },
+    );
+
+    expect(loopConfig).toMatchObject({
+      target: {
+        node: "main",
+        agentFilename: "agent.agency",
+        workingDir: tmpDir,
+      },
+      policy: {
+        goal: "improve",
+        iterations: 2,
+        judgeSamples: 3,
+        acceptThreshold: 1,
+        mutatorModel: "mutator",
+      },
+      artifacts: {
+        runsDir: tmpDir,
+        runId: "run",
+      },
+    });
+    expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
+  });
 });
+
+function optimizeResult(config: OptimizeLoopConfig): OptimizeResult {
+  return {
+    runId: config.artifacts.runId,
+    runDir: path.join(config.artifacts.runsDir, config.artifacts.runId),
+    championIter: "baseline",
+    championSource: config.target.agentSource,
+    acceptedCount: 0,
+    rejectedCount: 0,
+    validationFailedCount: 0,
+    iterations: [],
+  };
+}

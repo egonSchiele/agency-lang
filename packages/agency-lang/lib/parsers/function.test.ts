@@ -2261,6 +2261,84 @@ describe("graphNodeParser", () => {
       },
     },
     {
+      input: `node judgePairwise(
+  goal: string,
+  responseA: string,
+  responseB: string,
+): PairwiseJudgeResult {
+  const result: PairwiseJudgeResult = llm(goal)
+  return result
+}`,
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "judgePairwise",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "goal",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "functionParameter",
+              name: "responseA",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "functionParameter",
+              name: "responseB",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          returnType: { type: "typeAliasVariable", aliasName: "PairwiseJudgeResult" },
+          body: [
+            {
+              type: "assignment",
+              declKind: "const",
+              variableName: "result",
+              typeHint: { type: "typeAliasVariable", aliasName: "PairwiseJudgeResult" },
+              value: {
+                type: "functionCall",
+                functionName: "llm",
+                arguments: [{ type: "variableName", value: "goal" }],
+              },
+            },
+            { type: "returnStatement", value: { type: "variableName", value: "result" } },
+          ],
+        },
+      },
+    },
+    {
+      input: `node combine(
+  left: string,
+  right: string
+): string {
+  return left
+}`,
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "combine",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "left",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "functionParameter",
+              name: "right",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "string" },
+          body: [{ type: "returnStatement", value: { type: "variableName", value: "left" } }],
+        },
+      },
+    },
+    {
       input: "node greet() { message = `hello` }",
       expected: {
         success: true,
@@ -2633,6 +2711,14 @@ describe("graphNodeParser", () => {
     },
     {
       input: "node main() {",
+      expected: { success: false },
+      throws: true,
+    },
+    {
+      input: `node missingComma(
+  left: string
+  right: string
+) { left }`,
       expected: { success: false },
       throws: true,
     },

@@ -108,6 +108,7 @@ export interface AgencyConfig {
   /** Eval command configuration */
   eval?: {
     runsDir?: string;
+    optimizeRunsDir?: string;
   };
 
   /** Smoltalk client config */
@@ -316,6 +317,7 @@ export const AgencyConfigSchema = z
     eval: z
       .object({
         runsDir: z.string(),
+        optimizeRunsDir: z.string(),
       })
       .partial(),
     client: z

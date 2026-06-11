@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Bundled optimize mutator agent returns a structured prompt proposal.",
+      "input": "",
+      "expectedOutput": "{\"prompt\":\"Classify carefully: ${text}\",\"rationale\":\"Added care.\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        {
+          "return": {
+            "prompt": "Classify carefully: ${text}",
+            "rationale": "Added care."
+          }
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

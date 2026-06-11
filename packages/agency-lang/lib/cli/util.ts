@@ -214,6 +214,9 @@ type ExecuteNodeArgs = {
   // These land in `process.argv.slice(2)` of the running agent —
   // primarily for testing std::args and other argv-reading code.
   argv?: string[];
+  // Optional writable directory for transient evaluate/result files. Useful
+  // for bundled agents that may live in a read-only package install.
+  scratchDir?: string;
 };
 
 export async function executeNodeAsync({
@@ -228,6 +231,7 @@ export async function executeNodeAsync({
   llmMocks,
   useTestLLMProvider,
   argv,
+  scratchDir,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -244,12 +248,17 @@ export async function executeNodeAsync({
     }
 
     const baseName = agencyFile.replace(".agency", "");
-    evaluateFile = `${baseName}.evaluate.js`;
-    resultsFile = `${baseName}.evaluate.json`;
+    const evaluateBase = scratchDir
+      ? path.join(scratchDir, path.basename(baseName))
+      : baseName;
+    evaluateFile = `${evaluateBase}.evaluate.js`;
+    resultsFile = `${evaluateBase}.evaluate.json`;
     // The template imports via "./${filename}", so compute a relative path
     // from the evaluate script's directory to the compiled module.
+    const evaluateDir = fs.realpathSync(path.dirname(evaluateFile));
+    const compiledRealPath = fs.realpathSync(compiledPath);
     let importSpecifier = path
-      .relative(path.dirname(evaluateFile), compiledPath)
+      .relative(evaluateDir, compiledRealPath)
       .replace(/\\/g, "/");
     if (!importSpecifier.startsWith(".")) {
       importSpecifier = `./${importSpecifier}`;
@@ -487,7 +496,7 @@ export async function executeJudgePairwiseAsync({
   responseB,
 }: ExecutePairwiseJudgeArgs): Promise<{
   winner: "A" | "B" | "tie";
-  confidence: "low" | "medium" | "high";
+  confidence: number;
   reasoning: string;
   stdout: string;
   stderr: string;
@@ -513,7 +522,7 @@ export async function executeJudgePairwiseAsync({
 
 export function assertValidPairwiseResult(raw: unknown): asserts raw is {
   winner: "A" | "B" | "tie";
-  confidence: "low" | "medium" | "high";
+  confidence: number;
   reasoning: string;
 } {
   if (raw === null || typeof raw !== "object") {
@@ -528,9 +537,10 @@ export function assertValidPairwiseResult(raw: unknown): asserts raw is {
     throw new Error(`Pairwise judge returned invalid winner: ${String(result.winner)}`);
   }
   if (
-    result.confidence !== "low" &&
-    result.confidence !== "medium" &&
-    result.confidence !== "high"
+    typeof result.confidence !== "number" ||
+    !Number.isInteger(result.confidence) ||
+    result.confidence < 0 ||
+    result.confidence > 100
   ) {
     throw new Error(
       `Pairwise judge returned invalid confidence: ${String(result.confidence)}`,

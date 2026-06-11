@@ -23,6 +23,8 @@ import type {
   EvalRunTaskResult,
 } from "../eval/runTypes.js";
 import type { EvalRecord } from "../eval/types.js";
+import { optimizeLoop } from "../optimize/loop.js";
+import type { OptimizeLoopConfig, OptimizeResult } from "../optimize/types.js";
 
 /**
  * State carried by the Agency-side `evalRun` loop. Note: this is just the
@@ -159,3 +161,33 @@ export async function _evalJudge(
 ): Promise<PairwiseVerdict> {
   return judgePairwise(rubric, recordPathA, recordPathB);
 }
+
+/**
+ * Stdlib binding for `agency.eval.optimize`. This deliberately does not
+ * install any approval handler; callers decide which handlers are in scope.
+ */
+export async function _optimize(
+  config: AgencyConfigLike,
+  agentSource: string,
+  node: string,
+  tasks: EvalRunTask[],
+  goal: string,
+  iterations: number,
+  judgeSamples: number,
+  acceptThreshold: number,
+  runsDir: string,
+  runId: string,
+  agentFilename: string,
+  workingDir: string,
+  mutatorModel?: string,
+  loop: (config: OptimizeLoopConfig) => Promise<OptimizeResult> = optimizeLoop,
+): Promise<OptimizeResult> {
+  return loop({
+    runtime: { config, tasks },
+    target: { agentSource, node, agentFilename, workingDir },
+    policy: { goal, iterations, judgeSamples, acceptThreshold, mutatorModel },
+    artifacts: { runsDir, runId: runId || nanoid() },
+  });
+}
+
+type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];

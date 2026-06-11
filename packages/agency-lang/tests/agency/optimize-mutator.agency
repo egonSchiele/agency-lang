@@ -1,0 +1,17 @@
+import node { mutatePrompt } from "../../lib/agents/mutatePrompt.agency"
+
+type MutationProposal = {
+  prompt: string;
+  rationale: string
+}
+
+node main(): MutationProposal {
+  const currentPrompt = "Classify: $" + "{text}"
+  const proposal = mutatePrompt(
+    "Improve classification accuracy",
+    currentPrompt,
+    "",
+    "",
+  )
+  return proposal.data
+}

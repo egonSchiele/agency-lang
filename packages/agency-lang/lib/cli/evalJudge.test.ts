@@ -24,7 +24,7 @@ describe("evalJudge", () => {
         { path: "b.eval.json", response: "B" },
       ],
       winner: "A",
-      confidence: "high",
+      confidence: 87,
       reasoning: "A is more precise.",
       generatedAt: "2026-06-08T00:00:00.000Z",
     });
@@ -58,11 +58,11 @@ describe("evalJudge", () => {
         { path: "b.eval.json", response: "B" },
       ],
       winner: "A",
-      confidence: "high",
+      confidence: 87,
       reasoning: "A is more precise.",
       generatedAt: "2026-06-08T00:00:00.000Z",
     });
-    expect(logSpy).toHaveBeenCalledWith("Winner: A (high)");
+    expect(logSpy).toHaveBeenCalledWith("Winner: A (87)");
     expect(logSpy).toHaveBeenCalledWith("Reasoning: A is more precise.");
     expect(logSpy).toHaveBeenCalledWith(`\nWrote verdict to ${out}`);
   });

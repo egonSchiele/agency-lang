@@ -1234,17 +1234,31 @@ export class TypeScriptBuilder {
 
   private processImportStatement(node: ImportStatement): TsNode {
     const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
+    const aliasesFull = this.scopes.visibleTypeAliasesFull();
+    // Value-only-parameterized aliases (e.g. `type NumberInRange(low, high) = number`)
+    // emit nothing at their declaration site (see processTypeAlias) because
+    // every use-site inlines a fresh schema. Importing such a name from the
+    // compiled target module would fail with "does not provide an export"
+    // and registering it as a tool would reference an undefined local.
+    const isInlinedAlias = (name: string): boolean => {
+      const entry = aliasesFull[name];
+      if (!entry?.valueParams || entry.valueParams.length === 0) return false;
+      return !entry.typeParams || entry.typeParams.length === 0;
+    };
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
-        case "namedImport":
+        case "namedImport": {
+          const keptNames = nameType.importedNames.filter((name) => !isInlinedAlias(name));
+          if (keptNames.length === 0) return ts.empty();
           return ts.importDecl({
             importKind: "named",
-            names: nameType.importedNames.map((name) => {
+            names: keptNames.map((name) => {
               const alias = nameType.aliases[name];
               return alias ? { name, alias } : name;
             }),
             from,
           });
+        }
         case "namespaceImport":
           return ts.importDecl({
             importKind: "namespace",
@@ -1267,6 +1281,7 @@ export class TypeScriptBuilder {
         switch (nameType.type) {
           case "namedImport":
             for (const name of nameType.importedNames) {
+              if (isInlinedAlias(name)) continue;
               const localName = nameType.aliases[name] ?? name;
               this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
             }

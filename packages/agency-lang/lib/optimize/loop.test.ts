@@ -34,6 +34,25 @@ describe("optimizeLoop", () => {
     expect(fs.readFileSync(sourcePath, "utf-8")).toContain("new ${text}");
   });
 
+  it("rewrites a local prompt variable without injecting synthetic stdlib imports", async () => {
+    const result = await optimizeLoop(baseConfig({
+      target: { agentSource: variablePromptAgentSource("What is the capital of India?") },
+    }), {
+      mutate: async () => ({ prompt: "What is the capital of France?", rationale: "Target France." }),
+      evalRun: fakeEvalRun(),
+      judgeTask: async (): Promise<OptimizeTaskVerdict> => taskVerdict("candidate", 80),
+    });
+
+    const candidateSource = fs.readFileSync(path.join(tmpDir, "runs", "run", "iter-1", "agent", "agent.agency"), "utf-8");
+    const mutation = fs.readFileSync(path.join(tmpDir, "runs", "run", "iter-1", "mutation.md"), "utf-8");
+
+    expect(result.championSource).toContain("What is the capital of France?");
+    expect(candidateSource).toContain("What is the capital of France?");
+    expect(candidateSource).not.toContain("std::index");
+    expect(mutation).toContain("What is the capital of India?");
+    expect(mutation).toContain("What is the capital of France?");
+  });
+
   it("keeps baseline when the candidate loses", async () => {
     const result = await optimizeLoop(baseConfig({}), {
       mutate: async () => ({ prompt: "new ${text}", rationale: "Clearer." }),
@@ -174,6 +193,15 @@ function agentSource(prompt: string, optimizeKeys = "prompt"): string {
   return `node main(text: string): string {
   @optimize(${optimizeKeys})
   const result: string = llm("${prompt}")
+  return result
+}\n`;
+}
+
+function variablePromptAgentSource(prompt: string): string {
+  return `node main(): string {
+  const prompt = "${prompt}"
+  @optimize(prompt)
+  const result: string = llm(prompt)
   return result
 }\n`;
 }

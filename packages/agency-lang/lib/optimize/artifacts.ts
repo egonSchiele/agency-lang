@@ -26,7 +26,7 @@ export type IterationArtifact = {
 export type OptimizeArtifacts = {
   runDir: string;
   writeBaseline(source: string): IterationArtifact;
-  writeCandidate(iter: number, source: string, mutation: { rationale: string; diff?: string }): IterationArtifact;
+  writeCandidate(iter: number, source: string, mutation: { rationale: string; oldPrompt?: string; newPrompt?: string; diff?: string }): IterationArtifact;
   writeValidationFailure(iter: number, details: { attemptedPrompt: string; rationale?: string; error: string }): IterationArtifact;
   writeRuntimeRejection(iter: number, error: unknown): string;
   writeVerdict(iter: number, verdict: OptimizeVerdict): string;
@@ -83,7 +83,7 @@ export function createOptimizeArtifacts(args: {
     writeCandidate(iter, source, mutation) {
       const artifact = writeSourceIteration(iter, source);
       const mutationPath = path.join(artifact.iterDir, "mutation.md");
-      writeFile(mutationPath, mutationMarkdown(mutation.rationale, mutation.diff));
+      writeFile(mutationPath, mutationMarkdown(mutation.rationale, mutation.diff, mutation.oldPrompt, mutation.newPrompt));
       return { ...artifact, mutationPath };
     },
     writeValidationFailure(iter, details) {
@@ -156,8 +156,15 @@ function isInsideOrSame(candidate: string, parent: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function mutationMarkdown(rationale: string, diff?: string): string {
-  return [`# Mutation`, "", rationale, ...(diff ? ["", "```diff", diff, "```"] : [])].join("\n");
+function mutationMarkdown(rationale: string, diff?: string, oldPrompt?: string, newPrompt?: string): string {
+  return [
+    `# Mutation`,
+    "",
+    rationale,
+    ...(oldPrompt !== undefined ? ["", "Old prompt:", "```", oldPrompt, "```"] : []),
+    ...(newPrompt !== undefined ? ["", "New prompt:", "```", newPrompt, "```"] : []),
+    ...(diff ? ["", "```diff", diff, "```"] : []),
+  ].join("\n");
 }
 
 function validationFailureMarkdown(details: { attemptedPrompt: string; rationale?: string; error: string }): string {

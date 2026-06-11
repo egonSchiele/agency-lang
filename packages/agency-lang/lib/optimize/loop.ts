@@ -117,7 +117,12 @@ export async function optimizeLoop(
     }
 
     const candidateSource = updateSourcePrompt(currentSource, config.target.node, mutation.prompt);
-    const candidateArtifact = artifacts.writeCandidate(iter, candidateSource, { rationale: mutation.rationale });
+    const candidateArtifact = artifacts.writeCandidate(iter, candidateSource, {
+      rationale: mutation.rationale,
+      oldPrompt: currentPrompt,
+      newPrompt: mutation.prompt,
+      diff: promptDiff(currentPrompt, mutation.prompt),
+    });
 
     const recordRejection = (phase: string, error: unknown): void => {
       report(deps, `Iteration ${iter}/${config.policy.iterations}: rejected during ${phase} (${errorText(error)})`);
@@ -303,11 +308,16 @@ function targetsFromSource(source: string, nodeName: string) {
 }
 
 function programFromSource(source: string) {
-  const parsed = parseAgency(source);
+  const parsed = parseAgency(source, {}, false);
   if (!parsed.success) throw new Error(`Parse error: ${parsed.message}`);
   const info = buildCompilationUnit(parsed.result);
   const preprocessor = new TypescriptPreprocessor(parsed.result, {}, info);
   return preprocessor.preprocess();
+}
+
+function promptDiff(oldPrompt: string, newPrompt: string): string {
+  if (oldPrompt === newPrompt) return "";
+  return [`- ${oldPrompt}`, `+ ${newPrompt}`].join("\n");
 }
 
 function iterationFromArtifact(

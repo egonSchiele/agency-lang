@@ -122,6 +122,21 @@ node main(user: string, topic: string): string {
     expect(targets[0].promptValue).toBe("Hello ${user}, tell me about ${topic}");
   });
 
+  it("extracts promptValue from a local prompt variable passed to llm()", () => {
+    const code = `
+node main(): string {
+  const prompt = "What is the capital of India?"
+  @optimize(prompt)
+  const result: string = llm(prompt)
+  return result
+}`;
+    const program = preprocess(code);
+
+    const targets = findOptimizeTargets(program, "main");
+
+    expect(targets[0].promptValue).toBe("What is the capital of India?");
+  });
+
   it("finds optimize targets nested in thread blocks", () => {
     const code = `
 node main(msg: string): string {
@@ -169,5 +184,24 @@ node main(msg: string): string {
     const output = generator.generate(program);
     expect(output.output).toContain("new prompt: ${msg}");
     expect(output.output).not.toContain("old prompt");
+  });
+
+  it("updatePrompt rewrites a local prompt variable passed to llm()", () => {
+    const code = `
+node main(): string {
+  const prompt = "What is the capital of India?"
+  @optimize(prompt)
+  const result: string = llm(prompt)
+  return result
+}`;
+    const program = preprocess(code);
+    const targets = findOptimizeTargets(program, "main");
+
+    updatePrompt(targets[0], "What is the capital of France?");
+
+    const generator = new AgencyGenerator();
+    const output = generator.generate(program);
+    expect(output.output).toContain("What is the capital of France?");
+    expect(output.output).not.toContain("What is the capital of India?");
   });
 });

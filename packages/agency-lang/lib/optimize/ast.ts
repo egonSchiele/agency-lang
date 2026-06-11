@@ -5,25 +5,19 @@ import { expressionToString, walkNodesArray } from "@/utils/node.js";
 export type OptimizeTarget = {
   node: AgencyNode;
   llmCall: AgencyNode | null;
+  promptNode: AgencyNode | null;
   tag: Tag;
   promptValue?: string;
   configKeys?: string[];
 };
 
 export function getPromptValue(target: OptimizeTarget): string {
-  if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
-    return target.llmCall.arguments[0].segments
-      .map((segment: PromptSegment) =>
-        segment.type === "text" ? segment.value : `\${${expressionToString(segment.expression)}}`,
-      )
-      .join("");
-  }
-  return "";
+  return target.promptNode ? promptNodeValue(target.promptNode) : "";
 }
 
 export function updatePrompt(target: OptimizeTarget, newPrompt: string): void {
-  if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
-    target.llmCall.arguments[0].segments = parsePromptToSegments(newPrompt);
+  if (target.promptNode && isStringPromptNode(target.promptNode)) {
+    target.promptNode.segments = parsePromptToSegments(newPrompt);
   }
 }
 
@@ -41,19 +35,21 @@ export function findOptimizeTargets(
 ): OptimizeTarget[] {
   const node = program.nodes.find((candidate) => candidate.type === "graphNode" && candidate.nodeName === nodeName);
   if (!node || node.type !== "graphNode") return [];
-  return walkNodesArray(node.body)
-    .map((item) => buildOptimizeTarget(item.node))
+  return walkNodesArray(node.body, [node])
+    .map((item) => buildOptimizeTarget(item.node, item.ancestors))
     .filter((target): target is OptimizeTarget => target !== null);
 }
 
-function buildOptimizeTarget(node: AgencyNode): OptimizeTarget | null {
+function buildOptimizeTarget(node: AgencyNode, ancestors: AgencyNode[]): OptimizeTarget | null {
   if (node.type !== "assignment" && node.type !== "functionCall") return null;
   const optimizeTag = findOptimizeTag(node);
   if (!optimizeTag) return null;
+  const llmCall = findTaggedLlmCall(node);
 
   const target: OptimizeTarget = {
     node,
-    llmCall: findTaggedLlmCall(node),
+    llmCall,
+    promptNode: findPromptNode(llmCall, node, ancestors),
     tag: optimizeTag,
     configKeys: readOptimizeConfigKeys(optimizeTag),
   };
@@ -77,6 +73,49 @@ function findTaggedLlmCall(node: AgencyNode): AgencyNode | null {
     return node;
   }
   return null;
+}
+
+function findPromptNode(llmCall: AgencyNode | null, taggedNode: AgencyNode, ancestors: AgencyNode[]): AgencyNode | null {
+  if (!llmCall || llmCall.type !== "functionCall") return null;
+  const promptArg = llmCall.arguments[0];
+  if (isStringPromptNode(promptArg)) return promptArg;
+  if (promptArg?.type !== "variableName") return null;
+  return findLocalStringAssignment(promptArg.value, taggedNode, ancestors);
+}
+
+function findLocalStringAssignment(name: string, taggedNode: AgencyNode, ancestors: AgencyNode[]): AgencyNode | null {
+  const body = nearestBody(ancestors);
+  if (!body) return null;
+  const tagIndex = body.indexOf(taggedNode);
+  if (tagIndex === -1) return null;
+  for (let index = tagIndex - 1; index >= 0; index -= 1) {
+    const candidate = body[index];
+    if (candidate.type === "assignment" && candidate.variableName === name && isStringPromptNode(candidate.value)) {
+      return candidate.value;
+    }
+  }
+  return null;
+}
+
+function nearestBody(ancestors: AgencyNode[]): AgencyNode[] | null {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
+    if ("body" in ancestor && Array.isArray(ancestor.body)) return ancestor.body;
+  }
+  return null;
+}
+
+function isStringPromptNode(node: unknown): node is AgencyNode & { type: "string" | "multiLineString"; segments: PromptSegment[] } {
+  return !!node && typeof node === "object" && "type" in node && (node.type === "string" || node.type === "multiLineString");
+}
+
+function promptNodeValue(node: AgencyNode): string {
+  if (!isStringPromptNode(node)) return "";
+  return node.segments
+    .map((segment: PromptSegment) =>
+      segment.type === "text" ? segment.value : `\${${expressionToString(segment.expression)}}`,
+    )
+    .join("");
 }
 
 function readOptimizeConfigKeys(tag: Tag): string[] {

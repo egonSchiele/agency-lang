@@ -1,8 +1,6 @@
-import { NumberInRange } from "std::types"
-
 type PairwiseJudgeResult = {
   winner: "A" | "B" | "tie";
-  confidence: NumberInRange(0, 100);
+  confidence: number;
   reasoning: string
 }
 

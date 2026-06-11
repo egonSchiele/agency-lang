@@ -1,12 +1,13 @@
 import { evalInput, evalOutput } from "std::statelog"
-
 type Info = {
   capital: string
 }
 
-node main() {
-  const prompt = "What is the capital of India?"
+node main(): string {
+  const prompt = "What is the capital of France?"
   evalInput(prompt)
+  @optimize(prompt)
   const result: Info = llm(prompt)
   evalOutput(result.capital)
+  return result.capital
 }

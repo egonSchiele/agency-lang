@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { runCli } from "./agency.js";
+
+import { createProgram, runCli } from "./agency.js";
 
 let tmpDir: string;
 
@@ -63,5 +64,17 @@ describe("runCli", () => {
     expect(written).toContain('args = ["mcp"]');
     expect(written).not.toContain("/tmp/");
     logSpy.mockRestore();
+  });
+});
+
+describe("agency CLI command tree", () => {
+  it("exposes eval optimize and not the legacy top-level optimize command", () => {
+    const program = createProgram();
+    const topLevelCommands = program.commands.map((command) => command.name());
+    const evalCommand = program.commands.find((command) => command.name() === "eval");
+    const evalCommands = evalCommand?.commands.map((command) => command.name()) ?? [];
+
+    expect(topLevelCommands).not.toContain("optimize");
+    expect(evalCommands).toContain("optimize");
   });
 });

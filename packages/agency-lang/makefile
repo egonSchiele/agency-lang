@@ -29,6 +29,7 @@ agents:
 	pnpm run agency compile dist/lib/agents/policy/ && \
 	pnpm run agency compile dist/lib/agents/agency-agent/ && \
 	pnpm run agency compile dist/lib/agents/judge.agency && \
+	pnpm run agency compile dist/lib/agents/mutatePrompt.agency && \
 	mkdir -p dist/lib/agents/docs
 	cp -r docs/site/guide dist/lib/agents/docs/guide
 	cp -r docs/site/cli dist/lib/agents/docs/cli

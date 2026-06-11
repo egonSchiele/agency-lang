@@ -23,6 +23,7 @@ import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { evalRun } from "@/cli/eval/run.js";
+import { evalOptimize } from "@/cli/eval/optimize.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -53,7 +54,6 @@ import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
 import { generateLiterate } from "@/cli/literate.js";
-import { optimize } from "@/cli/optimize.js";
 import { watchAndCompile } from "@/cli/watch.js";
 import {
   setupAgentLsp,
@@ -340,6 +340,34 @@ export function createProgram(deps: CliDependencies = {}): Command {
         await evalJudge(recordA, recordB, { goal: opts.goal, out: opts.out });
       },
     );
+
+  evalCmd
+    .command("optimize")
+    .description("Optimize a tagged prompt against an eval task suite")
+    .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
+    .requiredOption("--tasks <fileOrDir>", "Task suite JSON file or directory")
+    .requiredOption("--goal <text>", "Plain-English optimization goal")
+    .option("--iterations <n>", "Maximum candidate iterations", parseInt)
+    .option("--judge-samples <n>", "Pairwise judge samples per task", parseInt)
+    .option("--accept-threshold <n>", "Accept when confident wins minus losses exceeds this margin", parseInt)
+    .option("--run-id <id>", "Run id / output subdirectory")
+    .option("--runs-dir <path>", "Optimizer runs output directory")
+    .option("--mutator-model <model>", "Model to use for prompt mutation")
+    .action(async (opts: {
+      agent: string;
+      tasks: string;
+      goal: string;
+      iterations?: number;
+      judgeSamples?: number;
+      acceptThreshold?: number;
+      runId?: string;
+      runsDir?: string;
+      mutatorModel?: string;
+    }) => {
+      const result = await evalOptimize({ ...opts, config: getConfig() });
+      console.log(`Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`);
+      console.log(path.join(result.runDir, "summary.json"));
+    });
 
   program
     .command("format")
@@ -784,19 +812,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
         );
       },
     );
-
-  program
-    .command("optimize")
-    .description("Optimize prompts and parameters using iterative feedback")
-    .argument("<target>", "Target node (e.g., file.agency:nodeName)")
-    .option("--iterations <n>", "Maximum iterations", parseInt)
-    .action(async (target: string, opts: any) => {
-      const config = getConfig();
-      const optimizeOpts: Record<string, any> = {};
-      if (opts.iterations !== undefined)
-        optimizeOpts.iterations = opts.iterations;
-      await optimize(config, target, optimizeOpts);
-    });
 
   program
     .command("agent")

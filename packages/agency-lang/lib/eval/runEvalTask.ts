@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as path from "path";
+
 import {
   prepareEvalRunTask,
   recordEvalRunTaskPrepareFailure,
@@ -18,6 +21,10 @@ import type {
  * subprocess fork; alternative callers (tests, in-process variants) can
  * plug in their own runner. Must never throw — failures are returned as
  * `{ ok: false, errorMessage }`.
+ *
+ * On success the runner may report the path where it actually wrote the
+ * statelog. When omitted, the framework uses the `statelogPath` it provided
+ * to the runner.
  */
 export type EvalTaskRunner = (args: {
   compiled: EvalRunCompiledAgent;
@@ -25,7 +32,7 @@ export type EvalTaskRunner = (args: {
   args: Record<string, any>;
   cwd: string;
   statelogPath: string;
-}) => Promise<{ ok: true } | { ok: false; errorMessage: string }>;
+}) => Promise<{ ok: true; statelogPath?: string } | { ok: false; errorMessage: string }>;
 
 /**
  * How to turn a written statelog into an eval-record.json. Must never throw
@@ -78,10 +85,12 @@ export async function runEvalTask(args: {
     return recordEvalRunTaskRunFailure(prepared, runResult.errorMessage);
   }
 
-  if (shouldExtractStatelog(prepared.statelogPath)) {
+  const statelogPath = runResult.statelogPath ?? prepared.statelogPath;
+  ensureStatelogAtExpectedPath(prepared, statelogPath);
+  if (shouldExtractStatelog(statelogPath)) {
     try {
       await args.extractor({
-        statelogPath: prepared.statelogPath,
+        statelogPath,
         outPath: prepared.evalRecordPath,
         task: args.task,
       });
@@ -93,6 +102,15 @@ export async function runEvalTask(args: {
   }
 
   return recordEvalRunTaskSuccess(prepared);
+}
+
+function ensureStatelogAtExpectedPath(prepared: PreparedEvalRunTask, statelogPath: string): void {
+  if (statelogPath !== prepared.statelogPath || shouldExtractStatelog(statelogPath)) return;
+
+  const fallbackPath = path.join(prepared.workdirPath, "statelog.log");
+  if (shouldExtractStatelog(fallbackPath)) {
+    fs.copyFileSync(fallbackPath, prepared.statelogPath);
+  }
 }
 
 function errMessage(err: unknown): string {

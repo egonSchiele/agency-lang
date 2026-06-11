@@ -1,4 +1,35 @@
-import { _evalInput, _evalOutput } from "agency-lang/stdlib-lib/statelog.js"
+import {
+  _evalInput,
+  _evalOutput,
+  _evalRecord,
+  _evalInputs,
+  _evalOutputs,
+  _finalEvalOutput,
+} from "agency-lang/stdlib-lib/statelog.js"
+
+export type StatelogEvalValue = {
+  value: any;
+  threadId?: string;
+  tMs: number;
+  truncated?: boolean
+}
+
+export type StatelogEvalRecord = {
+  traceId: string;
+  recordVersion: number;
+  formatVersion: number;
+  durationMs: number;
+  source: string;
+  evalInputs: StatelogEvalValue[];
+  evalOutputs: StatelogEvalValue[];
+  threads: Record<string, any>[];
+  events: Record<string, any>[];
+  interrupts: Record<string, any>[];
+  errors: Record<string, any>[];
+  incomplete: Record<string, any>[];
+  metrics: Record<string, any>;
+  warnings: string[]
+}
 
 export def evalInput(value: any) {
   """
@@ -50,4 +81,51 @@ export def evalOutput(value: any) {
     accepted; same serialization rules as `evalInput`.
   """
   _evalOutput(value)
+}
+
+export def evalRecord(statelogPath: string, allowedPaths: string[] = []): StatelogEvalRecord {
+  """
+  Parse a statelog JSONL file and return the same structured EvalRecord
+  produced by `agency eval extract`. Use this when an agent needs to inspect
+  a previous run without shelling out to the CLI.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes. When provided,
+    statelogPath must resolve under one of these prefixes.
+  """
+  return _evalRecord(statelogPath, allowedPaths)
+}
+
+export def evalInputs(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
+  """
+  Parse a statelog JSONL file and return the values recorded as eval inputs.
+  This mirrors `new StatelogParser(path).evalInputs()` in TypeScript.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes
+  """
+  return _evalInputs(statelogPath, allowedPaths)
+}
+
+export def evalOutputs(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
+  """
+  Parse a statelog JSONL file and return the values recorded as eval outputs.
+  This mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes
+  """
+  return _evalOutputs(statelogPath, allowedPaths)
+}
+
+export def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue | null {
+  """
+  Parse a statelog JSONL file and return the final eval output, or null when
+  the trace has no output. This is the canonical judge-ready final-output
+  selection rule.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes
+  """
+  return _finalEvalOutput(statelogPath, allowedPaths)
 }

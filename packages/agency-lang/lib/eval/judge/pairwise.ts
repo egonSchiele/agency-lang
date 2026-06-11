@@ -1,7 +1,7 @@
 import * as fs from "fs";
 
-import { executeJudgePairwiseAsync } from "@/cli/util.js";
-import type { JudgeSample, JudgeWinner, PairwiseVerdict, TaskVerdict } from "./types.js";
+import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
+import type { JudgeSample, JudgeWinner, PairwiseJudgeResult, PairwiseVerdict, TaskVerdict } from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
 
 export type JudgePairwiseOptions = {
@@ -26,12 +26,11 @@ export async function judgePair(args: JudgePairArgs): Promise<TaskVerdict> {
   if (respA.missing) warnMissing(args.recordPathA);
   if (respB.missing) warnMissing(args.recordPathB);
 
-  const judged = await executeJudgePairwiseAsync({
-    baseName: args.baseName ?? args.recordPathA.replace(/\.eval\.json$/, ""),
-    goal: args.goal,
-    responseA: order === "AB" ? respA.text : respB.text,
-    responseB: order === "AB" ? respB.text : respA.text,
-  });
+  const judged = await runPairwiseJudge(
+    args.goal,
+    order === "AB" ? respA.text : respB.text,
+    order === "AB" ? respB.text : respA.text,
+  );
   const sample: JudgeSample = {
     winner: mapWinnerToOriginal(judged.winner, order),
     confidence: judged.confidence,
@@ -74,6 +73,41 @@ export async function judgePairwise(
     confidence: verdict.confidence,
     reasoning: verdict.reasoning,
     generatedAt: verdict.generatedAt,
+  };
+}
+
+async function runPairwiseJudge(
+  goal: string,
+  responseA: string,
+  responseB: string,
+): Promise<PairwiseJudgeResult> {
+  const result = await runAgencyAgent({
+    agent: "judgePairwise.agency",
+    node: "judgePairwise",
+    args: { goal, responseA, responseB },
+    config: {},
+  });
+  return assertPairwiseJudgeResult(result.data);
+}
+
+function assertPairwiseJudgeResult(value: unknown): PairwiseJudgeResult {
+  if (!value || typeof value !== "object") {
+    throw new Error("Malformed pairwise judge result: expected object");
+  }
+  const result = value as Record<string, unknown>;
+  if (result.winner !== "A" && result.winner !== "B" && result.winner !== "tie") {
+    throw new Error("Malformed pairwise judge result: winner must be A, B, or tie");
+  }
+  if (typeof result.confidence !== "number") {
+    throw new Error("Malformed pairwise judge result: confidence must be a number");
+  }
+  if (typeof result.reasoning !== "string") {
+    throw new Error("Malformed pairwise judge result: reasoning must be a string");
+  }
+  return {
+    winner: result.winner,
+    confidence: result.confidence,
+    reasoning: result.reasoning,
   };
 }
 

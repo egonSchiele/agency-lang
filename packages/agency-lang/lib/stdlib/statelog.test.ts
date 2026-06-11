@@ -1,11 +1,47 @@
-import { describe, expect, it, vi } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { StatelogClient } from "../statelogClient.js";
-import { _evalInput, _evalOutput } from "./statelog.js";
+import {
+  _evalInput,
+  _evalInputs,
+  _evalOutput,
+  _evalOutputs,
+  _evalRecord,
+  _finalEvalOutput,
+} from "./statelog.js";
+
+let ts = 0;
+
+function nextTs(): string {
+  ts += 100;
+  return new Date(1_700_000_000_000 + ts).toISOString();
+}
+
+function event(type: string, data: Record<string, unknown> = {}): EventEnvelope {
+  return {
+    format_version: 1,
+    trace_id: "trace-stdlib",
+    project_id: "project",
+    span_id: null,
+    parent_span_id: null,
+    data: { type, timestamp: nextTs(), ...data },
+  };
+}
+
+function writeJsonl(dir: string, events: EventEnvelope[]): string {
+  const filePath = path.join(dir, "statelog.jsonl");
+  fs.writeFileSync(filePath, events.map((ev) => JSON.stringify(ev)).join("\n"));
+  return filePath;
+}
 
 function makeCtx(): RuntimeContext<any> {
   return new RuntimeContext({
@@ -41,6 +77,17 @@ async function withFrame(
 }
 
 describe("std::statelog eval annotations", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "stdlib-statelog-"));
+    ts = 0;
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
   it("records eval input with the active thread id", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
@@ -148,6 +195,31 @@ describe("std::statelog eval annotations", () => {
     expect(spies.evalOutputRecorded).toHaveBeenCalledWith({
       value: "x",
       threadId: null,
+    });
+  });
+
+  it("exposes parser projections for agents", async () => {
+    const statelogPath = writeJsonl(tmpDir, [
+      event("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      event("evalInputRecorded", { threadId: "0", value: "question" }),
+      event("evalOutputRecorded", { threadId: "0", value: "draft" }),
+      event("evalOutputRecorded", { threadId: "0", value: "answer" }),
+    ]);
+
+    await expect(_evalInputs(statelogPath)).resolves.toMatchObject([
+      { value: "question", threadId: "0" },
+    ]);
+    await expect(_evalOutputs(statelogPath)).resolves.toMatchObject([
+      { value: "draft", threadId: "0" },
+      { value: "answer", threadId: "0" },
+    ]);
+    await expect(_finalEvalOutput(statelogPath)).resolves.toMatchObject({
+      value: "answer",
+      threadId: "0",
+    });
+    await expect(_evalRecord(statelogPath)).resolves.toMatchObject({
+      traceId: "trace-stdlib",
+      source: statelogPath,
     });
   });
 });

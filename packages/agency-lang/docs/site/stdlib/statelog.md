@@ -4,6 +4,44 @@ name: "statelog"
 
 # statelog
 
+## Types
+
+### StatelogEvalValue
+
+```ts
+export type StatelogEvalValue = {
+  value: any;
+  threadId?: string;
+  tMs: number;
+  truncated?: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L10))
+
+### StatelogEvalRecord
+
+```ts
+export type StatelogEvalRecord = {
+  traceId: string;
+  recordVersion: number;
+  formatVersion: number;
+  durationMs: number;
+  source: string;
+  evalInputs: StatelogEvalValue[];
+  evalOutputs: StatelogEvalValue[];
+  threads: Record<string, any>[];
+  events: Record<string, any>[];
+  interrupts: Record<string, any>[];
+  errors: Record<string, any>[];
+  incomplete: Record<string, any>[];
+  metrics: Record<string, any>;
+  warnings: string[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L17))
+
 ## Functions
 
 ### evalInput
@@ -40,7 +78,7 @@ Record an eval input — a value that should be considered part of
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L34))
 
 ### evalOutput
 
@@ -74,4 +112,99 @@ Record an eval output — a value that should be considered the
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L61))
+
+### evalRecord
+
+```ts
+evalRecord(statelogPath: string, allowedPaths: string[]): StatelogEvalRecord
+```
+
+Parse a statelog JSONL file and return the same structured EvalRecord
+  produced by `agency eval extract`. Use this when an agent needs to inspect
+  a previous run without shelling out to the CLI.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes. When provided,
+    statelogPath must resolve under one of these prefixes.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| statelogPath | `string` |  |
+| allowedPaths | `string[]` | [] |
+
+**Returns:** [StatelogEvalRecord](#statelogevalrecord)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L86))
+
+### evalInputs
+
+```ts
+evalInputs(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
+```
+
+Parse a statelog JSONL file and return the values recorded as eval inputs.
+  This mirrors `new StatelogParser(path).evalInputs()` in TypeScript.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| statelogPath | `string` |  |
+| allowedPaths | `string[]` | [] |
+
+**Returns:** `StatelogEvalValue[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L99))
+
+### evalOutputs
+
+```ts
+evalOutputs(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
+```
+
+Parse a statelog JSONL file and return the values recorded as eval outputs.
+  This mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| statelogPath | `string` |  |
+| allowedPaths | `string[]` | [] |
+
+**Returns:** `StatelogEvalValue[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L110))
+
+### finalEvalOutput
+
+```ts
+finalEvalOutput(statelogPath: string, allowedPaths: string[]): StatelogEvalValue | null
+```
+
+Parse a statelog JSONL file and return the final eval output, or null when
+  the trace has no output. This is the canonical judge-ready final-output
+  selection rule.
+
+  @param statelogPath - Path to the statelog JSONL file to parse
+  @param allowedPaths - Optional allow-list of path prefixes
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| statelogPath | `string` |  |
+| allowedPaths | `string[]` | [] |
+
+**Returns:** `StatelogEvalValue | null`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L121))

@@ -8,8 +8,7 @@ import type { AgencyConfig } from "@/config.js";
 import { compile } from "@/cli/commands.js";
 import { parseTarget } from "@/cli/util.js";
 import { RunStrategy } from "@/importStrategy.js";
-import { extractEvalRecord } from "@/eval/extract.js";
-import { readAllEvents } from "@/eval/parseJsonl.js";
+import { StatelogParser } from "@/eval/statelogParser.js";
 import { loadTasks, taskFromGoal } from "@/eval/loadTasks.js";
 import {
   initializeEvalRun,
@@ -201,8 +200,7 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
   statelogPath,
   outPath,
 }) => {
-  const events = await readAllEvents(statelogPath);
-  const record = extractEvalRecord(events, statelogPath);
+  const record = new StatelogParser(statelogPath).evalRecord();
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };
 

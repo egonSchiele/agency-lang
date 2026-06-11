@@ -4,24 +4,26 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { executeJudgePairwiseAsync } from "@/cli/util.js";
+import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
 import { judgePair, judgePairwise } from "./pairwise.js";
 
-vi.mock("@/cli/util.js", () => ({
-  executeJudgePairwiseAsync: vi.fn(),
+vi.mock("@/cli/runAgencyAgent.js", () => ({
+  runAgencyAgent: vi.fn(),
 }));
 
-const mockedJudge = vi.mocked(executeJudgePairwiseAsync);
+const mockedRunAgencyAgent = vi.mocked(runAgencyAgent);
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 describe("judgePairwise", () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    mockedJudge.mockResolvedValue({
-      winner: "A",
-      confidence: 87,
-      reasoning: "A is more precise.",
+    mockedRunAgencyAgent.mockResolvedValue({
+      data: {
+        winner: "A",
+        confidence: 87,
+        reasoning: "A is more precise.",
+      },
       stdout: "",
       stderr: "",
     });
@@ -29,7 +31,7 @@ describe("judgePairwise", () => {
   });
 
   afterEach(() => {
-    mockedJudge.mockReset();
+    mockedRunAgencyAgent.mockReset();
     stderrSpy.mockRestore();
   });
 
@@ -41,12 +43,16 @@ describe("judgePairwise", () => {
       baseName: "test-pairwise",
     });
 
-    expect(mockedJudge).toHaveBeenCalledWith({
-      baseName: "test-pairwise",
-      goal: "name the capital of India",
-      responseA: "New Delhi",
-      responseB: "Delhi",
-    });
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      agent: "judgePairwise.agency",
+      node: "judgePairwise",
+      args: {
+        goal: "name the capital of India",
+        responseA: "New Delhi",
+        responseB: "Delhi",
+      },
+      config: {},
+    }));
     expect(verdict.verdictVersion).toBe(1);
     expect(verdict.goal).toBe("name the capital of India");
     expect(verdict.inputs).toEqual([
@@ -71,12 +77,16 @@ describe("judgePairwise", () => {
       baseName: "test-pair",
     });
 
-    expect(mockedJudge).toHaveBeenCalledWith({
-      baseName: "test-pair",
-      goal: "name the capital of India",
-      responseA: "New Delhi",
-      responseB: "Delhi",
-    });
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      agent: "judgePairwise.agency",
+      node: "judgePairwise",
+      args: {
+        goal: "name the capital of India",
+        responseA: "New Delhi",
+        responseB: "Delhi",
+      },
+      config: {},
+    }));
     expect(verdict).toMatchObject({
       taskId: "capital-india",
       goal: "name the capital of India",
@@ -97,9 +107,9 @@ describe("judgePairwise", () => {
 
     const verdict = await judgePairwise("name the capital of India", a, b);
 
-    expect(mockedJudge).toHaveBeenCalledWith(
-      expect.objectContaining({ responseA: "New Delhi", responseB: "Delhi" }),
-    );
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: "New Delhi", responseB: "Delhi" }),
+    }));
     expect(verdict.inputs.map((input) => input.response)).toEqual([
       "New Delhi",
       "Delhi",
@@ -114,9 +124,9 @@ describe("judgePairwise", () => {
 
     const verdict = await judgePairwise("goal", a, b);
 
-    expect(mockedJudge).toHaveBeenCalledWith(
-      expect.objectContaining({ responseA: "", responseB: "Delhi" }),
-    );
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: "", responseB: "Delhi" }),
+    }));
     expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining(`${a} has no recorded final response`),
     );
@@ -131,9 +141,9 @@ describe("judgePairwise", () => {
 
     const verdict = await judgePairwise("goal", a, b);
 
-    expect(mockedJudge).toHaveBeenCalledWith(
-      expect.objectContaining({ responseA: "", responseB: "Delhi" }),
-    );
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: "", responseB: "Delhi" }),
+    }));
     expect(verdict.inputs[0].response).toBeNull();
   });
 
@@ -151,9 +161,9 @@ describe("judgePairwise", () => {
 
     const verdict = await judgePairwise("goal", a, b);
 
-    expect(mockedJudge).toHaveBeenCalledWith(
-      expect.objectContaining({ responseA: '{"reply":"hello"}' }),
-    );
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: '{"reply":"hello"}' }),
+    }));
     expect(verdict.inputs[0].response).toBe('{"reply":"hello"}');
   });
 
@@ -171,9 +181,9 @@ describe("judgePairwise", () => {
 
     const verdict = await judgePairwise("goal", a, b);
 
-    expect(mockedJudge).toHaveBeenCalledWith(
-      expect.objectContaining({ responseA: "partial" }),
-    );
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: "partial" }),
+    }));
     expect(verdict.inputs[0]).toEqual({
       path: a,
       response: "partial",
@@ -187,6 +197,6 @@ describe("judgePairwise", () => {
     await expect(
       judgePairwise("goal", missing, path.join(fixturesDir, "v2-B.eval.json")),
     ).rejects.toThrow(missing);
-    expect(mockedJudge).not.toHaveBeenCalled();
+    expect(mockedRunAgencyAgent).not.toHaveBeenCalled();
   });
 });

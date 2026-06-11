@@ -2,11 +2,10 @@ import * as fs from "fs";
 
 import { nanoid } from "nanoid";
 
-import { extractEvalRecord } from "../eval/extract.js";
 import { judgePairwise } from "../eval/judge/pairwise.js";
 import { judgeSuite, type JudgeSuiteArgs } from "../eval/judge/suite.js";
 import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
-import { readAllEvents } from "../eval/parseJsonl.js";
+import { StatelogParser } from "../eval/statelogParser.js";
 import {
   initializeEvalRun,
   prepareEvalRunTask,
@@ -104,8 +103,7 @@ export async function _finalizeEvalRunTask(
   }
   if (shouldExtractStatelog(prepared.statelogPath)) {
     try {
-      const events = await readAllEvents(prepared.statelogPath);
-      const record = extractEvalRecord(events, prepared.statelogPath);
+      const record = new StatelogParser(prepared.statelogPath).evalRecord();
       fs.writeFileSync(prepared.evalRecordPath, JSON.stringify(record, null, 2));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -145,8 +143,7 @@ export function _formatEvalRunFailure(value: any): string {
  * pipeline; no separate logic here.
  */
 export async function _evalExtract(statelogPath: string): Promise<EvalRecord> {
-  const events = await readAllEvents(statelogPath);
-  return extractEvalRecord(events, statelogPath);
+  return new StatelogParser(statelogPath).evalRecord();
 }
 
 /**

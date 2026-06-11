@@ -38,3 +38,24 @@ export async function readAllEvents(file: string): Promise<EventEnvelope[]> {
   for await (const ev of readEvents(file)) out.push(ev);
   return out;
 }
+
+/** Synchronous variant for small, file-oriented facades such as
+ *  StatelogParser. Keeps JSONL validation semantics aligned with
+ *  readEvents(): blank lines are skipped, and malformed JSON reports
+ *  the source line number. */
+export function readAllEventsSync(file: string): EventEnvelope[] {
+  const out: EventEnvelope[] = [];
+  const lines = fs.readFileSync(file, "utf-8").split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line === "") continue;
+    try {
+      out.push(JSON.parse(line) as EventEnvelope);
+    } catch (err) {
+      throw new Error(
+        `Malformed JSON on line ${index + 1}: ${(err as Error).message}`,
+      );
+    }
+  }
+  return out;
+}

@@ -1,7 +1,6 @@
 import * as fs from "fs";
 
-import { extractEvalRecord } from "../eval/extract.js";
-import { readAllEvents } from "../eval/parseJsonl.js";
+import { StatelogParser } from "../eval/statelogParser.js";
 
 export type EvalExtractOptions = {
   out?: string;
@@ -15,10 +14,9 @@ export async function evalExtract(
   file: string,
   opts: EvalExtractOptions = {},
 ): Promise<void> {
-  const events = await readAllEvents(file);
-  const record = extractEvalRecord(events, file, {
+  const record = new StatelogParser(file, {
     previewChars: opts.previewChars,
-  });
+  }).evalRecord();
   const outPath = opts.out ?? defaultOutPath(file);
   const pretty = opts.pretty !== false;
   fs.writeFileSync(outPath, JSON.stringify(record, null, pretty ? 2 : 0));

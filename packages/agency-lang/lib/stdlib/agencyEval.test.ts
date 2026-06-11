@@ -9,6 +9,7 @@ import {
   _finishEvalRun,
   _formatEvalRunFailure,
   _initEvalRun,
+  _evalJudgeSuite,
   _optimize,
   _prepareEvalRunTask,
 } from "./agencyEval.js";
@@ -28,7 +29,7 @@ describe("agency eval stdlib helpers", () => {
   it("initializes runs with generated ids and reports prepare failures", () => {
     const state = _initEvalRun(
       { moduleId: "agent" },
-      [{ task_id: "../escape", rubric: "r", args: {} }],
+      [{ task_id: "../escape", goal: "g", args: {} }],
       "main",
       tmpDir,
       "",
@@ -53,7 +54,7 @@ describe("agency eval stdlib helpers", () => {
   it("finalizes prepared tasks with success or error results", async () => {
     const state = _initEvalRun(
       { moduleId: "agent" },
-      [{ task_id: "t1", rubric: "r", args: {} }],
+      [{ task_id: "t1", goal: "g", args: {} }],
       "main",
       tmpDir,
       "r1",
@@ -77,6 +78,33 @@ describe("agency eval stdlib helpers", () => {
     expect(_formatEvalRunFailure("plain")).toBe("plain");
   });
 
+  it("delegates suite judging to the core judgeSuite helper", async () => {
+    const result = await _evalJudgeSuite(
+      "run-a",
+      "run-b",
+      [{ task_id: "task-1", goal: "g", args: {} }],
+      5,
+      60,
+      1,
+      "none",
+      async (args) => ({
+        verdictVersion: 2,
+        generatedAt: "2026-06-11T00:00:00.000Z",
+        policy: args.policy,
+        winsA: 0,
+        winsB: 1,
+        ties: 0,
+        winner: "B",
+        perTask: [],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      winner: "B",
+      policy: { samples: 5, confidenceThreshold: 60, marginThreshold: 1, positionBias: "none" },
+    });
+  });
+
   it("delegates optimize requests to the core loop without installing handlers", async () => {
     let loopConfig: OptimizeLoopConfig | null = null;
 
@@ -84,7 +112,7 @@ describe("agency eval stdlib helpers", () => {
       {},
       "node main() {}\n",
       "main",
-      [{ task_id: "t1", rubric: "r", args: {} }],
+      [{ task_id: "t1", goal: "g", args: {} }],
       "improve",
       2,
       3,

@@ -263,7 +263,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Run an Agency agent against an eval task suite")
     .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
     .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
-    .option("--goal <text>", "Run one inline task with this rubric")
+    .option("--goal <text>", "Run one inline task with this goal")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
@@ -323,21 +323,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   evalCmd
     .command("judge")
-    .description("Compare two eval records and decide which better meets a goal")
-    .argument("<recordA>", "Path to first eval record (.eval.json)")
-    .argument("<recordB>", "Path to second eval record (.eval.json)")
-    .requiredOption(
-      "--goal <text>",
-      "Plain-English description of what success looks like",
-    )
+    .description("Compare two eval records or eval run directories")
+    .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
+    .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
+    .option("--goal <text>", "Goal used to judge responses")
+    .option("--tasks <fileOrDir>", "Eval task suite for run-directory comparison")
+    .option("--samples <n>", "Judge samples per task", parseInt)
+    .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
+    .option("--margin-threshold <n>", "Suite win margin required", parseInt)
+    .option("--position-bias <mode>", "Position bias control: swap or none", "swap")
     .option("-o, --out <path>", "Output verdict JSON path")
     .action(
       async (
-        recordA: string,
-        recordB: string,
-        opts: { goal: string; out?: string },
+        inputA: string,
+        inputB: string,
+        opts: {
+          goal?: string;
+          tasks?: string;
+          out?: string;
+          samples?: number;
+          confidenceThreshold?: number;
+          marginThreshold?: number;
+          positionBias?: "swap" | "none";
+        },
       ) => {
-        await evalJudge(recordA, recordB, { goal: opts.goal, out: opts.out });
+        await evalJudge(inputA, inputB, opts);
       },
     );
 

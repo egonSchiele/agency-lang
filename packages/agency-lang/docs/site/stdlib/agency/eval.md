@@ -11,14 +11,14 @@ name: "eval"
 ```ts
 export type EvalRunTask = {
   task_id: string;
-  rubric: string;
+  goal: string;
   args: Record<string, any>;
   node?: string;
   working_dir?: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L13))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L14))
 
 ### EvalRunTaskResult
 
@@ -33,7 +33,7 @@ export type EvalRunTaskResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L22))
 
 ### EvalRunResult
 
@@ -48,7 +48,7 @@ export type EvalRunResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L31))
 
 ### EvalValue
 
@@ -61,7 +61,7 @@ export type EvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L100))
 
 ### EvalRecord
 
@@ -84,7 +84,7 @@ export type EvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L107))
 
 ### PairwiseVerdictInput
 
@@ -96,7 +96,7 @@ export type PairwiseVerdictInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L149))
 
 ### PairwiseVerdict
 
@@ -112,7 +112,81 @@ export type PairwiseVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L155))
+
+### JudgeAggregationPolicy
+
+```ts
+export type JudgeAggregationPolicy = {
+  samples: number;
+  confidenceThreshold: number;
+  marginThreshold: number;
+  positionBias: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L195))
+
+### TaskVerdictInput
+
+```ts
+export type TaskVerdictInput = {
+  path?: string;
+  status: string;
+  response?: string;
+  truncated?: boolean;
+  errorMessage?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L202))
+
+### JudgeSample
+
+```ts
+export type JudgeSample = {
+  winner: string;
+  confidence: number;
+  reasoning: string;
+  order: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L210))
+
+### TaskVerdict
+
+```ts
+export type TaskVerdict = {
+  taskId: string;
+  goal: string;
+  inputs: TaskVerdictInput[];
+  winner: string;
+  confidence: number;
+  reasoning: string;
+  samples: JudgeSample[];
+  generatedAt: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L217))
+
+### SuiteVerdict
+
+```ts
+export type SuiteVerdict = {
+  verdictVersion: number;
+  generatedAt: string;
+  policy: JudgeAggregationPolicy;
+  winsA: number;
+  winsB: number;
+  ties: number;
+  winner: string;
+  perTask: TaskVerdict[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L228))
 
 ### OptimizeDecision
 
@@ -124,7 +198,7 @@ export type OptimizeDecision =
   | "validation-failed"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L268))
 
 ### OptimizeIterationResult
 
@@ -142,7 +216,7 @@ export type OptimizeIterationResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L270))
 
 ### OptimizeResult
 
@@ -159,7 +233,7 @@ export type OptimizeResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L212))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L282))
 
 ## Functions
 
@@ -194,7 +268,7 @@ Run a compiled Agency program against eval tasks, writing per-task
 
 **Returns:** [EvalRunResult](#evalrunresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L40))
 
 ### evalExtract
 
@@ -226,15 +300,15 @@ Extract a structured eval record from a statelog file. Equivalent to
 
 **Returns:** [EvalRecord](#evalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L124))
 
 ### evalJudge
 
 ```ts
-evalJudge(rubric: string, recordPathA: string, recordPathB: string): PairwiseVerdict
+evalJudge(goal: string, recordPathA: string, recordPathB: string): PairwiseVerdict
 ```
 
-Pairwise-judge two eval records against a rubric. Returns a
+Pairwise-judge two eval records against a goal. Returns a
   structured verdict naming the winner ("A", "B", or "tie"), the
   judge's confidence as an integer from 0 to 100, and the
   reasoning the judge produced.
@@ -250,7 +324,7 @@ Pairwise-judge two eval records against a rubric. Returns a
   high-precision callers should invoke twice with swapped order and
   reconcile the verdicts.
 
-  @param rubric - What the judge should grade against. Per-task rubrics
+  @param goal - What the judge should grade against. Per-task goals
     from an eval suite are the typical input.
   @param recordPathA - Path to the first eval record JSON file
   @param recordPathB - Path to the second eval record JSON file
@@ -259,13 +333,47 @@ Pairwise-judge two eval records against a rubric. Returns a
 
 | Name | Type | Default |
 |---|---|---|
-| rubric | `string` |  |
+| goal | `string` |  |
 | recordPathA | `string` |  |
 | recordPathB | `string` |  |
 
 **Returns:** [PairwiseVerdict](#pairwiseverdict)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L165))
+
+### evalJudgeSuite
+
+```ts
+evalJudgeSuite(runA: string, runB: string, tasks: EvalRunTask[], samples: number, confidenceThreshold: number, marginThreshold: number, positionBias: string): SuiteVerdict
+```
+
+Judge two eval run directories by task id and aggregate the results into a
+  suite verdict. Missing or failed task records are handled deterministically
+  without calling the LLM judge; successful tasks are judged pairwise.
+
+  @param runA - Path to the first eval run directory
+  @param runB - Path to the second eval run directory
+  @param tasks - Task suite defining task ids and goals to compare
+  @param samples - Judge samples per task
+  @param confidenceThreshold - Minimum task confidence counted as a suite win
+  @param marginThreshold - Suite win margin required to avoid an overall tie
+  @param positionBias - Position bias control: "swap" or "none"
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| runA | `string` |  |
+| runB | `string` |  |
+| tasks | `EvalRunTask[]` |  |
+| samples | `number` | 3 |
+| confidenceThreshold | `number` | 50 |
+| marginThreshold | `number` | 0 |
+| positionBias | `string` | "swap" |
+
+**Returns:** [SuiteVerdict](#suiteverdict)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L239))
 
 ### optimize
 
@@ -316,4 +424,4 @@ Optimize the prompt marked with @optimize(prompt) in agentSource by
 
 **Returns:** [OptimizeResult](#optimizeresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L293))

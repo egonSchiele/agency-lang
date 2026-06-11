@@ -26,14 +26,14 @@ Task suites can be either a JSON file with `{ "tasks": [...] }` or a directory c
 ```json
 {
   "task_id": "fizzbuzz-write",
-  "rubric": "Should produce a typechecking fizzbuzz program.",
+  "goal": "Should produce a typechecking fizzbuzz program.",
   "args": { "prompt": "Write fizzbuzz in Agency" },
   "node": "evalMain",
   "working_dir": "./fixtures/empty-project"
 }
 ```
 
-`rubric` is required. `args` defaults to `{}`. `task_id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the task workdir before the subprocess runs, so each task can mutate its own isolated fixture copy.
+`goal` is required. `args` defaults to `{}`. `task_id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the task workdir before the subprocess runs, so each task can mutate its own isolated fixture copy.
 
 For a single ad-hoc run, use `--goal` instead of `--tasks`:
 
@@ -45,7 +45,7 @@ Options:
 
 - `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
 - `--tasks <file|dir>` — task suite file or directory. Mutually exclusive with `--goal`.
-- `--goal <text>` — create one inline task with this rubric. Mutually exclusive with `--tasks`.
+- `--goal <text>` — create one inline task with this goal. Mutually exclusive with `--tasks`.
 - `--run-id <id>` — output run id. Defaults to a generated id.
 - `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
 - `--no-continue-on-error` — stop after the first task failure. By default, remaining tasks continue.

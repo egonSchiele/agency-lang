@@ -40,6 +40,12 @@ export function initializeEvalRun(args: {
 
   const runDir = path.resolve(args.runsDir, args.runId);
   const tasksDir = path.join(runDir, "tasks");
+  if (fs.existsSync(runDir)) {
+    throw new Error(
+      `Run directory already exists: ${runDir}.
+Choose a different --run-id or delete the existing directory.`,
+    );
+  }
   fs.mkdirSync(tasksDir, { recursive: true });
 
   writeJson(path.join(runDir, "config.json"), {

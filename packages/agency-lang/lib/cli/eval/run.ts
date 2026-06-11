@@ -113,7 +113,7 @@ export async function evalRun(
   const taskSelection = validateTaskSelection(opts);
   const tasks =
     taskSelection === "goal"
-      ? [taskFromGoal(opts.goal ?? "", nanoid)]
+      ? [taskFromGoal(opts.goal ?? "")]
       : loadTasks(path.resolve(opts.tasks ?? ""), nanoid);
 
   return evalRunLoadedTasks({

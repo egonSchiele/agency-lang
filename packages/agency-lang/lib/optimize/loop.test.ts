@@ -9,7 +9,7 @@ import type { EvalRunResult, EvalRunTask } from "@/eval/runTypes.js";
 
 describe("optimizeLoop", () => {
   let tmpDir: string;
-  const tasks: EvalRunTask[] = [{ task_id: "t1", rubric: "prefer accuracy", args: { text: "hi" } }];
+  const tasks: EvalRunTask[] = [{ task_id: "t1", goal: "prefer accuracy", args: { text: "hi" } }];
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-loop-"));

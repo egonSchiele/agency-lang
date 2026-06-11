@@ -1,10 +1,12 @@
-export type EvalRunTask = {
+export type EvalTask = {
   task_id: string;
-  rubric: string;
+  goal: string;
   args: Record<string, any>;
   node?: string;
   working_dir?: string;
 };
+
+export type EvalRunTask = EvalTask;
 
 export type EvalRunTaskResult = {
   taskId: string;

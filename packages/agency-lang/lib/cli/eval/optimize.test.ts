@@ -25,7 +25,7 @@ describe("eval optimize CLI", () => {
     fs.writeFileSync(agentFile, "node main() {}\n");
     const tasksFile = path.join(tmpDir, "tasks.json");
     fs.writeFileSync(tasksFile, JSON.stringify({
-      tasks: [{ task_id: "first", rubric: "be correct", args: { text: "hi" } }],
+      tasks: [{ task_id: "first", goal: "be correct", args: { text: "hi" } }],
     }));
 
     const capture: { loopConfig?: OptimizeLoopConfig } = {};
@@ -70,7 +70,7 @@ describe("eval optimize CLI", () => {
       },
     });
     if (!capture.loopConfig) throw new Error("optimize loop was not called");
-    expect(capture.loopConfig.runtime.tasks).toEqual([{ task_id: "first", rubric: "be correct", args: { text: "hi" } }]);
+    expect(capture.loopConfig.runtime.tasks).toEqual([{ task_id: "first", goal: "be correct", args: { text: "hi" } }]);
     expect(handlerCountDuringLoop).toBe(1);
     expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
   });
@@ -80,7 +80,7 @@ describe("eval optimize CLI", () => {
     fs.writeFileSync(agentFile, "node main() {}\n");
     const tasksFile = path.join(tmpDir, "tasks.json");
     fs.writeFileSync(tasksFile, JSON.stringify({
-      tasks: [{ task_id: "task-id", rubric: "inline rubric", args: {} }],
+      tasks: [{ task_id: "task-id", goal: "inline goal", args: {} }],
     }));
     const capture: { loopConfig?: OptimizeLoopConfig } = {};
 
@@ -88,7 +88,7 @@ describe("eval optimize CLI", () => {
       {
         agent: agentFile,
         tasks: tasksFile,
-        goal: "inline rubric",
+        goal: "inline goal",
         config: { eval: { optimizeRunsDir: path.join(tmpDir, "configured-runs") } },
       },
       {
@@ -102,7 +102,7 @@ describe("eval optimize CLI", () => {
     );
 
     if (!capture.loopConfig) throw new Error("optimize loop was not called");
-    expect(capture.loopConfig.runtime.tasks).toEqual([{ task_id: "task-id", rubric: "inline rubric", args: {} }]);
+    expect(capture.loopConfig.runtime.tasks).toEqual([{ task_id: "task-id", goal: "inline goal", args: {} }]);
     expect(capture.loopConfig).toMatchObject({
       artifacts: {
         runsDir: path.join(tmpDir, "configured-runs"),

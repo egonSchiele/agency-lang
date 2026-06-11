@@ -45,7 +45,7 @@ export type OptimizeLoopDeps = {
   }) => Promise<EvalRunResult>;
   judgeTask?: (args: {
     taskId: string;
-    rubric: string;
+    goal: string;
     championRecordPath: string;
     candidateRecordPath: string;
     samples: number;
@@ -270,7 +270,7 @@ async function judgeTasks(
     const candidateRecordPath = recordPathForTask(candidateEval, task.task_id);
     results.push(await (deps.judgeTask ?? judgeCandidateAgainstChampion)({
       taskId: task.task_id,
-      rubric: task.rubric,
+      goal: task.goal,
       championRecordPath,
       candidateRecordPath,
       samples,

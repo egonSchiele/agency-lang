@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { executeJudgePairwiseAsync } from "@/cli/util.js";
-import { judgePairwise } from "./pairwise.js";
+import { judgePair, judgePairwise } from "./pairwise.js";
 
 vi.mock("@/cli/util.js", () => ({
   executeJudgePairwiseAsync: vi.fn(),
@@ -56,6 +56,38 @@ describe("judgePairwise", () => {
     expect(verdict.winner).toBe("A");
     expect(verdict.confidence).toBe(87);
     expect(verdict.reasoning).toBe("A is more precise.");
+    expect(new Date(verdict.generatedAt).toString()).not.toBe("Invalid Date");
+  });
+
+  it("returns a task verdict from judgePair", async () => {
+    const a = path.join(fixturesDir, "v2-A.eval.json");
+    const b = path.join(fixturesDir, "v2-B.eval.json");
+
+    const verdict = await judgePair({
+      taskId: "capital-india",
+      goal: "name the capital of India",
+      recordPathA: a,
+      recordPathB: b,
+      baseName: "test-pair",
+    });
+
+    expect(mockedJudge).toHaveBeenCalledWith({
+      baseName: "test-pair",
+      goal: "name the capital of India",
+      responseA: "New Delhi",
+      responseB: "Delhi",
+    });
+    expect(verdict).toMatchObject({
+      taskId: "capital-india",
+      goal: "name the capital of India",
+      winner: "A",
+      confidence: 87,
+      samples: [{ winner: "A", confidence: 87, order: "AB" }],
+      inputs: [
+        { path: a, response: "New Delhi", status: "ok" },
+        { path: b, response: "Delhi", status: "ok" },
+      ],
+    });
     expect(new Date(verdict.generatedAt).toString()).not.toBe("Invalid Date");
   });
 

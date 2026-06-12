@@ -32,6 +32,19 @@ describe("export const", () => {
     }
   });
 
+  it("rejects export optimize const", () => {
+    const result = modifiedAssignmentParser(`export optimize const x = 5\n`);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.message).toContain("export optimize declarations are unsupported");
+    }
+  });
+
+  it("rejects optimize export const", () => {
+    const result = modifiedAssignmentParser(`optimize export const x = 5\n`);
+    expect(result.success).toBe(false);
+  });
+
   // The parser accepts export let syntactically; the typechecker is responsible
   // for rejecting it (export only makes sense for const declarations).
   it("parses export let (typechecker rejects this, not parser)", () => {

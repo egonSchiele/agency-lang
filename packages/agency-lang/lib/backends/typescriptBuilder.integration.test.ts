@@ -154,6 +154,27 @@ twice(label: "test") as {
   });
 });
 
+describe("optimize declaration modifier", () => {
+  it("does not emit optimize as runtime TypeScript", () => {
+    const optimized = generateWithBuilder(`
+optimize const prompt = "hi"
+node main() {
+  return prompt
+}
+`);
+
+    const plain = generateWithBuilder(`
+const prompt = "hi"
+node main() {
+  return prompt
+}
+`);
+
+    expect(normalizeWhitespace(optimized)).toBe(normalizeWhitespace(plain));
+    expect(optimized).not.toContain("optimize");
+  });
+});
+
 describe("Safe functions and methods", () => {
   it.each([
     { safe: true, funcName: "safeFnIf", emitsRetryableFalse: false, block: "if" },

@@ -36,6 +36,7 @@ import {
   optional,
   or,
   parseError,
+  peek,
   Parser,
   ParserResult,
   quotedString,
@@ -3133,19 +3134,55 @@ const staticKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
+const optimizeAssignmentPrefixParser: Parser<boolean> = or(
+  map(seqC(str("static"), spaces, peek(str("const"))), () => true),
+  map(peek(or(str("const"), str("let"))), () => false),
+);
+
+const optimizeAssignmentParser: Parser<Assignment> = (input: string): ParserResult<Assignment> => {
+  const parser = seqC(
+    str("optimize"),
+    spaces,
+    capture(optimizeAssignmentPrefixParser, "isStatic"),
+    capture(assignmentParser, "assignment"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+
+  const assignment = result.result.assignment;
+  if (!assignment.declKind) {
+    return failure("optimize requires 'let' or 'const' (e.g., 'optimize const prompt = ...')", input);
+  }
+  if (result.result.isStatic && assignment.declKind !== "const") {
+    return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
+  }
+
+  const out = { ...assignment, optimize: true };
+  if (result.result.isStatic) out.static = true;
+  return success(out, result.rest);
+};
+
 // Parse "export" and "static" in any order before "let"/"const"
 export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: string) => {
   let rest = input;
   let isExported = false;
   let isStatic = false;
 
-  // Try up to 2 modifiers in any order
+  const optimizeResult = optimizeAssignmentParser(rest);
+  if (optimizeResult.success) {
+    return optimizeResult;
+  }
+
+  // Try up to 2 legacy modifiers in any order
   for (let i = 0; i < 2; i++) {
     if (!isExported) {
       const exportResult = exportKeywordParser(rest);
       if (exportResult.success && exportResult.result) {
         isExported = true;
         rest = exportResult.rest;
+        if (/^optimize\b/.test(rest.trimStart())) {
+          return failure("export optimize declarations are unsupported in v1", input);
+        }
         continue;
       }
     }
@@ -3161,7 +3198,7 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   }
 
   // If no modifiers found, this parser doesn't match
-  if (!isExported && !isStatic) return failure("expected 'export' or 'static'", input);
+  if (!isExported && !isStatic) return failure("expected 'export', 'static', or 'optimize'", input);
 
   const result = assignmentParser(rest);
   if (!result.success) return result;
@@ -3180,6 +3217,30 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (isStatic) out.static = true;
   return success(out, result.rest);
 });
+
+const bodyOptimizeAssignmentParser: Parser<Assignment> = (input: string) => {
+  const result = modifiedAssignmentParser(input);
+  if (!result.success) return result;
+  if (result.result.optimize) return result;
+  return failure("expected optimize assignment", input);
+};
+
+const BODY_RESERVED_MODIFIER_MESSAGE =
+  "`static` and `export` declarations are only supported at module top level. " +
+  "Inside function and node bodies, use `optimize const ...` for optimizable local declarations or ordinary `const`/`let` declarations.";
+
+const bodyReservedModifierParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    or(str("static"), str("export")),
+    spaces,
+    or(str("const"), str("let"), str("static"), str("optimize")),
+  );
+  if (!probe(input).success) return failure("", input);
+  return parseError(
+    BODY_RESERVED_MODIFIER_MESSAGE,
+    fail("body declaration modifier"),
+  )(input) as ParserResult<never>;
+};
 
 /**
  * `static <expression-statement>` at module top level. Routes a bare
@@ -3297,11 +3358,14 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   keywordParser,
   debug(typeAliasParser, "error in typeAliasParser"),
   tagParser,
+  bodyReservedModifierParser,
   // withModifierParser must be tried before returnStatementParser/
   // assignmentParser so that `return foo() with approve` and
   // `const x = foo() with approve` don't get partially consumed by
   // the inner statement parser, which would leave `with approve`
-  // dangling and unparseable.
+  // dangling and unparseable. bodyReservedModifierParser sits before
+  // it so top-level-only `static`/`export` declarations are still
+  // rejected inside function and node bodies.
   lazy(() => withModifierParser),
   returnStatementParser,
   gotoStatementParser,
@@ -3318,6 +3382,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   multiLineCommentParser,
   commentParser,
   skillParser,
+  bodyOptimizeAssignmentParser,
   assignmentParser,
   binOpParser,
   booleanParser,

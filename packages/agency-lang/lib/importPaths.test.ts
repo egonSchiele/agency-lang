@@ -6,9 +6,11 @@ import {
   toCompiledImportPath,
   isPkgImport,
   isAgencyImport,
+  agencyImportTargets,
   parsePkgImport,
   resolvePkgAgencyPath,
 } from "./importPaths.js";
+import { parseAgency } from "./parser.js";
 import { CompileStrategy, RunStrategy } from "./importStrategy.js";
 import { SymbolTable } from "./symbolTable.js";
 import * as fs from "fs";
@@ -113,6 +115,40 @@ describe("isAgencyImport", () => {
     expect(isAgencyImport("zod")).toBe(false);
     expect(isAgencyImport("./utils.js")).toBe(false);
     expect(isAgencyImport("@anthropic/sdk")).toBe(false);
+  });
+});
+
+describe("agencyImportTargets", () => {
+  it("returns Agency import edges from import, import node, and export-from statements", () => {
+    const absoluteImport = path.join(os.tmpdir(), "absolute.agency");
+    const parsed = parseAgency(`
+import { helper } from "./helper.agency"
+import { read } from "std::fs"
+import { pkgHelper } from "pkg::helpers"
+import { jsHelper } from "./helper.js"
+import { bare } from "bare.agency"
+import node { worker } from "../nodes/worker.agency"
+export { prompt } from "./prompt.agency"
+export * from "${absoluteImport}"
+node main() {}
+`, {}, false);
+    if (!parsed.success) throw new Error(parsed.message ?? "parse failed");
+
+    expect(agencyImportTargets(parsed.result)).toEqual([
+      "./helper.agency",
+      "std::fs",
+      "pkg::helpers",
+      "bare.agency",
+      "../nodes/worker.agency",
+      "./prompt.agency",
+      absoluteImport,
+    ]);
+    expect(agencyImportTargets(parsed.result, { localOnly: true })).toEqual([
+      "./helper.agency",
+      "../nodes/worker.agency",
+      "./prompt.agency",
+      absoluteImport,
+    ]);
   });
 });
 

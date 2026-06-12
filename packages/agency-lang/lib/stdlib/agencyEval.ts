@@ -206,14 +206,19 @@ export async function _optimize(
   mutatorModel?: string,
   loop: (config: OptimizeLoopConfig) => Promise<OptimizeResult> = optimizeLoop,
 ): Promise<OptimizeResult> {
-  const resolvedEntryFile = path.resolve(workingDir, entryFile);
+  const resolvedWorkingDir = path.resolve(workingDir);
+  const resolvedEntryFile = path.resolve(resolvedWorkingDir, entryFile);
   const agentSource = fs.readFileSync(resolvedEntryFile, "utf8");
   return loop({
     runtime: { config, tasks },
-    target: { agentSource, node, agentFilename: path.basename(resolvedEntryFile), workingDir },
+    target: { agentSource, node, agentFilename: relativeAgencyPath(resolvedWorkingDir, resolvedEntryFile), workingDir: resolvedWorkingDir },
     policy: { goal, iterations, judgeSamples, acceptThreshold, mutatorModel },
     artifacts: { runsDir, runId: runId || nanoid() },
   });
 }
 
 type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];
+
+function relativeAgencyPath(baseDir: string, absoluteFile: string): string {
+  return path.relative(baseDir, absoluteFile).split(path.sep).join("/");
+}

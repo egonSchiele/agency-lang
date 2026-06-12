@@ -150,6 +150,40 @@ describe("agency eval stdlib helpers", () => {
     });
     expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
   });
+
+  it("preserves optimize entry paths relative to the stdlib working directory", async () => {
+    let loopConfig: OptimizeLoopConfig | null = null;
+    fs.mkdirSync(path.join(tmpDir, "agents"), { recursive: true });
+    const entryFile = path.join(tmpDir, "agents", "agent.agency");
+    fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
+
+    await _optimize(
+      {},
+      "agents/agent.agency",
+      tmpDir,
+      "main",
+      [{ task_id: "t1", goal: "g", args: {} }],
+      "improve",
+      2,
+      3,
+      1,
+      tmpDir,
+      "run",
+      "mutator",
+      async (config) => {
+        loopConfig = config;
+        return optimizeResult(config);
+      },
+    );
+
+    expect(loopConfig).toMatchObject({
+      target: {
+        agentFilename: "agents/agent.agency",
+        workingDir: tmpDir,
+        agentSource: "optimize const prompt = \"hi\"\nnode main() {}\n",
+      },
+    });
+  });
 });
 
 function optimizeResult(config: OptimizeLoopConfig): OptimizeResult {

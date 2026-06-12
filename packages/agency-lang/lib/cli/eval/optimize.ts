@@ -67,13 +67,14 @@ function buildOptimizeLoopConfig(
   const tasks = loadTasks(path.resolve(opts.tasks), deps.makeId ?? nanoid);
   const agentSource = fs.readFileSync(target.agentFile, "utf-8");
   const config = opts.config ?? {};
+  const workingDir = optimizeWorkingDir(target.agentFile);
   return {
     runtime: { config, tasks },
     target: {
       agentSource,
       node: target.node,
-      agentFilename: path.basename(target.agentFile),
-      workingDir: path.dirname(target.agentFile),
+      agentFilename: relativeAgencyPath(workingDir, target.agentFile),
+      workingDir,
       writebackPath: target.agentFile,
     },
     policy: {
@@ -88,4 +89,19 @@ function buildOptimizeLoopConfig(
       runId: opts.runId ?? (deps.makeRunId ?? nanoid)(),
     },
   };
+}
+
+function optimizeWorkingDir(agentFile: string): string {
+  const cwd = process.cwd();
+  if (isInsideOrSame(agentFile, cwd)) return cwd;
+  return path.dirname(agentFile);
+}
+
+function isInsideOrSame(candidate: string, parent: string): boolean {
+  const relative = path.relative(parent, path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function relativeAgencyPath(baseDir: string, absoluteFile: string): string {
+  return path.relative(baseDir, absoluteFile).split(path.sep).join("/");
 }

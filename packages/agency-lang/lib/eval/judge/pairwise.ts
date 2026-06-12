@@ -1,7 +1,7 @@
 import * as fs from "fs";
 
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
-import type { PairwiseJudgeResult, PairwiseVerdict } from "./types.js";
+import type { JudgeSample, JudgeWinner, PairwiseJudgeResult, PairwiseVerdict, TaskVerdict } from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
 import { z } from "zod";
 
@@ -11,32 +11,71 @@ const PairwiseJudgeResultSchema = z.object({
   reasoning: z.string(),
 });
 
+export type JudgePairArgs = {
+  taskId: string;
+  goal: string;
+  recordPathA: string;
+  recordPathB: string;
+  order?: "AB" | "BA";
+};
+
+export async function judgePair(args: JudgePairArgs): Promise<TaskVerdict> {
+  if (!args.taskId) throw new Error("judgePair requires taskId");
+  const order = args.order ?? "AB";
+  const recordA = readJson(args.recordPathA);
+  const recordB = readJson(args.recordPathB);
+  const respA = selectFinalResponse(recordA);
+  const respB = selectFinalResponse(recordB);
+
+  if (respA.missing) warnMissing(args.recordPathA);
+  if (respB.missing) warnMissing(args.recordPathB);
+
+  const judged = await runPairwiseJudge(
+    args.goal,
+    order === "AB" ? respA.text : respB.text,
+    order === "AB" ? respB.text : respA.text,
+  );
+  const sample: JudgeSample = {
+    winner: judged.winner,
+    confidence: judged.confidence,
+    reasoning: judged.reasoning,
+    order,
+  };
+  const winner = mapWinnerToOriginal(judged.winner, order);
+
+  return {
+    taskId: args.taskId,
+    goal: args.goal,
+    inputs: [
+      taskInputOf(args.recordPathA, respA),
+      taskInputOf(args.recordPathB, respB),
+    ],
+    winner,
+    confidence: sample.confidence,
+    reasoning: sample.reasoning,
+    samples: [sample],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 export async function judgePairwise(
   goal: string,
   recordPathA: string,
   recordPathB: string,
 ): Promise<PairwiseVerdict> {
-  const recordA = readJson(recordPathA);
-  const recordB = readJson(recordPathB);
-  const respA = selectFinalResponse(recordA);
-  const respB = selectFinalResponse(recordB);
-
-  if (respA.missing) warnMissing(recordPathA);
-  if (respB.missing) warnMissing(recordPathB);
-
-  const judged = await runPairwiseJudge(goal, respA.text, respB.text);
+  const verdict = await judgePair({ taskId: "pairwise", goal, recordPathA, recordPathB });
 
   return {
     verdictVersion: 1,
     goal,
     inputs: [
-      inputOf(recordPathA, respA),
-      inputOf(recordPathB, respB),
+      pairwiseInputOf(verdict.inputs[0]),
+      pairwiseInputOf(verdict.inputs[1]),
     ],
-    winner: judged.winner,
-    confidence: judged.confidence,
-    reasoning: judged.reasoning,
-    generatedAt: new Date().toISOString(),
+    winner: verdict.winner,
+    confidence: verdict.confidence,
+    reasoning: verdict.reasoning,
+    generatedAt: verdict.generatedAt,
   };
 }
 
@@ -88,4 +127,27 @@ function inputOf(
     response: response.missing ? null : response.text,
     ...(response.truncated ? { truncated: true as const } : {}),
   };
+}
+
+function pairwiseInputOf(input: TaskVerdict["inputs"][number]): PairwiseVerdict["inputs"][number] {
+  return {
+    path: input.path ?? "",
+    response: input.response ?? null,
+    ...(input.truncated ? { truncated: true as const } : {}),
+  };
+}
+
+function taskInputOf(
+  filePath: string,
+  response: { text: string; missing: boolean; truncated?: true },
+): TaskVerdict["inputs"][number] {
+  return {
+    ...inputOf(filePath, response),
+    status: "ok",
+  };
+}
+
+function mapWinnerToOriginal(winner: JudgeWinner, order: "AB" | "BA"): JudgeWinner {
+  if (winner === "tie" || order === "AB") return winner;
+  return winner === "A" ? "B" : "A";
 }

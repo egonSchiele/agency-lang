@@ -4,14 +4,14 @@ import type { PairwiseVerdict } from "@/eval/judge/types.js";
 import type { OptimizeJudgeSample, OptimizeTaskVerdict, OptimizeWinner } from "./types.js";
 
 export type PairwiseJudge = (
-  rubric: string,
+  goal: string,
   recordPathA: string,
   recordPathB: string,
 ) => Promise<Pick<PairwiseVerdict, "winner" | "confidence" | "reasoning">>;
 
 export async function judgeCandidateAgainstChampion(args: {
   taskId: string;
-  rubric: string;
+  goal: string;
   championRecordPath: string;
   candidateRecordPath: string;
   samples: number;
@@ -23,7 +23,7 @@ export async function judgeCandidateAgainstChampion(args: {
     const championFirst = sampleIndex % 2 === 0;
     const recordA = championFirst ? args.championRecordPath : args.candidateRecordPath;
     const recordB = championFirst ? args.candidateRecordPath : args.championRecordPath;
-    const verdict = await judge(args.rubric, recordA, recordB);
+    const verdict = await judge(args.goal, recordA, recordB);
     samples.push({
       winner: mapWinner(verdict.winner, championFirst),
       confidence: verdict.confidence,

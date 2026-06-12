@@ -1,5 +1,5 @@
 import type { AgencyConfig } from "@/config.js";
-import type { EvalRunTask } from "@/eval/runTypes.js";
+import type { EvalTask } from "@/eval/runTypes.js";
 
 export type OptimizeDecision = "baseline" | "accepted" | "rejected" | "validation-failed";
 export type OptimizeWinner = "champion" | "candidate" | "tie";
@@ -67,7 +67,7 @@ export type OptimizeResult = {
 export type OptimizeLoopConfig = {
   runtime: {
     config: AgencyConfig;
-    tasks: EvalRunTask[];
+    tasks: EvalTask[];
   };
   target: {
     agentSource: string;

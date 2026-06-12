@@ -2,17 +2,17 @@ import * as fs from "fs";
 import * as path from "path";
 
 import {
-  prepareEvalRunTask,
-  recordEvalRunTaskPrepareFailure,
-  recordEvalRunTaskRunFailure,
-  recordEvalRunTaskSuccess,
+  prepareEvalTask,
+  recordEvalTaskPrepareFailure,
+  recordEvalTaskRunFailure,
+  recordEvalTaskSuccess,
   shouldExtractStatelog,
   type EvalRunState,
-  type PreparedEvalRunTask,
+  type PreparedEvalTask,
 } from "./runArtifacts.js";
 import type {
   EvalRunCompiledAgent,
-  EvalRunTask,
+  EvalTask,
   EvalRunTaskResult,
 } from "./runTypes.js";
 
@@ -43,7 +43,7 @@ export type EvalTaskRunner = (args: {
 export type EvalRecordExtractor = (args: {
   statelogPath: string;
   outPath: string;
-  task: EvalRunTask;
+  task: EvalTask;
 }) => Promise<void>;
 
 /**
@@ -59,19 +59,19 @@ export type EvalRecordExtractor = (args: {
  */
 export async function runEvalTask(args: {
   state: EvalRunState;
-  task: EvalRunTask;
+  task: EvalTask;
   compiled: EvalRunCompiledAgent;
   defaultNode: string;
   runner: EvalTaskRunner;
   extractor: EvalRecordExtractor;
 }): Promise<EvalRunTaskResult> {
-  let prepared: PreparedEvalRunTask;
+  let prepared: PreparedEvalTask;
   try {
-    prepared = prepareEvalRunTask(args.state, args.task);
+    prepared = prepareEvalTask(args.state, args.task);
   } catch (err) {
     const message = errMessage(err);
     console.error(`[evalRun] prepare failed for task ${args.task.task_id}: ${message}`);
-    return recordEvalRunTaskPrepareFailure(args.task.task_id, message);
+    return recordEvalTaskPrepareFailure(args.task.task_id, message);
   }
 
   const runResult = await args.runner({
@@ -82,7 +82,7 @@ export async function runEvalTask(args: {
     statelogPath: prepared.statelogPath,
   });
   if (!runResult.ok) {
-    return recordEvalRunTaskRunFailure(prepared, runResult.errorMessage);
+    return recordEvalTaskRunFailure(prepared, runResult.errorMessage);
   }
 
   const statelogPath = runResult.statelogPath ?? prepared.statelogPath;
@@ -97,14 +97,14 @@ export async function runEvalTask(args: {
     } catch (err) {
       const message = errMessage(err);
       console.error(`[evalRun] extract failed for task ${args.task.task_id}: ${message}`);
-      return recordEvalRunTaskRunFailure(prepared, message);
+      return recordEvalTaskRunFailure(prepared, message);
     }
   }
 
-  return recordEvalRunTaskSuccess(prepared);
+  return recordEvalTaskSuccess(prepared);
 }
 
-function ensureStatelogAtExpectedPath(prepared: PreparedEvalRunTask, statelogPath: string): void {
+function ensureStatelogAtExpectedPath(prepared: PreparedEvalTask, statelogPath: string): void {
   if (statelogPath !== prepared.statelogPath || shouldExtractStatelog(statelogPath)) return;
 
   const fallbackPath = path.join(prepared.workdirPath, "statelog.log");

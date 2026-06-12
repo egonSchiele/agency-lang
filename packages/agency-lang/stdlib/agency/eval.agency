@@ -1,18 +1,84 @@
 import { run, CompiledProgram } from "std::agency"
 import {
   _initEvalRun,
-  _prepareEvalRunTask,
-  _finalizeEvalRunTask,
+  _prepareEvalTask,
+  _finalizeEvalTask,
   _finishEvalRun,
   _formatEvalRunFailure,
   _evalExtract,
   _evalJudge,
+  _evalJudgeSuite,
   _optimize,
 } from "agency-lang/stdlib-lib/agencyEval.js"
 
-export type EvalRunTask = {
+/** @module
+  Helpers for running and judging eval suites from Agency code.
+
+  ## Run a task suite
+
+  ```ts
+  import { compile } from "std::agency"
+  import { evalRun } from "std::agency/eval"
+
+  node main() {
+    const agent = compile("agent.agency")
+    const result = evalRun(agent, [
+      { task_id: "capital-france", goal: "Return Paris", args: {} },
+    ])
+    print(result.runDir)
+  }
+  ```
+
+  ## Extract and judge eval records
+
+  ```ts
+  import { evalExtract, evalJudge } from "std::agency/eval"
+
+  node main() {
+    const record = evalExtract("runs/demo/tasks/capital-france/statelog.jsonl")
+    print(record.evalOutputs)
+
+    const verdict = evalJudge(
+      "Prefer the answer that names the capital exactly.",
+      "runs/a/tasks/capital-france/eval-record.json",
+      "runs/b/tasks/capital-france/eval-record.json",
+    )
+    print(verdict.winner)
+  }
+  ```
+
+  ## Judge whole run directories
+
+  ```ts
+  import { evalJudgeSuite } from "std::agency/eval"
+
+  node main() {
+    const verdict = evalJudgeSuite("runs/baseline", "runs/candidate", [
+      { task_id: "capital-france", goal: "Return Paris", args: {} },
+    ])
+    print(verdict.winner)
+  }
+  ```
+
+  ## Optimize an agent prompt
+
+  ```ts
+  import { optimize } from "std::agency/eval"
+  import { read } from "std::fs"
+
+  node main() {
+    const source = read("agent.agency")
+    const result = optimize({}, source, [
+      { task_id: "capital-france", goal: "Return Paris", args: {} },
+    ], "Prefer concise, exact answers.")
+    print(result.championIter)
+  }
+  ```
+*/
+
+export type EvalTask = {
   task_id: string;
-  rubric: string;
+  goal: string;
   args: Record<string, any>;
   node?: string;
   working_dir?: string
@@ -38,7 +104,7 @@ export type EvalRunResult = {
 
 export def evalRun(
   compiled: CompiledProgram,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   node: string = "main",
   runsDir: string = "runs/",
   runId: string = "",
@@ -62,7 +128,7 @@ export def evalRun(
   let lastStatus = "success"
 
   for (task in state.tasks) {
-    const prep = _prepareEvalRunTask(state, task)
+    const prep = _prepareEvalTask(state, task)
     if (prep.ok) {
       const prepared = prep.prepared
       const runResult = run(
@@ -76,7 +142,7 @@ export def evalRun(
       if (isFailure(runResult)) {
         runError = _formatEvalRunFailure(runResult)
       }
-      const taskResult = _finalizeEvalRunTask(prepared, runError)
+      const taskResult = _finalizeEvalTask(prepared, runError)
       results.push(taskResult)
       lastStatus = taskResult.status
     } else {
@@ -162,12 +228,12 @@ export type PairwiseVerdict = {
 }
 
 export def evalJudge(
-  rubric: string,
+  goal: string,
   recordPathA: string,
   recordPathB: string,
 ): PairwiseVerdict {
   """
-  Pairwise-judge two eval records against a rubric. Returns a
+  Pairwise-judge two eval records against a goal. Returns a
   structured verdict naming the winner ("A", "B", or "tie"), the
   judge's confidence as an integer from 0 to 100, and the
   reasoning the judge produced.
@@ -183,12 +249,81 @@ export def evalJudge(
   high-precision callers should invoke twice with swapped order and
   reconcile the verdicts.
 
-  @param rubric - What the judge should grade against. Per-task rubrics
+  @param goal - What the judge should grade against. Per-task goals
     from an eval suite are the typical input.
   @param recordPathA - Path to the first eval record JSON file
   @param recordPathB - Path to the second eval record JSON file
   """
-  return _evalJudge(rubric, recordPathA, recordPathB)
+  return _evalJudge(goal, recordPathA, recordPathB)
+}
+
+export type JudgeAggregationPolicy = {
+  samples: number;
+  confidenceThreshold: number;
+  marginThreshold: number;
+  positionBias: string
+}
+
+export type TaskVerdictInput = {
+  path?: string;
+  status: string;
+  response?: string;
+  truncated?: boolean;
+  errorMessage?: string
+}
+
+export type JudgeSample = {
+  winner: string;
+  confidence: number;
+  reasoning: string;
+  order: string
+}
+
+export type TaskVerdict = {
+  taskId: string;
+  goal: string;
+  inputs: TaskVerdictInput[];
+  winner: string;
+  confidence: number;
+  reasoning: string;
+  samples: JudgeSample[];
+  generatedAt: string
+}
+
+export type SuiteVerdict = {
+  verdictVersion: number;
+  generatedAt: string;
+  policy: JudgeAggregationPolicy;
+  winsA: number;
+  winsB: number;
+  ties: number;
+  winner: string;
+  perTask: TaskVerdict[]
+}
+
+export def evalJudgeSuite(
+  runA: string,
+  runB: string,
+  tasks: EvalTask[],
+  samples: number = 3,
+  confidenceThreshold: number = 50,
+  marginThreshold: number = 0,
+  positionBias: string = "swap",
+): SuiteVerdict {
+  """
+  Judge two eval run directories by task id and aggregate the results into a
+  suite verdict. Missing or failed task records are handled deterministically
+  without calling the LLM judge; successful tasks are judged pairwise.
+
+  @param runA - Path to the first eval run directory
+  @param runB - Path to the second eval run directory
+  @param tasks - Task suite defining task ids and goals to compare
+  @param samples - Judge samples per task
+  @param confidenceThreshold - Minimum task confidence counted as a suite win
+  @param marginThreshold - Suite win margin required to avoid an overall tie
+  @param positionBias - Position bias control: "swap" or "none"
+  """
+  return _evalJudgeSuite(runA, runB, tasks, samples, confidenceThreshold, marginThreshold, positionBias)
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +358,7 @@ export type OptimizeResult = {
 export def optimize(
   config: Record<string, any>,
   agentSource: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   goal: string,
   node: string = "main",
   iterations: number = 5,

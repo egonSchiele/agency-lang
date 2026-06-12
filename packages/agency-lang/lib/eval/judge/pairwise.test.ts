@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
-import { judgePairwise } from "./pairwise.js";
+import { judgePair, judgePairwise } from "./pairwise.js";
 
 vi.mock("@/cli/runAgencyAgent.js", () => ({
   runAgencyAgent: vi.fn(),
@@ -61,6 +61,72 @@ describe("judgePairwise", () => {
     expect(verdict.confidence).toBe(87);
     expect(verdict.reasoning).toBe("A is more precise.");
     expect(new Date(verdict.generatedAt).toString()).not.toBe("Invalid Date");
+  });
+
+  it("returns a task verdict from judgePair", async () => {
+    const a = path.join(fixturesDir, "v2-A.eval.json");
+    const b = path.join(fixturesDir, "v2-B.eval.json");
+
+    const verdict = await judgePair({
+      taskId: "capital-india",
+      goal: "name the capital of India",
+      recordPathA: a,
+      recordPathB: b,
+    });
+
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      agent: "judgePairwise.agency",
+      node: "judgePairwise",
+      args: {
+        goal: "name the capital of India",
+        responseA: "New Delhi",
+        responseB: "Delhi",
+      },
+      config: {},
+    }));
+    expect(verdict).toMatchObject({
+      taskId: "capital-india",
+      goal: "name the capital of India",
+      winner: "A",
+      confidence: 87,
+      samples: [{ winner: "A", confidence: 87, order: "AB" }],
+      inputs: [
+        { path: a, response: "New Delhi", status: "ok" },
+        { path: b, response: "Delhi", status: "ok" },
+      ],
+    });
+    expect(new Date(verdict.generatedAt).toString()).not.toBe("Invalid Date");
+  });
+
+  it("requires judgePair callers to provide a task id", async () => {
+    const a = path.join(fixturesDir, "v2-A.eval.json");
+    const b = path.join(fixturesDir, "v2-B.eval.json");
+
+    await expect(judgePair({
+      goal: "name the capital of India",
+      recordPathA: a,
+      recordPathB: b,
+    } as any)).rejects.toThrow(/taskId/);
+    expect(mockedRunAgencyAgent).not.toHaveBeenCalled();
+  });
+
+  it("keeps swapped-order samples in judge order while mapping the task winner", async () => {
+    const a = path.join(fixturesDir, "v2-A.eval.json");
+    const b = path.join(fixturesDir, "v2-B.eval.json");
+
+    const verdict = await judgePair({
+      taskId: "capital-india",
+      goal: "name the capital of India",
+      recordPathA: a,
+      recordPathB: b,
+      order: "BA",
+    });
+
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: "Delhi", responseB: "New Delhi" }),
+    }));
+    expect(verdict.winner).toBe("B");
+    expect(verdict.samples).toEqual([{ winner: "A", confidence: 87, reasoning: "A is more precise.", order: "BA" }]);
   });
 
   it("returns a verdict for legacy v1 records", async () => {

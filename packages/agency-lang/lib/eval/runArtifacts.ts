@@ -4,7 +4,7 @@ import * as path from "path";
 import { assertEvalRunId, assertEvalTaskId } from "./ids.js";
 import type {
   EvalRunResult,
-  EvalRunTask,
+  EvalTask,
   EvalRunTaskResult,
 } from "./runTypes.js";
 
@@ -17,8 +17,8 @@ export type EvalRunState = {
   continueOnError: boolean;
 };
 
-export type PreparedEvalRunTask = {
-  task: EvalRunTask;
+export type PreparedEvalTask = {
+  task: EvalTask;
   taskDir: string;
   taskJsonPath: string;
   statelogPath: string;
@@ -32,7 +32,7 @@ export function initializeEvalRun(args: {
   runsDir: string;
   agent: string;
   tasksSource: string;
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
   continueOnError: boolean;
   startedAt: Date;
 }): EvalRunState {
@@ -40,6 +40,12 @@ export function initializeEvalRun(args: {
 
   const runDir = path.resolve(args.runsDir, args.runId);
   const tasksDir = path.join(runDir, "tasks");
+  if (fs.existsSync(runDir)) {
+    throw new Error(
+      `Run directory already exists: ${runDir}.
+Choose a different --run-id or delete the existing directory.`,
+    );
+  }
   fs.mkdirSync(tasksDir, { recursive: true });
 
   writeJson(path.join(runDir, "config.json"), {
@@ -61,10 +67,10 @@ export function initializeEvalRun(args: {
   };
 }
 
-export function prepareEvalRunTask(
+export function prepareEvalTask(
   state: EvalRunState,
-  task: EvalRunTask,
-): PreparedEvalRunTask {
+  task: EvalTask,
+): PreparedEvalTask {
   assertEvalTaskId(task.task_id);
 
   const taskDir = path.join(state.tasksDir, task.task_id);
@@ -81,7 +87,7 @@ export function prepareEvalRunTask(
     fs.mkdirSync(workdirPath, { recursive: true });
   }
 
-  const prepared: PreparedEvalRunTask = {
+  const prepared: PreparedEvalTask = {
     task,
     taskDir,
     taskJsonPath: path.join(taskDir, "task.json"),
@@ -110,7 +116,7 @@ export function prepareEvalRunTask(
  * were prepared (e.g. invalid task_id, working_dir validation). The result
  * carries no on-disk paths because none were allocated.
  */
-export function recordEvalRunTaskPrepareFailure(
+export function recordEvalTaskPrepareFailure(
   taskId: string,
   errorMessage: string,
 ): EvalRunTaskResult {
@@ -129,8 +135,8 @@ export function recordEvalRunTaskPrepareFailure(
  * extract. Writes the error message to the task's error.txt for offline
  * inspection.
  */
-export function recordEvalRunTaskRunFailure(
-  prepared: PreparedEvalRunTask,
+export function recordEvalTaskRunFailure(
+  prepared: PreparedEvalTask,
   errorMessage: string,
 ): EvalRunTaskResult {
   fs.writeFileSync(prepared.errorPath, errorMessage);
@@ -144,8 +150,8 @@ export function recordEvalRunTaskRunFailure(
   };
 }
 
-export function recordEvalRunTaskSuccess(
-  prepared: PreparedEvalRunTask,
+export function recordEvalTaskSuccess(
+  prepared: PreparedEvalTask,
 ): EvalRunTaskResult {
   return {
     taskId: prepared.task.task_id,

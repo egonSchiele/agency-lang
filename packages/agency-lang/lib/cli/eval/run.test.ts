@@ -64,6 +64,20 @@ describe("eval run CLI", () => {
     expect(fs.existsSync(path.join(runsDir, "r1", "tasks", result.tasks[0].taskId, "eval-record.json"))).toBe(true);
   });
 
+  it("throws setup failures before creating a run directory", async () => {
+    const runsDir = path.join(tmpDir, "runs");
+
+    await expect(evalRun({
+      agent: path.join(tmpDir, "missing.agency"),
+      goal: "do it",
+      runsDir,
+      runId: "setup-failed",
+      continueOnError: true,
+    })).rejects.toThrow();
+
+    expect(fs.existsSync(path.join(runsDir, "setup-failed"))).toBe(false);
+  });
+
   it("extracts from workdir statelog.log when runtime overrides do not redirect the log file", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");
@@ -104,8 +118,8 @@ describe("eval run CLI", () => {
     const tasksFile = path.join(tmpDir, "tasks.json");
     fs.writeFileSync(tasksFile, JSON.stringify({
       tasks: [
-        { task_id: "first", rubric: "r1", args: {} },
-        { task_id: "second", rubric: "r2", args: {} },
+        { task_id: "first", goal: "g1", args: {} },
+        { task_id: "second", goal: "g2", args: {} },
       ],
     }));
 
@@ -130,5 +144,11 @@ describe("eval run CLI", () => {
     expect(runs).toBe(1);
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0]).toMatchObject({ taskId: "first", status: "error", errorMessage: "nope" });
+    expect(fs.readFileSync(path.join(runsDir, "stop", "tasks", "first", "error.txt"), "utf-8")).toBe("nope");
+    expect(JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8"))).toMatchObject({
+      okCount: 0,
+      errorCount: 1,
+      tasks: [{ taskId: "first", status: "error", errorMessage: "nope" }],
+    });
   });
 });

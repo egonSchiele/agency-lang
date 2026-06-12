@@ -7,9 +7,11 @@ import type { AgencyConfig } from "@/config.js";
 import { loadTasks } from "@/eval/loadTasks.js";
 import { optimizeLoop } from "@/optimize/loop.js";
 import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
+import { parseAgency } from "@/parser.js";
 import { approve } from "@/runtime/interrupts.js";
 import { getRuntimeContext, runInBootstrapFrame } from "@/runtime/asyncContext.js";
 import { RuntimeContext } from "@/runtime/state/context.js";
+import type { AgencyProgram } from "@/types.js";
 
 import { resolveEvalRunTarget } from "./run.js";
 
@@ -92,9 +94,11 @@ function buildOptimizeLoopConfig(
 }
 
 function optimizeWorkingDir(agentFile: string): string {
+  const files = localAgencyFileClosure(agentFile);
+  const importClosureDir = commonAncestor(files.map((file) => path.dirname(file)));
   const cwd = process.cwd();
-  if (isInsideOrSame(agentFile, cwd)) return cwd;
-  return path.dirname(agentFile);
+  if (isInsideOrSame(importClosureDir, cwd)) return cwd;
+  return importClosureDir;
 }
 
 function isInsideOrSame(candidate: string, parent: string): boolean {
@@ -104,4 +108,67 @@ function isInsideOrSame(candidate: string, parent: string): boolean {
 
 function relativeAgencyPath(baseDir: string, absoluteFile: string): string {
   return path.relative(baseDir, absoluteFile).split(path.sep).join("/");
+}
+
+function localAgencyFileClosure(entryFile: string): string[] {
+  const files: string[] = [];
+  const visited: Record<string, true> = {};
+  visitLocalAgencyFile(entryFile, visited, files);
+  return files;
+}
+
+function visitLocalAgencyFile(
+  absoluteFile: string,
+  visited: Record<string, true>,
+  files: string[],
+): void {
+  const filePath = path.resolve(absoluteFile);
+  const canonicalFile = fs.realpathSync(absoluteFile);
+  if (visited[canonicalFile]) return;
+  visited[canonicalFile] = true;
+  files.push(filePath);
+
+  const source = fs.readFileSync(canonicalFile, "utf-8");
+  const parseResult = parseAgency(source, {}, false);
+  if (!parseResult.success) {
+    throw new Error(`Failed to parse optimize agent file ${canonicalFile}: ${parseResult.message ?? "parse error"}`);
+  }
+
+  for (const importPath of localAgencyImports(parseResult.result)) {
+    visitLocalAgencyFile(path.resolve(path.dirname(filePath), importPath), visited, files);
+  }
+}
+
+function localAgencyImports(program: AgencyProgram): string[] {
+  const imports: string[] = [];
+  for (const node of program.nodes) {
+    if (node.type === "importStatement" && isLocalAgencyModulePath(node.modulePath)) {
+      imports.push(node.modulePath);
+    } else if (node.type === "importNodeStatement" && isLocalAgencyModulePath(node.agencyFile)) {
+      imports.push(node.agencyFile);
+    } else if (node.type === "exportFromStatement" && isLocalAgencyModulePath(node.modulePath)) {
+      imports.push(node.modulePath);
+    }
+  }
+  return imports;
+}
+
+function isLocalAgencyModulePath(modulePath: string): boolean {
+  return (
+    (modulePath.startsWith("./") || modulePath.startsWith("../")) &&
+    modulePath.endsWith(".agency")
+  );
+}
+
+function commonAncestor(paths: string[]): string {
+  if (paths.length === 0) return process.cwd();
+  const [first, ...rest] = paths.map((candidate) => path.resolve(candidate).split(path.sep));
+  const prefix: string[] = [];
+  for (let index = 0; index < first.length; index += 1) {
+    const segment = first[index];
+    if (rest.some((candidate) => candidate[index] !== segment)) break;
+    prefix.push(segment);
+  }
+  const joined = prefix.join(path.sep);
+  return joined === "" ? path.sep : joined;
 }

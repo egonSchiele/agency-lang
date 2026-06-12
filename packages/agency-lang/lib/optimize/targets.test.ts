@@ -133,6 +133,51 @@ optimize const bPrompt = "b"
     ]);
   });
 
+  it("follows local named re-exports", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(dir, "main.agency", `
+import { prompt } from "./lib.agency"
+optimize const rootPrompt = "root"
+`);
+    writeAgency(dir, "lib.agency", `
+export { prompt } from "./prompts.agency"
+`);
+    writeAgency(dir, "prompts.agency", `
+optimize const prompt = "exported"
+`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+
+    expect(targetSet.targets.map((target) => target.id)).toEqual([
+      "main.agency:global:rootPrompt",
+      "prompts.agency:global:prompt",
+    ]);
+    expect(Object.keys(targetSet.files).sort()).toEqual([
+      "lib.agency",
+      "main.agency",
+      "prompts.agency",
+    ]);
+  });
+
+  it("follows local star re-exports", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(dir, "main.agency", `
+import { prompt } from "./lib.agency"
+`);
+    writeAgency(dir, "lib.agency", `
+export * from "./prompts.agency"
+`);
+    writeAgency(dir, "prompts.agency", `
+optimize const prompt = "exported"
+`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+
+    expect(targetSet.targets.map((target) => target.id)).toEqual([
+      "prompts.agency:global:prompt",
+    ]);
+  });
+
   it("collapses duplicate import spellings by canonical path", () => {
     const dir = makeTempDir();
     const entry = writeAgency(dir, "foo.agency", `

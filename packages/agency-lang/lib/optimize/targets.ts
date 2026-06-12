@@ -177,6 +177,8 @@ function localAgencyImports(program: AgencyProgram): string[] {
       imports.push(node.modulePath);
     } else if (node.type === "importNodeStatement" && isLocalAgencyModulePath(node.agencyFile)) {
       imports.push(node.agencyFile);
+    } else if (node.type === "exportFromStatement" && isLocalAgencyModulePath(node.modulePath)) {
+      imports.push(node.modulePath);
     }
   }
   return imports;

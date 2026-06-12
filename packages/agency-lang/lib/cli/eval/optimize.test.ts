@@ -115,6 +115,50 @@ describe("eval optimize CLI", () => {
     });
   });
 
+  it("chooses a working directory that contains parent-relative local imports", async () => {
+    fs.mkdirSync(path.join(tmpDir, "app"), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, "shared"), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, "tools"), { recursive: true });
+    const agentFile = path.join(tmpDir, "app", "agent.agency");
+    fs.writeFileSync(agentFile, `
+import { prompt } from "../shared/prompts.agency"
+node main() {}
+`);
+    fs.writeFileSync(path.join(tmpDir, "shared", "prompts.agency"), `
+optimize const prompt = "shared"
+`);
+    const tasksFile = path.join(tmpDir, "tools", "tasks.json");
+    fs.writeFileSync(tasksFile, JSON.stringify({
+      tasks: [{ task_id: "first", goal: "be correct", args: {} }],
+    }));
+    process.chdir(path.join(tmpDir, "tools"));
+
+    const capture: { loopConfig?: OptimizeLoopConfig } = {};
+    await evalOptimize(
+      {
+        agent: "../app/agent.agency:main",
+        tasks: "tasks.json",
+        goal: "improve correctness",
+        config: {},
+      },
+      {
+        makeRunId: () => "run",
+        optimizeLoop: async (config) => {
+          capture.loopConfig = config;
+          return optimizeResult(config);
+        },
+      },
+    );
+
+    expect(capture.loopConfig).toMatchObject({
+      target: {
+        agentFilename: "app/agent.agency",
+        workingDir: path.dirname(process.cwd()),
+        writebackPath: path.join(path.dirname(process.cwd()), "app", "agent.agency"),
+      },
+    });
+  });
+
   it("uses configured optimize runs dir defaults", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");

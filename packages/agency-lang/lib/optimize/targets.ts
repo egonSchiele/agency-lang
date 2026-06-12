@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
 import type { AgencyNode, AgencyProgram, Assignment, PromptSegment } from "@/types.js";
 import { expressionToString, walkNodes } from "@/utils/node.js";
@@ -85,8 +86,8 @@ function visitFile(
   rejectLegacyOptimizeTags(parseResult.result, file);
   collectTargets(parseResult.result, file, canonicalFile, targets);
 
-  for (const importPath of localAgencyImports(parseResult.result)) {
-    visitFile(path.resolve(path.dirname(canonicalFile), importPath), baseDir, visited, files, targets);
+  for (const importPath of agencyImportTargets(parseResult.result, { localOnly: true })) {
+    visitFile(resolveAgencyImportPath(importPath, canonicalFile), baseDir, visited, files, targets);
   }
 }
 
@@ -167,27 +168,6 @@ function rejectLegacyOptimizeTags(program: AgencyProgram, file: string): void {
 function legacyOptimizeError(file: string): Error {
   return new Error(
     `\`@optimize(...)\` is no longer supported in ${file}. Mark the declaration to optimize instead, for example:\n\n  optimize const prompt = "..."`,
-  );
-}
-
-function localAgencyImports(program: AgencyProgram): string[] {
-  const imports: string[] = [];
-  for (const node of program.nodes) {
-    if (node.type === "importStatement" && isLocalAgencyModulePath(node.modulePath)) {
-      imports.push(node.modulePath);
-    } else if (node.type === "importNodeStatement" && isLocalAgencyModulePath(node.agencyFile)) {
-      imports.push(node.agencyFile);
-    } else if (node.type === "exportFromStatement" && isLocalAgencyModulePath(node.modulePath)) {
-      imports.push(node.modulePath);
-    }
-  }
-  return imports;
-}
-
-function isLocalAgencyModulePath(modulePath: string): boolean {
-  return (
-    (modulePath.startsWith("./") || modulePath.startsWith("../")) &&
-    modulePath.endsWith(".agency")
   );
 }
 

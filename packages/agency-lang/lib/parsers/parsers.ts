@@ -36,6 +36,7 @@ import {
   optional,
   or,
   parseError,
+  peek,
   Parser,
   ParserResult,
   quotedString,
@@ -3133,14 +3134,32 @@ const staticKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
-const optimizeKeywordParser: Parser<boolean> = (input: string): ParserResult<boolean> => {
-  const result = seqC(str("optimize"), spaces)(input);
-  if (!result.success) return success(false, input);
-  const nextToken = result.rest.trimStart();
-  if (/^(const|let|static)\b/.test(nextToken)) {
-    return success(true, result.rest);
+const optimizeAssignmentPrefixParser: Parser<boolean> = or(
+  map(seqC(str("static"), spaces, peek(str("const"))), () => true),
+  map(peek(or(str("const"), str("let"))), () => false),
+);
+
+const optimizeAssignmentParser: Parser<Assignment> = (input: string): ParserResult<Assignment> => {
+  const parser = seqC(
+    str("optimize"),
+    spaces,
+    capture(optimizeAssignmentPrefixParser, "isStatic"),
+    capture(assignmentParser, "assignment"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+
+  const assignment = result.result.assignment;
+  if (!assignment.declKind) {
+    return failure("optimize requires 'let' or 'const' (e.g., 'optimize const prompt = ...')", input);
   }
-  return success(false, input);
+  if (result.result.isStatic && assignment.declKind !== "const") {
+    return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
+  }
+
+  const out = { ...assignment, optimize: true };
+  if (result.result.isStatic) out.static = true;
+  return success(out, result.rest);
 };
 
 // Parse "export" and "static" in any order before "let"/"const"
@@ -3148,12 +3167,10 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   let rest = input;
   let isExported = false;
   let isStatic = false;
-  let isOptimize = false;
 
-  const optimizeResult = optimizeKeywordParser(rest);
-  if (optimizeResult.success && optimizeResult.result) {
-    isOptimize = true;
-    rest = optimizeResult.rest;
+  const optimizeResult = optimizeAssignmentParser(rest);
+  if (optimizeResult.success) {
+    return optimizeResult;
   }
 
   // Try up to 2 legacy modifiers in any order
@@ -3181,18 +3198,10 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   }
 
   // If no modifiers found, this parser doesn't match
-  if (!isExported && !isStatic && !isOptimize) return failure("expected 'export', 'static', or 'optimize'", input);
-
-  if (isOptimize && isExported) {
-    return failure("export optimize declarations are unsupported in v1", input);
-  }
+  if (!isExported && !isStatic) return failure("expected 'export', 'static', or 'optimize'", input);
 
   const result = assignmentParser(rest);
   if (!result.success) return result;
-
-  if (isOptimize && !result.result.declKind) {
-    return failure("optimize requires 'let' or 'const' (e.g., 'optimize const prompt = ...')", input);
-  }
 
   if (isStatic && result.result.declKind !== "const") {
     return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
@@ -3206,7 +3215,6 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   const out = { ...result.result };
   if (isExported) out.exported = true;
   if (isStatic) out.static = true;
-  if (isOptimize) out.optimize = true;
   return success(out, result.rest);
 });
 
@@ -3233,30 +3241,6 @@ const bodyReservedModifierParser: Parser<never> = (input: string) => {
     fail("body declaration modifier"),
   )(input) as ParserResult<never>;
 };
-
-const bodyWithModifierParser: Parser<WithModifier> = withLoc((input: string) => {
-  const stmtResult = or(bodyOptimizeAssignmentParser, assignmentParser, returnStatementParser, functionCallParser)(input);
-  if (!stmtResult.success) return failure("expected statement before 'with'", input);
-
-  const modParser = seqC(
-    optionalSpaces,
-    str("with"),
-    spaces,
-    capture(or(str("approve"), str("reject"), str("propagate")), "handlerName"),
-    optionalSpacesOrNewline,
-  );
-  const modResult = modParser(stmtResult.rest);
-  if (!modResult.success) return failure("expected 'with approve/reject/propagate'", input);
-
-  return success(
-    {
-      type: "withModifier" as const,
-      statement: stmtResult.result,
-      handlerName: modResult.result.handlerName as WithModifier["handlerName"],
-    },
-    modResult.rest,
-  );
-});
 
 /**
  * `static <expression-statement>` at module top level. Routes a bare
@@ -3374,12 +3358,15 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   keywordParser,
   debug(typeAliasParser, "error in typeAliasParser"),
   tagParser,
+  bodyReservedModifierParser,
   // withModifierParser must be tried before returnStatementParser/
   // assignmentParser so that `return foo() with approve` and
   // `const x = foo() with approve` don't get partially consumed by
   // the inner statement parser, which would leave `with approve`
-  // dangling and unparseable.
-  lazy(() => bodyWithModifierParser),
+  // dangling and unparseable. bodyReservedModifierParser sits before
+  // it so top-level-only `static`/`export` declarations are still
+  // rejected inside function and node bodies.
+  lazy(() => withModifierParser),
   returnStatementParser,
   gotoStatementParser,
   interruptStatementParser,
@@ -3395,7 +3382,6 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   multiLineCommentParser,
   commentParser,
   skillParser,
-  bodyReservedModifierParser,
   bodyOptimizeAssignmentParser,
   assignmentParser,
   binOpParser,

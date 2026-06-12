@@ -5,13 +5,13 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadTasks } from "@/eval/loadTasks.js";
+import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { optimizeLoop } from "@/optimize/loop.js";
 import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
 import { parseAgency } from "@/parser.js";
 import { approve } from "@/runtime/interrupts.js";
 import { getRuntimeContext, runInBootstrapFrame } from "@/runtime/asyncContext.js";
 import { RuntimeContext } from "@/runtime/state/context.js";
-import type { AgencyProgram } from "@/types.js";
 
 import { resolveEvalRunTarget } from "./run.js";
 
@@ -138,30 +138,9 @@ function visitLocalAgencyFile(
     throw new Error(`Failed to parse optimize agent file ${canonicalFile}: ${parseResult.message ?? "parse error"}`);
   }
 
-  for (const importPath of localAgencyImports(parseResult.result)) {
-    visitLocalAgencyFile(path.resolve(path.dirname(filePath), importPath), visited, files);
+  for (const importPath of agencyImportTargets(parseResult.result, { localOnly: true })) {
+    visitLocalAgencyFile(resolveAgencyImportPath(importPath, canonicalFile), visited, files);
   }
-}
-
-function localAgencyImports(program: AgencyProgram): string[] {
-  const imports: string[] = [];
-  for (const node of program.nodes) {
-    if (node.type === "importStatement" && isLocalAgencyModulePath(node.modulePath)) {
-      imports.push(node.modulePath);
-    } else if (node.type === "importNodeStatement" && isLocalAgencyModulePath(node.agencyFile)) {
-      imports.push(node.agencyFile);
-    } else if (node.type === "exportFromStatement" && isLocalAgencyModulePath(node.modulePath)) {
-      imports.push(node.modulePath);
-    }
-  }
-  return imports;
-}
-
-function isLocalAgencyModulePath(modulePath: string): boolean {
-  return (
-    (modulePath.startsWith("./") || modulePath.startsWith("../")) &&
-    modulePath.endsWith(".agency")
-  );
 }
 
 function commonAncestor(paths: string[]): string {

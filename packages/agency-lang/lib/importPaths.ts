@@ -3,6 +3,7 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import picomatch from "picomatch";
+import type { AgencyProgram } from "./types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -194,6 +195,46 @@ export function isAgencyImport(importPath: string): boolean {
     importPath.endsWith(".agency") ||
     isStdlibImport(importPath) ||
     isPkgImport(importPath)
+  );
+}
+
+export type AgencyImportTargetsOptions = {
+  localOnly?: boolean;
+};
+
+/**
+ * Return import paths that point at Agency modules from a parsed program.
+ * Includes ordinary imports, `import node` statements, and re-exports.
+ */
+export function agencyImportTargets(
+  program: AgencyProgram,
+  options: AgencyImportTargetsOptions = {},
+): string[] {
+  const imports: string[] = [];
+  for (const node of program.nodes) {
+    let modulePath: string | null = null;
+    if (node.type === "importStatement") {
+      modulePath = node.modulePath;
+    } else if (node.type === "importNodeStatement") {
+      modulePath = node.agencyFile;
+    } else if (node.type === "exportFromStatement") {
+      modulePath = node.modulePath;
+    }
+    if (!modulePath || !isAgencyImport(modulePath)) continue;
+    if (options.localOnly && !isLocalImportTarget(modulePath)) continue;
+    imports.push(modulePath);
+  }
+  return imports;
+}
+
+function isLocalImportTarget(modulePath: string): boolean {
+  return (
+    importKind(modulePath) === "local" &&
+    (
+      modulePath.startsWith("./") ||
+      modulePath.startsWith("../") ||
+      modulePath.startsWith("/")
+    )
   );
 }
 

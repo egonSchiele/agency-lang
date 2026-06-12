@@ -3344,6 +3344,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   multiLineCommentParser,
   commentParser,
   skillParser,
+  modifiedAssignmentParser,
   assignmentParser,
   binOpParser,
   booleanParser,

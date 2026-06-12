@@ -22,7 +22,6 @@ import {
 } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
-import renderJudgePairwiseEvaluate from "@/templates/cli/judgePairwiseEvaluate.js";
 import { compile } from "./commands.js";
 import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
@@ -217,6 +216,9 @@ type ExecuteNodeArgs = {
   // Optional writable directory for transient evaluate/result files. Useful
   // for bundled agents that may live in a read-only package install.
   scratchDir?: string;
+  // Optional stdout/stderr buffer limit for callers that expose resource
+  // controls. Defaults to the historical executeNodeAsync limit.
+  maxBufferBytes?: number;
 };
 
 export async function executeNodeAsync({
@@ -232,6 +234,7 @@ export async function executeNodeAsync({
   useTestLLMProvider,
   argv,
   scratchDir,
+  maxBufferBytes,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -304,7 +307,7 @@ export async function executeNodeAsync({
     // other code that reads command-line flags.
     const nodeArgs = argv !== undefined ? [evaluateFile, ...argv] : [evaluateFile];
     const { stdout, stderr } = await execFileAsync("node", nodeArgs, {
-      maxBuffer: 10 * 1024 * 1024,
+      maxBuffer: maxBufferBytes ?? 10 * 1024 * 1024,
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
       ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
@@ -480,75 +483,6 @@ export async function executeJudgeAsync(
     agencyFileBaseName,
   });
   return { score: raw.score, reasoning: raw.reasoning, stdout, stderr };
-}
-
-type ExecutePairwiseJudgeArgs = {
-  baseName: string;
-  goal: string;
-  responseA: string;
-  responseB: string;
-};
-
-export async function executeJudgePairwiseAsync({
-  baseName,
-  goal,
-  responseA,
-  responseB,
-}: ExecutePairwiseJudgeArgs): Promise<{
-  winner: "A" | "B" | "tie";
-  confidence: number;
-  reasoning: string;
-  stdout: string;
-  stderr: string;
-}> {
-  const currentDir = path.dirname(new URL(import.meta.url).pathname);
-  const { raw, stdout, stderr } = await runAgencyJudge<
-    { goal: string; responseA: string; responseB: string },
-    unknown
-  >({
-    judgeAgencyFile: path.resolve(currentDir, "../agents/judgePairwise.agency"),
-    renderRunner: renderJudgePairwiseEvaluate,
-    templateData: {
-      goal: JSON.stringify(goal),
-      responseA: JSON.stringify(responseA),
-      responseB: JSON.stringify(responseB),
-    },
-    agencyFileBaseName: baseName,
-  });
-
-  assertValidPairwiseResult(raw);
-  return { ...raw, stdout, stderr };
-}
-
-export function assertValidPairwiseResult(raw: unknown): asserts raw is {
-  winner: "A" | "B" | "tie";
-  confidence: number;
-  reasoning: string;
-} {
-  if (raw === null || typeof raw !== "object") {
-    throw new Error("Pairwise judge returned a non-object result");
-  }
-  const result = raw as Record<string, unknown>;
-  if (
-    result.winner !== "A" &&
-    result.winner !== "B" &&
-    result.winner !== "tie"
-  ) {
-    throw new Error(`Pairwise judge returned invalid winner: ${String(result.winner)}`);
-  }
-  if (
-    typeof result.confidence !== "number" ||
-    !Number.isInteger(result.confidence) ||
-    result.confidence < 0 ||
-    result.confidence > 100
-  ) {
-    throw new Error(
-      `Pairwise judge returned invalid confidence: ${String(result.confidence)}`,
-    );
-  }
-  if (typeof result.reasoning !== "string") {
-    throw new Error("Pairwise judge returned invalid reasoning");
-  }
 }
 
 export function* findRecursively(

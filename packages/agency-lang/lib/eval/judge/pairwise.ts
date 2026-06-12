@@ -1,18 +1,20 @@
 import * as fs from "fs";
 
-import { executeJudgePairwiseAsync } from "@/cli/util.js";
-import type { PairwiseVerdict } from "./types.js";
+import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
+import type { PairwiseJudgeResult, PairwiseVerdict } from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
+import { z } from "zod";
 
-export type JudgePairwiseOptions = {
-  baseName?: string;
-};
+const PairwiseJudgeResultSchema = z.object({
+  winner: z.union([z.literal("A"), z.literal("B"), z.literal("tie")]),
+  confidence: z.number().int().min(0).max(100),
+  reasoning: z.string(),
+});
 
 export async function judgePairwise(
   goal: string,
   recordPathA: string,
   recordPathB: string,
-  opts: JudgePairwiseOptions = {},
 ): Promise<PairwiseVerdict> {
   const recordA = readJson(recordPathA);
   const recordB = readJson(recordPathB);
@@ -22,12 +24,7 @@ export async function judgePairwise(
   if (respA.missing) warnMissing(recordPathA);
   if (respB.missing) warnMissing(recordPathB);
 
-  const judged = await executeJudgePairwiseAsync({
-    baseName: opts.baseName ?? recordPathA.replace(/\.eval\.json$/, ""),
-    goal,
-    responseA: respA.text,
-    responseB: respB.text,
-  });
+  const judged = await runPairwiseJudge(goal, respA.text, respB.text);
 
   return {
     verdictVersion: 1,
@@ -41,6 +38,28 @@ export async function judgePairwise(
     reasoning: judged.reasoning,
     generatedAt: new Date().toISOString(),
   };
+}
+
+async function runPairwiseJudge(
+  goal: string,
+  responseA: string,
+  responseB: string,
+): Promise<PairwiseJudgeResult> {
+  const result = await runAgencyAgent({
+    agent: "judgePairwise.agency",
+    node: "judgePairwise",
+    args: { goal, responseA, responseB },
+    config: {},
+  });
+  return assertPairwiseJudgeResult(result.data);
+}
+
+function assertPairwiseJudgeResult(value: unknown): PairwiseJudgeResult {
+  const parsed = PairwiseJudgeResultSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error(`Malformed pairwise judge result: ${z.prettifyError(parsed.error)}`);
+  }
+  return parsed.data;
 }
 
 function readJson(filePath: string): any {

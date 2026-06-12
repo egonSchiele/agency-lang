@@ -52,15 +52,13 @@ Helpers for running and judging eval suites from Agency code.
   }
   ```
 
-  ## Optimize an agent prompt
+  ## Optimize marked declarations
 
   ```ts
   import { optimize } from "std::agency/eval"
-  import { read } from "std::fs"
 
   node main() {
-    const source = read("agent.agency")
-    const result = optimize({}, source, [
+    const result = optimize({}, "agent.agency", ".", [
       { task_id: "capital-france", goal: "Return Paris", args: {} },
     ], "Prefer concise, exact answers.")
     print(result.championIter)
@@ -81,7 +79,7 @@ export type EvalTask = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L77))
 
 ### EvalRunTaskResult
 
@@ -96,7 +94,7 @@ export type EvalRunTaskResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L85))
 
 ### EvalRunResult
 
@@ -111,7 +109,7 @@ export type EvalRunResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L94))
 
 ### EvalValue
 
@@ -124,7 +122,7 @@ export type EvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L163))
 
 ### EvalRecord
 
@@ -147,7 +145,7 @@ export type EvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L170))
 
 ### PairwiseVerdictInput
 
@@ -159,7 +157,7 @@ export type PairwiseVerdictInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L212))
 
 ### PairwiseVerdict
 
@@ -175,7 +173,7 @@ export type PairwiseVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L220))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L218))
 
 ### JudgeAggregationPolicy
 
@@ -188,7 +186,7 @@ export type JudgeAggregationPolicy = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L260))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L258))
 
 ### TaskVerdictInput
 
@@ -202,7 +200,7 @@ export type TaskVerdictInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L267))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L265))
 
 ### JudgeSample
 
@@ -215,7 +213,7 @@ export type JudgeSample = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L273))
 
 ### TaskVerdict
 
@@ -232,7 +230,7 @@ export type TaskVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L282))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L280))
 
 ### SuiteVerdict
 
@@ -249,7 +247,7 @@ export type SuiteVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L293))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L291))
 
 ### OptimizeDecision
 
@@ -261,7 +259,7 @@ export type OptimizeDecision =
   | "validation-failed"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L333))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L331))
 
 ### OptimizeIterationResult
 
@@ -279,7 +277,7 @@ export type OptimizeIterationResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L335))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L333))
 
 ### OptimizeResult
 
@@ -296,7 +294,7 @@ export type OptimizeResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L347))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L345))
 
 ## Functions
 
@@ -331,7 +329,7 @@ Run a compiled Agency program against eval tasks, writing per-task
 
 **Returns:** [EvalRunResult](#evalrunresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L103))
 
 ### evalExtract
 
@@ -363,7 +361,7 @@ Extract a structured eval record from a statelog file. Equivalent to
 
 **Returns:** [EvalRecord](#evalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L187))
 
 ### evalJudge
 
@@ -402,7 +400,7 @@ Pairwise-judge two eval records against a goal. Returns a
 
 **Returns:** [PairwiseVerdict](#pairwiseverdict)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L228))
 
 ### evalJudgeSuite
 
@@ -436,35 +434,33 @@ Judge two eval run directories by task id and aggregate the results into a
 
 **Returns:** [SuiteVerdict](#suiteverdict)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L302))
 
 ### optimize
 
 ```ts
-optimize(config: Record<string, any>, agentSource: string, tasks: EvalTask[], goal: string, node: string, iterations: number, judgeSamples: number, acceptThreshold: number, runsDir: string, runId: string, agentFilename: string, workingDir: string, mutatorModel: string): OptimizeResult
+optimize(config: Record<string, any>, entryFile: string, workingDir: string, tasks: EvalTask[], goal: string, node: string, iterations: number, judgeSamples: number, acceptThreshold: number, runsDir: string, runId: string, mutatorModel: string): OptimizeResult
 ```
 
-Optimize the prompt marked with @optimize(prompt) in agentSource by
-  repeatedly proposing mutations, running the candidate against eval tasks,
-  and accepting candidates whose confident pairwise wins exceed losses by
-  acceptThreshold.
+Optimize declarations marked with the `optimize` modifier in an Agency file.
+  For example, `optimize const prompt = "..."` marks a string declaration the
+  optimizer may mutate while evaluating candidates against eval tasks.
 
   This stdlib function does not install any approval handler. Callers that
   want to auto-approve std::agency.run subprocess execution should wrap the
   call in their own handler; the CLI does this for `agency eval optimize`.
 
   @param config - Agency config to use for eval compilation and LLM calls
-  @param agentSource - Agency source text containing exactly one target tag
+  @param entryFile - Agency file containing the eval entrypoint
+  @param workingDir - Working directory used to resolve entryFile and imports
   @param tasks - Eval tasks to run for each candidate
   @param goal - Plain-English optimization objective for the mutator
-  @param node - Node containing the @optimize(prompt) target
+  @param node - Node to evaluate while optimizing discovered declarations
   @param iterations - Maximum candidate iterations after the baseline
   @param judgeSamples - Pairwise judge samples per task
   @param acceptThreshold - Accept when wins minus losses exceeds this value
   @param runsDir - Directory where optimization artifacts are written
   @param runId - Run id; generated by default
-  @param agentFilename - Logical filename used when materializing agentSource
-  @param workingDir - Working directory copied for candidate eval workspaces
   @param mutatorModel - Optional model override for prompt mutation
 
 **Parameters:**
@@ -472,7 +468,8 @@ Optimize the prompt marked with @optimize(prompt) in agentSource by
 | Name | Type | Default |
 |---|---|---|
 | config | `Record<string, any>` |  |
-| agentSource | `string` |  |
+| entryFile | `string` |  |
+| workingDir | `string` |  |
 | tasks | `EvalTask[]` |  |
 | goal | `string` |  |
 | node | `string` | "main" |
@@ -481,10 +478,8 @@ Optimize the prompt marked with @optimize(prompt) in agentSource by
 | acceptThreshold | `number` | 0 |
 | runsDir | `string` | "runs/optimize" |
 | runId | `string` | "" |
-| agentFilename | `string` | "agent.agency" |
-| workingDir | `string` | "." |
 | mutatorModel | `string` | "" |
 
 **Returns:** [OptimizeResult](#optimizeresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L358))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L356))

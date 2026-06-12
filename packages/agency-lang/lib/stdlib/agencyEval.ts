@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import { nanoid } from "nanoid";
 
@@ -192,7 +193,8 @@ export async function _evalJudgeSuite(
  */
 export async function _optimize(
   config: AgencyConfigLike,
-  agentSource: string,
+  entryFile: string,
+  workingDir: string,
   node: string,
   tasks: EvalTask[],
   goal: string,
@@ -201,14 +203,14 @@ export async function _optimize(
   acceptThreshold: number,
   runsDir: string,
   runId: string,
-  agentFilename: string,
-  workingDir: string,
   mutatorModel?: string,
   loop: (config: OptimizeLoopConfig) => Promise<OptimizeResult> = optimizeLoop,
 ): Promise<OptimizeResult> {
+  const resolvedEntryFile = path.resolve(workingDir, entryFile);
+  const agentSource = fs.readFileSync(resolvedEntryFile, "utf8");
   return loop({
     runtime: { config, tasks },
-    target: { agentSource, node, agentFilename, workingDir },
+    target: { agentSource, node, agentFilename: path.basename(resolvedEntryFile), workingDir },
     policy: { goal, iterations, judgeSamples, acceptThreshold, mutatorModel },
     artifacts: { runsDir, runId: runId || nanoid() },
   });

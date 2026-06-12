@@ -107,10 +107,13 @@ describe("agency eval stdlib helpers", () => {
 
   it("delegates optimize requests to the core loop without installing handlers", async () => {
     let loopConfig: OptimizeLoopConfig | null = null;
+    const entryFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
 
     const result = await _optimize(
       {},
-      "node main() {}\n",
+      entryFile,
+      tmpDir,
       "main",
       [{ task_id: "t1", goal: "g", args: {} }],
       "improve",
@@ -119,8 +122,6 @@ describe("agency eval stdlib helpers", () => {
       1,
       tmpDir,
       "run",
-      "agent.agency",
-      tmpDir,
       "mutator",
       async (config) => {
         loopConfig = config;
@@ -133,6 +134,7 @@ describe("agency eval stdlib helpers", () => {
         node: "main",
         agentFilename: "agent.agency",
         workingDir: tmpDir,
+        agentSource: "optimize const prompt = \"hi\"\nnode main() {}\n",
       },
       policy: {
         goal: "improve",

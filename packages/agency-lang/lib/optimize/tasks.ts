@@ -1,11 +1,11 @@
 import path from "path";
 
-import type { EvalRunTask } from "@/eval/runTypes.js";
+import type { EvalTask } from "@/eval/runTypes.js";
 
 export function normalizeOptimizeTasks(
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   workingDir: string,
-): EvalRunTask[] {
+): EvalTask[] {
   return tasks.map((task) => ({
     ...task,
     ...(task.working_dir

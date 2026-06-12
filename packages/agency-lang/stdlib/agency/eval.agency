@@ -1,8 +1,8 @@
 import { run, CompiledProgram } from "std::agency"
 import {
   _initEvalRun,
-  _prepareEvalRunTask,
-  _finalizeEvalRunTask,
+  _prepareEvalTask,
+  _finalizeEvalTask,
   _finishEvalRun,
   _formatEvalRunFailure,
   _evalExtract,
@@ -11,7 +11,72 @@ import {
   _optimize,
 } from "agency-lang/stdlib-lib/agencyEval.js"
 
-export type EvalRunTask = {
+/** @module
+  Helpers for running and judging eval suites from Agency code.
+
+  ## Run a task suite
+
+  ```ts
+  import { compile } from "std::agency"
+  import { evalRun } from "std::agency/eval"
+
+  node main() {
+    const agent = compile("agent.agency")
+    const result = evalRun(agent, [
+      { task_id: "capital-france", goal: "Return Paris", args: {} },
+    ])
+    print(result.runDir)
+  }
+  ```
+
+  ## Extract and judge eval records
+
+  ```ts
+  import { evalExtract, evalJudge } from "std::agency/eval"
+
+  node main() {
+    const record = evalExtract("runs/demo/tasks/capital-france/statelog.jsonl")
+    print(record.evalOutputs)
+
+    const verdict = evalJudge(
+      "Prefer the answer that names the capital exactly.",
+      "runs/a/tasks/capital-france/eval-record.json",
+      "runs/b/tasks/capital-france/eval-record.json",
+    )
+    print(verdict.winner)
+  }
+  ```
+
+  ## Judge whole run directories
+
+  ```ts
+  import { evalJudgeSuite } from "std::agency/eval"
+
+  node main() {
+    const verdict = evalJudgeSuite("runs/baseline", "runs/candidate", [
+      { task_id: "capital-france", goal: "Return Paris", args: {} },
+    ])
+    print(verdict.winner)
+  }
+  ```
+
+  ## Optimize an agent prompt
+
+  ```ts
+  import { optimize } from "std::agency/eval"
+  import { read } from "std::fs"
+
+  node main() {
+    const source = read("agent.agency")
+    const result = optimize({}, source, [
+      { task_id: "capital-france", goal: "Return Paris", args: {} },
+    ], "Prefer concise, exact answers.")
+    print(result.championIter)
+  }
+  ```
+*/
+
+export type EvalTask = {
   task_id: string;
   goal: string;
   args: Record<string, any>;
@@ -39,7 +104,7 @@ export type EvalRunResult = {
 
 export def evalRun(
   compiled: CompiledProgram,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   node: string = "main",
   runsDir: string = "runs/",
   runId: string = "",
@@ -63,7 +128,7 @@ export def evalRun(
   let lastStatus = "success"
 
   for (task in state.tasks) {
-    const prep = _prepareEvalRunTask(state, task)
+    const prep = _prepareEvalTask(state, task)
     if (prep.ok) {
       const prepared = prep.prepared
       const runResult = run(
@@ -77,7 +142,7 @@ export def evalRun(
       if (isFailure(runResult)) {
         runError = _formatEvalRunFailure(runResult)
       }
-      const taskResult = _finalizeEvalRunTask(prepared, runError)
+      const taskResult = _finalizeEvalTask(prepared, runError)
       results.push(taskResult)
       lastStatus = taskResult.status
     } else {
@@ -239,7 +304,7 @@ export type SuiteVerdict = {
 export def evalJudgeSuite(
   runA: string,
   runB: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   samples: number = 3,
   confidenceThreshold: number = 50,
   marginThreshold: number = 0,
@@ -293,7 +358,7 @@ export type OptimizeResult = {
 export def optimize(
   config: Record<string, any>,
   agentSource: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   goal: string,
   node: string = "main",
   iterations: number = 5,

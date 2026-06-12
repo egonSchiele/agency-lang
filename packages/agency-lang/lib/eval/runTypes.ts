@@ -6,8 +6,6 @@ export type EvalTask = {
   working_dir?: string;
 };
 
-export type EvalRunTask = EvalTask;
-
 export type EvalRunTaskResult = {
   taskId: string;
   status: "success" | "error";
@@ -30,7 +28,7 @@ export type EvalRunConfig = {
   runId: string;
   runsDir: string;
   agent: string;
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
   tasksSource: string;
   continueOnError: boolean;
   verbose?: boolean;

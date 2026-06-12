@@ -5,13 +5,13 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  _finalizeEvalRunTask,
+  _finalizeEvalTask,
   _finishEvalRun,
   _formatEvalRunFailure,
   _initEvalRun,
   _evalJudgeSuite,
   _optimize,
-  _prepareEvalRunTask,
+  _prepareEvalTask,
 } from "./agencyEval.js";
 import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
 
@@ -37,7 +37,7 @@ describe("agency eval stdlib helpers", () => {
     );
     expect(state.runId).not.toBe("");
 
-    const prep = _prepareEvalRunTask(state, state.tasks[0]);
+    const prep = _prepareEvalTask(state, state.tasks[0]);
     expect(prep.ok).toBe(false);
     if (!prep.ok) {
       expect(prep.result).toMatchObject({
@@ -60,13 +60,13 @@ describe("agency eval stdlib helpers", () => {
       "r1",
       true,
     );
-    const prep = _prepareEvalRunTask(state, state.tasks[0]);
+    const prep = _prepareEvalTask(state, state.tasks[0]);
     expect(prep.ok).toBe(true);
     if (!prep.ok) return;
 
     // No statelog file written → finalize skips extraction and succeeds.
-    const success = await _finalizeEvalRunTask(prep.prepared, "");
-    const error = await _finalizeEvalRunTask(prep.prepared, "boom");
+    const success = await _finalizeEvalTask(prep.prepared, "");
+    const error = await _finalizeEvalTask(prep.prepared, "boom");
 
     expect(success).toMatchObject({ taskId: "t1", status: "success" });
     expect(error).toMatchObject({ taskId: "t1", status: "error", errorMessage: "boom" });

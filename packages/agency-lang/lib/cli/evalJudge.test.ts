@@ -121,14 +121,23 @@ describe("evalJudge", () => {
 
   it("compares single-task run directories with an inline goal", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-inline-"));
-    const runA = writeRun(dir, "a", ["task-1"]);
-    const runB = writeRun(dir, "b", ["task-1"]);
+    const runA = writeRun(dir, "a", ["capital-france"]);
+    const runB = writeRun(dir, "b", ["capital-france"]);
 
     await evalJudge(runA, runB, { goal: "Return Paris" });
 
     expect(mockedJudgeSuite).toHaveBeenCalledWith(expect.objectContaining({
-      tasks: [{ task_id: "task-1", goal: "Return Paris", args: {} }],
+      tasks: [{ task_id: "capital-france", goal: "Return Paris", args: {} }],
     }));
+  });
+
+  it("rejects inline goals when single-task run ids differ", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-mismatch-"));
+    const runA = writeRun(dir, "a", ["capital-france"]);
+    const runB = writeRun(dir, "b", ["capital-germany"]);
+
+    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/task ids differ/i);
+    expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
 
   it("rejects inline goals for ambiguous multi-task run directories", async () => {
@@ -145,6 +154,17 @@ describe("evalJudge", () => {
     const runA = writeRun(dir, "a", ["task-1"]);
 
     await expect(evalJudge("a.eval.json", runA, { goal: "Return Paris" })).rejects.toThrow(/both inputs/i);
+  });
+
+  it("rejects invalid numeric judge policy options", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-policy-"));
+    const runA = writeRun(dir, "a", ["task-1"]);
+    const runB = writeRun(dir, "b", ["task-1"]);
+
+    await expect(evalJudge(runA, runB, { goal: "Return Paris", samples: Number.NaN })).rejects.toThrow(/samples/);
+    await expect(evalJudge(runA, runB, { goal: "Return Paris", confidenceThreshold: Number.NaN })).rejects.toThrow(/confidenceThreshold/);
+    await expect(evalJudge(runA, runB, { goal: "Return Paris", marginThreshold: -1 })).rejects.toThrow(/marginThreshold/);
+    expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
 });
 

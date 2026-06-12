@@ -98,6 +98,37 @@ describe("judgePairwise", () => {
     expect(new Date(verdict.generatedAt).toString()).not.toBe("Invalid Date");
   });
 
+  it("requires judgePair callers to provide a task id", async () => {
+    const a = path.join(fixturesDir, "v2-A.eval.json");
+    const b = path.join(fixturesDir, "v2-B.eval.json");
+
+    await expect(judgePair({
+      goal: "name the capital of India",
+      recordPathA: a,
+      recordPathB: b,
+    } as any)).rejects.toThrow(/taskId/);
+    expect(mockedRunAgencyAgent).not.toHaveBeenCalled();
+  });
+
+  it("keeps swapped-order samples in judge order while mapping the task winner", async () => {
+    const a = path.join(fixturesDir, "v2-A.eval.json");
+    const b = path.join(fixturesDir, "v2-B.eval.json");
+
+    const verdict = await judgePair({
+      taskId: "capital-india",
+      goal: "name the capital of India",
+      recordPathA: a,
+      recordPathB: b,
+      order: "BA",
+    });
+
+    expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.objectContaining({ responseA: "Delhi", responseB: "New Delhi" }),
+    }));
+    expect(verdict.winner).toBe("B");
+    expect(verdict.samples).toEqual([{ winner: "A", confidence: 87, reasoning: "A is more precise.", order: "BA" }]);
+  });
+
   it("returns a verdict for legacy v1 records", async () => {
     const a = path.join(fixturesDir, "v1-A.eval.json");
     const b = path.join(fixturesDir, "v1-B.eval.json");

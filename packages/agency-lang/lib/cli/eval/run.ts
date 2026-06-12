@@ -22,7 +22,7 @@ import {
 import type {
   EvalRunCompiledAgent,
   EvalRunResult,
-  EvalRunTask,
+  EvalTask,
   EvalRunTaskResult,
 } from "@/eval/runTypes.js";
 import {
@@ -45,7 +45,7 @@ export type EvalRunCliOptions = {
 
 export type EvalRunLoadedTasksOptions = {
   agent: string;
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
   tasksSource: string;
   runId?: string;
   runsDir?: string;

@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { optimizeLoop } from "./loop.js";
 import type { OptimizeTaskVerdict } from "./types.js";
-import type { EvalRunResult, EvalRunTask } from "@/eval/runTypes.js";
+import type { EvalRunResult, EvalTask } from "@/eval/runTypes.js";
 
 describe("optimizeLoop", () => {
   let tmpDir: string;
-  const tasks: EvalRunTask[] = [{ task_id: "t1", goal: "prefer accuracy", args: { text: "hi" } }];
+  const tasks: EvalTask[] = [{ task_id: "t1", goal: "prefer accuracy", args: { text: "hi" } }];
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-loop-"));
@@ -212,7 +212,7 @@ function taskVerdict(winner: OptimizeTaskVerdict["winner"], confidence: number):
 
 function fakeEvalRun(opts: { omitRecordsAfterBaseline?: boolean } = {}) {
   let calls = 0;
-  return async (args: { runsDir: string; runId: string; tasks: EvalRunTask[]; agent: string }): Promise<EvalRunResult> => {
+  return async (args: { runsDir: string; runId: string; tasks: EvalTask[]; agent: string }): Promise<EvalRunResult> => {
     calls += 1;
     const runDir = path.join(args.runsDir, args.runId);
     const results = args.tasks.map((task) => {

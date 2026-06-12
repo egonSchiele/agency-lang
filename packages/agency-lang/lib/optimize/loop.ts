@@ -5,7 +5,7 @@ import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import { evalRunLoadedTasks } from "@/cli/eval/run.js";
 import type { AgencyConfig } from "@/config.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
-import type { EvalRunResult, EvalRunTask } from "@/eval/runTypes.js";
+import type { EvalRunResult, EvalTask } from "@/eval/runTypes.js";
 import { parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 
@@ -38,7 +38,7 @@ export type OptimizeLoopDeps = {
   }) => Promise<MutationProposal>;
   evalRun?: (args: {
     agent: string;
-    tasks: EvalRunTask[];
+    tasks: EvalTask[];
     runsDir: string;
     runId: string;
     config: AgencyConfig;
@@ -232,7 +232,7 @@ async function runEval(
   deps: OptimizeLoopDeps,
   config: OptimizeLoopConfig,
   agent: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   runId: string,
   runsDir: string,
 ): Promise<EvalRunResult> {
@@ -241,7 +241,7 @@ async function runEval(
 
 async function defaultEvalRun(args: {
   agent: string;
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
   runsDir: string;
   runId: string;
   config: AgencyConfig;
@@ -259,7 +259,7 @@ async function defaultEvalRun(args: {
 
 async function judgeTasks(
   deps: OptimizeLoopDeps,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   championEval: EvalRunResult,
   candidateEval: EvalRunResult,
   samples: number,

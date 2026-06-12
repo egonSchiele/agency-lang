@@ -8,18 +8,18 @@ import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
 import { StatelogParser } from "../eval/statelogParser.js";
 import {
   initializeEvalRun,
-  prepareEvalRunTask,
-  recordEvalRunTaskPrepareFailure,
-  recordEvalRunTaskRunFailure,
-  recordEvalRunTaskSuccess,
+  prepareEvalTask,
+  recordEvalTaskPrepareFailure,
+  recordEvalTaskRunFailure,
+  recordEvalTaskSuccess,
   shouldExtractStatelog,
   writeEvalRunSummary,
   type EvalRunState,
-  type PreparedEvalRunTask,
+  type PreparedEvalTask,
 } from "../eval/runArtifacts.js";
 import type {
   EvalRunResult,
-  EvalRunTask,
+  EvalTask,
   EvalRunTaskResult,
 } from "../eval/runTypes.js";
 import type { EvalRecord } from "../eval/types.js";
@@ -34,7 +34,7 @@ import type { OptimizeLoopConfig, OptimizeResult } from "../optimize/types.js";
  * at the call site instead of hidden as a side effect.
  */
 export type AgencyEvalRunState = EvalRunState & {
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
 };
 
 /**
@@ -43,12 +43,12 @@ export type AgencyEvalRunState = EvalRunState & {
  * thrown errors from the TS helper.
  */
 export type AgencyPrepareResult =
-  | { ok: true; prepared: PreparedEvalRunTask }
+  | { ok: true; prepared: PreparedEvalTask }
   | { ok: false; result: EvalRunTaskResult };
 
 export function _initEvalRun(
   compiled: { moduleId: string },
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   node: string,
   runsDir: string,
   runId: string,
@@ -71,18 +71,18 @@ export function _initEvalRun(
  * as a `{ ok: false, result }` so the Agency loop has a single branching
  * pattern (`if (prep.ok)`) instead of an extra `try` per iteration.
  */
-export function _prepareEvalRunTask(
+export function _prepareEvalTask(
   state: AgencyEvalRunState,
-  task: EvalRunTask,
+  task: EvalTask,
 ): AgencyPrepareResult {
   try {
-    return { ok: true, prepared: prepareEvalRunTask(state, task) };
+    return { ok: true, prepared: prepareEvalTask(state, task) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[evalRun] prepare failed for task ${task.task_id}: ${message}`);
     return {
       ok: false,
-      result: recordEvalRunTaskPrepareFailure(task.task_id, message),
+      result: recordEvalTaskPrepareFailure(task.task_id, message),
     };
   }
 }
@@ -94,12 +94,12 @@ export function _prepareEvalRunTask(
  * written. Never throws — any extract failure is turned into an error
  * result so the Agency loop never has to wrap this call in `try`.
  */
-export async function _finalizeEvalRunTask(
-  prepared: PreparedEvalRunTask,
+export async function _finalizeEvalTask(
+  prepared: PreparedEvalTask,
   runError: string,
 ): Promise<EvalRunTaskResult> {
   if (runError) {
-    return recordEvalRunTaskRunFailure(prepared, runError);
+    return recordEvalTaskRunFailure(prepared, runError);
   }
   if (shouldExtractStatelog(prepared.statelogPath)) {
     try {
@@ -108,10 +108,10 @@ export async function _finalizeEvalRunTask(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[evalRun] extract failed for task ${prepared.task.task_id}: ${message}`);
-      return recordEvalRunTaskRunFailure(prepared, message);
+      return recordEvalTaskRunFailure(prepared, message);
     }
   }
-  return recordEvalRunTaskSuccess(prepared);
+  return recordEvalTaskSuccess(prepared);
 }
 
 export function _finishEvalRun(
@@ -168,7 +168,7 @@ export async function _evalJudge(
 export async function _evalJudgeSuite(
   runA: string,
   runB: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   samples: number,
   confidenceThreshold: number,
   marginThreshold: number,
@@ -194,7 +194,7 @@ export async function _optimize(
   config: AgencyConfigLike,
   agentSource: string,
   node: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   goal: string,
   iterations: number,
   judgeSamples: number,

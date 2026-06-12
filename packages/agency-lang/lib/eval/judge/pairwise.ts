@@ -12,7 +12,7 @@ const PairwiseJudgeResultSchema = z.object({
 });
 
 export type JudgePairArgs = {
-  taskId?: string;
+  taskId: string;
   goal: string;
   recordPathA: string;
   recordPathB: string;
@@ -20,6 +20,7 @@ export type JudgePairArgs = {
 };
 
 export async function judgePair(args: JudgePairArgs): Promise<TaskVerdict> {
+  if (!args.taskId) throw new Error("judgePair requires taskId");
   const order = args.order ?? "AB";
   const recordA = readJson(args.recordPathA);
   const recordB = readJson(args.recordPathB);
@@ -35,20 +36,21 @@ export async function judgePair(args: JudgePairArgs): Promise<TaskVerdict> {
     order === "AB" ? respB.text : respA.text,
   );
   const sample: JudgeSample = {
-    winner: mapWinnerToOriginal(judged.winner, order),
+    winner: judged.winner,
     confidence: judged.confidence,
     reasoning: judged.reasoning,
     order,
   };
+  const winner = mapWinnerToOriginal(judged.winner, order);
 
   return {
-    taskId: args.taskId ?? "task-1",
+    taskId: args.taskId,
     goal: args.goal,
     inputs: [
       taskInputOf(args.recordPathA, respA),
       taskInputOf(args.recordPathB, respB),
     ],
-    winner: sample.winner,
+    winner,
     confidence: sample.confidence,
     reasoning: sample.reasoning,
     samples: [sample],
@@ -61,7 +63,7 @@ export async function judgePairwise(
   recordPathA: string,
   recordPathB: string,
 ): Promise<PairwiseVerdict> {
-  const verdict = await judgePair({ goal, recordPathA, recordPathB });
+  const verdict = await judgePair({ taskId: "pairwise", goal, recordPathA, recordPathB });
 
   return {
     verdictVersion: 1,

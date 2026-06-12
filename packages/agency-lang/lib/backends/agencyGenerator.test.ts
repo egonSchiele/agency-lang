@@ -271,6 +271,28 @@ describe("AgencyGenerator - Doc Comments", () => {
   });
 });
 
+describe("AgencyGenerator - optimize modifier", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("formats optimize const", () => {
+    expect(formatAgency('optimize const prompt = "hi"')).toBe('optimize const prompt = "hi"');
+  });
+
+  it("formats optimize let", () => {
+    expect(formatAgency('optimize let prompt = "hi"')).toBe('optimize let prompt = "hi"');
+  });
+
+  it("formats optimize static const in canonical order", () => {
+    expect(formatAgency('optimize static const prompt = "hi"')).toBe('optimize static const prompt = "hi"');
+  });
+});
+
 describe("AgencyGenerator - bang (!) validated type annotations", () => {
   function formatAgency(input: string): string {
     const parseResult = parseAgency(input, {}, false);
@@ -712,4 +734,3 @@ describe("AgencyGenerator - string delimiter round-tripping", () => {
     expect(out).toBe('"hello"');
   });
 });
-

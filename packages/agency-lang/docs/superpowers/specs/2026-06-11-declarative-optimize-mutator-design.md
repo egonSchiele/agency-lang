@@ -1,0 +1,328 @@
+# Declarative Optimize Mutator Design
+
+**Date:** 2026-06-11
+**Status:** Draft
+
+## Summary
+
+Add a declarative source mutation interface for `agency eval optimize`. The mutator consumes the optimize target catalog produced by declaration-target discovery and applies explicit operation records to Agency source files.
+
+The v1 implementation supports optimized variable targets only:
+
+```agency
+def bar() {
+  optimize const prompt = "xyz"
+  const result = llm(prompt)
+}
+```
+
+The optimizer can replace that initializer with a declarative operation:
+
+```ts
+await mutator.apply([
+  {
+    target: "foo.agency:bar:prompt",
+    kind: "variable",
+    op: "replaceInitializer",
+    value: "\"new prompt\"",
+  },
+]);
+```
+
+The interface is designed to remain readable for humans and easy for LLMs to produce, while still validating every operation against a discovered target catalog before source is changed.
+
+## Relationship to Other Specs
+
+This spec depends on:
+
+- `2026-06-10-optimize-declaration-modifier-design.md` for `optimize` syntax and target catalog discovery.
+- `2026-06-11-optimize-eval-pipeline-design.md` for how optimize evaluates candidates, writes artifacts, and decides whether to write back a champion.
+
+The declaration modifier spec owns what is optimizable and what ID each target receives. This mutator spec owns how source changes are represented, validated, previewed, and applied. The eval pipeline spec consumes both pieces.
+
+## Design Goals
+
+- Keep mutation proposals declarative and serializable.
+- Make target IDs readable in logs, artifacts, and LLM-generated plans.
+- Validate against discovered targets rather than trusting hand-authored strings.
+- Support atomic multi-target candidate mutations.
+- Produce preview results and diffs without writing source files.
+- Apply replacements in the correct syntactic context, not as blind text splices.
+- Preserve a forward-compatible shape for optimized types.
+
+## Non-Goals
+
+- General-purpose Agency AST editing.
+- Arbitrary expression rewrites in v1.
+- Implementing `optimize type` parser/typechecker support in v1.
+- Adding new optimize target discovery rules beyond the declaration modifier spec.
+- Sandbox/worktree isolation for candidate evaluation.
+
+## Target IDs and Catalogs
+
+The mutator never discovers targets itself. It consumes an `OptimizeTargetSet` produced by `discoverOptimizeTargets()`.
+
+Variable targets use:
+
+```text
+<relative-file>:<scope>:<variable>
+```
+
+Examples:
+
+```text
+foo.agency:bar:prompt
+foo.agency:global:systemPrompt
+helpers/prompts.agency:classify:judgePrompt
+```
+
+Top-level ordinary and `static` variables both use `global` as the scope because Agency cannot have a static and global variable with the same name.
+
+V1 variable catalog entries use:
+
+```ts
+type OptimizeVariableTarget = {
+  id: string;
+  kind: "variable";
+  file: string;
+  scope: string;
+  name: string;
+  valueKind: "string" | "multilineString";
+  value: string;
+};
+```
+
+Future optimized type targets should fit the same catalog model:
+
+```agency
+optimize type ResultType = string
+```
+
+with a target ID such as:
+
+```text
+foo.agency:ResultType
+```
+
+and a target entry like:
+
+```ts
+type OptimizeTypeTarget = {
+  id: string;
+  kind: "type";
+  file: string;
+  name: string;
+  definition: string;
+};
+```
+
+The mutator API should be a discriminated union over target kinds so type support can be added without replacing the variable mutation API.
+
+## Public API Shape
+
+The durable API is operation-based:
+
+```ts
+const mutator = new OptimizeSourceMutator({ targetSet });
+
+const preview = await mutator.preview([
+  {
+    target: "foo.agency:bar:prompt",
+    kind: "variable",
+    op: "replaceInitializer",
+    value: "\"new prompt\"",
+  },
+]);
+
+await mutator.apply(preview);
+```
+
+The convenience API can exist on top:
+
+```ts
+await mutator.mutate("foo.agency:bar:prompt", "\"new prompt\"");
+```
+
+`mutate(id, value)` infers the default operation from the discovered target kind:
+
+- `kind: "variable"` → `op: "replaceInitializer"`
+- future `kind: "type"` → `op: "replaceTypeDefinition"`
+
+The convenience method must reject ambiguous or unsupported target kinds rather than guessing.
+
+## Operation Schema
+
+V1 supports one operation:
+
+```ts
+type ReplaceVariableInitializerOperation = {
+  target: string;
+  kind: "variable";
+  op: "replaceInitializer";
+  value: string;
+  expected?: string;
+  rationale?: string;
+};
+```
+
+Future type support should use:
+
+```ts
+type ReplaceTypeDefinitionOperation = {
+  target: string;
+  kind: "type";
+  op: "replaceTypeDefinition";
+  value: string;
+  expected?: string;
+  rationale?: string;
+};
+```
+
+`value` is Agency source text for the syntactic context being replaced. For variables, it is an initializer expression, for example:
+
+```ts
+value: "\"Return JSON with a capital field.\""
+```
+
+For future types, it is the right-hand side of a type definition:
+
+```ts
+value: "{ capital: string }"
+```
+
+The API should accept strings first, even for types, because optimizer proposals are likely generated by an LLM as source text. Richer type representations can be layered on later if they become useful.
+
+## Preview Result
+
+`preview()` validates and applies operations to an in-memory candidate file set, but does not write source files:
+
+```ts
+type OptimizeMutationPreview = {
+  files: Record<string, string>;
+  changes: OptimizeAppliedChange[];
+  diff: string;
+  diagnostics: OptimizeMutationDiagnostic[];
+};
+```
+
+`files` contains the full candidate Agency file set keyed by relative file path. Changed and unchanged discovered Agency files are included so candidate evaluation can run against a complete materialized file set.
+
+`diff` is a unified diff for changed files. `changes` is target-level and records `target`, `kind`, `op`, `oldValue`, `newValue`, and optional `rationale`.
+
+## Validation Rules
+
+Validation happens before any files are written:
+
+1. Every `target` must exist in the supplied target catalog.
+2. `kind` must match the target catalog entry.
+3. `op` must be valid for the target kind.
+4. `expected`, when supplied, must match the current target value/definition.
+5. `value` must parse in the syntactic context being replaced.
+6. V1 variable values must be string or multiline string expressions.
+7. String interpolation placeholders must be preserved for variable targets.
+8. Multiple operations for the same target in one batch are rejected.
+9. The resulting file set must parse successfully.
+
+Interpolation preservation uses the same safety rule as the existing prompt optimizer: the multiset of `${...}` expressions in the old value must equal the multiset in the new value. The comparison should parse interpolation expressions and compare canonical rendered forms while preserving multiplicity.
+
+## Atomicity
+
+Mutation batches are atomic. If any operation is invalid, no candidate preview is produced and no source file is written.
+
+This matters because optimize often needs coordinated changes, such as a prompt and a future structured output type:
+
+```ts
+await mutator.preview([
+  {
+    target: "foo.agency:global:systemPrompt",
+    kind: "variable",
+    op: "replaceInitializer",
+    value: "\"Return only structured JSON.\"",
+  },
+  {
+    target: "foo.agency:ResultType",
+    kind: "type",
+    op: "replaceTypeDefinition",
+    value: "{ capital: string }",
+  },
+]);
+```
+
+V1 should reject the type operation until `optimize type` is implemented, but the schema should not need to change when type support arrives.
+
+## Applying and Writing
+
+The mutator should support two usage patterns:
+
+1. Preview a candidate and let the optimize artifact layer write it under `iter-N/agent/`.
+2. Apply a validated preview to source files during final champion writeback.
+
+The pipeline remains responsible for writeback timing and external-change checks. The mutator should expose enough metadata for the pipeline to abort writeback if source hashes or target IDs changed since discovery.
+
+`apply()` should not rediscover targets from live files unless explicitly asked. It should apply the already validated preview to a chosen destination, or write back through the pipeline after the pipeline has performed hash/target-set verification.
+
+## Error Handling
+
+Errors should be structured enough for the LLM mutator loop to retry after validation failures:
+
+```ts
+type OptimizeMutationDiagnostic = {
+  target?: string;
+  code:
+    | "unknown-target"
+    | "kind-mismatch"
+    | "unsupported-operation"
+    | "expected-mismatch"
+    | "invalid-replacement-syntax"
+    | "unsupported-value-domain"
+    | "interpolation-mismatch"
+    | "duplicate-target-operation"
+    | "parse-failed";
+  message: string;
+};
+```
+
+The optimize loop can include these diagnostics in the next mutator prompt so the LLM can produce a corrected mutation proposal.
+
+## Implementation Architecture
+
+Add a focused source mutator module:
+
+```text
+lib/optimize/sourceMutator.ts
+```
+
+Suggested exports:
+
+```ts
+export type OptimizeMutationOperation =
+  | ReplaceVariableInitializerOperation
+  | ReplaceTypeDefinitionOperation;
+
+export class OptimizeSourceMutator {
+  constructor(args: { targetSet: OptimizeTargetSet });
+  preview(operations: OptimizeMutationOperation[]): OptimizeMutationPreview;
+  apply(preview: OptimizeMutationPreview, destination?: string): void;
+  mutate(target: string, value: string): OptimizeMutationPreview;
+}
+```
+
+The implementation should use parsed AST plus `AgencyGenerator` to render changed files. It should not fall back to blind source-slice replacement. Reformatting the full Agency file is acceptable because optimized source is expected to be format-compatible.
+
+The existing LLM proposal module can keep its current filename if useful, but it should output declarative operations rather than owning source edits directly.
+
+## Testing
+
+- Builds previews for `foo.agency:bar:prompt` variable initializer replacements.
+- Builds previews for `foo.agency:global:systemPrompt` top-level replacements.
+- Rejects unknown targets.
+- Rejects kind/op mismatches.
+- Rejects duplicate operations for the same target.
+- Rejects stale `expected` values.
+- Rejects invalid Agency expression source for variable initializers.
+- Rejects non-string variable initializer replacements in v1.
+- Preserves interpolation multisets, including duplicate placeholders.
+- Produces a full candidate file set and unified diff.
+- Applies multiple valid operations atomically.
+- Keeps `mutate(id, value)` as convenience sugar over the operation API.
+- Reserves but rejects `kind: "type"` operations until `optimize type` support lands.

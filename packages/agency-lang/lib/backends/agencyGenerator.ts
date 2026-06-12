@@ -735,6 +735,7 @@ export class AgencyGenerator {
         ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases, true)}${bangSuffix}`
         : `${node.variableName}${chainStr}`;
     const exportPrefix = node.exported ? "export " : "";
+    const optimizePrefix = node.optimize ? "optimize " : "";
     const staticPrefix = node.static ? "static " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
     let valueCode = "";
@@ -746,7 +747,7 @@ export class AgencyGenerator {
     return (
       tags +
       this.indentStr(
-        `${exportPrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`,
+        `${exportPrefix}${optimizePrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`,
       )
     );
   }

@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import { nanoid } from "nanoid";
 
@@ -192,7 +193,8 @@ export async function _evalJudgeSuite(
  */
 export async function _optimize(
   config: AgencyConfigLike,
-  agentSource: string,
+  entryFile: string,
+  workingDir: string,
   node: string,
   tasks: EvalTask[],
   goal: string,
@@ -201,17 +203,26 @@ export async function _optimize(
   acceptThreshold: number,
   runsDir: string,
   runId: string,
-  agentFilename: string,
-  workingDir: string,
   mutatorModel?: string,
   loop: (config: OptimizeLoopConfig) => Promise<OptimizeResult> = optimizeLoop,
 ): Promise<OptimizeResult> {
+  const resolvedWorkingDir = path.resolve(workingDir);
+  const resolvedEntryFile = path.resolve(resolvedWorkingDir, entryFile);
+  const agentSource = fs.readFileSync(resolvedEntryFile, "utf8");
   return loop({
     runtime: { config, tasks },
-    target: { agentSource, node, agentFilename, workingDir },
+    target: { agentSource, node, agentFilename: relativeAgencyPath(resolvedWorkingDir, resolvedEntryFile), workingDir: resolvedWorkingDir },
     policy: { goal, iterations, judgeSamples, acceptThreshold, mutatorModel },
     artifacts: { runsDir, runId: runId || nanoid() },
   });
 }
 
 type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];
+
+function relativeAgencyPath(baseDir: string, absoluteFile: string): string {
+  const relative = path.relative(baseDir, absoluteFile);
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Optimize entry file ${absoluteFile} must be inside optimize working directory ${baseDir}`);
+  }
+  return relative.split(path.sep).join("/");
+}

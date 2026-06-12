@@ -1,30 +1,38 @@
-type MutationProposal = {
-  prompt: string;
+type OptimizeMutationOperation = {
+  target: string;
+  kind: string;
+  op: string;
+  value: string;
+  rationale: string
+}
+
+type OptimizeMutationProposal = {
+  operations: OptimizeMutationOperation[];
   rationale: string
 }
 
 node mutatePrompt(
-  goal: string,
-  currentPrompt: string,
+  targets: string,
+  goals: string,
   history: string,
-  validationFailure: string = "",
-): MutationProposal {
+  diagnostics: string = "",
+): OptimizeMutationProposal {
   const prompt = """
-  GOAL:
-  ${goal}
+  OPTIMIZE TARGETS:
+  ${targets}
 
-  CURRENT PROMPT:
-  ${currentPrompt}
+  GOALS:
+  ${goals}
 
   ${history}
 
   YOUR TASK:
-  Propose a new prompt that better achieves the goal. Return JSON with:
-  - "prompt": the new prompt text. Must preserve every interpolation placeholder that the current prompt uses (no drops, no additions).
-  - "rationale": 2-4 sentences explaining what you changed and why.
+  Propose replacement values for one or more of the optimize targets listed above so the agent better achieves the goals. Return JSON with:
+  - "operations": one record per target you change. Each record needs "target" and "kind" copied exactly from the list above, "op" set to "replaceInitializer", "value" with the replacement as Agency source text including the surrounding quotes, and "rationale" with one sentence on what you changed. The replacement must preserve every interpolation placeholder the current value uses (no drops, no additions).
+  - "rationale": 2-4 sentences explaining the overall change.
 
-  ${validationFailure}
+  ${diagnostics}
   """
-  const proposal: MutationProposal = llm(prompt)
+  const proposal: OptimizeMutationProposal = llm(prompt)
   return proposal
 }

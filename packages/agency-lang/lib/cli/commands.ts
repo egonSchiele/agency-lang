@@ -264,6 +264,8 @@ export function compile(
     ts?: boolean;
     symbolTable?: SymbolTable;
     importStrategy?: ImportStrategy;
+    /** Suppress the per-file `input → output (in Nms)` progress line. */
+    quiet?: boolean;
   },
 ): string | null {
   if (!fs.existsSync(inputFile)) {
@@ -412,7 +414,9 @@ export function compile(
   }
   const compileEndTime = performance.now();
   const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
-  console.log(`${inputFile} → ${outputFile} (in ${timeTaken})`);
+  if (!options?.quiet) {
+    console.log(`${inputFile} → ${outputFile} (in ${timeTaken})`);
+  }
   return outputFile;
 }
 

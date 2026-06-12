@@ -1,8 +1,13 @@
-import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
-import type { OptimizeResult, OptimizeVerdict } from "./types.js";
+import type { JudgeAggregationPolicy, SuiteVerdict } from "@/eval/judge/types.js";
+
+import type { OptimizeMutationDiagnostic, OptimizeMutationPreview } from "./sourceMutator.js";
+import { sha256Text, type OptimizeTargetSet } from "./targets.js";
+import type { OptimizeResult } from "./types.js";
+
+export { sha256Text };
 
 const WORKSPACE_COPY_EXCLUDED_DIRS = [
   ".git",
@@ -14,91 +19,104 @@ const WORKSPACE_COPY_EXCLUDED_DIRS = [
   ".agency-memory",
 ];
 
-export type IterationArtifact = {
+export type IterationAgentArtifact = {
   iter: number;
   iterDir: string;
-  agentPath: string;
+  agentDir: string;
+};
+
+export type IterationWorkspaceArtifact = {
+  iter: number;
   workspaceDir: string;
-  workspaceAgentPath: string;
-  mutationPath?: string;
+};
+
+export type MutationArtifact = {
+  iter: number;
+  mutationJsonPath: string;
+  mutationMarkdownPath: string;
+  diffPath: string;
 };
 
 export type OptimizeArtifacts = {
   runDir: string;
-  writeBaseline(source: string): IterationArtifact;
-  writeCandidate(iter: number, source: string, mutation: { rationale: string; oldPrompt?: string; newPrompt?: string; diff?: string }): IterationArtifact;
-  writeValidationFailure(iter: number, details: { attemptedPrompt: string; rationale?: string; error: string }): IterationArtifact;
+  writeTargets(targetSet: OptimizeTargetSet): string;
+  writeIterationAgent(iter: number, files: Record<string, string>): IterationAgentArtifact;
+  writeIterationWorkspace(iter: number, files: Record<string, string>): IterationWorkspaceArtifact;
+  writeMutationPreview(iter: number, preview: OptimizeMutationPreview, rationale?: string): MutationArtifact;
+  writeValidationFailure(iter: number, details: { rationale?: string; diagnostics: OptimizeMutationDiagnostic[] }): string;
   writeRuntimeRejection(iter: number, error: unknown): string;
-  writeVerdict(iter: number, verdict: OptimizeVerdict): string;
-  writeFinalChampion(source: string, championIter: number | "baseline"): string;
+  writeVerdict(iter: number, verdict: SuiteVerdict): string;
+  writeFinalChampion(files: Record<string, string>, championIter: number | "baseline"): string;
   writeSummary(result: OptimizeResult): string;
 };
-
-export function sha256Text(value: string): string {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
 
 export function createOptimizeArtifacts(args: {
   runsDir: string;
   runId: string;
-  agentFilename: string;
   workingDir: string;
-  goal: string;
+  entryFile: string;
+  node: string;
+  tasksSource: string;
   iterations: number;
-  judgeSamples: number;
-  acceptThreshold: number;
-  sourceSha256: string;
+  judgePolicy: JudgeAggregationPolicy;
   mutatorModel?: string;
 }): OptimizeArtifacts {
   const runDir = path.resolve(args.runsDir, args.runId);
+  if (fs.existsSync(runDir)) {
+    throw new Error(`Run directory already exists: ${runDir}. Pass a fresh --run-id or remove the directory.`);
+  }
   fs.mkdirSync(runDir, { recursive: true });
   writeJson(path.join(runDir, "config.json"), {
     runId: args.runId,
-    goal: args.goal,
-    iterations: args.iterations,
-    judgeSamples: args.judgeSamples,
-    acceptThreshold: args.acceptThreshold,
-    mutatorModel: args.mutatorModel,
-    agentFilename: args.agentFilename,
+    entryFile: args.entryFile,
+    node: args.node,
     workingDir: args.workingDir,
-    sourceSha256: args.sourceSha256,
+    tasksSource: args.tasksSource,
+    iterations: args.iterations,
+    judgePolicy: args.judgePolicy,
+    mutatorModel: args.mutatorModel,
   });
-
-  const writeSourceIteration = (iter: number, source: string): IterationArtifact => {
-    const iterDir = iterationDir(runDir, iter);
-    const agentPath = path.join(iterDir, "agent", args.agentFilename);
-    writeFile(agentPath, source);
-    const workspaceDir = path.join(iterDir, "workspace");
-    prepareWorkspace(args.workingDir, workspaceDir, runDir);
-    const workspaceAgentPath = path.join(workspaceDir, args.agentFilename);
-    writeFile(workspaceAgentPath, source);
-    return { iter, iterDir, agentPath, workspaceDir, workspaceAgentPath };
-  };
 
   return {
     runDir,
-    writeBaseline(source) {
-      return writeSourceIteration(0, source);
+    writeTargets(targetSet) {
+      const targetsPath = path.join(runDir, "targets.json");
+      writeJson(targetsPath, targetSet);
+      return targetsPath;
     },
-    writeCandidate(iter, source, mutation) {
-      const artifact = writeSourceIteration(iter, source);
-      const mutationPath = path.join(artifact.iterDir, "mutation.md");
-      writeFile(mutationPath, mutationMarkdown(mutation.rationale, mutation.diff, mutation.oldPrompt, mutation.newPrompt));
-      return { ...artifact, mutationPath };
+    writeIterationAgent(iter, files) {
+      const iterDir = iterationDir(runDir, iter);
+      const agentDir = path.join(iterDir, "agent");
+      for (const [file, source] of Object.entries(files)) {
+        writeFile(path.join(agentDir, file), source);
+      }
+      return { iter, iterDir, agentDir };
+    },
+    writeIterationWorkspace(iter, files) {
+      const workspaceDir = path.join(iterationDir(runDir, iter), "workspace");
+      prepareWorkspace(args.workingDir, workspaceDir, runDir);
+      for (const [file, source] of Object.entries(files)) {
+        writeFile(path.join(workspaceDir, file), source);
+      }
+      return { iter, workspaceDir };
+    },
+    writeMutationPreview(iter, preview, rationale) {
+      const iterDir = iterationDir(runDir, iter);
+      const mutationJsonPath = path.join(iterDir, "mutation.json");
+      writeJson(mutationJsonPath, {
+        ...(rationale !== undefined ? { rationale } : {}),
+        changes: preview.changes,
+      });
+      const mutationMarkdownPath = path.join(iterDir, "mutation.md");
+      writeFile(mutationMarkdownPath, mutationPreviewMarkdown(preview, rationale));
+      const diffPath = path.join(iterDir, "diff.txt");
+      writeFile(diffPath, preview.diff);
+      return { iter, mutationJsonPath, mutationMarkdownPath, diffPath };
     },
     writeValidationFailure(iter, details) {
-      const iterDir = iterationDir(runDir, iter);
-      fs.mkdirSync(iterDir, { recursive: true });
-      const mutationPath = path.join(iterDir, "mutation.md");
+      const mutationPath = path.join(iterationDir(runDir, iter), "mutation.md");
       writeFile(mutationPath, validationFailureMarkdown(details));
-      return {
-        iter,
-        iterDir,
-        agentPath: "",
-        workspaceDir: "",
-        workspaceAgentPath: "",
-        mutationPath,
-      };
+      return mutationPath;
     },
     writeRuntimeRejection(iter, error) {
       const errorPath = path.join(iterationDir(runDir, iter), "error.txt");
@@ -110,11 +128,13 @@ export function createOptimizeArtifacts(args: {
       writeJson(verdictPath, verdict);
       return verdictPath;
     },
-    writeFinalChampion(source, championIter) {
-      const championPath = path.join(runDir, "champion", "agent", args.agentFilename);
-      writeFile(championPath, source);
+    writeFinalChampion(files, championIter) {
+      const championAgentDir = path.join(runDir, "champion", "agent");
+      for (const [file, source] of Object.entries(files)) {
+        writeFile(path.join(championAgentDir, file), source);
+      }
       writeFile(path.join(runDir, "champion", "championIter"), String(championIter));
-      return championPath;
+      return championAgentDir;
     },
     writeSummary(result) {
       const summaryPath = path.join(runDir, "summary.json");
@@ -156,27 +176,36 @@ function isInsideOrSame(candidate: string, parent: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function mutationMarkdown(rationale: string, diff?: string, oldPrompt?: string, newPrompt?: string): string {
+function mutationPreviewMarkdown(preview: OptimizeMutationPreview, rationale?: string): string {
   return [
-    `# Mutation`,
+    "# Mutation",
+    ...(rationale ? ["", rationale] : []),
+    ...preview.changes.flatMap((change) => [
+      "",
+      `## ${change.target}`,
+      ...(change.rationale ? ["", change.rationale] : []),
+      "",
+      "Old value:",
+      "```",
+      change.oldValue,
+      "```",
+      "",
+      "New value:",
+      "```",
+      change.newValue,
+      "```",
+    ]),
     "",
-    rationale,
-    ...(oldPrompt !== undefined ? ["", "Old prompt:", "```", oldPrompt, "```"] : []),
-    ...(newPrompt !== undefined ? ["", "New prompt:", "```", newPrompt, "```"] : []),
-    ...(diff ? ["", "```diff", diff, "```"] : []),
+    "Full diff: see diff.txt",
   ].join("\n");
 }
 
-function validationFailureMarkdown(details: { attemptedPrompt: string; rationale?: string; error: string }): string {
+function validationFailureMarkdown(details: { rationale?: string; diagnostics: OptimizeMutationDiagnostic[] }): string {
   return [
     "# Validation failed",
     "",
-    `Error: ${details.error}`,
-    "",
-    "Attempted prompt:",
-    "```",
-    details.attemptedPrompt,
-    "```",
+    "The proposed mutation operations were rejected by the source mutator:",
+    ...details.diagnostics.map((diagnostic) => `- [${diagnostic.code}] ${diagnostic.message}`),
     ...(details.rationale ? ["", "Rationale:", details.rationale] : []),
   ].join("\n");
 }

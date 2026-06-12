@@ -3,9 +3,12 @@ import type { OptimizeDecision } from "./types.js";
 export type MutationHistoryEntry = {
   iter: number;
   decision: Exclude<OptimizeDecision, "baseline">;
-  wins: number;
-  losses: number;
+  /** Suite wins for the champion (side A). */
+  winsA: number;
+  /** Suite wins for the candidate (side B). */
+  winsB: number;
   rationale: string;
+  operations: { target: string; op: string }[];
   lossReasons: string[];
 };
 
@@ -22,7 +25,8 @@ export function buildMutationHistory(entries: MutationHistoryEntry[]): string {
 
 function renderEntry(entry: MutationHistoryEntry): string {
   const lines = [
-    `- iter ${entry.iter} (${entry.decision}, ${entry.wins} wins / ${entry.losses} losses):`,
+    `- iter ${entry.iter} (${entry.decision}, ${entry.winsB} wins / ${entry.winsA} losses):`,
+    `    targets: ${entry.operations.map((operation) => operation.target).join(", ")}`,
     `    mutation: ${oneLine(entry.rationale)}`,
   ];
   if (entry.decision === "rejected" && entry.lossReasons.length > 0) {

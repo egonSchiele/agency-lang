@@ -6,7 +6,10 @@ import { nanoid } from "nanoid";
 import { judgePairwise } from "../eval/judge/pairwise.js";
 import { judgeSuite, type JudgeSuiteArgs } from "../eval/judge/suite.js";
 import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
+import { taskFromGoal } from "../eval/loadTasks.js";
 import { StatelogParser } from "../eval/statelogParser.js";
+import { createOptimizeReporter, type OptimizeVerbosity } from "../optimize/reporter.js";
+import { discoverOptimizeTargets } from "../optimize/targets.js";
 import {
   initializeEvalRun,
   prepareEvalTask,
@@ -190,6 +193,10 @@ export async function _evalJudgeSuite(
 /**
  * Stdlib binding for `agency.eval.optimize`. This deliberately does not
  * install any approval handler; callers decide which handlers are in scope.
+ *
+ * Mirrors the `agency eval optimize` CLI: exactly one of `tasks` or `goal`
+ * selects the suite, a goal desugars through `taskFromGoal()`, and a
+ * candidate is accepted iff the judge suite returns winner `B`.
  */
 export async function _optimize(
   config: AgencyConfigLike,
@@ -199,30 +206,45 @@ export async function _optimize(
   tasks: EvalTask[],
   goal: string,
   iterations: number,
-  judgeSamples: number,
-  acceptThreshold: number,
+  samples: number,
+  confidenceThreshold: number,
+  marginThreshold: number,
   runsDir: string,
   runId: string,
-  mutatorModel?: string,
-  loop: (config: OptimizeLoopConfig) => Promise<OptimizeResult> = optimizeLoop,
+  mutatorModel: string,
+  writeback: boolean,
+  verbosity: string,
+  loop: typeof optimizeLoop = optimizeLoop,
 ): Promise<OptimizeResult> {
-  const resolvedWorkingDir = path.resolve(workingDir);
-  const resolvedEntryFile = path.resolve(resolvedWorkingDir, entryFile);
-  const agentSource = fs.readFileSync(resolvedEntryFile, "utf8");
+  const hasTasks = tasks.length > 0;
+  const hasGoal = goal !== "";
+  if (hasTasks === hasGoal) {
+    throw new Error("Provide exactly one of --tasks or --goal");
+  }
+  if (verbosity !== "silent" && verbosity !== "default") {
+    throw new Error('verbosity must be "silent" or "default"');
+  }
+  const selectedTasks = hasGoal ? [taskFromGoal(goal)] : tasks;
+  const resolvedEntryFile = path.resolve(workingDir || ".", entryFile);
+  const targetSet = discoverOptimizeTargets(resolvedEntryFile);
+  const reporter = createOptimizeReporter(verbosity as OptimizeVerbosity);
   return loop({
-    runtime: { config, tasks },
-    target: { agentSource, node, agentFilename: relativeAgencyPath(resolvedWorkingDir, resolvedEntryFile), workingDir: resolvedWorkingDir },
-    policy: { goal, iterations, judgeSamples, acceptThreshold, mutatorModel },
-    artifacts: { runsDir, runId: runId || nanoid() },
-  });
+    runtime: {
+      config,
+      tasks: selectedTasks,
+      tasksSource: hasGoal ? "inline:goal" : "stdlib:tasks",
+    },
+    target: {
+      entryFile: targetSet.entryFile,
+      node,
+      targetSet,
+      workingDir: targetSet.baseDir,
+      writeback,
+    },
+    policy: { iterations, mutatorModel: mutatorModel || undefined },
+    judgePolicy: { samples, confidenceThreshold, marginThreshold, positionBias: "swap" },
+    artifacts: { runsDir: path.resolve(runsDir), runId: runId || nanoid() },
+  }, { reporter });
 }
 
 type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];
-
-function relativeAgencyPath(baseDir: string, absoluteFile: string): string {
-  const relative = path.relative(baseDir, absoluteFile);
-  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Optimize entry file ${absoluteFile} must be inside optimize working directory ${baseDir}`);
-  }
-  return relative.split(path.sep).join("/");
-}

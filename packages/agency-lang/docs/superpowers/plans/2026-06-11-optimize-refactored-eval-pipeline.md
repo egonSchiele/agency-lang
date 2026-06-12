@@ -45,6 +45,10 @@ Prerequisites:
   - Accept only when `suiteVerdict.winner === "B"`.
 - `lib/optimize/loop.test.ts`
   - Tests for task reuse, A/B side mapping, acceptance rule, candidate failures, judge failures, and summary counts.
+- `lib/optimize/history.ts`, `lib/optimize/history.test.ts`
+  - Operation-based mutation history entries (no prompt text bodies).
+- `lib/optimize/ast.ts`
+  - Delete the legacy tag-based helpers (`findOptimizeTargets`, `getPromptValue`, `updatePrompt`) and the legacy `OptimizeTarget` type, resolving the name collision with `lib/optimize/targets.ts`. Keep `parsePromptToSegments` (interpolation validation still needs it; move it next to the validation helper if `ast.ts` ends up empty).
 - `lib/optimize/artifacts.ts`
   - Ensure layout has `runs/optimize/<run-id>/iter-N/agent/`, `eval-run/`, `verdict.json`, `champion/agent/`, and `summary.json`.
 - `lib/optimize/artifacts.test.ts`
@@ -60,6 +64,11 @@ Prerequisites:
 - Champion is side A; candidate is side B. `judgeSuite()` owns position-bias swapping internally.
 - Do not keep optimize-specific `judgeSamples`, `acceptThreshold`, `buildOptimizeVerdict`, source-patching helpers, or sampling code after migration unless compatibility tests require temporary wrappers.
 - Candidate eval task failures should be visible to `judgeSuite()` through missing/failed task statuses. Reject unless suite winner is B.
+- Target discovery (`discoverOptimizeTargets()`) runs once at CLI startup; the discovered `OptimizeTargetSet` rides in `OptimizeLoopConfig.target.targetSet`. After an accepted candidate, the champion adopts the `targetSet` returned by `OptimizeSourceMutator.preview()` (the mutator plan makes preview return the updated set) — never re-run disk discovery mid-loop.
+- **Parse budget:** parsing can take up to a second on long files. Total parse cost at the optimize layer must be O(n) in the number of Agency files: one discovery pass at startup, plus O(files touched) per preview attempt. Anything that re-parses the whole import tree per iteration (re-discovery on acceptance, a second closure walk, parsing unchanged files) is a defect. Candidate compilation inside each eval run necessarily processes the tree; that is the compiler's cost, not this layer's, and must not be added to.
+- **Keep the per-iteration workspace.** `iter-N/workspace/` remains a full working-dir copy (existing `prepareWorkspace()` exclusions) so candidates can read non-Agency resources at runtime, and task `working_dir` normalization (`normalizeOptimizeTasks`) stays. `iter-N/agent/` holds only the discovered Agency file set for inspection; the same candidate files are overlaid onto the workspace, and baseline/candidate evals always run against the workspace entry file.
+- The LLM mutator contract is defined in the declarative-optimize-mutator plan (Task 5): `proposeMutation({ config, targets, tasks, history, model?, diagnostics?, callModel? })` returning `{ operations, rationale }`. The mutator does not validate; the loop owns a single retry, passing diagnostics from a rejected `OptimizeSourceMutator.preview()` back via `diagnostics`.
+- Sequencing (accepted): the declarative-optimize-mutator plan executes first, and its Task 5 changes the mutator output shape before this plan migrates the loop. `agency eval optimize` is broken on main in that window; Task 3 below closes it. Do not add compatibility shims.
 
 ---
 
@@ -184,7 +193,85 @@ git commit -m "optimize: use shared eval task model"
 
 ---
 
-### Task 3: Compose optimize loop with eval run and judge suite
+### Task 3: Migrate the optimize loop to declaration targets and the source mutator
+
+The loop core is still on the legacy model: `validateOptimizeTarget()` requires the `@optimize(prompt)` tag that `discoverOptimizeTargets()` now rejects, mutations are applied via the `lib/optimize/ast.ts` prompt-patching helpers, and the champion is a single source string. This task replaces that core with declaration-target discovery plus the declarative source mutator, and closes the accepted broken window opened by the mutator plan's Task 5.
+
+**Files:**
+- Modify: `lib/optimize/loop.ts`
+- Modify: `lib/optimize/loop.test.ts`
+- Modify: `lib/optimize/types.ts`
+- Modify: `lib/cli/eval/optimize.ts` (run discovery at startup, pass the target set into the loop config; delete `localAgencyFileClosure` so the import closure is parsed exactly once at startup. Fold the working-dir rule — common ancestor of the closure, unless inside cwd — into `discoverOptimizeTargets()`: walk first collecting absolute paths and parsed programs, compute `baseDir` at the end when no explicit `baseDir` option is given, then key the file map. Deriving the dir outside discovery doesn't work because discovery needs `baseDir` up front to key relative paths.)
+- Modify: `lib/optimize/history.ts`, `lib/optimize/history.test.ts`
+- Modify/Delete: `lib/optimize/ast.ts` (legacy helpers; see file structure notes)
+
+- [ ] **Step 1: Write failing loop migration tests**
+
+Inject fake `proposeMutation` and a real (or fake) `OptimizeSourceMutator`. Assert:
+
+- the loop config carries `target.targetSet: OptimizeTargetSet` and the loop throws before the baseline run when `targetSet.targets` is empty,
+- the baseline iteration materializes `targetSet.files` sources verbatim into `iter-0/agent/` and overlays them onto `iter-0/workspace/`,
+- the mutator is called with the contract from the declarative-optimize-mutator plan (Task 5): `proposeMutation({ config, targets, tasks, history, diagnostics? })` returning `{ operations, rationale }`,
+- proposed operations go through `OptimizeSourceMutator.preview()`; a preview with diagnostics triggers exactly one mutator retry with those diagnostics passed back; a second failure records a validation-failed iteration and continues,
+- candidate previews are materialized into `iter-N/agent/` and overlaid onto `iter-N/workspace/`; evals run against the workspace entry file,
+- after an accepted candidate, the champion adopts the preview's updated `targetSet` (assert no re-discovery and no re-parsing of unchanged files — e.g. with a discovery/parse spy),
+- champion state is a file set (relative path → source), not a single source string.
+
+- [ ] **Step 2: Run RED**
+
+```bash
+pnpm test:run lib/optimize/loop.test.ts > /tmp/optimize-pipeline-migrate-red.log 2>&1
+```
+
+- [ ] **Step 3: Restructure `OptimizeLoopConfig.target`**
+
+```ts
+target: {
+  entryFile: string;            // relative, from targetSet.entryFile
+  node: string;
+  targetSet: OptimizeTargetSet; // discovered once at CLI startup
+  workingDir: string;
+  writeback: boolean;           // replaces writebackPath
+};
+```
+
+Replace `agentSource` / `agentFilename` / `writebackPath`. Writeback writes the champion file set to the original `absoluteFile` paths from `targetSet.files`, after verifying every file's current on-disk sha256 still matches its discovery-time sha256; any mismatch aborts writeback for all files (artifacts are already written at that point).
+
+- [ ] **Step 4: Replace the mutation path in the loop**
+
+Delete `validateOptimizeTarget`, `promptFromSource`, `updateSourcePrompt`, `targetsFromSource`, and `programFromSource` from `loop.ts`, along with the interim `LegacyMutationProposal` type and throwing `legacyMutateUnavailable` default that closed the broken window. The per-iteration flow becomes: `proposeMutation(...)` → `OptimizeSourceMutator.preview(operations)` → (retry once on diagnostics) → materialize preview files → eval → judge. Keep the workspace copy exactly as today (`prepareWorkspace` + exclusions), overlaying preview files on top.
+
+Materialize through a new file-set workspace writer in `lib/optimize/artifacts.ts` (with a test):
+
+```ts
+writeIterationWorkspace(iter: number, files: Record<string, string>): {
+  iter: number;
+  workspaceDir: string;
+};
+```
+
+It prepares `iter-N/workspace/` (full working-dir copy, existing `prepareWorkspace` exclusions) and overlays `files` on top, preserving relative paths. Once the loop uses `writeIterationAgent` + `writeIterationWorkspace`, delete the single-source `writeBaseline`/`writeCandidate` writers and the `IterationArtifact` shape if nothing else consumes them.
+
+- [ ] **Step 5: Update mutation history to operations**
+
+History entries record `{ iter, decision, rationale, operations: [{ target, op }], lossReasons }` — no prompt text bodies. The rendered history string stays the mutator-prompt input.
+
+- [ ] **Step 6: Run GREEN**
+
+```bash
+pnpm test:run lib/optimize/loop.test.ts lib/optimize/history.test.ts lib/optimize/sourceMutator.test.ts > /tmp/optimize-pipeline-migrate-green.log 2>&1
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/optimize lib/cli/eval/optimize.ts
+git commit -m "optimize: migrate loop to declaration targets and source mutator"
+```
+
+---
+
+### Task 4: Compose optimize loop with eval run and judge suite
 
 **Files:**
 - Modify: `lib/optimize/loop.ts`
@@ -224,9 +311,7 @@ Remove `judgeTask` / optimize-specific sampling deps.
 
 - [ ] **Step 4: Use eval run for baseline/candidates**
 
-Call `evalRunLoadedTasks({ agent: materializedEntryFile, tasks, tasksSource: "optimize:tasks", runsDir: iterEvalRunDir, runId: "eval-run", continueOnError: true, config })` or the artifact convention chosen in the declaration modifier plan. Ensure output ends up under `iter-N/eval-run/`.
-
-Before implementing, verify the exact export name in `lib/cli/eval/run.ts` — if only `evalRun()` exists today, either extract a tasks-already-loaded entrypoint as a small refactor here, or call `evalRun()` with the loaded tasks injected via the existing `deps`. Do not silently invent a function name that the prerequisite plan never created.
+Call `evalRunLoadedTasks({ agent: workspaceEntryFile, tasks, tasksSource: "optimize:tasks", runsDir: iterDir, runId: "eval-run", continueOnError: true, config })`, where `workspaceEntryFile` is the entry file inside `iter-N/workspace/` (Task 3). The eval run directory is `<runsDir>/<runId>`, so passing the iter dir as `runsDir` with run id `"eval-run"` yields exactly `iter-N/eval-run/` — do not pass `iter-N/eval-run` as `runsDir` or output nests one level too deep. (`evalRunLoadedTasks()` already exists in `lib/cli/eval/run.ts` under this exact name.)
 
 - [ ] **Step 5: Use judge suite for champion vs candidate**
 
@@ -262,7 +347,7 @@ git commit -m "optimize: compose eval run and judge suite"
 
 ---
 
-### Task 4: Align optimize artifacts with refactored pipeline
+### Task 5: Align optimize artifacts with refactored pipeline
 
 **Files:**
 - Modify: `lib/optimize/artifacts.ts`
@@ -277,11 +362,13 @@ Assert:
 runs/optimize/<run-id>/config.json
 runs/optimize/<run-id>/targets.json
 runs/optimize/<run-id>/iter-0/agent/
+runs/optimize/<run-id>/iter-0/workspace/
 runs/optimize/<run-id>/iter-0/eval-run/
 runs/optimize/<run-id>/iter-1/agent/
+runs/optimize/<run-id>/iter-1/workspace/
 runs/optimize/<run-id>/iter-1/mutation.json
 runs/optimize/<run-id>/iter-1/mutation.md
-runs/optimize/<run-id>/iter-1/diff.patch
+runs/optimize/<run-id>/iter-1/diff.txt
 runs/optimize/<run-id>/iter-1/eval-run/
 runs/optimize/<run-id>/iter-1/verdict.json
 runs/optimize/<run-id>/champion/agent/
@@ -318,7 +405,7 @@ git commit -m "optimize: write refactored pipeline artifacts"
 
 ---
 
-### Task 5: Handle optimize error policy
+### Task 6: Handle optimize error policy
 
 **Files:**
 - Modify: `lib/optimize/loop.ts`
@@ -365,7 +452,7 @@ git commit -m "optimize: enforce pipeline error policy"
 
 ---
 
-### Task 6: Update docs and remove obsolete optimize judging knobs
+### Task 7: Update docs and remove obsolete optimize judging knobs
 
 **Files:**
 - Modify: `docs/site/cli/eval.md` (the `eval optimize` section)
@@ -411,9 +498,9 @@ git commit -m "docs: describe refactored optimize pipeline"
 
 ---
 
-### Task 7: Keep `stdlib/agency/eval.agency` `optimize()` wrapper in sync with the refactored pipeline
+### Task 8: Keep `stdlib/agency/eval.agency` `optimize()` wrapper in sync with the refactored pipeline
 
-Whenever the CLI surface changes, the stdlib must expose the same functionality so users can build Agency agents that call the optimizer. The declaration-modifier-v2 plan (Task 9) makes the stdlib `optimize()` wrapper adopt the new target-discovery model. **This task layers on the pipeline changes** (judge-suite acceptance, removal of optimize-specific sampling/verdict knobs, judge flag standardization).
+Whenever the CLI surface changes, the stdlib must expose the same functionality so users can build Agency agents that call the optimizer. The declaration-modifier-v2 plan (Task 5) makes the stdlib `optimize()` wrapper adopt the new target-discovery model. **This task layers on the pipeline changes** (judge-suite acceptance, removal of optimize-specific sampling/verdict knobs, judge flag standardization).
 
 **Files:**
 - Modify: `stdlib/agency/eval.agency` — `optimize()` parameters
@@ -424,6 +511,8 @@ Whenever the CLI surface changes, the stdlib must expose the same functionality 
 - [ ] **Step 1: Match parameter set to the new CLI**
 
 Remove `acceptThreshold` (now `suiteVerdict.winner === "B"` only — no thresholding at the optimize layer) and `judgeSamples` if it has been renamed (`--samples`). Add equivalents for `--confidence-threshold`, `--margin-threshold` if surfaced by `judgeSuite()`. Keep parameter names aligned with the eval-judge stdlib wrapper so users see consistent vocabulary.
+
+Mirror the CLI's task-selection rule: exactly one of `tasks` or `goal`. `goal` desugars through the same `taskFromGoal()` path the CLI uses (`task_id: "task-1"`); passing both or neither is an error with the same message as the CLI.
 
 - [ ] **Step 2: Update docstring with acceptance rule**
 

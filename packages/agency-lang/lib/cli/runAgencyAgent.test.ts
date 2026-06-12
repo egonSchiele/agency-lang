@@ -34,7 +34,7 @@ describe("runAgencyAgent", () => {
     );
   });
 
-  it("passes args, statelog config, limits, hooks, and argv to the execution boundary", async () => {
+  it("passes args, statelog config, limits, mocks, and argv to the execution boundary", async () => {
     const agentPath = path.join(tmpDir, "agent.agency");
     const statelogPath = path.join(tmpDir, "statelog.jsonl");
     fs.writeFileSync(agentPath, "node main(value: string) { return value }\n");
@@ -44,7 +44,6 @@ describe("runAgencyAgent", () => {
       stderr: "err",
     }));
     const deps: RunAgencyAgentDeps = { executeNodeAsync };
-    const interruptHandlers = [{ action: "approve" as const }];
     const llmMocks = [{ return: "mocked" }];
 
     const result = await runAgencyAgent({
@@ -56,7 +55,6 @@ describe("runAgencyAgent", () => {
       scratchDir: tmpDir,
       statelogPath,
       limits: { wallClockMs: 1234, stdoutBytes: 2048 },
-      interruptHandlers,
       llmMocks,
       useTestLLMProvider: true,
       argv: ["--flag"],
@@ -78,7 +76,6 @@ describe("runAgencyAgent", () => {
       nodeName: "main",
       hasArgs: true,
       argsString: "\"hello\"",
-      interruptHandlers,
       timeoutMs: 1234,
       maxBufferBytes: 2048,
       llmMocks,
@@ -88,16 +85,49 @@ describe("runAgencyAgent", () => {
     });
   });
 
-  it("rejects unsupported policy fields explicitly", async () => {
+  it("uses a writable scratch directory for bundled agents by default", async () => {
+    const executeNodeAsync = vi.fn<NonNullable<RunAgencyAgentDeps["executeNodeAsync"]>>(
+      async () => ({ data: "ok", stdout: "", stderr: "" }),
+    );
+
+    await runAgencyAgent({
+      agent: "judgePairwise.agency",
+      node: "judgePairwise",
+      args: { goal: "g", responseA: "a", responseB: "b" },
+      config: {},
+    }, { executeNodeAsync });
+
+    const call = executeNodeAsync.mock.calls[0]?.[0];
+    expect(call).toBeDefined();
+    if (!call) throw new Error("executeNodeAsync was not called");
+    expect(call.scratchDir).toContain(path.join(os.tmpdir(), "agency-agent-"));
+    expect(fs.existsSync(call.scratchDir ?? "")).toBe(true);
+  });
+
+  it("omits trailing defaulted parameters and rejects unknown arguments", async () => {
     const agentPath = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentPath, "node main() {}\n");
+    fs.writeFileSync(agentPath, "node main(value: string, suffix: string = \"!\") { return value + suffix }\n");
+    const executeNodeAsync = vi.fn<NonNullable<RunAgencyAgentDeps["executeNodeAsync"]>>(
+      async () => ({ data: "ok", stdout: "", stderr: "" }),
+    );
+
+    await runAgencyAgent({
+      agent: agentPath,
+      node: "main",
+      args: { value: "hello" },
+      config: {},
+    }, { executeNodeAsync });
+
+    const call = executeNodeAsync.mock.calls[0]?.[0];
+    expect(call).toBeDefined();
+    if (!call) throw new Error("executeNodeAsync was not called");
+    expect(call.argsString).toBe("\"hello\"");
 
     await expect(runAgencyAgent({
       agent: agentPath,
       node: "main",
-      args: {},
+      args: { value: "hello", extra: true },
       config: {},
-      policy: { allowedTools: ["read"] },
-    })).rejects.toThrow(/policy\.allowedTools is not supported/);
+    }, { executeNodeAsync })).rejects.toThrow(/Unknown argument "extra"/);
   });
 });

@@ -11,7 +11,7 @@ name: "statelog"
 ```ts
 export type StatelogEvalValue = {
   value: any;
-  threadId?: string;
+  threadId: string | null;
   tMs: number;
   truncated?: boolean
 }

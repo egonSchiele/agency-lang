@@ -3,12 +3,15 @@ import * as fs from "fs";
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
 import type { JudgeSample, JudgeWinner, PairwiseJudgeResult, PairwiseVerdict, TaskVerdict } from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
+import { z } from "zod";
 
-export type JudgePairwiseOptions = {
-  baseName?: string;
-};
+const PairwiseJudgeResultSchema = z.object({
+  winner: z.union([z.literal("A"), z.literal("B"), z.literal("tie")]),
+  confidence: z.number().int().min(0).max(100),
+  reasoning: z.string(),
+});
 
-export type JudgePairArgs = JudgePairwiseOptions & {
+export type JudgePairArgs = {
   taskId?: string;
   goal: string;
   recordPathA: string;
@@ -57,18 +60,16 @@ export async function judgePairwise(
   goal: string,
   recordPathA: string,
   recordPathB: string,
-  opts: JudgePairwiseOptions = {},
 ): Promise<PairwiseVerdict> {
-  const verdict = await judgePair({ goal, recordPathA, recordPathB, ...opts });
+  const verdict = await judgePair({ goal, recordPathA, recordPathB });
 
   return {
     verdictVersion: 1,
     goal,
-    inputs: verdict.inputs.map((input) => ({
-      path: input.path ?? "",
-      response: input.response ?? null,
-      ...(input.truncated ? { truncated: true as const } : {}),
-    })) as PairwiseVerdict["inputs"],
+    inputs: [
+      pairwiseInputOf(verdict.inputs[0]),
+      pairwiseInputOf(verdict.inputs[1]),
+    ],
     winner: verdict.winner,
     confidence: verdict.confidence,
     reasoning: verdict.reasoning,
@@ -91,24 +92,11 @@ async function runPairwiseJudge(
 }
 
 function assertPairwiseJudgeResult(value: unknown): PairwiseJudgeResult {
-  if (!value || typeof value !== "object") {
-    throw new Error("Malformed pairwise judge result: expected object");
+  const parsed = PairwiseJudgeResultSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error(`Malformed pairwise judge result: ${z.prettifyError(parsed.error)}`);
   }
-  const result = value as Record<string, unknown>;
-  if (result.winner !== "A" && result.winner !== "B" && result.winner !== "tie") {
-    throw new Error("Malformed pairwise judge result: winner must be A, B, or tie");
-  }
-  if (typeof result.confidence !== "number") {
-    throw new Error("Malformed pairwise judge result: confidence must be a number");
-  }
-  if (typeof result.reasoning !== "string") {
-    throw new Error("Malformed pairwise judge result: reasoning must be a string");
-  }
-  return {
-    winner: result.winner,
-    confidence: result.confidence,
-    reasoning: result.reasoning,
-  };
+  return parsed.data;
 }
 
 function readJson(filePath: string): any {
@@ -136,6 +124,14 @@ function inputOf(
     path: filePath,
     response: response.missing ? null : response.text,
     ...(response.truncated ? { truncated: true as const } : {}),
+  };
+}
+
+function pairwiseInputOf(input: TaskVerdict["inputs"][number]): PairwiseVerdict["inputs"][number] {
+  return {
+    path: input.path ?? "",
+    response: input.response ?? null,
+    ...(input.truncated ? { truncated: true as const } : {}),
   };
 }
 

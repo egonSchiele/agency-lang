@@ -17,13 +17,13 @@ Refactor `optimize` so it composes the shared eval primitives instead of owning 
 The easy-start command should be:
 
 ```bash
-agency optimize foo.agency --goal "Make the agent return the capital of France with no extra words."
+agency eval optimize foo.agency --goal "Make the agent return the capital of France with no extra words."
 ```
 
 Advanced users can provide a task suite:
 
 ```bash
-agency optimize foo.agency --tasks tasks.json
+agency eval optimize foo.agency --tasks tasks.json
 ```
 
 ## Relationship to other specs
@@ -33,17 +33,20 @@ This spec depends on:
 - `2026-06-11-eval-core-primitives-design.md`
 - `2026-06-11-eval-goals-and-judge-suite-design.md`
 - `2026-06-10-optimize-declaration-modifier-design.md`
+- `2026-06-11-declarative-optimize-mutator-design.md`
 
-The declaration modifier spec owns optimize target syntax, target discovery, mutation artifacts, and writeback rules. This spec owns how optimize presents goals/tasks and composes run/judge primitives.
+The declaration modifier spec owns optimize target syntax and target discovery. This spec owns how optimize presents goals/tasks and composes run/judge primitives, including pipeline artifact layout and writeback timing.
+
+The declarative mutator spec owns source mutation operation schemas, preview/apply behavior, diffs, and target-specific replacement validation. This pipeline spec consumes that API; it should not define a second patching mechanism.
 
 ## Command surface
 
 ### Easy-start CLI
 
-Provide a top-level command:
+Provide an eval-namespaced command:
 
 ```bash
-agency optimize <file>[:<node>] --goal <text> [options]
+agency eval optimize <file>[:<node>] --goal <text> [options]
 ```
 
 This is a convenience surface for first-time users. It defaults to calling `main()` with no args unless a node is supplied in `<file>:<node>`.
@@ -60,20 +63,12 @@ Use --tasks tasks.json to provide args for this agent.
 Support task suites:
 
 ```bash
-agency optimize <file>[:<node>] --tasks <file|dir> [options]
+agency eval optimize <file>[:<node>] --tasks <file|dir> [options]
 ```
 
 Task files use `goal`, not `rubric`.
 
-### Eval namespace alias
-
-`agency eval optimize` may remain as an alias for users who think of optimize as part of eval:
-
-```bash
-agency eval optimize <file>[:<node>] (--goal <text> | --tasks <file|dir>) [options]
-```
-
-Both entrypoints call the same implementation.
+There is no top-level `agency optimize` alias. Keeping one spelling avoids unnecessary command-surface ambiguity.
 
 ### Options
 
@@ -149,8 +144,8 @@ run baseline task suite
 champion := baseline
 
 for each iteration:
-  build declarative mutation patch plan
-  apply candidate patch plan to file set
+  build declarative mutation operations
+  preview/apply operations to candidate file set
   run candidate task suite
   judgeSuite(championRun, candidateRun, tasks, policy)
   if suiteVerdict.winner == "B": champion := candidate
@@ -223,13 +218,13 @@ For declaration-modifier optimize, the mutator receives:
 - current optimize targets and values,
 - recent iteration history including judge suite verdict summaries.
 
-It returns a target-level mutation proposal. Patch application remains declarative as described in the optimize declaration implementation plan:
+It returns a target-level mutation proposal. Source application remains declarative as described in the declarative mutator design:
 
 ```text
 mutator changes
-  → buildOptimizePatchPlan()
-  → validateOptimizePatchPlan()
-  → applyOptimizePatchPlan()
+  → buildOptimizeMutationPlan()
+  → sourceMutator.preview()
+  → sourceMutator.apply()
 ```
 
 This keeps source mutation separate from evaluation and judging.
@@ -247,16 +242,16 @@ This keeps source mutation separate from evaluation and judging.
 
 - Optimize-specific judge sampling or aggregation.
 - Clean-worktree/sandbox isolation.
-- General AST editing beyond optimize patch plans.
+- General AST editing beyond declarative optimize mutation operations.
 - Non-string optimize domains.
 - Exported or nested optimize declarations unless the declaration modifier spec changes.
 
 ## Testing
 
-- `agency optimize foo.agency --goal ...` creates a one-task suite and runs baseline/candidate.
-- `agency optimize foo.agency --tasks tasks.json` uses task goals in judge suite.
+- `agency eval optimize foo.agency --goal ...` creates a one-task suite and runs baseline/candidate.
+- `agency eval optimize foo.agency --tasks tasks.json` uses task goals in judge suite.
 - Optimize calls judge suite with A = champion, B = candidate.
 - Multi-sample judge behavior is tested in eval judge tests, not optimize tests, except for verifying options are passed through.
 - Candidate acceptance depends only on `suiteVerdict.winner === "B"`.
 - Optimize run directory collision throws.
-- Top-level `agency optimize` and `agency eval optimize` call the same core.
+- No top-level `agency optimize` command is registered.

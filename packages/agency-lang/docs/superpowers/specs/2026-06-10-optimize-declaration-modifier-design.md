@@ -11,13 +11,12 @@ The v1 scope is intentionally narrow:
 
 - `optimize` applies only to variable declarations.
 - Runtime execution treats `optimize` as a no-op.
-- `agency optimize file.agency:node` uses `node` as the eval entrypoint, but discovers optimized declarations across the root agent file and its local `.agency` import tree. `agency eval optimize` may remain as an alias.
+- `agency eval optimize file.agency:node` uses `node` as the eval entrypoint, but discovers optimized declarations across the root agent file and its local `.agency` import tree.
 - V1 supports only string and multiline-string initializers.
-- Each iteration proposes a coordinated patch set across discovered targets and accepts or rejects the patch set as a unit.
-- Artifacts record discovered targets, target-level changes, source diffs, and verdicts.
-- Writeback may update imported local `.agency` files, gated by the existing writeback behavior.
+- Discovery emits a sorted target catalog consumed by the declarative mutator and optimize eval pipeline.
+- `targets.json` records discovered targets. Mutation artifacts, source diffs, and writeback timing are owned by the declarative mutator and optimize eval pipeline specs.
 
-General AST editing for agents is out of scope for this design. This design solves the deterministic optimizer-target mutation problem first.
+General AST editing for agents is out of scope for this design. This design solves the deterministic optimizer-target discovery problem first. The declarative mutation API that consumes discovered target IDs is specified separately in `docs/superpowers/specs/2026-06-11-declarative-optimize-mutator-design.md`.
 
 ## Relationship to the Existing Optimize Design
 
@@ -29,12 +28,12 @@ When this spec conflicts with the earlier optimize-command spec, this spec wins 
 
 - parser and formatter syntax,
 - optimize target discovery,
-- mutator input and output shape,
-- mutation artifacts,
-- multi-file candidate materialization, and
-- writeback behavior for imported local `.agency` files.
+- target catalog shape, and
+- target ID stability rules.
 
-The eval pipeline specs own judge sampling, aggregation, run directory conventions, and summary/verdict concepts. This declaration-modifier spec owns target discovery and source mutation.
+The eval pipeline specs own judge sampling, aggregation, run directory conventions, and summary/verdict concepts. This declaration-modifier spec owns target syntax and discovery.
+
+The declarative mutator spec owns source mutation APIs, preview/apply behavior, context-specific replacement validation, and future extensibility beyond string variable initializers. This spec only defines the target catalog contract that mutator consumes.
 
 ## Motivation
 
@@ -109,10 +108,9 @@ The modifier exists only for optimizer tooling.
 
 ## Command Surface
 
-The primary CLI is top-level, with an eval-namespace alias if desired:
+The optimize command lives under the eval namespace:
 
 ```bash
-agency optimize <file>[:<node>] (--goal "<text>" | --tasks <file|dir>) [options]
 agency eval optimize <file>[:<node>] (--goal "<text>" | --tasks <file|dir>) [options]
 ```
 
@@ -147,7 +145,7 @@ The implementation plan should choose the smallest compatible path based on the 
 For this command:
 
 ```bash
-agency optimize foo.agency:main --tasks tasks.json
+agency eval optimize foo.agency:main --tasks tasks.json
 ```
 
 `foo.agency:main` selects the eval entrypoint. It does not limit optimize target discovery to declarations inside `main`.
@@ -198,6 +196,48 @@ Scope names in v1 are:
 The optimizer should fail on duplicate target IDs.
 
 Targets are sorted by ID everywhere they are reported or sent to the mutator: startup logs, `targets.json`, mutator input, mutation artifacts, and patch application. This keeps runs reproducible and avoids import-order-dependent mutator prompts.
+
+Discovery also emits a target catalog entry for every target. V1 variable targets use this shape:
+
+```ts
+type OptimizeVariableTarget = {
+  id: string
+  kind: "variable"
+  file: string
+  scope: "global" | string
+  name: string
+  valueKind: "string" | "multilineString"
+  value: string
+}
+```
+
+The catalog, not hand-authored strings, is the source of truth for legal mutations. Human-readable target IDs are designed for logs, artifacts, and LLM-generated mutation proposals, but every mutation must still be validated against a discovered catalog entry.
+
+Future optimized type declarations should use the same catalog model with a different target kind. The likely ID shape for top-level types is:
+
+```text
+<relative-file>:<type-name>
+```
+
+Example:
+
+```text
+foo.agency:ResultType
+```
+
+And the target entry can extend the same discriminated union:
+
+```ts
+type OptimizeTypeTarget = {
+  id: string
+  kind: "type"
+  file: string
+  name: string
+  definition: string
+}
+```
+
+V1 does not parse or mutate `optimize type`; the catalog shape is reserved so the mutator API can add type operations later without replacing the variable-target contract.
 
 ### Scope Restrictions in V1
 
@@ -291,7 +331,14 @@ optimize const model: "gpt-4o-mini" | "gpt-4.1" = "gpt-4o-mini"
 optimize const temperature: NumberInRange(0, 1) = 0.2
 ```
 
-## Mutation Model
+## Mutation API Boundary
+
+The declaration modifier feature produces a deterministic target catalog. The declarative mutator API consumes that catalog. This split is intentional:
+
+- this spec owns syntax, AST representation, import-tree discovery, target IDs, value-domain validation, and target catalog artifacts;
+- `2026-06-11-declarative-optimize-mutator-design.md` owns mutation operation schemas, `preview`/`apply`, context-specific replacement validation, diffs, stale-target checks, and future target kinds such as optimized types.
+
+The v1 optimizer still sends target values to the bundled mutation agent and receives target-level changes, but the TypeScript source-editing interface should use the declarative operation model from the mutator spec rather than a declaration-modifier-specific patch API.
 
 ### Mutator Input
 
@@ -333,19 +380,9 @@ The mutator returns target-level changes:
 
 The mutator may change one, many, or all targets. Targets not mentioned in `changes` remain unchanged.
 
-### Patch Application
+### Mutation Application
 
-Patch application is deterministic:
-
-1. Look up each target by ID.
-2. Verify the old value still matches the target value used to build the mutator input.
-3. Validate the new value.
-4. Preserve interpolation placeholders for that target.
-5. Replace the declaration initializer.
-6. Render changed files.
-7. Produce target-level and file-level diffs.
-
-For v1, interpolation preservation should use the same rule as the current prompt optimizer: the multiset of `${...}` expressions in the old value must equal the multiset in the new value. The comparison should parse interpolation expressions and compare their canonical rendered form, not raw source text, while preserving multiplicity. For example, `${x}` appearing twice must still appear twice in the proposed value.
+Mutation application is delegated to the declarative mutator layer. For v1 variable targets, the default operation is equivalent to replacing the declaration initializer while preserving the declaration shape and `optimize` modifier. The mutator layer validates the new source in the target's syntactic context, preserves required string interpolations, renders changed files, and emits target-level/file-level diffs.
 
 ## Optimization Strategy
 
@@ -580,73 +617,24 @@ Responsibilities:
 - sort targets by ID,
 - retain parsed documents by file for later patch application.
 
-### Patch Application Module
+### Declarative Mutator Module
 
-Add a narrow optimizer-scoped patch module, for example:
-
-```text
-lib/optimize/patch.ts
-```
-
-Types:
+The source-editing implementation lives in the declarative mutator module described by `2026-06-11-declarative-optimize-mutator-design.md`. That module consumes `OptimizeTargetSet` and returns preview/apply results for operation records such as:
 
 ```ts
-type OptimizeTargetChange = {
-  id: string
-  oldValue: string
-  newValue: string
-  rationale: string
-}
-
-type OptimizePatchResult = {
-  files: Record<string, string>
-  changes: OptimizeTargetChange[]
-  diff: string
+{
+  target: "foo.agency:main:prompt",
+  kind: "variable",
+  op: "replaceInitializer",
+  value: "\"What is the capital of France?\""
 }
 ```
 
-API:
+The declaration modifier implementation should not grow a separate patch API that duplicates the mutator module.
 
-```ts
-applyOptimizeChanges(targetSet, changes): OptimizePatchResult
-```
+### Bundled LLM Mutator
 
-Responsibilities:
-
-- look up each target by ID,
-- verify the old value still matches,
-- validate interpolation preservation,
-- replace string or multiline-string initializer segments,
-- render changed files with `AgencyGenerator`,
-- produce target-level and file-level diffs.
-
-This is not a general AST editing library. It is the deterministic edit layer for optimize targets.
-
-### Mutator
-
-Change the bundled mutator agent from single-prompt output to target-level output.
-
-Example Agency types:
-
-```agency
-type OptimizeTargetInput = {
-  id: string;
-  value: string
-}
-
-type OptimizeTargetChange = {
-  id: string;
-  value: string;
-  rationale: string
-}
-
-type OptimizeMutation = {
-  changes: OptimizeTargetChange[];
-  rationale: string
-}
-```
-
-The TypeScript wrapper validates that every returned ID exists and that every returned value is valid for that target.
+The bundled LLM mutator should use the declarative mutator operation schema rather than a declaration-modifier-specific `{ id, value }` change shape. See `2026-06-11-declarative-optimize-mutator-design.md` for the exact operation records and validation rules.
 
 ### Optimize Loop
 
@@ -667,12 +655,12 @@ Each iteration:
 
 1. reads the champion file set,
 2. discovers current target values,
-3. calls the mutator with all target values,
-4. applies returned changes,
+3. calls the LLM mutator with all target values,
+4. previews/applies returned declarative operations through the source mutator,
 5. writes the candidate file set,
 6. evaluates `entryFile:entryNode`,
 7. judges candidate against champion,
-8. accepts or rejects the whole patch set.
+8. accepts or rejects the whole operation batch.
 
 ## Backward Compatibility
 

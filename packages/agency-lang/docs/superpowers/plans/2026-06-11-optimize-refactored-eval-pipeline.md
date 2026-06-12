@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `agency eval optimize <file>[:<node>]` compose shared eval run, eval judge suite, and declaration-target patching instead of owning its own judging pipeline.
+**Goal:** Make `agency eval optimize <file>[:<node>]` compose shared eval run, eval judge suite, declaration-target discovery, and the declarative source mutator instead of owning its own judging or source-editing pipeline.
 
-**Command surface decision:** We are **not** adding a new top-level `agency optimize` command and we are **not** keeping the legacy top-level `agency optimize` command as an alias. The only supported entrypoint is `agency eval optimize`. Having two names for the same command is unnecessarily confusing. Any reference in this plan to a top-level `agency optimize` is a historical artifact from an earlier draft and should be ignored — the legacy top-level command is removed in the declaration-modifier-v2 plan (Task 8), and this plan must not re-add it.
+**Command surface decision:** We are **not** adding a new top-level `agency optimize` command and we are **not** keeping the legacy top-level `agency optimize` command as an alias. The only supported entrypoint is `agency eval optimize`. Having two names for the same command is unnecessarily confusing. Any reference in this plan to a top-level `agency optimize` is a historical artifact from an earlier draft and should be ignored — the legacy top-level command is removed in the declaration-modifier-v2 plan (Task 4), and this plan must not re-add it.
 
-**Architecture:** Treat optimize as source mutation orchestration only: discover declaration targets, run a baseline eval suite, iterate mutator patch plans, evaluate candidates with `evalRunLoadedTasks()`, judge champion-vs-candidate with `judgeSuite()`, accept only `winner === "B"`, write optimize artifacts, and optionally write back the champion file set.
+**Architecture:** Treat optimize as orchestration only: discover declaration targets, run a baseline eval suite, ask the LLM mutator for declarative mutation operations, preview/apply those operations through the source mutator, evaluate candidates with `evalRunLoadedTasks()`, judge champion-vs-candidate with `judgeSuite()`, accept only `winner === "B"`, write optimize artifacts, and optionally write back the champion file set.
 
-**Tech Stack:** TypeScript, Commander CLI, Vitest, `lib/eval/loadTasks.ts`, `lib/cli/eval/run.ts`, `lib/eval/judge/suite.ts`, `lib/optimize/targets.ts`, `lib/optimize/patch.ts`, `lib/optimize/artifacts.ts`.
+**Tech Stack:** TypeScript, Commander CLI, Vitest, `lib/eval/loadTasks.ts`, `lib/cli/eval/run.ts`, `lib/eval/judge/suite.ts`, `lib/optimize/targets.ts`, `lib/optimize/sourceMutator.ts`, `lib/optimize/artifacts.ts`.
 
 ---
 
@@ -21,6 +21,7 @@ Prerequisites:
 - `docs/superpowers/plans/2026-06-11-eval-core-primitives.md`
 - `docs/superpowers/plans/2026-06-11-eval-goals-tasks-judge-suite.md`
 - `docs/superpowers/plans/2026-06-11-optimize-declaration-modifier-v2.md`
+- `docs/superpowers/plans/2026-06-11-declarative-optimize-mutator.md`
 
 ## File structure
 
@@ -29,7 +30,7 @@ Prerequisites:
 - `scripts/agency.ts`
   - The only optimize entrypoint is `agency eval optimize <file>[:<node>]`.
   - Replace required `--agent` option with positional `<agent>` argument.
-  - Do **not** add a top-level `agency optimize` command. The legacy top-level command is deleted in the declaration-modifier-v2 plan (Task 8).
+  - Do **not** add a top-level `agency optimize` command. The legacy top-level command is deleted in the declaration-modifier-v2 plan (Task 4).
 - `lib/cli/eval/optimize.ts`
   - Accept `--goal` or `--tasks` exactly like eval run.
   - Build one `OptimizeLoopConfig` from shared task loading, declaration discovery, and judge policy flags.
@@ -40,6 +41,7 @@ Prerequisites:
 - `lib/optimize/loop.ts`
   - Use `evalRunLoadedTasks()` for every baseline/candidate run.
   - Use `judgeSuite()` with champion as A and candidate as B.
+  - Convert LLM mutation proposals into declarative source mutator operations and consume preview/apply results.
   - Accept only when `suiteVerdict.winner === "B"`.
 - `lib/optimize/loop.test.ts`
   - Tests for task reuse, A/B side mapping, acceptance rule, candidate failures, judge failures, and summary counts.
@@ -48,9 +50,7 @@ Prerequisites:
 - `lib/optimize/artifacts.test.ts`
   - Layout and collision tests.
 - `docs/site/cli/eval.md`
-  - Document eval optimize alias.
-- `docs/site/cli/optimize.md`
-  - Document primary top-level optimize command and declaration modifier examples.
+  - Document `agency eval optimize` with declaration modifier examples.
 
 ## Implementation notes
 
@@ -58,7 +58,7 @@ Prerequisites:
 - If selected node requires args and `--goal` creates no args, fail before baseline run with the exact helpful message from the spec.
 - Optimize run directory collision matches eval run: throw and stop; no overwrite/resume.
 - Champion is side A; candidate is side B. `judgeSuite()` owns position-bias swapping internally.
-- Do not keep optimize-specific `judgeSamples`, `acceptThreshold`, `buildOptimizeVerdict`, or sampling code after migration unless compatibility tests require temporary wrappers.
+- Do not keep optimize-specific `judgeSamples`, `acceptThreshold`, `buildOptimizeVerdict`, source-patching helpers, or sampling code after migration unless compatibility tests require temporary wrappers.
 - Candidate eval task failures should be visible to `judgeSuite()` through missing/failed task statuses. Reject unless suite winner is B.
 
 ---
@@ -70,7 +70,7 @@ Prerequisites:
 - Modify: `lib/cli/eval/optimize.ts`
 - Modify: `lib/cli/eval/optimize.test.ts`
 
-**Prerequisite:** The legacy top-level `agency optimize` command and `lib/cli/optimize.ts` are deleted in the declaration-modifier-v2 plan (Task 8). Do not re-add them here. The only optimize entrypoint after this work is `agency eval optimize`.
+**Prerequisite:** The legacy top-level `agency optimize` command and `lib/cli/optimize.ts` are deleted in the declaration-modifier-v2 plan (Task 4). Do not re-add them here. The only optimize entrypoint after this work is `agency eval optimize`.
 
 - [ ] **Step 1: Write failing CLI tests**
 
@@ -457,7 +457,7 @@ git commit -m "optimize: stdlib optimize() matches refactored pipeline"
 pnpm test:run \
   lib/cli/eval/optimize.test.ts \
   lib/optimize/targets.test.ts \
-  lib/optimize/patch.test.ts \
+  lib/optimize/sourceMutator.test.ts \
   lib/optimize/artifacts.test.ts \
   lib/optimize/loop.test.ts \
   lib/eval/loadTasks.test.ts \

@@ -3,22 +3,23 @@ import * as fs from "fs";
 import { nanoid } from "nanoid";
 
 import { judgePairwise } from "../eval/judge/pairwise.js";
-import type { PairwiseVerdict } from "../eval/judge/types.js";
+import { judgeSuite, type JudgeSuiteArgs } from "../eval/judge/suite.js";
+import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
 import { StatelogParser } from "../eval/statelogParser.js";
 import {
   initializeEvalRun,
-  prepareEvalRunTask,
-  recordEvalRunTaskPrepareFailure,
-  recordEvalRunTaskRunFailure,
-  recordEvalRunTaskSuccess,
+  prepareEvalTask,
+  recordEvalTaskPrepareFailure,
+  recordEvalTaskRunFailure,
+  recordEvalTaskSuccess,
   shouldExtractStatelog,
   writeEvalRunSummary,
   type EvalRunState,
-  type PreparedEvalRunTask,
+  type PreparedEvalTask,
 } from "../eval/runArtifacts.js";
 import type {
   EvalRunResult,
-  EvalRunTask,
+  EvalTask,
   EvalRunTaskResult,
 } from "../eval/runTypes.js";
 import type { EvalRecord } from "../eval/types.js";
@@ -33,7 +34,7 @@ import type { OptimizeLoopConfig, OptimizeResult } from "../optimize/types.js";
  * at the call site instead of hidden as a side effect.
  */
 export type AgencyEvalRunState = EvalRunState & {
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
 };
 
 /**
@@ -42,12 +43,12 @@ export type AgencyEvalRunState = EvalRunState & {
  * thrown errors from the TS helper.
  */
 export type AgencyPrepareResult =
-  | { ok: true; prepared: PreparedEvalRunTask }
+  | { ok: true; prepared: PreparedEvalTask }
   | { ok: false; result: EvalRunTaskResult };
 
 export function _initEvalRun(
   compiled: { moduleId: string },
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   node: string,
   runsDir: string,
   runId: string,
@@ -70,18 +71,18 @@ export function _initEvalRun(
  * as a `{ ok: false, result }` so the Agency loop has a single branching
  * pattern (`if (prep.ok)`) instead of an extra `try` per iteration.
  */
-export function _prepareEvalRunTask(
+export function _prepareEvalTask(
   state: AgencyEvalRunState,
-  task: EvalRunTask,
+  task: EvalTask,
 ): AgencyPrepareResult {
   try {
-    return { ok: true, prepared: prepareEvalRunTask(state, task) };
+    return { ok: true, prepared: prepareEvalTask(state, task) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[evalRun] prepare failed for task ${task.task_id}: ${message}`);
     return {
       ok: false,
-      result: recordEvalRunTaskPrepareFailure(task.task_id, message),
+      result: recordEvalTaskPrepareFailure(task.task_id, message),
     };
   }
 }
@@ -93,12 +94,12 @@ export function _prepareEvalRunTask(
  * written. Never throws — any extract failure is turned into an error
  * result so the Agency loop never has to wrap this call in `try`.
  */
-export async function _finalizeEvalRunTask(
-  prepared: PreparedEvalRunTask,
+export async function _finalizeEvalTask(
+  prepared: PreparedEvalTask,
   runError: string,
 ): Promise<EvalRunTaskResult> {
   if (runError) {
-    return recordEvalRunTaskRunFailure(prepared, runError);
+    return recordEvalTaskRunFailure(prepared, runError);
   }
   if (shouldExtractStatelog(prepared.statelogPath)) {
     try {
@@ -107,10 +108,10 @@ export async function _finalizeEvalRunTask(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[evalRun] extract failed for task ${prepared.task.task_id}: ${message}`);
-      return recordEvalRunTaskRunFailure(prepared, message);
+      return recordEvalTaskRunFailure(prepared, message);
     }
   }
-  return recordEvalRunTaskSuccess(prepared);
+  return recordEvalTaskSuccess(prepared);
 }
 
 export function _finishEvalRun(
@@ -147,16 +148,42 @@ export async function _evalExtract(statelogPath: string): Promise<EvalRecord> {
 
 /**
  * Stdlib binding for `eval judge`. Pairwise-judges two eval records against
- * a rubric and returns the structured PairwiseVerdict. Delegates to the
+ * a goal and returns the structured PairwiseVerdict. Delegates to the
  * existing `judgePairwise` so CLI and stdlib paths share judge behavior
  * (including the subprocess judge invocation through `runAgencyJudge`).
  */
 export async function _evalJudge(
-  rubric: string,
+  goal: string,
   recordPathA: string,
   recordPathB: string,
 ): Promise<PairwiseVerdict> {
-  return judgePairwise(rubric, recordPathA, recordPathB);
+  return judgePairwise(goal, recordPathA, recordPathB);
+}
+
+/**
+ * Stdlib binding for suite-aware eval judging. Compares two eval run
+ * directories by task id and returns the suite verdict produced by the core
+ * judgeSuite helper.
+ */
+export async function _evalJudgeSuite(
+  runA: string,
+  runB: string,
+  tasks: EvalTask[],
+  samples: number,
+  confidenceThreshold: number,
+  marginThreshold: number,
+  positionBias: string,
+  judge: (args: JudgeSuiteArgs) => Promise<SuiteVerdict> = judgeSuite,
+): Promise<SuiteVerdict> {
+  if (positionBias !== "swap" && positionBias !== "none") {
+    throw new Error('positionBias must be "swap" or "none"');
+  }
+  return judge({
+    runA,
+    runB,
+    tasks,
+    policy: { samples, confidenceThreshold, marginThreshold, positionBias },
+  });
 }
 
 /**
@@ -167,7 +194,7 @@ export async function _optimize(
   config: AgencyConfigLike,
   agentSource: string,
   node: string,
-  tasks: EvalRunTask[],
+  tasks: EvalTask[],
   goal: string,
   iterations: number,
   judgeSamples: number,

@@ -5,17 +5,23 @@ description: Documents `agency eval judge`, which compares two eval records agai
 
 # Judging eval records
 
-`agency eval judge` compares two `.eval.json` records from `agency eval extract`, sends the final response from each record to an LLM judge, and writes a small verdict JSON showing which response better meets your goal.
+`agency eval judge` compares two `.eval.json` records from `agency eval extract` or two eval run directories from `agency eval run`, sends final responses to an LLM judge, and writes a verdict JSON showing which side better meets your goal.
 
 ## Synopsis
 
 ```bash
 agency eval judge --goal <text> [--out <path>] <recordA.eval.json> <recordB.eval.json>
+agency eval judge (--goal <text> | --tasks <file|dir>) [--out <path>] <runA> <runB>
 ```
 
 Options:
 
-- `--goal <text>` — required plain-English description of what success looks like.
+- `--goal <text>` — plain-English description of what success looks like. Required for record comparison. For single-task run directories, creates an inline `task-1` goal.
+- `--tasks <file|dir>` — eval task suite for run-directory comparison.
+- `--samples <n>` — judge samples per task. Defaults to `3`.
+- `--confidence-threshold <n>` — minimum task confidence counted as a suite win. Defaults to `50`.
+- `--margin-threshold <n>` — suite win margin required. Defaults to `0`.
+- `--position-bias <swap|none>` — alternate A/B positions across samples or keep original order. Defaults to `swap`.
 - `-o, --out <path>` — output verdict JSON path. Defaults to `<recordA-stem>.vs.<recordB-stem>.verdict.json` in the current working directory.
 
 ## Example
@@ -25,6 +31,12 @@ agency eval judge \
   --goal "give the correct capital of India (New Delhi) with no additional text" \
   lib/eval/judge/fixtures/india-A.eval.json \
   lib/eval/judge/fixtures/india-B.eval.json
+```
+
+Compare two run directories against a task suite:
+
+```bash
+agency eval judge runs/baseline runs/candidate --tasks tasks.json
 ```
 
 The command prints a short summary and writes the full verdict:
@@ -57,4 +69,4 @@ type PairwiseVerdict = {
 
 ## Limitations
 
-v0.1 compares only final responses. Behavioral assertions, rubric files, single-record scoring, and multi-mode dispatch are not supported yet.
+Behavioral assertions and single-record scoring are not supported yet.

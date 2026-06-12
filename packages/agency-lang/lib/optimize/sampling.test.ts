@@ -7,11 +7,11 @@ describe("judgeCandidateAgainstChampion", () => {
     const calls: Array<[string, string]> = [];
     const verdict = await judgeCandidateAgainstChampion({
       taskId: "task-1",
-      rubric: "prefer accuracy",
+      goal: "prefer accuracy",
       championRecordPath: "champion.json",
       candidateRecordPath: "candidate.json",
       samples: 2,
-      judge: async (_rubric, recordA, recordB) => {
+      judge: async (_goal, recordA, recordB) => {
         calls.push([recordA, recordB]);
         return { winner: "A", confidence: 80, reasoning: "A wins" };
       },

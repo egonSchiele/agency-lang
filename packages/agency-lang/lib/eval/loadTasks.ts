@@ -4,18 +4,18 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import { assertEvalTaskId } from "./ids.js";
-import type { EvalRunTask } from "./runTypes.js";
+import type { EvalTask } from "./runTypes.js";
 
 type MakeId = () => string;
 
-export function taskFromGoal(goal: string, makeId: MakeId = nanoid): EvalRunTask {
+export function taskFromGoal(goal: string): EvalTask {
   if (typeof goal !== "string" || goal.length === 0) {
     throw new Error("--goal must be a non-empty string");
   }
-  return { task_id: makeId(), rubric: goal, args: {} };
+  return { task_id: "task-1", goal, args: {} };
 }
 
-export function loadTasks(sourcePath: string, makeId: MakeId = nanoid): EvalRunTask[] {
+export function loadTasks(sourcePath: string, makeId: MakeId = nanoid): EvalTask[] {
   const stat = fs.statSync(sourcePath);
   if (stat.isDirectory()) {
     return loadTasksFromDirectory(sourcePath, makeId);
@@ -23,7 +23,7 @@ export function loadTasks(sourcePath: string, makeId: MakeId = nanoid): EvalRunT
   return loadTasksFromFile(sourcePath, makeId);
 }
 
-export function loadTasksFromFile(filePath: string, makeId: MakeId = nanoid): EvalRunTask[] {
+export function loadTasksFromFile(filePath: string, makeId: MakeId = nanoid): EvalTask[] {
   const parsed = readJson(filePath);
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as any).tasks)) {
     throw new Error(`Task suite ${filePath} must contain a top-level tasks array`);
@@ -33,7 +33,7 @@ export function loadTasksFromFile(filePath: string, makeId: MakeId = nanoid): Ev
   );
 }
 
-function loadTasksFromDirectory(directoryPath: string, makeId: MakeId): EvalRunTask[] {
+function loadTasksFromDirectory(directoryPath: string, makeId: MakeId): EvalTask[] {
   const files = fs
     .readdirSync(directoryPath)
     .filter((file) => file.endsWith(".json"))
@@ -51,13 +51,16 @@ function readJson(filePath: string): unknown {
   }
 }
 
-function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalRunTask {
+function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalTask {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Eval task must be a JSON object");
   }
   const task = raw as Record<string, unknown>;
-  if (typeof task.rubric !== "string" || task.rubric.length === 0) {
-    throw new Error("Eval task rubric must be a non-empty string");
+  if (task.goal !== undefined && task.rubric !== undefined) {
+    throw new Error("Eval task cannot specify both goal and rubric");
+  }
+  if (typeof task.goal !== "string" || task.goal.length === 0) {
+    throw new Error("Eval task goal must be a non-empty string");
   }
   if (task.args !== undefined && (!task.args || typeof task.args !== "object" || Array.isArray(task.args))) {
     throw new Error("Eval task args must be an object when provided");
@@ -68,9 +71,9 @@ function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalRunTa
   if (task.working_dir !== undefined && typeof task.working_dir !== "string") {
     throw new Error("Eval task working_dir must be a string when provided");
   }
-  const out: EvalRunTask = {
+  const out: EvalTask = {
     task_id: typeof task.task_id === "string" ? task.task_id : makeId(),
-    rubric: task.rubric,
+    goal: task.goal,
     args: (task.args ?? {}) as Record<string, any>,
   };
   if (typeof task.node === "string") out.node = task.node;
@@ -78,7 +81,7 @@ function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalRunTa
   return out;
 }
 
-function validateTasks(tasks: EvalRunTask[]): EvalRunTask[] {
+function validateTasks(tasks: EvalTask[]): EvalTask[] {
   const seen: Record<string, true> = {};
   for (const task of tasks) {
     assertEvalTaskId(task.task_id);

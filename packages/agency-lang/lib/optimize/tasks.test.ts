@@ -5,7 +5,7 @@ import { normalizeOptimizeTasks } from "./tasks.js";
 describe("normalizeOptimizeTasks", () => {
   it("resolves relative working_dir values against the optimizer workingDir", () => {
     const tasks = normalizeOptimizeTasks(
-      [{ task_id: "t1", rubric: "r", args: {}, working_dir: "fixtures" }],
+      [{ task_id: "t1", goal: "g", args: {}, working_dir: "fixtures" }],
       "/repo/project",
     );
 
@@ -14,7 +14,7 @@ describe("normalizeOptimizeTasks", () => {
 
   it("preserves absolute working_dir values", () => {
     const tasks = normalizeOptimizeTasks(
-      [{ task_id: "t1", rubric: "r", args: {}, working_dir: "/tmp/fixtures" }],
+      [{ task_id: "t1", goal: "g", args: {}, working_dir: "/tmp/fixtures" }],
       "/repo/project",
     );
 
@@ -22,7 +22,7 @@ describe("normalizeOptimizeTasks", () => {
   });
 
   it("does not mutate input tasks", () => {
-    const input = [{ task_id: "t1", rubric: "r", args: {}, working_dir: "fixtures" }];
+    const input = [{ task_id: "t1", goal: "g", args: {}, working_dir: "fixtures" }];
     normalizeOptimizeTasks(input, "/repo/project");
     expect(input[0].working_dir).toBe("fixtures");
   });

@@ -1,6 +1,6 @@
-export type EvalRunTask = {
+export type EvalTask = {
   task_id: string;
-  rubric: string;
+  goal: string;
   args: Record<string, any>;
   node?: string;
   working_dir?: string;
@@ -28,7 +28,7 @@ export type EvalRunConfig = {
   runId: string;
   runsDir: string;
   agent: string;
-  tasks: EvalRunTask[];
+  tasks: EvalTask[];
   tasksSource: string;
   continueOnError: boolean;
   verbose?: boolean;

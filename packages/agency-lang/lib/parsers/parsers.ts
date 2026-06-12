@@ -3133,13 +3133,30 @@ const staticKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
+const optimizeKeywordParser: Parser<boolean> = (input: string): ParserResult<boolean> => {
+  const result = seqC(str("optimize"), spaces)(input);
+  if (!result.success) return success(false, input);
+  const nextToken = result.rest.trimStart();
+  if (/^(const|let|static)\b/.test(nextToken)) {
+    return success(true, result.rest);
+  }
+  return success(false, input);
+};
+
 // Parse "export" and "static" in any order before "let"/"const"
 export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: string) => {
   let rest = input;
   let isExported = false;
   let isStatic = false;
+  let isOptimize = false;
 
-  // Try up to 2 modifiers in any order
+  const optimizeResult = optimizeKeywordParser(rest);
+  if (optimizeResult.success && optimizeResult.result) {
+    isOptimize = true;
+    rest = optimizeResult.rest;
+  }
+
+  // Try up to 2 legacy modifiers in any order
   for (let i = 0; i < 2; i++) {
     if (!isExported) {
       const exportResult = exportKeywordParser(rest);
@@ -3161,10 +3178,18 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   }
 
   // If no modifiers found, this parser doesn't match
-  if (!isExported && !isStatic) return failure("expected 'export' or 'static'", input);
+  if (!isExported && !isStatic && !isOptimize) return failure("expected 'export', 'static', or 'optimize'", input);
+
+  if (isOptimize && isExported) {
+    return failure("export optimize declarations are unsupported in v1", input);
+  }
 
   const result = assignmentParser(rest);
   if (!result.success) return result;
+
+  if (isOptimize && !result.result.declKind) {
+    return failure("optimize requires 'let' or 'const' (e.g., 'optimize const prompt = ...')", input);
+  }
 
   if (isStatic && result.result.declKind !== "const") {
     return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
@@ -3178,6 +3203,7 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   const out = { ...result.result };
   if (isExported) out.exported = true;
   if (isStatic) out.static = true;
+  if (isOptimize) out.optimize = true;
   return success(out, result.rest);
 });
 

@@ -178,6 +178,7 @@ export type Assignment = BaseNode & {
   validated?: boolean;
   scope?: ScopeType;
   static?: boolean;
+  optimize?: boolean;
   declKind?: "let" | "const";
   value: Expression | MessageThread;
   tags?: Tag[];

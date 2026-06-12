@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { assignmentParser, modifiedAssignmentParser } from "./parsers.js";
+import { parseAgency } from "../parser.js";
 
 describe("assignmentParser", () => {
   const testCases = [
@@ -587,6 +588,68 @@ describe("assignmentParser", () => {
 });
 
 describe("modifiedAssignmentParser", () => {
+  it("should parse optimize const", () => {
+    const result = modifiedAssignmentParser('optimize const prompt = "hi"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.optimize).toBe(true);
+      expect(result.result.declKind).toBe("const");
+      expect(result.result.variableName).toBe("prompt");
+    }
+  });
+
+  it("should parse optimize let", () => {
+    const result = modifiedAssignmentParser('optimize let prompt = "hi"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.optimize).toBe(true);
+      expect(result.result.declKind).toBe("let");
+      expect(result.result.variableName).toBe("prompt");
+    }
+  });
+
+  it("should parse optimize static const", () => {
+    const result = modifiedAssignmentParser('optimize static const prompt = "hi"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.optimize).toBe(true);
+      expect(result.result.static).toBe(true);
+      expect(result.result.declKind).toBe("const");
+      expect(result.result.variableName).toBe("prompt");
+    }
+  });
+
+  it("should reject invalid optimize modifier positions", () => {
+    expect(modifiedAssignmentParser('static optimize const prompt = "hi"').success).toBe(false);
+    expect(modifiedAssignmentParser('const optimize prompt = "hi"').success).toBe(false);
+    expect(modifiedAssignmentParser('optimize prompt = "hi"').success).toBe(false);
+    expect(modifiedAssignmentParser('export optimize const prompt = "hi"').success).toBe(false);
+    expect(modifiedAssignmentParser('optimize export const prompt = "hi"').success).toBe(false);
+  });
+
+  it("keeps optimize as an identifier when it is not a declaration modifier", () => {
+    const declaration = parseAgency("node main() { const optimize = 5 }", {}, false);
+    expect(declaration.success).toBe(true);
+    if (declaration.success) {
+      const main = declaration.result.nodes.find((node) => node.type === "graphNode");
+      expect(main?.body[0]).toMatchObject({ type: "assignment", variableName: "optimize" });
+    }
+
+    const call = parseAgency("node main() { optimize(x) }", {}, false);
+    expect(call.success).toBe(true);
+    if (call.success) {
+      const main = call.result.nodes.find((node) => node.type === "graphNode");
+      expect(main?.body[0]).toMatchObject({ type: "functionCall", functionName: "optimize" });
+    }
+
+    const reassignment = parseAgency("node main() { optimize = 1 }", {}, false);
+    expect(reassignment.success).toBe(true);
+    if (reassignment.success) {
+      const main = reassignment.result.nodes.find((node) => node.type === "graphNode");
+      expect(main?.body[0]).toMatchObject({ type: "assignment", variableName: "optimize" });
+    }
+  });
+
   it("should parse static const with a number", () => {
     const result = modifiedAssignmentParser("static const x = 42");
     expect(result.success).toBe(true);

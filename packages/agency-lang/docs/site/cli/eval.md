@@ -66,9 +66,9 @@ runs/<run-id>/
 
 `summary.json` contains the run id, agent label, task results, and success/error counts. `eval-record.json` is produced with the same extractor described below whenever the task produced a non-empty statelog.
 
-## Optimizing a tagged prompt
+## Optimizing marked declarations
 
-`agency eval optimize` runs an eval-driven prompt optimization loop. It looks for exactly one `@optimize(prompt)` tag in the selected node, evaluates the baseline prompt, proposes prompt mutations, evaluates each candidate against the task suite, and accepts candidates that beat the current champion by the configured win/loss margin.
+`agency eval optimize` runs an eval-driven optimization loop over declarations marked with the `optimize` modifier. Target discovery starts at the agent file and follows local relative `.agency` imports, then the optimizer evaluates the baseline, proposes declaration mutations, evaluates each candidate against the task suite, and accepts candidates that beat the current champion by the configured win/loss margin.
 
 ```bash
 agency eval optimize \
@@ -78,17 +78,19 @@ agency eval optimize \
   --iterations 5
 ```
 
-The target node must contain a single optimizable `llm(...)` call:
+Mark each string declaration the optimizer may change:
 
-```ts
+```agency
+optimize const systemPrompt = "Answer accurately."
+
 node main(question: string): string {
-  @optimize(prompt)
-  const answer: string = llm("Answer accurately: ${question}")
+  optimize const prompt = "Answer accurately: ${question}"
+  const answer: string = llm(prompt)
   return answer
 }
 ```
 
-Bare `@optimize` is treated as `@optimize(prompt)`. Other optimization targets, multiple tags in the same node, or a tag that does not enclose an `llm(...)` prompt are rejected.
+Legacy `@optimize(...)` tags are no longer supported. Use `optimize const` or `optimize let` on the declaration itself.
 
 Options:
 
@@ -109,6 +111,7 @@ Each optimize run writes:
 ```text
 runs/optimize/<run-id>/
   config.json
+  targets.json
   iter-0/
     agent/<agent-filename>
     workspace/

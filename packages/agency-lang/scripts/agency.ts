@@ -353,7 +353,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   evalCmd
     .command("optimize")
-    .description("Optimize a tagged prompt against an eval task suite")
+    .description("Optimize marked Agency declarations against an eval task suite")
     .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
     .requiredOption("--tasks <fileOrDir>", "Task suite JSON file or directory")
     .requiredOption("--goal <text>", "Plain-English optimization goal")

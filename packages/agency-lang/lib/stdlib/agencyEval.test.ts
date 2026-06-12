@@ -184,6 +184,32 @@ describe("agency eval stdlib helpers", () => {
       },
     });
   });
+
+  it("rejects optimize entry files outside the stdlib working directory", async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-outside-"));
+    try {
+      const entryFile = path.join(outsideDir, "agent.agency");
+      fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
+
+      await expect(_optimize(
+        {},
+        entryFile,
+        tmpDir,
+        "main",
+        [{ task_id: "t1", goal: "g", args: {} }],
+        "improve",
+        2,
+        3,
+        1,
+        tmpDir,
+        "run",
+        "mutator",
+        async (config) => optimizeResult(config),
+      )).rejects.toThrow(/inside optimize working directory/i);
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function optimizeResult(config: OptimizeLoopConfig): OptimizeResult {

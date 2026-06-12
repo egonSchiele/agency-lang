@@ -3163,6 +3163,9 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
       if (exportResult.success && exportResult.result) {
         isExported = true;
         rest = exportResult.rest;
+        if (/^optimize\b/.test(rest.trimStart())) {
+          return failure("export optimize declarations are unsupported in v1", input);
+        }
         continue;
       }
     }
@@ -3205,6 +3208,54 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (isStatic) out.static = true;
   if (isOptimize) out.optimize = true;
   return success(out, result.rest);
+});
+
+const bodyOptimizeAssignmentParser: Parser<Assignment> = (input: string) => {
+  const result = modifiedAssignmentParser(input);
+  if (!result.success) return result;
+  if (result.result.optimize) return result;
+  return failure("expected optimize assignment", input);
+};
+
+const BODY_RESERVED_MODIFIER_MESSAGE =
+  "`static` and `export` declarations are only supported at module top level. " +
+  "Inside function and node bodies, use `optimize const ...` for optimizable local declarations or ordinary `const`/`let` declarations.";
+
+const bodyReservedModifierParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    or(str("static"), str("export")),
+    spaces,
+    or(str("const"), str("let"), str("static"), str("optimize")),
+  );
+  if (!probe(input).success) return failure("", input);
+  return parseError(
+    BODY_RESERVED_MODIFIER_MESSAGE,
+    fail("body declaration modifier"),
+  )(input) as ParserResult<never>;
+};
+
+const bodyWithModifierParser: Parser<WithModifier> = withLoc((input: string) => {
+  const stmtResult = or(bodyOptimizeAssignmentParser, assignmentParser, returnStatementParser, functionCallParser)(input);
+  if (!stmtResult.success) return failure("expected statement before 'with'", input);
+
+  const modParser = seqC(
+    optionalSpaces,
+    str("with"),
+    spaces,
+    capture(or(str("approve"), str("reject"), str("propagate")), "handlerName"),
+    optionalSpacesOrNewline,
+  );
+  const modResult = modParser(stmtResult.rest);
+  if (!modResult.success) return failure("expected 'with approve/reject/propagate'", input);
+
+  return success(
+    {
+      type: "withModifier" as const,
+      statement: stmtResult.result,
+      handlerName: modResult.result.handlerName as WithModifier["handlerName"],
+    },
+    modResult.rest,
+  );
 });
 
 /**
@@ -3328,7 +3379,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   // `const x = foo() with approve` don't get partially consumed by
   // the inner statement parser, which would leave `with approve`
   // dangling and unparseable.
-  lazy(() => withModifierParser),
+  lazy(() => bodyWithModifierParser),
   returnStatementParser,
   gotoStatementParser,
   interruptStatementParser,
@@ -3344,7 +3395,8 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   multiLineCommentParser,
   commentParser,
   skillParser,
-  modifiedAssignmentParser,
+  bodyReservedModifierParser,
+  bodyOptimizeAssignmentParser,
   assignmentParser,
   binOpParser,
   booleanParser,

@@ -623,8 +623,23 @@ describe("modifiedAssignmentParser", () => {
     expect(modifiedAssignmentParser('static optimize const prompt = "hi"').success).toBe(false);
     expect(modifiedAssignmentParser('const optimize prompt = "hi"').success).toBe(false);
     expect(modifiedAssignmentParser('optimize prompt = "hi"').success).toBe(false);
-    expect(modifiedAssignmentParser('export optimize const prompt = "hi"').success).toBe(false);
+    const exportOptimize = modifiedAssignmentParser('export optimize const prompt = "hi"');
+    expect(exportOptimize.success).toBe(false);
+    if (!exportOptimize.success) {
+      expect(exportOptimize.message).toContain("export optimize declarations are unsupported");
+    }
     expect(modifiedAssignmentParser('optimize export const prompt = "hi"').success).toBe(false);
+  });
+
+  it("allows only optimize-modified assignments inside function and node bodies", () => {
+    const optimize = parseAgency('node main() { optimize const prompt = "hi" }', {}, false);
+    expect(optimize.success).toBe(true);
+
+    const staticConst = parseAgency("node main() { static const prompt = \"hi\" }", {}, false);
+    expect(staticConst.success).toBe(false);
+
+    const exportedConst = parseAgency("def helper() { export const prompt = \"hi\" }", {}, false);
+    expect(exportedConst.success).toBe(false);
   });
 
   it("keeps optimize as an identifier when it is not a declaration modifier", () => {

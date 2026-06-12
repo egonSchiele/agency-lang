@@ -35,6 +35,9 @@ describe("export const", () => {
   it("rejects export optimize const", () => {
     const result = modifiedAssignmentParser(`export optimize const x = 5\n`);
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.message).toContain("export optimize declarations are unsupported");
+    }
   });
 
   it("rejects optimize export const", () => {

@@ -159,6 +159,42 @@ optimize const prompt = "shared"
     });
   });
 
+  it("keeps absolute agents outside the invocation directory contained in their own working directory", async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "eval-optimize-outside-"));
+    try {
+      const agentFile = path.join(outsideDir, "agent.agency");
+      fs.writeFileSync(agentFile, "node main() {}\n");
+      const tasksFile = path.join(tmpDir, "tasks.json");
+      fs.writeFileSync(tasksFile, JSON.stringify({
+        tasks: [{ task_id: "first", goal: "be correct", args: {} }],
+      }));
+      process.chdir(tmpDir);
+
+      const capture: { loopConfig?: OptimizeLoopConfig } = {};
+      await evalOptimize({
+        agent: `${agentFile}:main`,
+        tasks: "tasks.json",
+        goal: "improve correctness",
+        config: {},
+      }, {
+        optimizeLoop: async (config) => {
+          capture.loopConfig = config;
+          return optimizeResult(config);
+        },
+      });
+
+      expect(capture.loopConfig).toMatchObject({
+        target: {
+          agentFilename: "agent.agency",
+          workingDir: outsideDir,
+          writebackPath: agentFile,
+        },
+      });
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
   it("uses configured optimize runs dir defaults", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");

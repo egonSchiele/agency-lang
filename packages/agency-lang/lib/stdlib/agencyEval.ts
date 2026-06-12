@@ -220,5 +220,9 @@ export async function _optimize(
 type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];
 
 function relativeAgencyPath(baseDir: string, absoluteFile: string): string {
-  return path.relative(baseDir, absoluteFile).split(path.sep).join("/");
+  const relative = path.relative(baseDir, absoluteFile);
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Optimize entry file ${absoluteFile} must be inside optimize working directory ${baseDir}`);
+  }
+  return relative.split(path.sep).join("/");
 }

@@ -377,6 +377,59 @@ describe("OptimizeSourceMutator.preview", () => {
     expect(updated.targets.map((target) => target.id)).toEqual(targetSet.targets.map((target) => target.id));
   });
 
+  it("applies two operations on different targets in the same file", () => {
+    const targetSet = discoverFixture();
+    const mutator = new OptimizeSourceMutator({ targetSet });
+
+    const preview = mutator.preview([
+      {
+        target: "foo.agency:bar:prompt",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: "\"new prompt\"",
+      },
+      {
+        target: "foo.agency:global:systemPrompt",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: "\"new system\"",
+      },
+    ]);
+
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["foo.agency"]).toContain("optimize const prompt = \"new prompt\"");
+    expect(preview.files["foo.agency"]).toContain("optimize static const systemPrompt = \"new system\"");
+    expect(preview.changes).toHaveLength(2);
+    expect(preview.targetSet.targets.map((target) => target.value).sort()).toEqual([
+      "imported",
+      "new prompt",
+      "new system",
+    ]);
+  });
+
+  it("replaces a multiline string target with a single-line string", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(dir, "multi.agency", "optimize const big = \"\"\"\nline one\nline two\n\"\"\"\n\nnode main() {\n  return big\n}\n");
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    expect(targetSet.targets[0].valueKind).toBe("multilineString");
+    const mutator = new OptimizeSourceMutator({ targetSet });
+
+    const preview = mutator.preview([
+      {
+        target: "multi.agency:global:big",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: "\"now short\"",
+      },
+    ]);
+
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["multi.agency"]).toContain("optimize const big = \"now short\"");
+    const updated = preview.targetSet.targets.find((target) => target.id === "multi.agency:global:big");
+    expect(updated?.valueKind).toBe("string");
+    expect(updated?.value).toBe("now short");
+  });
+
   it("applies multiple operations across files atomically", () => {
     const targetSet = discoverFixture();
     const mutator = new OptimizeSourceMutator({ targetSet });

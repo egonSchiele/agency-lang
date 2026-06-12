@@ -1,15 +1,24 @@
 import node { mutatePrompt } from "../../lib/agents/mutatePrompt.agency"
 
-type MutationProposal = {
-  prompt: string;
+type OptimizeMutationOperation = {
+  target: string;
+  kind: string;
+  op: string;
+  value: string;
   rationale: string
 }
 
-node main(): MutationProposal {
-  const currentPrompt = "Classify: $" + "{text}"
+type OptimizeMutationProposal = {
+  operations: OptimizeMutationOperation[];
+  rationale: string
+}
+
+node main(): OptimizeMutationProposal {
+  const targets = "- id: foo.agency:bar:prompt\n  kind: variable\n  current value: \"Classify: $" + "{text}\""
+  const goals = "- [task-1] Improve classification accuracy"
   const proposal = mutatePrompt(
-    "Improve classification accuracy",
-    currentPrompt,
+    targets,
+    goals,
     "",
     "",
   )

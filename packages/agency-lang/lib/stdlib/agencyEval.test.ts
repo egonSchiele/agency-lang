@@ -209,6 +209,15 @@ describe("agency eval stdlib helpers", () => {
     await expect(reject([{ task_id: "t1", goal: "g", args: {} }], "both")).rejects.toThrow(/exactly one of --tasks or --goal/i);
   });
 
+  it("rejects unknown verbosity values", async () => {
+    const entryFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
+
+    await expect(
+      _optimize({}, entryFile, tmpDir, "main", [{ task_id: "t1", goal: "g", args: {} }], "", 1, 1, 50, 0, tmpDir, "run", "", false, "loud", async (config) => optimizeResult(config)),
+    ).rejects.toThrow(/verbosity must be/);
+  });
+
   it("resolves relative entry files against the stdlib working directory", async () => {
     let loopConfig: OptimizeLoopConfig | null = null;
     fs.mkdirSync(path.join(tmpDir, "agents"), { recursive: true });

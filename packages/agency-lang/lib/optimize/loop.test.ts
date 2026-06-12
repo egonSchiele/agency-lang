@@ -178,6 +178,22 @@ describe("optimizeLoop", () => {
     expect(calls.mutate[0].diagnostics).toBeUndefined();
   });
 
+  it("feeds rendered mutation history into subsequent mutator calls", async () => {
+    const dir = makeTempDir();
+    const targetSet = discoverFixture(dir);
+    const { deps, calls } = makeDeps({
+      proposals: [proposal("\"first\""), proposal("\"second\"")],
+      winners: ["B", "A"],
+    });
+
+    await optimizeLoop(makeConfig(dir, targetSet, { iterations: 2 }), deps);
+
+    expect(calls.mutate[0].history).toBe("");
+    expect(calls.mutate[1].history).toContain("HISTORY (most recent first):");
+    expect(calls.mutate[1].history).toContain("iter 1");
+    expect(calls.mutate[1].history).toContain("agent.agency:global:prompt");
+  });
+
   it("retries the mutator once with diagnostics from a rejected preview", async () => {
     const dir = makeTempDir();
     const targetSet = discoverFixture(dir);

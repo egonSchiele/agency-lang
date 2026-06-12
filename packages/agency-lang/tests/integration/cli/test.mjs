@@ -128,6 +128,54 @@ def add(a: number, b: number): number {
   assertIncludes(literateOutput, "// sum");
   console.log("Test 5 passed");
 
+  // --- Test 6: eval run with an inline goal ---
+  console.log("--- Test 6: eval run with an inline goal ---");
+  writeFile(dir, "eval-agent.agency", `optimize const greeting = "hello"
+
+node main(): string {
+  return greeting + " world"
+}
+`);
+  run(dir, "npx agency eval run --agent eval-agent.agency --goal \"Say hello\" --runs-dir eval-runs --run-id smoke");
+  const evalSummary = JSON.parse(readFileSync(join(dir, "eval-runs", "smoke", "summary.json"), "utf-8"));
+  if (evalSummary.okCount !== 1 || evalSummary.errorCount !== 0) {
+    throw new Error(`eval run summary unexpected: ${JSON.stringify(evalSummary)}`);
+  }
+  console.log("Test 6 passed");
+
+  // --- Test 7: eval optimize baseline-only run (no LLM calls) ---
+  // --iterations 0 runs target discovery, the baseline eval, artifacts, and
+  // the reporter without ever calling the mutator or judge models.
+  console.log("--- Test 7: eval optimize baseline-only ---");
+  const optimizeOutput = run(
+    dir,
+    "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id smoke --no-writeback 2>&1",
+  );
+  assertIncludes(optimizeOutput, "1 optimize target(s) discovered");
+  assertIncludes(optimizeOutput, "eval-agent.agency:global:greeting");
+  assertIncludes(optimizeOutput, "champion iteration baseline");
+  assertIncludes(optimizeOutput, "Optimized variables:");
+  const optimizeSummary = JSON.parse(readFileSync(join(dir, "optimize-runs", "smoke", "summary.json"), "utf-8"));
+  if (optimizeSummary.championIter !== "baseline") {
+    throw new Error(`optimize summary unexpected: ${JSON.stringify(optimizeSummary)}`);
+  }
+  const targetsJson = JSON.parse(readFileSync(join(dir, "optimize-runs", "smoke", "targets.json"), "utf-8"));
+  if (targetsJson.targets.length !== 1 || targetsJson.targets[0].id !== "eval-agent.agency:global:greeting") {
+    throw new Error(`targets.json unexpected: ${JSON.stringify(targetsJson)}`);
+  }
+  // The legacy flag surface must stay dead.
+  const legacyOutput = run(dir, "npx agency eval optimize --agent eval-agent.agency --goal x 2>&1", { expectFail: true });
+  assertIncludes(legacyOutput, "unknown option");
+  // --silent prints nothing.
+  const silentOutput = run(
+    dir,
+    "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id silent-smoke --no-writeback --silent 2>&1",
+  );
+  if (silentOutput.trim() !== "") {
+    throw new Error(`--silent printed output: ${JSON.stringify(silentOutput)}`);
+  }
+  console.log("Test 7 passed");
+
   console.log("=== All CLI tests passed ===");
   cleanup(dir);
 } catch (err) {

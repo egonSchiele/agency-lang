@@ -3,16 +3,18 @@ import * as fs from "fs";
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
 import type { PairwiseJudgeResult, PairwiseVerdict } from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
+import { z } from "zod";
 
-export type JudgePairwiseOptions = {
-  baseName?: string;
-};
+const PairwiseJudgeResultSchema = z.object({
+  winner: z.union([z.literal("A"), z.literal("B"), z.literal("tie")]),
+  confidence: z.number().int().min(0).max(100),
+  reasoning: z.string(),
+});
 
 export async function judgePairwise(
   goal: string,
   recordPathA: string,
   recordPathB: string,
-  _opts: JudgePairwiseOptions = {},
 ): Promise<PairwiseVerdict> {
   const recordA = readJson(recordPathA);
   const recordB = readJson(recordPathB);
@@ -53,24 +55,11 @@ async function runPairwiseJudge(
 }
 
 function assertPairwiseJudgeResult(value: unknown): PairwiseJudgeResult {
-  if (!value || typeof value !== "object") {
-    throw new Error("Malformed pairwise judge result: expected object");
+  const parsed = PairwiseJudgeResultSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error(`Malformed pairwise judge result: ${z.prettifyError(parsed.error)}`);
   }
-  const result = value as Record<string, unknown>;
-  if (result.winner !== "A" && result.winner !== "B" && result.winner !== "tie") {
-    throw new Error("Malformed pairwise judge result: winner must be A, B, or tie");
-  }
-  if (typeof result.confidence !== "number") {
-    throw new Error("Malformed pairwise judge result: confidence must be a number");
-  }
-  if (typeof result.reasoning !== "string") {
-    throw new Error("Malformed pairwise judge result: reasoning must be a string");
-  }
-  return {
-    winner: result.winner,
-    confidence: result.confidence,
-    reasoning: result.reasoning,
-  };
+  return parsed.data;
 }
 
 function readJson(filePath: string): any {

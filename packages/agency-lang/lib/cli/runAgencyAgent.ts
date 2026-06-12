@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
 
@@ -7,17 +8,13 @@ import { parseAgency } from "@/parser.js";
 import type { GraphNodeDefinition } from "@/types.js";
 import type { LLMMock } from "@/runtime/deterministicClient.js";
 
-import { executeNodeAsync, type InterruptHandler } from "./util.js";
+import { executeNodeAsync } from "./util.js";
 
 export type AgencyAgentLimits = {
   wallClockMs?: number;
   memoryBytes?: number;
   stdoutBytes?: number;
   ipcPayloadBytes?: number;
-};
-
-export type AgencyAgentPolicy = {
-  allowedTools?: string[];
 };
 
 export type RunAgencyAgentArgs = {
@@ -29,8 +26,6 @@ export type RunAgencyAgentArgs = {
   scratchDir?: string;
   statelogPath?: string;
   limits?: AgencyAgentLimits;
-  policy?: AgencyAgentPolicy;
-  interruptHandlers?: InterruptHandler[];
   llmMocks?: LLMMock[];
   useTestLLMProvider?: boolean;
   argv?: string[];
@@ -54,11 +49,11 @@ export async function runAgencyAgent(
   args: RunAgencyAgentArgs,
   deps: RunAgencyAgentDeps = {},
 ): Promise<RunAgencyAgentResult> {
-  validatePolicy(args.policy);
   validateLimits(args.limits);
   const agencyFile = resolveAgencyAgentPath(args.agent, args.cwd);
+  const scratchDir = args.scratchDir ?? defaultScratchDirForAgent(agencyFile);
   const node = findNode(agencyFile, args.node, args.config);
-  if (args.scratchDir) fs.mkdirSync(args.scratchDir, { recursive: true });
+  if (scratchDir) fs.mkdirSync(scratchDir, { recursive: true });
 
   const result = await (deps.executeNodeAsync ?? executeNodeAsync)({
     config: configWithStatelog(args.config, args.statelogPath),
@@ -66,13 +61,12 @@ export async function runAgencyAgent(
     nodeName: args.node,
     hasArgs: node.parameters.length > 0,
     argsString: argsStringForNode(node, args.args),
-    interruptHandlers: args.interruptHandlers,
     timeoutMs: args.limits?.wallClockMs,
     maxBufferBytes: args.limits?.stdoutBytes,
     llmMocks: args.llmMocks,
     useTestLLMProvider: args.useTestLLMProvider,
     argv: args.argv,
-    scratchDir: args.scratchDir,
+    scratchDir,
   });
 
   return {
@@ -95,12 +89,6 @@ export function resolveAgencyAgentPath(agent: string, cwd = process.cwd()): stri
   throw new Error(`Agency agent not found: ${agent}`);
 }
 
-function validatePolicy(policy?: AgencyAgentPolicy): void {
-  if (policy?.allowedTools && policy.allowedTools.length > 0) {
-    throw new Error("runAgencyAgent policy.allowedTools is not supported yet");
-  }
-}
-
 function validateLimits(limits?: AgencyAgentLimits): void {
   if (!limits) return;
   if (limits.memoryBytes !== undefined) {
@@ -109,6 +97,12 @@ function validateLimits(limits?: AgencyAgentLimits): void {
   if (limits.ipcPayloadBytes !== undefined) {
     throw new Error("runAgencyAgent limits.ipcPayloadBytes is not supported by this runner yet");
   }
+}
+
+function defaultScratchDirForAgent(agencyFile: string): string | undefined {
+  const relative = path.relative(bundledAgentsDir, agencyFile);
+  const isBundled = relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  return isBundled ? fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-")) : undefined;
 }
 
 function configWithStatelog(
@@ -144,25 +138,41 @@ function argsStringForNode(
   node: GraphNodeDefinition,
   args: Record<string, unknown>,
 ): string {
+  const parameterNames = node.parameters.map((param) => param.name);
+  for (const name of Object.keys(args)) {
+    if (!parameterNames.includes(name)) {
+      throw new Error(`Unknown argument "${name}" for node ${node.nodeName}`);
+    }
+  }
   if (node.parameters.length === 0) {
     if (Object.keys(args).length > 0) {
       throw new Error(`Node ${node.nodeName} does not take arguments`);
     }
     return "";
   }
+  const lastProvidedIndex = node.parameters.reduce(
+    (last, param, index) => Object.prototype.hasOwnProperty.call(args, param.name) ? index : last,
+    -1,
+  );
+  const lastRequiredIndex = node.parameters.reduce(
+    (last, param, index) => param.defaultValue ? last : index,
+    -1,
+  );
   return node.parameters
-    .map((param) => serializeArg(args, param.name, node.nodeName))
+    .slice(0, Math.max(lastProvidedIndex, lastRequiredIndex) + 1)
+    .map((param) => serializeArg(args, param, node.nodeName))
     .join(", ");
 }
 
 function serializeArg(
   args: Record<string, unknown>,
-  name: string,
+  param: GraphNodeDefinition["parameters"][number],
   nodeName: string,
 ): string {
-  if (!Object.prototype.hasOwnProperty.call(args, name)) {
-    throw new Error(`Missing argument "${name}" for node ${nodeName}`);
+  if (!Object.prototype.hasOwnProperty.call(args, param.name)) {
+    if (param.defaultValue) return "undefined";
+    throw new Error(`Missing argument "${param.name}" for node ${nodeName}`);
   }
-  const value = args[name];
+  const value = args[param.name];
   return value === undefined ? "undefined" : JSON.stringify(value);
 }

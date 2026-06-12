@@ -39,9 +39,7 @@ describe("judgePairwise", () => {
     const a = path.join(fixturesDir, "v2-A.eval.json");
     const b = path.join(fixturesDir, "v2-B.eval.json");
 
-    const verdict = await judgePairwise("name the capital of India", a, b, {
-      baseName: "test-pairwise",
-    });
+    const verdict = await judgePairwise("name the capital of India", a, b);
 
     expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
       agent: "judgePairwise.agency",
@@ -162,5 +160,17 @@ describe("judgePairwise", () => {
       judgePairwise("goal", missing, path.join(fixturesDir, "v2-B.eval.json")),
     ).rejects.toThrow(missing);
     expect(mockedRunAgencyAgent).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed judge confidence", async () => {
+    mockedRunAgencyAgent.mockResolvedValue({
+      data: { winner: "A", confidence: 101, reasoning: "too high" },
+      stdout: "",
+      stderr: "",
+    });
+
+    await expect(
+      judgePairwise("goal", path.join(fixturesDir, "v2-A.eval.json"), path.join(fixturesDir, "v2-B.eval.json")),
+    ).rejects.toThrow(/confidence/);
   });
 });

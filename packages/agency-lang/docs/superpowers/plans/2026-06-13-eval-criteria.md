@@ -18,7 +18,7 @@
 - **Create** `lib/eval/criteria.test.ts` — unit tests for the above.
 - **Create** `lib/eval/judge/criteria.test.ts` — LLM-free test that criteria flow through `judgeSuite` → `judgePair`.
 - **Modify** `lib/eval/runTypes.ts` — add `criteria?: string[]` to `EvalTask`.
-- **Modify** `lib/eval/loadTasks.ts` (+ `loadTasks.test.ts`) — parse suite-level `criteria`, resolve relative to task-file dir, attach to each task; extend `taskFromGoal`.
+- **Modify** `lib/eval/loadTasks.ts` (+ `loadTasks.test.ts`) — parse suite-level `criteria`, resolve relative to task-file dir, attach via a single exported `withCriteria` helper (the one place that owns task-shaping); extend `taskFromGoal`.
 - **Modify** `lib/eval/judge/types.ts` — add `criteria?` to `JudgePairArgs` (defined in pairwise.ts; see Task 3).
 - **Modify** `lib/eval/judge/pairwise.ts` — thread criteria through `judgePair`, `judgePairwise`, `runPairwiseJudge`.
 - **Modify** `lib/eval/judge/suite.ts` — pass `task.criteria` into each judge call.
@@ -245,20 +245,31 @@ Add the import near the other imports (after line 6):
 import { resolveCriteria } from "./criteria.js";
 ```
 
-Extend `taskFromGoal` (lines 11-16) to accept resolved criteria:
+Add a single declarative helper that owns the "a task carries the suite's
+shared criteria" rule, so no call site hand-rolls the attach logic. Place it
+just above `taskFromGoal`:
 
 ```ts
-export function taskFromGoal(goal: string, criteria?: string[]): EvalTask {
-  if (typeof goal !== "string" || goal.length === 0) {
-    throw new Error("--goal must be a non-empty string");
-  }
-  const task: EvalTask = { task_id: "task-1", goal, args: {} };
-  if (criteria && criteria.length > 0) task.criteria = criteria;
-  return task;
+/** A task carrying the suite's shared criteria — field omitted when empty. */
+export function withCriteria(task: EvalTask, criteria: string[]): EvalTask {
+  return criteria.length > 0 ? { ...task, criteria } : task;
 }
 ```
 
-Replace `loadTasksFromFile` (lines 26-34) to read and attach suite-level criteria:
+Extend `taskFromGoal` (lines 11-16) to accept resolved criteria, expressed via
+the helper (no inline guard):
+
+```ts
+export function taskFromGoal(goal: string, criteria: string[] = []): EvalTask {
+  if (typeof goal !== "string" || goal.length === 0) {
+    throw new Error("--goal must be a non-empty string");
+  }
+  return withCriteria({ task_id: "task-1", goal, args: {} }, criteria);
+}
+```
+
+Replace `loadTasksFromFile` (lines 26-34) to read suite-level criteria and
+attach them declaratively (a `map`, not a mutation loop):
 
 ```ts
 export function loadTasksFromFile(filePath: string, makeId: MakeId = nanoid): EvalTask[] {
@@ -267,15 +278,11 @@ export function loadTasksFromFile(filePath: string, makeId: MakeId = nanoid): Ev
     throw new Error(`Task suite ${filePath} must contain a top-level tasks array`);
   }
   const baseDir = path.dirname(filePath);
-  const rawCriteria = (parsed as any).criteria as string | string[] | undefined;
-  const criteria = resolveCriteria(rawCriteria, baseDir);
+  const criteria = resolveCriteria((parsed as any).criteria as string | string[] | undefined, baseDir);
   const tasks = validateTasks(
     (parsed as any).tasks.map((raw: unknown) => normalizeTask(raw, baseDir, makeId)),
   );
-  if (criteria.length > 0) {
-    for (const task of tasks) task.criteria = criteria;
-  }
-  return tasks;
+  return tasks.map((task) => withCriteria(task, criteria));
 }
 ```
 
@@ -553,11 +560,14 @@ In `buildOptimizeLoopConfig`, replace the task construction (lines 77-79) with c
 
 In `lib/cli/evalJudge.ts`:
 
-Add the import (after line 6):
+Add the imports (after line 6):
 
 ```ts
 import { resolveCriteria } from "@/eval/criteria.js";
+import { withCriteria } from "@/eval/loadTasks.js";
 ```
+
+> `loadTasks` already imports from this file (`loadTasks`), so import `withCriteria` from the same module to keep task-shaping in one place.
 
 Add `criteria?: string[];` to `EvalJudgeOptions` (lines 11-19).
 
@@ -593,9 +603,7 @@ function tasksFromInlineGoal(runA: string, runB: string, goal: string, criteria:
   if (taskIdA !== taskIdB) {
     throw new Error(`Inline --goal run task ids differ (${taskIdA} vs ${taskIdB}); use --tasks instead`);
   }
-  const task: EvalTask = { task_id: taskIdA, goal, args: {} };
-  if (criteria.length > 0) task.criteria = criteria;
-  return [task];
+  return [withCriteria({ task_id: taskIdA, goal, args: {} }, criteria)];
 }
 ```
 
@@ -681,4 +689,6 @@ git commit -m "Document eval criteria field and --criteria flag"
 
 **Placeholder scan:** No TBD/TODO; every code step shows full code. The only ellipses are inside illustrative JSON `"code": "..."` payloads, which are intentional sample data, not plan gaps.
 
-**Type consistency:** `resolveCriteria(sources, baseDir)` and `renderCriteria(criteria)` signatures are used identically in Tasks 2, 3, 4. `EvalTask.criteria?: string[]` defined in Task 2 is read in Task 3 (`task.criteria`) and written in Tasks 2 & 4. `JudgePairArgs.criteria?: string[]` defined in Task 3 Step 3 is forwarded in Task 3 Step 4 and consumed by the Task 3 test. `taskFromGoal(goal, criteria?)` and `tasksFromInlineGoal(runA, runB, goal, criteria)` signatures match their call sites in Task 4.
+**Type consistency:** `resolveCriteria(sources, baseDir)` and `renderCriteria(criteria)` signatures are used identically in Tasks 2, 3, 4. `EvalTask.criteria?: string[]` defined in Task 2 is read in Task 3 (`task.criteria`) and attached only through `withCriteria(task, criteria)` (Task 2), the single declarative owner of task-shaping, reused by `taskFromGoal` (Task 2), `loadTasksFromFile` (Task 2), and `tasksFromInlineGoal` (Task 4) — no call site hand-rolls the attach guard. `JudgePairArgs.criteria?: string[]` defined in Task 3 Step 3 is forwarded in Task 3 Step 4 and consumed by the Task 3 test. `taskFromGoal(goal, criteria: string[] = [])` and `tasksFromInlineGoal(runA, runB, goal, criteria)` signatures match their call sites in Task 4.
+
+**Anti-pattern check (`docs/dev/anti-patterns.md`):** "Imperative code everywhere" — attachment is encapsulated behind `withCriteria` and applied via `map`, not a mutation loop, so the three call sites are declarative. "Inconsistent patterns" / duplication — the attach guard lives in exactly one helper. "Leaky abstractions" — `criteria.ts` exposes `resolve`/`render` and hides `@path` + prompt-block construction. "Swallowed catch" — `resolveOne` rethrows with context. No nested ternaries; the empty-vs-undefined `criteria` field has no downstream meaning and is handled once in `withCriteria`.

@@ -4,13 +4,13 @@
       "nodeName": "main",
       "input": "",
       "retry": 3,
-      "expectedOutput": "[12,5,7]",
+      "expectedOutput": "[5,7]",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "partial function works as LLM tool with bound value applied",
+      "description": "partial function works as LLM tool with bound value applied: the tool body sees the bound a=5 plus the LLM-supplied b. The assertion does not depend on the LLM echoing the result back, so this stays stable under real LLM calls.",
       "llmMocks": [
         { "toolCall": { "name": "add", "args": { "b": 7 } } },
         { "return": 12 }

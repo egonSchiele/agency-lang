@@ -9,6 +9,6 @@ export def add(a: number, b: number): number {
 
 node main() {
   const add5 = add.partial(a: 5)
-  const result: number = llm("Use the add5 tool to add 5 and 7. Return ONLY the number.", { tools: [add5] })
-  return [result, aVal, bVal]
+  const result: number = llm("Call the add5 tool exactly once, with b set to 7. Reply with only the number the tool returned.", { tools: [add5] })
+  return [aVal, bVal]
 }

@@ -82,6 +82,7 @@ describe("runAgencyAgent", () => {
       useTestLLMProvider: true,
       argv: ["--flag"],
       scratchDir: tmpDir,
+      quietCompile: true,
     });
   });
 

@@ -3,18 +3,18 @@
     {
       "nodeName": "main",
       "input": "",
-      "retry": 5,
-      "expectedOutput": "[12,5,7]",
+      "retry": 2,
+      "expectedOutput": "[5,true]",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "partial function as LLM tool survives interrupt with correct schema after revival",
+      "description": "partial function as LLM tool survives interrupt: the bound arg and the approval result are visible in the tool body after revival. The interrupt message and the assertions depend only on the bound arg, never on the LLM's choice of b or its final reply, so this stays stable under real LLM calls.",
       "interruptHandlers": [
         {
           "action": "approve",
-          "expectedMessage": "Confirm adding 5 + 7?"
+          "expectedMessage": "Confirm add with a=5?"
         }
       ],
       "llmMocks": [

@@ -187,4 +187,20 @@ describe("DeterministicClient scoped mocks", () => {
       inModule("agents/taskAgent.agency", () => client.text(baseConfig)),
     ).rejects.toThrow(/no llmMocks queue.*taskAgent.*mutatePrompt/s);
   });
+
+  it("does not treat user-controlled scope keys as prototype properties", async () => {
+    // "__proto__" must behave as an ordinary queue key (no prototype
+    // mutation), and unmatched modules must not falsely resolve against
+    // inherited Object.prototype names like "constructor".
+    const client = new DeterministicClient(
+      JSON.parse('{"__proto__": [{"return": "proto queue"}]}'),
+    );
+
+    const result = await inModule("agents/__proto__.agency", () => client.text(baseConfig));
+    expect(result.success && result.value.output).toBe("proto queue");
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    await expect(
+      inModule("agents/constructor.agency", () => client.text(baseConfig)),
+    ).rejects.toThrow(/no llmMocks queue/);
+  });
 });

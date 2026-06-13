@@ -69,7 +69,11 @@ export class DeterministicClient implements LLMClient {
 
   constructor(mocks: LLMMock[] | ScopedLLMMocks) {
     this.scoped = !Array.isArray(mocks);
-    this.queues = {};
+    // Null prototype: scope keys come from user-controlled JSON
+    // (AGENCY_LLM_MOCKS / test.json), so a plain `{}` would let
+    // "__proto__" pollute the prototype and would falsely match scope
+    // lookups against inherited names like "constructor".
+    this.queues = Object.create(null);
     if (Array.isArray(mocks)) {
       this.queues[FALLBACK_SCOPE] = { mocks, callIndex: 0 };
     } else {

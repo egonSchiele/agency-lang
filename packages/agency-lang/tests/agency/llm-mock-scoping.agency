@@ -1,10 +1,11 @@
-import node { mutatePrompt } from "../../lib/agents/mutatePrompt.agency"
+import { mutatePrompt } from "../../lib/agents/mutatePrompt.agency"
 
 // Scoped-mock routing test. Each queue holds exactly one mock, so this
 // only passes when BOTH llm() calls draw from their own module's queue:
-// if routing collapsed to a single queue, the second call would exhaust
-// it; if the queues were swapped, the mutator's structured-output schema
-// would reject the plain string.
+// any misrouting either exhausts a queue or feeds the mutator's
+// structured-output schema a plain string, and the test fails. Calling
+// a node transitions to it, so the mutator call is the last statement
+// and its proposal is the run's result.
 node main() {
   const summary: string = llm("Summarize: hello")
   const proposal = mutatePrompt(
@@ -13,5 +14,5 @@ node main() {
     "",
     "",
   )
-  return proposal.data
+  return proposal
 }

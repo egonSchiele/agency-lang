@@ -154,7 +154,7 @@ node main(): string {
   assertIncludes(optimizeOutput, "1 optimize target(s) discovered");
   assertIncludes(optimizeOutput, "eval-agent.agency:global:greeting");
   assertIncludes(optimizeOutput, "champion iteration baseline");
-  assertIncludes(optimizeOutput, "Optimized variables:");
+  assertIncludes(optimizeOutput, "Optimized variables");
   const optimizeSummary = JSON.parse(readFileSync(join(dir, "optimize-runs", "smoke", "summary.json"), "utf-8"));
   if (optimizeSummary.championIter !== "baseline") {
     throw new Error(`optimize summary unexpected: ${JSON.stringify(optimizeSummary)}`);

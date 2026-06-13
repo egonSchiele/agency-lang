@@ -1,3 +1,36 @@
+## Jun 12 2026 — v0.5
+
+### Language / Typechecker
+- Block types take named params and the `->` arrow.
+- You can pass an array where a variadic is expected.
+- Strings keep their original quotes instead of getting forced to double quotes, single-quoted strings work, and escapes are supported.
+- Comments work inside records.
+
+### Execution model
+- Fork/parallel/race branches each get their own isolated state now (you can still opt into sharing). This means that users can safely store state in globals without worrying about concurrent access from different threads.
+
+### Eval
+- Big one: there's a whole new `agency eval` command — `extract`, `run`, `judge`, and `optimize` (this replaces the old `agency test eval`).
+- New `optimize` modifier on variables, and we now find every optimize-marked variable across the whole import tree.
+
+### Stdlib
+- `withLock` — a mutex for threads.
+- `std::layout` got tables, plus you can set widths (a number, a percent, or "full") and text wraps to fit.
+- `std::args` for parsing command-line args.
+- `std::skills` understands the standard SKILL.md format.
+- Eval helpers (`evalJudge`, `evalExtract`), a `StatelogParser`, and `runAgencyAgent()` for running the built-in agents.
+
+### Agency Agent
+- Re-architected from a handoff model to a coordinator pattern.
+- If you don't have a policy yet, it asks whether you want a minimal or recommended one and writes it out for you.
+- Picks up your commands from `.claude/commands/`.
+- Takes command-line args, plays nicely with unix pipes, and prints tool calls more readably.
+- When it hits the max tool-call rounds it now tells the LLM to wrap up instead of throwing.
+
+### Runtime / codegen / CLI
+- Parsing got a lot faster — tarsec caches its line table and we memoize, taking ui.agency from 6s down to <1s.
+- Docs only list exported functions and types now.
+
 ## Jun 3 2026 — v0.4
 
 Breaking change: - **Disable per-function checkpoint** (perf). Was creating ~3 checkpoints per keystroke in the agent. Will return as opt-in eventually.

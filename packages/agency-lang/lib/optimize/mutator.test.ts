@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { EvalTask } from "@/eval/runTypes.js";
 
 import type { OptimizeTarget } from "./targets.js";
-import { buildMutatorMessage, buildMutatorSections, proposeMutation } from "./mutator.js";
+import { buildMutatorSections, proposeMutation } from "./mutator.js";
 
 const targets: OptimizeTarget[] = [
   {
@@ -46,58 +46,54 @@ const proposalJson = {
   rationale: "Updated the main prompt.",
 };
 
-describe("buildMutatorMessage", () => {
+describe("buildMutatorSections", () => {
   it("lists targets sorted by id with kind and current value", () => {
-    const message = buildMutatorMessage(buildMutatorSections({ targets, tasks, history: "" }));
+    const sections = buildMutatorSections({ targets, tasks, history: "" });
 
-    expect(message).toContain("OPTIMIZE TARGETS:");
-    expect(message.indexOf("foo.agency:bar:prompt")).toBeLessThan(
-      message.indexOf("foo.agency:global:systemPrompt"),
+    expect(sections.targets.indexOf("foo.agency:bar:prompt")).toBeLessThan(
+      sections.targets.indexOf("foo.agency:global:systemPrompt"),
     );
-    expect(message).toContain("kind: variable");
-    expect(message).toContain("Classify ${text}");
-    expect(message).toContain("be brief");
+    expect(sections.targets).toContain("kind: variable");
+    expect(sections.targets).toContain("Classify ${text}");
+    expect(sections.targets).toContain("be brief");
   });
 
   it("lists suite goals in task id order", () => {
-    const message = buildMutatorMessage(buildMutatorSections({ targets, tasks, history: "" }));
+    const sections = buildMutatorSections({ targets, tasks, history: "" });
 
-    expect(message).toContain("GOALS:");
-    expect(message.indexOf("[task-1] Return Paris")).toBeLessThan(
-      message.indexOf("[task-2] Mention the city"),
+    expect(sections.goals.indexOf("[task-1] Return Paris")).toBeLessThan(
+      sections.goals.indexOf("[task-2] Mention the city"),
     );
   });
 
-  it("includes recent history when present", () => {
-    const message = buildMutatorMessage(buildMutatorSections({
+  it("passes history through verbatim", () => {
+    const sections = buildMutatorSections({
       targets,
       tasks,
       history: "HISTORY (most recent first):\n- iter 1",
-    }));
+    });
 
-    expect(message).toContain("HISTORY (most recent first):");
-    expect(message).toContain("- iter 1");
+    expect(sections.history).toBe("HISTORY (most recent first):\n- iter 1");
   });
 
-  it("includes validation diagnostics from a prior rejected preview", () => {
-    const message = buildMutatorMessage(buildMutatorSections({
+  it("renders validation diagnostics from a prior rejected preview", () => {
+    const sections = buildMutatorSections({
       targets,
       tasks,
       history: "",
       diagnostics: [
         { target: "foo.agency:bar:prompt", code: "interpolation-mismatch", message: "you removed an interpolation" },
       ],
-    }));
+    });
 
-    expect(message).toContain("failed validation");
-    expect(message).toContain("[interpolation-mismatch] you removed an interpolation");
+    expect(sections.diagnostics).toContain("failed validation");
+    expect(sections.diagnostics).toContain("[interpolation-mismatch] you removed an interpolation");
   });
 
-  it("asks for declarative operation records", () => {
-    const message = buildMutatorMessage(buildMutatorSections({ targets, tasks, history: "" }));
+  it("renders no diagnostics section when there are none", () => {
+    const sections = buildMutatorSections({ targets, tasks, history: "" });
 
-    expect(message).toContain("\"operations\"");
-    expect(message).toContain("replaceInitializer");
+    expect(sections.diagnostics).toBe("");
   });
 });
 

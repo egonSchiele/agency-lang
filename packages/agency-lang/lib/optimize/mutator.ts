@@ -52,7 +52,6 @@ export type MutatorMessageSections = {
 };
 
 export type MutatorModelCaller = (args: {
-  message: string;
   sections: MutatorMessageSections;
   config: AgencyConfig;
   model: string;
@@ -87,36 +86,20 @@ export function buildMutatorSections(inputs: MutatorPromptInputs): MutatorMessag
   return { targets, goals, history: inputs.history, diagnostics };
 }
 
-export function buildMutatorMessage(sections: MutatorMessageSections): string {
-  return [
-    "OPTIMIZE TARGETS:",
-    sections.targets,
-    "",
-    "GOALS:",
-    sections.goals,
-    ...(sections.history ? ["", sections.history] : []),
-    "",
-    "YOUR TASK:",
-    "Propose replacement values for one or more of the optimize targets listed above so the agent better achieves the goals. Return JSON with:",
-    "- \"operations\": one record per target you change. Each record needs \"target\" and \"kind\" copied exactly from the list above, \"op\" set to \"replaceInitializer\", \"value\" with the replacement as Agency source text including the surrounding quotes, and \"rationale\" with one sentence on what you changed. The replacement must preserve every interpolation placeholder the current value uses (no drops, no additions).",
-    "- \"rationale\": 2-4 sentences explaining the overall change.",
-    ...(sections.diagnostics ? ["", sections.diagnostics] : []),
-  ].join("\n");
-}
-
 /**
  * Asks the mutator model for declarative mutation operations against the
- * supplied optimize targets. Performs no validation beyond response shape:
- * `OptimizeSourceMutator.preview()` owns semantic validation, and the
- * optimize loop feeds rejected-preview diagnostics back in via
- * `args.diagnostics` for a retry.
+ * supplied optimize targets. The prompt itself lives in
+ * `lib/agents/mutatePrompt.agency` — an Agency agent owns the LLM call,
+ * the task instructions, and structured output; this module only renders
+ * the deterministic data sections, exposes the `callModel` test seam, and
+ * validates the response shape at the process boundary. Semantic
+ * validation belongs to `OptimizeSourceMutator.preview()`, whose rejected
+ * diagnostics come back in via `args.diagnostics` for a retry.
  */
 export async function proposeMutation(args: ProposeMutationArgs): Promise<MutationProposal> {
   const model = args.model || args.config.client?.defaultModel || "gpt-4o-mini";
   const sections = buildMutatorSections(args);
-  const message = buildMutatorMessage(sections);
   const raw = await (args.callModel ?? defaultCallModel)({
-    message,
     sections,
     config: args.config,
     model,

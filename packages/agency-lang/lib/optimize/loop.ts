@@ -273,6 +273,17 @@ async function runCandidateIteration(args: {
   };
 }
 
+/** One initial proposal plus one retry with the rejected preview's
+ *  diagnostics fed back to the mutator. */
+const MUTATION_PROPOSAL_ATTEMPTS = 2;
+
+/**
+ * Each iteration's eval run lives inside its own `iter-N/` directory, so
+ * the eval run id is a fixed directory name rather than an identifier:
+ * `runsDir: iter-N` + `runId: "eval-run"` materializes `iter-N/eval-run/`.
+ */
+const EVAL_RUN_DIR_NAME = "eval-run";
+
 type MutationOutcome =
   | { ok: true; preview: OptimizeMutationPreview; rationale: string }
   | {
@@ -297,7 +308,7 @@ async function proposeValidMutation(
   let diagnostics: OptimizeMutationDiagnostic[] | undefined;
   let lastProposal: MutationProposal | null = null;
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < MUTATION_PROPOSAL_ATTEMPTS; attempt += 1) {
     const proposal = await (deps.mutate ?? proposeMutation)({
       config: config.runtime.config,
       targets: champion.targetSet.targets,
@@ -338,7 +349,7 @@ async function runIterationEval(
     agent: path.join(workspace.workspaceDir, config.target.entryFile),
     tasks,
     runsDir: path.join(artifacts.runDir, `iter-${iter}`),
-    runId: "eval-run",
+    runId: EVAL_RUN_DIR_NAME,
     config: config.runtime.config,
     pipeAgentOutput: deps.pipeAgentOutput ?? false,
   });
@@ -353,15 +364,10 @@ async function defaultEvalRun(args: {
   pipeAgentOutput: boolean;
 }): Promise<EvalRunResult> {
   return evalRunLoadedTasks({
-    agent: args.agent,
-    tasks: args.tasks,
+    ...args,
     tasksSource: "optimize:tasks",
-    runsDir: args.runsDir,
-    runId: args.runId,
     continueOnError: true,
-    config: args.config,
     quietCompile: true,
-    pipeAgentOutput: args.pipeAgentOutput,
   });
 }
 

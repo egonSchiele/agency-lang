@@ -3,7 +3,7 @@ import * as fs from "fs";
 import type { SuiteVerdict } from "@/eval/judge/types.js";
 import { selectFinalResponse } from "@/eval/judge/selectFinalResponse.js";
 import { formatDiff } from "@/utils/diff.js";
-
+import { color } from "@/utils/termcolors.js";
 import type { OptimizeAppliedChange, OptimizeMutationDiagnostic } from "./sourceMutator.js";
 import type { OptimizeTarget, OptimizeTargetSet } from "./targets.js";
 import type { OptimizeResult } from "./types.js";
@@ -66,11 +66,11 @@ export function createOptimizeReporter(
 
   return {
     runStarted({ runId, targetSet, taskCount }) {
-      log(`Run ${runId}: ${targetSet.targets.length} optimize target(s) discovered:`);
+      log(color.yellow(`\n== Run ${runId}: ${targetSet.targets.length} optimize target(s) discovered ==`));
       for (const target of targetSet.targets) {
-        log(`  - ${target.id} = ${JSON.stringify(truncate(target.value, LIST_VALUE_LIMIT))}`);
+        log(`  - ${color.blue(target.id)} = ${JSON.stringify(truncate(target.value, LIST_VALUE_LIMIT))}`);
       }
-      log(`Evaluating baseline on ${taskCount} task(s)`);
+      log(`\nEvaluating baseline on ${taskCount} task(s)`);
     },
     phase({ iter, total, message }) {
       separate(iter);
@@ -78,7 +78,7 @@ export function createOptimizeReporter(
     },
     validationFailed({ iter, total, diagnostics }) {
       separate(iter);
-      log(`Iteration ${iter}/${total}: validation failed:`);
+      log(color.red(`Iteration ${iter}/${total}: validation failed:`));
       for (const diagnostic of diagnostics) {
         log(`  - [${diagnostic.code}] ${diagnostic.message}`);
       }
@@ -89,39 +89,40 @@ export function createOptimizeReporter(
     },
     iterationDecided({ iter, total, decision, verdict, changes, rationale, records }) {
       separate(iter);
-      log(`Iteration ${iter}/${total}: ${decision} (candidate wins ${verdict.winsB}, champion wins ${verdict.winsA}, ties ${verdict.ties})`);
+      const logColor = decision === "accepted" ? color.green : color.red
+      log(logColor(`Iteration ${iter}/${total}: ${decision} (candidate wins ${verdict.winsB}, champion wins ${verdict.winsA}, ties ${verdict.ties})`));
       for (const change of changes) {
         logValueDiff(log, change.target, change.oldValue, change.newValue);
       }
-      log(`  rationale: ${rationale}`);
       for (const record of records) {
-        log(`  ${record.taskId} response:`);
-        logBlock(log, responseDiff(record));
+        log(color.blue(`  ~ ${record.taskId} response:`));
+        logBlock(log, responseDiff(record, log));
       }
+      log(`\n  Rationale: ${rationale}\n`);
     },
     runFinished({ result, writebackApplied, initialTargets, finalTargets }) {
       log("");
-      log("Optimized variables:");
+      log(color.yellow("== Optimized variables =="));
       const finalById: Record<string, OptimizeTarget> = {};
       for (const target of finalTargets) finalById[target.id] = target;
       for (const initial of initialTargets) {
         logValueDiff(log, initial.id, initial.value, finalById[initial.id]?.value ?? initial.value);
       }
       log("");
-      log(`Complete: champion iteration ${result.championIter}, accepted ${result.acceptedCount}, rejected ${result.rejectedCount}, validation failed ${result.validationFailedCount}`);
+      log(color.yellow(`Complete: champion iteration ${result.championIter}, accepted ${result.acceptedCount}, rejected ${result.rejectedCount}, validation failed ${result.validationFailedCount}`));
       log(`Artifacts: ${result.runDir}`);
-      if (writebackApplied) log("Champion written back to source files");
+      if (writebackApplied) log(color.green("\nChampion written back to source files.\n"));
     },
   };
 }
 
 export const SILENT_OPTIMIZE_REPORTER: OptimizeReporter = {
-  runStarted() {},
-  phase() {},
-  validationFailed() {},
-  iterationRejected() {},
-  iterationDecided() {},
-  runFinished() {},
+  runStarted() { },
+  phase() { },
+  validationFailed() { },
+  iterationRejected() { },
+  iterationDecided() { },
+  runFinished() { },
 };
 
 /**
@@ -130,27 +131,29 @@ export const SILENT_OPTIMIZE_REPORTER: OptimizeReporter = {
  * which is exactly `formatDiff`'s behavior for equal inputs.
  */
 function logValueDiff(log: (line: string) => void, target: string, oldValue: string, newValue: string): void {
-  log(`  ~ ${target}:`);
+  log(color.blue(`  ~ ${target}:`));
   logBlock(log, formatDiff(truncate(oldValue, DIFF_VALUE_LIMIT), truncate(newValue, DIFF_VALUE_LIMIT)));
 }
 
-function responseDiff(record: TaskRecordPair): string {
-  const championResponse = readResponse(record.championRecordPath);
-  const candidateResponse = readResponse(record.candidateRecordPath);
-  if (championResponse === null && candidateResponse === null) return "(both responses missing)";
-  if (championResponse === null) return `(champion response missing)\n${truncate(candidateResponse ?? "", DIFF_VALUE_LIMIT)}`;
-  if (candidateResponse === null) return `(candidate response missing)\n${truncate(championResponse, DIFF_VALUE_LIMIT)}`;
+function responseDiff(record: TaskRecordPair, log: (line: string) => void): string {
+  const championResponse = readResponse(record.championRecordPath, log);
+  const candidateResponse = readResponse(record.candidateRecordPath, log);
+  if (championResponse === null && candidateResponse === null) return color.red("(both responses missing)");
+  if (championResponse === null) return color.red(`(champion response missing)\n${truncate(candidateResponse ?? "", DIFF_VALUE_LIMIT)}`);
+  if (candidateResponse === null) return color.red(`(candidate response missing)\n${truncate(championResponse, DIFF_VALUE_LIMIT)}`);
   return formatDiff(truncate(championResponse, DIFF_VALUE_LIMIT), truncate(candidateResponse, DIFF_VALUE_LIMIT));
 }
 
-function readResponse(recordPath?: string): string | null {
+function readResponse(recordPath: string | undefined, log: (line: string) => void): string | null {
   if (!recordPath || !fs.existsSync(recordPath)) return null;
   try {
     const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
     const response = selectFinalResponse(record);
     return response.missing ? null : response.text;
   } catch (error) {
-    console.error(`failed to read eval record ${recordPath}:`, error);
+    // Route through the injected logger so callers that capture or
+    // redirect reporter output never see stray stderr writes.
+    log(`  (failed to read eval record ${recordPath}: ${error instanceof Error ? error.message : String(error)})`);
     return null;
   }
 }

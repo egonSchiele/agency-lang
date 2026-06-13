@@ -180,24 +180,35 @@ function mutationPreviewMarkdown(preview: OptimizeMutationPreview, rationale?: s
   return [
     "# Mutation",
     ...(rationale ? ["", rationale] : []),
-    ...preview.changes.flatMap((change) => [
-      "",
-      `## ${change.target}`,
-      ...(change.rationale ? ["", change.rationale] : []),
-      "",
-      "Old value:",
-      "```",
-      change.oldValue,
-      "```",
-      "",
-      "New value:",
-      "```",
-      change.newValue,
-      "```",
-    ]),
+    ...preview.changes.flatMap((change) => {
+      const oldFence = codeFence(change.oldValue);
+      const newFence = codeFence(change.newValue);
+      return [
+        "",
+        `## ${change.target}`,
+        ...(change.rationale ? ["", change.rationale] : []),
+        "",
+        "Old value:",
+        oldFence,
+        change.oldValue,
+        oldFence,
+        "",
+        "New value:",
+        newFence,
+        change.newValue,
+        newFence,
+      ];
+    }),
     "",
     "Full diff: see diff.txt",
   ].join("\n");
+}
+
+/** A fence longer than any backtick run in the value, so prompts that
+ *  themselves contain ``` don't break the markdown. */
+function codeFence(value: string): string {
+  const longestRun = Math.max(2, ...[...value.matchAll(/`+/g)].map((match) => match[0].length));
+  return "`".repeat(longestRun + 1);
 }
 
 function validationFailureMarkdown(details: { rationale?: string; diagnostics: OptimizeMutationDiagnostic[] }): string {

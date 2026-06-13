@@ -182,7 +182,7 @@ describe("createOptimizeReporter", () => {
     expect(text).toContain("~ foo.agency:bar:prompt:");
     expect(text).toContain(color.red("- xyz"));
     expect(text).toContain(color.green("+ a better prompt"));
-    expect(text).toContain("rationale: Overall clearer.");
+    expect(text).toContain("Rationale: Overall clearer.");
   });
 
   it("prints unchanged values dimmed without diff markers", () => {
@@ -244,7 +244,7 @@ describe("createOptimizeReporter", () => {
     reporter.runFinished(finishedArgs());
 
     const text = lines.join("\n");
-    expect(text).toContain("Optimized variables:");
+    expect(text).toContain("== Optimized variables ==");
     expect(text).toContain("~ foo.agency:bar:prompt:");
     expect(text).toContain(color.red("- xyz"));
     expect(text).toContain(color.green("+ a better prompt"));

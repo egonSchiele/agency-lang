@@ -52,6 +52,10 @@ export type EvalRunLoadedTasksOptions = {
   continueOnError?: boolean;
   verbose?: boolean;
   config?: AgencyConfig;
+  /** Suppress compile progress lines for the agent compile. */
+  quietCompile?: boolean;
+  /** Pipe agent subprocess stdout/stderr through to the console. Defaults to true. */
+  pipeAgentOutput?: boolean;
 };
 
 /**
@@ -148,6 +152,7 @@ export async function evalRunLoadedTasks(
   const compiled = await compileAgentForEvalRun({
     config: opts.config ?? {},
     agentFile: target.agentFile,
+    quiet: opts.quietCompile ?? false,
   });
 
   const state = initializeEvalRun({
@@ -160,7 +165,7 @@ export async function evalRunLoadedTasks(
     startedAt: new Date(),
   });
 
-  const runner = overrides.runner ?? subprocessEvalTaskRunner;
+  const runner = overrides.runner ?? makeSubprocessEvalTaskRunner(opts.pipeAgentOutput ?? true);
   const extractor = overrides.extractor ?? defaultEvalRecordExtractor;
 
   const results: EvalRunTaskResult[] = [];
@@ -183,9 +188,11 @@ export async function evalRunLoadedTasks(
 async function compileAgentForEvalRun(args: {
   config: AgencyConfig;
   agentFile: string;
+  quiet?: boolean;
 }): Promise<EvalRunCompiledAgent> {
   const compiledPath = compile(args.config, args.agentFile, undefined, {
     importStrategy: new RunStrategy(),
+    quiet: args.quiet,
   });
   if (compiledPath === null) {
     throw new Error(`Failed to compile ${args.agentFile}`);
@@ -204,24 +211,21 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };
 
-const subprocessEvalTaskRunner: EvalTaskRunner = async ({
-  compiled,
-  node,
-  args,
-  cwd,
-  statelogPath,
-}) => {
-  if (!compiled.path) {
-    return { ok: false, errorMessage: "Compiled agent has no path" };
-  }
-  return runCompiledAgentInSubprocess({
-    compiledPath: compiled.path,
-    node,
-    args,
-    cwd,
-    statelogPath,
-  });
-};
+function makeSubprocessEvalTaskRunner(pipeAgentOutput: boolean): EvalTaskRunner {
+  return async ({ compiled, node, args, cwd, statelogPath }) => {
+    if (!compiled.path) {
+      return { ok: false, errorMessage: "Compiled agent has no path" };
+    }
+    return runCompiledAgentInSubprocess({
+      compiledPath: compiled.path,
+      node,
+      args,
+      cwd,
+      statelogPath,
+      pipeAgentOutput,
+    });
+  };
+}
 
 async function runCompiledAgentInSubprocess(args: {
   compiledPath: string;
@@ -229,6 +233,7 @@ async function runCompiledAgentInSubprocess(args: {
   args: Record<string, any>;
   cwd: string;
   statelogPath: string;
+  pipeAgentOutput: boolean;
 }): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
   const limits = DEFAULT_EVAL_RUN_LIMITS;
   const child = fork(
@@ -257,8 +262,10 @@ async function runCompiledAgentInSubprocess(args: {
       resolve(value);
     };
 
-    child.stdout?.pipe(process.stdout);
-    child.stderr?.pipe(process.stderr);
+    if (args.pipeAgentOutput) {
+      child.stdout?.pipe(process.stdout);
+      child.stderr?.pipe(process.stderr);
+    }
 
     child.on("message", (msg: any) => {
       if (msg?.type === "result") {

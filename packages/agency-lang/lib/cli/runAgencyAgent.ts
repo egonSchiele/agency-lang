@@ -67,6 +67,9 @@ export async function runAgencyAgent(
     useTestLLMProvider: args.useTestLLMProvider,
     argv: args.argv,
     scratchDir,
+    // Builtin-agent compiles are ephemeral implementation details; their
+    // progress lines only clutter the caller's log.
+    quietCompile: true,
   });
 
   return {

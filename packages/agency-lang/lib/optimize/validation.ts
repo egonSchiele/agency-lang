@@ -1,19 +1,41 @@
+import { stringParser } from "@/parsers/parsers.js";
+import type { PromptSegment } from "@/types.js";
 import { expressionToString } from "@/utils/node.js";
 
-import { parsePromptToSegments } from "./ast.js";
 import type { ValidationResult } from "./types.js";
+
+/** Parses decoded prompt text (no surrounding quotes) into prompt segments. */
+export function parsePromptToSegments(prompt: string): PromptSegment[] {
+  const parsed = stringParser(JSON.stringify(prompt));
+  if (!parsed.success || parsed.rest.length > 0) {
+    throw new Error("Failed to parse prompt as an Agency string literal");
+  }
+  return parsed.result.segments;
+}
 
 export function validateMutationPrompt(
   currentPrompt: string,
   proposedPrompt: string,
 ): ValidationResult {
-  if (proposedPrompt.length === 0) {
+  return validateOptimizedStringValue(currentPrompt, proposedPrompt);
+}
+
+/**
+ * Validates a replacement value for an optimized string declaration: the
+ * replacement must be non-empty and preserve the multiset of `${...}`
+ * interpolation placeholders, compared by canonical rendered expression.
+ */
+export function validateOptimizedStringValue(
+  currentValue: string,
+  proposedValue: string,
+): ValidationResult {
+  if (proposedValue.length === 0) {
     return { ok: false, reason: "prompt is empty" };
   }
 
   try {
-    const current = interpolationMultiset(currentPrompt);
-    const proposed = interpolationMultiset(proposedPrompt);
+    const current = interpolationMultiset(currentValue);
+    const proposed = interpolationMultiset(proposedValue);
     if (current.length !== proposed.length) {
       return { ok: false, reason: interpolationCountReason(current, proposed) };
     }

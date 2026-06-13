@@ -219,6 +219,9 @@ type ExecuteNodeArgs = {
   // Optional stdout/stderr buffer limit for callers that expose resource
   // controls. Defaults to the historical executeNodeAsync limit.
   maxBufferBytes?: number;
+  // Suppress compile progress lines. Internal agent invocations (judge,
+  // mutator) set this so their ephemeral compiles don't clutter user logs.
+  quietCompile?: boolean;
 };
 
 export async function executeNodeAsync({
@@ -235,6 +238,7 @@ export async function executeNodeAsync({
   argv,
   scratchDir,
   maxBufferBytes,
+  quietCompile,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -247,6 +251,7 @@ export async function executeNodeAsync({
     } else {
       compiledPath = compile(config, agencyFile, undefined, {
         importStrategy: new RunStrategy(),
+        quiet: quietCompile,
       })!;
     }
 

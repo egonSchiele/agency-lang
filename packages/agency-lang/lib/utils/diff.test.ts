@@ -46,6 +46,18 @@ describe("formatDiff", () => {
     expect(result).toBe("");
   });
 
+  it("emits plain text without ANSI codes when colorize is off", () => {
+    const result = formatDiff("line1\nline2\nline3", "line1\nchanged\nline3", { colorize: false });
+    expect(result).not.toContain("[");
+    expect(result).toContain("- line2");
+    expect(result).toContain("+ changed");
+    expect(result).toContain("  line1");
+  });
+
+  it("colorizes by default", () => {
+    expect(formatDiff("alice", "bob")).toContain(color.red("- alice"));
+  });
+
   it("works with JSON-like fixture output", () => {
     const expected = JSON.stringify({ name: "Alice", age: 30 }, null, 2);
     const actual = JSON.stringify({ name: "Bob", age: 30 }, null, 2);

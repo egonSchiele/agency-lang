@@ -25,6 +25,46 @@ afterEach(() => {
   }
 });
 
+describe("discoverOptimizeTargets default base dir", () => {
+  it("defaults to the closure's common ancestor when it lies outside cwd", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "app/agent.agency", `
+import { helper } from "../shared/prompts.agency"
+node main() {}
+`);
+    writeAgency(dir, "shared/prompts.agency", `
+optimize const prompt = "shared"
+def helper() {
+  return prompt
+}
+`);
+
+    const targetSet = discoverOptimizeTargets(entry);
+
+    expect(targetSet.baseDir).toBe(dir);
+    expect(targetSet.entryFile).toBe("app/agent.agency");
+    expect(Object.keys(targetSet.files).sort()).toEqual([
+      "app/agent.agency",
+      "shared/prompts.agency",
+    ]);
+  });
+
+  it("defaults to cwd when the closure sits inside it", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "nested/agent.agency", "optimize const prompt = \"hi\"\nnode main() {}\n");
+    const originalCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const targetSet = discoverOptimizeTargets(entry);
+
+      expect(targetSet.baseDir).toBe(dir);
+      expect(targetSet.entryFile).toBe("nested/agent.agency");
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+});
+
 describe("discoverOptimizeTargets", () => {
   it("finds root, function-local, node-local, and imported optimize targets", () => {
     const dir = makeTempDir();
@@ -236,6 +276,15 @@ node main() {
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
       /only string and multiline string initializers are supported/i,
+    );
+  });
+
+  it("rejects optimize declarations with non-string initializers", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(dir, "foo.agency", "optimize const limit = 42\n");
+
+    expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
+      /Unsupported optimize target foo\.agency:global:limit/,
     );
   });
 

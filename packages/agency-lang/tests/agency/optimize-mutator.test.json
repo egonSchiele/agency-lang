@@ -2,15 +2,23 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Bundled optimize mutator agent returns a structured prompt proposal.",
+      "description": "Bundled optimize mutator agent returns declarative operation records.",
       "input": "",
-      "expectedOutput": "{\"prompt\":\"Classify carefully: ${text}\",\"rationale\":\"Added care.\"}",
+      "expectedOutput": "{\"operations\":[{\"target\":\"foo.agency:bar:prompt\",\"kind\":\"variable\",\"op\":\"replaceInitializer\",\"value\":\"\\\"Classify carefully: ${text}\\\"\",\"rationale\":\"Added care.\"}],\"rationale\":\"Asks for more care.\"}",
       "evaluationCriteria": [{ "type": "exact" }],
       "llmMocks": [
         {
           "return": {
-            "prompt": "Classify carefully: ${text}",
-            "rationale": "Added care."
+            "operations": [
+              {
+                "target": "foo.agency:bar:prompt",
+                "kind": "variable",
+                "op": "replaceInitializer",
+                "value": "\"Classify carefully: ${text}\"",
+                "rationale": "Added care."
+              }
+            ],
+            "rationale": "Asks for more care."
           }
         }
       ],

@@ -207,6 +207,20 @@ Each `llm()` call in the agency code consumes one entry from `llmMocks`, in orde
 - `{ "return": <value> }` — the LLM returns `<value>`. Strings are returned as-is; non-strings are JSON-stringified (the agency runtime parses them back per the response type annotation).
 - `{ "toolCall": { "name": "...", "args": { ... } } }` — the LLM emits a tool call. Use this when an `llm(..., { tools: [...] })` call should invoke a function. Tool-using flows usually need a sequence like `[toolCall, toolCall, ..., return]` — one mock per LLM round-trip.
 
+**Per-agent scoped mocks:**
+
+When a test spans several agents (e.g. a main agent that invokes the bundled mutator or judge), a single ordered list forces you to predict the exact global interleaving of `llm()` calls across all of them. Instead, pass `llmMocks` as an object of independent queues keyed by agent:
+
+```json
+"llmMocks": {
+  "mutatePrompt": [{ "return": { "operations": [], "rationale": "..." } }],
+  "judgePairwise": [{ "return": { "winner": "B", "confidence": 90, "reasoning": "..." } }],
+  "*": [{ "return": "task agent response" }]
+}
+```
+
+Keys are matched against the module making the `llm()` call: the exact module id (`lib/agents/mutatePrompt.agency`), then its basename without the extension (`mutatePrompt`), then the `"*"` fallback queue. Each queue is consumed in order independently of the others. The env var inherits into eval/agent subprocesses, so scoping works across process boundaries too. See `tests/agency/llm-mock-scoping.test.json` for a working example.
+
 **Behavior under deterministic mode:**
 
 - Tests with `evaluationCriteria.type === "llmJudge"` are auto-skipped (the judge itself is an LLM call without a mock).

@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import type { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
 import type { GraphNodeDefinition } from "@/types.js";
-import type { LLMMock } from "@/runtime/deterministicClient.js";
+import type { LLMMock, ScopedLLMMocks } from "@/runtime/deterministicClient.js";
 
 import { executeNodeAsync } from "./util.js";
 
@@ -26,7 +26,7 @@ export type RunAgencyAgentArgs = {
   scratchDir?: string;
   statelogPath?: string;
   limits?: AgencyAgentLimits;
-  llmMocks?: LLMMock[];
+  llmMocks?: LLMMock[] | ScopedLLMMocks;
   useTestLLMProvider?: boolean;
   argv?: string[];
 };

@@ -6,6 +6,7 @@
       "input": "",
       "expectedOutput": "{\"operations\":[{\"target\":\"foo.agency:bar:prompt\",\"kind\":\"variable\",\"op\":\"replaceInitializer\",\"value\":\"\\\"Classify carefully: ${text}\\\"\",\"rationale\":\"Added care.\"}],\"rationale\":\"Asks for more care.\"}",
       "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
       "llmMocks": [
         {
           "return": {

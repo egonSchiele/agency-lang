@@ -10,6 +10,7 @@
           "type": "exact"
         }
       ],
+      "useTestLLMProvider": true,
       "llmMocks": {
         "llm-mock-scoping": [
           {

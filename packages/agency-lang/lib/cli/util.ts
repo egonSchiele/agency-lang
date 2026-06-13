@@ -26,7 +26,7 @@ import { compile } from "./commands.js";
 import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
-import type { LLMMock } from "../runtime/deterministicClient.js";
+import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -202,7 +202,7 @@ type ExecuteNodeArgs = {
   // when AGENCY_USE_TEST_LLM_PROVIDER is set OR when useTestLLMProvider
   // is true. The compiled module's imports template auto-activates
   // DeterministicClient when this env var is present.
-  llmMocks?: LLMMock[];
+  llmMocks?: LLMMock[] | ScopedLLMMocks;
   // Force the deterministic LLM provider for this run even when the
   // suite-level AGENCY_USE_TEST_LLM_PROVIDER env var is unset. Use for
   // tests whose assertions depend on the deterministic client's fixed

@@ -1,5 +1,6 @@
 import type { PromptResult, StreamChunk, Result } from "smoltalk";
 import { ToolCall } from "smoltalk";
+import { agencyStore } from "./asyncContext.js";
 import type {
   EmbedConfig,
   EmbedResult,
@@ -26,6 +27,19 @@ export type MultiToolCallMock = {
 
 export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock;
 
+/**
+ * Per-agent mock queues. Keys are matched against the executing module:
+ * the exact module id ("lib/agents/mutatePrompt.agency"), then its
+ * basename without the extension ("mutatePrompt"), then the "*" fallback
+ * queue. Each queue is consumed in order, independently of the others,
+ * so tests that span several agents (e.g. a full optimize iteration:
+ * task agent + mutator + judge) don't have to predict the global
+ * interleaving of llm() calls.
+ */
+export type ScopedLLMMocks = Record<string, LLMMock[]>;
+
+const FALLBACK_SCOPE = "*";
+
 // Synthetic non-zero usage/cost so tests that only assert "value is
 // nonzero" still pass under the deterministic client. Tests that assert
 // on exact token counts or precise costs are using a real LLM and won't
@@ -43,27 +57,73 @@ const SYNTHETIC_COST = {
   currency: "USD",
 };
 
-export class DeterministicClient implements LLMClient {
-  private mocks: LLMMock[];
-  private callIndex = 0;
+type MockQueue = {
+  mocks: LLMMock[];
+  callIndex: number;
+};
 
-  constructor(mocks: LLMMock[]) {
-    this.mocks = mocks;
+export class DeterministicClient implements LLMClient {
+  private queues: Record<string, MockQueue>;
+  /** Array form: one anonymous queue, original error messages. */
+  private readonly scoped: boolean;
+
+  constructor(mocks: LLMMock[] | ScopedLLMMocks) {
+    this.scoped = !Array.isArray(mocks);
+    this.queues = {};
+    if (Array.isArray(mocks)) {
+      this.queues[FALLBACK_SCOPE] = { mocks, callIndex: 0 };
+    } else {
+      for (const [scope, queueMocks] of Object.entries(mocks)) {
+        this.queues[scope] = { mocks: queueMocks, callIndex: 0 };
+      }
+    }
+  }
+
+  /**
+   * Picks the mock queue for the currently-executing module. The module
+   * id comes from the ALS frame's callsite (seeded by `Runner.runInScope`
+   * for every step body); outside any frame — or when no scope matches —
+   * the "*" queue applies.
+   */
+  private resolveQueue(): { scope: string; queue: MockQueue } {
+    if (!this.scoped) {
+      return { scope: FALLBACK_SCOPE, queue: this.queues[FALLBACK_SCOPE] };
+    }
+    const moduleId = agencyStore.getStore()?.callsite?.moduleId;
+    if (moduleId !== undefined) {
+      if (this.queues[moduleId]) {
+        return { scope: moduleId, queue: this.queues[moduleId] };
+      }
+      const basename = moduleId.split("/").pop()?.replace(/\.agency$/, "") ?? moduleId;
+      if (this.queues[basename]) {
+        return { scope: basename, queue: this.queues[basename] };
+      }
+    }
+    if (this.queues[FALLBACK_SCOPE]) {
+      return { scope: FALLBACK_SCOPE, queue: this.queues[FALLBACK_SCOPE] };
+    }
+    throw new Error(
+      `DeterministicClient: no llmMocks queue matches module ${moduleId ?? "(no execution frame)"}. ` +
+      `Available scopes: ${Object.keys(this.queues).join(", ")}. Add a "*" queue as a fallback.`
+    );
   }
 
   async text(_config: PromptConfig): Promise<Result<PromptResult>> {
+    const { scope, queue } = this.resolveQueue();
     // NOTE: increment-then-check is intentional. callIndex tracks the
     // 1-based index of the *current* call so error messages say
     // "call #N" where N matches what a user would expect when reading
     // their llmMocks list (call #1 = first mock, call #2 = second, ...).
-    this.callIndex++;
-    if (this.callIndex > this.mocks.length) {
+    queue.callIndex++;
+    if (queue.callIndex > queue.mocks.length) {
+      const where = this.scoped ? ` in scope "${scope}"` : "";
       throw new Error(
-        `DeterministicClient: no mock provided for llm() call #${this.callIndex}. Add an entry to llmMocks in your test.json.`
+        `DeterministicClient: no mock provided for llm() call #${queue.callIndex}${where}. Add an entry to llmMocks in your test.json.`
       );
     }
 
-    const mock = this.mocks[this.callIndex - 1];
+    const mock = queue.mocks[queue.callIndex - 1];
+    const callIndex = queue.callIndex;
 
     if ("return" in mock) {
       const output =
@@ -87,7 +147,7 @@ export class DeterministicClient implements LLMClient {
       // mocks for tools that take no arguments can omit it cleanly.
       const calls = mock.toolCalls.map(
         (tc, i) =>
-          new ToolCall(`mock-tool-${this.callIndex}-${i}`, tc.name, tc.args ?? {}),
+          new ToolCall(`mock-tool-${callIndex}-${i}`, tc.name, tc.args ?? {}),
       );
       return {
         success: true,
@@ -109,7 +169,7 @@ export class DeterministicClient implements LLMClient {
       success: true,
       value: {
         output: null,
-        toolCalls: [new ToolCall(`mock-tool-${this.callIndex}`, name, args ?? {})],
+        toolCalls: [new ToolCall(`mock-tool-${callIndex}`, name, args ?? {})],
         model: "deterministic",
         usage: SYNTHETIC_USAGE,
         cost: SYNTHETIC_COST,

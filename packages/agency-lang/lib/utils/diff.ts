@@ -8,12 +8,20 @@ const DIFF_EQUAL = 0;
 const dmp = new DiffMatchPatch();
 
 /**
- * Formats a colored, line-based diff between two strings.
- * Deletions (expected) are shown in red with a "-" prefix.
- * Insertions (actual) are shown in green with a "+" prefix.
- * Equal lines are shown dimmed with a "  " prefix.
+ * Formats a line-based diff between two strings.
+ * Deletions (expected) are shown with a "-" prefix, insertions (actual)
+ * with a "+" prefix, and equal lines with a "  " prefix.
+ * Colorized (red/green/dim) by default; pass `colorize: false` for plain
+ * text suitable for files and artifacts.
  */
-export function formatDiff(expected: string, actual: string): string {
+export function formatDiff(
+  expected: string,
+  actual: string,
+  opts: { colorize?: boolean } = {},
+): string {
+  const colorize = opts.colorize ?? true;
+  const paint = (fn: (text: string) => string, text: string): string =>
+    colorize ? fn(text) : text;
   const diffs = dmp.diff_main(expected, actual);
   dmp.diff_cleanupSemantic(diffs);
 
@@ -24,11 +32,11 @@ export function formatDiff(expected: string, actual: string): string {
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       if (op === DIFF_DELETE) {
-        lines.push(color.red(`- ${part}`));
+        lines.push(paint(color.red, `- ${part}`));
       } else if (op === DIFF_INSERT) {
-        lines.push(color.green(`+ ${part}`));
+        lines.push(paint(color.green, `+ ${part}`));
       } else {
-        lines.push(color.dim(`  ${part}`));
+        lines.push(paint(color.dim, `  ${part}`));
       }
     }
   }

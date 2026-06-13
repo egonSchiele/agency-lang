@@ -35,17 +35,50 @@ export type DiscoverOptimizeTargetsOptions = {
   baseDir?: string;
 };
 
+/** A discovered target paired with its `Assignment` node in the parsed
+ *  program, for consumers (like the source mutator) that edit the AST. */
+export type OptimizeTargetNode = {
+  target: OptimizeTarget;
+  assignment: Assignment;
+};
+
+export function sha256Text(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Discovers optimize targets across the local Agency import closure of
+ * `entryFile`. This is the single parse pass over the closure: when
+ * `options.baseDir` is omitted, the base/working directory is computed from
+ * the walked closure itself (its common ancestor directory, unless that
+ * lies inside the current working directory, in which case cwd wins) — so
+ * callers never need a second closure walk to pick a working dir.
+ */
 export function discoverOptimizeTargets(
   entryFile: string,
   options: DiscoverOptimizeTargetsOptions = {},
 ): OptimizeTargetSet {
-  const absoluteEntryFile = path.resolve(entryFile);
-  const baseDir = fs.realpathSync(path.resolve(options.baseDir ?? process.cwd()));
+  const absoluteEntryFile = fs.realpathSync(path.resolve(entryFile));
+  const parsedFiles: ParsedSourceFile[] = [];
+  visitFile(absoluteEntryFile, {}, parsedFiles);
+
+  const baseDir = options.baseDir
+    ? fs.realpathSync(path.resolve(options.baseDir))
+    : defaultBaseDir(parsedFiles.map((parsed) => parsed.absoluteFile));
+
   const files: Record<string, OptimizeSourceFile> = {};
   const targets: OptimizeTarget[] = [];
-  const visited: Record<string, true> = {};
-
-  visitFile(absoluteEntryFile, baseDir, visited, files, targets);
+  for (const parsed of parsedFiles) {
+    const file = relativeFile(baseDir, parsed.absoluteFile);
+    files[file] = {
+      file,
+      absoluteFile: parsed.absoluteFile,
+      source: parsed.source,
+      sha256: sha256Text(parsed.source),
+    };
+    rejectLegacyOptimizeTags(parsed.program, file);
+    targets.push(...collectTargets(parsed.program, file, parsed.absoluteFile).map((entry) => entry.target));
+  }
 
   targets.sort((a, b) => a.id.localeCompare(b.id));
   rejectDuplicateTargetIds(targets);
@@ -58,45 +91,70 @@ export function discoverOptimizeTargets(
   };
 }
 
+type ParsedSourceFile = {
+  absoluteFile: string;
+  source: string;
+  program: AgencyProgram;
+};
+
 function visitFile(
   absoluteFile: string,
-  baseDir: string,
   visited: Record<string, true>,
-  files: Record<string, OptimizeSourceFile>,
-  targets: OptimizeTarget[],
+  parsedFiles: ParsedSourceFile[],
 ): void {
   const canonicalFile = fs.realpathSync(absoluteFile);
   if (visited[canonicalFile]) return;
   visited[canonicalFile] = true;
 
   const source = fs.readFileSync(canonicalFile, "utf8");
-  const file = relativeFile(baseDir, canonicalFile);
   const parseResult = parseAgency(source, {}, false);
   if (!parseResult.success) {
-    throw new Error(`Failed to parse optimize target file ${file}: ${parseResult.message ?? "parse error"}`);
+    throw new Error(`Failed to parse optimize target file ${canonicalFile}: ${parseResult.message ?? "parse error"}`);
   }
 
-  files[file] = {
-    file,
-    absoluteFile: canonicalFile,
-    source,
-    sha256: crypto.createHash("sha256").update(source).digest("hex"),
-  };
-
-  rejectLegacyOptimizeTags(parseResult.result, file);
-  collectTargets(parseResult.result, file, canonicalFile, targets);
+  parsedFiles.push({ absoluteFile: canonicalFile, source, program: parseResult.result });
 
   for (const importPath of agencyImportTargets(parseResult.result, { localOnly: true })) {
-    visitFile(resolveAgencyImportPath(importPath, canonicalFile), baseDir, visited, files, targets);
+    visitFile(resolveAgencyImportPath(importPath, canonicalFile), visited, parsedFiles);
   }
 }
 
-function collectTargets(
+function defaultBaseDir(absoluteFiles: string[]): string {
+  const ancestor = commonAncestor(absoluteFiles.map((file) => path.dirname(file)));
+  const cwd = fs.realpathSync(process.cwd());
+  return isInsideOrSame(ancestor, cwd) ? cwd : ancestor;
+}
+
+function commonAncestor(paths: string[]): string {
+  if (paths.length === 0) return process.cwd();
+  const [first, ...rest] = paths.map((candidate) => path.resolve(candidate).split(path.sep));
+  const prefix: string[] = [];
+  for (let index = 0; index < first.length; index += 1) {
+    const segment = first[index];
+    if (rest.some((candidate) => candidate[index] !== segment)) break;
+    prefix.push(segment);
+  }
+  const joined = prefix.join(path.sep);
+  return joined === "" ? path.sep : joined;
+}
+
+function isInsideOrSame(candidate: string, parent: string): boolean {
+  const relative = path.relative(parent, path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+/**
+ * Collects the optimize targets declared in one parsed program, paired with
+ * their `Assignment` nodes. Discovery uses the target halves; the source
+ * mutator uses the assignment nodes to replace initializers and this same
+ * function to refresh target entries after rendering a candidate.
+ */
+export function collectTargets(
   program: AgencyProgram,
   file: string,
   absoluteFile: string,
-  targets: OptimizeTarget[],
-): void {
+): OptimizeTargetNode[] {
+  const collected: OptimizeTargetNode[] = [];
   for (const { node, ancestors } of walkNodes(program.nodes)) {
     if (node.type !== "assignment" || !node.optimize) continue;
 
@@ -107,8 +165,9 @@ function collectTargets(
       );
     }
 
-    targets.push(buildTarget(node, file, absoluteFile, scope));
+    collected.push({ target: buildTarget(node, file, absoluteFile, scope), assignment: node });
   }
+  return collected;
 }
 
 function directOptimizeScope(ancestors: AgencyNode[]): string | null {
@@ -171,7 +230,13 @@ function legacyOptimizeError(file: string): Error {
   );
 }
 
-function promptSegmentsToString(segments: PromptSegment[]): string {
+/**
+ * Renders prompt segments back to the decoded target value representation:
+ * literal text with interpolations re-rendered as `${expr}`. This is the
+ * representation stored in `OptimizeTarget.value` and the one `expected`
+ * guards compare against.
+ */
+export function promptSegmentsToString(segments: PromptSegment[]): string {
   return segments.map((segment) => {
     if (segment.type === "text") return segment.value;
     return `\${${expressionToString(segment.expression)}}`;

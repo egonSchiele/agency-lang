@@ -353,30 +353,37 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   evalCmd
     .command("optimize")
-    .description("Optimize marked Agency declarations against an eval task suite")
-    .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
-    .requiredOption("--tasks <fileOrDir>", "Task suite JSON file or directory")
-    .requiredOption("--goal <text>", "Plain-English optimization goal")
+    .description("Optimize marked Agency declarations against an eval goal or task suite")
+    .argument("<agent>", "Agency file target: file.agency[:node]")
+    .option("--goal <text>", "Goal to optimize for")
+    .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
     .option("--iterations <n>", "Maximum candidate iterations", parseInt)
-    .option("--judge-samples <n>", "Pairwise judge samples per task", parseInt)
-    .option("--accept-threshold <n>", "Accept when confident wins minus losses exceeds this margin", parseInt)
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Optimizer runs output directory")
-    .option("--mutator-model <model>", "Model to use for prompt mutation")
-    .action(async (opts: {
-      agent: string;
-      tasks: string;
-      goal: string;
+    .option("--no-writeback", "Do not write the champion back to source files")
+    .option("--mutator-model <model>", "Model to use for proposing mutations")
+    .option("--samples <n>", "Judge samples per task", parseInt)
+    .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
+    .option("--margin-threshold <n>", "Suite win margin required", parseInt)
+    .option("--silent", "Print nothing; artifacts are still written")
+    .action(async (agent: string, opts: {
+      goal?: string;
+      tasks?: string;
       iterations?: number;
-      judgeSamples?: number;
-      acceptThreshold?: number;
       runId?: string;
       runsDir?: string;
+      writeback: boolean;
       mutatorModel?: string;
+      samples?: number;
+      confidenceThreshold?: number;
+      marginThreshold?: number;
+      silent?: boolean;
     }) => {
-      const result = await evalOptimize({ ...opts, config: getConfig() });
-      console.log(`Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`);
-      console.log(path.join(result.runDir, "summary.json"));
+      const result = await evalOptimize({ ...opts, agent, config: getConfig() });
+      if (!opts.silent) {
+        console.log(`Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`);
+        console.log(path.join(result.runDir, "summary.json"));
+      }
     });
 
   program

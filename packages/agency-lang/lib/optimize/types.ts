@@ -1,11 +1,14 @@
 import type { AgencyConfig } from "@/config.js";
+import type { JudgeAggregationPolicy } from "@/eval/judge/types.js";
 import type { EvalTask } from "@/eval/runTypes.js";
 
+import type { OptimizeMutationOperation } from "./sourceMutator.js";
+import type { OptimizeTargetSet } from "./targets.js";
+
 export type OptimizeDecision = "baseline" | "accepted" | "rejected" | "validation-failed";
-export type OptimizeWinner = "champion" | "candidate" | "tie";
 
 export type MutationProposal = {
-  prompt: string;
+  operations: OptimizeMutationOperation[];
   rationale: string;
 };
 
@@ -13,43 +16,15 @@ export type ValidationResult =
   | { ok: true }
   | { ok: false; reason: string };
 
-export type OptimizeJudgeSample = {
-  winner: OptimizeWinner;
-  confidence: number;
-  reasoning: string;
-};
-
-export type OptimizeTaskVerdict = {
-  taskId: string;
-  winner: OptimizeWinner;
-  confidence: number;
-  samples: OptimizeJudgeSample[];
-};
-
-export type OptimizeVerdict = {
-  iter: number;
-  championIter: number | "baseline";
-  judgeSamples: number;
-  acceptThreshold: number;
-  perTask: OptimizeTaskVerdict[];
-  wins: number;
-  losses: number;
-  ties: number;
-  margin: number;
-  decision: "accepted" | "rejected";
-  mutationSummary: string;
-  warning?: string;
-};
-
 export type IterationResult = {
   iter: number;
-  agentPath: string;
+  decision: OptimizeDecision;
+  agentDir?: string;
   mutationPath?: string;
   evalRunDir?: string;
   verdictPath?: string;
-  decision: OptimizeDecision;
-  wins: number;
-  losses: number;
+  winsA: number;
+  winsB: number;
   ties: number;
 };
 
@@ -57,7 +32,8 @@ export type OptimizeResult = {
   runId: string;
   runDir: string;
   championIter: number | "baseline";
-  championSource: string;
+  /** The champion's full Agency file set, keyed by relative path. */
+  championFiles: Record<string, string>;
   acceptedCount: number;
   rejectedCount: number;
   validationFailedCount: number;
@@ -68,21 +44,24 @@ export type OptimizeLoopConfig = {
   runtime: {
     config: AgencyConfig;
     tasks: EvalTask[];
+    tasksSource: string;
   };
   target: {
-    agentSource: string;
+    /** Relative entry file, from `targetSet.entryFile`. */
+    entryFile: string;
     node: string;
-    agentFilename: string;
+    /** Discovered once at CLI startup; never re-discovered mid-loop. */
+    targetSet: OptimizeTargetSet;
     workingDir: string;
-    writebackPath?: string;
+    /** Write the champion file set back to source files at the end. */
+    writeback: boolean;
   };
   policy: {
-    goal: string;
     iterations: number;
-    judgeSamples: number;
-    acceptThreshold: number;
     mutatorModel?: string;
   };
+  /** Shared judge aggregation policy; acceptance is `winner === "B"`. */
+  judgePolicy: JudgeAggregationPolicy;
   artifacts: {
     runsDir: string;
     runId: string;

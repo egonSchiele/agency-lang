@@ -4,7 +4,7 @@
 
 **Goal:** Add a declarative source mutator that previews and applies optimize target operations by ID, starting with variable initializer replacement and reserving the operation shape for future optimized types.
 
-**Architecture:** Consume `OptimizeTargetSet` from declaration-target discovery, validate operation records against the target catalog, render candidate Agency file sets with `AgencyGenerator`, and return target-level changes plus unified diffs. Keep the LLM proposal mutator separate: it proposes declarative operations; `OptimizeSourceMutator` applies them safely.
+**Architecture:** Consume `OptimizeTargetSet` from declaration-target discovery, validate operation records against the target catalog, render candidate Agency file sets with `AgencyGenerator`, and return target-level changes plus human-readable diffs. Keep the LLM proposal mutator separate: it proposes declarative operations; `OptimizeSourceMutator` applies them safely.
 
 **Tech Stack:** TypeScript, Vitest, Agency parser/AST/generator, `lib/optimize/targets.ts`, `lib/optimize/validation.ts`, existing optimize mutator wrapper and artifact pipeline.
 
@@ -49,12 +49,18 @@ Follow-up consumers:
 ## Implementation notes
 
 - The source mutator consumes a previously discovered `OptimizeTargetSet`; it does not discover targets by walking files itself.
+- `OptimizeTargetSet` deliberately retains no parsed ASTs — it is a plain serializable value object. The mutator re-parses each file the batch touches from `targetSet.files[file].source` (the source captured at discovery time, never re-read from disk) once per `preview()` call, and keeps the parsed programs private. Fresh parses per preview also make atomicity free: a rejected batch cannot leave mutated shared AST state behind.
+- **Parse budget:** parsing can take up to a second on long files, so per-preview parse cost must be O(files touched by the batch), never O(import tree). Only the files named by operations are parsed; unchanged files pass through as cached source strings.
+- `preview()` returns the updated `OptimizeTargetSet` for the candidate: changed files get refreshed `source`/`sha256` and refreshed target values computed from the mutated in-memory programs; unchanged entries are carried over untouched. Reuse the per-program collection logic in `lib/optimize/targets.ts` (export the existing internal `collectTargets` as a helper) rather than duplicating it. Consumers must never need to re-run discovery or re-parse unchanged files to keep iterating.
 - V1 supports only `{ kind: "variable", op: "replaceInitializer" }`.
 - `mutate(id, value)` is sugar over the operation API and infers the operation from the discovered target kind.
 - Top-level variable IDs use `global`, e.g. `foo.agency:global:systemPrompt`.
 - `kind: "type"` / `op: "replaceTypeDefinition"` should be represented in the type union but rejected in v1 with a clear unsupported-operation diagnostic.
 - Replacement `value` is Agency source text in the target's syntactic context. For variables, include the string quotes: `"\"new prompt\""`.
+- `expected` (the stale-value guard) is compared against the target's decoded `value` — the same representation as `OptimizeTarget.value` (prompt text without surrounding quotes, interpolations rendered as `${expr}`). It is never compared against quoted Agency source.
+- Parse `operation.value` with `exprParser`, already exported from `lib/parsers/parsers.ts` (it is the parser `assignmentParser` uses for initializers). Require full consumption — only trailing whitespace may remain after the parse.
 - Use parsed AST plus `AgencyGenerator`; do not use blind source-slice replacement.
+- Mutations are applied via parse → replace AST node → render, never by patching source text. The diff output is informational only, for users reviewing what changed: extend `lib/utils/diff.ts` with an uncolored variant of `formatDiff()` and write its output to `diff.txt` (not `diff.patch` — it is not a unified patch). Never write ANSI color codes into artifacts.
 - Reformatting changed Agency files is acceptable. The full candidate file set should include unchanged discovered Agency files.
 - Multiple operations for the same target in one batch are rejected.
 - Preview/apply is atomic: any invalid operation prevents all file changes.
@@ -77,6 +83,7 @@ In `lib/optimize/sourceMutator.test.ts`, build a minimal `OptimizeTargetSet` fix
   id: "foo.agency:bar:prompt",
   kind: "variable",
   file: "foo.agency",
+  absoluteFile: "/abs/foo.agency",
   scope: "bar",
   name: "prompt",
   valueKind: "string",
@@ -125,7 +132,7 @@ export type ReplaceTypeDefinitionOperation = {
 export type OptimizeMutationOperation = ReplaceVariableInitializerOperation | ReplaceTypeDefinitionOperation;
 ```
 
-Add `OptimizeMutationDiagnostic`, `OptimizeAppliedChange`, and `OptimizeMutationPreview` types matching the spec. If `lib/optimize/types.ts` already centralizes optimize public types, re-export from there rather than duplicating definitions.
+Add `OptimizeMutationDiagnostic`, `OptimizeAppliedChange`, and `OptimizeMutationPreview` types matching the spec. `OptimizeMutationPreview` includes a `targetSet` field: the updated `OptimizeTargetSet` for the candidate file set. If `lib/optimize/types.ts` already centralizes optimize public types, re-export from there rather than duplicating definitions.
 
 - [ ] **Step 4: Implement validation skeleton**
 
@@ -205,6 +212,10 @@ git commit -m "optimize: validate optimized string replacements"
 **Files:**
 - Modify: `lib/optimize/sourceMutator.ts`
 - Modify: `lib/optimize/sourceMutator.test.ts`
+- Modify: `lib/utils/diff.ts` (uncolored `formatDiff` variant)
+- Modify: `lib/utils/diff.test.ts`
+- Modify: `lib/optimize/targets.ts` (export the per-program target collection for reuse)
+- Modify: `lib/optimize/targets.test.ts`
 
 - [ ] **Step 1: Write failing preview tests**
 
@@ -229,7 +240,9 @@ Assert `preview()`:
 - preserves `optimize` and `static`,
 - includes changed and unchanged discovered Agency files in `files`,
 - includes target-level `changes`,
-- includes a unified `diff`,
+- includes a human-readable `diff`,
+- includes an updated `targetSet` whose changed targets carry the new value and whose unchanged entries are identical to the input set,
+- only parses files named by the batch's operations (assert via a counting parse spy or by constructing a target set whose unchanged file contains deliberately unparseable garbage in `source` — preview must still succeed),
 - returns no files when validation fails.
 
 - [ ] **Step 2: Run RED**
@@ -240,15 +253,17 @@ pnpm test:run lib/optimize/sourceMutator.test.ts > /tmp/optimize-source-mutator-
 
 - [ ] **Step 3: Parse replacement values in expression context**
 
-For `replaceInitializer`, parse `operation.value` as an Agency expression/initializer. Reject valid TypeScript but invalid Agency source. Reject non-string/non-multiline-string expression AST nodes in v1.
+For `replaceInitializer`, parse `operation.value` with `exprParser` (already exported from `lib/parsers/parsers.ts`; it is the parser `assignmentParser` uses for initializers). Require full consumption — only trailing whitespace may remain after the parse, otherwise reject. Reject valid TypeScript but invalid Agency source. Reject non-string/non-multiline-string expression AST nodes in v1.
 
 - [ ] **Step 4: Replace AST nodes and render files**
 
-Use the parsed document references retained by `OptimizeTargetSet`. If `OptimizeTargetSet` intentionally omits AST nodes from public artifacts, keep parsed documents in an internal/non-serialized field for source mutator use. Render changed files with `AgencyGenerator`.
+`OptimizeTargetSet` retains no parsed ASTs. At the start of `preview()`, re-parse **only the files the batch's operations touch** from `targetSet.files[file].source` (the source captured at discovery time — never re-read from disk), keep the parsed programs private to the mutator, locate each target's `Assignment` node by scope and name, replace its initializer with the parsed replacement expression, and render changed files with `AgencyGenerator`.
 
-- [ ] **Step 5: Produce unified diffs**
+Build the preview's updated `targetSet` from the same in-memory programs: refresh `source`/`sha256` and target entries for changed files (reusing the exported collection helper from `lib/optimize/targets.ts`), carry every other entry over unchanged. Do not re-parse unchanged files and do not re-run disk discovery.
 
-Use an existing diff helper/dependency if present in `package.json`; otherwise add a tiny file-scoped unified diff helper inside `sourceMutator.ts`. Do not add a new package solely for basic diff output unless the repo already uses one.
+- [ ] **Step 5: Produce human-readable diffs**
+
+The diff is informational only — mutations are applied through the AST, never by patching. Extend `lib/utils/diff.ts` with an uncolored variant of the existing `formatDiff()` (e.g. a `colorize` option that defaults to on so existing callers keep colors) and use that here. Do not write ANSI color codes into preview output or artifacts, and do not add a new diff package.
 
 - [ ] **Step 6: Run GREEN**
 
@@ -319,6 +334,27 @@ git commit -m "optimize: apply declarative source mutation previews"
 - Modify: `lib/optimize/mutator.ts`
 - Modify: `lib/optimize/mutator.test.ts`
 - Modify: `lib/agents/mutatePrompt.agency`
+
+**Contract (consumed by the refactored-eval-pipeline plan's loop-migration task — keep these names exact):**
+
+```ts
+export type ProposeMutationArgs = {
+  config: AgencyConfig;
+  targets: OptimizeTarget[];                   // champion's discovered targets, sorted by id
+  tasks: EvalTask[];                           // eval suite; goals rendered in task_id order
+  history: string;                             // rendered mutation history
+  model?: string;
+  diagnostics?: OptimizeMutationDiagnostic[];  // from a prior rejected preview, for retry
+  callModel?: MutatorModelCaller;
+};
+
+export function proposeMutation(args: ProposeMutationArgs): Promise<MutationProposal>;
+// MutationProposal = { operations: OptimizeMutationOperation[]; rationale: string }
+```
+
+`proposeMutation()` performs no validation itself: `OptimizeSourceMutator.preview()` owns validation, and the optimize loop feeds preview diagnostics back through `args.diagnostics` for one retry. There is no separate optimization goal parameter — the objective is the suite task goals in `args.tasks`.
+
+**Sequencing note (accepted):** landing this task changes the mutator output shape while `optimizeLoop` still consumes `proposal.prompt`, so `agency eval optimize` is broken on main from this task until the refactored-eval-pipeline plan's loop-migration task lands. This window is accepted; do not add a compatibility shim.
 
 - [ ] **Step 1: Write failing LLM mutator tests**
 
@@ -415,7 +451,7 @@ Assert an `OptimizeMutationPreview` can be written as:
 iter-1/agent/foo.agency
 iter-1/mutation.json
 iter-1/mutation.md
-iter-1/diff.patch
+iter-1/diff.txt
 ```
 
 `mutation.json` should record operation-level and target-level details, including `target`, `kind`, `op`, `oldValue`, `newValue`, and `rationale`.

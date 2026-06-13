@@ -116,13 +116,16 @@ describe("agency eval stdlib helpers", () => {
       tmpDir,
       "main",
       [{ task_id: "t1", goal: "g", args: {} }],
-      "improve",
+      "",
       2,
       3,
+      60,
       1,
       tmpDir,
       "run",
       "mutator",
+      false,
+      "silent",
       async (config) => {
         loopConfig = config;
         return optimizeResult(config);
@@ -130,28 +133,92 @@ describe("agency eval stdlib helpers", () => {
     );
 
     expect(loopConfig).toMatchObject({
+      runtime: {
+        tasks: [{ task_id: "t1", goal: "g", args: {} }],
+        tasksSource: "stdlib:tasks",
+      },
       target: {
         node: "main",
-        agentFilename: "agent.agency",
-        workingDir: tmpDir,
-        agentSource: "optimize const prompt = \"hi\"\nnode main() {}\n",
+        entryFile: "agent.agency",
+        writeback: false,
       },
       policy: {
-        goal: "improve",
         iterations: 2,
-        judgeSamples: 3,
-        acceptThreshold: 1,
         mutatorModel: "mutator",
+      },
+      judgePolicy: {
+        samples: 3,
+        confidenceThreshold: 60,
+        marginThreshold: 1,
+        positionBias: "swap",
       },
       artifacts: {
         runsDir: tmpDir,
         runId: "run",
       },
     });
+    if (!loopConfig) throw new Error("loop was not called");
+    expect((loopConfig as OptimizeLoopConfig).target.targetSet.targets.map((target) => target.id)).toEqual([
+      "agent.agency:global:prompt",
+    ]);
     expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
   });
 
-  it("preserves optimize entry paths relative to the stdlib working directory", async () => {
+  it("desugars a goal into a single task-1 task", async () => {
+    let loopConfig: OptimizeLoopConfig | null = null;
+    const entryFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
+
+    await _optimize(
+      {},
+      entryFile,
+      tmpDir,
+      "main",
+      [],
+      "improve",
+      2,
+      3,
+      50,
+      0,
+      tmpDir,
+      "run",
+      "",
+      false,
+      "silent",
+      async (config) => {
+        loopConfig = config;
+        return optimizeResult(config);
+      },
+    );
+
+    expect(loopConfig).toMatchObject({
+      runtime: {
+        tasks: [{ task_id: "task-1", goal: "improve", args: {} }],
+        tasksSource: "inline:goal",
+      },
+    });
+  });
+
+  it("requires exactly one of tasks or goal", async () => {
+    const entryFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
+    const reject = (tasks: { task_id: string; goal: string; args: Record<string, unknown> }[], goal: string) =>
+      _optimize({}, entryFile, tmpDir, "main", tasks, goal, 1, 1, 50, 0, tmpDir, "run", "", false, "silent", async (config) => optimizeResult(config));
+
+    await expect(reject([], "")).rejects.toThrow(/exactly one of --tasks or --goal/i);
+    await expect(reject([{ task_id: "t1", goal: "g", args: {} }], "both")).rejects.toThrow(/exactly one of --tasks or --goal/i);
+  });
+
+  it("rejects unknown verbosity values", async () => {
+    const entryFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
+
+    await expect(
+      _optimize({}, entryFile, tmpDir, "main", [{ task_id: "t1", goal: "g", args: {} }], "", 1, 1, 50, 0, tmpDir, "run", "", false, "loud", async (config) => optimizeResult(config)),
+    ).rejects.toThrow(/verbosity must be/);
+  });
+
+  it("resolves relative entry files against the stdlib working directory", async () => {
     let loopConfig: OptimizeLoopConfig | null = null;
     fs.mkdirSync(path.join(tmpDir, "agents"), { recursive: true });
     const entryFile = path.join(tmpDir, "agents", "agent.agency");
@@ -163,52 +230,25 @@ describe("agency eval stdlib helpers", () => {
       tmpDir,
       "main",
       [{ task_id: "t1", goal: "g", args: {} }],
-      "improve",
+      "",
       2,
       3,
-      1,
+      50,
+      0,
       tmpDir,
       "run",
-      "mutator",
+      "",
+      false,
+      "silent",
       async (config) => {
         loopConfig = config;
         return optimizeResult(config);
       },
     );
 
-    expect(loopConfig).toMatchObject({
-      target: {
-        agentFilename: "agents/agent.agency",
-        workingDir: tmpDir,
-        agentSource: "optimize const prompt = \"hi\"\nnode main() {}\n",
-      },
-    });
-  });
-
-  it("rejects optimize entry files outside the stdlib working directory", async () => {
-    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-outside-"));
-    try {
-      const entryFile = path.join(outsideDir, "agent.agency");
-      fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
-
-      await expect(_optimize(
-        {},
-        entryFile,
-        tmpDir,
-        "main",
-        [{ task_id: "t1", goal: "g", args: {} }],
-        "improve",
-        2,
-        3,
-        1,
-        tmpDir,
-        "run",
-        "mutator",
-        async (config) => optimizeResult(config),
-      )).rejects.toThrow(/inside optimize working directory/i);
-    } finally {
-      fs.rmSync(outsideDir, { recursive: true, force: true });
-    }
+    if (!loopConfig) throw new Error("loop was not called");
+    const config = loopConfig as OptimizeLoopConfig;
+    expect(config.target.targetSet.files[config.target.entryFile].absoluteFile).toBe(fs.realpathSync(entryFile));
   });
 });
 
@@ -217,7 +257,7 @@ function optimizeResult(config: OptimizeLoopConfig): OptimizeResult {
     runId: config.artifacts.runId,
     runDir: path.join(config.artifacts.runsDir, config.artifacts.runId),
     championIter: "baseline",
-    championSource: config.target.agentSource,
+    championFiles: {},
     acceptedCount: 0,
     rejectedCount: 0,
     validationFailedCount: 0,

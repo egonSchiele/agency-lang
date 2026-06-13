@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Scoped llmMocks route each agent's llm() calls to its own queue.",
+      "input": "",
+      "expectedOutput": "{\"operations\":[{\"target\":\"foo.agency:global:prompt\",\"kind\":\"variable\",\"op\":\"replaceInitializer\",\"value\":\"\\\"hello there\\\"\",\"rationale\":\"Friendlier.\"}],\"rationale\":\"mutator-rationale\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": {
+        "llm-mock-scoping": [
+          {
+            "return": "main-summary"
+          }
+        ],
+        "mutatePrompt": [
+          {
+            "return": {
+              "operations": [
+                {
+                  "target": "foo.agency:global:prompt",
+                  "kind": "variable",
+                  "op": "replaceInitializer",
+                  "value": "\"hello there\"",
+                  "rationale": "Friendlier."
+                }
+              ],
+              "rationale": "mutator-rationale"
+            }
+          }
+        ]
+      },
+      "retry": 1
+    }
+  ]
+}

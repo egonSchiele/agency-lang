@@ -20,7 +20,7 @@ import { formatDiff } from "@/utils/diff.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
-import type { LLMMock } from "../runtime/deterministicClient.js";
+import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -49,7 +49,7 @@ type TestCase = {
   // Ordered list of LLM mocks consumed by the deterministic LLM client
   // when running under AGENCY_USE_TEST_LLM_PROVIDER=1. Each entry maps to
   // one llm() call in the agency code, in source order.
-  llmMocks?: LLMMock[];
+  llmMocks?: LLMMock[] | ScopedLLMMocks;
   // Force the deterministic LLM provider even when the suite is not
   // launched with AGENCY_USE_TEST_LLM_PROVIDER=1. Use for tests whose
   // assertions depend on the deterministic client's fixed per-call cost /

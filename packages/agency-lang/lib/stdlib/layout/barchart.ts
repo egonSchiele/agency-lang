@@ -20,8 +20,17 @@ export const DEFAULT_SYMBOLS = ["█", "▓", "▒", "░"];
 const DEFAULT_BAR_AREA = 40;
 const TRACK_CHAR = "·";
 
-export function resolveColor(name: string): (s: string) => string {
-  if (!name) return (s) => s;
+// True only for a non-empty string. Used to decide whether an optional
+// key field was explicitly set. The Agency block builder leaves omitted
+// optional params as a runtime sentinel (not "" or undefined), so we
+// can't trust `?? default` / truthiness on the raw value — only a real
+// string counts as an explicit color/symbol; everything else auto-assigns.
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0;
+}
+
+export function resolveColor(name: unknown): (s: string) => string {
+  if (!isNonEmptyString(name)) return (s) => s;
   if (name.startsWith("#")) return (s) => (color as any).hex(name)(s);
   const fn = (color as any)[name];
   return typeof fn === "function" ? (s) => fn(s) : (s) => s;
@@ -30,9 +39,9 @@ export function resolveColor(name: string): (s: string) => string {
 export function resolveKeys(keys: BarKey[] | null, barChar: string): ResolvedKey[] {
   const list = keys && keys.length > 0 ? keys : [{ name: "" } as BarKey];
   return list.map((k, i) => ({
-    name: k.name ?? "",
-    color: k.color ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length],
-    symbol: k.symbol ?? (i === 0 ? barChar : DEFAULT_SYMBOLS[i % DEFAULT_SYMBOLS.length]),
+    name: isNonEmptyString(k.name) ? k.name : "",
+    color: isNonEmptyString(k.color) ? k.color : DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+    symbol: isNonEmptyString(k.symbol) ? k.symbol : (i === 0 ? barChar : DEFAULT_SYMBOLS[i % DEFAULT_SYMBOLS.length]),
   }));
 }
 

@@ -1,4 +1,5 @@
-import { table, text } from "std::layout"
+import { text } from "std::layout"
+import { table } from "std::table"
 
 // Builds a table via the data form (no trailing block) and returns
 // the LayoutNode. The .test.json fixture pins the full tree shape:

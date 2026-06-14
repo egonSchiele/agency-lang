@@ -1,4 +1,5 @@
-import { table, render, text } from "std::layout"
+import { render, text } from "std::layout"
+import { table } from "std::table"
 
 // End-to-end render of a small table covering: title (embedded in
 // the top border), caption (dim line below the bottom border), header

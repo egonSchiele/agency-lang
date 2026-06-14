@@ -1,4 +1,5 @@
-import { table, render, text } from "std::layout"
+import { render, text } from "std::layout"
+import { table } from "std::table"
 import { withLock } from "std::concurrency"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"

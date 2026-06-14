@@ -1,5 +1,6 @@
 import { highlight, Theme } from "cli-highlight";
 import { color } from "@/utils/termcolors.js";
+import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
@@ -157,4 +158,41 @@ function mapMarkdownBlock(block: Block): Block {
     }
   }
   return block;
+}
+
+export function _diff(
+  oldText: string,
+  newText: string,
+  context: number,
+  lineNumbers: boolean,
+  colored: boolean,
+  oldLabel: string,
+  newLabel: string,
+  ignoreWhitespace: boolean,
+  hunkHeaders: boolean,
+  summary: boolean,
+): string {
+  const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
+  return renderDiff(hunks, {
+    lineNumbers,
+    colored,
+    oldLabel: oldLabel || undefined,
+    newLabel: newLabel || undefined,
+    hunkHeaders,
+    summary,
+  });
+}
+
+export function _patch(
+  oldText: string,
+  newText: string,
+  filename: string,
+  context: number,
+  ignoreWhitespace: boolean,
+  newFilename: string,
+): string {
+  const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
+  const oldLabel = oldText === "" ? "/dev/null" : `a/${filename}`;
+  const newLabel = newText === "" ? "/dev/null" : `b/${newFilename || filename}`;
+  return renderPatch(hunks, oldLabel, newLabel);
 }

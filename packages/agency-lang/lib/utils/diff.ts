@@ -31,6 +31,10 @@ export type RenderDiffOpts = {
   newLabel?: string;
   hunkHeaders?: boolean;
   summary?: boolean;
+  // When present and `colored`, renderDiff uses the highlighted code path:
+  // each line's body is produced by this function (syntax highlighting +
+  // background tint for changed lines), padded to `width` columns.
+  renderBody?: (code: string, kind: DiffLine["kind"], width: number) => string;
 };
 
 // Collapse runs of whitespace and trim, for comparison only (the original
@@ -252,6 +256,27 @@ function gutterWidth(hunks: Hunk[]): number {
   return String(max).length;
 }
 
+// Widest raw line in display columns (line text is ANSI-free, so length is the
+// visible width). Changed-line backgrounds pad to this so the bars align.
+function blockWidth(hunks: Hunk[]): number {
+  let max = 0;
+  for (const h of hunks) for (const l of h.lines) max = Math.max(max, l.text.length);
+  return max;
+}
+
+// Gutter for the highlighted path: line number (per side) + the -/+/space
+// marker, colored by change kind (sits on the default background, left of the
+// tinted code).
+function highlightGutter(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
+  const marker = line.kind === "delete" ? "-" : line.kind === "insert" ? "+" : " ";
+  const num = line.kind === "delete" ? line.oldNum : line.newNum;
+  const numStr = lineNumbers ? `${(num === null ? "" : String(num)).padStart(numWidth)} ` : "";
+  const cell = `${numStr}${marker} `;
+  if (line.kind === "delete") return color.red(cell);
+  if (line.kind === "insert") return color.green(cell);
+  return color.dim(cell);
+}
+
 /** Render hunks as a human-readable diff string. */
 export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
   const colored = opts.colored ?? false;
@@ -271,18 +296,30 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
   if (opts.oldLabel) out.push(paint(color.red, `--- ${opts.oldLabel}`));
   if (opts.newLabel) out.push(paint(color.green, `+++ ${opts.newLabel}`));
 
-  const width = opts.lineNumbers ? gutterWidth(hunks) : 0;
+  const useHighlight = colored && !!opts.renderBody;
+  const numWidth = opts.lineNumbers ? gutterWidth(hunks) : 0;
+  const blockW = useHighlight ? blockWidth(hunks) : 0;
+
   const gutter = (l: DiffLine): string => {
     if (!opts.lineNumbers) return "";
     const n = l.kind === "delete" ? l.oldNum : l.newNum;
-    return `${(n === null ? "" : String(n)).padStart(width)} `;
+    return `${(n === null ? "" : String(n)).padStart(numWidth)} `;
   };
 
   for (const h of hunks) {
     if (opts.hunkHeaders) {
       out.push(paint(color.cyan, `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`));
     }
-    renderHunkBody(h.lines, out, colored, gutter);
+    if (useHighlight) {
+      for (const line of h.lines) {
+        out.push(
+          highlightGutter(line, numWidth, opts.lineNumbers ?? false) +
+            opts.renderBody!(line.text, line.kind, blockW),
+        );
+      }
+    } else {
+      renderHunkBody(h.lines, out, colored, gutter);
+    }
   }
   return out.join("\n");
 }

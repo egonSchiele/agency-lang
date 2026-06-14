@@ -1,7 +1,10 @@
-import { LayoutNode, Width, Alignment, BorderStyle } from "std::layout"
+---
+name: "table"
+---
 
-/** @module
-  ## Module: std::table
+# table
+
+## Module: std::table
 
   Tabular layout for terminal output. Columns line up across header /
   body / footer; the outer frame uses the same `BorderStyle` enum as
@@ -37,20 +40,48 @@ import { LayoutNode, Width, Alignment, BorderStyle } from "std::layout"
 
   Render a table with `render`, imported from `std::layout`:
   `import { render } from "std::layout"`.
-*/
 
+## Types
+
+### Cell
+
+* A table cell. Either a bare string (auto-coerced to a styled `text`
+ * leaf at render time) or any pre-built LayoutNode (e.g.
+ * `text("-50", fgColor: "red")`).
+
+```ts
 /**
  * A table cell. Either a bare string (auto-coerced to a styled `text`
  * leaf at render time) or any pre-built LayoutNode (e.g.
  * `text("-50", fgColor: "red")`).
  */
 export type Cell = string | LayoutNode
+```
 
-// Row alias for table body / footer. The parser doesn't currently
-// accept `Cell[][]` directly where `Cell` is a union; aliasing the
-// row type first sidesteps that.
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L47))
+
+### CellRow
+
+```ts
 export type CellRow = Cell[]
+```
 
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L52))
+
+### ColumnSpec
+
+* Per-column configuration for a `table`. All fields are optional;
+ * omitted columns default to start-aligned with no minimum width.
+ *
+ * @param align - Horizontal alignment of every cell in this column
+ * @param minWidth - Lower bound on column width; widens narrow columns
+ * @param width - Optional per-column constraint. A number caps the
+ *   column's content width in cells. `"X%"` takes a percentage of the
+ *   table's remaining inner width. `"full"` is not allowed here.
+ * @param fgColor - Default foreground color for every cell in this
+ *   column that doesn't carry its own `fgColor`.
+
+```ts
 /**
  * Per-column configuration for a `table`. All fields are optional;
  * omitted columns default to start-aligned with no minimum width.
@@ -69,7 +100,17 @@ export type ColumnSpec = {
   width?: Width;
   fgColor?: string
 }
+```
 
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L66))
+
+### TableBuilder
+
+* Methods available inside a `table`'s trailing `as t { ... }` block.
+ * `columns` / `caption` set top-level table attrs; `header` / `row` /
+ * `footer` append cell arrays to the corresponding section.
+
+```ts
 /**
  * Methods available inside a `table`'s trailing `as t { ... }` block.
  * `columns` / `caption` set top-level table attrs; `header` / `row` /
@@ -82,62 +123,19 @@ export type TableBuilder = {
   row: any;
   footer: any
 }
+```
 
-def _setTableColumns(state: any, specs: ColumnSpec[]): any {
-  state.columns = specs
-  return null
-}
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L78))
 
-def _setTableCaption(state: any, text: string): any {
-  state.caption = text
-  return null
-}
+## Functions
 
-def _setTableHeader(state: any, ...cells: Cell[]): any {
-  state.header = cells
-  return null
-}
+### table
 
-def _addTableRow(state: any, ...cells: Cell[]): any {
-  state.body.push(cells)
-  return null
-}
+```ts
+table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: string, caption: string, cellPadding: number, width: Width, columns: ColumnSpec[], header: Cell[], body: CellRow[], footer: CellRow[], headerDivider: boolean, footerDivider: boolean, rowDividers: boolean, columnDividers: boolean, block: (TableBuilder) => void): LayoutNode
+```
 
-def _addTableFooter(state: any, ...cells: Cell[]): any {
-  state.footer.push(cells)
-  return null
-}
-
-def _makeTableBuilder(state: any): TableBuilder {
-  return {
-    columns: _setTableColumns.partial(state: state),
-    caption: _setTableCaption.partial(state: state),
-    header: _setTableHeader.partial(state: state),
-    row: _addTableRow.partial(state: state),
-    footer: _addTableFooter.partial(state: state)
-  }
-}
-
-export def table(
-  title: string = "",
-  titleColor: string = "",
-  borderStyle: BorderStyle = "rounded",
-  borderColor: string = "",
-  caption: string = "",
-  cellPadding: number = 1,
-  width: Width = null,
-  columns: ColumnSpec[] = null,
-  header: Cell[] = null,
-  body: CellRow[] = null,
-  footer: CellRow[] = null,
-  headerDivider: boolean = true,
-  footerDivider: boolean = true,
-  rowDividers: boolean = false,
-  columnDividers: boolean = true,
-  block: (TableBuilder) -> void = null,
-): LayoutNode {
-  """
-  Render data as a bordered table layout node. When calling this as an
+Render data as a bordered table layout node. When calling this as an
   LLM tool, use the data form: pass `header`, `body`, and `footer` as
   arrays of cells (every row must have the same number of cells).
   Render the result with `render`.
@@ -151,51 +149,28 @@ export def table(
   @param borderStyle - Frame style: "rounded", "heavy", "double", or "light"
   @param cellPadding - Horizontal padding inside each cell, in cells
   @param width - Table width in cells, or "full" / "N%"
-  """
-  const bodyArr: any[] = []
-  if (body != null) {
-    for (r in body) {
-      bodyArr.push(r)
-    }
-  }
-  const footerArr: any[] = []
-  if (footer != null) {
-    for (r in footer) {
-      footerArr.push(r)
-    }
-  }
-  const state: any = {
-    header: header,
-    body: bodyArr,
-    footer: footerArr,
-    columns: columns,
-    caption: caption
-  }
-  if (block != null) {
-    block(_makeTableBuilder(state))
-  }
-  const attrs: any = {
-    title: title,
-    titleColor: titleColor,
-    borderStyle: borderStyle,
-    borderColor: borderColor,
-    caption: state.caption,
-    cellPadding: cellPadding,
-    columns: state.columns,
-    header: state.header,
-    body: state.body,
-    footer: state.footer,
-    headerDivider: headerDivider,
-    footerDivider: footerDivider,
-    rowDividers: rowDividers,
-    columnDividers: columnDividers
-  }
-  if (width != null) {
-    attrs.width = width
-  }
-  return {
-    type: "table",
-    attrs: attrs,
-    children: []
-  }
-}
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| title | `string` | "" |
+| titleColor | `string` | "" |
+| borderStyle | [BorderStyle](layout.md#borderstyle) | "rounded" |
+| borderColor | `string` | "" |
+| caption | `string` | "" |
+| cellPadding | `number` | 1 |
+| width | [Width](layout.md#width) | null |
+| columns | `ColumnSpec[]` | null |
+| header | `Cell[]` | null |
+| body | `CellRow[]` | null |
+| footer | `CellRow[]` | null |
+| headerDivider | `boolean` | true |
+| footerDivider | `boolean` | true |
+| rowDividers | `boolean` | false |
+| columnDividers | `boolean` | true |
+| block | `(TableBuilder) => void` | null |
+
+**Returns:** [LayoutNode](layout.md#layoutnode)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L121))

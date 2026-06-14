@@ -68,6 +68,53 @@ const vscodeDarkTheme = {
   default: lightGray,
 } as unknown as Theme;
 
+// Dim backgrounds for changed lines (RGB), shared by the themes and the
+// trailing-pad code so they always match.
+const DIM_RED: [number, number, number] = [60, 0, 0];
+const DIM_GREEN: [number, number, number] = [0, 45, 0];
+
+// A copy of the VS Code theme with a background chained onto every style, so
+// cli-highlight emits the background as part of each token (no ANSI
+// post-processing). `default` covers whitespace/unmatched text, so the whole
+// line is backgrounded.
+function makeBgTheme(rgb: [number, number, number]): Theme {
+  const out: Record<string, unknown> = {};
+  for (const [token, style] of Object.entries(vscodeDarkTheme as Record<string, (s: string) => string>)) {
+    out[token] = (style as unknown as { bgRgb: (r: number, g: number, b: number) => (s: string) => string }).bgRgb(
+      ...rgb,
+    );
+  }
+  return out as unknown as Theme;
+}
+
+const RED_BG_THEME = makeBgTheme(DIM_RED);
+const GREEN_BG_THEME = makeBgTheme(DIM_GREEN);
+const redPad = color.bgRgb(...DIM_RED);
+const greenPad = color.bgRgb(...DIM_GREEN);
+
+// Render one diff line's body for the highlighted path. Context lines are
+// plainly highlighted; changed lines are highlighted with a background theme
+// and padded to `width` with the matching background.
+function diffBody(
+  code: string,
+  kind: "context" | "delete" | "insert",
+  width: number,
+  language: string,
+): string {
+  if (kind === "context") return syntaxHighlight(code, language);
+  const lang = language === "agency" ? "ts" : language;
+  const theme = kind === "delete" ? RED_BG_THEME : GREEN_BG_THEME;
+  const pad = kind === "delete" ? redPad : greenPad;
+  let body: string;
+  try {
+    body = highlight(code, { language: lang, theme, ignoreIllegals: true });
+  } catch {
+    body = pad(code); // on highlighter failure, still show the line tinted
+  }
+  const padLen = Math.max(0, width - code.length);
+  return padLen > 0 ? body + pad(" ".repeat(padLen)) : body;
+}
+
 export function syntaxHighlight(code: string, _language: string): string {
   if (_language === "markdown" || _language === "md") {
     return highlightMarkdown(code);
@@ -172,15 +219,22 @@ export function _diff(
   ignoreWhitespace: boolean,
   hunkHeaders: boolean,
   summary: boolean,
+  language: string,
 ): string {
   const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
+  const colored = color === "auto" ? autoUseColor() : color === true;
+  const renderBody = language
+    ? (code: string, kind: "context" | "delete" | "insert", width: number) =>
+        diffBody(code, kind, width, language)
+    : undefined;
   return renderDiff(hunks, {
     lineNumbers,
-    colored: color === "auto" ? autoUseColor() : color === true,
+    colored,
     oldLabel,
     newLabel,
     hunkHeaders,
     summary,
+    renderBody,
   });
 }
 

@@ -5,9 +5,17 @@
 // stack vertically inside the frame.
 
 import { Block } from "./block.js";
-import { BorderStyle, bordered } from "./border.js";
+import { BORDER_CELLS, BorderStyle, bordered } from "./border.js";
 import { LayoutNode } from "./nodes.js";
 import { growToWidth, renderNode } from "./render.js";
+import {
+  NodeHandler,
+  SizingContext,
+  innerWidthAfterChrome,
+  nonNegativeInteger,
+  resolveContainer,
+  resolveOwnWidth,
+} from "./sizing.js";
 
 export function composeBox(node: LayoutNode): Block {
   // Single-child box uses that child directly; multi-child (or empty)
@@ -27,3 +35,15 @@ export function composeBox(node: LayoutNode): Block {
   });
   return resolved !== undefined ? growToWidth(framed, resolved) : framed;
 }
+
+function sizeBox(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  const own = resolveOwnWidth(node, ctx);
+  const padding = nonNegativeInteger(node.attrs.padding);
+  const inner = innerWidthAfterChrome(own, BORDER_CELLS + 2 * padding);
+  // Box children either occupy the inner width directly (single child)
+  // or are wrapped in an implicit column, which itself fills the inner
+  // width. Either way, children fill.
+  return resolveContainer(node, own, { defaultWidth: inner, percentBasis: inner });
+}
+
+export const box: NodeHandler = { size: sizeBox, render: composeBox };

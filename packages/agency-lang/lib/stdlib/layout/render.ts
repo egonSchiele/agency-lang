@@ -11,32 +11,15 @@
 
 import { stripAnsi } from "./ansi.js";
 import { Block, pad } from "./block.js";
-import { composeColumn, composeRow } from "./axis.js";
-import { composeBox } from "./box.js";
-import { BORDER_CELLS } from "./border.js";
-import { _resolveTableWidths, composeTable } from "./table.js";
-import { LEAF_RENDERERS, LayoutNode, NodeType } from "./nodes.js";
-import {
-  NodeHandler,
-  SizingContext,
-  innerWidthAfterChrome,
-  nonNegativeInteger,
-  resolveContainer,
-  resolveOwnWidth,
-  setAttr,
-} from "./sizing.js";
+import { LayoutNode, NodeType, hline, raw, space, text, vline } from "./nodes.js";
+import { box } from "./box.js";
+import { column, row } from "./axis.js";
+import { table } from "./table.js";
+import { NodeHandler, SizingContext } from "./sizing.js";
 
 export type Viewport = { cols: number; rows: number };
 
 const DEFAULT_VIEWPORT: Viewport = { cols: 80, rows: 24 };
-
-export const RENDERERS: Record<NodeType, (n: LayoutNode) => Block> = {
-  ...LEAF_RENDERERS,
-  row:    composeRow,
-  column: composeColumn,
-  box:    composeBox,
-  table:  composeTable,
-};
 
 export function renderNode(node: LayoutNode): Block {
   const handler = HANDLERS[node.type];
@@ -91,28 +74,22 @@ export function growToWidth(block: Block, targetWidth: number): Block {
 // leaves, `attrs.wrapWidth`). Renderers in box.ts / axis.ts / table.ts
 // read these annotations.
 
-type Sizer = (node: LayoutNode, ctx: SizingContext) => LayoutNode;
-
-const SIZERS: Record<NodeType, Sizer> = {
-  box:    sizeBox,
-  row:    sizeRow,
-  column: sizeColumn,
-  table:  sizeTable,
-  text:   sizeText,
-  raw:    passthrough,
-  space:  passthrough,
-  hline:  passthrough,
-  vline:  passthrough,
+// Single dispatch table: each node type's size + render paired, sourced
+// from the per-concern files that own them.
+export const HANDLERS: Record<NodeType, NodeHandler> = {
+  box, row, column, table,
+  text, raw, space, hline, vline,
 };
 
-// Single dispatch table pairing each node type's size + render. Declared
-// after SIZERS / RENDERERS because it reads both at module-eval time.
-export const HANDLERS: Record<NodeType, NodeHandler> = Object.fromEntries(
-  (Object.keys(RENDERERS) as NodeType[]).map((t) => [
-    t,
-    { size: SIZERS[t], render: RENDERERS[t] },
-  ]),
-) as Record<NodeType, NodeHandler>;
+// Derived views kept so the test surface (`_internal`) and any external
+// readers that referenced these keep working.
+export const RENDERERS: Record<NodeType, (n: LayoutNode) => Block> = Object.fromEntries(
+  Object.entries(HANDLERS).map(([k, h]) => [k, h.render]),
+) as Record<NodeType, (n: LayoutNode) => Block>;
+
+export const SIZERS: Record<NodeType, NodeHandler["size"]> = Object.fromEntries(
+  Object.entries(HANDLERS).map(([k, h]) => [k, h.size]),
+) as Record<NodeType, NodeHandler["size"]>;
 
 export function resolveSizes(node: LayoutNode, viewport: Viewport): LayoutNode {
   // The viewport is the implicit "parent" of the root: it provides the
@@ -124,53 +101,6 @@ export function resolveSizes(node: LayoutNode, viewport: Viewport): LayoutNode {
 
 export function resolveNode(node: LayoutNode, ctx: SizingContext): LayoutNode {
   return HANDLERS[node.type].size(node, ctx);
-}
-
-// Resolve a node's `width` attribute against the parent's context.
-// Returns the concrete cell count the node should occupy, or undefined
-// if it is content-driven.
-function sizeBox(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  const own = resolveOwnWidth(node, ctx);
-  const padding = nonNegativeInteger(node.attrs.padding);
-  const inner = innerWidthAfterChrome(own, BORDER_CELLS + 2 * padding);
-  // Box children either occupy the inner width directly (single child)
-  // or are wrapped in an implicit column, which itself fills the inner
-  // width. Either way, children fill.
-  return resolveContainer(node, own, { defaultWidth: inner, percentBasis: inner });
-}
-
-function sizeColumn(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  const own = resolveOwnWidth(node, ctx);
-  // Columns stack vertically; horizontal width is shared with every child.
-  return resolveContainer(node, own, { defaultWidth: own, percentBasis: own });
-}
-
-function sizeRow(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  const own = resolveOwnWidth(node, ctx);
-  const gap = nonNegativeInteger(node.attrs.gap);
-  const gapTotal = Math.max(0, node.children.length - 1) * gap;
-  const inner = innerWidthAfterChrome(own, gapTotal);
-  // Row children stay natural width unless they declare their own
-  // width; percentages compute against the row's inner space.
-  return resolveContainer(node, own, { defaultWidth: undefined, percentBasis: inner });
-}
-
-function sizeText(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  // Text doesn't track a resolvedWidth; instead it gets a wrapWidth so
-  // its content wraps to the inline space the parent allocated.
-  const own = resolveOwnWidth(node, ctx);
-  if (own === undefined) return node;
-  return setAttr(node, "wrapWidth", own);
-}
-
-function sizeTable(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  // Tables have a custom column-width distribution; delegate to the
-  // table module after resolving the table's own outer width.
-  return _resolveTableWidths(node, resolveOwnWidth(node, ctx));
-}
-
-function passthrough(node: LayoutNode, _ctx: SizingContext): LayoutNode {
-  return node;
 }
 
 export function render(node: LayoutNode, viewport?: Viewport): string {

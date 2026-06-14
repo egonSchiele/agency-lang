@@ -7,6 +7,7 @@
 
 import { Style, wrapText } from "./ansi.js";
 import { Align, Block, pad, styled } from "./block.js";
+import { NodeHandler, SizingContext, resolveOwnWidth, setAttr } from "./sizing.js";
 
 export type NodeType =
   | "box" | "row" | "column"
@@ -133,3 +134,21 @@ export const LEAF_RENDERERS: Record<
     return styled(Block.of(Array(length).fill(char)), styleOf(n.attrs));
   },
 };
+
+function sizeText(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  // Text doesn't track a resolvedWidth; instead it gets a wrapWidth so
+  // its content wraps to the inline space the parent allocated.
+  const own = resolveOwnWidth(node, ctx);
+  if (own === undefined) return node;
+  return setAttr(node, "wrapWidth", own);
+}
+
+function passthrough(node: LayoutNode, _ctx: SizingContext): LayoutNode {
+  return node;
+}
+
+export const text:  NodeHandler = { size: sizeText,    render: LEAF_RENDERERS.text };
+export const raw:   NodeHandler = { size: passthrough, render: LEAF_RENDERERS.raw };
+export const space: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.space };
+export const hline: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.hline };
+export const vline: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.vline };

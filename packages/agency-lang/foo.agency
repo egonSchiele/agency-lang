@@ -4,8 +4,9 @@ type Info = {
 }
 
 node main(): string {
-  optimize const prompt = "What is the capital of France?"
+  const prompt = "What is the capital of France?"
   evalInput(prompt)
+  @optimize(prompt)
   const result: Info = llm(prompt)
   evalOutput(result.capital)
   return result.capital

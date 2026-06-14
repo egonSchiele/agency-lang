@@ -15,7 +15,15 @@ import { composeColumn, composeRow } from "./axis.js";
 import { composeBox } from "./box.js";
 import { BORDER_CELLS } from "./border.js";
 import { _resolveTableWidths, composeTable } from "./table.js";
-import { LEAF_RENDERERS, LayoutNode, NodeType, parseWidth } from "./nodes.js";
+import { LEAF_RENDERERS, LayoutNode, NodeType } from "./nodes.js";
+import {
+  SizingContext,
+  innerWidthAfterChrome,
+  nonNegativeInteger,
+  resolveContainer,
+  resolveOwnWidth,
+  setAttr,
+} from "./sizing.js";
 
 export type Viewport = { cols: number; rows: number };
 
@@ -82,15 +90,6 @@ export function growToWidth(block: Block, targetWidth: number): Block {
 // leaves, `attrs.wrapWidth`). Renderers in box.ts / axis.ts / table.ts
 // read these annotations.
 
-export type SizingContext = {
-  // The width an unsized node should adopt. Undefined when the parent
-  // does not impose a width on its children (e.g. row children).
-  defaultWidth: number | undefined;
-  // The width that percentages and "full" compute against. Undefined
-  // when no enclosing ancestor has a resolved width.
-  percentBasis: number | undefined;
-};
-
 type Sizer = (node: LayoutNode, ctx: SizingContext) => LayoutNode;
 
 const SIZERS: Record<NodeType, Sizer> = {
@@ -120,21 +119,6 @@ export function resolveNode(node: LayoutNode, ctx: SizingContext): LayoutNode {
 // Resolve a node's `width` attribute against the parent's context.
 // Returns the concrete cell count the node should occupy, or undefined
 // if it is content-driven.
-function resolveOwnWidth(node: LayoutNode, ctx: SizingContext): number | undefined {
-  const width = parseWidth(node.attrs.width);
-  if (width === null) return ctx.defaultWidth;
-  if (width.kind === "cells") return width.value;
-  const pct = width.kind === "full" ? 100 : width.value;
-  if (ctx.percentBasis === undefined) {
-    throw new Error(
-      `std::layout: width "${node.attrs.width}" on this ${node.type} ` +
-      `requires a sized ancestor (set an explicit width on the parent ` +
-      `or one of its ancestors).`,
-    );
-  }
-  return Math.floor((ctx.percentBasis * pct) / 100);
-}
-
 function sizeBox(node: LayoutNode, ctx: SizingContext): LayoutNode {
   const own = resolveOwnWidth(node, ctx);
   const padding = nonNegativeInteger(node.attrs.padding);
@@ -177,32 +161,6 @@ function sizeTable(node: LayoutNode, ctx: SizingContext): LayoutNode {
 
 function passthrough(node: LayoutNode, _ctx: SizingContext): LayoutNode {
   return node;
-}
-
-// Build a resolved container node: annotate it with its own width and
-// recurse on every child using `childCtx`.
-function resolveContainer(
-  node: LayoutNode,
-  ownWidth: number | undefined,
-  childCtx: SizingContext,
-): LayoutNode {
-  const children = node.children.map((child) => resolveNode(child, childCtx));
-  const annotated = ownWidth === undefined ? node : setAttr(node, "resolvedWidth", ownWidth);
-  return { ...annotated, children };
-}
-
-function innerWidthAfterChrome(own: number | undefined, chrome: number): number | undefined {
-  if (own === undefined) return undefined;
-  return Math.max(0, own - chrome);
-}
-
-function nonNegativeInteger(raw: unknown): number {
-  const value = typeof raw === "number" ? raw : 0;
-  return Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
-}
-
-function setAttr(node: LayoutNode, key: string, value: unknown): LayoutNode {
-  return { ...node, attrs: { ...node.attrs, [key]: value } };
 }
 
 export function render(node: LayoutNode, viewport?: Viewport): string {

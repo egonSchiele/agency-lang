@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDiff } from "./diff.js";
+import { formatDiff, computeHunks, renderDiff, renderPatch } from "./diff.js";
 import { color } from "./termcolors.js";
 
 // Strip ANSI escape codes so assertions can check rendered content
@@ -102,5 +102,50 @@ describe("formatDiff", () => {
     expect(result).toContain(color.green("Bob"));
     // age line is unchanged and shown dim with a 2-space prefix
     expect(strip(result)).toContain('  "age": 30');
+  });
+});
+
+describe("renderDiff options", () => {
+  const OLD = "a\nb\nc\nd\ne\nf\ng";
+  const NEW = "a\nb\nc\nD\ne\nf\ng";
+
+  it("limits context and emits separate hunks", () => {
+    const hunks = computeHunks(OLD, NEW, 1, false);
+    const result = renderDiff(hunks, {});
+    // 1 line of context each side of the change to line 4 ("c","D"/"d","e")
+    expect(strip(result)).toBe("  c\n- d\n+ D\n  e");
+  });
+
+  it("renders per-side line numbers (old on delete, new elsewhere)", () => {
+    const hunks = computeHunks("one\ntwo\nthree", "one\nTWO\nthree", -1, false);
+    const result = renderDiff(hunks, { lineNumbers: true });
+    expect(strip(result)).toBe("1   one\n2 - two\n2 + TWO\n3   three");
+  });
+
+  it("emits hunk headers", () => {
+    const hunks = computeHunks("one\ntwo\nthree", "one\nTWO\nthree", 1, false);
+    const result = renderDiff(hunks, { hunkHeaders: true });
+    expect(strip(result)).toContain("@@ -1,3 +1,3 @@");
+  });
+
+  it("renders labels", () => {
+    const hunks = computeHunks("x", "y", -1, false);
+    const result = renderDiff(hunks, { oldLabel: "a.txt", newLabel: "b.txt" });
+    expect(strip(result)).toContain("--- a.txt");
+    expect(strip(result)).toContain("+++ b.txt");
+  });
+
+  it("renders a summary line", () => {
+    const hunks = computeHunks("one\ntwo", "one\nTWO\nthree", -1, false);
+    const result = renderDiff(hunks, { summary: true });
+    expect(strip(result).split("\n")[0]).toBe("2 insertions, 1 deletion");
+  });
+
+  it("ignores whitespace-only changes when asked", () => {
+    const hunks = computeHunks("a   b", "a b", -1, true);
+    // normalized equal -> single context line, no -/+ markers
+    const result = renderDiff(hunks, {});
+    expect(strip(result)).not.toContain("- ");
+    expect(strip(result)).not.toContain("+ ");
   });
 });

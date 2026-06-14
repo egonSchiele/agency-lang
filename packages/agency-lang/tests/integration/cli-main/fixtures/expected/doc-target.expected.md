@@ -14,7 +14,7 @@ A person to greet.
 
 ```ts
 /** A person to greet. */
-type Person = {
+export type Person = {
   name: string
 }
 ```

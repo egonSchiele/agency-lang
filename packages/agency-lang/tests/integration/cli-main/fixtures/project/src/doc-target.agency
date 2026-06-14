@@ -3,12 +3,12 @@
 */
 
 /** A person to greet. */
-type Person = {
+export type Person = {
   name: string
 }
 
 /** Build a greeting. */
-def greet(person: Person): string {
+export def greet(person: Person): string {
   return "Hello, " + person.name + "!"
 }
 

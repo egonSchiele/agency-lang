@@ -31,12 +31,12 @@ type Internal = {
   id: string
 }
 
-def greet(name: string): string {
+export def greet(name: string): string {
   """Greet the user by name."""
   return "Hello, " + name
 }
 
-def add(a: number, b: number): number {
+export def add(a: number, b: number): number {
   """
   Add two numbers together.
   """
@@ -91,7 +91,7 @@ node main() {
     fs.writeFileSync(
       path.join(inputDir, "utils.agency"),
       `
-def helper(): string {
+export def helper(): string {
   """A helper function."""
   return "help"
 }
@@ -164,7 +164,7 @@ node main() {
     fs.writeFileSync(
       path.join(inputDir, "defaults.agency"),
       `
-def greet(name: string = "world"): string {
+export def greet(name: string = "world"): string {
   return "Hello, " + name
 }
 `,
@@ -218,7 +218,7 @@ node main() {
     fs.writeFileSync(
       path.join(inputDir, "funcdoc.agency"),
       `/** Extra context for docs. */
-def add(a: number, b: number): number {
+export def add(a: number, b: number): number {
   """Adds two numbers."""
   return a + b
 }
@@ -351,7 +351,7 @@ type Internal = "hidden"
       path.join(inputDir, "funcs.agency"),
       `export type Category = "a" | "b"
 
-def getCategory(): Category {
+export def getCategory(): Category {
   return "a"
 }
 `,
@@ -388,16 +388,16 @@ def getCategory(): Category {
     fs.writeFileSync(
       path.join(inputDir, "throws.agency"),
       `
-def deploy(): string {
+export def deploy(): string {
   interrupt myapp::deploy("deploying")
   return "ok"
 }
 
-def helper(): string {
+export def helper(): string {
   return deploy()
 }
 
-def safe(): string {
+export def safe(): string {
   return "no interrupts here"
 }
 

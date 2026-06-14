@@ -604,22 +604,6 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid. Set
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L491))
 
-### maybeLoadPolicy
-
-```ts
-maybeLoadPolicy()
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L511))
-
-### maybeFlush
-
-```ts
-maybeFlush()
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L528))
-
 ### flushPolicy
 
 ```ts
@@ -637,54 +621,6 @@ flushPolicy()
  * handler).
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L547))
-
-### describeScopedMatch
-
-```ts
-describeScopedMatch(intr: any): string
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| intr | `any` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L557))
-
-### prettyPrintInterruptData
-
-```ts
-prettyPrintInterruptData(data: any): string
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| data | `any` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L583))
-
-### askUser
-
-```ts
-askUser(intr: any): AskUserResult
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| intr | `any` |  |
-
-**Returns:** [AskUserResult](#askuserresult)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L613))
 
 ### _handler
 

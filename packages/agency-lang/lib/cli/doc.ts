@@ -402,7 +402,7 @@ function generateFunctionSection(
 ): string | null {
   if (fns.length === 0) return null;
   const _parts = fns.map((fn) => {
-    if (fn.exported === false) return null; // skip non-exported functions
+    if (!fn.exported) return null; // skip non-exported functions
     const sig = formatSignature(fn.functionName, fn.parameters, fn.returnType);
     return section(
       heading(3, fn.functionName),

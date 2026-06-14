@@ -69,48 +69,6 @@ export type ThreadInfo = {
 
 ## Functions
 
-### summarize
-
-```ts
-summarize(messages: ThreadMessage[]): string
-```
-
-One-shot LLM summarization used by the lazy summarize path.
-  Wrapped in a `thread {}` block so the summarizer prompt runs on
-  an isolated message history and doesn't pollute the agent's main
-  conversation. Uses structured output so the returned text comes
-  back on a known field instead of free-form completion text.
-
-  @param messages - The thread's messages to summarize
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| messages | `ThreadMessage[]` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/threads.agency#L62))
-
-### summaryFor
-
-```ts
-summaryFor(id: string, existing: string | null, messages: ThreadMessage[]): string | null
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| id | `string` |  |
-| existing | `string \| null` |  |
-| messages | `ThreadMessage[]` |  |
-
-**Returns:** `string | null`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/threads.agency#L90))
-
 ### listThreads
 
 ```ts

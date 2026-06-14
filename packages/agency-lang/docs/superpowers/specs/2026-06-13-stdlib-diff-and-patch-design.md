@@ -53,9 +53,9 @@ Factor the file into three layers:
    ```
 
    - `context` is the number of unchanged lines kept on each side of a change.
-     When omitted (the `diff` default), the whole input is one hunk (full
-     context). When set to `N`, runs of unchanged lines longer than `2N`
-     collapse, splitting output into multiple hunks.
+     When negative (the `diff` default, `-1`), the whole input is one hunk
+     (full context). When set to `N >= 0`, runs of unchanged lines longer than
+     `2N` collapse, splitting output into multiple hunks.
    - `ignoreWhitespace` normalizes each line (collapse runs of whitespace,
      trim) for the *comparison* only; the original text is preserved for
      rendering.
@@ -84,8 +84,18 @@ existing callers (`lib/optimize/reporter.ts`, `lib/cli/test.ts`,
 New file (or new exports) exposing:
 
 ```ts
-export function _diff(oldText: string, newText: string, opts: DiffOpts): string;   // computeHunks + renderDiff
-export function _patch(oldText: string, newText: string, filename: string, opts: PatchOpts): string; // computeHunks + renderPatch
+// Flat params mirror the Agency signatures (codegen passes named args
+// positionally). `context: -1` means full context.
+export function _diff(
+  oldText: string, newText: string,
+  context: number, lineNumbers: boolean, colored: boolean,
+  oldLabel: string, newLabel: string,
+  ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean,
+): string;   // computeHunks + renderDiff
+export function _patch(
+  oldText: string, newText: string, filename: string,
+  context: number, ignoreWhitespace: boolean, newFilename: string,
+): string;   // computeHunks + renderPatch
 ```
 
 `_syntaxHighlight` already lives in the syntax stdlib-lib; `_diff`/`_patch`
@@ -93,37 +103,48 @@ join it.
 
 ### Agency wrappers (`stdlib/syntax.agency`)
 
+Options are flat named parameters (Agency supports named args), not an
+options object:
+
 ```ts
-type DiffOptions = {
-  context?: number          # unchanged lines kept around each change; omitted = full context
-  lineNumbers?: boolean     # per-side single-column gutter (default false)
-  colored?: boolean         # ANSI red/green/dim + inline word-highlight (default false)
-  oldLabel?: string         # renders a `--- <oldLabel>` header
-  newLabel?: string         # renders a `+++ <newLabel>` header
-  ignoreWhitespace?: boolean # whitespace-only changes treated as equal (default false)
-  hunkHeaders?: boolean     # `@@ -l,c +l,c @@` separators (default false)
-  summary?: boolean         # leading "N insertions, M deletions" line (default false)
-}
+export safe def diff(
+  oldText: string,
+  newText: string,
+  context: number = -1,            # unchanged lines kept around each change; -1 = full context
+  lineNumbers: boolean = false,    # per-side single-column gutter
+  colored: boolean = false,        # ANSI red/green/dim + inline word-highlight
+  oldLabel: string = "",           # non-empty renders a `--- <oldLabel>` header
+  newLabel: string = "",           # non-empty renders a `+++ <newLabel>` header
+  ignoreWhitespace: boolean = false, # whitespace-only changes treated as equal
+  hunkHeaders: boolean = false,    # `@@ -l,c +l,c @@` separators
+  summary: boolean = false,        # leading "N insertions, M deletions" line
+): string
 
-export safe def diff(oldText: string, newText: string, options: DiffOptions = {}): string
-
-type PatchOptions = {
-  context?: number          # context lines per hunk (default 3)
-  ignoreWhitespace?: boolean
-  newFilename?: string      # override the +++ side path (renames); omit when unchanged
-}
-
-export safe def patch(oldText: string, newText: string, filename: string, options: PatchOptions = {}): string
+export safe def patch(
+  oldText: string,
+  newText: string,
+  filename: string,
+  context: number = 3,             # context lines per hunk
+  ignoreWhitespace: boolean = false,
+  newFilename: string = "",        # non-empty overrides the +++ side path (renames)
+): string
 ```
+
+Callers set only what they need via named args, e.g.
+`diff(a, b, colored: true)` or `patch(a, b, "f.txt", context: 5)`.
 
 Both are `safe` (pure, no side effects) so they are LLM-callable without an
 approval prompt. Both carry docstrings (which become tool descriptions).
+
+**Sentinel conventions:** `context: -1` (and any negative) means full context.
+Empty-string `oldLabel`/`newLabel`/`newFilename` mean "unset" — no header line
+for `diff`, and `filename` reused for both sides in `patch`.
 
 ## Behavior details
 
 ### `diff`
 
-- **No options** → byte-identical to today's inline `-`/`+` word-highlighted
+- **Defaults only** → byte-identical to today's inline `-`/`+` word-highlighted
   diff at full context. Nothing regresses.
 - **`colored` defaults to `false`.** The return value is data — it may be fed
   to an LLM or written to a file — so plain text is the safe default. Terminal
@@ -173,7 +194,7 @@ Unit tests (`lib/utils/diff.test.ts`, runs under `pnpm test:run`):
 
 - `computeHunks`: context windowing (collapse > 2N), multiple hunks, hunk
   line-number math, `ignoreWhitespace` comparison.
-- `renderDiff`: no-options back-compat equals current `formatDiff` output;
+- `renderDiff`: default-args back-compat equals current `formatDiff` output;
   per-side line numbers; `@@` headers; labels; summary; `colored:false` has no
   ANSI; word-highlight only when colored.
 - `renderPatch`: header/hunk format; `/dev/null` for create and delete;

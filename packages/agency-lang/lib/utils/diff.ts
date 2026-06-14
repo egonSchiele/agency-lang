@@ -12,8 +12,8 @@ type Diff = [number, string];
 export type DiffLine = {
   kind: "context" | "delete" | "insert";
   text: string;
-  oldNo: number | null;
-  newNo: number | null;
+  oldNum: number | null;
+  newNum: number | null;
 };
 
 export type Hunk = {
@@ -52,6 +52,13 @@ function encodeLines(lines: string[], map: Map<string, number>, arr: string[]): 
   for (const line of lines) {
     let idx = map.get(line);
     if (idx === undefined) {
+      if (arr.length >= 0x10000) {
+        // One char per unique line; beyond 0xFFFF, String.fromCharCode wraps
+        // into already-used code units and silently corrupts the diff.
+        throw new Error(
+          "diff: inputs have more than 65535 unique lines, which exceeds the line-diff limit",
+        );
+      }
       idx = arr.length;
       arr.push(line);
       map.set(line, idx);
@@ -79,14 +86,14 @@ function diffLines(oldText: string, newText: string, ignoreWhitespace: boolean):
   for (const [op, chunk] of diffs) {
     for (let k = 0; k < chunk.length; k++) {
       if (op === DIFF_EQUAL) {
-        out.push({ kind: "context", text: newLines[ni], oldNo: oi + 1, newNo: ni + 1 });
+        out.push({ kind: "context", text: newLines[ni], oldNum: oi + 1, newNum: ni + 1 });
         oi++;
         ni++;
       } else if (op === DIFF_DELETE) {
-        out.push({ kind: "delete", text: oldLines[oi], oldNo: oi + 1, newNo: null });
+        out.push({ kind: "delete", text: oldLines[oi], oldNum: oi + 1, newNum: null });
         oi++;
       } else {
-        out.push({ kind: "insert", text: newLines[ni], oldNo: null, newNo: ni + 1 });
+        out.push({ kind: "insert", text: newLines[ni], oldNum: null, newNum: ni + 1 });
         ni++;
       }
     }
@@ -94,13 +101,30 @@ function diffLines(oldText: string, newText: string, ignoreWhitespace: boolean):
   return out;
 }
 
-function makeHunk(lines: DiffLine[]): Hunk {
-  const oldNos = lines.filter((l) => l.oldNo !== null).map((l) => l.oldNo as number);
-  const newNos = lines.filter((l) => l.newNo !== null).map((l) => l.newNo as number);
+// The old/new line number of the last numbered line before `start`, or 0 if
+// none. Used to anchor the hunk header for insert-only / delete-only hunks,
+// which carry no line number of their own on one side.
+function anchorsBefore(lines: DiffLine[], start: number): { prevOld: number; prevNew: number } {
+  let prevOld = 0;
+  let prevNew = 0;
+  for (let k = start - 1; k >= 0; k--) {
+    if (prevOld === 0 && lines[k].oldNum !== null) prevOld = lines[k].oldNum as number;
+    if (prevNew === 0 && lines[k].newNum !== null) prevNew = lines[k].newNum as number;
+    if (prevOld !== 0 && prevNew !== 0) break;
+  }
+  return { prevOld, prevNew };
+}
+
+function makeHunk(lines: DiffLine[], prevOld: number, prevNew: number): Hunk {
+  const oldNos = lines.filter((l) => l.oldNum !== null).map((l) => l.oldNum as number);
+  const newNos = lines.filter((l) => l.newNum !== null).map((l) => l.newNum as number);
   return {
-    oldStart: oldNos.length ? oldNos[0] : 0,
+    // For a side with no lines of its own (pure insertion / deletion), the
+    // unified-diff start is the line number it sits *after*: the preceding
+    // numbered line, or 0 at the start of file.
+    oldStart: oldNos.length ? oldNos[0] : prevOld,
     oldLines: oldNos.length,
-    newStart: newNos.length ? newNos[0] : 0,
+    newStart: newNos.length ? newNos[0] : prevNew,
     newLines: newNos.length,
     lines,
   };
@@ -121,7 +145,7 @@ export function computeHunks(
 ): Hunk[] {
   const lines = diffLines(oldText, newText, ignoreWhitespace);
   if (lines.length === 0) return [];
-  if (context < 0) return [makeHunk(lines)];
+  if (context < 0) return [makeHunk(lines, 0, 0)];
 
   const include: boolean[] = new Array(lines.length).fill(false);
   for (let i = 0; i < lines.length; i++) {
@@ -141,7 +165,8 @@ export function computeHunks(
     }
     let j = i;
     while (j < lines.length && include[j]) j++;
-    hunks.push(makeHunk(lines.slice(i, j)));
+    const { prevOld, prevNew } = anchorsBefore(lines, i);
+    hunks.push(makeHunk(lines.slice(i, j), prevOld, prevNew));
     i = j;
   }
   return hunks;
@@ -221,7 +246,7 @@ function gutterWidth(hunks: Hunk[]): number {
   let max = 0;
   for (const h of hunks)
     for (const l of h.lines) {
-      const n = l.kind === "delete" ? l.oldNo : l.newNo;
+      const n = l.kind === "delete" ? l.oldNum : l.newNum;
       if (n !== null) max = Math.max(max, n);
     }
   return String(max).length;
@@ -249,7 +274,7 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
   const width = opts.lineNumbers ? gutterWidth(hunks) : 0;
   const gutter = (l: DiffLine): string => {
     if (!opts.lineNumbers) return "";
-    const n = l.kind === "delete" ? l.oldNo : l.newNo;
+    const n = l.kind === "delete" ? l.oldNum : l.newNum;
     return `${(n === null ? "" : String(n)).padStart(width)} `;
   };
 

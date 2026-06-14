@@ -43,18 +43,18 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 ### diff
 
 ```ts
-diff(oldText: string, newText: string, context: number, lineNumbers: boolean, colored: boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean): string
+diff(oldText: string, newText: string, context: number, lineNumbers: boolean, color: "auto" | boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean): string
 ```
 
 Produce a human-readable diff of two strings and return it as a string.
-  By default returns a plain (uncolored) inline diff showing the full text
-  with changed words highlighted via `-`/`+` lines.
+  Shows the full text by default with changed words highlighted via `-`/`+`
+  lines.
 
   @param oldText - The original text
   @param newText - The updated text
   @param context - Unchanged lines to keep around each change; -1 means show the full text
   @param lineNumbers - Prefix each line with its line number
-  @param colored - Emit ANSI colors (red deletions, green insertions) with inline word highlighting
+  @param color - `"auto"` (default) emits ANSI colors only when stdout is a TTY; `true` always; `false` never. Coloring highlights deletions in red and insertions in green inline.
   @param oldLabel - When non-empty, render a `--- <oldLabel>` header
   @param newLabel - When non-empty, render a `+++ <newLabel>` header
   @param ignoreWhitespace - Treat whitespace-only changes as equal
@@ -69,7 +69,7 @@ Produce a human-readable diff of two strings and return it as a string.
 | newText | `string` |  |
 | context | `number` | -1 |
 | lineNumbers | `boolean` | false |
-| colored | `boolean` | false |
+| color | `"auto" \| boolean` | "auto" |
 | oldLabel | `string` | "" |
 | newLabel | `string` | "" |
 | ignoreWhitespace | `boolean` | false |

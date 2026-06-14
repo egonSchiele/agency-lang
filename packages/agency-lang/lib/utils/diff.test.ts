@@ -180,4 +180,25 @@ describe("renderPatch", () => {
     expect(patch).toContain("--- a/old.txt");
     expect(patch).toContain("+++ b/new.txt");
   });
+
+  it("anchors an insert-only hunk header to the preceding line (context 0)", () => {
+    // Insert X after line "a"; with context 0 the hunk has no old line of its
+    // own, so oldStart must come from the preceding line, not default to 0.
+    const patch = renderPatch(computeHunks("a\nb\nc", "a\nX\nb\nc", 0, false), "a/f", "b/f");
+    expect(patch).toContain("@@ -1,0 +2,1 @@");
+  });
+
+  it("anchors a delete-only hunk header to the preceding line (context 0)", () => {
+    const patch = renderPatch(computeHunks("a\nb\nc", "a\nc", 0, false), "a/f", "b/f");
+    expect(patch).toContain("@@ -2,1 +1,0 @@");
+  });
+});
+
+describe("computeHunks limits", () => {
+  it("throws when inputs exceed the unique-line limit", () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 65537; i++) lines.push("line" + i);
+    const big = lines.join("\n");
+    expect(() => computeHunks(big, "", 3, false)).toThrow(/unique lines/);
+  });
 });

@@ -1,6 +1,6 @@
 import { diff } from "std::syntax"
 
 node main(): string {
-  // Call diff setting only `colored` by name, skipping the params before it.
-  return diff("a\nb\nc", "a\nB\nc", colored: false)
+  // Call diff setting only `color` by name, skipping the params before it.
+  return diff("a\nb\nc", "a\nB\nc", color: false)
 }

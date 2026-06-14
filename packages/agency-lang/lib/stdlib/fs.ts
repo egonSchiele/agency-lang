@@ -6,7 +6,6 @@ import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
 import { resolveDir } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";
-import { computeHunks, renderDiff } from "../utils/diff.js";
 
 export { resolvePath } from "./resolvePath.js";
 
@@ -22,17 +21,15 @@ export type MultiEditResult = {
   edits: number;
 };
 
-export async function _multiedit(
-  dir: string,
-  filename: string,
+// Apply the edits to `contents` in memory (no I/O), returning the result and
+// the number of replacements. Throws on a missing or ambiguous match. Shared
+// by `_multiedit` (which writes) and `_previewEdit` (which doesn't).
+function applyEdits(
+  contents: string,
   edits: MultiEdit[],
-  printDiff: boolean = false,
-): Promise<MultiEditResult> {
-  const full = await resolvePath(dir, filename);
-  let contents = await fs.readFile(full, "utf8");
-  const original = contents;
+  filename: string,
+): { contents: string; replacements: number } {
   let total = 0;
-
   for (let i = 0; i < edits.length; i++) {
     const { oldText, newText, replaceAll } = edits[i];
     if (!oldText) {
@@ -70,12 +67,40 @@ export async function _multiedit(
       total += 1;
     }
   }
+  return { contents, replacements: total };
+}
 
-  await fs.writeFile(full, contents, "utf8");
-  if (printDiff && original !== contents) {
-    console.log(renderDiff(computeHunks(original, contents, -1, false), { colored: true }));
+// Compute the before/after contents of an edit without writing. Used to put a
+// preview in the `std::edit` interrupt data so handlers can diff it themselves.
+// Best-effort: a bad path, missing file, or non-matching edit returns empty
+// strings rather than throwing, so the interrupt still fires (and can be
+// rejected). The authoritative validation and erroring happen in `_multiedit`
+// after the interrupt is approved.
+export async function _previewEdit(
+  dir: string,
+  filename: string,
+  edits: MultiEdit[],
+): Promise<{ before: string; after: string }> {
+  try {
+    const full = await resolvePath(dir, filename);
+    const before = await fs.readFile(full, "utf8");
+    const { contents } = applyEdits(before, edits, filename);
+    return { before, after: contents };
+  } catch {
+    return { before: "", after: "" };
   }
-  return { replacements: total, path: filename, edits: edits.length };
+}
+
+export async function _multiedit(
+  dir: string,
+  filename: string,
+  edits: MultiEdit[],
+): Promise<MultiEditResult> {
+  const full = await resolvePath(dir, filename);
+  const original = await fs.readFile(full, "utf8");
+  const { contents, replacements } = applyEdits(original, edits, filename);
+  await fs.writeFile(full, contents, "utf8");
+  return { replacements, path: filename, edits: edits.length };
 }
 
 export type PatchResult = {

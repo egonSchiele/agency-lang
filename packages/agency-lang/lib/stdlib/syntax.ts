@@ -1,6 +1,7 @@
 import { highlight, Theme } from "cli-highlight";
 import { color } from "@/utils/termcolors.js";
 import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
+import { autoUseColor } from "@/utils/termcolors.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
@@ -165,7 +166,7 @@ export function _diff(
   newText: string,
   context: number,
   lineNumbers: boolean,
-  colored: boolean,
+  color: "auto" | boolean,
   oldLabel: string,
   newLabel: string,
   ignoreWhitespace: boolean,
@@ -175,9 +176,9 @@ export function _diff(
   const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
   return renderDiff(hunks, {
     lineNumbers,
-    colored,
-    oldLabel: oldLabel || undefined,
-    newLabel: newLabel || undefined,
+    colored: color === "auto" ? autoUseColor() : color === true,
+    oldLabel,
+    newLabel,
     hunkHeaders,
     summary,
   });

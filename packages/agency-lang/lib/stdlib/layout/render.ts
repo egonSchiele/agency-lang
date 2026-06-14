@@ -17,6 +17,7 @@ import { column, row } from "./axis.js";
 import { table } from "./table.js";
 import { barchart } from "./barchart.js";
 import { NodeHandler, SizingContext } from "./sizing.js";
+import { autoUseColor } from "@/utils/termcolors.js";
 
 export type Viewport = { cols: number; rows: number };
 
@@ -116,27 +117,6 @@ export function render(node: LayoutNode, viewport?: Viewport): string {
   return renderNode(resolved).toString();
 }
 
-// "auto" color resolution follows the de-facto ecosystem convention:
-//   * `NO_COLOR` set (any value)         → disable, no matter what.
-//   * `FORCE_COLOR` set to a truthy value → enable, no matter what.
-//   * otherwise                           → enable iff stdout is a TTY.
-//
-// `process.stdout.isTTY` alone is unreliable when Agency runs through
-// nested spawns (`pnpm run agency …` spawns the CLI which spawns the
-// compiled script); some intermediate hops can drop the TTY flag even
-// when the user is at an interactive terminal. The env-var fallbacks
-// give the user explicit overrides.
-function _autoUseColor(): boolean {
-  if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") {
-    return false;
-  }
-  const force = process.env.FORCE_COLOR;
-  if (force !== undefined && force !== "" && force !== "0" && force !== "false") {
-    return true;
-  }
-  return process.stdout.isTTY === true;
-}
-
 function buildViewport(cols?: number, rows?: number): Viewport | undefined {
   if (cols === undefined || cols <= 0) return undefined;
   const validRows = rows !== undefined && rows > 0 ? rows : DEFAULT_VIEWPORT.rows;
@@ -144,7 +124,7 @@ function buildViewport(cols?: number, rows?: number): Viewport | undefined {
 }
 
 export function _render(node: LayoutNode, color: "auto" | boolean, cols?: number, rows?: number): string {
-  const useColor = color === "auto" ? _autoUseColor() : color === true;
+  const useColor = color === "auto" ? autoUseColor() : color === true;
   const out = render(node, buildViewport(cols, rows));
   return useColor ? out : stripAnsi(out);
 }

@@ -19,9 +19,6 @@
 - `std::args` for parsing command-line args.
 - `std::skills` understands the standard SKILL.md format.
 - Eval helpers (`evalJudge`, `evalExtract`), a `StatelogParser`, and `runAgencyAgent()` for running the built-in agents.
-- `std::syntax::diff(old, new, ...)` returns a flexible human-readable diff string (line numbers, context, color, labels, hunk headers, summary, ignore-whitespace).
-- `std::syntax::patch(old, new, filename, ...)` returns a standard unified diff that `std::fs::applyPatch` can apply (supports file creation, deletion, and renames).
-- Removed `std::fs::printDiff`; use `print(diff(old, new, colored: true))` instead.
 
 ### Agency Agent
 - Re-architected from a handoff model to a coordinator pattern.

@@ -149,3 +149,35 @@ describe("renderDiff options", () => {
     expect(strip(result)).not.toContain("+ ");
   });
 });
+
+describe("renderPatch", () => {
+  it("produces an applicable unified-diff body for a modification", () => {
+    const hunks = computeHunks("one\ntwo\nthree\n", "one\nTWO\nthree\n", 3, false);
+    const patch = renderPatch(hunks, "a/f.txt", "b/f.txt");
+    expect(patch.startsWith("--- a/f.txt\n+++ b/f.txt\n")).toBe(true);
+    expect(patch).toContain("@@ -1");
+    expect(patch).toContain("\n one");
+    expect(patch).toContain("\n-two");
+    expect(patch).toContain("\n+TWO");
+    expect(patch.endsWith("\n")).toBe(true);
+    // No ANSI, no two-space display prefixes.
+    expect(patch).not.toContain("\x1b");
+  });
+
+  it("uses /dev/null for new and deleted files", () => {
+    const created = renderPatch(computeHunks("", "hello\nworld", 3, false), "/dev/null", "b/new.txt");
+    expect(created).toContain("--- /dev/null");
+    expect(created).toContain("@@ -0,0 +1");
+    expect(created).toContain("+hello");
+
+    const deleted = renderPatch(computeHunks("bye\n", "", 3, false), "a/old.txt", "/dev/null");
+    expect(deleted).toContain("+++ /dev/null");
+    expect(deleted).toContain("-bye");
+  });
+
+  it("supports renames via differing labels", () => {
+    const patch = renderPatch(computeHunks("x\n", "y\n", 3, false), "a/old.txt", "b/new.txt");
+    expect(patch).toContain("--- a/old.txt");
+    expect(patch).toContain("+++ b/new.txt");
+  });
+});

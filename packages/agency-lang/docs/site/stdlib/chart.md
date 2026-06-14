@@ -118,7 +118,7 @@ Render a horizontal bar chart as a layout node. When calling this as
   @param data - Categories to plot. Each has a `label` and a positional `values` array aligned to `keys`
   @param showValues - Show the numeric value beside each bar
   @param legend - Show a legend listing the named keys
-  @param max - Fix the axis maximum; 0 derives it from the data
+  @param max - Fix the axis maximum (a positive number; values beyond it saturate at a full bar). 0 derives it from the data
   @param barChar - Default fill cell for the first / single series
   @param width - Chart width in cells, or "full" / "N%"
 

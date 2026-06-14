@@ -147,8 +147,18 @@ function drawStack(
   barArea: number,
   sign: number,
 ): string {
-  const total = segs.reduce((a, b) => a + b, 0);
-  const body = segs.map((n, i) => resolveColor(keys[i].color)(keys[i].symbol.repeat(n))).join("");
+  // Clamp the cumulative run to the width available on this side of the
+  // baseline, so a stack whose total exceeds the axis maximum saturates
+  // the bar instead of overflowing the chart.
+  const avail = sign >= 0 ? barArea - baseline : baseline;
+  let used = 0;
+  const clamped = segs.map((n) => {
+    const c = Math.max(0, Math.min(n, avail - used));
+    used += c;
+    return c;
+  });
+  const total = clamped.reduce((a, b) => a + b, 0);
+  const body = clamped.map((n, i) => resolveColor(keys[i].color)(keys[i].symbol.repeat(n))).join("");
   if (sign >= 0) {
     return track(baseline) + body + track(barArea - baseline - total);
   }
@@ -157,28 +167,35 @@ function drawStack(
 
 type ChartRow = { label: string; bar: string; value: string };
 
+// The value shown beside a bar: in stacked mode the category total; in
+// grouped mode each key's own value (one per bar).
+function barValue(bar: Bar, mode: BarMode, ki: number): string {
+  return mode === "stacked"
+    ? fmtValue(bar.values.reduce((s, v) => s + v, 0))
+    : fmtValue(bar.values[ki]);
+}
+
 // "What" each data entry becomes: in grouped mode one row per key (label
-// + value only on the first); in stacked mode a single row. No padding or
-// layout concerns here.
+// on the first, its own value on each); in stacked mode a single row. No
+// padding or layout concerns here.
 function chartRows(
   data: Bar[],
   keys: ResolvedKey[],
   mode: BarMode,
-  valueStrings: string[],
   span: number,
   barArea: number,
   baseline: number,
 ): ChartRow[] {
-  return data.flatMap((bar, bi) => {
+  return data.flatMap((bar) => {
     if (mode === "stacked") {
       const sign = bar.values.some((v) => v < 0) ? -1 : 1;
       const segs = stackSegments(bar.values, span, barArea);
-      return [{ label: bar.label, bar: drawStack(segs, keys, baseline, barArea, sign), value: valueStrings[bi] }];
+      return [{ label: bar.label, bar: drawStack(segs, keys, baseline, barArea, sign), value: barValue(bar, "stacked", 0) }];
     }
     return keys.map((k, ki) => {
       const v = bar.values[ki];
       const bar_ = drawBar(barCells(v, span, barArea), baseline, barArea, Math.sign(v) || 1, k.symbol, resolveColor(k.color));
-      return { label: ki === 0 ? bar.label : "", bar: bar_, value: ki === 0 ? valueStrings[bi] : "" };
+      return { label: ki === 0 ? bar.label : "", bar: bar_, value: barValue(bar, "grouped", ki) };
     });
   });
 }
@@ -204,24 +221,33 @@ export function renderBarChart(node: LayoutNode): Block {
   const wantLegend: boolean = a.legend !== false;
   const resolvedWidth: number | undefined = typeof a.resolvedWidth === "number" ? a.resolvedWidth : undefined;
 
-  const valueStrings = data.map((b) =>
+  if (typeof a.max === "number" && (!Number.isFinite(a.max) || a.max < 0)) {
+    throw new Error(`std::chart: max must be a non-negative number, got ${a.max}.`);
+  }
+
+  // Value shown per row (grouped → one per key; stacked → category total).
+  const allValues = data.flatMap((bar) =>
     mode === "stacked"
-      ? fmtValue(b.values.reduce((s, v) => s + v, 0))
-      : fmtValue(b.values.reduce((m, v) => (Math.abs(v) > Math.abs(m) ? v : m), 0)),
+      ? [barValue(bar, "stacked", 0)]
+      : keys.map((_k, ki) => barValue(bar, "grouped", ki)),
   );
   const labelW = data.length ? Math.max(...data.map((b) => visualWidth(b.label))) : 0;
-  const valueW = showValues && valueStrings.length ? Math.max(...valueStrings.map((s) => s.length)) : 0;
+  const valueW = showValues ? Math.max(0, ...allValues.map((s) => s.length)) : 0;
 
   const chrome = labelW + 1 + (showValues ? valueW + 1 : 0);
   const totalW = resolvedWidth ?? chrome + DEFAULT_BAR_AREA;
-  const barArea = Math.max(1, totalW - chrome);
+  // Clamp to 0 (not 1) so an explicit `width` is never exceeded; a chart
+  // with no room left simply renders an empty bar region.
+  const barArea = Math.max(0, totalW - chrome);
 
   const { min, max: autoMax } = dataRange(data, mode);
-  const max = typeof a.max === "number" && a.max > autoMax ? a.max : autoMax;
+  // A positive `max` fixes the axis maximum (values beyond it saturate);
+  // 0 / unset derives it from the data.
+  const max = typeof a.max === "number" && a.max > 0 ? a.max : autoMax;
   const span = max - min;
   const baseline = baselineColumn(min, max, barArea);
 
-  const rows = chartRows(data, keys, mode, valueStrings, span, barArea, baseline);
+  const rows = chartRows(data, keys, mode, span, barArea, baseline);
 
   // "How" — three aligned columns combined with the Block algebra, the
   // same pad/beside/above approach composeRow and composeTable use. No

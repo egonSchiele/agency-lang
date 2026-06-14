@@ -450,7 +450,7 @@ describe("resolveReExports: leading preamble ordering", () => {
     } as unknown as AgencyNode;
     const moduleDoc = {
       type: "multiLineComment",
-      value: "@module\n  docs",
+      content: "\n  module docs\n",
       isDoc: true,
       isModuleDoc: true,
     } as unknown as AgencyNode;
@@ -507,5 +507,63 @@ describe("resolveReExports: leading preamble ordering", () => {
     expect(
       result.nodes.slice(0, docIdx).every((n) => preamble.has(n.type)),
     ).toBe(true);
+  });
+
+  it("does not split a regular doc comment from the declaration it documents", () => {
+    const sourcePath = "/project/source.agency";
+    const reexporterPath = "/project/reexporter.agency";
+    // A non-`@module` doc comment binds to the next declaration. Synthesized
+    // re-export nodes must not be inserted between them.
+    const docComment = {
+      type: "multiLineComment",
+      content: " docs for foo ",
+      isDoc: true,
+      isModuleDoc: false,
+    } as unknown as AgencyNode;
+    const fooDef = {
+      type: "function",
+      functionName: "foo",
+      exported: true,
+      safe: false,
+      parameters: [],
+      body: [],
+    } as unknown as AgencyNode;
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        docComment,
+        fooDef,
+        makeExportFromStmt({
+          modulePath: "./source.agency",
+          body: {
+            kind: "namedExport",
+            names: ["search"],
+            aliases: {},
+            safeNames: [],
+          },
+        }),
+      ],
+    };
+    const symbolTable = table({
+      [sourcePath]: { search: fn({ name: "search" }) },
+      [reexporterPath]: {
+        foo: fn({ name: "foo" }),
+        search: fn({
+          name: "search",
+          reExportedFrom: { sourceFile: sourcePath, originalName: "search" },
+        }),
+      },
+    });
+
+    const result = resolveReExports(program, symbolTable, reexporterPath);
+
+    // The doc comment is immediately followed by `foo` (the declaration it
+    // documents) — nothing synthesized was spliced between them.
+    const docIdx = result.nodes.findIndex((n) => n.type === "multiLineComment");
+    expect(docIdx).toBeGreaterThanOrEqual(0);
+    expect(result.nodes[docIdx + 1]).toMatchObject({
+      type: "function",
+      functionName: "foo",
+    });
   });
 });

@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"--- a/f.txt\\n+++ b/f.txt\\n@@ -1,4 +1,4 @@\\n one\\n-two\\n+TWO\\n three\\n \\n\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

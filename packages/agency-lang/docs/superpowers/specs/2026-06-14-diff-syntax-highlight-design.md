@@ -74,35 +74,30 @@ and keeps all hunk/gutter/layout logic in one place.
 
 ## Rendering details
 
-### Background-aware highlighting (no ANSI post-processing)
+### Continuous line background (re-arm after resets)
 
-cli-highlight wraps **every** run of source — keywords, strings, operators,
-whitespace, and unmatched text (via the `default` style) — in a theme style
-function; there are no raw unstyled spans. So if the theme itself sets a
-background, every emitted segment carries it. The per-segment full resets
-(`\x1b[0m`) are zero-width (immediately followed by the next segment's
-background open, with no character between), so the background is **continuous**
-with no gaps. This was verified empirically against cli-highlight.
+A per-token background theme was tried first but is **insufficient**: real
+highlight.js grammars emit some punctuation and whitespace as *unstyled raw
+text* (not routed through the `default` style), so a theme-applied background
+leaves gaps wherever the highlighter emits raw text — visible as holes in the
+colored bar on real code.
 
-The highlighted `renderBody` therefore:
+So the background is treated as a property of the **line**, not the tokens. The
+highlighted `renderBody`:
 
 - **Context line:** `syntaxHighlight(code, language)` with the normal VS Code
   theme — no background, no padding.
-- **Deleted line:** `syntaxHighlight(code, language)` with a **red-background
-  theme**, then pad the trailing space to `width` with the red background and a
-  final reset.
-- **Inserted line:** same with a **green-background theme**.
+- **Changed line (delete/insert):** `syntaxHighlight(code, language)` with the
+  **same** normal theme (so changed-line colors match context lines exactly),
+  then make the background continuous: prefix the background-open SGR, and
+  **re-arm it after every reset** the highlighter emits (`split(reset).join(reset
+  + bgOpen)`), so raw/unstyled spans stay backgrounded. Finally pad the trailing
+  spaces to `width` and end with a single reset.
 
-Background-aware themes are built by a factory:
-
-```ts
-function makeBgTheme(rgb: [number, number, number]): Theme
-// each entry of the existing VS Code palette, with `.bgRgb(...rgb)` chained on,
-// so cli-highlight emits foreground + background per segment.
-```
-
-The only manual step is padding the trailing spaces out to the block width with
-the background — intrinsic to drawing a rectangular bar, not a workaround.
+This keeps the foreground entirely owned by the canonical `syntaxHighlight`; the
+only background handling is "set it, keep it armed across resets, pad to width."
+`bgOpen(rgb)` is derived from `termcolors` (`color.bgRgb(...)`) so the SGR format
+isn't hardcoded. The dim red/green backgrounds are `(60,0,0)` / `(0,45,0)`.
 
 ### Block width
 
@@ -134,23 +129,24 @@ TS unit tests:
   right `kind`; `width` is the max line width; the gutter numbers/markers on
   changed lines are colored; without `renderBody` or with `colored: false`,
   output is identical to today (existing tests stay green).
-- `lib/stdlib/syntax.test.ts` (or co-located), for `makeBgTheme` /
-  the highlighted `renderBody`: a changed line's output carries the background
-  code across all segments (bg-open count ≥ reset count) and ends in a reset;
-  a context line carries no background; padding reaches the requested width.
+- `lib/stdlib/syntax.test.ts`, for the highlighted `_diff`: a deleted line
+  carries the dim-red background SGR, an inserted line the dim-green one, a
+  context line carries no background, a foreground code is present, and with
+  `color: false` the output is plain with no ANSI.
 
-One pure Agency execution test (`tests/agency/`, no LLM): `diff(old, new, color:
-true, language: "ts")` returns a string containing both a background SGR code
-and a foreground highlight code.
+One end-to-end Agency-js test (`tests/agency-js/stdlib/std-syntax-diff-highlight`,
+no LLM): `diff(old, new, color: true, language: "ts")` returns a string
+containing both background SGR codes and a foreground highlight code, while
+plain mode (no `language`) carries no background.
 
-A manual visual check against the reference screenshots.
+A manual visual check against the reference screenshots (in particular, that
+the colored bars have no gaps over punctuation/whitespace).
 
 ## Out of scope
 
-- **Per-word brighter background** on the changed token(s). With the
-  background-aware theme this becomes more tractable (the changed span could use
-  a brighter-bg theme variant), but composing per-character bg intensity with
-  the highlighter's token boundaries is still extra work; deferred as a possible
+- **Per-word brighter background** on the changed token(s). This needs
+  per-character composition of background intensity with the highlighter's
+  foreground spans, which is extra work; deferred as a possible
   follow-up.
 - **Full-terminal-width** bars (padding to `process.stdout.columns`).
 - Changing `patch`, or any non-color/plain-text behavior.

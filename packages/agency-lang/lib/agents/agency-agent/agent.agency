@@ -13,7 +13,7 @@ import {
  } from "std::policy"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
-import { highlight } from "std::syntax"
+import { highlight, diff } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
@@ -601,7 +601,13 @@ node main() {
       historyMax: 1000,
       paletteCommands: mergedPalette(),
     )
-  } with handler
+  } with (data) {
+    if (data.kind == "std::edit") {
+      print(color.yellow("⏺ Edit: ${data.filename}"))
+      print(diff(data.before, data.after, language: "auto"))
+    }
+    return handler(data)
+  }
 
   print(color.cyan("\nGoodbye!"))
 }

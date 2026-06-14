@@ -1,8 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { handleBlockParser } from "./parsers.js";
+import { handleBlockParser, bodyParser } from "./parsers.js";
 import { normalizeCode } from "@/index.js";
 
 describe("handleBlockParser", () => {
+  it("should not match `handle` as a prefix of an identifier like `handler`", () => {
+    // Regression: `str("handle")` lacked a word boundary, so a statement
+    // `handler(data)` matched the `handle` keyword and the committing
+    // parseError threw "expected `{`" instead of backtracking to a call.
+    const input = 'handle {\n  foo()\n} with (data) {\n  handler(data)\n}';
+    const result = handleBlockParser(normalizeCode(input));
+    expect(result.success).toBe(true);
+    if (result.success && result.result.handler.kind === "inline") {
+      const bodyTypes = result.result.handler.body.map((n) => n.type);
+      expect(bodyTypes).toContain("functionCall");
+    }
+  });
+
+  it("should parse a `handler(...)` call as a statement, not a handle block", () => {
+    const result = bodyParser(normalizeCode("handler(data)\n"));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.map((n) => n.type)).toContain("functionCall");
+    }
+  });
+
   it("should parse inline handler", () => {
     const input = 'handle {\n  foo()\n} with (data) {\n  return approve()\n}';
     const result = handleBlockParser(normalizeCode(input));

@@ -24,6 +24,7 @@ import { agentNames } from "../lib/config.agency"
 import { oracleAgent } from "./oracle.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
+
 // File-system tools handed to the LLM as a single bundle anchored to
 // one directory. `openDir(dir)` returns a Workspace whose `read` /
 // `write` / `edit` / `ls` / `glob` / `grep` / `bash` all resolve
@@ -295,7 +296,7 @@ export static const codeTools: any[] = [
   setCwd,
   workspace.read,
   workspace.write,
-  workspace.edit.partial(printDiff: true),
+  workspace.edit,
   workspace.ls,
   workspace.glob,
   workspace.grep,

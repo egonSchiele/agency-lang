@@ -3591,6 +3591,11 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
   seqC(
     set("type", "handleBlock"),
     str("handle"),
+    // Require a word boundary so an identifier like `handler(...)` isn't
+    // matched as the `handle` keyword. Without this, the committing
+    // `parseError` below throws "expected `{`" instead of letting the
+    // statement parser backtrack to a function call.
+    not(varNameChar),
     optionalSpaces,
     captureCaptures(
       parseError(

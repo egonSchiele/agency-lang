@@ -24,6 +24,7 @@ import {
 } from "./border.js";
 import { Cell, ColumnSpec, LayoutNode, Width, parseWidth } from "./nodes.js";
 import { growToWidth, renderNode, resolveNode } from "./render.js";
+import { NodeHandler, SizingContext, resolveOwnWidth } from "./sizing.js";
 
 export { Cell, ColumnSpec };
 
@@ -623,3 +624,11 @@ export function composeTable(node: LayoutNode): Block {
     : Block.of([...framed.lines, ...captionBlock.lines]);
   return resolved !== undefined ? growToWidth(withCaption, resolved) : withCaption;
 }
+
+function sizeTable(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  // Tables have a custom column-width distribution; delegate to the
+  // table module after resolving the table's own outer width.
+  return _resolveTableWidths(node, resolveOwnWidth(node, ctx));
+}
+
+export const table: NodeHandler = { size: sizeTable, render: composeTable };

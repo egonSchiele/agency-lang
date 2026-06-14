@@ -9,6 +9,14 @@
 import { Align, Block, above, beside, pad } from "./block.js";
 import { LayoutNode } from "./nodes.js";
 import { growToWidth, renderNode } from "./render.js";
+import {
+  NodeHandler,
+  SizingContext,
+  innerWidthAfterChrome,
+  nonNegativeInteger,
+  resolveContainer,
+  resolveOwnWidth,
+} from "./sizing.js";
 
 type Axis = "row" | "column";
 
@@ -127,3 +135,22 @@ function composeAxis(node: LayoutNode, axis: Axis): Block {
 
 export function composeRow(node: LayoutNode):    Block { return composeAxis(node, "row"); }
 export function composeColumn(node: LayoutNode): Block { return composeAxis(node, "column"); }
+
+function sizeColumn(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  const own = resolveOwnWidth(node, ctx);
+  // Columns stack vertically; horizontal width is shared with every child.
+  return resolveContainer(node, own, { defaultWidth: own, percentBasis: own });
+}
+
+function sizeRow(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  const own = resolveOwnWidth(node, ctx);
+  const gap = nonNegativeInteger(node.attrs.gap);
+  const gapTotal = Math.max(0, node.children.length - 1) * gap;
+  const inner = innerWidthAfterChrome(own, gapTotal);
+  // Row children stay natural width unless they declare their own
+  // width; percentages compute against the row's inner space.
+  return resolveContainer(node, own, { defaultWidth: undefined, percentBasis: inner });
+}
+
+export const row:    NodeHandler = { size: sizeRow,    render: composeRow };
+export const column: NodeHandler = { size: sizeColumn, render: composeColumn };

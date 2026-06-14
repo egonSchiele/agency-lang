@@ -43,7 +43,7 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 ### diff
 
 ```ts
-diff(oldText: string, newText: string, context: number, lineNumbers: boolean, color: "auto" | boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean): string
+diff(oldText: string, newText: string, context: number, lineNumbers: boolean, color: "auto" | boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean, language: string): string
 ```
 
 Produce a human-readable diff of two strings and return it as a string.
@@ -60,6 +60,7 @@ Produce a human-readable diff of two strings and return it as a string.
   @param ignoreWhitespace - Treat whitespace-only changes as equal
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
+  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring
 
 **Parameters:**
 
@@ -75,6 +76,7 @@ Produce a human-readable diff of two strings and return it as a string.
 | ignoreWhitespace | `boolean` | false |
 | hunkHeaders | `boolean` | false |
 | summary | `boolean` | false |
+| language | `string` | "" |
 
 **Returns:** `string`
 
@@ -111,4 +113,4 @@ Produce a standard unified diff that std::fs::applyPatch (or `git apply`)
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L57))

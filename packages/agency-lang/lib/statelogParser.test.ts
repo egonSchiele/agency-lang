@@ -151,3 +151,56 @@ describe("StatelogParser tolerant parsing", () => {
     expect(() => p.evalRecord()).toThrow(/Malformed statelog on line 2/);
   });
 });
+
+describe("StatelogParser hierarchy", () => {
+  const env = (over: Partial<EventEnvelope>): EventEnvelope => ({
+    format_version: 1, trace_id: "t1", project_id: "p", span_id: null,
+    parent_span_id: null,
+    data: { type: "debug", timestamp: "2026-06-14T00:00:00Z" }, ...over,
+  });
+  const toJsonl = (evts: EventEnvelope[]) => evts.map((e) => JSON.stringify(e)).join("\n");
+
+  it("returns one trace per trace_id", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ trace_id: "a" }), env({ trace_id: "b" }), env({ trace_id: "a" }),
+    ]));
+    expect(p.traces().map((t) => t.traceId).sort()).toEqual(["a", "b"]);
+  });
+
+  it("nests span children under their parent span (order-independent)", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ span_id: "s2", parent_span_id: "s1", data: { type: "promptCompletion", timestamp: "2026-06-14T00:00:01Z" } }),
+      env({ span_id: "s1", parent_span_id: null, data: { type: "agentStart", timestamp: "2026-06-14T00:00:00Z" } }),
+    ]));
+    const root = p.onlyTrace().root();
+    const s1 = root.children.find((c) => c.id === "s1")!;
+    expect(s1.kind).toBe("span");
+    expect(s1.children.some((c) => c.id === "s2")).toBe(true);
+  });
+
+  it("getNodeById finds spans and line-derived event ids", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ span_id: "s1", data: { type: "toolCall", timestamp: "2026-06-14T00:00:00Z", toolName: "grep", timeTaken: 1200 } }),
+    ]));
+    expect(p.getNodeById("s1")?.kind).toBe("span");
+    const evtNode = p.getNodeById("evt:1");
+    expect(evtNode?.kind).toBe("event");
+    expect(evtNode?.summary).toContain("grep");
+    expect(p.eventOf("evt:1")?.data.type).toBe("toolCall");
+  });
+
+  it("rolls tokens/cost up onto spans", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ span_id: "s1", data: { type: "promptCompletion", timestamp: "2026-06-14T00:00:00Z",
+        timeTaken: 1000, usage: { inputTokens: 100, outputTokens: 50 }, cost: { totalCost: 0.01 } } }),
+    ]));
+    const s1 = p.getNodeById("s1")!;
+    expect(s1.metrics?.tokens).toBe(150);
+    expect(s1.metrics?.cost).toBeCloseTo(0.01);
+  });
+
+  it("onlyTrace throws when multiple traces present", () => {
+    const p = StatelogParser.fromString(toJsonl([env({ trace_id: "a" }), env({ trace_id: "b" })]));
+    expect(() => p.onlyTrace()).toThrow(/multiple trace/i);
+  });
+});

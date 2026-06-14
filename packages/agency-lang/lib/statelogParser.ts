@@ -1,5 +1,11 @@
 import * as fs from "fs";
 import type { EventEnvelope } from "./statelog/wireTypes.js";
+import {
+  spanLabelOf,
+  summarizeEvent,
+  summarizeSpanText,
+  summarizeTraceText,
+} from "./statelog/summarize.js";
 import { extractEvalRecord, type ExtractOptions } from "./eval/extract.js";
 import { normalize, type Normalized } from "./eval/normalize.js";
 import type {
@@ -27,6 +33,38 @@ export type ParseError = {
 // identity for event nodes (`evt:<lineNo>`) and is what `lines()` yields.
 type ParsedEvent = { event: EventEnvelope; lineNo: number };
 type ParseResult = { events: ParsedEvent[]; errors: ParseError[] };
+
+export type NodeKind = "trace" | "span" | "event";
+
+export type NodeMetrics = {
+  tokens?: number;
+  cost?: number;
+  durationMs?: number;
+  firstTs?: number;
+};
+
+// One node in the logical trace→span→event hierarchy. Spans (have children)
+// and leaf events (no children) share this shape — `kind` discriminates. No
+// full payload is held: leaves carry `lineNo`, and the payload is fetched
+// lazily via `eventOf(id)` (Tier-2). The plain-text `summary` is computed at
+// build time so consumers can render/grep a one-liner without the payload.
+export type StatelogNode = {
+  id: string; // trace:<traceId> | <span_id> | evt:<lineNo>
+  kind: NodeKind;
+  traceId: string;
+  parentId: string | null;
+  children: StatelogNode[];
+  label: string; // span type / event type / trace id
+  summary: string; // plain-text one-liner (grep-able)
+  metrics?: NodeMetrics; // rolled up for spans/traces; from the event for leaves
+  lineNo?: number; // events only — used by eventOf()
+};
+
+type BuiltNodes = {
+  roots: StatelogNode[];
+  byId: Record<string, StatelogNode>;
+  eventByLine: Record<number, EventEnvelope>;
+};
 
 // Tolerant line-by-line JSONL parse. Malformed lines, unsupported
 // `format_version`, and rows missing `trace_id`/`data.type` are collected as
@@ -91,6 +129,7 @@ export class StatelogParser {
   private readonly parsed: ParseResult;
   private normalizedCache?: Normalized;
   private evalRecordCache?: EvalRecord;
+  private nodesCache?: BuiltNodes;
 
   // The ONLY constructor. Both factories funnel through it, so there is a
   // single place where text / filePath / parsed are established together.
@@ -118,6 +157,43 @@ export class StatelogParser {
 
   parseErrors(): ParseError[] {
     return this.parsed.errors;
+  }
+
+  private nodes(): BuiltNodes {
+    if (!this.nodesCache) this.nodesCache = buildNodes(this.parsed.events);
+    return this.nodesCache;
+  }
+
+  getNodeById(id: string): StatelogNode | undefined {
+    return this.nodes().byId[id];
+  }
+
+  // Tier-2 payload fetch: returns the full EventEnvelope behind an event node.
+  eventOf(id: string): EventEnvelope | undefined {
+    const node = this.getNodeById(id);
+    if (!node || node.lineNo === undefined) return undefined;
+    return this.nodes().eventByLine[node.lineNo];
+  }
+
+  traces(): TraceView[] {
+    return this.nodes().roots.map((r) => new TraceView(this, r));
+  }
+
+  trace(traceId: string): TraceView {
+    const root = this.nodes().roots.find((r) => r.traceId === traceId);
+    if (!root) throw new Error(`No trace with id ${traceId}`);
+    return new TraceView(this, root);
+  }
+
+  onlyTrace(): TraceView {
+    const roots = this.nodes().roots;
+    if (roots.length > 1) {
+      throw new Error(
+        `multiple traces in input (${roots.map((r) => r.traceId).join(", ")}). Exactly one supported.`,
+      );
+    }
+    if (roots.length === 0) throw new Error("no traces in input");
+    return new TraceView(this, roots[0]);
   }
 
   normalized(): Normalized {
@@ -183,6 +259,253 @@ export class StatelogParser {
   warnings(): string[] {
     return this.evalRecord().warnings;
   }
+}
+
+// A query scoped to one trace. A class (not a factory-returned object) so the
+// fluent surface — parser.trace(id).llmCalls(), parser.onlyTrace().root(),
+// parser.traces()[i].getNodeById(…) — is one well-defined type. Its query
+// methods mirror the parser's so a scoped call reads the same as the global.
+export class TraceView {
+  constructor(
+    private readonly parser: StatelogParser,
+    private readonly rootNode: StatelogNode,
+  ) {}
+
+  get traceId(): string {
+    return this.rootNode.traceId;
+  }
+
+  root(): StatelogNode {
+    return this.rootNode;
+  }
+
+  getNodeById(id: string): StatelogNode | undefined {
+    const n = this.parser.getNodeById(id);
+    return n && n.traceId === this.rootNode.traceId ? n : undefined;
+  }
+}
+
+// Build the trace→span→event hierarchy from the parsed events. Ported from the
+// viewer's buildForest, producing StatelogNode (no view fields) and keeping ALL
+// event types (hiding `graph` is a view concern). Four passes: create
+// traces/spans, re-resolve parents (order-independent), attach leaf events,
+// roll up metrics, then sort children chronologically.
+function buildNodes(parsed: ParsedEvent[]): BuiltNodes {
+  const traces: Record<string, StatelogNode> = {};
+  const spans: Record<string, StatelogNode> = {};
+  const desiredParent: Record<string, string | null> = {};
+  const eventByLine: Record<number, EventEnvelope> = {};
+
+  // Pass 1a: create traces and spans in arrival order.
+  for (const { event: evt } of parsed) {
+    ensureTrace(traces, evt.trace_id);
+    if (evt.span_id) {
+      ensureSpan(spans, traces, evt);
+      if (!(evt.span_id in desiredParent)) {
+        desiredParent[evt.span_id] = evt.parent_span_id ?? null;
+      }
+    }
+  }
+
+  // Pass 1b: re-resolve any span attached to the trace root because its parent
+  // had not been seen yet. Makes the tree shape order-independent.
+  for (const span of Object.values(spans)) {
+    const desiredParentId = desiredParent[span.id];
+    if (!desiredParentId) continue;
+    const trueParent = spans[desiredParentId];
+    if (!trueParent || span.parentId === trueParent.id) continue;
+    const traceRoot = traces[span.traceId];
+    traceRoot.children = traceRoot.children.filter((c) => c.id !== span.id);
+    span.parentId = trueParent.id;
+    trueParent.children.push(span);
+  }
+
+  // Pass 2: attach each event as a leaf under its span (or the trace root).
+  for (const { event: evt, lineNo } of parsed) {
+    eventByLine[lineNo] = evt;
+    const traceRoot = traces[evt.trace_id];
+    const parent = evt.span_id ? spans[evt.span_id] : traceRoot;
+    const leaf: StatelogNode = {
+      id: `evt:${lineNo}`,
+      traceId: evt.trace_id,
+      parentId: parent.id,
+      children: [],
+      kind: "event",
+      label: evt.data.type,
+      summary: summarizeEvent(evt),
+      lineNo,
+    };
+    parent.children.push(leaf);
+  }
+
+  // Pass 3: aggregate metrics on spans, then traces.
+  for (const span of Object.values(spans)) {
+    aggregateMetrics(span, eventByLine);
+  }
+  for (const trace of Object.values(traces)) {
+    aggregateMetrics(trace, eventByLine);
+    trace.summary = summarizeTraceText(trace.traceId, trace.metrics?.firstTs, trace.metrics ?? {});
+  }
+
+  // Pass 4: sort children chronologically (stable on ties / missing times).
+  for (const trace of Object.values(traces)) {
+    sortChildrenByTime(trace, eventByLine);
+  }
+
+  const byId: Record<string, StatelogNode> = {};
+  for (const trace of Object.values(traces)) indexNode(trace, byId);
+
+  return { roots: Object.values(traces), byId, eventByLine };
+}
+
+function ensureTrace(traces: Record<string, StatelogNode>, traceId: string): StatelogNode {
+  const existing = traces[traceId];
+  if (existing) return existing;
+  const root: StatelogNode = {
+    id: `trace:${traceId}`,
+    traceId,
+    parentId: null,
+    children: [],
+    kind: "trace",
+    label: traceId,
+    summary: "",
+  };
+  traces[traceId] = root;
+  return root;
+}
+
+function ensureSpan(
+  spans: Record<string, StatelogNode>,
+  traces: Record<string, StatelogNode>,
+  evt: EventEnvelope,
+): StatelogNode {
+  const existing = spans[evt.span_id!];
+  if (existing) return existing;
+  const node: StatelogNode = {
+    id: evt.span_id!,
+    traceId: evt.trace_id,
+    parentId: evt.parent_span_id ?? null,
+    children: [],
+    kind: "span",
+    label: spanLabelOf(evt),
+    summary: "",
+  };
+  spans[evt.span_id!] = node;
+  const parent = evt.parent_span_id
+    ? (spans[evt.parent_span_id] ?? ensureTrace(traces, evt.trace_id))
+    : ensureTrace(traces, evt.trace_id);
+  node.parentId = parent.id;
+  parent.children.push(node);
+  return node;
+}
+
+function aggregateMetrics(
+  node: StatelogNode,
+  eventByLine: Record<number, EventEnvelope>,
+): void {
+  const leaves: StatelogNode[] = [];
+  walkNode(node, (n) => {
+    if (n.kind === "event") leaves.push(n);
+  });
+  const eventOf = (l: StatelogNode): EventEnvelope => eventByLine[l.lineNo!];
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  const metrics: NodeMetrics = {};
+
+  const tokens = sum(
+    leaves
+      .filter((l) => eventOf(l).data.type === "promptCompletion")
+      .map((l) => {
+        const u = eventOf(l).data.usage ?? {};
+        return (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
+      }),
+  );
+  const cost = sum(
+    leaves
+      .filter((l) => eventOf(l).data.type === "promptCompletion")
+      .map((l) => eventOf(l).data.cost?.totalCost ?? 0),
+  );
+  const timestamps = leaves
+    .map((l) => Date.parse(eventOf(l).data.timestamp))
+    .filter(Number.isFinite);
+
+  if (tokens > 0) metrics.tokens = tokens;
+  if (cost > 0) metrics.cost = cost;
+  if (timestamps.length >= 1) metrics.firstTs = Math.min(...timestamps);
+
+  // Prefer the authoritative `timeTaken` field on the span's characteristic
+  // leaf events; fall back to the timestamp span.
+  const measured = measuredDuration(node, leaves, eventByLine);
+  if (measured !== undefined) metrics.durationMs = measured;
+  else if (timestamps.length >= 2) {
+    metrics.durationMs = Math.max(...timestamps) - Math.min(...timestamps);
+  }
+
+  if (Object.keys(metrics).length > 0) node.metrics = metrics;
+
+  if (node.kind === "span") {
+    node.summary = summarizeSpanText(node.label, node.metrics ?? {});
+  }
+}
+
+function measuredDuration(
+  node: StatelogNode,
+  leaves: StatelogNode[],
+  eventByLine: Record<number, EventEnvelope>,
+): number | undefined {
+  if (node.kind !== "span") return undefined;
+  const target = durationEventType(node.label);
+  const times = leaves
+    .filter((l) => eventByLine[l.lineNo!].data.type === target)
+    .map((l) => eventByLine[l.lineNo!].data.timeTaken)
+    .filter((t): t is number => typeof t === "number");
+  if (times.length === 0) return undefined;
+  return times.reduce((a, b) => a + b, 0);
+}
+
+function durationEventType(spanLabel: string): string | undefined {
+  switch (spanLabel) {
+    case "llmCall": return "promptCompletion";
+    case "toolExecution": return "toolCall";
+    case "agentRun": return "agentEnd";
+    case "forkAll":
+    case "race": return "forkEnd";
+    default: return undefined;
+  }
+}
+
+function sortChildrenByTime(
+  node: StatelogNode,
+  eventByLine: Record<number, EventEnvelope>,
+): void {
+  const decorated = node.children.map((child, idx) => ({
+    child,
+    ts: nodeSortTs(child, eventByLine),
+    idx,
+  }));
+  decorated.sort((a, b) => (a.ts !== b.ts ? a.ts - b.ts : a.idx - b.idx));
+  node.children = decorated.map((d) => d.child);
+  for (const child of node.children) sortChildrenByTime(child, eventByLine);
+}
+
+function nodeSortTs(
+  node: StatelogNode,
+  eventByLine: Record<number, EventEnvelope>,
+): number {
+  if (node.kind === "event") {
+    const t = Date.parse(eventByLine[node.lineNo!].data.timestamp);
+    return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
+  }
+  return node.metrics?.firstTs ?? Number.POSITIVE_INFINITY;
+}
+
+function walkNode(node: StatelogNode, visit: (n: StatelogNode) => void): void {
+  visit(node);
+  for (const c of node.children) walkNode(c, visit);
+}
+
+function indexNode(node: StatelogNode, byId: Record<string, StatelogNode>): void {
+  byId[node.id] = node;
+  for (const c of node.children) indexNode(c, byId);
 }
 
 function assertSingleTrace(events: EventEnvelope[]): void {

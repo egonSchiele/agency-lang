@@ -4,7 +4,7 @@
 
 **Goal:** Add a `language` parameter to `std::syntax::diff` that renders changed lines with a dim red/green background and syntax-highlighted code on top, plus a colored line-number gutter.
 
-**Architecture:** `renderDiff` (in `lib/utils/diff.ts`) keeps the shared scaffold (hunks, gutter, block width) and gains an injected `renderBody(code, kind, width)` hook for the highlighted code path. The highlighter and background-aware themes live in `lib/stdlib/syntax.ts`, which builds `renderBody` when a language is given and passes it through. `diff.ts` does no syntax highlighting and no escape-code manipulation. The background is produced by cli-highlight itself via a `makeBgTheme(rgb)` theme variant (each palette entry chained with `.bgRgb(...)`), so there is no ANSI post-processing.
+**Architecture:** `renderDiff` (in `lib/utils/diff.ts`) keeps the shared scaffold (hunks, gutter, block width) and gains an injected `renderBody(code, kind, width)` hook for the highlighted code path. The highlighter lives in `lib/stdlib/syntax.ts`, which builds `renderBody` when a language is given and passes it through. `diff.ts` does no syntax highlighting. Changed lines are highlighted with the normal VS Code theme (so their colors match context lines), then given a continuous background: set the background-open SGR once and **re-arm it after every reset** the highlighter emits, then pad to width. (An earlier `makeBgTheme(rgb)` per-token approach was abandoned: real highlight.js grammars emit some punctuation/whitespace as unstyled raw text, which a per-token background leaves as gaps — see the spec.)
 
 **Tech Stack:** TypeScript, cli-highlight (existing), `termcolors` (`color.bgRgb`, chainable), vitest unit tests, Agency-js tests.
 
@@ -37,7 +37,7 @@
 
 - **Modify** `lib/utils/diff.ts` — add `renderBody` to `RenderDiffOpts`; add `blockWidth` + `highlightGutter`; branch `renderDiff` into the highlighted code path.
 - **Modify** `lib/utils/diff.test.ts` — unit tests for the highlighted path with a stub `renderBody`.
-- **Modify** `lib/stdlib/syntax.ts` — add `makeBgTheme`, bg constants, `diffBody`; add a `language` param to `_diff` that builds `renderBody`.
+- **Modify** `lib/stdlib/syntax.ts` — add bg constants + a `bgOpen(rgb)` helper and a `diffBody` that highlights with the normal theme and re-arms the background after each reset; add a `language` param to `_diff` that builds `renderBody`.
 - **Create** `lib/stdlib/syntax.test.ts` — unit test the highlighted `_diff` output carries the backgrounds.
 - **Modify** `stdlib/syntax.agency` — add `language: string = ""` to `diff` and pass it through.
 - **Create** `tests/agency-js/stdlib/std-syntax-diff-highlight/{agent.agency,test.js,fixture.json}` — end-to-end check that `diff(..., color: true, language: "ts")` returns ANSI with both a background and a foreground code.
@@ -195,38 +195,32 @@ git commit -F /tmp/hl-task1.txt   # "Add renderBody hook and highlighted path to
 - Modify: `lib/stdlib/syntax.ts`
 - Create: `lib/stdlib/syntax.test.ts`
 
-- [ ] **Step 1: Add `makeBgTheme`, bg constants, and `diffBody`**
+- [ ] **Step 1: Add bg constants, `bgOpen`, and `diffBody`**
 
 In `lib/stdlib/syntax.ts`, just below the `vscodeDarkTheme` definition (after the `} as unknown as Theme;` line), add:
 
 ```ts
-// Dim backgrounds for changed lines (RGB), shared by the themes and the
-// trailing-pad code so they always match.
+// Dim backgrounds for changed lines (RGB).
 const DIM_RED: [number, number, number] = [60, 0, 0];
 const DIM_GREEN: [number, number, number] = [0, 45, 0];
+const ANSI_RESET = "\x1b[0m";
 
-// A copy of the VS Code theme with a background chained onto every style, so
-// cli-highlight emits the background as part of each token (no ANSI
-// post-processing). `default` covers whitespace/unmatched text, so the whole
-// line is backgrounded.
-function makeBgTheme(rgb: [number, number, number]): Theme {
-  const out: Record<string, unknown> = {};
-  for (const [token, style] of Object.entries(vscodeDarkTheme as Record<string, (s: string) => string>)) {
-    out[token] = (style as unknown as { bgRgb: (r: number, g: number, b: number) => (s: string) => string }).bgRgb(
-      ...rgb,
-    );
-  }
-  return out as unknown as Theme;
+// The bare background-open SGR for an RGB (no text, no reset), derived from
+// termcolors so the code format stays in one place.
+function bgOpen(rgb: [number, number, number]): string {
+  const wrapped = color.bgRgb(...rgb)(""); // "<open><reset>"
+  return wrapped.slice(0, wrapped.length - ANSI_RESET.length);
 }
-
-const RED_BG_THEME = makeBgTheme(DIM_RED);
-const GREEN_BG_THEME = makeBgTheme(DIM_GREEN);
-const redPad = color.bgRgb(...DIM_RED);
-const greenPad = color.bgRgb(...DIM_GREEN);
+const RED_OPEN = bgOpen(DIM_RED);
+const GREEN_OPEN = bgOpen(DIM_GREEN);
 
 // Render one diff line's body for the highlighted path. Context lines are
-// plainly highlighted; changed lines are highlighted with a background theme
-// and padded to `width` with the matching background.
+// plainly highlighted. Changed lines are highlighted with the SAME theme (so
+// colors match context) and then given a continuous line background: real
+// highlight.js grammars emit some punctuation/whitespace as unstyled raw text,
+// so a per-token background theme would leave gaps. Instead we set the
+// background once and re-arm it after every reset the highlighter emits, then
+// pad to `width` so the bar is rectangular.
 function diffBody(
   code: string,
   kind: "context" | "delete" | "insert",
@@ -234,17 +228,12 @@ function diffBody(
   language: string,
 ): string {
   if (kind === "context") return syntaxHighlight(code, language);
-  const lang = language === "agency" ? "ts" : language;
-  const theme = kind === "delete" ? RED_BG_THEME : GREEN_BG_THEME;
-  const pad = kind === "delete" ? redPad : greenPad;
-  let body: string;
-  try {
-    body = highlight(code, { language: lang, theme, ignoreIllegals: true });
-  } catch {
-    body = pad(code); // on highlighter failure, still show the line tinted
-  }
+  const open = kind === "delete" ? RED_OPEN : GREEN_OPEN;
+  const highlighted = syntaxHighlight(code, language);
+  const tinted = open + highlighted.split(ANSI_RESET).join(ANSI_RESET + open);
   const padLen = Math.max(0, width - code.length);
-  return padLen > 0 ? body + pad(" ".repeat(padLen)) : body;
+  const padding = padLen > 0 ? " ".repeat(padLen) : "";
+  return tinted + padding + ANSI_RESET;
 }
 ```
 
@@ -284,7 +273,7 @@ export function _diff(
 }
 ```
 
-Note: there is a parameter named `color` and a module import named `color` (termcolors). The existing `_diff` already shadows the import with the `color` parameter and only uses `autoUseColor()`; `diffBody`/`makeBgTheme` use the module `color` and are defined at module scope (outside `_diff`), so there is no conflict.
+Note: there is a parameter named `color` and a module import named `color` (termcolors). The existing `_diff` already shadows the import with the `color` parameter and only uses `autoUseColor()`; `diffBody`/`bgOpen` use the module `color` and are defined at module scope (outside `_diff`), so there is no conflict.
 
 - [ ] **Step 3: Write failing tests for the highlighted `_diff`**
 
@@ -532,7 +521,7 @@ Expected: the `diff` signature and `@param language` line are present.
 
 ## Self-Review notes (verified while writing)
 
-- **Spec coverage:** `language` trigger + color-off fallback → Tasks 2, 3 (and the `useHighlight = colored && renderBody` gate in Task 1). Injected `renderBody` architecture → Task 1. Background-aware themes (no post-processing) + `makeBgTheme` + bg colors in syntax.ts → Task 2. Gutter coloring + block-width padding → Tasks 1, 2. Context lines untinted → Task 2 `diffBody` + Task 1 test. Tests (stub renderBody; bg present; agency e2e) → Tasks 1, 2, 4.
+- **Spec coverage:** `language` trigger + color-off fallback → Tasks 2, 3 (and the `useHighlight = colored && renderBody` gate in Task 1). Injected `renderBody` architecture → Task 1. Continuous line background (set once + re-arm after each reset) + `bgOpen` + bg colors in syntax.ts → Task 2. Gutter coloring + block-width padding → Tasks 1, 2. Context lines untinted → Task 2 `diffBody` + Task 1 test. Tests (stub renderBody; bg present; agency e2e) → Tasks 1, 2, 4.
 - **Type consistency:** `renderBody(code: string, kind: "context"|"delete"|"insert", width: number) => string` is identical in `RenderDiffOpts` (Task 1), `_diff` (Task 2), and the stub (Task 1 test). `diffBody` signature matches its call site. `DIM_RED`/`DIM_GREEN` feed both the themes and the pad functions.
 - **No placeholders:** every code step shows full code; commands have expected output.
 - **Known soft spots called out:** exact bg SGR literals in tests (Task 2/4 give a `node -e` to confirm); gutter spacing in the Task 1 assertion (reconcile-to-actual note). Block width uses `string.length` (display columns), which can misalign on tabs/wide chars — acceptable for source-line diffs.

@@ -1,0 +1,28 @@
+import { barChart } from "std::chart"
+import { render } from "std::layout"
+
+// Data-param form.
+node testDataForm() {
+  const c = barChart(
+    title: "Q",
+    mode: "stacked",
+    keys: [{ name: "web" }, { name: "app" }],
+    data: [
+      { label: "Q1", values: [3, 1] },
+      { label: "Q2", values: [2, 2] },
+    ],
+    width: 24,
+  )
+  return render(c, color: false)
+}
+
+// Block form — must produce identical output.
+node testBlockForm() {
+  const c = barChart(title: "Q", mode: "stacked", width: 24) as ch {
+    ch.key("web")
+    ch.key("app")
+    ch.bar("Q1", 3, 1)
+    ch.bar("Q2", 2, 2)
+  }
+  return render(c, color: false)
+}

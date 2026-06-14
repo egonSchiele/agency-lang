@@ -1,0 +1,201 @@
+import { LayoutNode, Width, Alignment, BorderStyle } from "std::layout"
+export { render } from "std::layout"
+
+/** @module
+  ## Module: std::table
+
+  Tabular layout for terminal output. Columns line up across header /
+  body / footer; the outer frame uses the same `BorderStyle` enum as
+  `std::layout`'s `box`. Two construction styles, same result:
+
+  - **Data form (LLM-callable, JSON-friendly):** pass `header`, `body`,
+    `footer` as nested arrays of strings or `LayoutNode`s.
+
+    ```ts
+    import { table, render } from "std::table"
+
+    const t = table(
+      title: "Employees",
+      header: ["ID", "Name", "Balance"],
+      body: [
+        ["1", "Dave",  "100"],
+        ["2", "Alice", "-50"],
+      ],
+      footer: [["", "Total", "50"]],
+    )
+    print(render(t))
+    ```
+
+  - **Block form (Agency-author ergonomics):**
+
+    ```ts
+    const t = table(title: "Employees") as t {
+      t.header("ID", "Name", "Balance")
+      t.row("1", "Dave", "100")
+      t.footer("", "Total", "50")
+    }
+    ```
+
+  Render a table with `render` (re-exported here from `std::layout`).
+*/
+
+/**
+ * A table cell. Either a bare string (auto-coerced to a styled `text`
+ * leaf at render time) or any pre-built LayoutNode (e.g.
+ * `text("-50", fgColor: "red")`).
+ */
+export type Cell = string | LayoutNode
+
+// Row alias for table body / footer. The parser doesn't currently
+// accept `Cell[][]` directly where `Cell` is a union; aliasing the
+// row type first sidesteps that.
+export type CellRow = Cell[]
+
+/**
+ * Per-column configuration for a `table`. All fields are optional;
+ * omitted columns default to start-aligned with no minimum width.
+ *
+ * @param align - Horizontal alignment of every cell in this column
+ * @param minWidth - Lower bound on column width; widens narrow columns
+ * @param width - Optional per-column constraint. A number caps the
+ *   column's content width in cells. `"X%"` takes a percentage of the
+ *   table's remaining inner width. `"full"` is not allowed here.
+ * @param fgColor - Default foreground color for every cell in this
+ *   column that doesn't carry its own `fgColor`.
+ */
+export type ColumnSpec = {
+  align?: Alignment;
+  minWidth?: number;
+  width?: Width;
+  fgColor?: string
+}
+
+/**
+ * Methods available inside a `table`'s trailing `as t { ... }` block.
+ * `columns` / `caption` set top-level table attrs; `header` / `row` /
+ * `footer` append cell arrays to the corresponding section.
+ */
+export type TableBuilder = {
+  columns: any;
+  caption: any;
+  header: any;
+  row: any;
+  footer: any
+}
+
+def _setTableColumns(state: any, specs: ColumnSpec[]): any {
+  state.columns = specs
+  return null
+}
+
+def _setTableCaption(state: any, text: string): any {
+  state.caption = text
+  return null
+}
+
+def _setTableHeader(state: any, ...cells: Cell[]): any {
+  state.header = cells
+  return null
+}
+
+def _addTableRow(state: any, ...cells: Cell[]): any {
+  state.body.push(cells)
+  return null
+}
+
+def _addTableFooter(state: any, ...cells: Cell[]): any {
+  state.footer.push(cells)
+  return null
+}
+
+def _makeTableBuilder(state: any): TableBuilder {
+  return {
+    columns: _setTableColumns.partial(state: state),
+    caption: _setTableCaption.partial(state: state),
+    header: _setTableHeader.partial(state: state),
+    row: _addTableRow.partial(state: state),
+    footer: _addTableFooter.partial(state: state)
+  }
+}
+
+export def table(
+  title: string = "",
+  titleColor: string = "",
+  borderStyle: BorderStyle = "rounded",
+  borderColor: string = "",
+  caption: string = "",
+  cellPadding: number = 1,
+  width: Width = null,
+  columns: ColumnSpec[] = null,
+  header: Cell[] = null,
+  body: CellRow[] = null,
+  footer: CellRow[] = null,
+  headerDivider: boolean = true,
+  footerDivider: boolean = true,
+  rowDividers: boolean = false,
+  columnDividers: boolean = true,
+  block: (TableBuilder) -> void = null,
+): LayoutNode {
+  """
+  Render data as a bordered table layout node. When calling this as an
+  LLM tool, use the data form: pass `header`, `body`, and `footer` as
+  arrays of cells (every row must have the same number of cells).
+  Render the result with `render`.
+
+  @param title - Title shown in the top border
+  @param caption - Caption shown beneath the table
+  @param columns - Per-column configuration (alignment, width, color)
+  @param header - Header cells
+  @param body - Body rows, each an array of cells
+  @param footer - Footer rows, each an array of cells
+  @param borderStyle - Frame style: "rounded", "heavy", "double", or "light"
+  @param cellPadding - Horizontal padding inside each cell, in cells
+  @param width - Table width in cells, or "full" / "N%"
+  """
+  const bodyArr: any[] = []
+  if (body != null) {
+    for (r in body) {
+      bodyArr.push(r)
+    }
+  }
+  const footerArr: any[] = []
+  if (footer != null) {
+    for (r in footer) {
+      footerArr.push(r)
+    }
+  }
+  const state: any = {
+    header: header,
+    body: bodyArr,
+    footer: footerArr,
+    columns: columns,
+    caption: caption
+  }
+  if (block != null) {
+    block(_makeTableBuilder(state))
+  }
+  const attrs: any = {
+    title: title,
+    titleColor: titleColor,
+    borderStyle: borderStyle,
+    borderColor: borderColor,
+    caption: state.caption,
+    cellPadding: cellPadding,
+    columns: state.columns,
+    header: state.header,
+    body: state.body,
+    footer: state.footer,
+    headerDivider: headerDivider,
+    footerDivider: footerDivider,
+    rowDividers: rowDividers,
+    columnDividers: columnDividers
+  }
+  if (width != null) {
+    attrs.width = width
+  }
+  return {
+    type: "table",
+    attrs: attrs,
+    children: []
+  }
+}

@@ -24,6 +24,10 @@ import { padLine } from "./layout/block.js";
 import { HANDLERS, RENDERERS, _viewport, growToWidth, resolveSizes } from "./layout/render.js";
 import { _coerceCell, _tableChromeWidth, _validateTable } from "./layout/table.js";
 import { parseWidth, styleOf } from "./layout/nodes.js";
+import {
+  barCells, baselineColumn, dataRange, renderBarChart, resolveColor, resolveKeys,
+  stackSegments, validateChart,
+} from "./layout/barchart.js";
 
 export { Style, wrapText } from "./layout/ansi.js";
 export { Align, Block, above, beside, pad, styled } from "./layout/block.js";
@@ -40,4 +44,6 @@ export const _internal = {
   styleOf, RENDERERS, HANDLERS,
   parseWidth, wrapText, _viewport, resolveSizes, growToWidth,
   _coerceCell, _validateTable, _tableChromeWidth,
+  barCells, baselineColumn, dataRange, resolveKeys, stackSegments, renderBarChart,
+  resolveColor, validateChart,
 };

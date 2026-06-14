@@ -12,7 +12,7 @@ import { NodeHandler, SizingContext, resolveOwnWidth, setAttr } from "./sizing.j
 export type NodeType =
   | "box" | "row" | "column"
   | "text" | "raw" | "space" | "hline" | "vline"
-  | "table";
+  | "table" | "barchart";
 
 export type LayoutNode = {
   type: NodeType;

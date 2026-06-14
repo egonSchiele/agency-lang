@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import {
+// Import through the public layout entry (not ./barchart.js directly) so the
+// module graph initializes in the same order as production. Importing
+// barchart.js first would evaluate it before render.js builds HANDLERS,
+// leaving its handler entry undefined mid-cycle.
+import { _internal, _render, LayoutNode } from "../layout.js";
+import { color } from "../../utils/termcolors.js";
+
+const {
   barCells,
   baselineColumn,
   dataRange,
@@ -7,8 +14,7 @@ import {
   resolveKeys,
   stackSegments,
   validateChart,
-} from "./barchart.js";
-import { color } from "../../utils/termcolors.js";
+} = _internal;
 
 describe("barCells", () => {
   test("scales magnitude to cells", () => {
@@ -88,6 +94,63 @@ describe("validateChart", () => {
         [{ label: "Q1", values: [10, -5] }],
         "stacked",
       ),
+    ).toThrow(/mixes positive and negative/);
+  });
+});
+
+function chartNode(attrs: Record<string, unknown>): LayoutNode {
+  return { type: "barchart", attrs, children: [] };
+}
+
+function renderPlain(attrs: Record<string, unknown>): string {
+  // color: false → deterministic, ANSI stripped.
+  return _render(chartNode(attrs), false);
+}
+
+describe("renderBarChart", () => {
+  test("single-series bar fills proportionally and shows value + label", () => {
+    const out = renderPlain({
+      mode: "grouped",
+      data: [
+        { label: "North", values: [10] },
+        { label: "South", values: [5] },
+      ],
+      barChar: "#",
+      showValues: true,
+      legend: false,
+      // chrome = labelW(5) + 1 + valueW(2) + 1 = 9, so barArea = 9.
+      // Asserts relative bar length + containment, not exact width.
+      resolvedWidth: 18,
+    });
+    const lines = out.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("North");
+    expect(lines[0]).toContain("10");
+    const northBars = (lines[0].match(/#/g) ?? []).length;
+    const southBars = (lines[1].match(/#/g) ?? []).length;
+    expect(northBars).toBeGreaterThan(southBars);
+  });
+
+  test("legend lists each named key", () => {
+    const out = renderPlain({
+      mode: "stacked",
+      keys: [{ name: "web" }, { name: "app" }],
+      data: [{ label: "Q1", values: [3, 1] }],
+      legend: true,
+      showValues: false,
+      resolvedWidth: 30,
+    });
+    expect(out).toContain("web");
+    expect(out).toContain("app");
+  });
+
+  test("rejects mixed-sign stacked bars at render time", () => {
+    expect(() =>
+      renderPlain({
+        mode: "stacked",
+        keys: [{ name: "a" }, { name: "b" }],
+        data: [{ label: "Q1", values: [5, -2] }],
+      }),
     ).toThrow(/mixes positive and negative/);
   });
 });

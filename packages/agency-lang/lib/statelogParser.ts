@@ -1,7 +1,7 @@
-import type { EventEnvelope } from "../statelog/wireTypes.js";
-import { extractEvalRecord, type ExtractOptions } from "./extract.js";
-import { normalize, type Normalized } from "./normalize.js";
-import { readAllEventsSync } from "./parseJsonl.js";
+import type { EventEnvelope } from "./statelog/wireTypes.js";
+import { extractEvalRecord, type ExtractOptions } from "./eval/extract.js";
+import { normalize, type Normalized } from "./eval/normalize.js";
+import { readAllEventsSync } from "./eval/parseJsonl.js";
 import type {
   ErrorEntry,
   EvalRecord,
@@ -11,7 +11,7 @@ import type {
   Metrics,
   NormalizedEvent,
   ThreadEntry,
-} from "./types.js";
+} from "./eval/types.js";
 
 export type StatelogParserOptions = ExtractOptions;
 

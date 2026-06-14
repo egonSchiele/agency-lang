@@ -8,7 +8,7 @@ import type { AgencyConfig } from "@/config.js";
 import { compile } from "@/cli/commands.js";
 import { parseTarget } from "@/cli/util.js";
 import { RunStrategy } from "@/importStrategy.js";
-import { StatelogParser } from "@/eval/statelogParser.js";
+import { StatelogParser } from "@/statelogParser.js";
 import { loadTasks, taskFromGoal } from "@/eval/loadTasks.js";
 import {
   initializeEvalRun,

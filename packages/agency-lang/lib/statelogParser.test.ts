@@ -4,9 +4,9 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { EventEnvelope } from "../statelog/wireTypes.js";
-import { extractEvalRecord } from "./extract.js";
-import { normalize } from "./normalize.js";
+import type { EventEnvelope } from "./statelog/wireTypes.js";
+import { extractEvalRecord } from "./eval/extract.js";
+import { normalize } from "./eval/normalize.js";
 import { StatelogParser } from "./statelogParser.js";
 
 let ts = 0;

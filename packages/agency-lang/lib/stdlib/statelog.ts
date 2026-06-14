@@ -1,5 +1,5 @@
 import { agencyStore } from "../runtime/asyncContext.js";
-import { StatelogParser } from "../eval/statelogParser.js";
+import { StatelogParser } from "../statelogParser.js";
 import type { EvalRecord, EvalValue } from "../eval/types.js";
 import type { StatelogClient } from "../statelogClient.js";
 import { resolveDir } from "./resolveDir.js";

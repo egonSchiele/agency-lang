@@ -1,6 +1,6 @@
 import * as fs from "fs";
 
-import { StatelogParser } from "../eval/statelogParser.js";
+import { StatelogParser } from "../statelogParser.js";
 
 export type EvalExtractOptions = {
   out?: string;

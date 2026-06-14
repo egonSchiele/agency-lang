@@ -7,7 +7,7 @@ import { judgePairwise } from "../eval/judge/pairwise.js";
 import { judgeSuite, type JudgeSuiteArgs } from "../eval/judge/suite.js";
 import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
 import { taskFromGoal } from "../eval/loadTasks.js";
-import { StatelogParser } from "../eval/statelogParser.js";
+import { StatelogParser } from "../statelogParser.js";
 import { createOptimizeReporter, type OptimizeVerbosity } from "../optimize/reporter.js";
 import { discoverOptimizeTargets } from "../optimize/targets.js";
 import {

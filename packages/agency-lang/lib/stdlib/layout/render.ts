@@ -21,12 +21,19 @@ export type Viewport = { cols: number; rows: number };
 
 const DEFAULT_VIEWPORT: Viewport = { cols: 80, rows: 24 };
 
-export function renderNode(node: LayoutNode): Block {
-  const handler = HANDLERS[node.type];
+// Look up a node type's handler, throwing a clear error for unknown
+// types. Shared by both passes so the sizing and render passes report
+// an unknown node type identically.
+function handlerFor(type: NodeType): NodeHandler {
+  const handler = HANDLERS[type];
   if (!handler) {
-    throw new Error(`std::layout: unknown node type "${node.type}"`);
+    throw new Error(`std::layout: unknown node type "${type}"`);
   }
-  return handler.render(node);
+  return handler;
+}
+
+export function renderNode(node: LayoutNode): Block {
+  return handlerFor(node.type).render(node);
 }
 
 export function _viewport(): Viewport {
@@ -100,7 +107,7 @@ export function resolveSizes(node: LayoutNode, viewport: Viewport): LayoutNode {
 }
 
 export function resolveNode(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  return HANDLERS[node.type].size(node, ctx);
+  return handlerFor(node.type).size(node, ctx);
 }
 
 export function render(node: LayoutNode, viewport?: Viewport): string {

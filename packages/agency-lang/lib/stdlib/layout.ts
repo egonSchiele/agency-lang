@@ -11,11 +11,12 @@
 //   * ansi.ts    — SGR / color primitives, visualWidth
 //   * block.ts   — Block class + pad / beside / above / styled
 //   * border.ts  — bordered frame, BORDER_CHARS, title in top edge
-//   * nodes.ts   — LayoutNode types + leaf renderers
-//   * axis.ts    — composeRow / composeColumn
-//   * box.ts     — composeBox
-//   * table.ts   — composeTable + validation + cell layout
-//   * render.ts  — RENDERERS dispatch table + renderNode + render + _render
+//   * sizing.ts  — shared width helpers + SizingContext / NodeHandler types
+//   * nodes.ts   — LayoutNode types + leaf handlers (size + render)
+//   * axis.ts    — row / column handlers (size + render)
+//   * box.ts     — box handler (size + render)
+//   * table.ts   — table handler (size + render) + validation + cell layout
+//   * render.ts  — HANDLERS dispatch table + renderNode / resolveNode + render + _render
 
 import { BORDER_CHARS, resolveBorderStyle } from "./layout/border.js";
 import { colorToRgb, sgr, stripAnsi, visualWidth, wrapText } from "./layout/ansi.js";

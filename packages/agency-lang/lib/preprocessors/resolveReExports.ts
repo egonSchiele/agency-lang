@@ -1,4 +1,4 @@
-import type { AgencyNode, AgencyProgram } from "../types.js";
+import type { AgencyMultiLineComment, AgencyNode, AgencyProgram } from "../types.js";
 import type {
   ConstantSymbol,
   FunctionSymbol,
@@ -90,8 +90,46 @@ export function resolveReExports(
     }
   }
 
-  // Synthesized imports go before kept nodes (matches normal import positioning).
-  return { ...program, nodes: [...synthesized, ...kept] };
+  // Insert the synthesized nodes after the file's leading preamble —
+  // blank lines, comments (including the `@module` doc), and imports —
+  // rather than at the absolute front. A function/constant/type re-export
+  // desugars to a wrapper `def` / `static const` / `type`, which is
+  // non-preamble code; placing it before a leading `@module` doc comment
+  // would trip the preprocessor's "module doc must precede code" check.
+  // Keeping the leading preamble first preserves both behaviours: imports
+  // stay at the top, and `@module` keeps documenting the module.
+  let head = 0;
+  while (head < kept.length && isLeadingPreamble(kept[head])) {
+    head++;
+  }
+  return {
+    ...program,
+    nodes: [...kept.slice(0, head), ...synthesized, ...kept.slice(head)],
+  };
+}
+
+// Whether a node belongs to the file's leading preamble — the run that
+// synthesized re-export nodes are inserted *after*. Mirrors the
+// preprocessor's preamble notion (blank lines, comments, imports), with
+// one crucial exception: a regular doc comment (`/** ... */` that is not
+// `@module`) binds to the declaration that follows it, so it must NOT be
+// treated as preamble — otherwise synthesized nodes would be spliced
+// between the doc comment and its declaration, breaking doc attachment.
+// The `@module` doc and plain block comments are safe to keep ahead.
+function isLeadingPreamble(node: AgencyNode): boolean {
+  switch (node.type) {
+    case "comment":
+    case "newLine":
+    case "importStatement":
+    case "importNodeStatement":
+      return true;
+    case "multiLineComment": {
+      const mc = node as AgencyMultiLineComment;
+      return mc.isModuleDoc || !mc.isDoc;
+    }
+    default:
+      return false;
+  }
 }
 
 function hasReExportedFrom(

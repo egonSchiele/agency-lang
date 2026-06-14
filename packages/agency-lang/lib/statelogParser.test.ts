@@ -61,7 +61,7 @@ describe("StatelogParser", () => {
       event("evalOutputRecorded", { threadId: "0", value: "answer" }),
     ];
     const statelogPath = writeJsonl(tmpDir, events);
-    const log = new StatelogParser(statelogPath);
+    const log = StatelogParser.fromFile(statelogPath);
     const expected = extractEvalRecord(events, statelogPath);
 
     expect(log.evalRecord()).toEqual(expected);
@@ -83,7 +83,7 @@ describe("StatelogParser", () => {
       event("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
     ]);
 
-    expect(new StatelogParser(statelogPath).finalEvalOutput()).toBeNull();
+    expect(StatelogParser.fromFile(statelogPath).finalEvalOutput()).toBeNull();
   });
 
   it("rejects statelog files with more than one trace", () => {
@@ -91,9 +91,63 @@ describe("StatelogParser", () => {
       event("threadCreated", { threadId: "0", threadType: "thread" }, "trace-A"),
       event("threadCreated", { threadId: "1", threadType: "thread" }, "trace-B"),
     ]);
-    const log = new StatelogParser(statelogPath);
+    const log = StatelogParser.fromFile(statelogPath);
 
     expect(() => log.normalized()).toThrow(/multiple trace_ids/i);
     expect(() => log.evalRecord()).toThrow(/multiple trace_ids/i);
+  });
+});
+
+describe("StatelogParser tolerant parsing", () => {
+  const line = (o: object) => JSON.stringify(o);
+  const good = (over: object = {}) =>
+    line({
+      format_version: 1, trace_id: "t1", project_id: "p", span_id: null,
+      parent_span_id: null,
+      data: { type: "agentStart", timestamp: "2026-06-14T00:00:00Z" }, ...over,
+    });
+
+  it("fromString parses well-formed lines with no errors", () => {
+    const p = StatelogParser.fromString([good(), good()].join("\n"));
+    expect([...p.events()]).toHaveLength(2);
+    expect(p.parseErrors()).toHaveLength(0);
+  });
+
+  it("collects malformed-JSON errors instead of throwing", () => {
+    const p = StatelogParser.fromString([good(), "{ not json", good()].join("\n"));
+    expect([...p.events()]).toHaveLength(2);
+    expect(p.parseErrors()).toHaveLength(1);
+    expect(p.parseErrors()[0]).toMatchObject({ line: 2, kind: "invalid_json" });
+  });
+
+  it("rejects unsupported format_version as an error", () => {
+    const p = StatelogParser.fromString(
+      line({ format_version: 2, trace_id: "t", project_id: "p", span_id: null,
+        parent_span_id: null, data: { type: "x", timestamp: "" } }),
+    );
+    expect([...p.events()]).toHaveLength(0);
+    expect(p.parseErrors()[0]).toMatchObject({ kind: "unsupported_version" });
+  });
+
+  it("rejects rows missing trace_id or data.type", () => {
+    const p = StatelogParser.fromString(
+      line({ format_version: 1, project_id: "p", span_id: null, parent_span_id: null,
+        data: { timestamp: "" } }),
+    );
+    expect(p.parseErrors()[0]).toMatchObject({ kind: "missing_fields" });
+  });
+
+  it("treats missing format_version as legacy v1", () => {
+    const p = StatelogParser.fromString(
+      line({ trace_id: "t", project_id: "p", span_id: null, parent_span_id: null,
+        data: { type: "agentStart", timestamp: "" } }),
+    );
+    expect([...p.events()]).toHaveLength(1);
+    expect(p.parseErrors()).toHaveLength(0);
+  });
+
+  it("evalRecord throws on malformed input", () => {
+    const p = StatelogParser.fromString([good(), "{ not json"].join("\n"));
+    expect(() => p.evalRecord()).toThrow(/Malformed statelog on line 2/);
   });
 });

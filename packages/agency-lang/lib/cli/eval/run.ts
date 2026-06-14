@@ -207,7 +207,7 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
   statelogPath,
   outPath,
 }) => {
-  const record = new StatelogParser(statelogPath).evalRecord();
+  const record = StatelogParser.fromFile(statelogPath).evalRecord();
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };
 

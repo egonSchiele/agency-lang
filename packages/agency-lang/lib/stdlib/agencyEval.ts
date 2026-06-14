@@ -107,7 +107,7 @@ export async function _finalizeEvalTask(
   }
   if (shouldExtractStatelog(prepared.statelogPath)) {
     try {
-      const record = new StatelogParser(prepared.statelogPath).evalRecord();
+      const record = StatelogParser.fromFile(prepared.statelogPath).evalRecord();
       fs.writeFileSync(prepared.evalRecordPath, JSON.stringify(record, null, 2));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -147,7 +147,7 @@ export function _formatEvalRunFailure(value: any): string {
  * pipeline; no separate logic here.
  */
 export async function _evalExtract(statelogPath: string): Promise<EvalRecord> {
-  return new StatelogParser(statelogPath).evalRecord();
+  return StatelogParser.fromFile(statelogPath).evalRecord();
 }
 
 /**

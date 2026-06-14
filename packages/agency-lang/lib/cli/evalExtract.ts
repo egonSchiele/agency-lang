@@ -14,7 +14,7 @@ export async function evalExtract(
   file: string,
   opts: EvalExtractOptions = {},
 ): Promise<void> {
-  const record = new StatelogParser(file, {
+  const record = StatelogParser.fromFile(file, {
     previewChars: opts.previewChars,
   }).evalRecord();
   const outPath = opts.out ?? defaultOutPath(file);

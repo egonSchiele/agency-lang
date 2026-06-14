@@ -191,3 +191,26 @@ function createNoopColorFunction(): ColorFunction {
 export const ttyColor: ColorFunction = process.stdout.isTTY
   ? color
   : createNoopColorFunction();
+
+/**
+ * Resolve whether to emit ANSI color for an `"auto"` setting, following the
+ * de-facto ecosystem convention:
+ *   * `NO_COLOR` set (any value)          → disable, no matter what.
+ *   * `FORCE_COLOR` set to a truthy value → enable, no matter what.
+ *   * otherwise                           → enable iff stdout is a TTY.
+ *
+ * `process.stdout.isTTY` alone is unreliable when Agency runs through nested
+ * spawns (some intermediate hops drop the TTY flag), so the env-var fallbacks
+ * give the user explicit overrides. Shared by stdlib helpers that expose an
+ * `"auto" | boolean` color option (e.g. `std::layout::render`, `std::syntax::diff`).
+ */
+export function autoUseColor(): boolean {
+  if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") {
+    return false;
+  }
+  const force = process.env.FORCE_COLOR;
+  if (force !== undefined && force !== "" && force !== "0" && force !== "false") {
+    return true;
+  }
+  return process.stdout.isTTY === true;
+}

@@ -180,8 +180,12 @@ describe("createOptimizeReporter", () => {
     const text = lines.join("\n");
     expect(text).toContain("Iteration 1/5: accepted (candidate wins 2, champion wins 1, ties 0)");
     expect(text).toContain("~ foo.agency:bar:prompt:");
-    expect(text).toContain(color.red("- xyz"));
-    expect(text).toContain(color.green("+ a better prompt"));
+    // Replacement is rendered whole-line with the changed words highlighted;
+    // the "- "/"+ " prefix and the word are painted separately.
+    expect(text).toContain(color.red("- "));
+    expect(text).toContain(color.red("xyz"));
+    expect(text).toContain(color.green("+ "));
+    expect(text).toContain(color.green("a better prompt"));
     expect(text).toContain("Rationale: Overall clearer.");
   });
 
@@ -246,8 +250,12 @@ describe("createOptimizeReporter", () => {
     const text = lines.join("\n");
     expect(text).toContain("== Optimized variables ==");
     expect(text).toContain("~ foo.agency:bar:prompt:");
-    expect(text).toContain(color.red("- xyz"));
-    expect(text).toContain(color.green("+ a better prompt"));
+    // Replacement is rendered whole-line with the changed words highlighted;
+    // the "- "/"+ " prefix and the word are painted separately.
+    expect(text).toContain(color.red("- "));
+    expect(text).toContain(color.red("xyz"));
+    expect(text).toContain(color.green("+ "));
+    expect(text).toContain(color.green("a better prompt"));
     // The unchanged target shows its (truncated) value dimmed.
     expect(text).toContain("~ foo.agency:global:systemPrompt:");
     expect(text).not.toContain(`- ${"x".repeat(500)}`);

@@ -1,0 +1,24 @@
+import { patch } from "std::syntax"
+import { applyPatch } from "std::fs"
+
+node makePatch(oldText: string, newText: string, filename: string): string {
+  return patch(oldText, newText, filename)
+}
+
+node runApply(p: string): any {
+  handle {
+    const result = applyPatch(p)
+  } with (data) {
+    return approve()
+  }
+  return result
+}
+
+node readBack(filename: string): any {
+  handle {
+    const result = read(filename) catch "error reading file"
+  } with (data) {
+    return approve()
+  }
+  return result
+}

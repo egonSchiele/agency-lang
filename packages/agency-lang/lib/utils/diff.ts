@@ -7,38 +7,311 @@ const DIFF_EQUAL = 0;
 
 const dmp = new DiffMatchPatch();
 
+type Diff = [number, string];
+
+export type DiffLine = {
+  kind: "context" | "delete" | "insert";
+  text: string;
+  oldNum: number | null;
+  newNum: number | null;
+};
+
+export type Hunk = {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+};
+
+export type RenderDiffOpts = {
+  lineNumbers?: boolean;
+  colored?: boolean;
+  oldLabel?: string;
+  newLabel?: string;
+  hunkHeaders?: boolean;
+  summary?: boolean;
+};
+
+// Collapse runs of whitespace and trim, for comparison only (the original
+// line text is preserved for rendering).
+function normalizeLine(line: string): string {
+  return line.replace(/\s+/g, " ").trim();
+}
+
+// "" is zero lines; otherwise split on newline, KEEPING a trailing empty
+// element so a trailing newline survives a patch round-trip.
+function splitTextLines(text: string): string[] {
+  return text === "" ? [] : text.split("\n");
+}
+
+// Encode each unique line as a single char so diff_main runs at line
+// granularity. Caps at ~65k unique lines, plenty for stdlib diffs.
+function encodeLines(lines: string[], map: Map<string, number>, arr: string[]): string {
+  let s = "";
+  for (const line of lines) {
+    let idx = map.get(line);
+    if (idx === undefined) {
+      if (arr.length >= 0x10000) {
+        // One char per unique line; beyond 0xFFFF, String.fromCharCode wraps
+        // into already-used code units and silently corrupts the diff.
+        throw new Error(
+          "diff: inputs have more than 65535 unique lines, which exceeds the line-diff limit",
+        );
+      }
+      idx = arr.length;
+      arr.push(line);
+      map.set(line, idx);
+    }
+    s += String.fromCharCode(idx);
+  }
+  return s;
+}
+
+// Flat, line-by-line diff with old/new line numbers attached.
+function diffLines(oldText: string, newText: string, ignoreWhitespace: boolean): DiffLine[] {
+  const oldLines = splitTextLines(oldText);
+  const newLines = splitTextLines(newText);
+  const key = ignoreWhitespace ? normalizeLine : (s: string) => s;
+
+  const map = new Map<string, number>();
+  const arr: string[] = [];
+  const enc1 = encodeLines(oldLines.map(key), map, arr);
+  const enc2 = encodeLines(newLines.map(key), map, arr);
+  const diffs = dmp.diff_main(enc1, enc2, false) as Diff[];
+
+  const out: DiffLine[] = [];
+  let oi = 0;
+  let ni = 0;
+  for (const [op, chunk] of diffs) {
+    for (let k = 0; k < chunk.length; k++) {
+      if (op === DIFF_EQUAL) {
+        out.push({ kind: "context", text: newLines[ni], oldNum: oi + 1, newNum: ni + 1 });
+        oi++;
+        ni++;
+      } else if (op === DIFF_DELETE) {
+        out.push({ kind: "delete", text: oldLines[oi], oldNum: oi + 1, newNum: null });
+        oi++;
+      } else {
+        out.push({ kind: "insert", text: newLines[ni], oldNum: null, newNum: ni + 1 });
+        ni++;
+      }
+    }
+  }
+  return out;
+}
+
+// The old/new line number of the last numbered line before `start`, or 0 if
+// none. Used to anchor the hunk header for insert-only / delete-only hunks,
+// which carry no line number of their own on one side.
+function anchorsBefore(lines: DiffLine[], start: number): { prevOld: number; prevNew: number } {
+  let prevOld = 0;
+  let prevNew = 0;
+  for (let k = start - 1; k >= 0; k--) {
+    if (prevOld === 0 && lines[k].oldNum !== null) prevOld = lines[k].oldNum as number;
+    if (prevNew === 0 && lines[k].newNum !== null) prevNew = lines[k].newNum as number;
+    if (prevOld !== 0 && prevNew !== 0) break;
+  }
+  return { prevOld, prevNew };
+}
+
+function makeHunk(lines: DiffLine[], prevOld: number, prevNew: number): Hunk {
+  const oldNos = lines.filter((l) => l.oldNum !== null).map((l) => l.oldNum as number);
+  const newNos = lines.filter((l) => l.newNum !== null).map((l) => l.newNum as number);
+  return {
+    // For a side with no lines of its own (pure insertion / deletion), the
+    // unified-diff start is the line number it sits *after*: the preceding
+    // numbered line, or 0 at the start of file.
+    oldStart: oldNos.length ? oldNos[0] : prevOld,
+    oldLines: oldNos.length,
+    newStart: newNos.length ? newNos[0] : prevNew,
+    newLines: newNos.length,
+    lines,
+  };
+}
+
 /**
- * Formats a line-based diff between two strings.
- * Deletions (expected) are shown with a "-" prefix, insertions (actual)
- * with a "+" prefix, and equal lines with a "  " prefix.
- * Colorized (red/green/dim) by default; pass `colorize: false` for plain
- * text suitable for files and artifacts.
+ * Compute a line-level diff grouped into hunks.
+ * `context < 0` -> one hunk spanning everything (full context).
+ * `context >= 0` -> keep only changed lines plus `context` unchanged lines on
+ * each side; runs separated by more than 2*context unchanged lines split into
+ * separate hunks.
+ */
+export function computeHunks(
+  oldText: string,
+  newText: string,
+  context: number,
+  ignoreWhitespace: boolean,
+): Hunk[] {
+  const lines = diffLines(oldText, newText, ignoreWhitespace);
+  if (lines.length === 0) return [];
+  if (context < 0) return [makeHunk(lines, 0, 0)];
+
+  const include: boolean[] = new Array(lines.length).fill(false);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].kind !== "context") {
+      const lo = Math.max(0, i - context);
+      const hi = Math.min(lines.length - 1, i + context);
+      for (let j = lo; j <= hi; j++) include[j] = true;
+    }
+  }
+
+  const hunks: Hunk[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (!include[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < lines.length && include[j]) j++;
+    const { prevOld, prevNew } = anchorsBefore(lines, i);
+    hunks.push(makeHunk(lines.slice(i, j), prevOld, prevNew));
+    i = j;
+  }
+  return hunks;
+}
+
+// Render one side of a replacement with the changed words highlighted.
+function highlightLine(oldLine: string, newLine: string, side: number): string {
+  const prefix = side === DIFF_DELETE ? "- " : "+ ";
+  const sideColor = side === DIFF_DELETE ? color.red : color.green;
+  const wordDiffs = dmp.diff_main(oldLine, newLine) as Diff[];
+  dmp.diff_cleanupSemantic(wordDiffs);
+
+  let body = "";
+  for (const [op, text] of wordDiffs) {
+    if (op === DIFF_EQUAL) body += color.dim(text);
+    else if (op === side) body += sideColor(text);
+  }
+  return sideColor(prefix) + body;
+}
+
+function renderReplacement(
+  dels: DiffLine[],
+  inss: DiffLine[],
+  out: string[],
+  colored: boolean,
+  gutter: (l: DiffLine) => string,
+): void {
+  const paired = Math.min(dels.length, inss.length);
+  for (let k = 0; k < dels.length; k++) {
+    const body =
+      colored && k < paired
+        ? highlightLine(dels[k].text, inss[k].text, DIFF_DELETE)
+        : colored
+          ? color.red(`- ${dels[k].text}`)
+          : `- ${dels[k].text}`;
+    out.push(gutter(dels[k]) + body);
+  }
+  for (let k = 0; k < inss.length; k++) {
+    const body =
+      colored && k < paired
+        ? highlightLine(dels[k].text, inss[k].text, DIFF_INSERT)
+        : colored
+          ? color.green(`+ ${inss[k].text}`)
+          : `+ ${inss[k].text}`;
+    out.push(gutter(inss[k]) + body);
+  }
+}
+
+function renderHunkBody(
+  lines: DiffLine[],
+  out: string[],
+  colored: boolean,
+  gutter: (l: DiffLine) => string,
+): void {
+  const paint = (fn: (t: string) => string, t: string) => (colored ? fn(t) : t);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.kind === "context") {
+      out.push(gutter(line) + paint(color.dim, `  ${line.text}`));
+      i++;
+    } else if (line.kind === "delete") {
+      let d = i;
+      while (d < lines.length && lines[d].kind === "delete") d++;
+      let n = d;
+      while (n < lines.length && lines[n].kind === "insert") n++;
+      renderReplacement(lines.slice(i, d), lines.slice(d, n), out, colored, gutter);
+      i = n;
+    } else {
+      out.push(gutter(line) + paint(color.green, `+ ${line.text}`));
+      i++;
+    }
+  }
+}
+
+function gutterWidth(hunks: Hunk[]): number {
+  let max = 0;
+  for (const h of hunks)
+    for (const l of h.lines) {
+      const n = l.kind === "delete" ? l.oldNum : l.newNum;
+      if (n !== null) max = Math.max(max, n);
+    }
+  return String(max).length;
+}
+
+/** Render hunks as a human-readable diff string. */
+export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
+  const colored = opts.colored ?? false;
+  const paint = (fn: (t: string) => string, t: string) => (colored ? fn(t) : t);
+  const out: string[] = [];
+
+  if (opts.summary) {
+    let ins = 0;
+    let del = 0;
+    for (const h of hunks)
+      for (const l of h.lines) {
+        if (l.kind === "insert") ins++;
+        else if (l.kind === "delete") del++;
+      }
+    out.push(`${ins} insertion${ins === 1 ? "" : "s"}, ${del} deletion${del === 1 ? "" : "s"}`);
+  }
+  if (opts.oldLabel) out.push(paint(color.red, `--- ${opts.oldLabel}`));
+  if (opts.newLabel) out.push(paint(color.green, `+++ ${opts.newLabel}`));
+
+  const width = opts.lineNumbers ? gutterWidth(hunks) : 0;
+  const gutter = (l: DiffLine): string => {
+    if (!opts.lineNumbers) return "";
+    const n = l.kind === "delete" ? l.oldNum : l.newNum;
+    return `${(n === null ? "" : String(n)).padStart(width)} `;
+  };
+
+  for (const h of hunks) {
+    if (opts.hunkHeaders) {
+      out.push(paint(color.cyan, `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`));
+    }
+    renderHunkBody(h.lines, out, colored, gutter);
+  }
+  return out.join("\n");
+}
+
+/** Render hunks as a standard unified diff that std::fs::applyPatch can apply. */
+export function renderPatch(hunks: Hunk[], oldLabel: string, newLabel: string): string {
+  if (hunks.length === 0) return "";
+  const out: string[] = [`--- ${oldLabel}`, `+++ ${newLabel}`];
+  for (const h of hunks) {
+    out.push(`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`);
+    for (const l of h.lines) {
+      if (l.kind === "context") out.push(` ${l.text}`);
+      else if (l.kind === "delete") out.push(`-${l.text}`);
+      else out.push(`+${l.text}`);
+    }
+  }
+  return out.join("\n") + "\n";
+}
+
+/**
+ * Back-compat shim: full-context, colored-by-default inline diff. Existing
+ * callers (optimizer reporter, test runner, sourceMutator) rely on this exact
+ * output, so it must not change.
  */
 export function formatDiff(
   expected: string,
   actual: string,
   opts: { colorize?: boolean } = {},
 ): string {
-  const colorize = opts.colorize ?? true;
-  const paint = (fn: (text: string) => string, text: string): string =>
-    colorize ? fn(text) : text;
-  const diffs = dmp.diff_main(expected, actual);
-  dmp.diff_cleanupSemantic(diffs);
-
-  const lines: string[] = [];
-  for (const [op, text] of diffs) {
-    // Split text into individual lines to get per-line prefixes
-    const parts = text.split("\n");
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (op === DIFF_DELETE) {
-        lines.push(paint(color.red, `- ${part}`));
-      } else if (op === DIFF_INSERT) {
-        lines.push(paint(color.green, `+ ${part}`));
-      } else {
-        lines.push(paint(color.dim, `  ${part}`));
-      }
-    }
-  }
-  return lines.join("\n");
+  const hunks = computeHunks(expected, actual, -1, false);
+  return renderDiff(hunks, { colored: opts.colorize ?? true });
 }

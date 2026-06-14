@@ -1,0 +1,5 @@
+import { patch } from "std::syntax"
+
+node main(): string {
+  return patch("one\ntwo\nthree\n", "one\nTWO\nthree\n", "f.txt")
+}

@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "nodeName": "testDataForm",
+      "input": "",
+      "expectedOutput": "\"Q                       \\n█ web  ▓ app            \\nQ1 ██████████████▓▓▓▓▓ 4\\nQ2 ██████████▓▓▓▓▓▓▓▓▓ 4\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testBlockForm",
+      "input": "",
+      "expectedOutput": "\"Q                       \\n█ web  ▓ app            \\nQ1 ██████████████▓▓▓▓▓ 4\\nQ2 ██████████▓▓▓▓▓▓▓▓▓ 4\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

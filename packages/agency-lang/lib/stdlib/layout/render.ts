@@ -15,6 +15,7 @@ import { LayoutNode, NodeType, hline, raw, space, text, vline } from "./nodes.js
 import { box } from "./box.js";
 import { column, row } from "./axis.js";
 import { table } from "./table.js";
+import { barchart } from "./barchart.js";
 import { NodeHandler, SizingContext } from "./sizing.js";
 
 export type Viewport = { cols: number; rows: number };
@@ -84,7 +85,7 @@ export function growToWidth(block: Block, targetWidth: number): Block {
 // Single dispatch table: each node type's size + render paired, sourced
 // from the per-concern files that own them.
 export const HANDLERS: Record<NodeType, NodeHandler> = {
-  box, row, column, table,
+  box, row, column, table, barchart,
   text, raw, space, hline, vline,
 };
 

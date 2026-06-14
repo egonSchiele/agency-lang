@@ -6,19 +6,9 @@ import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
 import { resolveDir } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";
-import { formatDiff } from "../utils/diff.js";
+import { computeHunks, renderDiff } from "../utils/diff.js";
 
 export { resolvePath } from "./resolvePath.js";
-
-/**
- * Print a colored, line-based diff of `oldText` vs `newText` to
- * stdout. Deletions are red, insertions are green, unchanged context
- * is dimmed. Used both as a standalone Agency tool (`std::fs::printDiff`)
- * and as the side effect of `edit(..., printDiff: true)`.
- */
-export function _printDiff(oldText: string, newText: string): void {
-  console.log(formatDiff(oldText, newText));
-}
 
 export type MultiEdit = {
   oldText: string;
@@ -83,7 +73,7 @@ export async function _multiedit(
 
   await fs.writeFile(full, contents, "utf8");
   if (printDiff && original !== contents) {
-    _printDiff(original, contents);
+    console.log(renderDiff(computeHunks(original, contents, -1, false), { colored: true }));
   }
   return { replacements: total, path: filename, edits: edits.length };
 }

@@ -68,33 +68,27 @@ const vscodeDarkTheme = {
   default: lightGray,
 } as unknown as Theme;
 
-// Dim backgrounds for changed lines (RGB), shared by the themes and the
-// trailing-pad code so they always match.
+// Dim backgrounds for changed lines (RGB).
 const DIM_RED: [number, number, number] = [60, 0, 0];
 const DIM_GREEN: [number, number, number] = [0, 45, 0];
+const ANSI_RESET = "\x1b[0m";
 
-// A copy of the VS Code theme with a background chained onto every style, so
-// cli-highlight emits the background as part of each token (no ANSI
-// post-processing). `default` covers whitespace/unmatched text, so the whole
-// line is backgrounded.
-function makeBgTheme(rgb: [number, number, number]): Theme {
-  const out: Record<string, unknown> = {};
-  for (const [token, style] of Object.entries(vscodeDarkTheme as Record<string, (s: string) => string>)) {
-    out[token] = (style as unknown as { bgRgb: (r: number, g: number, b: number) => (s: string) => string }).bgRgb(
-      ...rgb,
-    );
-  }
-  return out as unknown as Theme;
+// The bare background-open SGR for an RGB (no text, no reset), derived from
+// termcolors so the code format stays in one place.
+function bgOpen(rgb: [number, number, number]): string {
+  const wrapped = color.bgRgb(...rgb)(""); // "<open><reset>"
+  return wrapped.slice(0, wrapped.length - ANSI_RESET.length);
 }
-
-const RED_BG_THEME = makeBgTheme(DIM_RED);
-const GREEN_BG_THEME = makeBgTheme(DIM_GREEN);
-const redPad = color.bgRgb(...DIM_RED);
-const greenPad = color.bgRgb(...DIM_GREEN);
+const RED_OPEN = bgOpen(DIM_RED);
+const GREEN_OPEN = bgOpen(DIM_GREEN);
 
 // Render one diff line's body for the highlighted path. Context lines are
-// plainly highlighted; changed lines are highlighted with a background theme
-// and padded to `width` with the matching background.
+// plainly highlighted. Changed lines are highlighted with the SAME theme (so
+// colors match context) and then given a continuous line background: real
+// highlight.js grammars emit some punctuation/whitespace as unstyled raw text,
+// so a per-token background theme would leave gaps. Instead we set the
+// background once and re-arm it after every reset the highlighter emits, then
+// pad to `width` so the bar is rectangular.
 function diffBody(
   code: string,
   kind: "context" | "delete" | "insert",
@@ -102,17 +96,12 @@ function diffBody(
   language: string,
 ): string {
   if (kind === "context") return syntaxHighlight(code, language);
-  const lang = language === "agency" ? "ts" : language;
-  const theme = kind === "delete" ? RED_BG_THEME : GREEN_BG_THEME;
-  const pad = kind === "delete" ? redPad : greenPad;
-  let body: string;
-  try {
-    body = highlight(code, { language: lang, theme, ignoreIllegals: true });
-  } catch {
-    body = pad(code); // on highlighter failure, still show the line tinted
-  }
+  const open = kind === "delete" ? RED_OPEN : GREEN_OPEN;
+  const highlighted = syntaxHighlight(code, language);
+  const tinted = open + highlighted.split(ANSI_RESET).join(ANSI_RESET + open);
   const padLen = Math.max(0, width - code.length);
-  return padLen > 0 ? body + pad(" ".repeat(padLen)) : body;
+  const padding = padLen > 0 ? " ".repeat(padLen) : "";
+  return tinted + padding + ANSI_RESET;
 }
 
 export function syntaxHighlight(code: string, _language: string): string {

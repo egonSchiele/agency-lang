@@ -76,3 +76,41 @@ The graph execution engine (`lib/simplemachine/graph.ts`) calls statelog methods
 - **Graceful no-op**: if `host` is not set, all logging methods return immediately without error. This means Statelog is entirely opt-in.
 - **Stdout mode**: setting `host: "stdout"` prints JSON logs to the console, useful for local debugging.
 - **Non-blocking**: log calls are fire-and-forget HTTP posts; they don't block graph execution.
+
+## Reading statelog files: `StatelogParser`
+
+`lib/statelogParser.ts` is the shared **model** for reading a `.statelog.jsonl`
+file back. It is the data layer behind the `agency logs view` TUI (see
+`lib/logsViewer/`) and the eval pipeline, and is meant to be reused anywhere
+that needs to query a trace.
+
+Construct it with `StatelogParser.fromFile(path)` or
+`StatelogParser.fromString(jsonl)` (the constructor is private). Parsing is
+tolerant: malformed/unsupported/incomplete lines are collected via
+`parseErrors()` rather than thrown, so a viewer can render a partial tree. The
+eval methods (`evalRecord()` etc.) re-impose strictness by throwing if any parse
+error is present.
+
+API surface:
+
+- **Hierarchy** — `traces()` / `trace(id)` / `onlyTrace()` return a `TraceView`
+  scoped to one trace; `getNodeById(id)` returns a `StatelogNode` in the
+  trace→span→event tree (with rolled-up `metrics`). Node ids: `trace-<traceId>`,
+  `<span_id>`, `evt-<lineNo>`. Payloads are **not** held on nodes — fetch them
+  lazily with `eventOf(id)` (a hashmap hit today; designed so an indexed
+  byte-offset backend can drop in later — see
+  `docs/dev/statelog-parser-memory-model.md`).
+- **Typed queries** — `llmCalls()` / `toolCalls()` (also scoped on `TraceView`),
+  read through `lib/statelog/wireAccessors.ts` so wire-format knowledge stays in
+  one place.
+- **Iteration** — `events()` (an `Iterable`, not an `Array`) and `lines()`
+  (yields each parsed event with its source line number).
+- **Eval compat** — `evalRecord()` / `evalInputs()` / `evalOutputs()` /
+  `finalEvalOutput()` / `errors()` / `interrupts()` / `threads()` / `metrics()`
+  are `EvalRecord`-derived and single-trace (they delegate to `onlyTrace()`).
+
+The logs viewer's `TreeNode` class (`lib/logsViewer/treeNode.ts`) wraps the
+parser as a view-model: `TreeNode.forestFromLog(path)` builds the display tree
+and hides the parser entirely; `node.event()` fetches a leaf's payload lazily.
+Plain-text one-line summaries live in `lib/statelog/summarize.ts` (shared by the
+model and the viewer's styled variants).

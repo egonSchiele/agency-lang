@@ -1,23 +1,34 @@
 import { describe, it, expect } from "vitest";
 import { handleKey } from "./input.js";
-import { ViewerState, TreeNode } from "./types.js";
+import { TreeNode } from "./treeNode.js";
+import type { ViewerState } from "./types.js";
 import type { KeyEvent } from "../tui/input/types.js";
 
 const k = (key: string, mods: Partial<KeyEvent> = {}): KeyEvent => ({ key, ...mods });
 
-const child = (id: string): TreeNode => ({
-  id,
-  traceId: "t",
-  parentId: "trace-t",
-  children: [],
-  nodeKind: "span",
-  label: id,
-  summary: id,
-});
+const child = (id: string): TreeNode =>
+  new TreeNode({
+    id,
+    traceId: "t",
+    parentId: "trace-t",
+    nodeKind: "span",
+    label: id,
+    summary: id,
+  });
+
+const traceNode = (id: string): TreeNode =>
+  new TreeNode({
+    id,
+    traceId: id,
+    parentId: null,
+    nodeKind: "trace",
+    label: id,
+    summary: id,
+  });
 
 const initial = (cursorId = "trace-t"): ViewerState => ({
   roots: [
-    {
+    new TreeNode({
       id: "trace-t",
       traceId: "t",
       parentId: null,
@@ -25,7 +36,7 @@ const initial = (cursorId = "trace-t"): ViewerState => ({
       nodeKind: "trace",
       label: "t",
       summary: "trace t",
-    },
+    }),
   ],
   expanded: new Set(["trace-t"]),
   cursorId,
@@ -52,10 +63,15 @@ describe("handleKey", () => {
   it("l expands a collapsed node with children", () => {
     // Add children to `a` so it can be expanded.
     const state = initial("a");
-    state.roots[0].children[0] = {
-      ...child("a"),
+    state.roots[0].children[0] = new TreeNode({
+      id: "a",
+      traceId: "t",
+      parentId: "trace-t",
+      nodeKind: "span",
+      label: "a",
+      summary: "a",
       children: [child("a-child")],
-    };
+    });
     state.expanded.delete("a");
     const next = handleKey(state, k("l"));
     expect(next.expanded.has("a")).toBe(true);
@@ -120,15 +136,14 @@ describe("handleKey", () => {
     const state = initial("trace-t");
     const a = state.roots[0].children[0];
     a.children = [
-      {
+      new TreeNode({
         id: "a-child",
         traceId: "t",
         parentId: "a",
-        children: [],
         nodeKind: "event",
         label: "debug",
         summary: "debug",
-      },
+      }),
     ];
     const next = handleKey(state, k("e"));
     expect(next.expanded.has("trace-t")).toBe(true);
@@ -147,11 +162,7 @@ describe("handleKey", () => {
 
   it("Tab cycles to the next trace root", () => {
     const state: ViewerState = {
-      roots: [
-        { ...child("t1"), id: "t1", nodeKind: "trace", traceId: "t1", parentId: null, summary: "t1" },
-        { ...child("t2"), id: "t2", nodeKind: "trace", traceId: "t2", parentId: null, summary: "t2" },
-        { ...child("t3"), id: "t3", nodeKind: "trace", traceId: "t3", parentId: null, summary: "t3" },
-      ],
+      roots: [traceNode("t1"), traceNode("t2"), traceNode("t3")],
       expanded: new Set(),
       cursorId: "t1",
       scrollTop: 0,
@@ -165,10 +176,7 @@ describe("handleKey", () => {
 
   it("Shift+Tab cycles to the previous trace root", () => {
     const state: ViewerState = {
-      roots: [
-        { ...child("t1"), id: "t1", nodeKind: "trace", traceId: "t1", parentId: null, summary: "t1" },
-        { ...child("t2"), id: "t2", nodeKind: "trace", traceId: "t2", parentId: null, summary: "t2" },
-      ],
+      roots: [traceNode("t1"), traceNode("t2")],
       expanded: new Set(),
       cursorId: "t1",
       scrollTop: 0,

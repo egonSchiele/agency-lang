@@ -58,7 +58,7 @@ export type NodeMetrics = {
 // lazily via `eventOf(id)` (Tier-2). The plain-text `summary` is computed at
 // build time so consumers can render/grep a one-liner without the payload.
 export type StatelogNode = {
-  id: string; // trace:<traceId> | <span_id> | evt:<lineNo>
+  id: string; // trace-<traceId> | <span_id> | evt-<lineNo>
   kind: NodeKind;
   traceId: string;
   parentId: string | null;
@@ -389,7 +389,10 @@ function buildNodes(parsed: ParsedEvent[]): BuiltNodes {
     const traceRoot = traces[evt.trace_id];
     const parent = evt.span_id ? spans[evt.span_id] : traceRoot;
     const leaf: StatelogNode = {
-      id: `evt:${lineNo}`,
+      // Hyphen (not colon) so the viewer's synthetic-row ids
+      // (`<leafId>:convo:…`, `<leafId>:raw`) stay parseable by splitting on the
+      // first colon. Still line-derived → stable + offset-friendly.
+      id: `evt-${lineNo}`,
       traceId: evt.trace_id,
       parentId: parent.id,
       children: [],
@@ -425,7 +428,7 @@ function ensureTrace(traces: Record<string, StatelogNode>, traceId: string): Sta
   const existing = traces[traceId];
   if (existing) return existing;
   const root: StatelogNode = {
-    id: `trace:${traceId}`,
+    id: `trace-${traceId}`,
     traceId,
     parentId: null,
     children: [],

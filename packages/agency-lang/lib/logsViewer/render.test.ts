@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { renderViewerLines, flattenVisibleRows, colorFor, wrapLine } from "./render.js";
-import { TreeNode, ViewerState } from "./types.js";
+import { TreeNode } from "./treeNode.js";
+import type { ViewerState } from "./types.js";
 import { color } from "@/utils/termcolors.js";
 
 function span(id: string, label: string, children: TreeNode[] = []): TreeNode {
-  return {
+  return new TreeNode({
     id,
     traceId: "t",
     parentId: null,
@@ -12,11 +13,11 @@ function span(id: string, label: string, children: TreeNode[] = []): TreeNode {
     nodeKind: "span",
     label,
     summary: `${label} (?)`,
-  };
+  });
 }
 
 function trace(children: TreeNode[]): TreeNode {
-  return {
+  return new TreeNode({
     id: "trace-t",
     traceId: "t",
     parentId: null,
@@ -24,7 +25,7 @@ function trace(children: TreeNode[]): TreeNode {
     nodeKind: "trace",
     label: "t",
     summary: "trace t",
-  };
+  });
 }
 
 const baseState = (
@@ -38,6 +39,21 @@ const baseState = (
   scrollTop: 0,
   quit: false,
 });
+
+// A promptCompletion leaf, built through the real model so node.event()
+// resolves its payload lazily (no payload is stored on the node).
+function pcForest(messages: unknown[]): TreeNode[] {
+  return TreeNode.forestFromString(
+    JSON.stringify({
+      format_version: 1,
+      trace_id: "t",
+      project_id: "p",
+      span_id: null,
+      parent_span_id: null,
+      data: { type: "promptCompletion", timestamp: "2026-01-01T00:00:00Z", messages },
+    }),
+  );
+}
 
 describe("flattenVisibleRows", () => {
   it("returns only roots when nothing is expanded", () => {
@@ -67,31 +83,19 @@ describe("renderViewerLines", () => {
     expect(lines[1]).toMatch(/▶/);
   });
 
-  it("uses ● for leaf events", () => {
-    const t: TreeNode = {
-      id: "trace-t",
-      traceId: "t",
-      parentId: null,
-      children: [
-        {
-          id: "evt-0",
-          traceId: "t",
-          parentId: "trace-t",
-          children: [],
-          nodeKind: "event",
-          label: "debug",
-          summary: "debug",
-        },
-      ],
-      nodeKind: "trace",
-      label: "t",
-      summary: "trace t",
-    };
-    const lines = renderViewerLines(baseState([t], ["trace-t"]), {
+  it("uses ▶ for expandable leaf events", () => {
+    const roots = TreeNode.forestFromString(
+      JSON.stringify({
+        format_version: 1, trace_id: "t", project_id: "p", span_id: null,
+        parent_span_id: null,
+        data: { type: "debug", timestamp: "2026-01-01T00:00:00Z" },
+      }),
+    );
+    const lines = renderViewerLines(baseState(roots, [roots[0].id]), {
       rows: 10,
       cols: 80,
     });
-    expect(lines[1]).toMatch(/●/);
+    expect(lines[1]).toMatch(/▶/);
   });
 
   it("indents children by depth", () => {
@@ -135,99 +139,49 @@ describe("renderViewerLines", () => {
 });
 
 describe("promptCompletion expansion", () => {
-  // A promptCompletion leaf should expand into one row per message
-  // followed by a single "raw data" toggle row. Expanding the toggle
-  // should then reveal the JSON dump.
-  function pcLeaf(): TreeNode {
-    return {
-      id: "evt-0",
-      traceId: "t",
-      parentId: "trace-t",
-      children: [],
-      nodeKind: "event",
-      label: "promptCompletion",
-      summary: "promptCompletion",
-      event: {
-        format_version: 1,
-        trace_id: "t",
-        project_id: "p",
-        span_id: null,
-        parent_span_id: null,
-        data: {
-          type: "promptCompletion",
-          timestamp: "2026-01-01T00:00:00Z",
-          messages: [
-            { role: "user", content: "hi" },
-            { role: "assistant", content: "hello" },
-          ],
-        },
-      },
-    };
-  }
-
+  // A promptCompletion leaf should expand into one row per message followed by
+  // a single "raw data" toggle row. Expanding the toggle reveals the JSON dump.
   it("expands into conversation lines + raw data toggle", () => {
-    const t = trace([pcLeaf()]);
-    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0"]));
+    const roots = pcForest([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ]);
+    const rows = flattenVisibleRows(baseState(roots, ["trace-t", "evt-1"]));
     // trace, leaf, [user], [assistant], raw-data toggle
     expect(rows).toHaveLength(5);
     expect(rows[2].node.nodeKind).toBe("convoLine");
     expect(rows[2].node.summary).toBe(`${color.green("[user]")} "hi"`);
     expect(rows[3].node.nodeKind).toBe("convoLine");
     expect(rows[4].node.nodeKind).toBe("rawDataToggle");
-    expect(rows[4].node.id).toBe("evt-0:raw");
+    expect(rows[4].node.id).toBe("evt-1:raw");
   });
 
   it("expands the raw-data toggle into JSON lines", () => {
-    const t = trace([pcLeaf()]);
+    const roots = pcForest([{ role: "user", content: "hi" }]);
     const rows = flattenVisibleRows(
-      baseState([t], ["trace-t", "evt-0", "evt-0:raw"]),
+      baseState(roots, ["trace-t", "evt-1", "evt-1:raw"]),
     );
-    // Should now include JSON lines after the toggle.
     const jsonRows = rows.filter((r) => r.node.nodeKind === "jsonLine");
     expect(jsonRows.length).toBeGreaterThan(0);
     expect(jsonRows[0].node.summary.trim()).toBe("{");
   });
 
-  // Long messages used to be silently clipped with a `…` by the TUI
-  // renderer. With viewportCols set on state, a long convoLine is
-  // split into multiple synthetic convoLine rows so the full text is
-  // visible (wrapped) instead of truncated.
+  // Long messages used to be silently clipped with a `…`. With viewportCols
+  // set, a long convoLine is split into multiple synthetic convoLine rows so
+  // the full text is visible (wrapped) instead of truncated.
   it("wraps long convoLines into multiple rows when viewportCols is set", () => {
     const longText = "a".repeat(120);
-    const leaf: TreeNode = {
-      id: "evt-0",
-      traceId: "t",
-      parentId: "trace-t",
-      children: [],
-      nodeKind: "event",
-      label: "promptCompletion",
-      summary: "promptCompletion",
-      event: {
-        format_version: 1,
-        trace_id: "t",
-        project_id: "p",
-        span_id: null,
-        parent_span_id: null,
-        data: {
-          type: "promptCompletion",
-          timestamp: "2026-01-01T00:00:00Z",
-          messages: [{ role: "user", content: longText }],
-        },
-      },
-    };
-    const t = trace([leaf]);
+    const roots = pcForest([{ role: "user", content: longText }]);
     const state: ViewerState = {
-      ...baseState([t], ["trace-t", "evt-0"]),
+      ...baseState(roots, ["trace-t", "evt-1"]),
       viewportCols: 40,
     };
     const rows = flattenVisibleRows(state);
     const convoRows = rows.filter((r) => r.node.nodeKind === "convoLine");
     expect(convoRows.length).toBeGreaterThan(1);
-    // No row's rendered text exceeds the available width.
     for (const r of convoRows) {
       expect(r.node.summary.length).toBeLessThanOrEqual(40 - r.depth * 2 - 2);
     }
-    // Concatenating wrapped chunks reconstructs the original line.
     const joined = convoRows.map((r) => r.node.summary).join("");
     expect(joined).toContain(longText);
   });
@@ -269,10 +223,10 @@ describe("colorFor", () => {
   });
 
   it("highlights error leaves in bright-red", () => {
-    const leaf: TreeNode = {
-      id: "evt-0", traceId: "t", parentId: null, children: [],
+    const leaf = new TreeNode({
+      id: "evt-0", traceId: "t", parentId: null,
       nodeKind: "event", label: "error", summary: "",
-    };
+    });
     expect(colorFor(leaf)).toBe("bright-red");
   });
 

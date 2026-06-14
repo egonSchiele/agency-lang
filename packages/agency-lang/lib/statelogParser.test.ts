@@ -183,10 +183,10 @@ describe("StatelogParser hierarchy", () => {
       env({ span_id: "s1", data: { type: "toolCall", timestamp: "2026-06-14T00:00:00Z", toolName: "grep", timeTaken: 1200 } }),
     ]));
     expect(p.getNodeById("s1")?.kind).toBe("span");
-    const evtNode = p.getNodeById("evt:1");
+    const evtNode = p.getNodeById("evt-1");
     expect(evtNode?.kind).toBe("event");
     expect(evtNode?.summary).toContain("grep");
-    expect(p.eventOf("evt:1")?.data.type).toBe("toolCall");
+    expect(p.eventOf("evt-1")?.data.type).toBe("toolCall");
   });
 
   it("rolls tokens/cost up onto spans", () => {

@@ -30,14 +30,17 @@ export function findMatches(
   };
   const walk = (node: TreeNode, depth: number): void => {
     pushIfMatches(node);
-    if (node.nodeKind === "event" && node.event) {
-      for (const synth of eventExpansionChildren(node, depth + 1, cols)) {
-        pushIfMatches(synth);
-        if (synth.nodeKind !== "rawDataToggle") {
-          continue;
-        }
-        for (const json of rawDataChildren(synth)) {
-          pushIfMatches(json);
+    if (node.nodeKind === "event") {
+      const ev = node.event();
+      if (ev) {
+        for (const synth of eventExpansionChildren(node, ev, depth + 1, cols)) {
+          pushIfMatches(synth);
+          if (synth.nodeKind !== "rawDataToggle") {
+            continue;
+          }
+          for (const json of rawDataChildren(synth)) {
+            pushIfMatches(json);
+          }
         }
       }
     }

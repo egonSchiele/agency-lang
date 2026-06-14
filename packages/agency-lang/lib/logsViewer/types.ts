@@ -3,39 +3,12 @@
 // pulling in viewer internals. Re-exported here to keep existing
 // imports from `logsViewer/types` working.
 import type { EventEnvelope, EventData } from "../statelog/wireTypes.js";
+import type { TreeNode } from "./treeNode.js";
 export type { EventEnvelope, EventData };
-
-// One node in the visible tree. Spans (have children) and leaf events
-// (no children) share this shape — `nodeKind` discriminates.
-export type TreeNode = {
-  id: string; // span_id for spans; "evt-<index>" for leaves
-  traceId: string;
-  parentId: string | null;
-  children: TreeNode[];
-  // Synthetic, on-the-fly rows generated when a leaf event is
-  // expanded — none are part of the persistent forest:
-  //   - "jsonLine"      : one rendered line of the leaf's JSON payload
-  //   - "convoLine"     : one rendered conversation message (promptCompletion only)
-  //   - "rawDataToggle" : expandable "raw data" header that, when opened,
-  //                       reveals the underlying JSON payload as jsonLine rows
-  nodeKind: "trace" | "span" | "event" | "jsonLine" | "convoLine" | "rawDataToggle";
-  // For "trace": the trace_id; for "span": the span type (agentRun,
-  // llmCall, ...); for "event": the data.type.
-  label: string;
-  // Pre-computed display summary, e.g. `llmCall (1.2s, 1500 tok, $0.007)`.
-  summary: string;
-  // For spans, aggregated from descendants; for events, drawn from
-  // the event payload.
-  duration?: number;
-  tokens?: number;
-  cost?: number;
-  // Earliest event timestamp (ms since epoch) under this node, used
-  // by the trace-header summary to show when the run started.
-  firstTs?: number;
-  // The raw event for leaf nodes. Spans don't carry one (multiple
-  // events share a span).
-  event?: EventEnvelope;
-};
+// TreeNode is now a class (lib/logsViewer/treeNode.ts) that hides the parser.
+// Re-exported so existing `import { TreeNode } from "./types.js"` sites keep
+// working.
+export type { TreeNode } from "./treeNode.js";
 
 export type ViewerState = {
   // The full forest (one root per trace_id).

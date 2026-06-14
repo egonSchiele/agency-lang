@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { findMatches, expandAncestorsOf, highlightMatches } from "./search.js";
-import { TreeNode, ViewerState } from "./types.js";
+import { TreeNode } from "./treeNode.js";
+import type { ViewerState } from "./types.js";
 
 function span(id: string, summary: string, children: TreeNode[] = [], parentId: string | null = null): TreeNode {
-  return {
+  return new TreeNode({
     id,
     traceId: "t",
     parentId,
@@ -11,11 +12,11 @@ function span(id: string, summary: string, children: TreeNode[] = [], parentId: 
     nodeKind: "span",
     label: id,
     summary,
-  };
+  });
 }
 
 function trace(id: string, children: TreeNode[] = []): TreeNode {
-  return {
+  return new TreeNode({
     id,
     traceId: id,
     parentId: null,
@@ -23,7 +24,26 @@ function trace(id: string, children: TreeNode[] = []): TreeNode {
     nodeKind: "trace",
     label: id,
     summary: `trace ${id}`,
-  };
+  });
+}
+
+// A promptCompletion leaf built through the real model so node.event() resolves
+// its payload lazily (the synthetic conversation/JSON rows are derived from it).
+function pcForest(content: string): TreeNode[] {
+  return TreeNode.forestFromString(
+    JSON.stringify({
+      format_version: 1,
+      trace_id: "T",
+      project_id: "p",
+      span_id: null,
+      parent_span_id: null,
+      data: {
+        type: "promptCompletion",
+        timestamp: "2026-01-01T00:00:00Z",
+        messages: [{ role: "user", content }],
+      },
+    }),
+  );
 }
 
 describe("findMatches", () => {
@@ -90,73 +110,40 @@ describe("expandAncestorsOf", () => {
 });
 
 describe("findMatches — synthetic rows", () => {
-  // A promptCompletion leaf whose conversation rows include the word
-  // "Alice". `findMatches` must reach the synthetic convoLine and
-  // `expandAncestorsOf` must auto-expand the leaf so `n`/`N` lands
-  // on it.
-  function pcLeaf(): TreeNode {
-    return {
-      id: "evt-0",
-      traceId: "T",
-      parentId: "T",
-      children: [],
-      nodeKind: "event",
-      label: "promptCompletion",
-      summary: "promptCompletion",
-      event: {
-        format_version: 1,
-        trace_id: "T",
-        project_id: "p",
-        span_id: null,
-        parent_span_id: null,
-        data: {
-          type: "promptCompletion",
-          timestamp: "2026-01-01T00:00:00Z",
-          messages: [{ role: "user", content: "Hello Alice" }],
-        },
-      },
-    };
-  }
-
+  // A promptCompletion leaf whose conversation rows include "Alice".
+  // findMatches must reach the synthetic convoLine, and expandAncestorsOf must
+  // auto-expand the leaf so n/N lands on it.
   it("matches text inside synthetic conversation rows", () => {
-    const leaf = pcLeaf();
-    const t = trace("T", [leaf]);
-    leaf.parentId = "T";
-    // "Alice" appears in the conversation row and again inside the
-    // raw-data JSON payload, so we expect both synthetic ids.
-    expect(findMatches([t], "Alice")).toContain("evt-0:convo:0:0");
+    const roots = pcForest("Hello Alice");
+    expect(findMatches(roots, "Alice")).toContain("evt-1:convo:0:0");
   });
 
   it("expands the parent leaf when a convo row matches", () => {
-    const leaf = pcLeaf();
-    const t = trace("T", [leaf]);
-    leaf.parentId = "T";
+    const roots = pcForest("Hello Alice");
     const state: ViewerState = {
-      roots: [t],
+      roots,
       expanded: new Set(),
-      cursorId: "T",
+      cursorId: "trace-T",
       scrollTop: 0,
       quit: false,
     };
-    const next = expandAncestorsOf(state, ["evt-0:convo:0"]);
-    expect(next.expanded.has("evt-0")).toBe(true);
-    expect(next.expanded.has("T")).toBe(true);
+    const next = expandAncestorsOf(state, ["evt-1:convo:0"]);
+    expect(next.expanded.has("evt-1")).toBe(true);
+    expect(next.expanded.has("trace-T")).toBe(true);
   });
 
   it("expands both leaf and raw-data toggle for raw-JSON matches", () => {
-    const leaf = pcLeaf();
-    const t = trace("T", [leaf]);
-    leaf.parentId = "T";
+    const roots = pcForest("Hello Alice");
     const state: ViewerState = {
-      roots: [t],
+      roots,
       expanded: new Set(),
-      cursorId: "T",
+      cursorId: "trace-T",
       scrollTop: 0,
       quit: false,
     };
-    const next = expandAncestorsOf(state, ["evt-0:raw:json:5"]);
-    expect(next.expanded.has("evt-0")).toBe(true);
-    expect(next.expanded.has("evt-0:raw")).toBe(true);
+    const next = expandAncestorsOf(state, ["evt-1:raw:json:5"]);
+    expect(next.expanded.has("evt-1")).toBe(true);
+    expect(next.expanded.has("evt-1:raw")).toBe(true);
   });
 });
 

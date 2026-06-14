@@ -1,4 +1,6 @@
-import { TreeNode, ViewerState } from "./types.js";
+import { TreeNode } from "./treeNode.js";
+import type { EventEnvelope } from "../statelog/wireTypes.js";
+import type { ViewerState } from "./types.js";
 import { summarizeSpanStyled, summarizeTraceStyled } from "./summary.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import { formatConversation } from "./conversation.js";
@@ -14,22 +16,29 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
     if (!state.expanded.has(node.id)) return;
     // Leaf event nodes can be "expanded" to inline a synthetic
     // payload view (conversation lines for promptCompletion, raw
-    // JSON otherwise). Real children only ever exist for non-leaf
+    // JSON otherwise). The payload is fetched lazily from the model
+    // via node.event(). Real children only ever exist for non-leaf
     // tree nodes.
-    if (node.nodeKind === "event" && node.event) {
-      for (const child of eventExpansionChildren(node, depth + 1, cols)) {
-        walk(child, depth + 1);
+    if (node.nodeKind === "event") {
+      const ev = node.event();
+      if (ev) {
+        for (const child of eventExpansionChildren(node, ev, depth + 1, cols)) {
+          walk(child, depth + 1);
+        }
+        return;
       }
-      return;
     }
     // A "raw data" toggle row, when expanded, reveals the JSON
-    // payload of the parent event leaf. We carry the original event
-    // on the toggle node so we can recompute lines here.
-    if (node.nodeKind === "rawDataToggle" && node.event) {
-      for (const child of jsonLineChildren(node, node.event)) {
-        walk(child, depth + 1);
+    // payload of the parent event leaf. event() delegates back to the
+    // source leaf so we can recompute lines here.
+    if (node.nodeKind === "rawDataToggle") {
+      const ev = node.event();
+      if (ev) {
+        for (const child of jsonLineChildren(node, ev)) {
+          walk(child, depth + 1);
+        }
+        return;
       }
-      return;
     }
     for (const c of node.children) walk(c, depth + 1);
   };
@@ -48,6 +57,8 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
 // forest).
 export function eventExpansionChildren(
   leaf: TreeNode,
+  // The leaf's payload, fetched by the caller via leaf.event().
+  ev: EventEnvelope,
   // Depth at which the synthetic children will be rendered (= parent
   // event depth + 1). Used to compute available width when wrapping
   // long conversation lines.
@@ -56,33 +67,32 @@ export function eventExpansionChildren(
   // (tests, non-TTY contexts).
   cols?: number,
 ): TreeNode[] {
-  if (!leaf.event) return [];
-  if (leaf.event.data.type === "promptCompletion") {
-    return promptCompletionChildren(leaf, childDepth, cols);
+  if (ev.data.type === "promptCompletion") {
+    return promptCompletionChildren(leaf, ev, childDepth, cols);
   }
-  return jsonLineChildren(leaf, leaf.event);
+  return jsonLineChildren(leaf, ev);
 }
 
 // Synthetic children of a "raw data" toggle row. Exported for the
 // same reason as eventExpansionChildren above.
 export function rawDataChildren(toggle: TreeNode): TreeNode[] {
-  if (!toggle.event) return [];
-  return jsonLineChildren(toggle, toggle.event);
+  const ev = toggle.event();
+  if (!ev) return [];
+  return jsonLineChildren(toggle, ev);
 }
 
 function promptCompletionChildren(
   leaf: TreeNode,
+  ev: EventEnvelope,
   childDepth = 0,
   cols?: number,
 ): TreeNode[] {
-  const messages = Array.isArray(leaf.event!.data.messages)
-    ? leaf.event!.data.messages
-    : [];
+  const messages = Array.isArray(ev.data.messages) ? ev.data.messages : [];
   const completionMessage = [];
-  if (leaf.event!.data.completion?.output) {
+  if (ev.data.completion?.output) {
     completionMessage.push({
       role: "assistant",
-      content: leaf.event!.data.completion.output,
+      content: ev.data.completion.output,
     });
   }
   const convoLines = formatConversation([...messages, ...completionMessage]);
@@ -96,27 +106,12 @@ function promptCompletionChildren(
   convoLines.forEach((line, i) => {
     const chunks = available !== undefined ? wrapLine(line, available) : [line];
     chunks.forEach((chunk, j) => {
-      convoNodes.push({
-        id: `${leaf.id}:convo:${i}:${j}`,
-        traceId: leaf.traceId,
-        parentId: leaf.id,
-        children: [],
-        nodeKind: "convoLine" as const,
-        label: "",
-        summary: chunk,
-      });
+      convoNodes.push(
+        TreeNode.syntheticLine(leaf, `${leaf.id}:convo:${i}:${j}`, "convoLine", chunk),
+      );
     });
   });
-  const toggle: TreeNode = {
-    id: `${leaf.id}:raw`,
-    traceId: leaf.traceId,
-    parentId: leaf.id,
-    children: [],
-    nodeKind: "rawDataToggle" as const,
-    label: "raw data",
-    summary: "raw data",
-    event: leaf.event,
-  };
+  const toggle = TreeNode.rawDataToggle(leaf);
   return [...convoNodes, toggle];
 }
 
@@ -146,19 +141,13 @@ export function wrapLine(text: string, width: number): string[] {
 // the same scroll/cursor model used for real tree rows.
 function jsonLineChildren(
   parent: TreeNode,
-  envelope: NonNullable<TreeNode["event"]>,
+  envelope: EventEnvelope,
 ): TreeNode[] {
   const text = JSON.stringify(envelope, null, 2);
   const lines = text.split("\n");
-  return lines.map((line, i) => ({
-    id: `${parent.id}:json:${i}`,
-    traceId: parent.traceId,
-    parentId: parent.id,
-    children: [],
-    nodeKind: "jsonLine" as const,
-    label: "",
-    summary: line,
-  }));
+  return lines.map((line, i) =>
+    TreeNode.syntheticLine(parent, `${parent.id}:json:${i}`, "jsonLine", line),
+  );
 }
 
 export function renderViewerLines(
@@ -264,9 +253,9 @@ function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
   if (node.nodeKind === "jsonLine" || node.nodeKind === "convoLine") return "";
   if (node.nodeKind === "rawDataToggle") return isExpanded ? "▼" : "▶";
   if (node.nodeKind === "event") {
-    // Event leaves with a payload are expandable (inline JSON).
-    if (node.event) return isExpanded ? "▼" : "▶";
-    return "●";
+    // Every model-built event leaf carries a payload (fetched lazily via
+    // event()), so leaves are always expandable to their inline JSON.
+    return isExpanded ? "▼" : "▶";
   }
   if (node.children.length === 0) return "●";
   return isExpanded ? "▼" : "▶";

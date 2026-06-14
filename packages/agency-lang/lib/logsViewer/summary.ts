@@ -1,4 +1,4 @@
-import { EventEnvelope, TreeNode } from "./types.js";
+import { TreeNode } from "./types.js";
 import {
   DEFAULT_THRESHOLDS,
   ViewerThresholds,
@@ -6,38 +6,7 @@ import {
   costMagnitude,
   Magnitude,
 } from "./thresholds.js";
-import {
-  summarizeEvent,
-  summarizeSpanText,
-  summarizeTraceText,
-  fmtDuration,
-  fmtCost,
-  fmtTime,
-} from "../statelog/summarize.js";
-
-// Compatibility wrappers over the shared plain-text summarizers in
-// lib/statelog/summarize.ts. Used by the legacy tree builder (tree.ts) until it
-// is removed; the model now produces `node.summary` directly via the shared
-// helpers.
-export function summarize(evt: EventEnvelope): string {
-  return summarizeEvent(evt);
-}
-
-export function summarizeSpan(node: TreeNode): string {
-  return summarizeSpanText(node.label, {
-    durationMs: node.duration,
-    tokens: node.tokens,
-    cost: node.cost,
-  });
-}
-
-export function summarizeTrace(node: TreeNode): string {
-  return summarizeTraceText(node.traceId, node.firstTs, {
-    durationMs: node.duration,
-    tokens: node.tokens,
-    cost: node.cost,
-  });
-}
+import { fmtDuration, fmtCost, fmtTime } from "../statelog/summarize.js";
 
 // ---------------------------------------------------------------------------
 // Styled-summary variants: produce the same text as the plain functions but

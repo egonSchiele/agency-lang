@@ -1,4 +1,5 @@
-import { box, render, table, text } from "std::layout"
+import { box, render, text } from "std::layout"
+import { table } from "std::table"
 
 node testBoxWidthAttr() {
   return box(width: "full")

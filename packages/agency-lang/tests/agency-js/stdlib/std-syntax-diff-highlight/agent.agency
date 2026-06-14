@@ -1,0 +1,9 @@
+import { diff } from "std::syntax"
+
+node highlightedDiff(oldText: string, newText: string): string {
+  return diff(oldText, newText, color: true, language: "ts")
+}
+
+node plainDiff(oldText: string, newText: string): string {
+  return diff(oldText, newText, color: true)
+}

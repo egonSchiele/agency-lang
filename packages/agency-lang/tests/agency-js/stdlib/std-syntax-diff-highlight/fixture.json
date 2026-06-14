@@ -1,0 +1,10 @@
+{
+  "highlighted": {
+    "hasRedBg": true,
+    "hasGreenBg": true,
+    "hasForeground": true
+  },
+  "plain": {
+    "hasBg": false
+  }
+}

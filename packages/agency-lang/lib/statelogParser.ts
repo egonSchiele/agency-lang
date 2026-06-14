@@ -6,6 +6,15 @@ import {
   summarizeSpanText,
   summarizeTraceText,
 } from "./statelog/summarize.js";
+import {
+  byType,
+  cost,
+  modelOf,
+  timestampMs,
+  tokensIn,
+  tokensOut,
+  toolNameOf,
+} from "./statelog/wireAccessors.js";
 import { extractEvalRecord, type ExtractOptions } from "./eval/extract.js";
 import { normalize, type Normalized } from "./eval/normalize.js";
 import type {
@@ -64,6 +73,23 @@ type BuiltNodes = {
   roots: StatelogNode[];
   byId: Record<string, StatelogNode>;
   eventByLine: Record<number, EventEnvelope>;
+};
+
+export type LlmCall = {
+  traceId: string;
+  spanId: string | null;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  cost: number;
+  tMs: number;
+};
+
+export type ToolCall = {
+  traceId: string;
+  spanId: string | null;
+  toolName: string;
+  tMs: number;
 };
 
 // Tolerant line-by-line JSONL parse. Malformed lines, unsupported
@@ -196,6 +222,35 @@ export class StatelogParser {
     return new TraceView(this, roots[0]);
   }
 
+  // Typed queries (span every trace; TraceView exposes scoped variants). Read
+  // through wireAccessors so wire-format knowledge stays in one place.
+  llmCalls(): LlmCall[] {
+    return byType(this.parsed.events.map((p) => p.event), "promptCompletion").map((e) => ({
+      traceId: e.trace_id,
+      spanId: e.span_id,
+      model: modelOf(e),
+      tokensIn: tokensIn(e),
+      tokensOut: tokensOut(e),
+      cost: cost(e),
+      tMs: timestampMs(e),
+    }));
+  }
+
+  toolCalls(): ToolCall[] {
+    return byType(this.parsed.events.map((p) => p.event), "toolCall").map((e) => ({
+      traceId: e.trace_id,
+      spanId: e.span_id,
+      toolName: toolNameOf(e),
+      tMs: timestampMs(e),
+    }));
+  }
+
+  // Yield each parsed event with its 1-based source line — the "yield each line
+  // of the log" accessor.
+  *lines(): Iterable<{ lineNo: number; event: EventEnvelope }> {
+    for (const p of this.parsed.events) yield { lineNo: p.lineNo, event: p.event };
+  }
+
   normalized(): Normalized {
     if (!this.normalizedCache) {
       const events = this.parsed.events.map((p) => p.event);
@@ -282,6 +337,14 @@ export class TraceView {
   getNodeById(id: string): StatelogNode | undefined {
     const n = this.parser.getNodeById(id);
     return n && n.traceId === this.rootNode.traceId ? n : undefined;
+  }
+
+  llmCalls(): LlmCall[] {
+    return this.parser.llmCalls().filter((c) => c.traceId === this.rootNode.traceId);
+  }
+
+  toolCalls(): ToolCall[] {
+    return this.parser.toolCalls().filter((c) => c.traceId === this.rootNode.traceId);
   }
 }
 

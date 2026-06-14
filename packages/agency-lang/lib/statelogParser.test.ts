@@ -204,3 +204,43 @@ describe("StatelogParser hierarchy", () => {
     expect(() => p.onlyTrace()).toThrow(/multiple trace/i);
   });
 });
+
+describe("StatelogParser typed queries", () => {
+  const env = (over: Partial<EventEnvelope>): EventEnvelope => ({
+    format_version: 1, trace_id: "t1", project_id: "p", span_id: null,
+    parent_span_id: null,
+    data: { type: "debug", timestamp: "2026-06-14T00:00:00Z" }, ...over,
+  });
+  const toJsonl = (e: EventEnvelope[]) => e.map((x) => JSON.stringify(x)).join("\n");
+
+  it("llmCalls returns model/tokens/cost for promptCompletion events", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ data: { type: "promptCompletion", timestamp: "2026-06-14T00:00:00Z",
+        model: '"gpt-x"', usage: { inputTokens: 10, outputTokens: 5 }, cost: { totalCost: 0.002 } } }),
+    ]));
+    const calls = p.llmCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ model: "gpt-x", tokensIn: 10, tokensOut: 5, cost: 0.002 });
+  });
+
+  it("toolCalls returns the tool name", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ data: { type: "toolCall", timestamp: "2026-06-14T00:00:00Z", toolName: "grep", timeTaken: 30 } }),
+    ]));
+    expect(p.toolCalls().map((t) => t.toolName)).toEqual(["grep"]);
+  });
+
+  it("trace(id).llmCalls() scopes to that trace", () => {
+    const p = StatelogParser.fromString(toJsonl([
+      env({ trace_id: "a", data: { type: "promptCompletion", timestamp: "2026-06-14T00:00:00Z", model: '"m"' } }),
+      env({ trace_id: "b", data: { type: "promptCompletion", timestamp: "2026-06-14T00:00:00Z", model: '"m"' } }),
+    ]));
+    expect(p.trace("a").llmCalls()).toHaveLength(1);
+    expect(p.llmCalls()).toHaveLength(2);
+  });
+
+  it("lines() yields each parsed event with its source line number", () => {
+    const p = StatelogParser.fromString(toJsonl([env({}), env({})]));
+    expect([...p.lines()].map((l) => l.lineNo)).toEqual([1, 2]);
+  });
+});

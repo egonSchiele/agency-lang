@@ -90,9 +90,35 @@ export function resolveReExports(
     }
   }
 
-  // Synthesized imports go before kept nodes (matches normal import positioning).
-  return { ...program, nodes: [...synthesized, ...kept] };
+  // Insert the synthesized nodes after the file's leading preamble —
+  // comments (including the `@module` doc), blank lines, and imports —
+  // rather than at the absolute front. A function/constant/type re-export
+  // desugars to a wrapper `def` / `static const` / `type`, which is
+  // non-preamble code; placing it before a leading `@module` doc comment
+  // would trip the preprocessor's "module doc must precede code" check.
+  // Keeping the leading preamble first preserves both behaviours: imports
+  // stay at the top, and `@module` keeps documenting the module.
+  let head = 0;
+  while (head < kept.length && LEADING_PREAMBLE_TYPES.has(kept[head].type)) {
+    head++;
+  }
+  return {
+    ...program,
+    nodes: [...kept.slice(0, head), ...synthesized, ...kept.slice(head)],
+  };
 }
+
+// Node types that may legally precede a `@module` doc comment, and so form
+// the "leading preamble" that synthesized re-export nodes are inserted
+// after. Mirrors the preprocessor's preamble notion (comments, blank
+// lines, imports).
+const LEADING_PREAMBLE_TYPES: ReadonlySet<string> = new Set([
+  "comment",
+  "newLine",
+  "multiLineComment",
+  "importStatement",
+  "importNodeStatement",
+]);
 
 function hasReExportedFrom(
   sym: SymbolInfo,

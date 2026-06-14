@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveReExports } from "./resolveReExports.js";
-import type { AgencyProgram } from "../types.js";
+import type { AgencyNode, AgencyProgram } from "../types.js";
 import {
   SymbolTable,
   type FileSymbols,
@@ -435,5 +435,77 @@ describe("resolveReExports: coalescing and star", () => {
     ) as FunctionDefinition[];
     const names = fns.map((f) => f.functionName).sort();
     expect(names).toEqual(["bar", "foo"]);
+  });
+});
+
+describe("resolveReExports: leading preamble ordering", () => {
+  it("keeps a leading @module doc comment and imports ahead of synthesized nodes", () => {
+    const sourcePath = "/project/source.agency";
+    const reexporterPath = "/project/reexporter.agency";
+    const userImport = {
+      type: "importStatement",
+      modulePath: "./other.agency",
+      isAgencyImport: true,
+      importedNames: [],
+    } as unknown as AgencyNode;
+    const moduleDoc = {
+      type: "multiLineComment",
+      value: "@module\n  docs",
+      isDoc: true,
+      isModuleDoc: true,
+    } as unknown as AgencyNode;
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        userImport,
+        moduleDoc,
+        makeExportFromStmt({
+          modulePath: "./source.agency",
+          body: {
+            kind: "namedExport",
+            names: ["search"],
+            aliases: {},
+            safeNames: [],
+          },
+        }),
+      ],
+    };
+    const symbolTable = table({
+      [sourcePath]: { search: fn({ name: "search" }) },
+      [reexporterPath]: {
+        search: fn({
+          name: "search",
+          reExportedFrom: { sourceFile: sourcePath, originalName: "search" },
+        }),
+      },
+    });
+
+    const result = resolveReExports(program, symbolTable, reexporterPath);
+
+    const docIdx = result.nodes.findIndex((n) => n.type === "multiLineComment");
+    const wrapperIdx = result.nodes.findIndex((n) => n.type === "function");
+    const synthImportIdx = result.nodes.findIndex(
+      (n) =>
+        n.type === "importStatement" &&
+        (n as ImportStatement).modulePath === "./source.agency",
+    );
+
+    // The module doc must precede every synthesized node so the
+    // preprocessor's "module doc must precede code" check still passes.
+    expect(docIdx).toBeGreaterThanOrEqual(0);
+    expect(wrapperIdx).toBeGreaterThan(docIdx);
+    expect(synthImportIdx).toBeGreaterThan(docIdx);
+
+    // Nothing non-preamble appears before the module doc.
+    const preamble = new Set([
+      "comment",
+      "newLine",
+      "multiLineComment",
+      "importStatement",
+      "importNodeStatement",
+    ]);
+    expect(
+      result.nodes.slice(0, docIdx).every((n) => preamble.has(n.type)),
+    ).toBe(true);
   });
 });

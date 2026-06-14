@@ -32,6 +32,7 @@ export safe def diff(
   ignoreWhitespace: boolean = false,
   hunkHeaders: boolean = false,
   summary: boolean = false,
+  language: string = "",
 ): string {
   """
   Produce a human-readable diff of two strings and return it as a string.
@@ -48,8 +49,9 @@ export safe def diff(
   @param ignoreWhitespace - Treat whitespace-only changes as equal
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
+  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring
   """
-  return _diff(oldText, newText, context, lineNumbers, color, oldLabel, newLabel, ignoreWhitespace, hunkHeaders, summary)
+  return _diff(oldText, newText, context, lineNumbers, color, oldLabel, newLabel, ignoreWhitespace, hunkHeaders, summary, language)
 }
 
 export safe def patch(

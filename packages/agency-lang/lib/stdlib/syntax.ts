@@ -68,6 +68,42 @@ const vscodeDarkTheme = {
   default: lightGray,
 } as unknown as Theme;
 
+// Dim backgrounds for changed lines (RGB).
+const DIM_RED: [number, number, number] = [60, 0, 0];
+const DIM_GREEN: [number, number, number] = [0, 45, 0];
+const ANSI_RESET = "\x1b[0m";
+
+// The bare background-open SGR for an RGB (no text, no reset), derived from
+// termcolors so the code format stays in one place.
+function bgOpen(rgb: [number, number, number]): string {
+  const wrapped = color.bgRgb(...rgb)(""); // "<open><reset>"
+  return wrapped.slice(0, wrapped.length - ANSI_RESET.length);
+}
+const RED_OPEN = bgOpen(DIM_RED);
+const GREEN_OPEN = bgOpen(DIM_GREEN);
+
+// Render one diff line's body for the highlighted path. Context lines are
+// plainly highlighted. Changed lines are highlighted with the SAME theme (so
+// colors match context) and then given a continuous line background: real
+// highlight.js grammars emit some punctuation/whitespace as unstyled raw text,
+// so a per-token background theme would leave gaps. Instead we set the
+// background once and re-arm it after every reset the highlighter emits, then
+// pad to `width` so the bar is rectangular.
+function diffBody(
+  code: string,
+  kind: "context" | "delete" | "insert",
+  width: number,
+  language: string,
+): string {
+  if (kind === "context") return syntaxHighlight(code, language);
+  const open = kind === "delete" ? RED_OPEN : GREEN_OPEN;
+  const highlighted = syntaxHighlight(code, language);
+  const tinted = open + highlighted.split(ANSI_RESET).join(ANSI_RESET + open);
+  const padLen = Math.max(0, width - code.length);
+  const padding = padLen > 0 ? " ".repeat(padLen) : "";
+  return tinted + padding + ANSI_RESET;
+}
+
 export function syntaxHighlight(code: string, _language: string): string {
   if (_language === "markdown" || _language === "md") {
     return highlightMarkdown(code);
@@ -172,15 +208,22 @@ export function _diff(
   ignoreWhitespace: boolean,
   hunkHeaders: boolean,
   summary: boolean,
+  language: string,
 ): string {
   const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
+  const colored = color === "auto" ? autoUseColor() : color === true;
+  const renderBody = language
+    ? (code: string, kind: "context" | "delete" | "insert", width: number) =>
+        diffBody(code, kind, width, language)
+    : undefined;
   return renderDiff(hunks, {
     lineNumbers,
-    colored: color === "auto" ? autoUseColor() : color === true,
+    colored,
     oldLabel,
     newLabel,
     hunkHeaders,
     summary,
+    renderBody,
   });
 }
 

@@ -202,3 +202,40 @@ describe("computeHunks limits", () => {
     expect(() => computeHunks(big, "", 3, false)).toThrow(/unique lines/);
   });
 });
+
+describe("renderDiff highlighted path", () => {
+  // Stub body renderer: marks kind/width/code so we can assert what renderDiff
+  // passed, without depending on a real highlighter.
+  const stub = (code: string, kind: string, width: number) => `<${kind}:${width}:${code}>`;
+
+  it("uses renderBody per line with the block width and a colored gutter", () => {
+    const hunks = computeHunks("aa\nbb\ncc", "aa\nBB\ncc", -1, false);
+    const result = renderDiff(hunks, { colored: true, renderBody: stub, lineNumbers: true });
+    const lines = strip(result).split("\n");
+    // width is the widest line ("aa"/"bb"/... = 2)
+    expect(lines).toEqual([
+      "1   <context:2:aa>",
+      "2 - <delete:2:bb>",
+      "2 + <insert:2:BB>",
+      "3   <context:2:cc>",
+    ]);
+    // changed-line gutters are colored red / green
+    expect(result).toContain(color.red("2 - "));
+    expect(result).toContain(color.green("2 + "));
+  });
+
+  it("falls back to inline when not colored, even if renderBody is set", () => {
+    const hunks = computeHunks("a", "b", -1, false);
+    const withBody = renderDiff(hunks, { colored: false, renderBody: stub });
+    const plain = renderDiff(hunks, { colored: false });
+    expect(withBody).toBe(plain);
+    expect(withBody).not.toContain("<delete");
+  });
+
+  it("uses the inline path when renderBody is absent", () => {
+    const hunks = computeHunks("a", "b", -1, false);
+    expect(renderDiff(hunks, { colored: true })).toBe(
+      `${color.red("- ")}${color.red("a")}\n${color.green("+ ")}${color.green("b")}`,
+    );
+  });
+});

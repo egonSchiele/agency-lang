@@ -11,7 +11,8 @@ import { LayoutNode, Width, Alignment, BorderStyle } from "std::layout"
     `footer` as nested arrays of strings or `LayoutNode`s.
 
     ```ts
-    import { table, render } from "std::table"
+    import { table } from "std::table"
+    import { render } from "std::layout"
 
     const t = table(
       title: "Employees",
@@ -59,7 +60,7 @@ export type CellRow = Cell[]
  * @param minWidth - Lower bound on column width; widens narrow columns
  * @param width - Optional per-column constraint. A number caps the
  *   column's content width in cells. `"X%"` takes a percentage of the
- *   table's remaining inner width. `"full"` is not allowed here.
+ *   table's remaining inner width; `"full"` is treated as `"100%"`.
  * @param fgColor - Default foreground color for every cell in this
  *   column that doesn't carry its own `fgColor`.
  */

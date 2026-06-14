@@ -14,7 +14,8 @@ name: "table"
     `footer` as nested arrays of strings or `LayoutNode`s.
 
     ```ts
-    import { table, render } from "std::table"
+    import { table } from "std::table"
+    import { render } from "std::layout"
 
     const t = table(
       title: "Employees",
@@ -58,7 +59,7 @@ name: "table"
 export type Cell = string | LayoutNode
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L48))
 
 ### CellRow
 
@@ -66,7 +67,7 @@ export type Cell = string | LayoutNode
 export type CellRow = Cell[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L53))
 
 ### ColumnSpec
 
@@ -77,7 +78,7 @@ export type CellRow = Cell[]
  * @param minWidth - Lower bound on column width; widens narrow columns
  * @param width - Optional per-column constraint. A number caps the
  *   column's content width in cells. `"X%"` takes a percentage of the
- *   table's remaining inner width. `"full"` is not allowed here.
+ *   table's remaining inner width; `"full"` is treated as `"100%"`.
  * @param fgColor - Default foreground color for every cell in this
  *   column that doesn't carry its own `fgColor`.
 
@@ -90,7 +91,7 @@ export type CellRow = Cell[]
  * @param minWidth - Lower bound on column width; widens narrow columns
  * @param width - Optional per-column constraint. A number caps the
  *   column's content width in cells. `"X%"` takes a percentage of the
- *   table's remaining inner width. `"full"` is not allowed here.
+ *   table's remaining inner width; `"full"` is treated as `"100%"`.
  * @param fgColor - Default foreground color for every cell in this
  *   column that doesn't carry its own `fgColor`.
  */
@@ -102,7 +103,7 @@ export type ColumnSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L67))
 
 ### TableBuilder
 
@@ -125,7 +126,7 @@ export type TableBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L79))
 
 ## Functions
 
@@ -173,4 +174,4 @@ Render data as a bordered table layout node. When calling this as an
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L122))

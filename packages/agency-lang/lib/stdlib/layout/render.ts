@@ -17,6 +17,7 @@ import { BORDER_CELLS } from "./border.js";
 import { _resolveTableWidths, composeTable } from "./table.js";
 import { LEAF_RENDERERS, LayoutNode, NodeType } from "./nodes.js";
 import {
+  NodeHandler,
   SizingContext,
   innerWidthAfterChrome,
   nonNegativeInteger,
@@ -38,11 +39,11 @@ export const RENDERERS: Record<NodeType, (n: LayoutNode) => Block> = {
 };
 
 export function renderNode(node: LayoutNode): Block {
-  const renderer = RENDERERS[node.type];
-  if (!renderer) {
+  const handler = HANDLERS[node.type];
+  if (!handler) {
     throw new Error(`std::layout: unknown node type "${node.type}"`);
   }
-  return renderer(node);
+  return handler.render(node);
 }
 
 export function _viewport(): Viewport {
@@ -104,6 +105,15 @@ const SIZERS: Record<NodeType, Sizer> = {
   vline:  passthrough,
 };
 
+// Single dispatch table pairing each node type's size + render. Declared
+// after SIZERS / RENDERERS because it reads both at module-eval time.
+export const HANDLERS: Record<NodeType, NodeHandler> = Object.fromEntries(
+  (Object.keys(RENDERERS) as NodeType[]).map((t) => [
+    t,
+    { size: SIZERS[t], render: RENDERERS[t] },
+  ]),
+) as Record<NodeType, NodeHandler>;
+
 export function resolveSizes(node: LayoutNode, viewport: Viewport): LayoutNode {
   // The viewport is the implicit "parent" of the root: it provides the
   // percent basis (so `width: "full"` / `width: "100%"` at the root mean
@@ -113,7 +123,7 @@ export function resolveSizes(node: LayoutNode, viewport: Viewport): LayoutNode {
 }
 
 export function resolveNode(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  return SIZERS[node.type](node, ctx);
+  return HANDLERS[node.type].size(node, ctx);
 }
 
 // Resolve a node's `width` attribute against the parent's context.

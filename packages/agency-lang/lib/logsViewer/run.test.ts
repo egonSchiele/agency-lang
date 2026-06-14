@@ -36,7 +36,7 @@ describe("runViewer", () => {
   it("renders, navigates with j, expands with l, quits with q", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      source: { jsonl: sample },
       input: new ScriptedInput(["j", "l", "q"]),
       output: out,
       viewport: { rows: 10, cols: 80 },
@@ -48,7 +48,7 @@ describe("runViewer", () => {
   it("shows a helpful message when the file is empty", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: "",
+      source: { jsonl: "" },
       input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 5, cols: 40 },
@@ -78,7 +78,7 @@ describe("runViewer", () => {
     ];
     const out = new FrameRecorder();
     await runViewer({
-      jsonl,
+      source: { jsonl },
       input: new ScriptedInput(keys),
       output: out,
       viewport: { rows: 5, cols: 80 },
@@ -93,7 +93,7 @@ describe("runViewer", () => {
   it("Enter on a leaf inlines its JSON payload below the leaf", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      source: { jsonl: sample },
       // Navigate: l (expand trace) l (expand agentRun span) j (move
       // to first child leaf, agentStart) Enter (inline its JSON) q.
       input: new ScriptedInput(["l", "l", "j", "Enter", "q"]),
@@ -109,7 +109,7 @@ describe("runViewer", () => {
     // extra `h` and ensure `"data":` is gone from the final frame.
     const out2 = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      source: { jsonl: sample },
       input: new ScriptedInput(["l", "l", "j", "Enter", "h", "q"]),
       output: out2,
       viewport: { rows: 20, cols: 80 },
@@ -124,7 +124,7 @@ describe("runViewer", () => {
     scripted.feedLine("agentEnd");
     scripted.feedKey({ key: "q" });
     await runViewer({
-      jsonl: sample,
+      source: { jsonl: sample },
       input: scripted,
       output: out,
       viewport: { rows: 10, cols: 80 },
@@ -141,7 +141,7 @@ describe("runViewer", () => {
   it("? opens the help overlay; any key closes it", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      source: { jsonl: sample },
       input: new ScriptedInput(["?", "j", "q"]),
       output: out,
       viewport: { rows: 20, cols: 80 },
@@ -157,7 +157,7 @@ describe("runViewer", () => {
     const out = new FrameRecorder();
     const bad = sample + "this is not json\n";
     await runViewer({
-      jsonl: bad,
+      source: { jsonl: bad },
       input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 10, cols: 80 },

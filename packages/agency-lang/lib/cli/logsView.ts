@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as tty from "tty";
-import { runViewer } from "@/logsViewer/run.js";
+import { runViewer, type ViewerSource } from "@/logsViewer/run.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
 
@@ -15,27 +15,26 @@ export async function logsView(
     if (cliOpts.follow) {
       console.error("--follow ignored when reading from stdin");
     }
-    await runWith(jsonl, { stdinIsPipe: true });
+    // The viewer owns all parsing; we just hand it the source. Follow mode is
+    // unavailable for a drained stdin pipe (no on-disk file to tail).
+    await runWith({ jsonl }, { stdinIsPipe: true, initialFollow: false });
     return;
   }
   if (!fs.existsSync(file)) {
     console.error(`File not found: ${file}`);
     process.exit(1);
   }
-  const jsonl = fs.readFileSync(file, "utf8");
-  // Always pass `file` as `followPath` so the user can toggle follow
-  // mode at runtime with `f`. `initialFollow` only controls whether
-  // the watcher is started immediately at boot.
-  await runWith(jsonl, {
+  // The path source enables follow mode (toggle with `f`); `initialFollow`
+  // only controls whether the watcher starts immediately at boot.
+  await runWith({ path: file }, {
     stdinIsPipe: false,
-    followPath: file,
     initialFollow: cliOpts.follow ?? false,
   });
 }
 
 async function runWith(
-  jsonl: string,
-  opts: { stdinIsPipe: boolean; followPath?: string; initialFollow?: boolean },
+  source: ViewerSource,
+  opts: { stdinIsPipe: boolean; initialFollow?: boolean },
 ): Promise<void> {
   // When stdin was used to feed the JSONL data we cannot also use it
   // for interactive keystrokes — it's been drained and isn't a TTY.
@@ -50,11 +49,10 @@ async function runWith(
   };
   try {
     await runViewer({
-      jsonl,
+      source,
       input,
       output,
       viewport,
-      followPath: opts.followPath,
       initialFollow: opts.initialFollow ?? false,
     });
   } finally {

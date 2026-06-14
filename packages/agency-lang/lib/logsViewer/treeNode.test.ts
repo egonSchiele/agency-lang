@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import { TreeNode } from "./treeNode.js";
 
 const env = (o: object) =>
@@ -32,5 +35,28 @@ describe("TreeNode.forestFromString", () => {
   it("exposes file-level parse errors via any node", () => {
     const roots = TreeNode.forestFromString([env({}), "{ bad json"].join("\n"));
     expect(roots[0].parseErrors()).toHaveLength(1);
+  });
+});
+
+describe("TreeNode.forestFromLog", () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "treenode-"));
+  });
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("reads a statelog file from disk and builds the tree", () => {
+    const file = path.join(tmpDir, "run.jsonl");
+    fs.writeFileSync(file, [
+      env({ span_id: "s1", data: { type: "agentStart", timestamp: "2026-06-14T00:00:00Z", entryNode: "main" } }),
+      env({ span_id: "s1", data: { type: "agentEnd", timestamp: "2026-06-14T00:00:01Z", timeTaken: 1000 } }),
+    ].join("\n"));
+    const roots = TreeNode.forestFromLog(file);
+    expect(roots).toHaveLength(1);
+    expect(roots[0].nodeKind).toBe("trace");
+    const span = roots[0].children.find((c) => c.nodeKind === "span");
+    expect(span?.label).toBe("agentRun");
   });
 });

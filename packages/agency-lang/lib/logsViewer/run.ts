@@ -5,8 +5,6 @@ import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
 import { clampScroll, followCursor } from "../tui/scroll.js";
 import { scrollList } from "../tui/scrollList.js";
-import { parseStatelogJsonl } from "./parse.js";
-import { buildForest } from "./tree.js";
 import {
   flattenVisibleRows,
   colorFor,
@@ -16,32 +14,45 @@ import {
 import { handleKeyEx } from "./input.js";
 import { formatKey } from "../tui/input/format.js";
 import type { KeyEvent } from "../tui/input/types.js";
-import { ViewerState, TreeNode } from "./types.js";
+import { TreeNode } from "./treeNode.js";
+import type { ParseError } from "../statelogParser.js";
+import type { ViewerState } from "./types.js";
 import { findMatches, expandAncestorsOf } from "./search.js";
 import { detectClipboard } from "./clipboard.js";
 import { follow, Follower } from "./follow.js";
 import { helpLines } from "./help.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 
+// Where the viewer reads its tree from: a file path (enables follow) or an
+// in-memory JSONL string (stdin pipe; no follow). The parser is created and
+// hidden inside TreeNode — the viewer never touches StatelogParser.
+export type ViewerSource = { path: string } | { jsonl: string };
+
 export type RunViewerOpts = {
-  jsonl: string;
+  source: ViewerSource;
   input: InputSource;
   output: OutputTarget;
   viewport: { rows: number; cols: number };
-  // Optional path to enable --follow mode (re-read as the file grows).
-  // Undefined disables follow even if the user presses `f` (e.g. when
-  // reading from stdin).
-  followPath?: string;
-  // If true, start the file watcher immediately at boot — equivalent
-  // to launching the viewer and then pressing `f`. Ignored when
-  // followPath is undefined.
+  // If true, start the file watcher immediately at boot — equivalent to
+  // launching the viewer and then pressing `f`. Ignored for stdin sources.
   initialFollow?: boolean;
   thresholds?: ViewerThresholds;
 };
 
 export async function runViewer(opts: RunViewerOpts): Promise<void> {
-  const parsed = parseStatelogJsonl(opts.jsonl);
-  const roots = buildForest(parsed.events);
+  const source = opts.source;
+  const followPath = "path" in source ? source.path : undefined;
+  // Build (or rebuild, on follow) the forest. The hidden parser re-reads the
+  // whole file each time — simpler than incremental and the file is usually
+  // tiny. Parse errors are reachable from any root (only rendered when roots
+  // exist, matching the "No events found." short-circuit below).
+  const buildForest = (): TreeNode[] =>
+    "path" in source
+      ? TreeNode.forestFromLog(source.path)
+      : TreeNode.forestFromString(source.jsonl);
+
+  let roots = buildForest();
+  const parseErrors = (): ParseError[] => roots[0]?.parseErrors() ?? [];
 
   const screen = new Screen({
     input: opts.input,
@@ -73,41 +84,34 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     opts.viewport,
   );
 
-  // Follow mode book-keeping. The watcher is started/stopped lazily
-  // when the user toggles `f`. We re-parse the *whole* JSONL on each
-  // append — simpler than incremental and the file is usually tiny.
-  let followerState: { f: Follower; jsonl: string } | undefined;
+  // Follow mode book-keeping. The watcher is started/stopped lazily when the
+  // user toggles `f`. On each append we rebuild the forest from the grown file.
+  let follower: Follower | undefined;
   const startFollow = (): void => {
-    if (!opts.followPath || followerState) return;
-    let accum = opts.jsonl;
-    followerState = {
-      jsonl: accum,
-      f: follow({
-        path: opts.followPath,
-        onAppend: (chunk) => {
-          accum += chunk;
-          if (followerState) followerState.jsonl = accum;
-          state = onFollowAppend(state, accum, opts.viewport);
-          screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
-        },
-      }),
-    };
+    if (!followPath || follower) return;
+    follower = follow({
+      path: followPath,
+      onAppend: () => {
+        roots = buildForest();
+        state = onFollowAppend(state, roots, opts.viewport);
+        screen.render(renderState(state, parseErrors(), opts.viewport, thresholds));
+      },
+    });
   };
   const stopFollow = (): void => {
-    if (!followerState) return;
-    followerState.f.stop();
-    followerState = undefined;
+    if (!follower) return;
+    follower.stop();
+    follower = undefined;
   };
 
-  // Auto-start follow if --follow was passed. We do this after
-  // building state so the [FOLLOW] indicator appears in the first
-  // render below.
-  if (opts.initialFollow && opts.followPath) {
+  // Auto-start follow if --follow was passed. We do this after building state
+  // so the [FOLLOW] indicator appears in the first render below.
+  if (opts.initialFollow && followPath) {
     startFollow();
     state = { ...state, followOn: true };
   }
 
-  screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+  screen.render(renderState(state, parseErrors(), opts.viewport, thresholds));
   try {
     while (!state.quit) {
       const event = await screen.nextKey();
@@ -126,7 +130,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       const paged = paginate(state, event, opts.viewport);
       if (paged) {
         state = applyScroll(paged, opts.viewport);
-        screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+        screen.render(renderState(state, parseErrors(), opts.viewport, thresholds));
         continue;
       }
       const { state: next, command } = handleKeyEx(state, event);
@@ -137,10 +141,10 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       } else if (command?.kind === "copy") {
         state = runCopy(state);
       } else if (command?.kind === "toggleFollow") {
-        state = runToggleFollow(state, opts.followPath, startFollow, stopFollow);
+        state = runToggleFollow(state, followPath, startFollow, stopFollow);
       }
       state = applyScroll(state, opts.viewport);
-      screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+      screen.render(renderState(state, parseErrors(), opts.viewport, thresholds));
     }
   } finally {
     stopFollow();
@@ -211,7 +215,7 @@ function runCopy(state: ViewerState): ViewerState {
   if (!node) return state;
   const cb = detectClipboard();
   if (!cb) return { ...state, messageBar: "clipboard unavailable" };
-  const payload = node.event ?? {
+  const payload = node.event() ?? {
     label: node.label,
     traceId: node.traceId,
     metrics: { duration: node.duration, tokens: node.tokens, cost: node.cost },
@@ -225,16 +229,14 @@ function runCopy(state: ViewerState): ViewerState {
   }
 }
 
-// Re-parse the whole accumulated JSONL after a follow append. We
-// preserve the cursor id across reloads; if it has been removed,
-// fall back to the first trace root.
+// Swap in a freshly-rebuilt forest after a follow append. We preserve the
+// cursor id across reloads; if its node has been removed, fall back to the
+// first trace root. (Line-derived ids stay stable for existing lines.)
 function onFollowAppend(
   prev: ViewerState,
-  jsonl: string,
+  roots: TreeNode[],
   viewport: { rows: number; cols: number },
 ): ViewerState {
-  const parsed = parseStatelogJsonl(jsonl);
-  const roots = buildForest(parsed.events);
   if (roots.length === 0) return prev;
   const stillThere = findNode(roots, prev.cursorId);
   const next: ViewerState = {

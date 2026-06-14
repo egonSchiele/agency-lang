@@ -162,7 +162,9 @@ export function fmtCost(c?: number): string {
 }
 
 function shortId(id?: string): string {
-  return (String(id) ?? "").slice(0, 6);
+  // Placeholder rather than slicing `String(undefined)` into "undefi".
+  if (id == null) return "?";
+  return String(id).slice(0, 6);
 }
 
 function stripQuotes(s?: string): string {

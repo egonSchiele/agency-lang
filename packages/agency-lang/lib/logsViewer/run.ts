@@ -172,12 +172,14 @@ function applySearch(
   }
   const matches = findMatches(state.roots, trimmed, state.viewportCols);
   if (matches.length === 0) {
+    // The status bar already renders `no matches — "query"` from the
+    // query/matches state; don't also set a transient messageBar or the two
+    // overlap into a garbled duplicate line.
     return {
       ...state,
       query: trimmed,
       matches: [],
       matchIdx: undefined,
-      messageBar: `no matches for "${trimmed}"`,
     };
   }
   const withAncestors = expandAncestorsOf(state, matches);

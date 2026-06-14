@@ -150,6 +150,11 @@ describe("StatelogParser tolerant parsing", () => {
     const p = StatelogParser.fromString([good(), "{ not json"].join("\n"));
     expect(() => p.evalRecord()).toThrow(/Malformed statelog on line 2/);
   });
+
+  it("normalized also throws on malformed input (eval methods stay strict)", () => {
+    const p = StatelogParser.fromString([good(), "{ not json"].join("\n"));
+    expect(() => p.normalized()).toThrow(/Malformed statelog on line 2/);
+  });
 });
 
 describe("StatelogParser hierarchy", () => {

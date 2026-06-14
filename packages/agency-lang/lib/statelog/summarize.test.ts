@@ -36,6 +36,12 @@ describe("summarizeEvent (leaf events)", () => {
   it("falls back to event type when no specific format applies", () => {
     expect(summarizeEvent(evt({ type: "unknownEvent" }))).toBe("unknownEvent");
   });
+
+  it("uses a '?' placeholder for a missing id instead of 'undefi'", () => {
+    const s = summarizeEvent(evt({ type: "checkpointCreated", reason: "retry" }));
+    expect(s).toContain("#?");
+    expect(s).not.toContain("undefi");
+  });
 });
 
 describe("summarizeSpanText", () => {

@@ -39,7 +39,7 @@ export type ParseError = {
 };
 
 // One kept event plus its 1-based source line. The line number is the stable
-// identity for event nodes (`evt:<lineNo>`) and is what `lines()` yields.
+// identity for event nodes (`evt-<lineNo>`) and is what `lines()` yields.
 type ParsedEvent = { event: EventEnvelope; lineNo: number };
 type ParseResult = { events: ParsedEvent[]; errors: ParseError[] };
 
@@ -251,8 +251,20 @@ export class StatelogParser {
     for (const p of this.parsed.events) yield { lineNo: p.lineNo, event: p.event };
   }
 
+  // The pre-refactor sync parser threw on the first malformed line, so the
+  // eval-facing methods (normalized/evalRecord and everything derived from
+  // them) refuse to operate on a partially-parsed file. Tolerant consumers
+  // (the viewer) use parseErrors() + the hierarchy/query APIs instead.
+  private assertNoParseErrors(): void {
+    const errors = this.parseErrors();
+    if (errors.length > 0) {
+      throw new Error(`Malformed statelog on line ${errors[0].line}: ${errors[0].detail}`);
+    }
+  }
+
   normalized(): Normalized {
     if (!this.normalizedCache) {
+      this.assertNoParseErrors();
       const events = this.parsed.events.map((p) => p.event);
       assertSingleTrace(events);
       this.normalizedCache = normalize(events);
@@ -261,13 +273,8 @@ export class StatelogParser {
   }
 
   evalRecord(): EvalRecord {
-    // Preserve the pre-refactor strict behavior: eval refuses to operate on a
-    // file with any malformed lines (the old readAllEventsSync threw outright).
-    if (this.parseErrors().length > 0) {
-      const first = this.parseErrors()[0];
-      throw new Error(`Malformed statelog on line ${first.line}: ${first.detail}`);
-    }
     if (!this.evalRecordCache) {
+      this.assertNoParseErrors();
       const events = this.parsed.events.map((p) => p.event);
       assertSingleTrace(events);
       this.evalRecordCache = extractEvalRecord(events, this.filePath ?? "<string>", this.options);

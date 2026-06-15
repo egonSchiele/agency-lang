@@ -26,6 +26,12 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
   Exits on `onSubmit` returning `false`, on Ctrl+D (EOF) at the
   prompt, or on Ctrl+C at an idle prompt.
 
+  Built-in `/paste` (TTY only): opens a multi-line editor (à la Node's
+  REPL `.editor`). Enter inserts a newline, Ctrl+D submits the whole
+  buffer as one message, and Ctrl+C / Esc cancels. Because Enter no
+  longer submits while in this mode, pasting a multi-line block lands
+  intact instead of firing one turn per line.
+
   Round-one limitations (intentional, see the spec):
   - `status` is accepted for signature parity but not yet rendered.
   WL2 will turn it into a per-turn footer.
@@ -64,7 +70,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L121))
 
 ### termWidth
 
@@ -74,7 +80,7 @@ termWidth(): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L125))
 
 ### hline
 
@@ -91,4 +97,4 @@ hline(char: string, width: number): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L129))

@@ -131,7 +131,7 @@ export function runDiagnostics(
   }
 
   const info = buildCompilationUnit(program, symbolTable, fsPath, source);
-  const { errors, scopes, interruptKindsByFunction } = typeCheck(program, config, info);
+  const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);
 
   for (const err of errors) {
     const range = err.loc
@@ -152,7 +152,7 @@ export function runDiagnostics(
     diagnostics,
     program,
     info,
-    semanticIndex: buildSemanticIndex(program, fsPath, symbolTable, interruptKindsByFunction),
+    semanticIndex: buildSemanticIndex(program, fsPath, symbolTable, interruptEffectsByFunction),
     scopes,
   };
 }

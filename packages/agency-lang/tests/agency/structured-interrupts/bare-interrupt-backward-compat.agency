@@ -7,7 +7,7 @@ node main() {
   handle {
     return check()
   } with (interrupt) {
-    if (interrupt.kind == "unknown") {
+    if (interrupt.effect == "unknown") {
       return approve()
     }
     return reject()

@@ -4,14 +4,14 @@ import { startHttpServer } from {{{httpAdapterPath:string}}};
 import { createLogger } from {{{loggerPath:string}}};
 
 const exportedNodeNames = {{{exportedNodeNamesJson:string}}};
-const interruptKindsByName = {{{interruptKindsByNameJson:string}}};
+const interruptEffectsByName = {{{interruptEffectsByNameJson:string}}};
 
 const exports = discoverExports({
   toolRegistry: mod.__toolRegistry ?? {},
   moduleExports: mod,
   moduleId: {{{moduleId:string}}},
   exportedNodeNames,
-  interruptKindsByName,
+  interruptEffectsByName,
 });
 
 const rawPort = process.env.PORT ?? {{{defaultPort:string}}};

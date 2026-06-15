@@ -3,7 +3,7 @@ import type {
   CompilationUnit,
   ImportedFunctionSignature,
 } from "../compilationUnit.js";
-import type { InterruptKind } from "../symbolTable.js";
+import type { InterruptEffect } from "../symbolTable.js";
 import {
   GLOBAL_SCOPE_KEY,
   ScopedTypeAliases,
@@ -61,7 +61,7 @@ export class TypeChecker {
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
   private importedFunctions: Record<string, ImportedFunctionSignature> = {};
   private jsImportedNames: Record<string, true> = {};
-  private interruptKindsByFunction: Record<string, InterruptKind[]> = {};
+  private interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
   private symbolTable?: SymbolTable;
   private currentFile?: string;
   private errors: TypeCheckError[] = [];
@@ -84,7 +84,7 @@ export class TypeChecker {
     );
     this.importedFunctions = { ...resolved.importedFunctions };
     this.jsImportedNames = { ...resolved.jsImportedNames };
-    this.interruptKindsByFunction = resolved.interruptKindsByFunction ?? {};
+    this.interruptEffectsByFunction = resolved.interruptEffectsByFunction ?? {};
     this.symbolTable = resolved.symbolTable;
     this.currentFile = resolved.fromFile;
     this.sourceText = resolved.sourceText;
@@ -113,7 +113,7 @@ export class TypeChecker {
       nodeDefs: this.nodeDefs,
       importedFunctions: this.importedFunctions,
       jsImportedNames: this.jsImportedNames,
-      interruptKindsByFunction: this.interruptKindsByFunction,
+      interruptEffectsByFunction: this.interruptEffectsByFunction,
       symbolTable: this.symbolTable,
       currentFile: this.currentFile,
       errors: this.errors,
@@ -293,7 +293,7 @@ export class TypeChecker {
     checkScopes(scopes, ctx);
 
     // 5. Analyze interrupts using functionRefType
-    const interruptKindsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
+    const interruptEffectsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
 
     // 5a. Build the per-function interrupt call graph used by
     // `agency interrupts` for static handler-set analysis. The
@@ -302,15 +302,15 @@ export class TypeChecker {
     const interruptCallGraph = buildInterruptCallGraph(scopes, ctx);
 
     // 6. Check for unhandled interrupt warnings (uses transitive results)
-    checkUnhandledInterruptWarnings(scopes, interruptKindsByFunction, ctx);
+    checkUnhandledInterruptWarnings(scopes, interruptEffectsByFunction, ctx);
 
     // 6a. Reject `interrupt` inside any callback body. Callbacks fire as
     // side effects; their body cannot pause execution.
-    checkCallbackBodyInterrupts(scopes, interruptKindsByFunction, ctx);
+    checkCallbackBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
 
     // 6b. Reject handlers whose body may itself raise an interrupt — that
     // re-enters the handler chain and recurses (see HandlerRecursionError).
-    checkHandlerBodyInterrupts(scopes, interruptKindsByFunction, ctx);
+    checkHandlerBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);
@@ -337,7 +337,7 @@ export class TypeChecker {
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),
       scopes,
-      interruptKindsByFunction,
+      interruptEffectsByFunction,
       interruptCallGraph,
     };
   }

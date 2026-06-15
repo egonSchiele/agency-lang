@@ -4,7 +4,7 @@ import { checkPolicy, validatePolicy } from "./policy.js";
 describe("checkPolicy", () => {
   it("returns propagate when no rules exist for the kind", () => {
     const policy = {};
-    const interrupt = { kind: "std::read", message: "msg", data: { filename: "foo" }, origin: "std::fs" };
+    const interrupt = { effect: "std::read", message: "msg", data: { filename: "foo" }, origin: "std::fs" };
     const result = checkPolicy(policy, interrupt);
     expect(result).toEqual({ type: "propagate" });
   });
@@ -16,9 +16,9 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
       .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Bob" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Bob" }, origin: "" }))
       .toEqual({ type: "reject" });
   });
 
@@ -29,9 +29,9 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::cmd", message: "", data: { command: "ls -la" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "ls -la" }, origin: "" }))
       .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { kind: "test::cmd", message: "", data: { command: "rm -rf" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "rm -rf" }, origin: "" }))
       .toEqual({ type: "reject" });
   });
 
@@ -42,9 +42,9 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::read", message: "", data: { path: "src/foo/bar.ts" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::read", message: "", data: { path: "src/foo/bar.ts" }, origin: "" }))
       .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { kind: "test::read", message: "", data: { path: "dist/foo.js" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::read", message: "", data: { path: "dist/foo.js" }, origin: "" }))
       .toEqual({ type: "reject" });
   });
 
@@ -55,7 +55,7 @@ describe("checkPolicy", () => {
         { match: { name: "Ali*" }, action: "approve" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
       .toEqual({ type: "reject" });
   });
 
@@ -66,7 +66,7 @@ describe("checkPolicy", () => {
         { action: "approve" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
       .toEqual({ type: "approve" });
   });
 
@@ -77,9 +77,9 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "std::read", message: "", data: {}, origin: "std::fs" }))
+    expect(checkPolicy(policy, { effect: "std::read", message: "", data: {}, origin: "std::fs" }))
       .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { kind: "std::read", message: "", data: {}, origin: "./myfile.agency" }))
+    expect(checkPolicy(policy, { effect: "std::read", message: "", data: {}, origin: "./myfile.agency" }))
       .toEqual({ type: "reject" });
   });
 
@@ -90,7 +90,7 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::x", message: "Are you sure about this?", data: {}, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::x", message: "Are you sure about this?", data: {}, origin: "" }))
       .toEqual({ type: "approve" });
   });
 
@@ -101,9 +101,9 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { kind: "test::cmd", message: "", data: { command: "rm foo", dir: "/tmp/x" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "rm foo", dir: "/tmp/x" }, origin: "" }))
       .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { kind: "test::cmd", message: "", data: { command: "rm foo", dir: "/home/x" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "rm foo", dir: "/home/x" }, origin: "" }))
       .toEqual({ type: "reject" });
   });
 
@@ -111,7 +111,7 @@ describe("checkPolicy", () => {
     const policy = {
       "test::x": [{ action: "approve" as const }],
     };
-    expect(checkPolicy(policy, { kind: "test::x", message: "", data: { anything: "whatever" }, origin: "" }))
+    expect(checkPolicy(policy, { effect: "test::x", message: "", data: { anything: "whatever" }, origin: "" }))
       .toEqual({ type: "approve" });
   });
 
@@ -119,7 +119,7 @@ describe("checkPolicy", () => {
     const policy = {
       "test::x": [{ action: "reject" as const }],
     };
-    const result = checkPolicy(policy, { kind: "test::x", message: "", data: {}, origin: "" });
+    const result = checkPolicy(policy, { effect: "test::x", message: "", data: {}, origin: "" });
     expect(result).toEqual({ type: "reject" });
   });
 
@@ -141,7 +141,7 @@ describe("checkPolicy", () => {
       };
       expect(
         checkPolicy(policy, {
-          kind: "std::read",
+          effect: "std::read",
           message: "",
           data: { dir: "./docs/guide" },
           origin: "",
@@ -158,7 +158,7 @@ describe("checkPolicy", () => {
       };
       expect(
         checkPolicy(policy, {
-          kind: "std::read",
+          effect: "std::read",
           message: "",
           data: { dir: "./docs/guide/sub" },
           origin: "",
@@ -175,7 +175,7 @@ describe("checkPolicy", () => {
       };
       expect(
         checkPolicy(policy, {
-          kind: "std::read",
+          effect: "std::read",
           message: "",
           data: { dir: "docs" },
           origin: "",
@@ -194,7 +194,7 @@ describe("checkPolicy", () => {
       };
       expect(
         checkPolicy(policy, {
-          kind: "std::read",
+          effect: "std::read",
           message: "",
           data: { dir: "./docs/guidance" },
           origin: "",
@@ -211,7 +211,7 @@ describe("checkPolicy", () => {
       };
       expect(
         checkPolicy(policy, {
-          kind: "std::read",
+          effect: "std::read",
           message: "",
           data: { dir: "./src" },
           origin: "",
@@ -228,7 +228,7 @@ describe("checkPolicy", () => {
       };
       expect(
         checkPolicy(policy, {
-          kind: "std::read",
+          effect: "std::read",
           message: "",
           data: { dir: "/abs/path/x" },
           origin: "",

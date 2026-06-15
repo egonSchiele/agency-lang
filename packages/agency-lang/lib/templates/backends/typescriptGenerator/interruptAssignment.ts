@@ -24,7 +24,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers({{{kind}}}, {{{message}}}, {{{data}}}, {{{origin}}}, __ctx, __stateStack());
+  const __handlerResult = await interruptWithHandlers({{{effect}}}, {{{message}}}, {{{data}}}, {{{origin}}}, __ctx, __stateStack());
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
     runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
@@ -59,7 +59,7 @@ export type TemplateType = {
   assignResolve: string | boolean | number;
   assignApprove: string | boolean | number;
   nodeContext: boolean;
-  kind: string | boolean | number;
+  effect: string | boolean | number;
   message: string | boolean | number;
   data: string | boolean | number;
   origin: string | boolean | number;

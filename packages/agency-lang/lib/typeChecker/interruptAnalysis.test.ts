@@ -7,7 +7,7 @@ import { SymbolTable } from "../symbolTable.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
 
-function interruptKindsFor(source: string, funcName: string): string[] {
+function interruptEffectsFor(source: string, funcName: string): string[] {
   const file = path.join(
     os.tmpdir(),
     `int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
@@ -19,8 +19,8 @@ function interruptKindsFor(source: string, funcName: string): string[] {
     const parseResult = parseAgency(source, {});
     if (!parseResult.success) throw new Error("Parse failed");
     const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, source);
-    const { interruptKindsByFunction } = typeCheck(parseResult.result, {}, info);
-    return (interruptKindsByFunction[funcName] ?? []).map((ik) => ik.kind).sort();
+    const { interruptEffectsByFunction } = typeCheck(parseResult.result, {}, info);
+    return (interruptEffectsByFunction[funcName] ?? []).map((ik) => ik.effect).sort();
   } finally {
     unlinkSync(file);
   }
@@ -29,7 +29,7 @@ function interruptKindsFor(source: string, funcName: string): string[] {
 describe("interrupt analysis via type checker", () => {
   it("collects direct interrupt kinds", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def deploy() {
         interrupt myapp::deploy("Deploy?")
@@ -42,7 +42,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("propagates transitively through calls", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def deploy() {
         interrupt myapp::deploy("Deploy?")
@@ -57,7 +57,7 @@ describe("interrupt analysis via type checker", () => {
   });
 
   it("handles cycles without infinite loop", () => {
-    const kinds = interruptKindsFor(
+    const kinds = interruptEffectsFor(
       `
       def ping() {
         interrupt myapp::ping("Ping")
@@ -75,7 +75,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("resolves function refs in llm tools arrays", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def deploy() {
         interrupt myapp::deploy("Deploy?")
@@ -91,7 +91,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("resolves function refs via variable assignment", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def deploy() {
         interrupt myapp::deploy("Deploy?")
@@ -108,7 +108,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("resolves function refs via spread", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def deploy() {
         interrupt myapp::deploy("Deploy?")
@@ -128,7 +128,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("returns empty for functions with no interrupts", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def add(a: number, b: number): number {
         return a + b
@@ -141,7 +141,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("collects multiple interrupt kinds from one function", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def riskyOp() {
         interrupt myapp::deploy("Deploy?")
@@ -155,7 +155,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("propagates through goto statements", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       node checkout() {
         interrupt payment::charge("Charge?")
@@ -171,7 +171,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("collects from node definitions", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       node checkout() {
         interrupt payment::charge("Charge?")
@@ -204,8 +204,8 @@ describe("interrupt analysis via type checker", () => {
       const parseResult = parseAgency(mainSource, {});
       if (!parseResult.success) throw new Error("Parse failed");
       const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, mainSource);
-      const { interruptKindsByFunction } = typeCheck(parseResult.result, {}, info);
-      const kinds = (interruptKindsByFunction["main"] ?? []).map((ik) => ik.kind).sort();
+      const { interruptEffectsByFunction } = typeCheck(parseResult.result, {}, info);
+      const kinds = (interruptEffectsByFunction["main"] ?? []).map((ik) => ik.effect).sort();
       expect(kinds).toEqual(["myapp::deploy"]);
     } finally {
       unlinkSync(mainFile);
@@ -215,7 +215,7 @@ describe("interrupt analysis via type checker", () => {
 
   it("propagates through multiple levels", () => {
     expect(
-      interruptKindsFor(
+      interruptEffectsFor(
         `
       def deploy() {
         interrupt myapp::deploy("Deploy?")

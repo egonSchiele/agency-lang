@@ -62,11 +62,11 @@ describe("subprocess interrupt IPC", () => {
     }) as any;
 
     const first = sendInterruptToParent(
-      { kind: "test", message: "first", data: {}, origin: "test" },
+      { effect: "test", message: "first", data: {}, origin: "test" },
       { propagated: false },
     );
     const second = sendInterruptToParent(
-      { kind: "test", message: "second", data: {}, origin: "test" },
+      { effect: "test", message: "second", data: {}, origin: "test" },
       { propagated: false },
     );
 
@@ -101,7 +101,7 @@ describe("subprocess interrupt IPC", () => {
     setSubprocessIpcPayloadLimit(1);
 
     await expect(sendInterruptToParent(
-      { kind: "test", message: "too large", data: { value: "é" }, origin: "test" },
+      { effect: "test", message: "too large", data: { value: "é" }, origin: "test" },
       { propagated: false },
     )).resolves.toEqual({ type: "reject", value: expect.stringContaining("ipc_payload") });
 
@@ -125,7 +125,7 @@ describe("subprocess interrupt IPC", () => {
     circular.self = circular;
 
     await expect(sendInterruptToParent(
-      { kind: "test", message: "bad", data: circular, origin: "test" },
+      { effect: "test", message: "bad", data: circular, origin: "test" },
       { propagated: false },
     )).resolves.toEqual({ type: "reject", value: expect.stringContaining("Failed to serialize interrupt payload") });
 

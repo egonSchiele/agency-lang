@@ -132,7 +132,7 @@ export function expressionToString(expr: Expression): string {
       return `schema(${variableTypeToString(expr.typeArg, {})})`;
     case "interruptStatement": {
       const args = expr.arguments.map(callArgToString).join(", ");
-      return `interrupt ${expr.kind}(${args})`;
+      return `interrupt ${expr.effect}(${args})`;
     }
     case "blockArgument": {
       const params = expr.params.map(p => p.typeHint ? `${p.name}: ${variableTypeToString(p.typeHint, {})}` : p.name).join(", ");

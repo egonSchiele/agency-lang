@@ -9,14 +9,14 @@ import { createMcpHandler, startStdioServer } from {{{mcpAdapterPath:string}}};
 import { PolicyStore } from {{{policyStorePath:string}}};
 
 const exportedNodeNames = {{{exportedNodeNamesJson:string}}};
-const interruptKindsByName = {{{interruptKindsByNameJson:string}}};
+const interruptEffectsByName = {{{interruptEffectsByNameJson:string}}};
 
 const exports = discoverExports({
   toolRegistry: mod.__toolRegistry ?? {},
   moduleExports: mod,
   moduleId: {{{moduleId:string}}},
   exportedNodeNames,
-  interruptKindsByName,
+  interruptEffectsByName,
 });
 
 const serverName = {{{serverName:string}}};
@@ -46,7 +46,7 @@ export type TemplateType = {
   mcpAdapterPath: string;
   policyStorePath: string;
   exportedNodeNamesJson: string;
-  interruptKindsByNameJson: string;
+  interruptEffectsByNameJson: string;
   moduleId: string;
   serverName: string;
   serverVersion: string;

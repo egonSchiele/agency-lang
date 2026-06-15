@@ -26,7 +26,7 @@ node main() {
     }
     return "run failed: " + result.error
   } with (data) {
-    if (data.kind == "std::run") {
+    if (data.effect == "std::run") {
       return approve()
     }
     return reject()

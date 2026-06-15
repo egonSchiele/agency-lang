@@ -168,7 +168,7 @@ else:
 
 ```ts
 handle { ... } with (data) {
-  if (data.kind == "std::read" && data.params.dir == "/private") {
+  if (data.effect == "std::read" && data.params.dir == "/private") {
     return reject()
   }
   return consultPolicy()
@@ -184,7 +184,7 @@ keeps the "every handler always runs" guarantee intact.
 
 ### The diagnostic
 
-The error names the handler and the interrupt kinds:
+The error names the handler and the interrupt effects:
 
 ```
 Handler 'defaultHandler' may raise interrupts [std::read]. That would

@@ -7,7 +7,7 @@ node main() {
   handle {
     return askName()
   } with (interrupt) {
-    if (interrupt.kind == "mytest::ask") {
+    if (interrupt.effect == "mytest::ask") {
       return approve("Alice")
     }
     return reject()

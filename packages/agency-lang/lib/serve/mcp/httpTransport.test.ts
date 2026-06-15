@@ -30,7 +30,7 @@ function makeHandler() {
       name: "add",
       description: "Add two numbers",
       agencyFunction: addFn,
-      interruptKinds: [],
+      interruptEffects: [],
     },
   ];
   return createMcpHandler({

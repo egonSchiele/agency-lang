@@ -99,7 +99,7 @@ describe("discoverExports", () => {
     expect(nodes[0].name).toBe("main");
     if (nodes[0].kind === "node") {
       expect(nodes[0].parameters).toEqual([{ name: "message" }]);
-      expect(nodes[0].interruptKinds).toEqual([]);
+      expect(nodes[0].interruptEffects).toEqual([]);
     }
   });
 
@@ -127,7 +127,7 @@ describe("discoverExports", () => {
     ).toEqual([]);
   });
 
-  it("attaches interruptKinds from interruptKindsByName", () => {
+  it("attaches interruptEffects from interruptEffectsByName", () => {
     const registry: Record<string, AgencyFunction> = {};
     AgencyFunction.create(
       {
@@ -150,19 +150,19 @@ describe("discoverExports", () => {
       },
       moduleId: "test",
       exportedNodeNames: ["checkout"],
-      interruptKindsByName: {
-        deploy: [{ kind: "myapp::deploy" }],
-        checkout: [{ kind: "payment::charge" }, { kind: "payment::refund" }],
+      interruptEffectsByName: {
+        deploy: [{ effect: "myapp::deploy" }],
+        checkout: [{ effect: "payment::charge" }, { effect: "payment::refund" }],
       },
     });
 
     const fn = exports.find((e) => e.name === "deploy")!;
-    expect(fn.interruptKinds).toEqual([{ kind: "myapp::deploy" }]);
+    expect(fn.interruptEffects).toEqual([{ effect: "myapp::deploy" }]);
 
     const node = exports.find((e) => e.name === "checkout")!;
-    expect(node.interruptKinds).toEqual([
-      { kind: "payment::charge" },
-      { kind: "payment::refund" },
+    expect(node.interruptEffects).toEqual([
+      { effect: "payment::charge" },
+      { effect: "payment::refund" },
     ]);
   });
 });

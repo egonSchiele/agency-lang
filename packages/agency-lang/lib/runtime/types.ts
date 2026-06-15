@@ -37,7 +37,7 @@ export type Approved = { type: "approve"; value?: any };
 export type Propagated = { type: "propagate" };
 
 export type HandlerFn = (
-  interrupt: { kind: string; message: string; data: any; origin: string },
+  interrupt: { effect: string; message: string; data: any; origin: string },
 ) => Promise<Approved | Rejected | Propagated | undefined>;
 
 /* tokenstats

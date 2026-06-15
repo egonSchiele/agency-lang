@@ -139,7 +139,7 @@ function stringifyValue(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v ?? null) ?? "undefined";
 }
 
-/** Format the optional `{kind, message, data}` interrupt summary
+/** Format the optional `{effect, message, data}` interrupt summary
  *  attached to `handlerDecision` / `interruptResolved` events. The
  *  runtime started attaching this so log readers can see *what* was
  *  being approved/rejected without correlating against a separate
@@ -147,10 +147,10 @@ function stringifyValue(v: unknown): string {
  *  (preserves prior format for older traces). */
 function formatInterruptSummary(intr: any): string {
   if (!intr || typeof intr !== "object") return "";
-  const kind = intr.kind ? String(intr.kind) : null;
+  const effect = intr.effect ? String(intr.effect) : null;
   const msg = intr.message ? truncate(String(intr.message), 50) : null;
-  if (kind && msg) return ` — ${kind}: "${msg}"`;
-  if (kind) return ` — ${kind}`;
+  if (effect && msg) return ` — ${effect}: "${msg}"`;
+  if (effect) return ` — ${effect}`;
   if (msg) return ` — "${msg}"`;
   return "";
 }

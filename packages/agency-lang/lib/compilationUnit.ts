@@ -15,7 +15,7 @@ import type {
   ImportStatement,
 } from "./types/importStatement.js";
 import { getImportedNames } from "./types/importStatement.js";
-import type { SymbolTable, InterruptKind } from "./symbolTable.js";
+import type { SymbolTable, InterruptEffect } from "./symbolTable.js";
 import { collectTypeAliasTags } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
@@ -121,8 +121,8 @@ export type CompilationUnit = {
    * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
    * many callers (including most tests) construct the AST directly. */
   sourceText?: string;
-  /** Transitive interrupt kinds per function/node, populated from the symbol table. */
-  interruptKindsByFunction?: Record<string, InterruptKind[]>;
+  /** Transitive interrupt effects per function/node, populated from the symbol table. */
+  interruptEffectsByFunction?: Record<string, InterruptEffect[]>;
   /** Symbol table used to build this unit. Forwarded so downstream
    *  consumers (e.g. the typechecker) can use it for cross-file lookups
    *  like resolving the file a function/node lives in. Optional because
@@ -298,30 +298,30 @@ export function buildCompilationUnit(
     // was never imported.
     pullTransitiveAliases(unit, symbolTable, aliasSeeds);
 
-    const interruptKindsByFunction: Record<string, InterruptKind[]> = {};
+    const interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
     const fileSymbols = symbolTable.getFile(fromFile);
     if (fileSymbols) {
       for (const [name, sym] of Object.entries(fileSymbols)) {
-        if ((sym.kind === "function" || sym.kind === "node") && sym.interruptKinds) {
-          interruptKindsByFunction[name] = sym.interruptKinds;
+        if ((sym.kind === "function" || sym.kind === "node") && sym.interruptEffects) {
+          interruptEffectsByFunction[name] = sym.interruptEffects;
         }
       }
     }
     for (const stmt of unit.importStatements) {
       for (const r of symbolTable.resolveImport(stmt, fromFile)) {
-        if ((r.symbol.kind === "function" || r.symbol.kind === "node") && r.symbol.interruptKinds) {
-          interruptKindsByFunction[r.localName] = r.symbol.interruptKinds;
+        if ((r.symbol.kind === "function" || r.symbol.kind === "node") && r.symbol.interruptEffects) {
+          interruptEffectsByFunction[r.localName] = r.symbol.interruptEffects;
         }
       }
     }
     for (const stmt of unit.importedNodes) {
       for (const r of symbolTable.resolveImportedNodes(stmt, fromFile)) {
-        if (r.symbol.kind === "node" && r.symbol.interruptKinds) {
-          interruptKindsByFunction[r.localName] = r.symbol.interruptKinds;
+        if (r.symbol.kind === "node" && r.symbol.interruptEffects) {
+          interruptEffectsByFunction[r.localName] = r.symbol.interruptEffects;
         }
       }
     }
-    unit.interruptKindsByFunction = interruptKindsByFunction;
+    unit.interruptEffectsByFunction = interruptEffectsByFunction;
     unit.symbolTable = symbolTable;
     unit.fromFile = fromFile;
   }

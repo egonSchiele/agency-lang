@@ -12,7 +12,7 @@ import type {
   ImportedFunctionSignature,
   ScopedTypeAliases,
 } from "../compilationUnit.js";
-import type { InterruptKind, SymbolTable } from "../symbolTable.js";
+import type { InterruptEffect, SymbolTable } from "../symbolTable.js";
 import type { InterruptCallGraph } from "./interruptAnalysis.js";
 
 export type TypeCheckError = {
@@ -27,7 +27,7 @@ export type TypeCheckError = {
 export type TypeCheckResult = {
   errors: TypeCheckError[];
   scopes: ScopeInfo[];
-  interruptKindsByFunction: Record<string, InterruptKind[]>;
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>;
   interruptCallGraph: InterruptCallGraph;
 };
 
@@ -75,7 +75,7 @@ export type TypeCheckerContext = {
   importedFunctions: Record<string, ImportedFunctionSignature>;
   /** Names brought in by non-Agency JS imports — see CompilationUnit. */
   jsImportedNames: Record<string, true>;
-  interruptKindsByFunction: Record<string, InterruptKind[]>;
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>;
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;

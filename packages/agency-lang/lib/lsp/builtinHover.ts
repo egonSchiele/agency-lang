@@ -28,9 +28,9 @@ function formatSig(sig: BuiltinSignature): string {
  */
 const KEYWORD_BUILTIN_HOVERS: Record<string, { sig: string; description: string }> = {
   interrupt: {
-    sig: "interrupt <kind>(message: string, payload?: Record<string, any>)",
+    sig: "interrupt <effect>(message: string, payload?: Record<string, any>)",
     description:
-      "Throw an interrupt of the given kind. The current execution state is captured so that, once responded to, execution resumes from exactly this point.",
+      "Throw an interrupt of the given effect. The current execution state is captured so that, once responded to, execution resumes from exactly this point.",
   },
   schema: {
     sig: "schema(T)",

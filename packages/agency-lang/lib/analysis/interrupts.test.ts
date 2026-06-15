@@ -29,7 +29,7 @@ node main() {
         const result = analyzeInterrupts(file, {});
         expect(result.sites).toHaveLength(1);
         const s = result.sites[0];
-        expect(s.site.kind).toBe("std::read");
+        expect(s.site.effect).toBe("std::read");
         expect(s.site.file).toBe(file);
         expect(s.site.line).toBe(4); // 1-indexed line of `interrupt std::read(...)`
         expect(s.handlers).toHaveLength(1);
@@ -71,7 +71,7 @@ node main() {
       (file) => {
         const result = analyzeInterrupts(file, {});
         expect(result.sites).toHaveLength(1);
-        expect(result.sites[0].site.kind).toBe("unknown");
+        expect(result.sites[0].site.effect).toBe("unknown");
       },
     );
   });
@@ -194,7 +194,7 @@ node main() {
 `,
       (file) => {
         const result = analyzeInterrupts(file, {});
-        const site = result.sites.find((s) => s.site.kind === "std::write");
+        const site = result.sites.find((s) => s.site.effect === "std::write");
         expect(site).toBeDefined();
         expect(site!.handlers).toHaveLength(1);
         expect(site!.handlers[0].line).toBe(7);
@@ -262,7 +262,7 @@ node main() {
         expect(result.sites).toHaveLength(2);
         // Sites are sorted by line, so std::write (line 4) comes first.
         expect(result.sites.map((s) => s.site.line)).toEqual([4, 5]);
-        expect(result.sites.map((s) => s.site.kind)).toEqual(["std::write", "std::read"]);
+        expect(result.sites.map((s) => s.site.effect)).toEqual(["std::write", "std::read"]);
       },
     );
   });
@@ -431,7 +431,7 @@ node main() {
       const result = analyzeInterrupts(mainFile, {});
       // Both same-named helpers are reported with their own interrupt
       // sites; neither overwrites the other in the merged graph.
-      const kinds = result.sites.map((s) => s.site.kind).sort();
+      const kinds = result.sites.map((s) => s.site.effect).sort();
       expect(kinds).toEqual(["std::read", "std::write"]);
       const files = new Set(result.sites.map((s) => s.site.file));
       expect(files).toEqual(
@@ -463,7 +463,7 @@ def b() {
       (file) => {
         const result = analyzeInterrupts(file, {});
         expect(result.sites).toHaveLength(1);
-        expect(result.sites[0].site.kind).toBe("std::read");
+        expect(result.sites[0].site.effect).toBe("std::read");
         expect(result.sites[0].site.file).toBe(file);
       },
     );

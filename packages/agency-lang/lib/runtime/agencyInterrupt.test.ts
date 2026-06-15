@@ -30,7 +30,7 @@ describe("agency.interrupt — handler approves", () => {
             async () => approve("handler-value"),
             async () => {
               result = await agency.interrupt({
-                kind: "test",
+                effect: "test",
                 message: "needs approval",
                 data: { foo: 1 },
               });
@@ -58,7 +58,7 @@ describe("agency.interrupt — handler rejects", () => {
             async () => reject("nope"),
             async () => {
               result = await agency.interrupt({
-                kind: "test",
+                effect: "test",
                 message: "needs approval",
                 data: {},
               });
@@ -81,7 +81,7 @@ describe("agency.interrupt — no handler", () => {
       agency.withResumableScope({ name: "halt" }, async (s) => {
         await s.step(async () => {
           await agency.interrupt({
-            kind: "test",
+            effect: "test",
             message: "propagated",
             data: { foo: 42 },
           });
@@ -96,7 +96,7 @@ describe("agency.interrupt — no handler", () => {
     expect(interrupts).toHaveLength(1);
     const intr = interrupts[0];
     expect(intr.type).toBe("interrupt");
-    expect(intr.kind).toBe("test");
+    expect(intr.effect).toBe("test");
     expect(intr.message).toBe("propagated");
     expect(intr.data).toEqual({ foo: 42 });
     // The codegen path attaches both id and the full snapshot.
@@ -115,7 +115,7 @@ describe("agency.interrupt — no handler", () => {
       agency.withResumableScope({ name: "no-after" }, async (s) => {
         await s.step(async () => {
           await agency.interrupt({
-            kind: "test",
+            effect: "test",
             message: "halt me",
             data: {},
           });
@@ -135,7 +135,7 @@ describe("agency.interrupt — no handler", () => {
         await s.step(async () => {
           order.push("first");
           await agency.interrupt({
-            kind: "test",
+            effect: "test",
             message: "halt",
             data: {},
           });
@@ -160,7 +160,7 @@ describe("agency.interrupt — resume idempotency", () => {
       agency.withResumableScope({ name: "resume" }, async (s) => {
         await s.step(async () => {
           await agency.interrupt({
-            kind: "test",
+            effect: "test",
             message: "first pass",
             data: { round: 1 },
           });
@@ -171,7 +171,7 @@ describe("agency.interrupt — resume idempotency", () => {
 
     expect(Array.isArray(firstResult)).toBe(true);
     const intr = firstResult[0];
-    expect(intr.kind).toBe("test");
+    expect(intr.effect).toBe("test");
     const persistedId = intr.interruptId;
 
     // Stamp a user response for the persisted interrupt id, mirroring
@@ -218,7 +218,7 @@ describe("agency.interrupt — resume idempotency", () => {
             },
             async () => {
               observed = await agency.interrupt({
-                kind: "test",
+                effect: "test",
                 message: "ignored on resume",
                 data: { round: 2 },
               });
@@ -245,7 +245,7 @@ describe("agency.interrupt — option defaults", () => {
           await agency.withHandler(
             // eslint-disable-next-line @typescript-eslint/require-await
             async (i) => {
-              observedKind = i.kind;
+              observedKind = i.effect;
               return approve("ok");
             },
             async () => {
@@ -263,7 +263,7 @@ describe("agency.interrupt — option defaults", () => {
     const ret = (await inFrame(ctx, () =>
       agency.withResumableScope({ name: "no-data" }, async (s) => {
         await s.step(async () => {
-          await agency.interrupt({ kind: "x", message: "no data" });
+          await agency.interrupt({ effect: "x", message: "no data" });
         });
       }),
     )) as unknown as Interrupt[];
@@ -276,7 +276,7 @@ describe("agency.interrupt — frame requirements", () => {
     const ctx = makeMockCtx();
     await expect(
       inFrame(ctx, () =>
-        agency.interrupt({ kind: "test", message: "x", data: {} }),
+        agency.interrupt({ effect: "test", message: "x", data: {} }),
       ),
     ).rejects.toThrow(/without an active Runner/);
   });
@@ -298,7 +298,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
     // again — infinite recursion without the depth guard.
     const selfRecursingHandler = async () => {
       await agency.interrupt({
-        kind: "inner",
+        effect: "inner",
         message: "raised from inside handler",
         data: {},
       });
@@ -310,7 +310,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
           await s.step(async () => {
             await agency.withHandler(selfRecursingHandler, async () => {
               await agency.interrupt({
-                kind: "outer",
+                effect: "outer",
                 message: "trips the chain the first time",
                 data: {},
               });
@@ -326,7 +326,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
     const ctx = makeMockCtx();
     const selfRecursingHandler = async () => {
       await agency.interrupt({
-        kind: "deep-recursion-kind",
+        effect: "deep-recursion-kind",
         message: "raised from inside handler",
         data: {},
       });
@@ -338,7 +338,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
           await s.step(async () => {
             await agency.withHandler(selfRecursingHandler, async () => {
               await agency.interrupt({
-                kind: "outer",
+                effect: "outer",
                 message: "trips first",
                 data: {},
               });
@@ -358,7 +358,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
     const ctx = makeMockCtx();
     const selfRecursingHandler = async () => {
       await agency.interrupt({
-        kind: "inner",
+        effect: "inner",
         message: "x",
         data: {},
       });
@@ -369,7 +369,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
         agency.withResumableScope({ name: "cleanup" }, async (s) => {
           await s.step(async () => {
             await agency.withHandler(selfRecursingHandler, async () => {
-              await agency.interrupt({ kind: "outer", message: "x", data: {} });
+              await agency.interrupt({ effect: "outer", message: "x", data: {} });
             });
           });
           return "unreachable";

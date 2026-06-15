@@ -4,6 +4,6 @@ import { SplatExpression, NamedArgument } from "./dataStructures.js";
 
 export type InterruptStatement = BaseNode & {
   type: "interruptStatement";
-  kind: string; // e.g. "std::read", "myapp::deploy"
+  effect: string; // e.g. "std::read", "myapp::deploy"
   arguments: (Expression | SplatExpression | NamedArgument)[];
 };

@@ -23,7 +23,7 @@
           "type": "returnStatement",
           "value": {
             "type": "interruptStatement",
-            "kind": "unknown",
+            "effect": "unknown",
             "arguments": [
               {
                 "type": "string",

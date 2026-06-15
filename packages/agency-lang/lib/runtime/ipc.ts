@@ -137,7 +137,7 @@ export function ipcLog(direction: "send" | "recv", msg: any): void {
   const ts = new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
   const type = msg?.type ?? "unknown";
   let detail: string;
-  if (type === "interrupt") detail = `kind=${msg.interrupt?.kind}`;
+  if (type === "interrupt") detail = `effect=${msg.interrupt?.effect}`;
   else if (type === "decision") detail = `approved=${msg.approved}`;
   else if (type === "result") detail = `data=${truncate(msg.value?.data)}`;
   else if (type === "error") detail = `error=${truncate(msg.error)}`;
@@ -154,7 +154,7 @@ export type IpcInterruptMessage = {
   type: "interrupt";
   interruptId: string;
   interrupt: {
-    kind: string;
+    effect: string;
     message: string;
     data: any;
     origin: string;
@@ -259,7 +259,7 @@ export function cleanupSessionLocks(
  */
 export async function sendInterruptToParent(
   interruptData: {
-    kind: string;
+    effect: string;
     message: string;
     data: any;
     origin: string;
@@ -539,9 +539,9 @@ function attachStdoutForwarder(
 }
 
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
-  const { kind, message, data, origin } = msg.interrupt;
+  const { effect, message, data, origin } = msg.interrupt;
   try {
-    const handlerResult = await interruptWithHandlers(kind, message, data, origin, s.ctx, s.stateStack);
+    const handlerResult = await interruptWithHandlers(effect, message, data, origin, s.ctx, s.stateStack);
     let decision: any;
     if (isApproved(handlerResult)) {
       decision = { type: "decision", interruptId: msg.interruptId, approved: true, value: (handlerResult as any).value };

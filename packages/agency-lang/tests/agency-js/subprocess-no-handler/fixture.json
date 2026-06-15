@@ -1,4 +1,4 @@
 {
   "type": "interrupt",
-  "kind": "std::run"
+  "effect": "std::run"
 }

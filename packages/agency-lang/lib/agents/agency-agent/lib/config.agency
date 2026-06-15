@@ -9,10 +9,10 @@ export static const POLICY_DIR = path.join(os.homedir(), ".agency-agent")
 export static const POLICY_PATH = path.join(POLICY_DIR, POLICY_FILE)
 export static const HISTORY_PATH = path.join(POLICY_DIR, HISTORY_FILE)
 
-// Per-kind config driving the "approve-always-here" option. For each
-// kind we list the data fields the scoped rule should pin, plus a
+// Per-effect config driving the "approve-always-here" option. For each
+// effect we list the data fields the scoped rule should pin, plus a
 // flag that turns a directory value into a brace-expanded glob so the
-// rule matches `dir` AND `dir/**`. Kinds not present in this map
+// rule matches `dir` AND `dir/**`. Effects not present in this map
 // don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
 export static const ALWAYS_FIELDS: ScopedRuleFields = {
   "std::read": [{

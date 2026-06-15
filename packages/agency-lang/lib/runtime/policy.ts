@@ -19,9 +19,9 @@ type PolicyResult =
 
 export function checkPolicy(
   policy: Policy,
-  interrupt: { kind: string; message: string; data: any; origin: string },
+  interrupt: { effect: string; message: string; data: any; origin: string },
 ): PolicyResult {
-  const rules = policy[interrupt.kind];
+  const rules = policy[interrupt.effect];
   if (!rules) {
     return { type: "propagate" };
   }
@@ -45,7 +45,7 @@ function stripDotSlash(s: string): string {
 
 function matchesRule(
   rule: PolicyRule,
-  interrupt: { kind: string; message: string; data: any; origin: string },
+  interrupt: { effect: string; message: string; data: any; origin: string },
 ): boolean {
   if (!rule.match) return true; // catch-all
 

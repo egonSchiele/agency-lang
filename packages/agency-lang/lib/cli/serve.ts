@@ -19,7 +19,7 @@ import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../stdlib/version.js";
 import type { ExportedItem } from "../serve/types.js";
-import type { InterruptKind } from "../symbolTable.js";
+import type { InterruptEffect } from "../symbolTable.js";
 import type { InterruptHandlers } from "../serve/mcp/interruptLoop.js";
 import { PolicyStore } from "../serve/policyStore.js";
 import * as esbuild from "esbuild";
@@ -31,7 +31,7 @@ type CompileResult = {
   outputPath: string;
   moduleId: string;
   exportedNodeNames: string[];
-  interruptKindsByName: Record<string, InterruptKind[]>;
+  interruptEffectsByName: Record<string, InterruptEffect[]>;
 };
 
 function compileForServe(file: string): CompileResult {
@@ -49,10 +49,10 @@ function compileForServe(file: string): CompileResult {
     .filter((sym) => sym.kind === "node" && sym.exported)
     .map((sym) => sym.name);
 
-  // Run type checker to get transitive interrupt kinds and report errors
+  // Run type checker to get transitive interrupt effects and report errors
   const source = fs.readFileSync(absoluteFile, "utf-8");
   const parseResult = parseAgency(source, config);
-  const interruptKindsByName: Record<string, InterruptKind[]> = {};
+  const interruptEffectsByName: Record<string, InterruptEffect[]> = {};
   if (parseResult.success) {
     const info = buildCompilationUnit(parseResult.result, symbolTable, absoluteFile, source);
     const result = typeCheck(parseResult.result, config, info);
@@ -64,11 +64,11 @@ function compileForServe(file: string): CompileResult {
     if (warnings.length > 0) {
       console.error(formatErrors(warnings, "warning"));
     }
-    Object.assign(interruptKindsByName, result.interruptKindsByFunction);
+    Object.assign(interruptEffectsByName, result.interruptEffectsByFunction);
   }
 
   const moduleId = path.relative(process.cwd(), absoluteFile);
-  return { outputPath, moduleId, exportedNodeNames, interruptKindsByName };
+  return { outputPath, moduleId, exportedNodeNames, interruptEffectsByName };
 }
 
 async function loadAndDiscover(
@@ -87,7 +87,7 @@ async function loadAndDiscover(
     moduleExports,
     moduleId: compileResult.moduleId,
     exportedNodeNames: compileResult.exportedNodeNames,
-    interruptKindsByName: compileResult.interruptKindsByName,
+    interruptEffectsByName: compileResult.interruptEffectsByName,
   });
 
   return { exports, moduleExports };
@@ -373,7 +373,7 @@ function buildHttpEntrypoint(
     loggerPath: JSON.stringify(distPath("lib/logger.js")),
     moduleId: JSON.stringify(compileResult.moduleId),
     exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
-    interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
+    interruptEffectsByNameJson: JSON.stringify(compileResult.interruptEffectsByName),
     defaultPort: JSON.stringify(String(options.port)),
     defaultHost: JSON.stringify(options.host),
     apiKeyEnv: JSON.stringify(options.apiKeyEnv),
@@ -393,7 +393,7 @@ function buildMcpEntrypoint(
     policyStorePath: JSON.stringify(distPath("lib/serve/policyStore.js")),
     moduleId: JSON.stringify(compileResult.moduleId),
     exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
-    interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
+    interruptEffectsByNameJson: JSON.stringify(compileResult.interruptEffectsByName),
     serverName: JSON.stringify(options.serverName),
     serverVersion: JSON.stringify(serverVersion),
   });
@@ -414,7 +414,7 @@ function buildMcpHttpEntrypoint(
     loggerPath: JSON.stringify(distPath("lib/logger.js")),
     moduleId: JSON.stringify(compileResult.moduleId),
     exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
-    interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
+    interruptEffectsByNameJson: JSON.stringify(compileResult.interruptEffectsByName),
     serverName: JSON.stringify(options.serverName),
     serverVersion: JSON.stringify(serverVersion),
     defaultPort: JSON.stringify(String(options.port)),

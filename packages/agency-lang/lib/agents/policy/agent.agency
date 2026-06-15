@@ -2,7 +2,7 @@ import { map } from "std::array"
 import {
   writePolicyFile,
   Policy,
-  InterruptKind,
+  InterruptEffect,
   InterruptDataKey,
   InterruptDataVal,
  } from "std::policy"
@@ -36,23 +36,23 @@ type PolicyAction = "approve" | "reject" | "propagate"
 let currentPolicy: Policy = {}
 
 def addToPolicy(
-  interruptKind: InterruptKind,
+  interruptEffect: InterruptEffect,
   matchArgName: InterruptDataKey,
   matchArgValue: InterruptDataVal,
   action: PolicyAction!,
 ): Result<Policy> {
   """
-  Add a rule to the current policy for the given interrupt kind, matching on the specified argument and value, with the specified action.
+  Add a rule to the current policy for the given interrupt effect, matching on the specified argument and value, with the specified action.
   Use only "approve", "reject", or "propagate" as the action. DO NOT use "allow" or "deny".
   Returns the current policy after adding the rule.
   """
   const match = {
     [matchArgName]: matchArgValue
   }
-  if (!currentPolicy[interruptKind]) {
-    currentPolicy[interruptKind] = []
+  if (!currentPolicy[interruptEffect]) {
+    currentPolicy[interruptEffect] = []
   }
-  currentPolicy[interruptKind].push({
+  currentPolicy[interruptEffect].push({
     match: match,
     action: action
   })
@@ -77,13 +77,13 @@ def setPolicy(newPolicy: Policy): Policy {
   return currentPolicy
 }
 
-def deleteFromPolicy(interruptKind: InterruptKind, index: number): boolean {
+def deleteFromPolicy(interruptEffect: InterruptEffect, index: number): boolean {
   """
-  Delete the rule at the specified index for the given interrupt kind from the current policy.
+  Delete the rule at the specified index for the given interrupt effect from the current policy.
   Returns true if the rule was successfully deleted, or false if the index was out of bounds.
   """
-  if (currentPolicy[interruptKind] && index < currentPolicy[interruptKind].length) {
-    currentPolicy[interruptKind].splice(index, 1)
+  if (currentPolicy[interruptEffect] && index < currentPolicy[interruptEffect].length) {
+    currentPolicy[interruptEffect].splice(index, 1)
     return true
   }
   return false
@@ -116,16 +116,16 @@ node main() {
     return
   }
 
-  const interruptKinds = cliArgs[0] |> parseJSON
+  const interruptEffects = cliArgs[0] |> parseJSON
   const outputPath = cliArgs[1]
   const existingPolicy = get(cliArgs, 2) |> parseJSON
 
-  if (interruptKinds is failure(error)) {
-    print("Failed to parse interrupt kinds: ${error}")
+  if (interruptEffects is failure(error)) {
+    print("Failed to parse interrupt effects: ${error}")
     return
   }
 
-  let contextMessage = "This agent can produce the following interrupts:\n${map(interruptKinds.value, \kind -> "- ${kind}\n").join("")}"
+  let contextMessage = "This agent can produce the following interrupts:\n${map(interruptEffects.value, \effect -> "- ${effect}\n").join("")}"
 
   if (existingPolicy is success(thePolicy)) {
     currentPolicy = thePolicy

@@ -624,10 +624,13 @@ export async function _runLineRepl(
       }
 
       // `/paste` (built-in, à la Node's `.editor`): open the multi-line
-      // editor and submit the whole buffer as one message. Only in a
-      // real TTY — under piped input there are no keystrokes to drive
-      // it, so fall through and let `/paste` reach the agent verbatim.
-      if (trimmed === "/paste" && useTTY) {
+      // editor and submit the whole buffer as one message. Requires an
+      // interactive TTY on BOTH ends: stdout so we can draw the editor,
+      // and **stdin** so there are keystrokes to drive it. If stdin is
+      // piped (even when stdout is still a TTY, as in a Unix pipeline),
+      // entering the editor would hang waiting for keys that never come,
+      // so fall through and let `/paste` reach the agent verbatim.
+      if (trimmed === "/paste" && useTTY && process.stdin.isTTY) {
         const buffer = await readMultiline(rl, useColor);
         if (buffer === null || buffer.trim().length === 0) continue;
         line = buffer;
@@ -728,16 +731,18 @@ function askLine(rl: readline.Interface, prompt: string): Promise<string> {
 // v1 is intentionally append-only: backspace edits the current line but
 // does not cross a newline back into an already-entered line (matches
 // the "no cross-line cursor" non-goal). The pure buffer ops below are
-// exported so the edge cases (paste with `\r\n`, backspace at line
-// start) are unit-testable without a real terminal.
+// kept module-private and surfaced for tests via the `_internal` export
+// at the end (the convention other stdlib-lib modules use), so the edge
+// cases (paste with `\r\n`, backspace at line start) are unit-testable
+// without committing them to the public `agency-lang/stdlib-lib` API.
 
 export type PasteState = { lines: string[]; current: string };
 
-export const EMPTY_PASTE: PasteState = { lines: [], current: "" };
+const EMPTY_PASTE: PasteState = { lines: [], current: "" };
 
 /** Apply one input character. `\n` / `\r` commit the current line and
  *  start a new one; anything else appends to the current line. */
-export function pasteChar(state: PasteState, ch: string): PasteState {
+function pasteChar(state: PasteState, ch: string): PasteState {
   if (ch === "\n" || ch === "\r") {
     return { lines: [...state.lines, state.current], current: "" };
   }
@@ -747,7 +752,7 @@ export function pasteChar(state: PasteState, ch: string): PasteState {
 /** Append a (possibly multi-line) chunk of text — e.g. a pasted block.
  *  Normalizes `\r\n` / `\r` to `\n` first so a pasted line ending lands
  *  as a single break rather than doubling up. */
-export function pasteText(state: PasteState, text: string): PasteState {
+function pasteText(state: PasteState, text: string): PasteState {
   let s = state;
   for (const ch of text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")) {
     s = pasteChar(s, ch);
@@ -757,17 +762,17 @@ export function pasteText(state: PasteState, text: string): PasteState {
 
 /** Delete the last character of the current line. No-op at the start of
  *  a line (v1 does not merge back into the previous line). */
-export function pasteBackspace(state: PasteState): PasteState {
+function pasteBackspace(state: PasteState): PasteState {
   if (state.current.length === 0) return state;
   return { lines: state.lines, current: state.current.slice(0, -1) };
 }
 
 /** Join the buffer into the final `\n`-separated string. */
-export function pasteJoin(state: PasteState): string {
+function pasteJoin(state: PasteState): string {
   return [...state.lines, state.current].join("\n");
 }
 
-export type PasteAction =
+type PasteAction =
   | "submit"
   | "cancel"
   | "newline"
@@ -777,7 +782,7 @@ export type PasteAction =
 
 /** Map a readline keypress to a paste-mode action. Returns `null` for
  *  keys we ignore in this mode (arrows, function keys, other chords). */
-export function classifyPasteKey(
+function classifyPasteKey(
   s: unknown,
   key: { name?: string; ctrl?: boolean; meta?: boolean } | undefined,
 ): PasteAction {
@@ -796,7 +801,7 @@ export function classifyPasteKey(
  *  Resolves with the joined buffer on Ctrl+D, or `null` on Ctrl+C /
  *  Esc. Restores the previous `_ttyWrite` (e.g. the slash-trigger
  *  wrapper) on exit. */
-export function readMultiline(
+function readMultiline(
   rl: readline.Interface,
   useColor: boolean,
 ): Promise<string | null> {
@@ -878,6 +883,20 @@ export function readMultiline(
     };
   });
 }
+
+/** Test-only surface for the `/paste` editor. Mirrors the `_internal`
+ *  convention used by other stdlib-lib modules (e.g. `layout.ts`) so
+ *  these helpers stay out of the supported `agency-lang/stdlib-lib` API
+ *  while remaining unit-testable. Not for production use. */
+export const _internal = {
+  EMPTY_PASTE,
+  pasteChar,
+  pasteText,
+  pasteBackspace,
+  pasteJoin,
+  classifyPasteKey,
+  readMultiline,
+};
 
 export function _clearScreen(): void {
   // ANSI escape code to clear the screen and move the cursor to the top-left.

@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import {
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { _internal, type PasteState } from "./cli.js";
+
+const {
   EMPTY_PASTE,
   pasteChar,
   pasteText,
@@ -7,8 +9,13 @@ import {
   pasteJoin,
   classifyPasteKey,
   readMultiline,
-  type PasteState,
-} from "./cli.js";
+} = _internal;
+
+// The readMultiline tests spy on process.stdout.write; restore after
+// every test so the global spy never leaks into other tests/files.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /** Feed a string char-by-char through `pasteChar` (what the editor does
  *  for typed input and for a pasted chunk). */

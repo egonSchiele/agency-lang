@@ -1,13 +1,12 @@
-import { evalInput, evalOutput } from "std::statelog"
-type Info = {
-  capital: string
-}
+import { colorSchemes, highlight } from "std::syntax"
+const data = read("foo.agency") with approve
 
 node main(): string {
-  const prompt = "What is the capital of France?"
-  evalInput(prompt)
-  @optimize(prompt)
-  const result: Info = llm(prompt)
-  evalOutput(result.capital)
-  return result.capital
+
+  for (theme in colorSchemes) {
+    print(theme)
+    print("------------------")
+    print(highlight(data, theme: theme, language: "ts"))
+    print("\n\n")
+  }
 }

@@ -1,5 +1,4 @@
 import { getVersion } from "std::agency"
-import { route } from "std::agent"
 import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
@@ -25,15 +24,10 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { codeSysPrompt, codeTools, codeAgent } from "./subagents/code.agency"
+import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
-import { oneShotAgent } from "./subagents/oneShot.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
-import {
-  researchSysPrompt,
-  researchTools,
-  researchAgent,
- } from "./subagents/research.agency"
+import { researchAgent } from "./subagents/research.agency"
 import { reviewAgent } from "./subagents/review.agency"
 
 
@@ -65,7 +59,7 @@ import { reviewAgent } from "./subagents/review.agency"
  *
  * This file's responsibilities collapse to:
  *   1. Per-turn callback (`_runTurn`) wiring the user message into
- *      route() and printing the reply into the scroll output.
+ *      `mainAgent` and printing the reply into the scroll output.
  *   2. Per-kind ALWAYS_FIELDS map for the policy handler's
  *      "approve-always-here" option.
  *   3. Wire the two specialists into one `RouterConfig`.
@@ -91,17 +85,28 @@ let VERBOSE: boolean = false
 // scroll-output writes when stdout is destined for a Unix pipe.
 let _isInteractive: boolean = true
 
+// Live tool-call tracing. Always shown in the interactive REPL; in
+// one-shot mode it's suppressed so piped output is just the reply,
+// unless the user opts in with `--verbose` / `--debug` (AGENT_DEBUG).
+def _showTraces(): boolean {
+  return _isInteractive || VERBOSE || AGENT_DEBUG
+}
+
 callback("onToolCallStart") as data {
-  pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  if (_showTraces()) {
+    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  }
 }
 
 callback("onToolCallEnd") as data {
-  if (data.result is success(_result)) {
-    pushMessage(color.dim.green("${formatToolResponse(_result)}"))
-  } else if (data.result is failure(_error)) {
-    pushMessage(color.red(" ⎿  Error: ${_error}"))
-  } else {
-    pushMessage(color.dim("${formatToolResponse(data.result)}"))
+  if (_showTraces()) {
+    if (data.result is success(_result)) {
+      pushMessage(color.dim.green("${formatToolResponse(_result)}"))
+    } else if (data.result is failure(_error)) {
+      pushMessage(color.red(" ⎿  Error: ${_error}"))
+    } else {
+      pushMessage(color.dim("${formatToolResponse(data.result)}"))
+    }
   }
 }
 
@@ -409,7 +414,10 @@ def mainAgent(prompt: string): string {
   thread(label: "main", summarize: true, session: "main") {
     setMemoryId("main")
     if (first) {
-      systemMessage(mainAgentSystemPrompt)
+      // `_context` carries the per-run grounding (date, cwd, AGENTS.md),
+      // set by `setupSession`. Appending it to the system prompt is what
+      // actually gets that context to the LLM.
+      systemMessage(mainAgentSystemPrompt + _context)
       first = false
     }
     const result = llm(prompt, {
@@ -418,30 +426,6 @@ def mainAgent(prompt: string): string {
     })
   }
   return result
-}
-
-def routeAgent(prompt: string): string {
-  const reply = route(
-    {
-    start: "code",
-    agents: {
-      code: {
-        type: "agent",
-        name: "code",
-        agent: codeAgent
-      },
-      research: {
-        type: "agent",
-        name: "research",
-        agent: researchAgent
-      }
-    },
-    maxHops: 3,
-    context: _context
-  },
-    prompt,
-  )
-  return reply
 }
 
 def roundedCost(): string {
@@ -508,6 +492,81 @@ def givePolicyChoice() {
   }
 }
 
+// Shared session setup for both interactive and one-shot modes. Builds
+// the per-run grounding context, loads (or initializes) the policy, and
+// returns the installed CLI policy handler. `interactive` gates the
+// first-run policy-choice prompt: one-shot has no user to answer it, so
+// it falls back to the recommended default (reads/web auto-approved;
+// writes still require approval, which a non-interactive run can't
+// grant — those tasks block, which is the safe behavior).
+def setupSession(interactive: boolean): any {
+  // Grounding: the LLM shouldn't have to ask where it is or what day it
+  // is. Project context: inline an AGENTS.md from the workspace root if
+  // present so the LLM follows the project's conventions.
+  const projectContext = loadAgentsMd(cwd()) with approve
+  _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
+
+  const policy = parsePolicyFile(POLICY_PATH)
+  if (policy is failure(f)) {
+    if (f.status == "doesnt-exist") {
+      if (interactive) {
+        print(color.yellow("No existing policy found at ${POLICY_PATH}."))
+        setPolicy(POLICY_PATH, givePolicyChoice())
+      } else {
+        setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
+      }
+    } else {
+      print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
+      process.exit(1)
+    }
+  } else {
+    setPolicy(POLICY_PATH, policy.value)
+  }
+  // Bind the handler to a local var so `with handler` parses (the
+  // `with` clause only accepts an identifier, not a call expression).
+  return cliPolicyHandler(file: POLICY_PATH, fields: ALWAYS_FIELDS)
+}
+
+// Show a colored diff for an incoming `std::edit` interrupt. Shared by
+// the interactive and one-shot handlers. The handler receives the whole
+// interrupt object ({kind, message, data, origin}); the edit's
+// filename / before / after live under `data.data`.
+def renderEditDiff(data: any) {
+  if (data.kind == "std::edit") {
+    print(color.yellow("⏺ Edit: ${data.data.filename}"))
+    print(
+      diff(
+      data.data.before,
+      data.data.after,
+      language: "auto",
+      color: true,
+      lineNumbers: true,
+      context: 3,
+      ignoreWhitespace: true,
+    ),
+    )
+  }
+}
+
+// One-shot entry: run a single turn through the same `mainAgent` the
+// REPL uses, with the same session setup and policy handler, and return
+// the reply. Used for `agency agent -p "..."`, a positional query, or
+// piped stdin. Slash commands are expanded so `-p /foo bar` works like
+// typing it in the REPL; the loop-only built-ins (`/exit` etc.) are
+// meaningless here and aren't checked.
+def oneShotAgent(prompt: string): string {
+  _isInteractive = false
+  const handler = setupSession(false)
+  let reply: string = ""
+  handle {
+    reply = mainAgent(expandSlash(prompt, projectCommands))
+  } with (data) {
+    renderEditDiff(data)
+    return handler(data)
+  }
+  return reply
+}
+
 node main() {
   // Parse CLI flags first — `parseArgs` exits on --help / --version /
   // usage errors, before any handlers or the TUI are installed.
@@ -541,64 +600,43 @@ node main() {
     VERBOSE = true
   }
 
-  setTitle("Agency Agent")
-  clearScreen()
   // Positional args (everything after flags) are joined with spaces to
   // form the one-shot prompt. `--` ends flag parsing if a positional
   // would otherwise look like a flag.
   const positionalQuery = args.positionals.join(" ")
   const hasQuery = positionalQuery != ""
 
-  // Non-interactive (piped) invocation: read the whole prompt from
-  // stdin, run one turn of `route()`, write the reply to stdout, and
-  // exit. No banner, no REPL, no slash commands. This lets the agent
-  // behave like a normal Unix filter: `echo "..." | pnpm run agency agent`.
-  //
-  // Also entered when `--print` / `-p` is passed, or when a positional
-  // query is given. In those cases stdin isn't read — the prompt comes
-  // from the positional.
+  // Non-interactive invocation: run one turn through the same agent the
+  // REPL uses and write the reply to stdout. No banner, no REPL. Entered
+  // when `--print` / `-p` is passed, a positional query is given, or
+  // stdin is piped — so the agent behaves like a Unix filter:
+  // `echo "..." | agency agent`. The prompt comes from the positional
+  // when present, otherwise from stdin. (Title/clearScreen are skipped
+  // so piped output stays free of escape codes.)
   const forceOneShot = args.flags.print || hasQuery
   if (forceOneShot || !isTTY()) {
-    const result = oneShotAgent()
-    print(result)
+    let prompt = positionalQuery
+    if (!hasQuery) {
+      const fromStdin = readStdin()
+      if (fromStdin == null || fromStdin == "") {
+        process.exit(0)
+      }
+      prompt = fromStdin
+    }
+    print(oneShotAgent(prompt))
     process.exit(0)
   }
 
+  setTitle("Agency Agent")
+  clearScreen()
   printHeader()
 
-  // Grounding: the LLM should not have to ask the user where it is
-  // or what day it is. Both are appended once per run so they ride
-  // with the first system message in each specialist's thread.
-  //
-  // Project context: if the user keeps an AGENTS.md at the workspace
-  // root (Anthropic / Pi / Aider all read it), inline it so the LLM
-  // automatically follows the project's conventions.
-  const projectContext = loadAgentsMd(cwd()) with approve
-  _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
-
-  const policy = parsePolicyFile(POLICY_PATH)
-  if (policy is failure(f)) {
-    const { status, error } = f
-    print(f, status, error)
-    if (status == "doesnt-exist") {
-      print(color.yellow("No existing policy found at ${POLICY_PATH}."))
-      const choice = givePolicyChoice()
-      setPolicy(POLICY_PATH, choice)
-    } else {
-      print(color.red("Failed to load policy: ${JSON.stringify(error)}"))
-      process.exit(1)
-    }
-  } else {
-    setPolicy(POLICY_PATH, policy.value)
-  }
-  // Bind the handler to a local var so `with handler` parses (the
-  // `with` clause only accepts an identifier, not a call expression).
-  const handler = cliPolicyHandler(file: POLICY_PATH, fields: ALWAYS_FIELDS)
+  const handler = setupSession(true)
 
   // The `repl()` widget owns the runloop; every Enter dispatches into
-  // `_runTurn` which calls `route()`. Interrupts raised inside
-  // route() propagate to the policy handler installed by the enclosing
-  // `handle` block via the AsyncLocalStorage handler stack.
+  // `_runTurn` which calls `mainAgent`. Interrupts raised during a turn
+  // propagate to the policy handler installed by the enclosing `handle`
+  // block via the AsyncLocalStorage handler stack.
   handle {
     repl(
       status: _buildStatus,
@@ -609,23 +647,7 @@ node main() {
       paletteCommands: mergedPalette(),
     )
   } with (data) {
-    if (data.kind == "std::edit") {
-      // The handler receives the whole interrupt object
-      // ({kind, message, data, origin}); the edit's filename/before/after
-      // live under `data.data`, not directly on `data`.
-      print(color.yellow("⏺ Edit: ${data.data.filename}"))
-      print(
-        diff(
-        data.data.before,
-        data.data.after,
-        language: "auto",
-        color: true,
-        lineNumbers: true,
-        context: 3,
-        ignoreWhitespace: true,
-      ),
-      )
-    }
+    renderEditDiff(data)
     return handler(data)
   }
 

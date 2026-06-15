@@ -405,6 +405,9 @@ export async function runNode({
         );
       }
     }
+    // Remote statelog POSTs are fire-and-forget; drain any still in
+    // flight now so telemetry is delivered before the process exits.
+    await execCtx.statelogClient.flush();
     execCtx.cleanup();
   }
 }

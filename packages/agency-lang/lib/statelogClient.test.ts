@@ -264,6 +264,44 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
+    it("every event is fire-and-forget; flush() drains in-flight POSTs", async () => {
+      // A remote POST that resolves only when we tell it to. If `debug`
+      // awaited the fetch, the line after it could never run before we
+      // resolve — proving non-blocking means `debug` returns first.
+      let resolveFetch: (r: Response) => void = () => {};
+      let settled = false;
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = (r) => {
+              settled = true;
+              resolve(r);
+            };
+          }),
+      );
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+        requestTimeoutMs: 60_000,
+      });
+
+      // Regular (non-agentEnd) event returns without awaiting the fetch.
+      await client.debug("hi", {});
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(settled).toBe(false); // POST still in flight after debug() resolved
+
+      // flush() awaits the in-flight POST. Resolve it on the next tick so
+      // the flush promise is what actually unblocks.
+      const flushed = client.flush();
+      resolveFetch(new Response("", { status: 200 }));
+      await flushed;
+      expect(settled).toBe(true);
+    });
+
     it("stdout sink does not require an apiKey", async () => {
       const spy = vi.spyOn(console, "log").mockImplementation(() => {});
       const client = new StatelogClient({

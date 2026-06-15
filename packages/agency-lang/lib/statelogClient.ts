@@ -106,6 +106,11 @@ export class StatelogClient {
   // apiKey disables ONLY the remote send; local sinks (logFile, stdout)
   // still receive events.
   private remoteEnabled: boolean = false;
+  // In-flight remote POSTs. Each event's network round-trip is fired
+  // without being awaited (so execution never blocks on telemetry), and
+  // tracked here so `flush()` can drain them at the end of a run before
+  // the process exits.
+  private inFlight: Set<Promise<unknown>> = new Set();
   // The "root" span stack — used by the outer agent run thread. Code
   // running inside `runInBranchContext` sees a branch-local stack
   // delivered via AsyncLocalStorage instead.
@@ -1089,19 +1094,35 @@ export class StatelogClient {
         if (this.debugMode) console.error("Failed to send statelog:", err);
       });
 
-      if (options?.noWait) {
-        // Detach the in-flight request from the caller's await chain.
-        // The `.catch` above guarantees no UnhandledPromiseRejection if
-        // it later fails or aborts.
-        return;
-      }
-      await request;
+      // Detach the network round-trip from the caller's await chain so
+      // execution never blocks on telemetry delivery. Awaiting each POST
+      // used to add ~1.8s to agent startup — one blocked round-trip per
+      // init-time interrupt. Track the request so `flush()` can drain it
+      // before the process exits; the `.catch` above guarantees no
+      // UnhandledPromiseRejection if it later fails or aborts. (`noWait`
+      // is now the default for every event; the option is kept for
+      // source compatibility.)
+      const tracked: Promise<unknown> = request.finally(() => {
+        this.inFlight.delete(tracked);
+      });
+      this.inFlight.add(tracked);
     } catch (err) {
       if (this.debugMode)
         console.error("Error sending log in statelog client:", err, {
           host: this.host,
         });
     }
+  }
+
+  /**
+   * Await every in-flight remote POST. Remote sends are fire-and-forget
+   * (see `post`), so call this at the end of a run — before the process
+   * exits — to make sure detached telemetry is actually delivered. A
+   * no-op when observability is off or nothing is in flight.
+   */
+  async flush(): Promise<void> {
+    if (this.inFlight.size === 0) return;
+    await Promise.allSettled([...this.inFlight]);
   }
 }
 

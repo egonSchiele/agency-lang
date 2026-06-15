@@ -1,6 +1,17 @@
 import { map } from "std::array"
 import { frontmatter } from "std::markdown"
-import { glob } from "std::shell"
+
+// `skillsDir` / `commandsDir` raise ONE approval interrupt up front
+// ("scan this directory for skills?"). Reading the matched files is part
+// of fulfilling that approval, so we glob + read them with the
+// non-interrupt primitives (`_glob` / `_read`) rather than the
+// interrupt-raising `glob` / `read` — otherwise every file would raise
+// its own std::glob / std::read interrupt, re-prompting the user (and,
+// for an agent that bundles 100+ doc files, flooding the handler chain
+// and statelog at startup). `try` keeps the same `Result` return shape
+// the interrupt-raising versions have.
+import { _read } from "agency-lang/stdlib-lib/builtins.js"
+import { _glob } from "agency-lang/stdlib-lib/shell.js"
 
 type SkillEntry = {
   name: string;
@@ -109,10 +120,10 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
     pattern = "*.{md,markdown}"
   }
   let lines: string[] = []
-  const pathsResult = glob(pattern, dir)
+  const pathsResult = try _glob(pattern, dir, 500, [])
   if (pathsResult is success(paths)) {
     lines = map(paths) as path {
-      const data = (read(path, dir) |> frontmatter) catch {}
+      const data = ((try _read(dir, path, 0, 0)) |> frontmatter) catch {}
       let entry = flatEntry(path, data)
       if (layout == "standard") {
         entry = standardEntry(path, data)
@@ -206,10 +217,10 @@ export def commandsDir(dir: string): any[] {
     dir: dir
   })
 
-  const pathsResult = glob("*.md", dir)
+  const pathsResult = try _glob("*.md", dir, 500, [])
   if (pathsResult is success(paths)) {
     return map(paths) as p {
-      const raw = read(p, dir) catch ""
+      const raw = (try _read(dir, p, 0, 0)) catch ""
       // `catch {}` collapses parse failures + a missing frontmatter
       // block to an empty object so the dot access below is safe.
       const fm = frontmatter(raw) catch {}

@@ -1,17 +1,17 @@
 import { typecheck, parseAST } from "std::agency"
 import { map, filter, some } from "std::array"
 import { setMemoryId } from "std::memory"
-import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
 
 
-static const docSkill = skillsDir("../docs/guide", "flat") with approve
-static const cliSkill = skillsDir("../docs/cli", "flat") with approve
-static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
-
-export static const reviewTools = [_typecheck, docSkill, cliSkill, appendixSkill]
+// NOTE: `reviewAgent`/`review` typecheck and parse snippets directly and
+// never call the LLM with skill tools (the tool path below is commented
+// out), so the doc `skillsDir(...)` scans this file used to do at module
+// load were pure startup cost with no consumer. Removed. If the LLM tool
+// path is reinstated, build the skills lazily inside `review` (see the
+// other subagents) rather than as eager `static const`s.
 
 type AgencyCode = {
   code: string

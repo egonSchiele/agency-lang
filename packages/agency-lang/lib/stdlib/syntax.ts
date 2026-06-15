@@ -1,72 +1,12 @@
-import { highlight, Theme } from "cli-highlight";
+import { highlight } from "cli-highlight";
+import type { Theme } from "cli-highlight";
 import { color } from "@/utils/termcolors.js";
 import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
 import { autoUseColor } from "@/utils/termcolors.js";
+import { resolveTheme } from "./syntax-themes.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
-// VS Code Dark+ color palette
-const blue = color.hex("#569CD6");
-const yellow = color.hex("#DCDCAA");
-const teal = color.hex("#4EC9B0");
-const lightGreen = color.hex("#B5CEA8");
-const red = color.hex("#D16969");
-const orange = color.hex("#CE9178");
-const lightBlue = color.hex("#9CDCFE");
-const green = color.hex("#6A9955");
-const darkGreen = color.hex("#608B4E");
-const gold = color.hex("#D7BA7D");
-const lightGray = color.hex("#D4D4D4");
-const magenta = color.hex("#C586C0");
-
-// VS Code Dark+ inspired theme. The Theme type expects ChalkInstance
-// values; our termcolors functions have a compatible call signature, so
-// the cast is safe at runtime — cli-highlight only ever invokes these as
-// `(text) => styledText`.
-const vscodeDarkTheme = {
-  keyword: blue,
-  built_in: yellow,
-  type: teal,
-  literal: blue,
-  number: lightGreen,
-  regexp: red,
-  string: orange,
-  subst: lightBlue,
-  symbol: blue,
-  class: teal,
-  function: yellow,
-  title: yellow,
-  params: lightBlue,
-  comment: green.italic,
-  doctag: darkGreen,
-  meta: blue,
-  "meta-keyword": blue,
-  "meta-string": orange,
-  section: blue.bold,
-  tag: blue,
-  name: blue,
-  "builtin-name": yellow,
-  attr: lightBlue,
-  attribute: lightBlue,
-  variable: lightBlue,
-  bullet: gold,
-  code: lightGray,
-  emphasis: color.italic,
-  strong: color.bold,
-  formula: magenta,
-  link: blue.underline,
-  quote: darkGreen,
-  "selector-tag": gold,
-  "selector-id": gold,
-  "selector-class": gold,
-  "selector-attr": gold,
-  "selector-pseudo": gold,
-  "template-tag": magenta,
-  "template-variable": lightBlue,
-  addition: lightGreen,
-  deletion: orange,
-  default: lightGray,
-} as unknown as Theme;
 
 // Dim backgrounds for changed lines (RGB).
 const DIM_RED: [number, number, number] = [60, 0, 0];
@@ -94,32 +34,36 @@ function diffBody(
   kind: "context" | "delete" | "insert",
   width: number,
   language: string,
+  theme: Theme,
 ): string {
-  if (kind === "context") return syntaxHighlight(code, language);
+  if (kind === "context") return highlightWithTheme(code, language, theme);
   const open = kind === "delete" ? RED_OPEN : GREEN_OPEN;
-  const highlighted = syntaxHighlight(code, language);
+  const highlighted = highlightWithTheme(code, language, theme);
   const tinted = open + highlighted.split(ANSI_RESET).join(ANSI_RESET + open);
   const padLen = Math.max(0, width - code.length);
   const padding = padLen > 0 ? " ".repeat(padLen) : "";
   return tinted + padding + ANSI_RESET;
 }
 
-export function syntaxHighlight(code: string, _language: string): string {
+export function highlightWithTheme(code: string, _language: string, theme: Theme): string {
   if (_language === "markdown" || _language === "md") {
     return highlightMarkdown(code);
   }
   try {
     const language = _language === "agency" ? "ts" : _language;
-    const highlightedCode = highlight(code, {
-      language,
-      ignoreIllegals: true,
-      theme: vscodeDarkTheme,
-    });
-    return highlightedCode;
+    return highlight(code, { language, ignoreIllegals: true, theme });
   } catch (error) {
     console.error(`Error highlighting code: ${error}`);
-    return code; // Return unhighlighted code on error
+    return code; // genuine highlight failure -> unhighlighted; theme errors throw before here
   }
+}
+
+export function syntaxHighlight(
+  code: string,
+  _language: string,
+  theme?: string | Record<string, { color?: string; styles?: string[] }>,
+): string {
+  return highlightWithTheme(code, _language, resolveTheme(theme));
 }
 
 /** For Markdown, plain `cli-highlight` only colors the syntax markers
@@ -209,13 +153,18 @@ export function _diff(
   hunkHeaders: boolean,
   summary: boolean,
   language: string,
+  theme: string | Record<string, { color?: string; styles?: string[] }>,
 ): string {
   const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
   const colored = color === "auto" ? autoUseColor() : color === true;
-  const renderBody = language
-    ? (code: string, kind: "context" | "delete" | "insert", width: number) =>
-        diffBody(code, kind, width, language)
-    : undefined;
+  // Resolve once (only when highlighting). resolveTheme throws on a bad theme,
+  // failing the whole diff early via Agency's auto-failure.
+  const resolved = language ? resolveTheme(theme) : undefined;
+  const renderBody =
+    language && resolved
+      ? (code: string, kind: "context" | "delete" | "insert", width: number) =>
+          diffBody(code, kind, width, language, resolved)
+      : undefined;
   return renderDiff(hunks, {
     lineNumbers,
     colored,

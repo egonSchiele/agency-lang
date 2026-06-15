@@ -623,8 +623,24 @@ export async function _runLineRepl(
         trimmed = picked;
       }
 
-      userMessageHistory.push(line);
-      process.stdout.write(color.bgBrightBlack.darkBlack(` User: ${line} \n`));
+      // `/paste` (built-in, à la Node's `.editor`): open the multi-line
+      // editor and submit the whole buffer as one message. Only in a
+      // real TTY — under piped input there are no keystrokes to drive
+      // it, so fall through and let `/paste` reach the agent verbatim.
+      if (trimmed === "/paste" && useTTY) {
+        const buffer = await readMultiline(rl, useColor);
+        if (buffer === null || buffer.trim().length === 0) continue;
+        line = buffer;
+        trimmed = buffer;
+      }
+
+      // History is one-entry-per-line on disk; a multi-line buffer would
+      // reload as several bogus entries, so keep it out of history.
+      if (!line.includes("\n")) userMessageHistory.push(line);
+      const banner = line.includes("\n")
+        ? ` User: ${line.split("\n")[0]} … (${line.split("\n").length} lines) \n`
+        : ` User: ${line} \n`;
+      process.stdout.write(color.bgBrightBlack.darkBlack(banner));
 
       let reply: unknown;
       // Snapshot wall-clock and the cumulative token counters before
@@ -694,6 +710,153 @@ function askLine(rl: readline.Interface, prompt: string): Promise<string> {
       rl.off("close", onClose);
       resolve(answer);
     });
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// `/paste` — multi-line input mode (modeled on Node's REPL `.editor`).
+//
+// Node `readline` is single-line: Enter always submits, and a pasted
+// block's interior newlines each fire a `line` event, so a multi-line
+// paste splits into several premature turns. `/paste` sidesteps this by
+// hijacking readline's `_ttyWrite` for the duration of the entry:
+// Enter inserts a newline into our own buffer, Ctrl+D submits, Ctrl+C /
+// Esc cancels. Because Enter no longer submits while in this mode, a
+// multi-line paste "just works" — its newlines land in the buffer like
+// any other Enter, with no bracketed-paste machinery needed.
+//
+// v1 is intentionally append-only: backspace edits the current line but
+// does not cross a newline back into an already-entered line (matches
+// the "no cross-line cursor" non-goal). The pure buffer ops below are
+// exported so the edge cases (paste with `\r\n`, backspace at line
+// start) are unit-testable without a real terminal.
+
+export type PasteState = { lines: string[]; current: string };
+
+export const EMPTY_PASTE: PasteState = { lines: [], current: "" };
+
+/** Apply one input character. `\n` / `\r` commit the current line and
+ *  start a new one; anything else appends to the current line. */
+export function pasteChar(state: PasteState, ch: string): PasteState {
+  if (ch === "\n" || ch === "\r") {
+    return { lines: [...state.lines, state.current], current: "" };
+  }
+  return { lines: state.lines, current: state.current + ch };
+}
+
+/** Append a (possibly multi-line) chunk of text — e.g. a pasted block.
+ *  Normalizes `\r\n` / `\r` to `\n` first so a pasted line ending lands
+ *  as a single break rather than doubling up. */
+export function pasteText(state: PasteState, text: string): PasteState {
+  let s = state;
+  for (const ch of text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")) {
+    s = pasteChar(s, ch);
+  }
+  return s;
+}
+
+/** Delete the last character of the current line. No-op at the start of
+ *  a line (v1 does not merge back into the previous line). */
+export function pasteBackspace(state: PasteState): PasteState {
+  if (state.current.length === 0) return state;
+  return { lines: state.lines, current: state.current.slice(0, -1) };
+}
+
+/** Join the buffer into the final `\n`-separated string. */
+export function pasteJoin(state: PasteState): string {
+  return [...state.lines, state.current].join("\n");
+}
+
+export type PasteAction =
+  | "submit"
+  | "cancel"
+  | "newline"
+  | "backspace"
+  | { append: string }
+  | null;
+
+/** Map a readline keypress to a paste-mode action. Returns `null` for
+ *  keys we ignore in this mode (arrows, function keys, other chords). */
+export function classifyPasteKey(
+  s: unknown,
+  key: { name?: string; ctrl?: boolean; meta?: boolean } | undefined,
+): PasteAction {
+  const name = key?.name;
+  if (key?.ctrl && name === "d") return "submit";
+  if ((key?.ctrl && name === "c") || name === "escape") return "cancel";
+  if (name === "return" || name === "enter") return "newline";
+  if (name === "backspace") return "backspace";
+  if (typeof s === "string" && s.length > 0 && !key?.ctrl && !key?.meta) {
+    return { append: s };
+  }
+  return null;
+}
+
+/** Drive an inline multi-line editor by hijacking `rl._ttyWrite`.
+ *  Resolves with the joined buffer on Ctrl+D, or `null` on Ctrl+C /
+ *  Esc. Restores the previous `_ttyWrite` (e.g. the slash-trigger
+ *  wrapper) on exit. */
+export function readMultiline(
+  rl: readline.Interface,
+  useColor: boolean,
+): Promise<string | null> {
+  const out = process.stdout;
+  const rlAny = rl as unknown as {
+    _ttyWrite: (s: unknown, key: unknown) => void;
+  };
+  const dim = useColor ? DIM : "";
+  const reset = useColor ? COLOR_RESET : "";
+  const CONT = `${dim}… ${reset}`;
+  let state: PasteState = EMPTY_PASTE;
+
+  out.write(
+    `${dim}── paste mode · Enter: newline · Ctrl+D: submit · Ctrl+C: cancel ──${reset}\n`,
+  );
+  out.write(CONT);
+
+  return new Promise<string | null>((resolve) => {
+    const original = rlAny._ttyWrite;
+    const finish = (val: string | null): void => {
+      rlAny._ttyWrite = original;
+      out.write("\n");
+      resolve(val);
+    };
+    rlAny._ttyWrite = (s: unknown, key: unknown): void => {
+      const action = classifyPasteKey(
+        s,
+        key as { name?: string; ctrl?: boolean; meta?: boolean } | undefined,
+      );
+      if (action === "submit") return finish(pasteJoin(state));
+      if (action === "cancel") return finish(null);
+      if (action === "newline") {
+        state = pasteChar(state, "\n");
+        out.write(`\n${CONT}`);
+        return;
+      }
+      if (action === "backspace") {
+        if (state.current.length > 0) {
+          state = pasteBackspace(state);
+          out.write("\b \b");
+        }
+        return;
+      }
+      if (action && typeof action === "object") {
+        // A pasted chunk can arrive as one event with embedded newlines;
+        // normalize line endings so `\r\n` doesn't double-break (matches
+        // `pasteText`), then echo char-by-char to keep screen + buffer
+        // in sync.
+        const normalized = action.append.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        for (const ch of normalized) {
+          if (ch === "\n") {
+            state = pasteChar(state, "\n");
+            out.write(`\n${CONT}`);
+          } else {
+            state = pasteChar(state, ch);
+            out.write(ch);
+          }
+        }
+      }
+    };
   });
 }
 

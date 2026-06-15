@@ -81,8 +81,9 @@ const TOKEN_CLASSES = [
   "selector-pseudo", "template-tag", "template-variable", "addition", "deletion", "default",
 ] as const;
 
-// camelCase ColorScheme field -> real hljs class (hyphenated classes only).
+// camelCase ColorScheme field -> real hljs class (non-identifier classes).
 const FIELD_TO_CLASS: Record<string, string> = {
+  builtIn: "built_in",
   metaKeyword: "meta-keyword",
   metaString: "meta-string",
   builtinName: "builtin-name",
@@ -400,6 +401,9 @@ const BUILTINS: Record<string, Theme> = {
   "a11y-dark": buildBuiltin(a11yDark),
   "a11y-light": buildBuiltin(a11yLight),
 };
+
+/** The names of all built-in color schemes (the valid string values for `theme`). */
+export const BUILTIN_THEME_NAMES: string[] = Object.keys(BUILTINS);
 
 // A custom theme as it arrives from Agency: camelCase field -> { color, styles? }.
 type CustomScheme = Record<string, { color?: string; styles?: string[] }>;

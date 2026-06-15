@@ -714,16 +714,18 @@ Near the top of `stdlib/syntax.agency` (after the existing `import`/`HighlightMo
 ```ts
 type Style = "bold" | "italic" | "underline" | "dim"
 
-type TokenStyle = {
+export type TokenStyle = {
   color: string
   styles?: Style[]
 }
 
-# A custom color scheme. Each field is a highlight.js token class; the 10
-# hyphenated classes use camelCase names (e.g. metaKeyword -> meta-keyword).
-type ColorScheme = {
+// A custom color scheme. Each field is a highlight.js token class; the
+// non-identifier classes use camelCase names (e.g. builtIn -> built_in,
+// metaKeyword -> meta-keyword). Use a doc comment (/** */) on the real type so
+// it shows in the generated docs, and `export` Style/TokenStyle/ColorScheme.
+export type ColorScheme = {
   keyword?: TokenStyle
-  built_in?: TokenStyle
+  builtIn?: TokenStyle
   type?: TokenStyle
   literal?: TokenStyle
   number?: TokenStyle

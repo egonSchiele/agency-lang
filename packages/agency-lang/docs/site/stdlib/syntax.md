@@ -12,7 +12,112 @@ name: "syntax"
 export type HighlightMode = "shell" | "web"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L7))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L8))
+
+### Style
+
+A text style modifier applied to a token's color.
+
+```ts
+/** A text style modifier applied to a token's color. */
+export type Style = "bold" | "italic" | "underline" | "dim"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L11))
+
+### TokenStyle
+
+* The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
+ * termcolors named color (e.g. "red", "brightGreen"); `styles` optionally adds
+ * bold / italic / underline / dim.
+
+```ts
+/**
+ * The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
+ * termcolors named color (e.g. "red", "brightGreen"); `styles` optionally adds
+ * bold / italic / underline / dim.
+ */
+export type TokenStyle = {
+  color: string;
+  styles?: Style[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L18))
+
+### ColorScheme
+
+* A custom color scheme. Each field is a highlight.js token class; the
+ * non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
+ * `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
+ * "vscode-dark" scheme.
+
+```ts
+/**
+ * A custom color scheme. Each field is a highlight.js token class; the
+ * non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
+ * `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
+ * "vscode-dark" scheme.
+ */
+export type ColorScheme = {
+  keyword?: TokenStyle;
+  builtIn?: TokenStyle;
+  type?: TokenStyle;
+  literal?: TokenStyle;
+  number?: TokenStyle;
+  regexp?: TokenStyle;
+  string?: TokenStyle;
+  subst?: TokenStyle;
+  symbol?: TokenStyle;
+  class?: TokenStyle;
+  function?: TokenStyle;
+  title?: TokenStyle;
+  params?: TokenStyle;
+  comment?: TokenStyle;
+  doctag?: TokenStyle;
+  meta?: TokenStyle;
+  section?: TokenStyle;
+  tag?: TokenStyle;
+  name?: TokenStyle;
+  attr?: TokenStyle;
+  attribute?: TokenStyle;
+  variable?: TokenStyle;
+  bullet?: TokenStyle;
+  code?: TokenStyle;
+  emphasis?: TokenStyle;
+  strong?: TokenStyle;
+  formula?: TokenStyle;
+  link?: TokenStyle;
+  quote?: TokenStyle;
+  addition?: TokenStyle;
+  deletion?: TokenStyle;
+  default?: TokenStyle;
+  metaKeyword?: TokenStyle;
+  metaString?: TokenStyle;
+  builtinName?: TokenStyle;
+  selectorTag?: TokenStyle;
+  selectorId?: TokenStyle;
+  selectorClass?: TokenStyle;
+  selectorAttr?: TokenStyle;
+  selectorPseudo?: TokenStyle;
+  templateTag?: TokenStyle;
+  templateVariable?: TokenStyle
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L29))
+
+## Constants
+
+### colorSchemes
+
+```ts
+export static const colorSchemes: string[] = _builtinThemeNames
+```
+
+**Type:** `string[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L75))
 
 ## Functions
 
@@ -37,7 +142,8 @@ A tool for syntax highlighting code snippets. Specify the programming language f
       })
 
   An unknown scheme name or an invalid color (bad hex / unknown color name)
-  returns a failure.
+  returns a failure. The `theme` applies to code highlighting; when
+  `language` is "markdown", fenced code blocks use the default palette.
 
   @param code - The code snippet to highlight
   @param language - The programming language of the code (optional, defaults to "plaintext")
@@ -55,7 +161,7 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L77))
 
 ### diff
 
@@ -99,7 +205,7 @@ Produce a human-readable diff of two strings and return it as a string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L110))
 
 ### patch
 
@@ -132,4 +238,4 @@ Produce a standard unified diff that std::fs::applyPatch (or `git apply`)
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L145))

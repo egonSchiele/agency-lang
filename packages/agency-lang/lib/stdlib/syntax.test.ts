@@ -51,3 +51,19 @@ describe("syntaxHighlight theme", () => {
     expect(() => syntaxHighlight("const x = 1", "ts", "bad-theme")).toThrow(/Unknown color scheme/);
   });
 });
+
+describe("_diff theme validation gating", () => {
+  // color off -> no highlighting -> the (unused) theme must NOT be validated.
+  it("ignores a bad theme when color is off", () => {
+    expect(() =>
+      _diff("a", "b", -1, false, false, "", "", false, false, false, "ts", "bad-theme"),
+    ).not.toThrow();
+  });
+
+  // color on + language set -> highlighting -> bad theme throws (-> failure).
+  it("validates the theme when coloring is on", () => {
+    expect(() =>
+      _diff("a", "b", -1, false, true, "", "", false, false, false, "ts", "bad-theme"),
+    ).toThrow(/Unknown color scheme/);
+  });
+});

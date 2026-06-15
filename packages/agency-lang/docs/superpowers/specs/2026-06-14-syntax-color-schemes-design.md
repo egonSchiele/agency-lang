@@ -35,8 +35,8 @@ highlight(code, "ts", theme: {
 diff(a, b, color: true, language: "ts", theme: "a11y-dark")
 ```
 
-- **String** → a named built-in (see below). An unknown name falls back to the
-  default (`vscode-dark`).
+- **String** → a named built-in (see below). An unknown name **fails** (see
+  [Failure behavior](#failure-behavior)).
 - **`ColorScheme`** → a custom theme (a typed object, below), merged over
   `vscode-dark` so partial overrides work.
 - On `diff`, the theme changes the **foreground** palette only; the red/green

@@ -4,6 +4,7 @@ import { color } from "@/utils/termcolors.js";
 import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
 import { autoUseColor } from "@/utils/termcolors.js";
 import { resolveTheme } from "./syntax-themes.js";
+export { BUILTIN_THEME_NAMES } from "./syntax-themes.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
@@ -157,11 +158,13 @@ export function _diff(
 ): string {
   const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
   const colored = color === "auto" ? autoUseColor() : color === true;
-  // Resolve once (only when highlighting). resolveTheme throws on a bad theme,
-  // failing the whole diff early via Agency's auto-failure.
-  const resolved = language ? resolveTheme(theme) : undefined;
+  // Resolve once, only when we'll actually highlight (language set AND colored).
+  // resolveTheme throws on a bad theme, failing the diff early — but only when
+  // highlighting would be emitted, so a plain/uncolored diff never validates an
+  // unused theme. throws via Agency's auto-failure.
+  const resolved = language && colored ? resolveTheme(theme) : undefined;
   const renderBody =
-    language && resolved
+    language && colored && resolved
       ? (code: string, kind: "context" | "delete" | "insert", width: number) =>
           diffBody(code, kind, width, language, resolved)
       : undefined;

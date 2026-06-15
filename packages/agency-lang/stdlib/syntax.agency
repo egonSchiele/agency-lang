@@ -6,19 +6,90 @@ import {
 
 export type HighlightMode = "shell" | "web"
 
+type Style = "bold" | "italic" | "underline" | "dim"
+
+type TokenStyle = {
+  color: string
+  styles?: Style[]
+}
+
+// A custom color scheme. Each field is a highlight.js token class; the 10
+// hyphenated classes use camelCase names (e.g. metaKeyword -> meta-keyword).
+type ColorScheme = {
+  keyword?: TokenStyle
+  built_in?: TokenStyle
+  type?: TokenStyle
+  literal?: TokenStyle
+  number?: TokenStyle
+  regexp?: TokenStyle
+  string?: TokenStyle
+  subst?: TokenStyle
+  symbol?: TokenStyle
+  class?: TokenStyle
+  function?: TokenStyle
+  title?: TokenStyle
+  params?: TokenStyle
+  comment?: TokenStyle
+  doctag?: TokenStyle
+  meta?: TokenStyle
+  section?: TokenStyle
+  tag?: TokenStyle
+  name?: TokenStyle
+  attr?: TokenStyle
+  attribute?: TokenStyle
+  variable?: TokenStyle
+  bullet?: TokenStyle
+  code?: TokenStyle
+  emphasis?: TokenStyle
+  strong?: TokenStyle
+  formula?: TokenStyle
+  link?: TokenStyle
+  quote?: TokenStyle
+  addition?: TokenStyle
+  deletion?: TokenStyle
+  default?: TokenStyle
+  metaKeyword?: TokenStyle
+  metaString?: TokenStyle
+  builtinName?: TokenStyle
+  selectorTag?: TokenStyle
+  selectorId?: TokenStyle
+  selectorClass?: TokenStyle
+  selectorAttr?: TokenStyle
+  selectorPseudo?: TokenStyle
+  templateTag?: TokenStyle
+  templateVariable?: TokenStyle
+}
+
 export def highlight(
   code: string,
   language: string = "plaintext",
   mode: HighlightMode = "shell",
+  theme: string | ColorScheme = "vscode-dark",
 ): string {
   """
   A tool for syntax highlighting code snippets. Specify the programming language for accurate highlighting (e.g., "javascript", "python", "json"). Defaults to plain text if no language is provided.
 
+  Pick a color scheme by name, or pass a custom one. Named schemes:
+  "vscode-dark" (default), "github-dark", "monokai", "dracula", "nord",
+  "github" (light), "a11y-dark", "a11y-light" (accessible).
+
+  A custom scheme maps token classes to colors, merged over "vscode-dark":
+
+      highlight(code, "ts", theme: {
+        keyword: { color: "#C586C0", styles: ["bold"] },
+        comment: { color: "#6A9955", styles: ["italic"] },
+        string:  { color: "green" }
+      })
+
+  An unknown scheme name or an invalid color (bad hex / unknown color name)
+  returns a failure.
+
   @param code - The code snippet to highlight
   @param language - The programming language of the code (optional, defaults to "plaintext")
   @param mode - The output format for the highlighted code: "shell" for terminal output
+  @param theme - A named color scheme (e.g. "dracula") or a custom ColorScheme object
   """
-  return _syntaxHighlight(code, language)
+  return _syntaxHighlight(code, language, theme)
 }
 
 export safe def diff(
@@ -33,6 +104,7 @@ export safe def diff(
   hunkHeaders: boolean = false,
   summary: boolean = false,
   language: string = "",
+  theme: string | ColorScheme = "vscode-dark",
 ): string {
   """
   Produce a human-readable diff of two strings and return it as a string.
@@ -50,8 +122,9 @@ export safe def diff(
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
   @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring
+  @param theme - When `language` is set, the syntax-highlighting color scheme: a named scheme (e.g. "dracula") or a custom ColorScheme object. An unknown scheme or invalid color returns a failure.
   """
-  return _diff(oldText, newText, context, lineNumbers, color, oldLabel, newLabel, ignoreWhitespace, hunkHeaders, summary, language)
+  return _diff(oldText, newText, context, lineNumbers, color, oldLabel, newLabel, ignoreWhitespace, hunkHeaders, summary, language, theme)
 }
 
 export safe def patch(

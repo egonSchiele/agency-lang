@@ -19,14 +19,30 @@ export type HighlightMode = "shell" | "web"
 ### highlight
 
 ```ts
-highlight(code: string, language: string, mode: HighlightMode): string
+highlight(code: string, language: string, mode: HighlightMode, theme: string | ColorScheme): string
 ```
 
 A tool for syntax highlighting code snippets. Specify the programming language for accurate highlighting (e.g., "javascript", "python", "json"). Defaults to plain text if no language is provided.
 
+  Pick a color scheme by name, or pass a custom one. Named schemes:
+  "vscode-dark" (default), "github-dark", "monokai", "dracula", "nord",
+  "github" (light), "a11y-dark", "a11y-light" (accessible).
+
+  A custom scheme maps token classes to colors, merged over "vscode-dark":
+
+      highlight(code, "ts", theme: {
+        keyword: { color: "#C586C0", styles: ["bold"] },
+        comment: { color: "#6A9955", styles: ["italic"] },
+        string:  { color: "green" }
+      })
+
+  An unknown scheme name or an invalid color (bad hex / unknown color name)
+  returns a failure.
+
   @param code - The code snippet to highlight
   @param language - The programming language of the code (optional, defaults to "plaintext")
   @param mode - The output format for the highlighted code: "shell" for terminal output
+  @param theme - A named color scheme (e.g. "dracula") or a custom ColorScheme object
 
 **Parameters:**
 
@@ -35,15 +51,16 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 | code | `string` |  |
 | language | `string` | "plaintext" |
 | mode | [HighlightMode](#highlightmode) | "shell" |
+| theme | `string \| ColorScheme` | "vscode-dark" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L63))
 
 ### diff
 
 ```ts
-diff(oldText: string, newText: string, context: number, lineNumbers: boolean, color: "auto" | boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean, language: string): string
+diff(oldText: string, newText: string, context: number, lineNumbers: boolean, color: "auto" | boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean, language: string, theme: string | ColorScheme): string
 ```
 
 Produce a human-readable diff of two strings and return it as a string.
@@ -61,6 +78,7 @@ Produce a human-readable diff of two strings and return it as a string.
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
   @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring
+  @param theme - When `language` is set, the syntax-highlighting color scheme: a named scheme (e.g. "dracula") or a custom ColorScheme object. An unknown scheme or invalid color returns a failure.
 
 **Parameters:**
 
@@ -77,10 +95,11 @@ Produce a human-readable diff of two strings and return it as a string.
 | hunkHeaders | `boolean` | false |
 | summary | `boolean` | false |
 | language | `string` | "" |
+| theme | `string \| ColorScheme` | "vscode-dark" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L95))
 
 ### patch
 
@@ -113,4 +132,4 @@ Produce a standard unified diff that std::fs::applyPatch (or `git apply`)
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L130))

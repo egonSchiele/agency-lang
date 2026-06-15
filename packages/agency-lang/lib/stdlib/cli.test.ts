@@ -94,8 +94,24 @@ describe("readMultiline editor (drives the hijacked _ttyWrite)", () => {
   /** Build a fake readline whose `_ttyWrite` slot readMultiline takes
    *  over, and a `send` that replays keystrokes through it. stdout is
    *  silenced so the editor's echo doesn't pollute test output. */
+  function fakeReadline(ttyWrite: () => void = () => {}) {
+    const closeHandlers: Array<() => void> = [];
+    return {
+      _ttyWrite: ttyWrite,
+      once: (ev: string, h: () => void) => {
+        if (ev === "close") closeHandlers.push(h);
+      },
+      off: (ev: string, h: () => void) => {
+        if (ev !== "close") return;
+        const i = closeHandlers.indexOf(h);
+        if (i >= 0) closeHandlers.splice(i, 1);
+      },
+      emitClose: () => closeHandlers.slice().forEach((h) => h()),
+    };
+  }
+
   function harness() {
-    const fakeRl = { _ttyWrite: () => {} };
+    const fakeRl = fakeReadline();
     const spy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const promise = readMultiline(fakeRl as never, false);
     const send = (s: unknown, key: Record<string, unknown>) =>
@@ -130,7 +146,7 @@ describe("readMultiline editor (drives the hijacked _ttyWrite)", () => {
 
   it("restores the previous _ttyWrite on exit", async () => {
     const original = () => {};
-    const fakeRl = { _ttyWrite: original };
+    const fakeRl = fakeReadline(original);
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const p = readMultiline(fakeRl as never, false);
     (fakeRl._ttyWrite as (s: unknown, k: unknown) => void)(undefined, {
@@ -139,5 +155,13 @@ describe("readMultiline editor (drives the hijacked _ttyWrite)", () => {
     });
     await p;
     expect(fakeRl._ttyWrite).toBe(original);
+  });
+
+  it("settles (does not hang) if the interface closes mid-edit", async () => {
+    const { promise, send, fakeRl } = harness();
+    send("partial", { name: undefined });
+    // Simulate a stdin EOF / readline close while editing.
+    (fakeRl as unknown as { emitClose: () => void }).emitClose();
+    expect(await promise).toBe("partial");
   });
 });

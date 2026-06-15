@@ -809,6 +809,20 @@ export function readMultiline(
   const CONT = `${dim}… ${reset}`;
   let state: PasteState = EMPTY_PASTE;
 
+  // We are usually entered straight after the `/` slash palette, which
+  // runs `prompts.autocomplete` and leaves the TTY in *canonical* mode
+  // (raw mode off) — and there is no `rl.question` between it and us to
+  // re-assert raw. In canonical mode Ctrl+D is an EOF, not a keystroke:
+  // it would close stdin instead of reaching our handler, leaving this
+  // promise unsettled (the agent then dies with "unsettled top-level
+  // await"). Force raw mode on for the duration so Ctrl+D is delivered
+  // as a key. `rl.question` re-asserts raw on the next prompt, and
+  // `rl.close()` restores the terminal on exit, so we leave it on.
+  const stdin = process.stdin as NodeJS.ReadStream & {
+    setRawMode?: (mode: boolean) => void;
+  };
+  if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(true);
+
   out.write(
     `${dim}── paste mode · Enter: newline · Ctrl+D: submit · Ctrl+C: cancel ──${reset}\n`,
   );
@@ -816,11 +830,16 @@ export function readMultiline(
 
   return new Promise<string | null>((resolve) => {
     const original = rlAny._ttyWrite;
+    // Defense in depth: if the interface closes while we're editing
+    // (e.g. a real stdin EOF), settle rather than hang forever.
+    const onClose = (): void => finish(pasteJoin(state));
     const finish = (val: string | null): void => {
       rlAny._ttyWrite = original;
+      rl.off("close", onClose);
       out.write("\n");
       resolve(val);
     };
+    rl.once("close", onClose);
     rlAny._ttyWrite = (s: unknown, key: unknown): void => {
       const action = classifyPasteKey(
         s,

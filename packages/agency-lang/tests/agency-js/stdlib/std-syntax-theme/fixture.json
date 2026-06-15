@@ -1,0 +1,6 @@
+{
+  "named": { "monokaiKeyword": true },
+  "custom": { "redKeyword": true },
+  "diff": { "monokaiKeyword": true, "hasRedBg": true, "hasGreenBg": true },
+  "bad": { "isFailure": true }
+}

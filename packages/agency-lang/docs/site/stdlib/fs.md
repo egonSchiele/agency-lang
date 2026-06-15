@@ -59,7 +59,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 
   Prefer one `edit` call with multiple entries over many `edit` calls. Keep each `oldText` as small as possible while still being unique — do not pad with unchanged context just to connect distant changes; instead, split them into separate entries in the same `edits` array.
 
-  The `std::edit` interrupt carries the full `before` and `after` file contents in its data, so a handler can render a diff itself (e.g. `print(diff(data.before, data.after, color: true))`).
+  The `std::edit` interrupt carries the full `before` and `after` file contents in its data, so a handler can render a diff itself. A handler receives the whole interrupt object, so the contents are at `data.data.before` / `data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
 
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, replaceAll

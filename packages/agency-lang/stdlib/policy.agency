@@ -233,6 +233,14 @@ let globalCliPolicyOpts: CliPolicyOpts = {
 let _policy: Policy | null = null
 let _policyLoaded: boolean = false
 let _pendingSave: boolean = false
+// True only while the handler is reading or writing its OWN policy file
+// (inside maybeLoadPolicy / maybeFlush / flushPolicy). Those file ops
+// raise std::read / std::write interrupts that re-enter this same
+// handler. We approve them directly (see `_handler`) — otherwise the
+// `_policy == null` default-reject would veto the `with approve` on the
+// file op (any handler can veto an interrupt), the load/save would fail,
+// and every real interrupt would fall through to prompting.
+let _internalIo: boolean = false
 
 /**
  * Evaluate a policy against a single interrupt. Returns the result
@@ -512,7 +520,9 @@ export def writePolicyFile(
 def maybeLoadPolicy() {
   if (!_policyLoaded) {
     _policyLoaded = true
+    _internalIo = true
     const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
+    _internalIo = false
     if (isFailure(loaded)) {
       _policy = {}
     } else {
@@ -530,7 +540,9 @@ def maybeFlush() {
   if (_pendingSave) {
     // flip FIRST
     _pendingSave = false
+    _internalIo = true
     writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
+    _internalIo = false
   }
 }
 
@@ -548,7 +560,9 @@ def maybeFlush() {
 export def flushPolicy() {
   if (_pendingSave) {
     _pendingSave = false
+    _internalIo = true
     writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
+    _internalIo = false
   }
 }
 
@@ -590,6 +604,21 @@ def prettyPrintInterruptData(data: any): string {
   }
   if (typeof data == "string") {
     return data
+  }
+  // Arrays are `typeof == "object"` too, but `for (x in array)` yields
+  // the ELEMENTS, not indices — so the object branch below would pass a
+  // non-string element straight into `text()` and crash `render` with
+  // `content.split is not a function`. Handle arrays explicitly, keyed
+  // by index, recursing into each element.
+  if (Array.isArray(data)) {
+    let i = 0
+    const inventory = table() as t {
+      for (item in data) {
+        t.row(text("${i}", bold: true), text(prettyPrintInterruptData(item)))
+        i = i + 1
+      }
+    }
+    return render(inventory)
   }
   if (typeof data == "object") {
     const inventory = table() as t {
@@ -688,6 +717,16 @@ def askUser(intr: any): AskUserResult {
  * Do not call directly; use `cliPolicyHandler` to construct one.
  */
 export def _handler(intr: any): any {
+  // Re-entrancy guard: while we read/write our OWN policy file (inside
+  // maybeLoadPolicy / maybeFlush below), that file op raises a nested
+  // std::read / std::write that re-enters this handler. Approve it
+  // directly so the file op's own `with approve` actually takes effect
+  // — without this, the `_policy == null` default-reject (or a no-match
+  // propagate) would veto it and the load/save would silently fail,
+  // making every real interrupt prompt. See `_internalIo`.
+  if (_internalIo) {
+    return approve()
+  }
   maybeLoadPolicy()
   maybeFlush()
 

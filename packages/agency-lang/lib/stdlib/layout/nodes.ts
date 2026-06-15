@@ -85,6 +85,19 @@ export function alignedTextBlock(content: string, align: Align): Block {
   return pad(block, block.width, block.height, align, "start");
 }
 
+// Coerce a leaf node's `content` attr to a string before rendering.
+// `text`/`raw` are typed `content: string`, but Agency code passes
+// `any` through dynamic data (e.g. interrupt payloads), so a number,
+// boolean, or object can reach here at runtime. Coercing — rather than
+// calling `.split` on whatever arrives — keeps `render` from throwing
+// `content.split is not a function` and turning the whole frame into a
+// Failure. `null`/`undefined` render as empty, matching the old `?? ""`.
+function asString(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (content == null) return "";
+  return String(content);
+}
+
 // Renderers for the leaf node types only. Containers (row / column /
 // box / table) are assembled into the full RENDERERS table in
 // `render.ts`.
@@ -93,7 +106,7 @@ export const LEAF_RENDERERS: Record<
   (n: LayoutNode) => Block
 > = {
   text: (n) => {
-    const content   = (n.attrs.content as string) ?? "";
+    const content   = asString(n.attrs.content);
     const align     = (n.attrs.align as Align) ?? "start";
     const wrapWidth = n.attrs.wrapWidth as number | undefined;
     const lines = wrapWidth !== undefined ? wrapText(content, wrapWidth) : content.split("\n");
@@ -101,7 +114,7 @@ export const LEAF_RENDERERS: Record<
     return styled(pad(block, block.width, block.height, align, "start"), styleOf(n.attrs));
   },
   raw: (n) => {
-    const content = (n.attrs.content as string) ?? "";
+    const content = asString(n.attrs.content);
     const align   = (n.attrs.align as Align) ?? "start";
     return alignedTextBlock(content, align);
   },

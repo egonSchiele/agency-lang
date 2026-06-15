@@ -603,8 +603,21 @@ node main() {
     )
   } with (data) {
     if (data.kind == "std::edit") {
-      print(color.yellow("⏺ Edit: ${data.filename}"))
-      print(diff(data.before, data.after, language: "auto"))
+      // The handler receives the whole interrupt object
+      // ({kind, message, data, origin}); the edit's filename/before/after
+      // live under `data.data`, not directly on `data`.
+      print(color.yellow("⏺ Edit: ${data.data.filename}"))
+      print(
+        diff(
+        data.data.before,
+        data.data.after,
+        language: "auto",
+        color: true,
+        lineNumbers: true,
+        context: 3,
+        ignoreWhitespace: true,
+      ),
+      )
     }
     return handler(data)
   }

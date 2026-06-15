@@ -1,5 +1,6 @@
 import { highlight } from "cli-highlight";
 import type { Theme } from "cli-highlight";
+import hljs from "highlight.js";
 import { color } from "@/utils/termcolors.js";
 import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
 import { autoUseColor } from "@/utils/termcolors.js";
@@ -46,11 +47,23 @@ function diffBody(
   return tinted + padding + ANSI_RESET;
 }
 
+// Auto-detect a language name from `code` via highlight.js. Used for the diff
+// "auto" path, where the language is detected once on the whole text so every
+// line is highlighted consistently (per-line auto-detection would be flaky).
+// Detection is heuristic and can be wrong on short/ambiguous snippets.
+export function detectLanguage(code: string): string {
+  return hljs.highlightAuto(code).language ?? "plaintext";
+}
+
 export function highlightWithTheme(code: string, _language: string, theme: Theme): string {
   if (_language === "markdown" || _language === "md") {
     return highlightMarkdown(code);
   }
   try {
+    // "auto": omit the language so cli-highlight runs highlight.js auto-detection.
+    if (_language === "auto") {
+      return highlight(code, { ignoreIllegals: true, theme });
+    }
     const language = _language === "agency" ? "ts" : _language;
     return highlight(code, { language, ignoreIllegals: true, theme });
   } catch (error) {
@@ -163,10 +176,14 @@ export function _diff(
   // highlighting would be emitted, so a plain/uncolored diff never validates an
   // unused theme. throws via Agency's auto-failure.
   const resolved = language && colored ? resolveTheme(theme) : undefined;
+  // For "auto", detect the language once on the full text so every line is
+  // highlighted with the same language (per-line detection would be inconsistent).
+  const lineLanguage =
+    language === "auto" ? detectLanguage(oldText + "\n" + newText) : language;
   const renderBody =
     language && colored && resolved
       ? (code: string, kind: "context" | "delete" | "insert", width: number) =>
-          diffBody(code, kind, width, language, resolved)
+          diffBody(code, kind, width, lineLanguage, resolved)
       : undefined;
   return renderDiff(hunks, {
     lineNumbers,

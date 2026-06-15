@@ -12,7 +12,7 @@ name: "syntax"
 export type HighlightMode = "shell" | "web"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L9))
 
 ### Style
 
@@ -23,7 +23,7 @@ A text style modifier applied to a token's color.
 export type Style = "bold" | "italic" | "underline" | "dim"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L24))
 
 ### TokenStyle
 
@@ -43,7 +43,7 @@ export type TokenStyle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L31))
 
 ### ColorScheme
 
@@ -105,7 +105,7 @@ export type ColorScheme = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L42))
 
 ## Constants
 
@@ -117,9 +117,32 @@ export static const colorSchemes: string[] = _builtinThemeNames
 
 **Type:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L88))
 
 ## Functions
+
+### detectLanguage
+
+```ts
+detectLanguage(code: string): string
+```
+
+Guess the programming language of a code snippet. Returns a highlight.js
+  language name (e.g. "typescript", "python", "json"), or "plaintext" when it
+  can't tell. Detection is heuristic and less reliable on short or ambiguous
+  snippets. Pass the result as the `language` argument to `highlight`.
+
+  @param code - The code snippet to detect the language of
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| code | `string` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L11))
 
 ### highlight
 
@@ -146,7 +169,7 @@ A tool for syntax highlighting code snippets. Specify the programming language f
   `language` is "markdown", fenced code blocks use the default palette.
 
   @param code - The code snippet to highlight
-  @param language - The programming language of the code (optional, defaults to "plaintext")
+  @param language - The programming language of the code (e.g. "javascript", "python"). Use "auto" to auto-detect it (heuristic; less reliable on short snippets). Defaults to "plaintext".
   @param mode - The output format for the highlighted code: "shell" for terminal output
   @param theme - A named color scheme (e.g. "dracula") or a custom ColorScheme object
 
@@ -161,7 +184,7 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L90))
 
 ### diff
 
@@ -183,7 +206,7 @@ Produce a human-readable diff of two strings and return it as a string.
   @param ignoreWhitespace - Treat whitespace-only changes as equal
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
-  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring
+  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring. Use "auto" to auto-detect the language once from the full text (heuristic).
   @param theme - When `language` is set, the syntax-highlighting color scheme: a named scheme (e.g. "dracula") or a custom ColorScheme object. An unknown scheme or invalid color returns a failure.
 
 **Parameters:**
@@ -205,7 +228,7 @@ Produce a human-readable diff of two strings and return it as a string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L123))
 
 ### patch
 
@@ -238,4 +261,4 @@ Produce a standard unified diff that std::fs::applyPatch (or `git apply`)
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L171))

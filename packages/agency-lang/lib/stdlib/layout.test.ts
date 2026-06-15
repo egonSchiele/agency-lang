@@ -612,6 +612,13 @@ describe("column renderer", () => {
     ]);
     expect(render(tree)).toBe("abcd\n x  ");
   });
+  test("column with explicit width centers content within that width", () => {
+    const tree = node("column", { width: 7, align: "center" }, [
+      node("raw", { content: "abc", align: "center" }),
+    ]);
+    // "abc" (width 3) inside a width-7 column, centered → 2 spaces left, 2 right
+    expect(render(tree)).toBe("  abc  ");
+  });
   test("gap inserts blank rows", () => {
     const tree = node("column", { gap: 1 }, [
       node("text", { content: "a" }),

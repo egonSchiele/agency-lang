@@ -123,13 +123,21 @@ function composeAxis(node: LayoutNode, axis: Axis): Block {
   const childAlign = (node.attrs.align as Align)  ?? "start";
   const ops        = AXIS_OPS[axis];
 
+  const resolved = node.attrs.resolvedWidth as number | undefined;
+
+  // For a column, the resolved width IS the cross axis, so children align
+  // within the full column width (not just the widest child) — this is
+  // what makes `align: "center"` center narrow children inside a wider
+  // declared width. For a row, the resolved width is the main axis and is
+  // grown via `growToWidth` below, so it doesn't enter the cross size.
+  const crossFloor = axis === "column" && resolved !== undefined ? resolved : 0;
+
   const rendered  = renderChildrenAlongAxis(node.children, axis);
-  const crossSize = maxOf(rendered, ops.crossSize, 0);
+  const crossSize = maxOf(rendered, ops.crossSize, crossFloor);
   const aligned   = rendered.map((b) => ops.alignCross(b, crossSize, childAlign));
 
   const gapBlock = gapCells > 0 ? ops.spaceBlock(gapCells) : null;
   const combined = joinWithGap(aligned, gapBlock, ops.join);
-  const resolved = node.attrs.resolvedWidth as number | undefined;
   return resolved !== undefined ? growToWidth(combined, resolved) : combined;
 }
 

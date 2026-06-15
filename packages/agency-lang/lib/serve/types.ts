@@ -1,12 +1,12 @@
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
-import type { InterruptKind } from "../symbolTable.js";
+import type { InterruptEffect } from "../symbolTable.js";
 
 export type ExportedFunction = {
   kind: "function";
   name: string;
   description: string;
   agencyFunction: AgencyFunction;
-  interruptKinds: InterruptKind[];
+  interruptEffects: InterruptEffect[];
 };
 
 export type ExportedNode = {
@@ -14,7 +14,7 @@ export type ExportedNode = {
   name: string;
   parameters: Array<{ name: string }>;
   invoke: (...args: unknown[]) => Promise<unknown>;
-  interruptKinds: InterruptKind[];
+  interruptEffects: InterruptEffect[];
 };
 
 export type ExportedItem = ExportedFunction | ExportedNode;

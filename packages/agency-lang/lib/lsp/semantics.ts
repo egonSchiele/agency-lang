@@ -1,6 +1,6 @@
 import { getWordAtPosition } from "../cli/definition.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import type { FileSymbols, InterruptKind, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
+import type { FileSymbols, InterruptEffect, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
 import type {
   AgencyProgram,
   FunctionDefinition,
@@ -21,7 +21,7 @@ export type SemanticSymbol = {
   returnType?: VariableType | null;
   aliasedType?: VariableType;
   importPath?: string;
-  interruptKinds?: InterruptKind[];
+  interruptEffects?: InterruptEffect[];
 };
 
 export type SemanticIndex = Record<string, SemanticSymbol>;
@@ -30,9 +30,9 @@ function addSymbol(index: SemanticIndex, symbol: SemanticSymbol): void {
   index[symbol.name] = symbol;
 }
 
-function interruptKindsFor(fileSymbols: FileSymbols | undefined, name: string): InterruptKind[] | undefined {
+function interruptEffectsFor(fileSymbols: FileSymbols | undefined, name: string): InterruptEffect[] | undefined {
   const sym = fileSymbols?.[name];
-  if (sym?.kind === "function" || sym?.kind === "node") return sym.interruptKinds;
+  if (sym?.kind === "function" || sym?.kind === "node") return sym.interruptEffects;
   return undefined;
 }
 
@@ -53,7 +53,7 @@ function addLocalDefinition(
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
-        interruptKinds: interruptKindsFor(fileSymbols, node.functionName),
+        interruptEffects: interruptEffectsFor(fileSymbols, node.functionName),
       });
       break;
     case "graphNode":
@@ -66,7 +66,7 @@ function addLocalDefinition(
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
-        interruptKinds: interruptKindsFor(fileSymbols, node.nodeName),
+        interruptEffects: interruptEffectsFor(fileSymbols, node.nodeName),
       });
       break;
     case "typeAlias":
@@ -106,7 +106,7 @@ function addImportedSymbol(
     returnType: isCallable ? sym.returnType : undefined,
     aliasedType: sym.kind === "type" ? sym.aliasedType : undefined,
     importPath: opts.importPath,
-    interruptKinds: isCallable ? sym.interruptKinds : undefined,
+    interruptEffects: isCallable ? sym.interruptEffects : undefined,
   });
 }
 
@@ -160,10 +160,10 @@ export function buildSemanticIndex(
   program: AgencyProgram,
   fsPath: string,
   symbolTable: SymbolTable,
-  interruptKindsByFunction?: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction?: Record<string, InterruptEffect[]>,
 ): SemanticIndex {
   const index: SemanticIndex = {};
-  const fileSymbols = enrichWithInterruptKinds(symbolTable.getFile(fsPath), interruptKindsByFunction);
+  const fileSymbols = enrichWithInterruptEffects(symbolTable.getFile(fsPath), interruptEffectsByFunction);
 
   for (const node of program.nodes) {
     if (
@@ -177,11 +177,11 @@ export function buildSemanticIndex(
 
   Object.assign(index, collectImportedSymbols(program, fsPath, symbolTable));
 
-  // Overlay transitive interrupt kinds onto imported symbols
-  if (interruptKindsByFunction) {
+  // Overlay transitive interrupt effects onto imported symbols
+  if (interruptEffectsByFunction) {
     for (const [name, sym] of Object.entries(index)) {
-      if (sym.source === "imported" && interruptKindsByFunction[name]) {
-        index[name] = { ...sym, interruptKinds: interruptKindsByFunction[name] };
+      if (sym.source === "imported" && interruptEffectsByFunction[name]) {
+        index[name] = { ...sym, interruptEffects: interruptEffectsByFunction[name] };
       }
     }
   }
@@ -189,16 +189,16 @@ export function buildSemanticIndex(
   return index;
 }
 
-/** Merge transitive interrupt kinds into a copy of file symbols. */
-function enrichWithInterruptKinds(
+/** Merge transitive interrupt effects into a copy of file symbols. */
+function enrichWithInterruptEffects(
   fileSymbols: FileSymbols | undefined,
-  interruptKindsByFunction?: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction?: Record<string, InterruptEffect[]>,
 ): FileSymbols | undefined {
-  if (!fileSymbols || !interruptKindsByFunction) return fileSymbols;
+  if (!fileSymbols || !interruptEffectsByFunction) return fileSymbols;
   const enriched: FileSymbols = {};
   for (const [name, sym] of Object.entries(fileSymbols)) {
-    if ((sym.kind === "function" || sym.kind === "node") && interruptKindsByFunction[name]) {
-      enriched[name] = { ...sym, interruptKinds: interruptKindsByFunction[name] };
+    if ((sym.kind === "function" || sym.kind === "node") && interruptEffectsByFunction[name]) {
+      enriched[name] = { ...sym, interruptEffects: interruptEffectsByFunction[name] };
     } else {
       enriched[name] = sym;
     }
@@ -258,16 +258,16 @@ function formatSignature(symbol: SemanticSymbol): string {
   }
 }
 
-function formatInterruptKinds(interruptKinds: InterruptKind[] | undefined): string {
-  if (!interruptKinds || interruptKinds.length === 0) return "";
-  const kinds = interruptKinds.map((ik) => `\`${ik.kind}\``).join(", ");
+function formatInterruptEffects(interruptEffects: InterruptEffect[] | undefined): string {
+  if (!interruptEffects || interruptEffects.length === 0) return "";
+  const kinds = interruptEffects.map((ik) => `\`${ik.effect}\``).join(", ");
   return `\n\n**Interrupts:** ${kinds}`;
 }
 
 export function formatSemanticHover(symbol: SemanticSymbol): string {
   const signature = formatSignature(symbol);
   const codeBlock = `\`\`\`typescript\n${signature}\n\`\`\``;
-  const interrupts = formatInterruptKinds(symbol.interruptKinds);
+  const interrupts = formatInterruptEffects(symbol.interruptEffects);
   if (symbol.source === "local") {
     return `${codeBlock}${interrupts}`;
   }

@@ -782,11 +782,11 @@ export class StatelogClient {
     decision: "approve" | "reject" | "propagate" | "none";
     value?: any;
     /** Optional summary of the interrupt being decided on. Carries
-     *  `kind`, `message`, and `data` so log consumers can see *what*
+     *  `effect`, `message`, and `data` so log consumers can see *what*
      *  was being approved/rejected without having to correlate with
      *  a separate `interruptThrown` event (which doesn't fire for
      *  synchronously-resolved interrupts like `with approve`). */
-    interrupt?: { kind: string; message: string; data: any };
+    interrupt?: { effect: string; message: string; data: any };
   }): Promise<void> {
     await this.post({
       type: "handlerDecision",
@@ -811,7 +811,7 @@ export class StatelogClient {
     timeTaken?: number;
     /** Optional summary of the interrupt being resolved. See
      *  `handlerDecision.interrupt` for rationale. */
-    interrupt?: { kind: string; message: string; data: any };
+    interrupt?: { effect: string; message: string; data: any };
   }): Promise<void> {
     await this.post({
       type: "interruptResolved",

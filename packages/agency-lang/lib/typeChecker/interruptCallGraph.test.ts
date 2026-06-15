@@ -60,7 +60,7 @@ node main() {
     expect(main.file).toMatch(/\.agency$/);
     expect(main.interruptSites).toHaveLength(1);
     const site = main.interruptSites[0];
-    expect(site.site.kind).toBe("std::read");
+    expect(site.site.effect).toBe("std::read");
     expect(site.file).toBe(main.file); // site file matches enclosing function's file
     expect(site.enclosingHandlers).toHaveLength(1);
     // Identity check: the captured handler is the `handle {` on the third
@@ -181,6 +181,6 @@ node main() {
 `);
     const main = entry(cg, "main");
     expect(main.interruptSites).toHaveLength(2);
-    expect(main.interruptSites.map((s) => s.site.kind)).toEqual(["std::read", "std::write"]);
+    expect(main.interruptSites.map((s) => s.site.effect)).toEqual(["std::read", "std::write"]);
   });
 });

@@ -1,15 +1,15 @@
 import process from "process";
-import type { InterruptKind } from "../../symbolTable.js";
+import type { InterruptEffect } from "../../symbolTable.js";
 import type { ExportedFunction, ExportedNode, ExportedItem } from "../types.js";
 import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
 import { errorMessage } from "../util.js";
 
-function formatToolDescription(description: string, interruptKinds: InterruptKind[]): string {
-  if (interruptKinds.length === 0) return description;
-  const kinds = interruptKinds.map((ik) => ik.kind).join(", ");
-  return `${description}\n\nInterrupt kinds: ${kinds}`;
+function formatToolDescription(description: string, interruptEffects: InterruptEffect[]): string {
+  if (interruptEffects.length === 0) return description;
+  const effects = interruptEffects.map((ie) => ie.effect).join(", ");
+  return `${description}\n\nInterrupt effects: ${effects}`;
 }
 
 type JsonRpcId = string | number | null;
@@ -65,20 +65,20 @@ const POLICY_TOOL_NAMES = {
 const POLICY_TOOL_DEFINITIONS = [
   {
     name: POLICY_TOOL_NAMES.GET,
-    description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt kind, where each kind maps to an ordered array of rules.",
+    description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt effect, where each effect maps to an ordered array of rules.",
     inputSchema: { type: "object" as const, properties: {} },
   },
   {
     name: POLICY_TOOL_NAMES.ADD_RULE,
-    description: "Add a rule to the interrupt policy. Rules control which actions the agent can take autonomously. Each tool lists its interrupt kinds — use those as the 'kind' parameter. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
+    description: "Add a rule to the interrupt policy. Rules control which actions the agent can take autonomously. Each tool lists its interrupt effects — use those as the 'effect' parameter. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        kind: { type: "string" as const, description: "The interrupt kind to add a rule for (e.g. 'email::send')" },
+        effect: { type: "string" as const, description: "The interrupt effect to add a rule for (e.g. 'email::send')" },
         action: { type: "string" as const, enum: ["approve", "reject"], description: "What to do when this rule matches" },
         match: { type: "object" as const, additionalProperties: { type: "string" as const }, description: "Optional. Keys are interrupt data field names, values are glob patterns (e.g. '*@company.com'). If omitted, the rule is a catch-all." },
       },
-      required: ["kind", "action"],
+      required: ["effect", "action"],
     },
   },
   {
@@ -87,10 +87,10 @@ const POLICY_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        kind: { type: "string" as const, description: "The interrupt kind to remove a rule from" },
+        effect: { type: "string" as const, description: "The interrupt effect to remove a rule from" },
         ruleIndex: { type: "integer" as const, minimum: 0, description: "Zero-based index of the rule to remove" },
       },
-      required: ["kind", "ruleIndex"],
+      required: ["effect", "ruleIndex"],
     },
   },
   {
@@ -110,15 +110,15 @@ function handlePolicyTool(
       return { content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }], isError: false };
     case POLICY_TOOL_NAMES.ADD_RULE:
       try {
-        policyStore.addRule(args.kind, { action: args.action, ...(args.match && { match: args.match }) });
-        return { content: [{ type: "text", text: `Rule added for '${args.kind}'.` }], isError: false };
+        policyStore.addRule(args.effect, { action: args.action, ...(args.match && { match: args.match }) });
+        return { content: [{ type: "text", text: `Rule added for '${args.effect}'.` }], isError: false };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }
     case POLICY_TOOL_NAMES.REMOVE_RULE:
       try {
-        policyStore.removeRule(args.kind, args.ruleIndex);
-        return { content: [{ type: "text", text: `Rule removed from '${args.kind}'.` }], isError: false };
+        policyStore.removeRule(args.effect, args.ruleIndex);
+        return { content: [{ type: "text", text: `Rule removed from '${args.effect}'.` }], isError: false };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }
@@ -210,14 +210,14 @@ export function createMcpHandler(config: McpConfig): McpHandler {
 
   const functionToolEntries = functions.map((f) => ({
     name: f.name,
-    description: formatToolDescription(f.description, f.interruptKinds),
+    description: formatToolDescription(f.description, f.interruptEffects),
     inputSchema: schemaToJsonSchema(f.agencyFunction.toolDefinition?.schema),
     ...(f.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));
 
   const nodeToolEntries = nodes.map((n) => ({
     name: n.name,
-    description: formatToolDescription(`Run the '${n.name}' node`, n.interruptKinds),
+    description: formatToolDescription(`Run the '${n.name}' node`, n.interruptEffects),
     inputSchema: {
       type: "object",
       properties: Object.fromEntries(n.parameters.map((p) => [p.name, { type: "string" }])),

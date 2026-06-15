@@ -113,7 +113,7 @@ If a node triggers an interrupt during execution, the response includes the inte
   "success": true,
   "value": {
     "interrupts": [
-      { "type": "interrupt", "kind": "std::read", "message": "Do you approve?" }
+      { "type": "interrupt", "effect": "std::read", "message": "Do you approve?" }
     ],
     "state": "..."
   }

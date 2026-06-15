@@ -109,7 +109,7 @@ type NumberInRange(low: number, high: number) = number
 });
 
 describe("SymbolTable direct interrupt collection", () => {
-  it("populates direct interruptKinds on function and node symbols", () => {
+  it("populates direct interruptEffects on function and node symbols", () => {
     const file = path.join(os.tmpdir(), `st-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
     writeFileSync(
       file,
@@ -132,15 +132,15 @@ describe("SymbolTable direct interrupt collection", () => {
       // Only direct interrupt kinds — no transitive propagation
       expect(symbols["deploy"]).toMatchObject({
         kind: "function",
-        interruptKinds: [{ kind: "myapp::deploy" }],
+        interruptEffects: [{ effect: "myapp::deploy" }],
       });
       expect(symbols["orchestrate"]).toMatchObject({
         kind: "function",
-        interruptKinds: [],
+        interruptEffects: [],
       });
       expect(symbols["main"]).toMatchObject({
         kind: "node",
-        interruptKinds: [],
+        interruptEffects: [],
       });
     } finally {
       unlinkSync(file);
@@ -172,11 +172,11 @@ describe("SymbolTable direct interrupt collection", () => {
       const st = SymbolTable.build(mainFile);
       const libSymbols = st.getFile(path.resolve(libFile))!;
       expect(libSymbols["deploy"].kind).toBe("function");
-      expect((libSymbols["deploy"] as any).interruptKinds).toEqual([{ kind: "myapp::deploy" }]);
+      expect((libSymbols["deploy"] as any).interruptEffects).toEqual([{ effect: "myapp::deploy" }]);
       // main has no direct interrupts — transitive propagation happens in type checker
       const mainSymbols = st.getFile(path.resolve(mainFile))!;
       expect(mainSymbols["main"].kind).toBe("node");
-      expect((mainSymbols["main"] as any).interruptKinds).toEqual([]);
+      expect((mainSymbols["main"] as any).interruptEffects).toEqual([]);
     } finally {
       unlinkSync(mainFile);
       unlinkSync(libFile);

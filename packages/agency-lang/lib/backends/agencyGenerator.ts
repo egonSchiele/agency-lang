@@ -516,10 +516,10 @@ export class AgencyGenerator {
 
   protected processInterruptStatement(node: InterruptStatement): string {
     const args = this.renderArgList(node.arguments);
-    if (node.kind === "unknown") {
+    if (node.effect === "unknown") {
       return this.indentStr(`interrupt${args}`);
     }
-    return this.indentStr(`interrupt ${node.kind}${args}`);
+    return this.indentStr(`interrupt ${node.effect}${args}`);
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {

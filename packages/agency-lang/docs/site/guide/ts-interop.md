@@ -90,7 +90,7 @@ agency.thread.user("Please proofread the following.");
 
 // Install a scoped handler
 await agency.withHandler(
-  (intr) => intr.kind === "std::read" ? approve("auto-y") : undefined,
+  (intr) => intr.effect === "std::read" ? approve("auto-y") : undefined,
   () => doWork(),
 );
 

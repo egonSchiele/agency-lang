@@ -1,6 +1,6 @@
 ---
 name: Policies
-description: Explains how to define structured policies — rules matching on interrupt kind and data — to auto-approve or reject interrupts inside handler blocks.
+description: Explains how to define structured policies — rules matching on interrupt effect and data — to auto-approve or reject interrupts inside handler blocks.
 ---
 
 # Policies
@@ -31,11 +31,11 @@ handle {
 }
 ```
 
-Policies are a structured way to respond to interrupts of different kinds. They don't magically get applied, you need to call the `checkPolicy()` function yourself. The rules of handlers still apply, so if a policy approves an interrupt, but a different handler rejects it, that interrupt will still get rejected.
+Policies are a structured way to respond to interrupts based on their effect. They don't magically get applied, you need to call the `checkPolicy()` function yourself. The rules of handlers still apply, so if a policy approves an interrupt, but a different handler rejects it, that interrupt will still get rejected.
 
 Here I've defined the policy as a variable, but its just an object. It could just as easily come from a JSON file, or a database.
 
-In this example, I am matching on the interrupt kind, but I can additionally match on the interrupt data too. For example, here is a policy that approves all reads from the `/tmp` directory, and rejects all other reads.
+In this example, I am matching on the interrupt effect, but I can additionally match on the interrupt data too. For example, here is a policy that approves all reads from the `/tmp` directory, and rejects all other reads.
 
 ```json
 {

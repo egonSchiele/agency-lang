@@ -18,7 +18,7 @@ function fakeLeafCheckpoint(id: number): any {
 function fakeInterrupt(idSuffix = "1", checkpointId = 100): Interrupt {
   return {
     type: "interrupt",
-    kind: "test",
+    effect: "test",
     message: "test",
     origin: "test",
     runId: "r-1",

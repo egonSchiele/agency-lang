@@ -52,15 +52,15 @@ export class AgencyCancelledError extends Error {
  *  handler-chain dispatch depth exceeds `MAX_HANDLER_CHAIN_DEPTH`. Almost
  *  always indicates a handler raised an interrupt that re-enters the same
  *  handler (directly or via the chain dispatcher visiting every handler).
- *  Carries the interrupt kind that tripped the limit so the diagnostic
+ *  Carries the interrupt effect that tripped the limit so the diagnostic
  *  points at the right place. */
 export class HandlerRecursionError extends Error {
-  readonly kind: string;
+  readonly effect: string;
   readonly depth: number;
-  constructor(kind: string, depth: number) {
+  constructor(effect: string, depth: number) {
     super(
       `Handler chain dispatch nested ${depth} levels deep while handling ` +
-        `interrupt of kind "${kind}". This usually means a handler raised an ` +
+        `interrupt of effect "${effect}". This usually means a handler raised an ` +
         `interrupt that re-entered itself (the chain dispatcher visits every ` +
         `handler, even after one approves). Check whether the handler's body ` +
         `calls anything that raises an interrupt (\`with approve\`, file I/O, ` +
@@ -68,7 +68,7 @@ export class HandlerRecursionError extends Error {
         `flag BEFORE the call, not after.`,
     );
     this.name = "HandlerRecursionError";
-    this.kind = kind;
+    this.effect = effect;
     this.depth = depth;
   }
 }

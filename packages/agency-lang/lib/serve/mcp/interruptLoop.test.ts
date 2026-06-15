@@ -12,8 +12,8 @@ function makeTmpStore(policy: Record<string, any> = {}): { store: PolicyStore; c
   return { store, cleanup: () => rmSync(tmpDir, { recursive: true, force: true }) };
 }
 
-function makeInterrupt(kind: string, data: Record<string, any> = {}): any {
-  return { type: "interrupt", kind, message: "", data, origin: "test", interruptId: "test-id", runId: "test-run" };
+function makeInterrupt(effect: string, data: Record<string, any> = {}): any {
+  return { type: "interrupt", effect, message: "", data, origin: "test", interruptId: "test-id", runId: "test-run" };
 }
 
 const isInterrupts = (data: unknown) =>

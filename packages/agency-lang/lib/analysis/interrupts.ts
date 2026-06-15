@@ -18,16 +18,16 @@ import type { InterruptStatement } from "@/types/interruptStatement.js";
 
 /**
  * One interrupt site: a single `interruptStatement` AST node, located by
- * (file, line, kind). `line` is **1-indexed** for human consumption (the
+ * (file, line, effect). `line` is **1-indexed** for human consumption (the
  * parser stores 0-indexed lines, so we add 1 when building this shape).
  */
 export type InterruptSite = {
   file: string;
   /** 1-indexed line number of the `interrupt …` statement. */
   line: number;
-  /** Interrupt kind, e.g. `"std::read"`. `"unknown"` for the bare
+  /** Interrupt effect, e.g. `"std::read"`. `"unknown"` for the bare
    *  `interrupt(...)` form. */
-  kind: string;
+  effect: string;
 };
 
 /**
@@ -271,7 +271,7 @@ function buildSiteResult(rec: SiteRecord, handlers: HandlerSet): SiteResult {
     site: {
       file: rec.file,
       line: toDisplayLine(rec.site.loc?.line),
-      kind: rec.site.kind,
+      effect: rec.site.effect,
     },
     handlers: Array.from(handlers.values()).map(toHandlerRef).sort(compareHandlerRefs),
   };

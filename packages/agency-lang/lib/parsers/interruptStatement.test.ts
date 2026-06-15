@@ -8,7 +8,7 @@ describe("interruptStatementParser", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.type).toBe("interruptStatement");
-    expect(result.result.kind).toBe("std::read");
+    expect(result.result.effect).toBe("std::read");
     expect(result.result.arguments).toHaveLength(2);
   });
 
@@ -17,7 +17,7 @@ describe("interruptStatementParser", () => {
     const result = interruptStatementParser(input);
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.result.kind).toBe("std::read");
+    expect(result.result.effect).toBe("std::read");
     expect(result.result.arguments).toHaveLength(1);
   });
 
@@ -26,7 +26,7 @@ describe("interruptStatementParser", () => {
     const result = interruptStatementParser(input);
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.result.kind).toBe("myapp::deploy");
+    expect(result.result.effect).toBe("myapp::deploy");
     expect(result.result.arguments).toHaveLength(2);
   });
 
@@ -35,7 +35,7 @@ describe("interruptStatementParser", () => {
     const result = interruptStatementParser(input);
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.result.kind).toBe("std::http::fetch");
+    expect(result.result.effect).toBe("std::http::fetch");
     expect(result.result.arguments).toHaveLength(1);
   });
 
@@ -45,7 +45,7 @@ describe("interruptStatementParser", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.type).toBe("interruptStatement");
-    expect(result.result.kind).toBe("unknown");
+    expect(result.result.effect).toBe("unknown");
     expect(result.result.arguments).toHaveLength(1);
   });
 
@@ -55,7 +55,7 @@ describe("interruptStatementParser", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.type).toBe("interruptStatement");
-    expect(result.result.kind).toBe("unknown");
+    expect(result.result.effect).toBe("unknown");
     expect(result.result.arguments).toHaveLength(2);
   });
 });
@@ -67,7 +67,7 @@ describe("interruptExprParser", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.type).toBe("interruptStatement");
-    expect(result.result.kind).toBe("std::read");
+    expect(result.result.effect).toBe("std::read");
   });
 
   it("parses bare interrupt expression", () => {
@@ -76,6 +76,6 @@ describe("interruptExprParser", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.type).toBe("interruptStatement");
-    expect(result.result.kind).toBe("unknown");
+    expect(result.result.effect).toBe("unknown");
   });
 });

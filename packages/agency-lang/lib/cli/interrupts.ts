@@ -26,9 +26,9 @@ export function renderInterrupts(result: AnalysisResult): string {
   for (const s of result.sites) {
     const lines: string[] = [];
     const header =
-      s.site.kind === "unknown"
+      s.site.effect === "unknown"
         ? `${s.site.file}:${s.site.line}  interrupt`
-        : `${s.site.file}:${s.site.line}  interrupt of kind ${s.site.kind}`;
+        : `${s.site.file}:${s.site.line}  interrupt of effect ${s.site.effect}`;
     lines.push(header);
     lines.push("  Possible enclosing handlers:");
     if (s.handlers.length === 0) {

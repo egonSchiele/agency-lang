@@ -52,7 +52,7 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
-  kind: string;           // e.g. "std::read", "unknown"
+  effect: string;         // e.g. "std::read", "unknown"
   message: string;        // human-readable description
   origin: string;         // compiler-injected module origin
   interruptId: string; // nanoid — globally unique
@@ -66,7 +66,7 @@ export type Interrupt<T = any> = {
 };
 
 export function interrupt<T = any>(opts: {
-  kind: string;
+  effect: string;
   message: string;
   data: T;
   origin: string;
@@ -75,7 +75,7 @@ export function interrupt<T = any>(opts: {
 }): Interrupt<T> {
   return {
     type: "interrupt",
-    kind: opts.kind,
+    effect: opts.effect,
     message: opts.message,
     origin: opts.origin,
     interruptId: opts.interruptId || nanoid(),
@@ -92,7 +92,7 @@ export function createDebugInterrupt<T = any>(
 ): Interrupt<T> {
   return {
     type: "interrupt",
-    kind: "debug",
+    effect: "debug",
     message: "",
     origin: "",
     interruptId: nanoid(),
@@ -147,7 +147,7 @@ async function runHandlerChain(
   ctx: RuntimeContext<any>,
   stack: StateStack | undefined,
   interruptId: string,
-  interruptObj: { kind: string; message: string; data: any; origin: string },
+  interruptObj: { effect: string; message: string; data: any; origin: string },
 ): Promise<HandlerChainOutcome> {
   let approvedValue: any = undefined;
   let hasApproval = false;
@@ -161,7 +161,7 @@ async function runHandlerChain(
     // the stack — otherwise a caller that catches this error would see a
     // stale +1 and trip the limit on the next legitimate dispatch.
     ctx._handlerChainDepth -= 1;
-    throw new HandlerRecursionError(interruptObj.kind, MAX_HANDLER_CHAIN_DEPTH);
+    throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
   const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
   try {
@@ -177,12 +177,12 @@ async function runHandlerChain(
       }
       // Pre-bind the interrupt summary once so all handlerDecision /
       // interruptResolved events from this dispatch carry the same
-      // {kind, message, data} payload — lets log readers see *what*
+      // {effect, message, data} payload — lets log readers see *what*
       // is being approved/rejected without needing a separate
       // interruptThrown event (which doesn't fire for synchronously-
       // resolved interrupts like `with approve`).
       const interruptSummary = {
-        kind: interruptObj.kind,
+        effect: interruptObj.effect,
         message: interruptObj.message,
         data: interruptObj.data,
       };
@@ -222,14 +222,14 @@ async function runHandlerChain(
 }
 
 export async function interruptWithHandlers<T = any>(
-  kind: string,
+  effect: string,
   message: string,
   data: T,
   origin: string,
   ctx: RuntimeContext<any>,
   stack?: StateStack,
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
-  const interruptObj = { kind, message, data, origin };
+  const interruptObj = { effect, message, data, origin };
   const interruptId = nanoid();
   const outcome = await runHandlerChain(ctx, stack, interruptId, interruptObj);
 
@@ -242,10 +242,10 @@ export async function interruptWithHandlers<T = any>(
   // IPC mode: always consult parent (unless local handler rejected — that already returned above)
   if (isIpcMode()) {
     const parentDecision = await sendInterruptToParent(
-      { kind, message, data, origin },
+      { effect, message, data, origin },
       { propagated: hasPropagation },
     );
-    const interruptSummary = { kind, message, data };
+    const interruptSummary = { effect, message, data };
     if (parentDecision.type === "approve") {
       ctx.statelogClient.interruptResolved({
         interruptId,
@@ -271,7 +271,7 @@ export async function interruptWithHandlers<T = any>(
   // from the runtime. A future improvement could add checkpoint events to
   // the generated templates.
   if (hasPropagation) {
-    const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
+    const intr = interrupt({ effect, message, data, origin, runId: ctx.getRunId(), interruptId });
     ctx.statelogClient.interruptThrown({
       interruptId: intr.interruptId,
       interruptData: data,
@@ -283,12 +283,12 @@ export async function interruptWithHandlers<T = any>(
       interruptId,
       outcome: "approved",
       resolvedBy: "handler",
-      interrupt: { kind, message, data },
+      interrupt: { effect, message, data },
     });
     return { type: "approve", value: approvedValue };
   }
   // No handler responded — propagate to user
-  const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
+  const intr = interrupt({ effect, message, data, origin, runId: ctx.getRunId(), interruptId });
   ctx.statelogClient.interruptThrown({
     interruptId: intr.interruptId,
     interruptData: data,

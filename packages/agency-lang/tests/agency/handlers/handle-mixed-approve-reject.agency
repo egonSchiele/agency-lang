@@ -36,9 +36,9 @@ node main() {
     const res1 = foo()
     log.push("foo returned ${res1}")
   } with (interrupt) {
-    if (interrupt.kind == "test::safe") {
+    if (interrupt.effect == "test::safe") {
       return approve("Alice")
-    } else if (interrupt.kind == "test::read") {
+    } else if (interrupt.effect == "test::read") {
       return reject("not allowed")
     }
   }
@@ -50,9 +50,9 @@ node bothRejected() {
     const res1 = foo()
     log.push("foo returned ${res1}")
   } with (interrupt) {
-    if (interrupt.kind == "test::safe") {
+    if (interrupt.effect == "test::safe") {
       return reject()
-    } else if (interrupt.kind == "test::read") {
+    } else if (interrupt.effect == "test::read") {
       return reject("not allowed")
     }
   }

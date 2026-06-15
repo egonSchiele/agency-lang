@@ -36,7 +36,7 @@ function makeExports(): {
       name: "add",
       description: "Add two numbers",
       agencyFunction: addFn,
-      interruptKinds: [],
+      interruptEffects: [],
     },
     {
       kind: "node",
@@ -46,7 +46,7 @@ function makeExports(): {
         data: { echo: message },
         messages: {},
       }),
-      interruptKinds: [],
+      interruptEffects: [],
     },
   ];
 
@@ -115,10 +115,10 @@ describe("HTTP adapter", () => {
     const body = result.body as any;
     expect(body.functions).toHaveLength(1);
     expect(body.functions[0].name).toBe("add");
-    expect(body.functions[0].interruptKinds).toEqual([]);
+    expect(body.functions[0].interruptEffects).toEqual([]);
     expect(body.nodes).toHaveLength(1);
     expect(body.nodes[0].name).toBe("main");
-    expect(body.nodes[0].interruptKinds).toEqual([]);
+    expect(body.nodes[0].interruptEffects).toEqual([]);
   });
 
   it("POST /function/:name calls function", async () => {
@@ -170,7 +170,7 @@ describe("HTTP adapter", () => {
     expect(result.status).toBe(404);
   });
 
-  it("GET /list includes interruptKinds as string arrays", async () => {
+  it("GET /list includes interruptEffects as string arrays", async () => {
     const registry: Record<string, AgencyFunction> = {};
     const deployFn = AgencyFunction.create(
       {
@@ -191,7 +191,7 @@ describe("HTTP adapter", () => {
           name: "deploy",
           description: "Deploy",
           agencyFunction: deployFn,
-          interruptKinds: [{ kind: "myapp::deploy" }],
+          interruptEffects: [{ effect: "myapp::deploy" }],
         },
       ],
       port: 3545,
@@ -201,7 +201,7 @@ describe("HTTP adapter", () => {
     });
     const result = await h("GET", "/list", undefined);
     const body = result.body as any;
-    expect(body.functions[0].interruptKinds).toEqual(["myapp::deploy"]);
+    expect(body.functions[0].interruptEffects).toEqual(["myapp::deploy"]);
   });
 });
 
@@ -311,7 +311,7 @@ describe("startHttpServer auth and host validation", () => {
         name: "fail",
         description: "",
         agencyFunction: failFn,
-        interruptKinds: [],
+        interruptEffects: [],
       },
     ];
     await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {

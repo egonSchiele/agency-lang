@@ -5,7 +5,7 @@ node main() {
     "std::read": [{ field: "dir", matchSubpaths: true }],
   }
   const intr = {
-    kind: "std::read",
+    effect: "std::read",
     data: { dir: "/Users/x/project", filename: "foo.ts" }
   }
   const policy = recordScopedRule({}, intr, fields)
@@ -16,7 +16,7 @@ node main() {
 
   // Should NOT auto-approve a non-matching read.
   const otherIntr = {
-    kind: "std::read",
+    effect: "std::read",
     data: { dir: "/Users/x/secrets", filename: "passwd" }
   }
   const d2 = checkPolicy(policy, otherIntr)
@@ -24,7 +24,7 @@ node main() {
 
   // Subpath of the original dir should still match (brace-expansion).
   const subIntr = {
-    kind: "std::read",
+    effect: "std::read",
     data: { dir: "/Users/x/project/sub", filename: "a.ts" }
   }
   const d3 = checkPolicy(policy, subIntr)

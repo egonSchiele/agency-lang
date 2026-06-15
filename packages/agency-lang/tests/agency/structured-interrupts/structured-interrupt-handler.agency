@@ -7,7 +7,7 @@ node main() {
   handle {
     return check("Alice")
   } with (interrupt) {
-    if (interrupt.kind == "mytest::greet") {
+    if (interrupt.effect == "mytest::greet") {
       if (interrupt.data.name == "Alice") {
         return approve()
       }

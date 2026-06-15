@@ -103,12 +103,12 @@ import {
 } from "./interrupts.js";
 
 export type InterruptOpts<T = unknown> = {
-  /** Stable identifier for the interrupt kind. Mirrors the kind a
+  /** Stable identifier for the interrupt effect. Mirrors the effect a
    *  generated `interrupt foo` statement would emit. Used by handlers
    *  to decide whether to intercept. Optional — defaults to
    *  `"unknown"` so quick TS scripts can call `agency.interrupt({message:...})`
-   *  without inventing a kind name. */
-  kind?: string;
+   *  without inventing an effect name. */
+  effect?: string;
   /** Human-readable description shown to the user / dashboards when
    *  the interrupt propagates. */
   message: string;
@@ -158,11 +158,11 @@ export async function interrupt<T = unknown>(
   }
 
   // First-time propagation: consult handlers.
-  const kind = opts.kind ?? "unknown";
+  const effect = opts.effect ?? "unknown";
   const data = opts.data;
   const origin = callsite.moduleId;
   const handlerResult = await interruptWithHandlers(
-    kind,
+    effect,
     opts.message,
     data,
     origin,

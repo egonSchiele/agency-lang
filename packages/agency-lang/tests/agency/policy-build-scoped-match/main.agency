@@ -9,7 +9,7 @@ node main() {
     ],
   }
   const readIntr = {
-    kind: "std::read",
+    effect: "std::read",
     data: { dir: "/Users/x/project", filename: "foo.ts" }
   }
   const m1 = buildScopedMatch(readIntr, fields)
@@ -19,7 +19,7 @@ node main() {
   }
 
   const execIntr = {
-    kind: "std::exec",
+    effect: "std::exec",
     data: { command: "git", subcommand: "log", args: ["log"] }
   }
   const m2 = buildScopedMatch(execIntr, fields)
@@ -27,7 +27,7 @@ node main() {
   if (m2.subcommand != "log") { return "FAIL: subcommand not pinned" }
 
   // Kind not in the fields map → empty match
-  const otherIntr = { kind: "myapp::deploy", data: { env: "prod" } }
+  const otherIntr = { effect: "myapp::deploy", data: { env: "prod" } }
   const m3 = buildScopedMatch(otherIntr, fields)
   if (keys(m3).length != 0) { return "FAIL: should be empty for unknown kind" }
 

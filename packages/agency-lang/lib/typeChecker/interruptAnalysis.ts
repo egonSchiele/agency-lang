@@ -1,4 +1,4 @@
-import type { InterruptKind } from "../symbolTable.js";
+import type { InterruptEffect } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
 import { walkNodes, type WalkAncestor } from "../utils/node.js";
@@ -70,7 +70,7 @@ type FunctionProfile = {
 export function analyzeInterruptsFromScopes(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
-): Record<string, InterruptKind[]> {
+): Record<string, InterruptEffect[]> {
   const profiles = collectProfiles(scopes, ctx);
   propagateTransitively(profiles);
   return formatResult(profiles);
@@ -85,8 +85,8 @@ function collectProfiles(
   const profiles: Record<string, FunctionProfile> = {};
 
   // Seed imported functions' direct kinds
-  for (const [name, importedKinds] of Object.entries(ctx.interruptKindsByFunction)) {
-    profiles[name] = { kinds: importedKinds.map((ik) => ik.kind), callees: [] };
+  for (const [name, importedKinds] of Object.entries(ctx.interruptEffectsByFunction)) {
+    profiles[name] = { kinds: importedKinds.map((ik) => ik.effect), callees: [] };
   }
 
   // Analyze each scope (skip the top-level scope — it has no function name
@@ -125,7 +125,7 @@ function collectFromBody(
   const callees: string[] = [];
   for (const { node } of walkNodes(body)) {
     if (node.type === "interruptStatement") {
-      addUnique(kinds, node.kind);
+      addUnique(kinds, node.effect);
     } else if (node.type === "functionCall") {
       addUnique(callees, node.functionName);
       for (const name of functionRefsInArgs(node.arguments, scope, ctx)) {
@@ -171,11 +171,11 @@ function propagateFromCallees(
 
 function formatResult(
   profiles: Record<string, FunctionProfile>,
-): Record<string, InterruptKind[]> {
-  const result: Record<string, InterruptKind[]> = {};
+): Record<string, InterruptEffect[]> {
+  const result: Record<string, InterruptEffect[]> = {};
   for (const [name, profile] of Object.entries(profiles)) {
     if (profile.kinds.length > 0) {
-      result[name] = profile.kinds.map((k) => ({ kind: k }));
+      result[name] = profile.kinds.map((k) => ({ effect: k }));
     }
   }
   return result;
@@ -355,7 +355,7 @@ function enclosingHandleBlocks(
  */
 export function checkUnhandledInterruptWarnings(
   scopes: ScopeInfo[],
-  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
   ctx: TypeCheckerContext,
 ): void {
   for (const info of scopes) {
@@ -366,10 +366,10 @@ export function checkUnhandledInterruptWarnings(
     if (!ctx.nodeDefs[info.name]) continue;
     for (const { node, ancestors } of walkNodes(info.body)) {
       if (node.type !== "functionCall") continue;
-      const kinds = interruptKindsByFunction[node.functionName];
+      const kinds = interruptEffectsByFunction[node.functionName];
       if (!kinds || kinds.length === 0) continue;
       if (isInsideHandler(ancestors)) continue;
-      const kindList = kinds.map((ik) => ik.kind).join(", ");
+      const kindList = kinds.map((ik) => ik.effect).join(", ");
       ctx.errors.push({
         message: `Function '${node.functionName}' may throw interrupts [${kindList}] but is not inside a handler.`,
         severity: "warning",
@@ -397,7 +397,7 @@ export function checkUnhandledInterruptWarnings(
  */
 export function checkHandlerBodyInterrupts(
   scopes: ScopeInfo[],
-  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
   ctx: TypeCheckerContext,
 ): void {
   for (const info of scopes) {
@@ -407,7 +407,7 @@ export function checkHandlerBodyInterrupts(
         const kinds = collectHandlerOffenderKinds(
           node,
           info,
-          interruptKindsByFunction,
+          interruptEffectsByFunction,
           ctx,
         );
         if (kinds.length === 0) continue;
@@ -433,28 +433,28 @@ export function checkHandlerBodyInterrupts(
   }
 }
 
-/** Collect every interrupt kind a handle block's handler may raise,
+/** Collect every interrupt effect a handle block's handler may raise,
  *  transitively. For a `functionRef` handler we read the already-propagated
  *  kinds directly. For an inline handler we reuse `collectFromBody` (the
  *  same walker Phase 1 uses for every scope) and then resolve its callees
- *  through `interruptKindsByFunction`, so transitive interrupts via tool
+ *  through `interruptEffectsByFunction`, so transitive interrupts via tool
  *  calls, function refs in args, or `goto` targets are caught with no
  *  duplicated walker logic. */
 function collectHandlerOffenderKinds(
   node: { handler: { kind: string; functionName?: string; body?: any[] } },
   info: ScopeInfo,
-  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
   ctx: TypeCheckerContext,
 ): string[] {
   if (node.handler.kind === "functionRef") {
-    const ks = interruptKindsByFunction[node.handler.functionName!] ?? [];
-    return ks.map((k) => k.kind);
+    const ks = interruptEffectsByFunction[node.handler.functionName!] ?? [];
+    return ks.map((k) => k.effect);
   }
   const profile = collectFromBody(node.handler.body ?? [], info.scope, ctx);
   const kinds = [...profile.kinds];
   for (const callee of profile.callees) {
-    for (const k of interruptKindsByFunction[callee] ?? []) {
-      addUnique(kinds, k.kind);
+    for (const k of interruptEffectsByFunction[callee] ?? []) {
+      addUnique(kinds, k.effect);
     }
   }
   return kinds;
@@ -494,12 +494,12 @@ function extractStaticString(expr: Expression): string | null {
  * `callback(...) { ... }` block becomes
  * `callback("hookName", __cb_scope_N)` — a 2-arg call whose second
  * argument is a `variableName` referencing a lifted top-level
- * function. We look that function up in `interruptKindsByFunction`
+ * function. We look that function up in `interruptEffectsByFunction`
  * (transitively populated) and emit an error if it may interrupt.
  */
 export function checkCallbackBodyInterrupts(
   scopes: ScopeInfo[],
-  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
   ctx: TypeCheckerContext,
 ): void {
   for (const info of scopes) {
@@ -517,10 +517,10 @@ export function checkCallbackBodyInterrupts(
       const fnName = fnArg && fnArg.type === "variableName" ? fnArg.value : null;
       if (!fnName) continue;
 
-      const kinds = interruptKindsByFunction[fnName];
+      const kinds = interruptEffectsByFunction[fnName];
       if (!kinds || kinds.length === 0) continue;
 
-      const kindList = kinds.map((ik) => ik.kind).join(", ");
+      const kindList = kinds.map((ik) => ik.effect).join(", ");
       ctx.errors.push({
         message:
           `\`interrupt\` is not allowed inside a callback body ` +

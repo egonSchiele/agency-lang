@@ -1,7 +1,7 @@
 import { AgencyConfig } from "@/config.js";
 import { runBundledAgent } from "./runBundledAgent.js";
 import { SymbolTable } from "../symbolTable.js";
-import type { FileSymbols, InterruptKind } from "../symbolTable.js";
+import type { FileSymbols, InterruptEffect } from "../symbolTable.js";
 import { existsSync, readFileSync } from "fs";
 import { validatePolicy } from "../runtime/policy.js";
 import { parseAgency } from "../parser.js";
@@ -9,9 +9,9 @@ import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "../typeChecker/index.js";
 import path from "path";
 
-function uniqueInterruptKinds(
+function uniqueInterruptEffects(
   fileSymbols: FileSymbols | undefined,
-  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
 ): string[] {
   // The symbol table only records *direct* interrupts (literal `interrupt`
   // statements in a function/node body). Transitive interrupts — e.g. a node
@@ -20,9 +20,9 @@ function uniqueInterruptKinds(
   const kinds: string[] = [];
   for (const sym of Object.values(fileSymbols ?? {})) {
     if (sym.kind !== "function" && sym.kind !== "node") continue;
-    const transitive = interruptKindsByFunction[sym.name] ?? sym.interruptKinds ?? [];
+    const transitive = interruptEffectsByFunction[sym.name] ?? sym.interruptEffects ?? [];
     for (const ik of transitive) {
-      if (!kinds.includes(ik.kind)) kinds.push(ik.kind);
+      if (!kinds.includes(ik.effect)) kinds.push(ik.effect);
     }
   }
   return kinds;
@@ -48,21 +48,21 @@ export function policyGen(
   const symbolTable = SymbolTable.build(absoluteFile, config);
   const fileSymbols = symbolTable.getFile(absoluteFile);
 
-  // Run the type checker so we get *transitive* interrupt kinds (the symbol
+  // Run the type checker so we get *transitive* interrupt effects (the symbol
   // table only knows about direct `interrupt` statements; calls into stdlib
   // functions like `read()` need the type checker's transitive analysis).
   const source = readFileSync(absoluteFile, "utf-8");
   const parseResult = parseAgency(source, config);
-  let interruptKindsByFunction: Record<string, InterruptKind[]> = {};
+  let interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
   if (parseResult.success) {
     const info = buildCompilationUnit(parseResult.result, symbolTable, absoluteFile, source);
     const result = typeCheck(parseResult.result, config, info);
-    interruptKindsByFunction = result.interruptKindsByFunction;
+    interruptEffectsByFunction = result.interruptEffectsByFunction;
   }
-  const interruptKinds = uniqueInterruptKinds(fileSymbols, interruptKindsByFunction);
+  const interruptEffects = uniqueInterruptEffects(fileSymbols, interruptEffectsByFunction);
 
-  if (interruptKinds.length === 0) {
-    console.log("No interrupt kinds found in this agent. No policy needed.");
+  if (interruptEffects.length === 0) {
+    console.log("No interrupt effects found in this agent. No policy needed.");
     return;
   }
 
@@ -82,7 +82,7 @@ export function policyGen(
   }
 
   const agentArgs = [
-    JSON.stringify(interruptKinds),
+    JSON.stringify(interruptEffects),
     outputPath,
     ...(existingPolicyJson ? [existingPolicyJson] : []),
   ];

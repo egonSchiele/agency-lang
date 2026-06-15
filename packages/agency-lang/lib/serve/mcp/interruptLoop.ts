@@ -8,7 +8,7 @@ export type InterruptHandlers = {
 };
 
 function applyPolicy(
-  interrupts: Array<{ kind: string; message: string; data: any; origin: string }>,
+  interrupts: Array<{ effect: string; message: string; data: any; origin: string }>,
   policy: Record<string, any>,
 ) {
   return interrupts.map((interrupt) => {
@@ -25,7 +25,7 @@ export async function runWithPolicy(
   let result = await invoke();
 
   while (handlers.hasInterrupts(result)) {
-    const interrupts = result as Array<{ kind: string; message: string; data: any; origin: string }>;
+    const interrupts = result as Array<{ effect: string; message: string; data: any; origin: string }>;
     const responses = applyPolicy(interrupts, policyStore.get());
     result = await handlers.respondToInterrupts(interrupts, responses);
   }

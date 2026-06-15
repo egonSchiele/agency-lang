@@ -6,7 +6,7 @@ name: "policy"
 
 ## Overview
 
-  A `Policy` is an ordered list of rules per interrupt kind that decides,
+  A `Policy` is an ordered list of rules per interrupt effect that decides,
   without prompting the user, whether to approve or reject each interrupt
   an agent raises. Rules use glob patterns ("match objects") against the
   interrupt's `data` fields. Evaluation is first-match-wins.
@@ -22,7 +22,7 @@ name: "policy"
   2. **CLI sugar** — `cliPolicyHandler` — drops in as a handler for
      interactive agents. It loads `policy.json` on first use, prompts
      the user with (a)/(r)/(aa)/(ap)/(rr) for each new interrupt
-     kind, records "always" decisions to disk, and replays matching
+     effect, records "always" decisions to disk, and replays matching
      rules on subsequent interrupts so the user is only asked once
      per pattern.
 
@@ -31,8 +31,8 @@ name: "policy"
   ```ts
   import { cliPolicyHandler, ScopedRuleFields } from "std::policy"
 
-  // Per-kind config controlling the "approve always here (ap)" option.
-  // For every kind you list, the (ap) prompt offers to pin the listed
+  // Per-effect config controlling the "approve always here (ap)" option.
+  // For every effect you list, the (ap) prompt offers to pin the listed
   // data fields. `matchSubpaths: true` brace-expands the value so
   // `/tmp/x` also matches `/tmp/x/anything`.
   const FIELDS: ScopedRuleFields = {
@@ -53,7 +53,7 @@ name: "policy"
     )
     handle {
       // Every interrupt the inner code raises is filtered through the
-      // policy. New kinds prompt the user; "aa" / "ap" decisions are
+      // policy. New effects prompt the user; "aa" / "ap" decisions are
       // persisted so the next run starts pre-approved.
       llm("hi", { tools: [...] })
     } with handler
@@ -77,7 +77,7 @@ name: "policy"
     // decision.type == "propagate" -- no rule matches. Ask your UI:
     const choice = askUserSomehow(intr)
     if (choice == "always-approve") {
-      myPolicy = recordRule(myPolicy, intr.kind, "approve")
+      myPolicy = recordRule(myPolicy, intr.effect, "approve")
       return approve()
     }
     return choice == "approve" ? approve() : reject()
@@ -89,7 +89,7 @@ name: "policy"
   Each rule has an optional `match` map. The values are glob patterns
   (via picomatch); evaluation passes when every key in `match` exists
   in `intr.data` and its value matches the pattern. A rule with no
-  `match` is a catch-all for that kind.
+  `match` is a catch-all for that effect.
 
   Example: this rule auto-approves reads under `/tmp` (and any subdir):
 
@@ -108,7 +108,7 @@ name: "policy"
 
   `recordRule` **appends** a catch-all rule. Because evaluation is
   first-match-wins, a new approve rule will be ignored if an earlier
-  catch-all already covers the kind:
+  catch-all already covers the effect:
 
   ```ts
   let p = recordRule({}, "std::read", "reject")
@@ -152,17 +152,17 @@ export type InterruptDataVal = string
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L142))
 
-### InterruptKind
+### InterruptEffect
 
-* Identifier for an interrupt's kind (e.g. `"std::read"`,
+* Identifier for an interrupt's effect (e.g. `"std::read"`,
  * `"myapp::deploy"`).
 
 ```ts
 /**
- * Identifier for an interrupt's kind (e.g. `"std::read"`,
+ * Identifier for an interrupt's effect (e.g. `"std::read"`,
  * `"myapp::deploy"`).
  */
-export type InterruptKind = string
+export type InterruptEffect = string
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L148))
@@ -172,14 +172,14 @@ export type InterruptKind = string
 * One row of a `Policy`. A rule passes if every key in `match` is
  * present in the interrupt's `data` and its value matches the glob
  * pattern. Omit `match` (or set it to `{}`) for a catch-all that
- * applies to every interrupt of the parent kind.
+ * applies to every interrupt of the parent effect.
 
 ```ts
 /**
  * One row of a `Policy`. A rule passes if every key in `match` is
  * present in the interrupt's `data` and its value matches the glob
  * pattern. Omit `match` (or set it to `{}`) for a catch-all that
- * applies to every interrupt of the parent kind.
+ * applies to every interrupt of the parent effect.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
@@ -191,19 +191,19 @@ export type PolicyRule = {
 
 ### Policy
 
-* A policy: ordered rules per interrupt kind. `checkPolicy` walks
- * the array for `intr.kind` in order and returns on the first
- * matching rule. If no rule for the kind exists, evaluation falls
+* A policy: ordered rules per interrupt effect. `checkPolicy` walks
+ * the array for `intr.effect` in order and returns on the first
+ * matching rule. If no rule for the effect exists, evaluation falls
  * through to `propagate` (i.e. ask the next handler in the chain).
 
 ```ts
 /**
- * A policy: ordered rules per interrupt kind. `checkPolicy` walks
- * the array for `intr.kind` in order and returns on the first
- * matching rule. If no rule for the kind exists, evaluation falls
+ * A policy: ordered rules per interrupt effect. `checkPolicy` walks
+ * the array for `intr.effect` in order and returns on the first
+ * matching rule. If no rule for the effect exists, evaluation falls
  * through to `propagate` (i.e. ask the next handler in the chain).
  */
-export type Policy = Record<InterruptKind, PolicyRule[]>
+export type Policy = Record<InterruptEffect, PolicyRule[]>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L167))
@@ -213,22 +213,22 @@ export type Policy = Record<InterruptKind, PolicyRule[]>
 * The five answers `cliPolicyHandler`'s prompt accepts:
  * - `"approve"` / `"reject"` — one-off (a) / (r).
  * - `"approve-always"` / `"reject-always"` — (aa) / (rr); records a
- *   catch-all rule for the kind so future interrupts of this kind
+ *   catch-all rule for the effect so future interrupts of this effect
  *   resolve without prompting.
  * - `"approve-always-here"` — (ap); records a scoped rule pinned to
- *   whichever fields you listed in `ScopedRuleFields` for this kind.
- *   Only offered when the kind has an entry in the config.
+ *   whichever fields you listed in `ScopedRuleFields` for this effect.
+ *   Only offered when the effect has an entry in the config.
 
 ```ts
 /**
  * The five answers `cliPolicyHandler`'s prompt accepts:
  * - `"approve"` / `"reject"` — one-off (a) / (r).
  * - `"approve-always"` / `"reject-always"` — (aa) / (rr); records a
- *   catch-all rule for the kind so future interrupts of this kind
+ *   catch-all rule for the effect so future interrupts of this effect
  *   resolve without prompting.
  * - `"approve-always-here"` — (ap); records a scoped rule pinned to
- *   whichever fields you listed in `ScopedRuleFields` for this kind.
- *   Only offered when the kind has an entry in the config.
+ *   whichever fields you listed in `ScopedRuleFields` for this effect.
+ *   Only offered when the effect has an entry in the config.
  */
 export type Decision =
   | "approve"
@@ -274,9 +274,9 @@ export type ScopedField = {
 
 ### ScopedRuleFields
 
-* Per-kind configuration consumed by `buildScopedMatch` and the
- * `cliPolicyHandler`. Maps each interrupt kind to the fields its
- * "approve-always-here" rule should pin. Kinds not present in this
+* Per-effect configuration consumed by `buildScopedMatch` and the
+ * `cliPolicyHandler`. Maps each interrupt effect to the fields its
+ * "approve-always-here" rule should pin. Effects not present in this
  * map don't offer the (ap) prompt option — the user falls back to
  * (a) / (r) / (aa) / (rr).
  *
@@ -293,9 +293,9 @@ export type ScopedField = {
 
 ````ts
 /**
- * Per-kind configuration consumed by `buildScopedMatch` and the
- * `cliPolicyHandler`. Maps each interrupt kind to the fields its
- * "approve-always-here" rule should pin. Kinds not present in this
+ * Per-effect configuration consumed by `buildScopedMatch` and the
+ * `cliPolicyHandler`. Maps each interrupt effect to the fields its
+ * "approve-always-here" rule should pin. Effects not present in this
  * map don't offer the (ap) prompt option — the user falls back to
  * (a) / (r) / (aa) / (rr).
  *
@@ -310,7 +310,7 @@ export type ScopedField = {
  * }
  * ```
  */
-export type ScopedRuleFields = Record<InterruptKind, ScopedField[]>
+export type ScopedRuleFields = Record<InterruptEffect, ScopedField[]>
 ````
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L220))
@@ -346,12 +346,12 @@ export type ParsePolicyFailure = {
 checkPolicy(policy: Record<string, any>, interrupt: Record<string, any>)
 ```
 
-Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule. Policy is a JSON object keyed by interrupt kind, where each kind maps to an ordered array of rules with optional match fields (glob patterns) and an action.
+Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule. Policy is a JSON object keyed by interrupt effect, where each effect maps to an ordered array of rules with optional match fields (glob patterns) and an action.
 
 * Evaluate a policy against a single interrupt. Returns the result
  * of `approve()`, `reject()`, or `propagate()` corresponding to the
- * first matching rule for `interrupt.kind`. If no rule matches
- * (no rules for the kind, or every rule's `match` failed), returns
+ * first matching rule for `interrupt.effect`. If no rule matches
+ * (no rules for the effect, or every rule's `match` failed), returns
  * `propagate()` so the next handler in the chain runs.
  *
  * Designed for use inside a custom handler. The CLI sugar
@@ -398,8 +398,8 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 buildScopedMatch(intr: Record<string, any>, fields: ScopedRuleFields): Record<string, string>
 ```
 
-Given the per-kind ScopedField[] config, build a match object pinned
-  to the meaningful fields of this interrupt. Returns {} when the kind
+Given the per-effect ScopedField[] config, build a match object pinned
+  to the meaningful fields of this interrupt. Returns {} when the effect
   isn't in the fields map. Pure.
 
 * Build the `match` map for a scoped rule by reading the configured
@@ -411,7 +411,7 @@ Given the per-kind ScopedField[] config, build a match object pinned
  * const rule: PolicyRule = { match: match, action: "approve" }
  * ```
  *
- * For each `ScopedField` configured for `intr.kind`:
+ * For each `ScopedField` configured for `intr.effect`:
  * - The field's value is read from `intr.data`.
  * - If `matchSubpaths: true`, the value is wrapped as
  *   `"{value,value/**}"` so the resulting glob matches both the
@@ -420,7 +420,7 @@ Given the per-kind ScopedField[] config, build a match object pinned
  *   match).
  *
  * Fields that are absent from `intr.data` (`null` / `undefined`)
- * are skipped silently. Kinds not present in `fields` return `{}`.
+ * are skipped silently. Effects not present in `fields` return `{}`.
  *
  * Most callers should use `recordScopedRule` instead, which calls
  * this internally; `buildScopedMatch` is exposed for callers
@@ -441,24 +441,24 @@ Given the per-kind ScopedField[] config, build a match object pinned
 ### recordRule
 
 ```ts
-recordRule(policy: Policy, kind: InterruptKind, action: "approve" | "reject"): Policy
+recordRule(policy: Policy, effect: InterruptEffect, action: "approve" | "reject"): Policy
 ```
 
-Return a new policy with a catch-all rule for `kind` appended.
+Return a new policy with a catch-all rule for `effect` appended.
   First-match-wins inside `checkPolicy`, so a single bare rule covers
-  every future interrupt of that kind. Pure — no I/O.
+  every future interrupt of that effect. Pure — no I/O.
 
-  WARNING: append order matters. A second call for the same kind with
-  a different action is dead — the earlier rule wins. Reset the kind's
+  WARNING: append order matters. A second call for the same effect with
+  a different action is dead — the earlier rule wins. Reset the effect's
   rules first if you want to flip a previous decision.
 
 * Return a new policy with a catch-all rule (`{ action }` with no
- * `match`) for `kind` appended. Pure — does not mutate the input.
+ * `match`) for `effect` appended. Pure — does not mutate the input.
  *
  * ## Precedence trap
  *
  * Evaluation is first-match-wins, so **append order matters**. A
- * second call for the same kind with a different action is dead
+ * second call for the same effect with a different action is dead
  * code:
  *
  * ```ts
@@ -467,9 +467,9 @@ Return a new policy with a catch-all rule for `kind` appended.
  * ```
  *
  * If you're flipping a previously-recorded decision, decide
- * explicitly: either reset the kind's rules first
+ * explicitly: either reset the effect's rules first
  * (`{ ...policy, "std::read": [] }` and re-record), or hand-edit
- * `policy[kind]` to replace the offending rule. This function does
+ * `policy[effect]` to replace the offending rule. This function does
  * not try to detect or warn about shadowing on your behalf.
 
 **Parameters:**
@@ -477,7 +477,7 @@ Return a new policy with a catch-all rule for `kind` appended.
 | Name | Type | Default |
 |---|---|---|
 | policy | [Policy](#policy) |  |
-| kind | [InterruptKind](#interruptkind) |  |
+| effect | [InterruptEffect](#interrupteffect) |  |
 | action | `"approve" \| "reject"` |  |
 
 **Returns:** [Policy](#policy)
@@ -491,16 +491,16 @@ recordScopedRule(policy: Policy, intr: Record<string, any>, fields: ScopedRuleFi
 ```
 
 Return a new policy with a scoped approve rule prepended for the
-  interrupt's kind. Prepended (not appended) so the more-specific
+  interrupt's effect. Prepended (not appended) so the more-specific
   rule wins over any later catch-all in first-match-wins order. Pure.
 
 * Return a new policy with a scoped approve rule prepended for
- * `intr.kind`. The rule's `match` is built by `buildScopedMatch`,
- * so it pins whichever fields are configured for the kind. Pure.
+ * `intr.effect`. The rule's `match` is built by `buildScopedMatch`,
+ * so it pins whichever fields are configured for the effect. Pure.
  *
  * Prepended (not appended) so the new, more-specific rule wins
  * over any pre-existing catch-all in first-match-wins order. This
- * makes scoped rules safe to add even if the kind already has a
+ * makes scoped rules safe to add even if the effect already has a
  * broader rejection: the scoped approval applies first when it
  * matches, otherwise the catch-all takes over.
  *
@@ -661,7 +661,7 @@ CLI sugar for an interactive policy handler. Owns load + save +
   handle { ... } with handler
 
   @param file - Path to the on-disk policy file
-  @param fields - Per-kind config controlling the "approve-always-here" option
+  @param fields - Per-effect config controlling the "approve-always-here" option
 
 * Drop-in policy handler for interactive CLI agents. Returns a
  * function ref you bind to a local variable and install on a `handle`
@@ -685,7 +685,7 @@ CLI sugar for an interactive policy handler. Owns load + save +
  *    matches, approves or rejects without prompting.
  * 3. **Prompts the user** when no rule applies, showing
  *    (a)/(r)/(aa)/(ap)/(rr). The (ap) option appears only when
- *    `fields` has an entry for the interrupt's kind.
+ *    `fields` has an entry for the interrupt's effect.
  * 4. **Records "always" decisions** in memory and flushes them to
  *    disk at the top of the next interrupt. Use `flushPolicy()` if
  *    you need the final decision of a session persisted before
@@ -710,8 +710,8 @@ CLI sugar for an interactive policy handler. Owns load + save +
  *
  * @param file - Path to the on-disk policy file. Created on first
  *   save; the containing directory must already exist.
- * @param fields - Per-kind config controlling the (ap) prompt
- *   option. Kinds not present here don't offer (ap).
+ * @param fields - Per-effect config controlling the (ap) prompt
+ *   option. Effects not present here don't offer (ap).
 
 **Parameters:**
 

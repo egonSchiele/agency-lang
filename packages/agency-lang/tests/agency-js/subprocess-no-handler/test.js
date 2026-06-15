@@ -16,5 +16,5 @@ const interrupt = result.data[0];
 
 writeFileSync("__result.json", JSON.stringify({
   type: interrupt.type,
-  kind: interrupt.kind,
+  effect: interrupt.effect,
 }, null, 2));

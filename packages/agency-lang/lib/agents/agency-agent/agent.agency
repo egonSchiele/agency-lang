@@ -60,7 +60,7 @@ import { reviewAgent } from "./subagents/review.agency"
  * This file's responsibilities collapse to:
  *   1. Per-turn callback (`_runTurn`) wiring the user message into
  *      `mainAgent` and printing the reply into the scroll output.
- *   2. Per-kind ALWAYS_FIELDS map for the policy handler's
+ *   2. Per-effect ALWAYS_FIELDS map for the policy handler's
  *      "approve-always-here" option.
  *   3. Wire the two specialists into one `RouterConfig`.
  *
@@ -529,10 +529,10 @@ def setupSession(interactive: boolean): any {
 
 // Show a colored diff for an incoming `std::edit` interrupt. Shared by
 // the interactive and one-shot handlers. The handler receives the whole
-// interrupt object ({kind, message, data, origin}); the edit's
+// interrupt object ({effect, message, data, origin}); the edit's
 // filename / before / after live under `data.data`.
 def renderEditDiff(data: any) {
-  if (data.kind == "std::edit") {
+  if (data.effect == "std::edit") {
     print(color.yellow("⏺ Edit: ${data.data.filename}"))
     print(
       diff(

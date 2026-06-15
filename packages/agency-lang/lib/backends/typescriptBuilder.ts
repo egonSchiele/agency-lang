@@ -1891,21 +1891,21 @@ export class TypeScriptBuilder {
     return this.processNode(node);
   }
 
-  private interruptTemplateArgs(kind: string, message: string, data: string, origin: string) {
+  private interruptTemplateArgs(effect: string, message: string, data: string, origin: string) {
     return {
-      kind: JSON.stringify(kind),
+      effect: JSON.stringify(effect),
       message,
       data,
       origin: JSON.stringify(origin),
     };
   }
 
-  private buildInterruptReturnStructured(kind: string, messageExpr: string, dataExpr: string): TsNode {
+  private buildInterruptReturnStructured(effect: string, messageExpr: string, dataExpr: string): TsNode {
     const origin = moduleIdToOrigin(this.moduleId);
     const opts = this.checkpointOpts();
     return ts.raw(
       renderInterruptReturn.default({
-        ...this.interruptTemplateArgs(kind, messageExpr, dataExpr, origin),
+        ...this.interruptTemplateArgs(effect, messageExpr, dataExpr, origin),
         nodeContext: this.scopes.current().type === "node",
         interruptIdKey: `__interruptId_${this.steps.joined("_")}`,
         ...opts,
@@ -1913,9 +1913,9 @@ export class TypeScriptBuilder {
     );
   }
 
-  private extractInterruptFields(node: InterruptStatement): { kind: string; messageExpr: string; dataExpr: string } {
+  private extractInterruptFields(node: InterruptStatement): { effect: string; messageExpr: string; dataExpr: string } {
     return {
-      kind: node.kind,
+      effect: node.effect,
       messageExpr: node.arguments && node.arguments.length > 0
         ? this.str(this.processCallArg(node.arguments[0]))
         : '""',
@@ -1930,8 +1930,8 @@ export class TypeScriptBuilder {
   }
 
   private processInterruptStatement(node: InterruptStatement): TsNode {
-    const { kind, messageExpr, dataExpr } = this.extractInterruptFields(node);
-    return this.buildInterruptReturnStructured(kind, messageExpr, dataExpr);
+    const { effect, messageExpr, dataExpr } = this.extractInterruptFields(node);
+    return this.buildInterruptReturnStructured(effect, messageExpr, dataExpr);
   }
 
   private processFunctionCallAsStatement(node: FunctionCall): TsNode {
@@ -2721,7 +2721,7 @@ export class TypeScriptBuilder {
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (this.isInterruptExpression(value)) {
-      const { kind, messageExpr, dataExpr } = this.extractInterruptFields(value as InterruptStatement);
+      const { effect, messageExpr, dataExpr } = this.extractInterruptFields(value as InterruptStatement);
       const origin = moduleIdToOrigin(this.moduleId);
       const makeAssign = (val: string) =>
         this.str(
@@ -2738,7 +2738,7 @@ export class TypeScriptBuilder {
           assignResolve: makeAssign("__response.value"),
           assignApprove: makeAssign("true"),
           handlerApprove: makeAssign("__handlerResult.value"),
-          ...this.interruptTemplateArgs(kind, messageExpr, dataExpr, origin),
+          ...this.interruptTemplateArgs(effect, messageExpr, dataExpr, origin),
           nodeContext: this.scopes.current().type === "node",
           interruptIdKey: `__interruptId_${this.steps.joined("_")}`,
           ...opts,

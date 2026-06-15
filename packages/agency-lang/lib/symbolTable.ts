@@ -24,8 +24,8 @@ import {
   getStdlibDir,
 } from "./importPaths.js";
 
-export type InterruptKind = {
-  kind: string;
+export type InterruptEffect = {
+  effect: string;
 };
 
 /** Type-alias names that resolve to built-in types. */
@@ -46,7 +46,7 @@ export type FunctionSymbol = {
   parameters: FunctionParameter[];
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
-  interruptKinds?: InterruptKind[];
+  interruptEffects?: InterruptEffect[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -58,7 +58,7 @@ export type NodeSymbol = {
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
   exported?: boolean;
-  interruptKinds?: InterruptKind[];
+  interruptEffects?: InterruptEffect[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -327,7 +327,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
           exported: !!node.exported,
-          interruptKinds: collectDirectInterruptKinds(node.body),
+          interruptEffects: collectDirectInterruptEffects(node.body),
         };
         break;
       case "function":
@@ -340,7 +340,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
-          interruptKinds: collectDirectInterruptKinds(node.body),
+          interruptEffects: collectDirectInterruptEffects(node.body),
         };
         break;
       case "typeAlias":
@@ -378,14 +378,14 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
   return symbols;
 }
 
-function collectDirectInterruptKinds(body: AgencyNode[]): InterruptKind[] {
-  const kinds: string[] = [];
+function collectDirectInterruptEffects(body: AgencyNode[]): InterruptEffect[] {
+  const effects: string[] = [];
   for (const { node } of walkNodes(body)) {
-    if (node.type === "interruptStatement" && !kinds.includes(node.kind)) {
-      kinds.push(node.kind);
+    if (node.type === "interruptStatement" && !effects.includes(node.effect)) {
+      effects.push(node.effect);
     }
   }
-  return kinds.map((k) => ({ kind: k }));
+  return effects.map((e) => ({ effect: e }));
 }
 
 function isExportedSymbol(sym: SymbolInfo): boolean {

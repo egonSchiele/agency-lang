@@ -1,0 +1,26 @@
+import { cliPolicyHandler, setPolicy, ScopedRuleFields } from "std::policy"
+
+// Regression: when an interrupt that is NOT auto-approved fires, the
+// handler prompts the user, which renders the interrupt's data via
+// prettyPrintInterruptData. A std::edit carries an `edits` ARRAY. The
+// old code treated arrays like objects, so `for (key in editsArray)`
+// yielded the Edit ELEMENTS, passing a non-string object into text(),
+// crashing render with "content.split is not a function". This must now
+// render cleanly and reach the reject decision.
+
+const FIELDS: ScopedRuleFields = {}
+const POLICY = {}
+
+node main(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, POLICY)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::edit("apply edits?", {
+      filename: "foo.agency",
+      edits: [{ oldText: "a", newText: "b", replaceAll: false }],
+    })
+  } with (data) {
+    return handler(data)
+  }
+  return "completed"
+}

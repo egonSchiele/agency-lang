@@ -1,0 +1,29 @@
+import { cliPolicyHandler, setPolicy, ScopedRuleFields } from "std::policy"
+
+// Regression: when the on-disk policy file EXISTS and approves a kind,
+// cliPolicyHandler must auto-approve it without prompting. Previously the
+// handler's lazy load read its own policy file, which raised a nested
+// std::read that re-entered the handler while _policy was still null; the
+// default-reject vetoed the read's `with approve`, the load failed, the
+// policy fell back to {}, and every interrupt prompted. Mirrors the
+// agency-agent's exact setup (setPolicy + cliPolicyHandler + an inline
+// handler that returns handler(data)).
+
+const FIELDS: ScopedRuleFields = {
+  "std::read": [{ field: "dir", matchSubpaths: true }],
+}
+
+const POLICY = {
+  "std::read": [{ action: "approve" }],
+}
+
+node main(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, POLICY)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::read("read it", { dir: "/tmp", filename: "f" })
+  } with (data) {
+    return handler(data)
+  }
+  return "pass"
+}

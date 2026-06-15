@@ -143,8 +143,10 @@ function stringifyValue(v: unknown): string {
  *  attached to `handlerDecision` / `interruptResolved` events. The
  *  runtime started attaching this so log readers can see *what* was
  *  being approved/rejected without correlating against a separate
- *  `interruptThrown` event. Returns "" when no summary is present
- *  (preserves prior format for older traces). */
+ *  `interruptThrown` event. Returns "" when no `effect` summary is
+ *  present. Note: pre-rename traces carried this field as `kind`; by
+ *  design (see the kind->effect rename) such older traces render
+ *  without the effect label rather than being read back-compatibly. */
 function formatInterruptSummary(intr: any): string {
   if (!intr || typeof intr !== "object") return "";
   const effect = intr.effect ? String(intr.effect) : null;

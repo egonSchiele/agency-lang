@@ -446,6 +446,14 @@ export class StateStack {
     if (pframes !== undefined) {
       this.other.memoryFrames = [...pframes];
     }
+    // Run-wide LLM defaults set via `std::llm` (setLlmOptions/setModel)
+    // ride the same branch inheritance: a fork branch inherits the
+    // parent's defaults at fork time, then its own setLlmOptions mutates
+    // this shallow copy — never the parent's object.
+    const pllm = parent.other.llmDefaults;
+    if (pllm !== undefined) {
+      this.other.llmDefaults = { ...pllm };
+    }
   }
 
   /** Pop the top memory frame, including the JSON-seeded bottom frame.

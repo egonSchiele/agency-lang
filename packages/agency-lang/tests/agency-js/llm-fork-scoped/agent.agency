@@ -1,0 +1,14 @@
+import { setModel } from "std::llm"
+
+// Each branch sets its own model and dispatches with it; the parent's
+// model is unaffected after the fork joins (no leak, no cross-branch
+// races). The parent's llm() call runs after the fork, so it is the
+// last LLM call.
+node main() {
+  setModel("base-model")
+  fork(["a", "b"]) as item {
+    setModel("model-${item}")
+    return llm("ping")
+  }
+  return llm("ping-parent")
+}

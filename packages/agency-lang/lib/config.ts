@@ -117,6 +117,7 @@ export interface AgencyConfig {
     defaultModel: string;
     openAiApiKey: string;
     googleApiKey: string;
+    anthropicApiKey: string;
     /**
      * Max characters of a single tool result fed back to the LLM.
      * Results longer than this are truncated (with a marker) in what
@@ -335,6 +336,7 @@ export const AgencyConfigSchema = z
         defaultModel: z.string(),
         openAiApiKey: z.string(),
         googleApiKey: z.string(),
+        anthropicApiKey: z.string(),
         maxToolResultChars: z.number(),
         statelog: z
           .object({

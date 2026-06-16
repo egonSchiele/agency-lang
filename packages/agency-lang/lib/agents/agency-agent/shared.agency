@@ -51,3 +51,36 @@ static const _memoryReady = enableMemory({
     model: "text-embedding-3-small"
   }
 }) with approve
+
+// Default models per provider. `slowProvider` pins the provider for the
+// deep-reasoning call: OpenAI needs the Responses API for reasoning /
+// extended thinking; native providers use their own. Used as fallbacks
+// when the user doesn't pass --model / --fast-model / --slow-model.
+type ProviderModels = { fast: string; slow: string; slowProvider: string }
+
+export static const MODELS: Record<string, ProviderModels> = {
+  openai: { fast: "gpt-4o-mini", slow: "gpt-5.5", slowProvider: "openai-responses" },
+  anthropic: { fast: "claude-haiku-4-5-20251001", slow: "claude-opus-4-8", slowProvider: "anthropic" },
+  google: { fast: "gemini-2.5-flash", slow: "gemini-2.5-pro", slowProvider: "google" }
+}
+
+// The slow ("deep reasoning") model + its provider, set once in main()
+// from the CLI flags / detected provider. The deep subagents (oracle,
+// explorer) read these instead of hardcoding a model. An empty
+// slowProvider means "let smoltalk resolve the provider from the model
+// name" — used when the user overrides --slow-model.
+let _slowModel: string = "gpt-5.5"
+let _slowProvider: string = "openai-responses"
+
+export def setSlowModel(model: string, provider: string) {
+  _slowModel = model
+  _slowProvider = provider
+}
+
+export def getSlowModel(): string {
+  return _slowModel
+}
+
+export def getSlowProvider(): string {
+  return _slowProvider
+}

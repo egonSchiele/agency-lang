@@ -1,0 +1,91 @@
+// Runtime control over which model `llm()` calls use, and which
+// provider is available. `_*` helpers read ctx/stack from
+// AsyncLocalStorage (see `lib/runtime/asyncContext.ts`).
+import { _setLlmOptions } from "agency-lang/stdlib-lib/llm.js"
+import { env } from "std::system"
+
+// LLM defaults that can be set at runtime. Mirrors a subset of the
+// per-call `llm()` options. Every field is optional; only provided
+// fields are changed.
+export type LlmDefaults = {
+  model?: string;
+  temperature?: number;
+  reasoningEffort?: string;
+  maxTokens?: number;
+  maxToolResultChars?: number
+}
+
+export def setLlmOptions(opts: LlmDefaults) {
+  """
+  Set default options for subsequent `llm()` calls. Only the fields you
+  pass are changed; others keep their current value. A per-call
+  `llm(..., { ... })` option still overrides these defaults.
+
+  Branch-scoped: a `fork`/`race` branch inherits the defaults active at
+  fork time, but a `setLlmOptions(...)` inside a branch affects only that
+  branch — it does not leak to siblings or the parent after join. The
+  defaults survive interrupt/resume.
+
+  @param opts - The default LLM options to merge in
+  """
+  _setLlmOptions(opts)
+}
+
+export def setModel(name: string) {
+  """
+  Set the default model for subsequent `llm()` calls. Convenience
+  wrapper for `setLlmOptions({ model: name })`.
+
+  A per-call `llm(..., { model })` option still overrides this, and it is
+  branch-scoped the same way `setLlmOptions` is.
+
+  @param name - The model name (e.g. "gpt-4o-mini", "claude-opus-4-8")
+  """
+  _setLlmOptions({ model: name })
+}
+
+def envVarFor(provider: string): string {
+  if (provider == "anthropic") {
+    return "ANTHROPIC_API_KEY"
+  }
+  if (provider == "google") {
+    return "GEMINI_API_KEY"
+  }
+  if (provider == "openai") {
+    return "OPENAI_API_KEY"
+  }
+  return ""
+}
+
+export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Result {
+  """
+  Detect which LLM provider is available based on API-key environment
+  variables, in your preferred order. Returns `success(provider)` with
+  the first provider in `order` whose key env var is set, or a
+  `failure(message)` listing the variables it checked if none are.
+
+  Recognized providers and their env vars: "anthropic"
+  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
+  (OPENAI_API_KEY). Unrecognized names in `order` are skipped. This only
+  detects the provider; mapping a provider to a concrete model is the
+  caller's job.
+
+  @param order - Providers to check, highest preference first
+  """
+  let checked = ""
+  for (provider in order) {
+    const varName = envVarFor(provider)
+    if (varName != "") {
+      if (checked == "") {
+        checked = varName
+      } else {
+        checked = "${checked}, ${varName}"
+      }
+      const value = env(varName)
+      if (value != null && value != "") {
+        return success(provider)
+      }
+    }
+  }
+  return failure("No LLM API key found. Set one of: ${checked}")
+}

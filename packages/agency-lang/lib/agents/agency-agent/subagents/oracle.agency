@@ -3,6 +3,7 @@ import { Workspace, openDir } from "std::fs"
 import { skillsDir } from "std::skills"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
+import { getSlowModel, getSlowProvider } from "../shared.agency"
 
 // Oracle gets its own read-only view of the project. Mirrors the
 // workspace setup in `code.agency` but only the read-side tools are
@@ -115,8 +116,8 @@ export def oracleAgent(userMsg: string, allowHandoff: boolean): string {
       userMsg,
       {
       tools: oracleTools,
-      model: "gpt-5.5",
-      provider: "openai-responses",
+      model: getSlowModel(),
+      provider: getSlowProvider(),
       reasoningEffort: "high",
       thinking: {
         enabled: true

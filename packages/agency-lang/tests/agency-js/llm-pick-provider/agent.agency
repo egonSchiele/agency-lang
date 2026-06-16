@@ -1,0 +1,19 @@
+import { pickProvider } from "std::llm"
+
+// Returns the picked provider, or "FAIL:<msg>" so the JS side can assert
+// both the success and the no-key failure paths.
+def describe(order: string[]): string {
+  const r = pickProvider(order)
+  if (isFailure(r)) {
+    return "FAIL:${r.error}"
+  }
+  return r.value
+}
+
+node main(): any {
+  return {
+    defaultOrder: describe(["anthropic", "google", "openai"]),
+    openaiFirst: describe(["openai", "anthropic"]),
+    noneAvailable: describe(["anthropic"])
+  }
+}

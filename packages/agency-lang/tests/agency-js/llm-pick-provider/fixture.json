@@ -1,0 +1,5 @@
+{
+  "defaultOrder": "google",
+  "openaiFirst": "openai",
+  "noneAvailable": "FAIL:No LLM API key found. Set one of: ANTHROPIC_API_KEY"
+}

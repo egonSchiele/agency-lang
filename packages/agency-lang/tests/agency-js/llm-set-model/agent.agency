@@ -1,0 +1,8 @@
+import { setModel } from "std::llm"
+
+// setModel at the top level changes the model the next llm() call
+// dispatches with.
+node main() {
+  setModel("test-model-x")
+  return llm("ping")
+}

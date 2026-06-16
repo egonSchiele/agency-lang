@@ -16,7 +16,9 @@ import { highlight, diff } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
+import { setModel, pickProvider } from "std::llm"
 
+import { MODELS, setSlowModel } from "./shared.agency"
 import { figs, title } from "./images/images.agency"
 import { POLICY_PATH, HISTORY_PATH, ALWAYS_FIELDS } from "./lib/config.agency"
 import {
@@ -588,6 +590,18 @@ node main() {
       verbose: {
         type: "boolean",
         description: "Echo tool-call starts to stdout in non-interactive mode"
+      },
+      model: {
+        type: "string",
+        description: "Model for all LLM calls (overrides provider auto-detection)"
+      },
+      fastmodel: {
+        type: "string",
+        description: "Model for ordinary work (default: per detected provider)"
+      },
+      slowmodel: {
+        type: "string",
+        description: "Model for deep reasoning, e.g. the oracle/explorer subagents"
       }
     }
   },
@@ -598,6 +612,48 @@ node main() {
   }
   if (args.flags.verbose) {
     VERBOSE = true
+  }
+
+  // Resolve which models to use. Explicit flags win; otherwise detect a
+  // provider from API-key env vars and use that provider's defaults. The
+  // fast model becomes the run-wide default via `setModel`; the slow
+  // model is read by the deep-reasoning subagents (oracle, explorer).
+  let provider = "openai"
+  // Absent string flags read as `undefined` (NOT null), and agency's
+  // `== null` does not match `undefined`. Normalize via `??` (which does
+  // treat `undefined` as nullish) to "" and compare strings.
+  const modelFlag = args.flags.model ?? ""
+  const fastFlag = args.flags.fastmodel ?? ""
+  const slowFlag = args.flags.slowmodel ?? ""
+  // A provider is only needed when fast OR slow can't be derived from
+  // flags (so `--model X` alone never requires an API key / detection).
+  const needFast = fastFlag == "" && modelFlag == ""
+  const needSlow = slowFlag == "" && modelFlag == ""
+  if (needFast || needSlow) {
+    const picked = pickProvider()
+    if (isSuccess(picked)) {
+      provider = picked.value
+    } else {
+      print(picked.error)
+      process.exit(1)
+    }
+  }
+  let fast = MODELS[provider].fast
+  if (fastFlag != "") {
+    fast = fastFlag
+  } else if (modelFlag != "") {
+    fast = modelFlag
+  }
+  setModel(fast)
+  // Slow model: an explicit flag wins (with empty provider so smoltalk
+  // resolves the provider from the model name); otherwise use the
+  // detected provider's slow model + its pinned provider.
+  if (slowFlag != "") {
+    setSlowModel(slowFlag, "")
+  } else if (modelFlag != "") {
+    setSlowModel(modelFlag, "")
+  } else {
+    setSlowModel(MODELS[provider].slow, MODELS[provider].slowProvider)
   }
 
   // Positional args (everything after flags) are joined with spaces to

@@ -3417,6 +3417,9 @@ export class TypeScriptBuilder {
       googleApiKey: cfg.client?.googleApiKey
         ? ts.str(cfg.client.googleApiKey)
         : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
+      anthropicApiKey: cfg.client?.anthropicApiKey
+        ? ts.str(cfg.client.anthropicApiKey)
+        : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
       model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),
       statelog: ts.obj({

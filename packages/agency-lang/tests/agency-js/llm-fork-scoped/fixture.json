@@ -1,0 +1,5 @@
+{
+  "parentModel": "base-model",
+  "branchModels": ["model-a", "model-b"],
+  "callCount": 3
+}

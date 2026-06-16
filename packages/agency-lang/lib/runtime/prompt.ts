@@ -385,15 +385,35 @@ export async function runPrompt(args: {
     memory?: boolean | { model?: string };
     maxToolResultChars?: number;
   };
-  const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
+
+  // Run-wide LLM defaults set at runtime via `std::llm`
+  // (setLlmOptions/setModel) live on the ACTIVE branch stack's
+  // `other.llmDefaults` (branch-scoped, serialized; seeded from the
+  // parent at fork time). Layer them BETWEEN the baked
+  // `smoltalkDefaults` and the per-call options, so precedence is
+  // baked agency.json < stack defaults < per-call `llm({...})`.
+  const stackDefaults = (stateStack?.other?.llmDefaults ?? {}) as {
+    maxToolResultChars?: number;
+    [k: string]: unknown;
+  };
+  const { maxToolResultChars: stackMaxToolResultChars, ...stackSmolDefaults } =
+    stackDefaults;
+  const clientConfig = ctx.getSmoltalkConfig({
+    ...stackSmolDefaults,
+    ...restClientConfig,
+  });
 
   // Cap on characters of a single tool result fed back to the LLM. The
   // full result is still cached for Agency code via `setResultOnBranch`;
   // only what the model sees is truncated. Resolution precedence:
-  // per-call `llm(..., { maxToolResultChars })` > agency.json
-  // (`ctx.maxToolResultChars`) > default. `0`/non-finite disables.
+  // per-call `llm(..., { maxToolResultChars })` > runtime
+  // `setLlmOptions` (active stack) > agency.json (`ctx.maxToolResultChars`)
+  // > default. `0`/non-finite disables.
   const toolResultCap =
-    callMaxToolResultChars ?? ctx.maxToolResultChars ?? DEFAULT_TOOL_RESULT_CHARS;
+    callMaxToolResultChars ??
+    stackMaxToolResultChars ??
+    ctx.maxToolResultChars ??
+    DEFAULT_TOOL_RESULT_CHARS;
 
   // Restore or initialize messages.
   //

@@ -1,6 +1,6 @@
 import { enableMemory, isMemoryActive } from "std::memory"
 
-// CHARACTERIZATION: a branch-local enableMemory does not affect the
+// Branch-scoped memory: a branch-local enableMemory does not affect the
 // parent after the fork joins (the branch frame lived on the branch's
 // own stack, which is discarded at join).
 node main(): boolean {

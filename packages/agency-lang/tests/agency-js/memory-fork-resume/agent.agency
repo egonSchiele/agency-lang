@@ -1,0 +1,20 @@
+import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
+
+// Each branch sets its OWN memory id, then interrupts. After the
+// interrupt is approved and execution resumes, the branch must still
+// observe its own id — i.e. the branch-local memory state must survive
+// serialize/restore and NOT be re-seeded from the parent on resume.
+def confirmWithId(item: string): string {
+  setMemoryId("id-${item}")
+  interrupt("approve ${item}?")
+  return getMemoryId()
+}
+
+node main() {
+  enableMemory({ dir: ".agency-tmp/memory-fork-resume" }) with approve
+  setMemoryId("base")
+  let results = fork(["a", "b"]) as item {
+    return confirmWithId(item)
+  }
+  return results
+}

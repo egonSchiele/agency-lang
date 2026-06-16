@@ -1,7 +1,7 @@
 import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
 
-// CHARACTERIZATION: each fork branch inherits the memory id set at the
-// top level (id reads resolve through the top-level stack).
+// Branch-scoped memory: each fork branch INHERITS the memory id set at
+// the top level at fork time (until it sets its own).
 node main() {
   enableMemory({ dir: ".agency-tmp/memory-fork-setid-inherits" }) with approve
   setMemoryId("base")

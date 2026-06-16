@@ -7,6 +7,7 @@ import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError } from "../errors.js";
+import { agencyStore } from "../asyncContext.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
@@ -349,17 +350,24 @@ export class RuntimeContext<T> {
    * for the "pop back to A returns A's manager" semantics.
    */
   getActiveMemoryManager(): MemoryManager | undefined {
-    if (!this.stateStack) return undefined;
-    let frame = this.stateStack.activeMemoryFrame();
-    if (!frame && this.jsonMemoryConfig && !this.stateStack.hasMemoryFrameStack()) {
+    // Resolve memory against the ACTIVE branch stack, not the top-level
+    // `this.stateStack`. Inside a fork/race/tool branch the active stack
+    // is that branch's own slice (seeded from the parent at fork time via
+    // `inheritMemoryFrom`), so `enableMemory`/`setMemoryId` inside a branch
+    // are visible to that branch and don't leak to siblings/parent. At the
+    // top level (and outside any ALS frame) this is `this.stateStack`.
+    const stack = agencyStore.getStore()?.stack ?? this.stateStack;
+    if (!stack) return undefined;
+    let frame = stack.activeMemoryFrame();
+    if (!frame && this.jsonMemoryConfig && !stack.hasMemoryFrameStack()) {
       // Old-checkpoint back-compat: stateStack restored from a
       // pre-memoryFrames snapshot (the array key isn't present at
       // all). Re-seed the JSON bottom frame so resume behaves like
       // a fresh run. An empty-array stack (user explicitly called
       // `disableMemory()`) is NOT re-seeded — that would silently
       // resurrect what the user asked to turn off.
-      this.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
-      frame = this.stateStack.activeMemoryFrame();
+      stack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
+      frame = stack.activeMemoryFrame();
     }
     if (!frame) return undefined;
 
@@ -381,17 +389,21 @@ export class RuntimeContext<T> {
       logLevel: this.logLevel,
       memoryIdRef: {
         // memoryId is orthogonal to which frame is active — it lives
-        // on `stateStack.other.memoryId` and persists across frame
-        // pushes/pops. We capture `this` (the execCtx) so the ref
-        // always sees the current stateStack (which can be replaced
-        // by `restoreState`).
+        // on `<stack>.other.memoryId` and persists across frame
+        // pushes/pops. Read the ACTIVE branch stack dynamically on each
+        // access (not a captured one): this manager is cached per
+        // configKey and shared across concurrent branches, so each
+        // branch's get/set must resolve to ITS own stack. Falls back to
+        // `this.stateStack` outside any ALS frame.
         get: () => {
-          const id = this.stateStack?.other?.memoryId;
+          const s = agencyStore.getStore()?.stack ?? this.stateStack;
+          const id = s?.other?.memoryId;
           return typeof id === "string" ? id : "default";
         },
         set: (id: string) => {
-          if (!this.stateStack) return;
-          this.stateStack.other.memoryId = id;
+          const s = agencyStore.getStore()?.stack ?? this.stateStack;
+          if (!s) return;
+          s.other.memoryId = id;
         },
       },
     });

@@ -116,21 +116,26 @@ type LsEntry = {
 export def ls(
   dir: string = ".",
   recursive: boolean = false,
+  maxResults: number = 1000,
   allowedPaths: string[] = [],
 ): Result {
   """
   List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
 
+  A recursive listing skips the heavyweight dirs (node_modules, .git, dist, build, .next, .cache) entirely and stops at `maxResults` entries (default 1000), so listing a project root can't return a multi-million-entry tree. A non-recursive listing still shows those dirs. If you suspect entries were truncated, narrow `dir` or raise `maxResults`.
+
   @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
+  @param maxResults - Maximum number of entries to return
   @param allowedPaths - Only allow listing directories under these prefixes
   """
   return interrupt std::ls("Are you sure you want to list this directory?", {
     dir: dir,
-    recursive: recursive
+    recursive: recursive,
+    maxResults: maxResults
   })
 
-  return try _ls(dir, recursive, allowedPaths)
+  return try _ls(dir, recursive, allowedPaths, maxResults)
 }
 
 type GrepMatch = {

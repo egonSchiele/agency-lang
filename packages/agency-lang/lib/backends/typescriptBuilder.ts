@@ -3447,6 +3447,11 @@ export class TypeScriptBuilder {
         String(this.agencyConfig.checkpoints.maxRestores),
       );
     }
+    if (cfg.client?.maxToolResultChars !== undefined) {
+      runtimeCtxArgs.maxToolResultChars = ts.raw(
+        String(cfg.client.maxToolResultChars),
+      );
+    }
 
     const traceConfigFields: Record<string, TsNode> = {
       program: ts.str(this.moduleId),

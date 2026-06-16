@@ -115,6 +115,11 @@ export class RuntimeContext<T> {
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
   statelogClient: StatelogClient;
   smoltalkDefaults: Partial<SmolConfig>;
+  /** Max characters of a single tool result fed back to the LLM (the
+   *  full result is still returned to Agency code). `undefined` falls
+   *  back to the runtime default in `runPrompt`. Baked in from
+   *  `agency.json` `client.maxToolResultChars` at compile time. */
+  maxToolResultChars?: number;
   private _llmClient: LLMClient;
   private _interruptResponses: Record<string, { response: InterruptResponse }> = {};
 
@@ -181,6 +186,7 @@ export class RuntimeContext<T> {
   constructor(args: {
     statelogConfig: StatelogConfig;
     smoltalkDefaults: Partial<SmolConfig>;
+    maxToolResultChars?: number;
     dirname: string;
     maxRestores?: number;
     traceConfig?: TraceConfig;
@@ -236,6 +242,7 @@ export class RuntimeContext<T> {
     this.graph = new SimpleMachine<T>(graphConfig);
 
     this.smoltalkDefaults = args.smoltalkDefaults;
+    this.maxToolResultChars = args.maxToolResultChars;
     this._llmClient = new SmoltalkClient();
     this.abortController = new AbortController();
 
@@ -265,6 +272,7 @@ export class RuntimeContext<T> {
     ) as RuntimeContext<T>;
     execCtx.graph = this.graph;
     execCtx.smoltalkDefaults = this.smoltalkDefaults;
+    execCtx.maxToolResultChars = this.maxToolResultChars;
     execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
     execCtx.statelogConfig = this.statelogConfig;

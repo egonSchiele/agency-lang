@@ -9,6 +9,7 @@ import type { TraceConfig } from "./trace/types.js";
 export type RuntimeContextConstructorArgs = {
   statelogConfig: StatelogConfig;
   smoltalkDefaults: Partial<SmolConfig>;
+  maxToolResultChars?: number;
   dirname: string;
   maxRestores?: number;
   traceConfig?: TraceConfig;

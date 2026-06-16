@@ -14,6 +14,7 @@ import { PromptBailout, PromptRunner } from "./promptRunner.js";
 import { isFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { LlmDefaults } from "../stdlib/llm.js";
 import { MessageThread } from "./state/messageThread.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -392,10 +393,8 @@ export async function runPrompt(args: {
   // parent at fork time). Layer them BETWEEN the baked
   // `smoltalkDefaults` and the per-call options, so precedence is
   // baked agency.json < stack defaults < per-call `llm({...})`.
-  const stackDefaults = (stateStack?.other?.llmDefaults ?? {}) as {
-    maxToolResultChars?: number;
-    [k: string]: unknown;
-  };
+  const stackDefaults: Partial<LlmDefaults> =
+    stateStack?.other?.llmDefaults ?? {};
   const { maxToolResultChars: stackMaxToolResultChars, ...stackSmolDefaults } =
     stackDefaults;
   const clientConfig = ctx.getSmoltalkConfig({

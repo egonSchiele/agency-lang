@@ -4,21 +4,41 @@ name: "llm"
 
 # llm
 
+Pick which model and options `llm()` calls use at runtime.
+
+`setModel` / `setLlmOptions` set defaults for subsequent `llm()` calls;
+`pickProvider` detects an available provider from API-key env vars.
+
+Defaults are branch-scoped — a `fork`/`race` branch inherits the
+run-wide default, but a `setModel` inside the branch stays local — and
+they survive interrupt/resume. A per-call `llm(..., { ... })` option
+always overrides these defaults.
+
 ## Types
 
 ### LlmDefaults
 
+Default options for `llm()` calls. Every field is optional; only the
+ *  fields you pass are changed. `provider` is normally derived from the
+ *  model name — set it only when the name doesn't imply a provider (e.g.
+ *  a custom or local model).
+
 ```ts
+/** Default options for `llm()` calls. Every field is optional; only the
+ *  fields you pass are changed. `provider` is normally derived from the
+ *  model name — set it only when the name doesn't imply a provider (e.g.
+ *  a custom or local model). */
 export type LlmDefaults = {
   model?: string;
+  provider?: string;
   temperature?: number;
-  reasoningEffort?: string;
+  reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
   maxToolResultChars?: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L20))
 
 ## Functions
 
@@ -28,14 +48,8 @@ export type LlmDefaults = {
 setLlmOptions(opts: LlmDefaults)
 ```
 
-Set default options for subsequent `llm()` calls. Only the fields you
-  pass are changed; others keep their current value. A per-call
-  `llm(..., { ... })` option still overrides these defaults.
-
-  Branch-scoped: a `fork`/`race` branch inherits the defaults active at
-  fork time, but a `setLlmOptions(...)` inside a branch affects only that
-  branch — it does not leak to siblings or the parent after join. The
-  defaults survive interrupt/resume.
+Set default options for subsequent llm() calls. Only the fields you
+  pass are changed; a per-call llm(..., { ... }) option overrides them.
 
   @param opts - The default LLM options to merge in
 
@@ -45,7 +59,7 @@ Set default options for subsequent `llm()` calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L29))
 
 ### setModel
 
@@ -53,13 +67,9 @@ Set default options for subsequent `llm()` calls. Only the fields you
 setModel(name: string)
 ```
 
-Set the default model for subsequent `llm()` calls. Convenience
-  wrapper for `setLlmOptions({ model: name })`.
+Set the default model for subsequent llm() calls.
 
-  A per-call `llm(..., { model })` option still overrides this, and it is
-  branch-scoped the same way `setLlmOptions` is.
-
-  @param name - The model name (e.g. "gpt-4o-mini", "claude-opus-4-8")
+  @param name - The model name, e.g. "gpt-4o-mini" or "claude-opus-4-8"
 
 **Parameters:**
 
@@ -67,24 +77,18 @@ Set the default model for subsequent `llm()` calls. Convenience
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L39))
 
 ### pickProvider
 
 ```ts
-pickProvider(order: string[]): Result
+pickProvider(order: string[]): Result<string>
 ```
 
-Detect which LLM provider is available based on API-key environment
-  variables, in your preferred order. Returns `success(provider)` with
-  the first provider in `order` whose key env var is set, or a
-  `failure(message)` listing the variables it checked if none are.
-
-  Recognized providers and their env vars: "anthropic"
+Return the first provider in `order` whose API-key environment variable
+  is set, or a failure if none are. Recognized providers: "anthropic"
   (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
-  (OPENAI_API_KEY). Unrecognized names in `order` are skipped. This only
-  detects the provider; mapping a provider to a concrete model is the
-  caller's job.
+  (OPENAI_API_KEY).
 
   @param order - Providers to check, highest preference first
 
@@ -94,6 +98,6 @@ Detect which LLM provider is available based on API-key environment
 |---|---|---|
 | order | `string[]` | ["anthropic", "google", "openai"] |
 
-**Returns:** `Result`
+**Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L63))

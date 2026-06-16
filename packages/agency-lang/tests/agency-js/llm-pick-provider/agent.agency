@@ -14,6 +14,7 @@ node main(): any {
   return {
     defaultOrder: describe(["anthropic", "google", "openai"]),
     openaiFirst: describe(["openai", "anthropic"]),
-    noneAvailable: describe(["anthropic"])
+    noneAvailable: describe(["anthropic"]),
+    emptyOrder: describe([])
   }
 }

@@ -9,8 +9,9 @@ import { getRuntimeContext } from "../runtime/asyncContext.js";
  */
 export type LlmDefaults = {
   model?: string;
+  provider?: string;
   temperature?: number;
-  reasoningEffort?: string;
+  reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
   maxToolResultChars?: number;
 };

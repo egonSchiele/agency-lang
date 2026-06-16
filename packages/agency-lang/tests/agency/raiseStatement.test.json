@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "raise continues to the next statement on approve",
+      "input": "",
+      "expectedOutput": "\"wrote\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "mainReject",
+      "description": "raise bails with a failure on reject",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

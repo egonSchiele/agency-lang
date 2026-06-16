@@ -16,6 +16,9 @@ export type GraphNodeDefinition = BaseNode & {
   tags?: Tag[];
   docComment?: AgencyMultiLineComment;
   docString?: MultiLineStringLiteral;
+  /** Declared effect set this node may raise (`raises <...>`).
+   *  Absent = unconstrained (may raise anything). */
+  raises?: VariableType;
 };
 
 export type NodeCall = {

@@ -102,6 +102,18 @@ function formatValueArgs(valueArgs: Expression[] | undefined): string {
 /**
  * Converts a VariableType to a string representation for naming/logging
  */
+// Render one member of an effect-set literal in Agency `<...>` form:
+// a namespaced/bare label prints unquoted; a nested set reference prints
+// its name. Guard clauses, no nested ternaries.
+function effectSetMemberToSource(
+  member: VariableType,
+  typeAliases: Record<string, VariableType>,
+): string {
+  if (member.type === "stringLiteralType") return member.value;
+  if (member.type === "typeAliasVariable") return member.aliasName;
+  return variableTypeToString(member, typeAliases, true);
+}
+
 export function variableTypeToString(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
@@ -125,6 +137,15 @@ export function variableTypeToString(
   } else if (variableType.type === "booleanLiteralType") {
     return `${variableType.value}`;
   } else if (variableType.type === "unionType") {
+    // Effect sets print as `<a, b>` in Agency source. Only in the
+    // formatting dialect — TS codegen never sees an effect set as a value
+    // type, and would want the plain `a | b` form anyway.
+    if (forFormatting && variableType.isEffectSet) {
+      const members = variableType.types
+        .map((t) => effectSetMemberToSource(t, typeAliases))
+        .join(", ");
+      return `<${members}>`;
+    }
     const str = variableType.types
       .map((t) => variableTypeToString(t, typeAliases, forFormatting))
       .join(" | ");

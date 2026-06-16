@@ -1253,6 +1253,72 @@ export const unionTypeParser: Parser<UnionType> = memo(
   _unionTypeParser,
 );
 
+// An item inside an effect-set literal `<...>`: a namespaced label
+// (`std::read`) is unambiguously a literal effect → StringLiteralType. A
+// bare identifier (`FsKinds`, `deploy`) is ambiguous at parse time — it may
+// name an effect set (to spread) OR be a bare literal effect — so it is
+// stored as a TypeAliasVariable and disambiguated later by
+// `resolveEffectSet` (known set → spread; otherwise → literal effect).
+// Effects are NOT required to be namespaced.
+const effectSetItemParser: Parser<VariableType> = (input: string) => {
+  const label = namespaceIdentifier(input);
+  if (label.success) {
+    return success(
+      { type: "stringLiteralType", value: label.result } as StringLiteralType,
+      label.rest,
+    );
+  }
+  const bare = many1WithJoin(varNameChar)(input);
+  if (!bare.success) return bare as ParserResult<VariableType>;
+  return success(
+    { type: "typeAliasVariable", aliasName: bare.result } as TypeAliasVariable,
+    bare.rest,
+  );
+};
+
+// Effect-set literal: `<std::read, std::write>`, `<>` (empty), `<*>` (any).
+// `<*>` lowers to the `any` primitive; everything else to a flagged
+// UnionType (possibly empty). Used by `effectSet` declarations and `raises`
+// clauses, NOT added to the general type grammar.
+export const effectSetLiteralParser: Parser<VariableType> = memo(
+  "effectSetLiteralParser",
+  (input: string): ParserResult<VariableType> => {
+    const star = seqC(
+      char("<"),
+      optionalSpaces,
+      char("*"),
+      optionalSpaces,
+      char(">"),
+    )(input);
+    if (star.success) {
+      return success(
+        { type: "primitiveType", value: "any" } as PrimitiveType,
+        star.rest,
+      );
+    }
+    const parser = seqC(
+      char("<"),
+      optionalSpaces,
+      capture(
+        sepBy(seqR(optionalSpaces, char(","), optionalSpaces), effectSetItemParser),
+        "types",
+      ),
+      optionalSpaces,
+      char(">"),
+    );
+    const r = parser(input);
+    if (!r.success) return r as ParserResult<VariableType>;
+    return success(
+      {
+        type: "unionType",
+        types: (r.result as any).types,
+        isEffectSet: true,
+      } as UnionType,
+      r.rest,
+    );
+  },
+);
+
 // Block type: () -> string, (number) -> any, (string, number) -> boolean
 // Params may be named or unnamed: (userMsg: string) -> string, (string) -> string.
 // Both `->` (preferred, matches inline-block lambda syntax) and `=>` (legacy)
@@ -1297,6 +1363,8 @@ export const blockTypeParser: Parser<BlockType> = memo(
       or(str("->"), str("=>")),
       optionalSpaces,
       capture(lazy(() => variableTypeParser), "returnType"),
+      optionalSpaces,
+      capture(optional(lazy(() => raisesClauseParser)), "raises"),
     );
     const result = parser(input);
     if (!result.success) return result;
@@ -1308,6 +1376,9 @@ export const blockTypeParser: Parser<BlockType> = memo(
           typeAnnotation: VariableType;
         }[],
         returnType: result.result.returnType,
+        ...((result.result as any).raises
+          ? { raises: (result.result as any).raises }
+          : {}),
       },
       result.rest,
     );
@@ -1564,6 +1635,43 @@ export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
     const baseResult = baseTypeAliasParser(exportResult.rest);
     if (!baseResult.success) return baseResult;
 
+    const result = { ...baseResult.result };
+    if (isExported) result.exported = true;
+    return { ...baseResult, result };
+  },
+);
+
+// `effectSet X = <...>` — declares a named effect set. Lowers to a
+// `typeAlias` AST node flagged `isEffectSet: true`, so it rides the existing
+// symbol-table / import-export machinery for type aliases with no new
+// plumbing. The RHS is an effect-set literal (`<...>` / `<>` / `<*>`).
+const baseEffectSetDeclParser: Parser<TypeAlias> = withLoc(
+  (input: string): ParserResult<TypeAlias> => {
+    const parser = seqC(
+      set("type", "typeAlias"),
+      set("isEffectSet", true),
+      str("effectSet"),
+      spaces,
+      capture(many1WithJoin(varNameChar), "aliasName"),
+      optionalSpaces,
+      str("="),
+      optionalSpaces,
+      capture(effectSetLiteralParser, "aliasedType"),
+      optionalSemicolon,
+      optionalSpacesOrNewline,
+    );
+    return parser(input) as ParserResult<TypeAlias>;
+  },
+);
+
+export const effectSetDeclParser: Parser<TypeAlias> = label(
+  "an effectSet declaration",
+  (input: string) => {
+    const exportResult = exportKeywordParser(input);
+    if (!exportResult.success) return exportResult as ParserResult<TypeAlias>;
+    const isExported = exportResult.result;
+    const baseResult = baseEffectSetDeclParser(exportResult.rest);
+    if (!baseResult.success) return baseResult;
     const result = { ...baseResult.result };
     if (isExported) result.exported = true;
     return { ...baseResult, result };
@@ -2532,16 +2640,41 @@ const namespaceIdentifier: Parser<string> = (input: string) => {
   return result;
 };
 
+// Keywords that introduce an interrupt raise; they must never be read as a
+// bare effect *label*, or `raise interrupt("x")` / `interrupt interrupt("x")`
+// would silently produce effect "interrupt" instead of an unlabeled
+// interrupt. (`raise interrupt(...)` is handled specially — see
+// `_raiseExprParser`.)
+const RESERVED_EFFECT_WORDS = ["interrupt", "raise"];
+
+// An effect label: namespaced (`std::read`) OR bare (`deploy`). Effects are
+// not required to be namespaced. Try the namespaced form first so
+// multi-segment names join correctly; fall back to a single bare identifier
+// (but never one of the interrupt-raising keywords).
+const effectIdentifier: Parser<string> = (input: string) => {
+  const ns = namespaceIdentifier(input);
+  if (ns.success) return ns;
+  const bare = many1WithJoin(varNameChar)(input);
+  if (!bare.success) return bare;
+  if (RESERVED_EFFECT_WORDS.includes(bare.result)) {
+    return failure(
+      `'${bare.result}' is a keyword and cannot be used as an effect label`,
+      input,
+    );
+  }
+  return bare;
+};
+
 // Core interrupt parser without trailing whitespace/semicolons (for use in expressions)
 // Handles both structured `interrupt std::read("msg")` and bare `interrupt("msg")` forms.
 // Bare form gets effect "unknown".
 const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
-  // Try structured form first: interrupt <namespace>(<args>)
+  // Try structured form first: interrupt <effect>(<args>)
   const structured = seqC(
     set("type", "interruptStatement"),
     str("interrupt"),
     spaces,
-    capture(namespaceIdentifier, "effect"),
+    capture(effectIdentifier, "effect"),
     captureCaptures(argumentListParser),
   )(input);
   if (structured.success) return success(structured.result as InterruptStatement, structured.rest);
@@ -2569,6 +2702,65 @@ export const interruptStatementParser: Parser<InterruptStatement> = label("an in
     return success(result.result, wsResult.success ? wsResult.rest : (semiResult.success ? semiResult.rest : result.rest));
   },
 ));
+
+// `raise` raises an interrupt as a statement. Accepted forms:
+//   raise interrupt("x")            — wraps an interrupt expression → effect "unknown"
+//   raise interrupt std::write("x") — wraps an interrupt expression → effect "std::write"
+//   raise std::write("x")           — effect shorthand → effect "std::write"
+//   raise deploy("x")               — bare effect shorthand → effect "deploy"
+//   raise("x")                      — bare → effect "unknown"
+// Lowers to the same `interruptStatement` node as `interrupt(...)` (so codegen
+// and effect inference are unchanged); the `viaRaise` marker only drives
+// formatter output. NOTE: distinct from the `throw(...)` builtin (JS Error).
+const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
+  // `raise ` (keyword + at least one space) introduces the long forms.
+  const head = seqC(str("raise"), spaces)(input);
+  if (head.success) {
+    // `raise interrupt(...)` — wrap a full interrupt expression. This is why
+    // `interrupt` is a reserved effect word: it routes here (effect "unknown"
+    // or the wrapped effect) instead of being read as a label named
+    // "interrupt".
+    const wrapped = _interruptExprParser(head.rest);
+    if (wrapped.success) {
+      return success(
+        { ...(wrapped.result as InterruptStatement), viaRaise: true },
+        wrapped.rest,
+      );
+    }
+    // `raise <effect>(args)` shorthand.
+    const structured = seqC(
+      set("type", "interruptStatement"),
+      set("viaRaise", true),
+      capture(effectIdentifier, "effect"),
+      captureCaptures(argumentListParser),
+    )(head.rest);
+    if (structured.success) {
+      return success(structured.result as InterruptStatement, structured.rest);
+    }
+  }
+  // `raise(args)` — bare, effect "unknown" (no space before `(`).
+  const bare = seqC(
+    set("type", "interruptStatement"),
+    set("viaRaise", true),
+    str("raise"),
+    set("effect", "unknown"),
+    captureCaptures(argumentListParser),
+  )(input);
+  if (!bare.success) return bare;
+  return success(bare.result as InterruptStatement, bare.rest);
+};
+
+export const raiseStatementParser: Parser<InterruptStatement> = label(
+  "a raise statement",
+  withLoc((input: string) => {
+    const result = _raiseExprParser(input);
+    if (!result.success) return result;
+    const semiResult = optionalSemicolon(result.rest);
+    const afterSemi = semiResult.success ? semiResult.rest : result.rest;
+    const wsResult = optionalSpacesOrNewline(afterSemi);
+    return success(result.result, wsResult.success ? wsResult.rest : afterSemi);
+  }),
+);
 
 // =============================================================================
 // binop.ts
@@ -3356,6 +3548,7 @@ export const docStringParser = multiLineStringParser;
 
 const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   keywordParser,
+  effectSetDeclParser,
   debug(typeAliasParser, "error in typeAliasParser"),
   tagParser,
   bodyReservedModifierParser,
@@ -3369,6 +3562,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   lazy(() => withModifierParser),
   returnStatementParser,
   gotoStatementParser,
+  raiseStatementParser,
   interruptStatementParser,
   lazy(() => forLoopParser),
   lazy(() => whileLoopParser),
@@ -3946,6 +4140,21 @@ export const functionReturnTypeParser: Parser<VariableType> = memo(
   ),
 );
 
+// `raises <...>` / `raises FsKinds` — the declared effect set. Value is a
+// VariableType: a flagged UnionType, the `any` primitive (`<*>`), or a
+// TypeAliasVariable referencing a named effectSet (or a bare effect).
+export const raisesClauseParser: Parser<VariableType> = memo(
+  "raisesClauseParser",
+  map(
+    seqC(
+      str("raises"),
+      many1(space),
+      capture(or(effectSetLiteralParser, typeAliasVariableParser), "value"),
+    ),
+    (r: any) => r.value as VariableType,
+  ),
+);
+
 const _baseFunctionParser: Parser<any> = memo(
   "_baseFunctionParser",
   seqC(
@@ -3979,6 +4188,8 @@ const _baseFunctionParser: Parser<any> = memo(
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
     capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
+    optionalSpacesOrNewline,
+    capture(optional(raisesClauseParser), "raises"),
     captureCaptures(
       parseError(
         "Expected function body",
@@ -4044,9 +4255,12 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
 
-  const { keyword: _keyword, returnTypeValidated: _rtv, ...rest } = baseResult.result as any;
+  const { keyword: _keyword, returnTypeValidated: _rtv, raises: _raises, ...rest } = baseResult.result as any;
   const result = { ...rest } as FunctionDefinition;
   if (_rtv) result.returnTypeValidated = true;
+  // Only attach `raises` when a clause was present (optional() yields null);
+  // keeps the AST shape unchanged for functions without a raises clause.
+  if (_raises) result.raises = _raises;
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
 
@@ -4104,6 +4318,8 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       optionalSpaces,
       capture(optional(functionReturnTypeParser), "returnType"),
       capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
+      optionalSpacesOrNewline,
+      capture(optional(raisesClauseParser), "raises"),
       captureCaptures(
         parseError(
           "expected node body",
@@ -4120,9 +4336,11 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       ),
     ),
     (result: any) => {
-      const { returnTypeValidated: _rtv, exported: _exp, ...rest } = result;
+      const { returnTypeValidated: _rtv, exported: _exp, raises: _raises, ...rest } = result;
       if (_rtv) rest.returnTypeValidated = true;
       if (_exp) rest.exported = true;
+      // Only attach `raises` when a clause was present (optional() yields null).
+      if (_raises) rest.raises = _raises;
       return rest;
     },
   ),

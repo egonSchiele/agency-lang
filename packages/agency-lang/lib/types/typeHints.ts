@@ -95,6 +95,9 @@ export type TypeAliasEntry = {
    */
   valueParams?: ValueParam[];
   tags?: Tag[];
+  /** True when the alias was declared with `effectSet` (not `type`).
+   *  Lets the effect-set resolver tell an effect set from a plain alias. */
+  isEffectSet?: boolean;
 };
 
 export type ResultType = {
@@ -122,6 +125,9 @@ export type BlockType = {
   params: { name: string; typeAnnotation: VariableType }[];
   returnType: VariableType;
   tags?: Tag[];
+  /** Effect set this function-typed value may raise (`-> T raises <...>`).
+   *  Phase 1: parsed and formatted only; compatibility is not yet checked. */
+  raises?: VariableType;
 };
 
 export type PrimitiveType = {
@@ -158,6 +164,10 @@ export type UnionType = {
   type: "unionType";
   types: VariableType[];
   tags?: Tag[];
+  /** True when this union came from effect-set syntax `<a, b>`. Used only
+   *  for diagnostics wording and formatter round-tripping — never for
+   *  core type-checking (subset checks run on union assignability). */
+  isEffectSet?: boolean;
 };
 
 export type ObjectProperty = {
@@ -219,6 +229,8 @@ export type TypeAlias = BaseNode & {
   exported?: boolean;
   docComment?: AgencyMultiLineComment;
   tags?: Tag[];
+  /** True when declared via `effectSet X = <...>` rather than `type X = ...`. */
+  isEffectSet?: boolean;
 };
 
 export type FunctionRefType = {
@@ -228,6 +240,7 @@ export type FunctionRefType = {
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
   tags?: Tag[];
+  raises?: VariableType;
 };
 
 export type TypeAliasVariable = {

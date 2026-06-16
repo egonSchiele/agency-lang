@@ -77,6 +77,9 @@ export type TypeSymbol = {
   /** `@validate(...)` / `@jsonSchema(...)` annotations declared above the alias.
    * Carried through imports/re-exports so annotation metadata flows across modules. */
   tags?: Tag[];
+  /** True when declared via `effectSet` (not `type`). Carried through imports
+   *  so an imported effect set is recognized as one. */
+  isEffectSet?: boolean;
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -357,6 +360,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           aliasedType: node.aliasedType,
           ...(node.typeParams ? { typeParams: node.typeParams } : {}),
           ...(node.valueParams ? { valueParams: node.valueParams } : {}),
+          ...(node.isEffectSet ? { isEffectSet: true } : {}),
           ...(typeAliasTags[node.aliasName]?.length
             ? { tags: typeAliasTags[node.aliasName] }
             : {}),

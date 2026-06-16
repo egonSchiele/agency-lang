@@ -516,10 +516,12 @@ export class AgencyGenerator {
 
   protected processInterruptStatement(node: InterruptStatement): string {
     const args = this.renderArgList(node.arguments);
+    // `raise` lowers to an interruptStatement; viaRaise drives the keyword.
+    const keyword = node.viaRaise ? "raise" : "interrupt";
     if (node.effect === "unknown") {
-      return this.indentStr(`interrupt${args}`);
+      return this.indentStr(`${keyword}${args}`);
     }
-    return this.indentStr(`interrupt ${node.effect}${args}`);
+    return this.indentStr(`${keyword} ${node.effect}${args}`);
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
@@ -677,6 +679,17 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
+    // An effectSet declaration uses the `effectSet` keyword; its RHS is an
+    // effect set rendered via `effectSetTypeToString` so `<*>` (stored as the
+    // `any` primitive) round-trips as `<*>` rather than `any`.
+    if (node.isEffectSet) {
+      return (
+        this.formatDocComment(node) +
+        this.indentStr(
+          `${exportPrefix}effectSet ${node.aliasName} = ${this.effectSetTypeToString(node.aliasedType)}`,
+        )
+      );
+    }
     const typeParamsStr = this.formatTypeParams(node.typeParams);
     const valueParamsStr = this.formatValueParams(node.valueParams);
     const tags = this.formatAttachedTags(node);
@@ -880,6 +893,23 @@ export class AgencyGenerator {
 
   // Function methods
 
+  // Render an effect-set TYPE to its surface form. `<*>` (stored as the `any`
+  // primitive) prints as `<*>`; a named set reference prints bare (`FsKinds`);
+  // an inline flagged union renders as `<...>` via variableTypeToString.
+  // Single source of truth for both effectSet declarations and raises clauses.
+  protected effectSetTypeToString(type: VariableType): string {
+    if (type.type === "primitiveType" && type.value === "any") {
+      return "<*>";
+    }
+    return variableTypeToString(type, this.typeAliases, true);
+  }
+
+  // Render a ` raises ...` clause for a def/node signature, or "" when absent.
+  protected formatRaisesClause(raises: VariableType | undefined): string {
+    if (!raises) return "";
+    return ` raises ${this.effectSetTypeToString(raises)}`;
+  }
+
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { functionName, body, parameters } = node;
@@ -890,6 +920,7 @@ export class AgencyGenerator {
       variableTypeToString(node.returnType, this.typeAliases, true) +
       returnTypeBang
       : "";
+    const raisesStr = this.formatRaisesClause(node.raises);
 
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
@@ -903,7 +934,7 @@ export class AgencyGenerator {
       prefix,
       "(",
       ")",
-      `${returnTypeStr} {`,
+      `${returnTypeStr}${raisesStr} {`,
     );
 
     let result = this.indentStr(`${signature}\n`);
@@ -1345,6 +1376,7 @@ export class AgencyGenerator {
       variableTypeToString(node.returnType, this.typeAliases, true) +
       returnTypeBang
       : "";
+    const raisesStr = this.formatRaisesClause(node.raises);
     const exportPrefix = node.exported ? "export " : "";
     const prefix = `${exportPrefix}node ${nodeName}`;
     const renderedParams = this.renderParams(parameters);
@@ -1353,7 +1385,7 @@ export class AgencyGenerator {
       prefix,
       "(",
       ")",
-      `${returnTypeStr} {`,
+      `${returnTypeStr}${raisesStr} {`,
     );
 
     let result = this.indentStr(`${signature}\n`);

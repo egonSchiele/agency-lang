@@ -5,7 +5,22 @@
       "description": "Each branch sets and observes its own memory id (no leakage/race)",
       "input": "",
       "expectedOutput": "[\"id-0\",\"id-1\",\"id-2\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "funcTest",
+      "description": "Each branch sets and observes its own memory id, even when set in a function and read in another function",
+      "input": "",
+      "expectedOutput": "[\"id-0-func\",\"id-1-func\",\"id-2-func\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

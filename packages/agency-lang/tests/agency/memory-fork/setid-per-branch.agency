@@ -5,10 +5,31 @@ import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
 // shared state). This is the payoff of the branch-scoping fix for the
 // `fork(range(N)) as i { setMemoryId(...) }` pattern.
 node main() {
-  enableMemory({ dir: ".agency-tmp/memory-fork-setid-per-branch" }) with approve
+  enableMemory({
+    dir: ".agency-tmp/memory-fork-setid-per-branch"
+  }) with approve
   const results = fork([0, 1, 2]) as i {
     setMemoryId("id-${i}")
     return getMemoryId()
+  }
+  return results
+}
+
+def setId(id: string) {
+  setMemoryId(id)
+}
+
+def foo() {
+  return getMemoryId()
+}
+
+node funcTest() {
+  enableMemory({
+    dir: ".agency-tmp/memory-fork-setid-per-branch"
+  }) with approve
+  const results = fork([0, 1, 2]) as i {
+    setId("id-${i}-func")
+    return foo()
   }
   return results
 }

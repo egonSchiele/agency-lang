@@ -18,7 +18,7 @@ export type MemoryConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L40))
 
 ## Functions
 
@@ -40,7 +40,7 @@ Return `true` iff there is an active memory frame on the current
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L48))
 
 ### setMemoryId
 
@@ -60,6 +60,10 @@ Set the memory scope for this agent run. Call this before other
   across `enableMemory` / `disableMemory` calls. If you want a fresh
   scope when switching stores, call `setMemoryId(...)` explicitly.
 
+  Branch-scoped: a fork/race branch inherits the id active at fork
+  time, but a `setMemoryId(...)` inside a branch affects only that
+  branch — it does not leak to siblings or the parent after join.
+
   @param id - A unique identifier for the memory scope (e.g. user ID)
 
 **Parameters:**
@@ -68,7 +72,23 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L63))
+
+### getMemoryId
+
+```ts
+getMemoryId(): string
+```
+
+Return the current memory scope id (the value last passed to
+  `setMemoryId`, or "default" if it was never set or memory is not
+  active). Reads the scope visible to the current execution branch.
+
+  @returns The active memory scope id
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L86))
 
 ### enableMemory
 
@@ -94,8 +114,9 @@ Turn memory on for the current execution branch using `config`.
   resolved so the same string in JSON and in code points at the same
   place). The directory is auto-created if missing.
 
-  Per-fork: each fork branch has its own frame stack, so an
-  `enableMemory` in one branch does not affect siblings.
+  Branch-scoped: a fork/race branch inherits the memory config active
+  at fork time, but `enableMemory`/`disableMemory` inside a branch
+  affect only that branch — not its siblings or the parent after join.
 
   @param config - Memory configuration with `dir` required
 
@@ -107,7 +128,7 @@ Turn memory on for the current execution branch using `config`.
 
 **Throws:** `std::memory::enableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L97))
 
 ### disableMemory
 
@@ -128,7 +149,7 @@ Pop the top memory frame from the current branch's stateStack.
 
 **Throws:** `std::memory::disableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L130))
 
 ### memory
 
@@ -168,7 +189,7 @@ Run `block` with `config` pushed as the active memory frame; pop
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L148))
 
 ### remember
 
@@ -195,7 +216,7 @@ Extract and store structured facts from the given text into the
 
 **Throws:** `std::memory::remember`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L181))
 
 ### recall
 
@@ -222,7 +243,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Throws:** `std::memory::recall`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L207))
 
 ### forget
 
@@ -248,4 +269,4 @@ Soft-delete facts matching the query from the knowledge graph.
 
 **Throws:** `std::memory::forget`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L225))

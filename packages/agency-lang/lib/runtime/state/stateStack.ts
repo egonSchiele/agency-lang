@@ -425,6 +425,29 @@ export class StateStack {
     return true;
   }
 
+  /**
+   * Seed this stack's memory state (active id + frame stack) from a
+   * parent stack at fork time, so a branch INHERITS the run-wide memory
+   * config while its own later `setMemoryId` / `enableMemory` /
+   * `disableMemory` affect only this branch. The frame stack is
+   * shallow-copied (a fresh array sharing the immutable `MemoryFrame`
+   * refs) so push/pop on the branch can't mutate the parent's array;
+   * `memoryId` is a string copy. Caller must only invoke this on a FRESH
+   * branch — see `inheritBranchMemory` in `runBatch.ts`, which guards on
+   * the branch not yet having its own memory state so a resumed branch
+   * keeps its serialized frames/id.
+   */
+  inheritMemoryFrom(parent: StateStack): void {
+    const pid = parent.other.memoryId;
+    if (typeof pid === "string") {
+      this.other.memoryId = pid;
+    }
+    const pframes = parent.memoryFramesArr();
+    if (pframes !== undefined) {
+      this.other.memoryFrames = [...pframes];
+    }
+  }
+
   /** Pop the top memory frame, including the JSON-seeded bottom frame.
    *  Returns the popped frame or `undefined` if the stack is already
    *  empty.

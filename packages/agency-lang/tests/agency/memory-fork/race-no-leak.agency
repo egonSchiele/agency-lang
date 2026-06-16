@@ -1,0 +1,15 @@
+import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
+
+// Branch-scoped memory applies to `race` too (not just `fork`): the
+// winning branch's setMemoryId stays branch-local and does not leak to
+// the parent after the race resolves. Exercises the runBatch "race"
+// mode path through the same inheritBranchMemory seam.
+node main(): string {
+  enableMemory({ dir: ".agency-tmp/memory-fork-race-no-leak" }) with approve
+  setMemoryId("base")
+  race([0]) as i {
+    setMemoryId("branch")
+    return getMemoryId()
+  }
+  return getMemoryId()
+}

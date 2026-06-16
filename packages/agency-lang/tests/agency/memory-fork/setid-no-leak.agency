@@ -1,0 +1,15 @@
+import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
+
+// Branch-scoped memory: setMemoryId inside a branch affects only that
+// branch and does NOT leak to the parent after the fork joins. (This is
+// the `fork(range(10)) as i { setMemoryId(i) }` case — branch-local, no
+// cross-branch leakage or races.)
+node main(): string {
+  enableMemory({ dir: ".agency-tmp/memory-fork-setid-no-leak" }) with approve
+  setMemoryId("base")
+  fork([0]) as i {
+    setMemoryId("branch")
+    return getMemoryId()
+  }
+  return getMemoryId()
+}

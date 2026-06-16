@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Branches inherit top-level enableMemory (isMemoryActive true in each)",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

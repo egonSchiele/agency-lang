@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "enableMemory inside a branch is visible only in that branch",
+      "input": "",
+      "expectedOutput": "[true,false,true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

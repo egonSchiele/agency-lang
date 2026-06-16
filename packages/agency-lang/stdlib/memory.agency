@@ -9,6 +9,7 @@
 // `lib/stdlib/memory.ts` for the migration window.
 import {
   _setMemoryId,
+  _getMemoryId,
   _shouldRunMemory,
   _buildExtractionPrompt,
   _applyExtractionResult,
@@ -73,9 +74,24 @@ export def setMemoryId(id: string) {
   across `enableMemory` / `disableMemory` calls. If you want a fresh
   scope when switching stores, call `setMemoryId(...)` explicitly.
 
+  Branch-scoped: a fork/race branch inherits the id active at fork
+  time, but a `setMemoryId(...)` inside a branch affects only that
+  branch — it does not leak to siblings or the parent after join.
+
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
   _setMemoryId(id)
+}
+
+export def getMemoryId(): string {
+  """
+  Return the current memory scope id (the value last passed to
+  `setMemoryId`, or "default" if it was never set or memory is not
+  active). Reads the scope visible to the current execution branch.
+
+  @returns The active memory scope id
+  """
+  return _getMemoryId()
 }
 
 export def enableMemory(config: MemoryConfig) {
@@ -98,8 +114,9 @@ export def enableMemory(config: MemoryConfig) {
   resolved so the same string in JSON and in code points at the same
   place). The directory is auto-created if missing.
 
-  Per-fork: each fork branch has its own frame stack, so an
-  `enableMemory` in one branch does not affect siblings.
+  Branch-scoped: a fork/race branch inherits the memory config active
+  at fork time, but `enableMemory`/`disableMemory` inside a branch
+  affect only that branch — not its siblings or the parent after join.
 
   @param config - Memory configuration with `dir` required
   """

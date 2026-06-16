@@ -1,0 +1,14 @@
+import { enableMemory, disableMemory, isMemoryActive } from "std::memory"
+
+// Branch-scoped memory: a branch can disable the inherited memory
+// (popping its own copy of the frame stack) and that affects only the
+// branch — the parent still has memory active after the fork joins.
+node main(): boolean {
+  enableMemory({ dir: ".agency-tmp/memory-fork-disable" }) with approve
+  const branchActive = fork([0, 1]) as i {
+    disableMemory() with approve
+    return isMemoryActive()
+  }
+  const parentActive = isMemoryActive()
+  return branchActive[0] == false && branchActive[1] == false && parentActive == true
+}

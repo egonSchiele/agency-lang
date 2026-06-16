@@ -1,0 +1,12 @@
+import { enableMemory, isMemoryActive } from "std::memory"
+
+// Branch-scoped memory: with memory enabled at the top level, each fork
+// branch INHERITS it (isMemoryActive() is true in every branch). A branch
+// is seeded with the parent's memory frames at fork time.
+node main() {
+  enableMemory({ dir: ".agency-tmp/memory-fork-enable-inherits" }) with approve
+  const results = fork([1, 2, 3]) as i {
+    return isMemoryActive()
+  }
+  return results
+}

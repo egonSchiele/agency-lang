@@ -1,0 +1,15 @@
+import { enableMemory, isMemoryActive } from "std::memory"
+
+// Branch-scoped memory: enabling memory INSIDE a branch is visible only
+// in that branch. Even branches enable it (observe active=true); odd
+// branches don't (active=false). (This is the
+// `fork(range(10)) as i { if (i % 2 == 0) { enableMemory() } }` case.)
+node main() {
+  const results = fork([0, 1, 2, 3]) as i {
+    if (i % 2 == 0) {
+      enableMemory({ dir: ".agency-tmp/memory-fork-branch-${i}" }) with approve
+    }
+    return isMemoryActive()
+  }
+  return results
+}

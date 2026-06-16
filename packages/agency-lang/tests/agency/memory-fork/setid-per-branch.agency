@@ -1,0 +1,14 @@
+import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
+
+// Branch-scoped memory: each fork branch sets its own memory id and sees
+// only its own — no cross-branch leakage, and deterministic (no race on
+// shared state). This is the payoff of the branch-scoping fix for the
+// `fork(range(N)) as i { setMemoryId(...) }` pattern.
+node main() {
+  enableMemory({ dir: ".agency-tmp/memory-fork-setid-per-branch" }) with approve
+  const results = fork([0, 1, 2]) as i {
+    setMemoryId("id-${i}")
+    return getMemoryId()
+  }
+  return results
+}

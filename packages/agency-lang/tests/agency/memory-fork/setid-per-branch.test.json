@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Each branch sets and observes its own memory id (no leakage/race)",
+      "input": "",
+      "expectedOutput": "[\"id-0\",\"id-1\",\"id-2\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

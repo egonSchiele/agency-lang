@@ -4,5 +4,6 @@
   "hasGit": false,
   "cappedCount": 2,
   "zeroCount": 0,
-  "missingFailed": true
+  "missingFailed": true,
+  "nonRecursiveHasNodeModules": true
 }

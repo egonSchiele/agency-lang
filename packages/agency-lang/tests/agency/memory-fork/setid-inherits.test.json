@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Branches inherit the top-level memory id via getMemoryId",
+      "input": "",
+      "expectedOutput": "[\"base\",\"base\",\"base\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

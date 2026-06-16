@@ -239,6 +239,24 @@ function rehydrateInheritedGuards(
   branch.guardsRehydrated = true;
 }
 
+/** Seed a fresh branch's memory state (active id + frame stack) from the
+ *  parent so the branch inherits the run-wide memory config, while its
+ *  own later `setMemoryId`/`enableMemory`/`disableMemory` stay branch-
+ *  local. Fresh-branch detection mirrors `seedBranchCost`: a value-based
+ *  check (resume-safe — does not rely on a live-only flag) so a resumed
+ *  branch, whose stack was restored from JSON with its own serialized
+ *  memory state, is never re-seeded from the parent. */
+function inheritBranchMemory(
+  branchStack: StateStack,
+  parentStack: StateStack,
+): void {
+  const fresh =
+    !branchStack.hasMemoryFrameStack() &&
+    branchStack.other.memoryId === undefined;
+  if (!fresh) return;
+  branchStack.inheritMemoryFrom(parentStack);
+}
+
 /** Wire up a branch's AbortController + composed signal, seed cost, and
  * fire `onBranchStart`. Returns the child's `invoke` promise (or a
  * resolved promise for cached branches). Centralized so all three modes
@@ -261,6 +279,7 @@ function startInvoke<T>(
   // — no install plumbing involved. Order is informational only; both
   // run before invoke.
   rehydrateInheritedGuards(t.branch, parentStack);
+  inheritBranchMemory(t.branch.stack, parentStack);
   const signal = composeBranchAbortSignal(t.branch, parentStack);
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "race branch setMemoryId stays branch-local (no leak to parent)",
+      "input": "",
+      "expectedOutput": "\"base\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

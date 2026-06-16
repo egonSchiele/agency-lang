@@ -73,6 +73,34 @@ describe("raises subset diagnostic", () => {
   });
 });
 
+describe("unknown (unlabeled) effects", () => {
+  it("`raise interrupt(...)` is reported as effect 'unknown', not 'interrupt'", () => {
+    const errs = typecheckSource(
+      'def f(): number raises <std::read> { raise interrupt("x")\n return 1 }',
+    );
+    const err = errs.find((e) => /raises effect/.test(e.message));
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("'unknown'");
+    expect(err!.message).not.toContain("'interrupt'");
+  });
+
+  it("`raises <unknown>` precisely accepts an unlabeled interrupt", () => {
+    const errs = raisesErrors('def f(): number raises <unknown> { raise interrupt("x")\n return 1 }');
+    expect(errs).toHaveLength(0);
+  });
+
+  it("`raises <unknown>` does NOT accept a labeled effect", () => {
+    const errs = typecheckSource(
+      'def f(): number raises <unknown> { raise std::write("m",{})\n return 1 }',
+    );
+    expect(errs.find((e) => /raises effect 'std::write'/.test(e.message))).toBeDefined();
+  });
+
+  it("`raises <*>` accepts an unlabeled interrupt too", () => {
+    expect(raisesErrors('def f(): number raises <*> { raise interrupt("x")\n return 1 }')).toHaveLength(0);
+  });
+});
+
 describe("raises must reference an effect set (not a plain type)", () => {
   it("errors when raises references a non-effectSet type alias", () => {
     const errs = typecheckSource(

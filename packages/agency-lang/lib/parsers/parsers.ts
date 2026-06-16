@@ -2640,13 +2640,30 @@ const namespaceIdentifier: Parser<string> = (input: string) => {
   return result;
 };
 
+// Keywords that introduce an interrupt raise; they must never be read as a
+// bare effect *label*, or `raise interrupt("x")` / `interrupt interrupt("x")`
+// would silently produce effect "interrupt" instead of an unlabeled
+// interrupt. (`raise interrupt(...)` is handled specially — see
+// `_raiseExprParser`.)
+const RESERVED_EFFECT_WORDS = ["interrupt", "raise"];
+
 // An effect label: namespaced (`std::read`) OR bare (`deploy`). Effects are
 // not required to be namespaced. Try the namespaced form first so
-// multi-segment names join correctly; fall back to a single bare identifier.
-const effectIdentifier: Parser<string> = or(
-  namespaceIdentifier,
-  many1WithJoin(varNameChar),
-);
+// multi-segment names join correctly; fall back to a single bare identifier
+// (but never one of the interrupt-raising keywords).
+const effectIdentifier: Parser<string> = (input: string) => {
+  const ns = namespaceIdentifier(input);
+  if (ns.success) return ns;
+  const bare = many1WithJoin(varNameChar)(input);
+  if (!bare.success) return bare;
+  if (RESERVED_EFFECT_WORDS.includes(bare.result)) {
+    return failure(
+      `'${bare.result}' is a keyword and cannot be used as an effect label`,
+      input,
+    );
+  }
+  return bare;
+};
 
 // Core interrupt parser without trailing whitespace/semicolons (for use in expressions)
 // Handles both structured `interrupt std::read("msg")` and bare `interrupt("msg")` forms.
@@ -2686,24 +2703,42 @@ export const interruptStatementParser: Parser<InterruptStatement> = label("an in
   },
 ));
 
-// `raise std::write(args)` / `raise deploy(args)` / `raise(args)` — raise an
-// interrupt as a statement. Lowers to the same `interruptStatement` node as
-// `interrupt(...)` (so codegen and effect inference are unchanged); the
-// `viaRaise` marker only drives formatter output. Mirrors
-// `_interruptExprParser`. NOTE: distinct from the `throw(...)` builtin,
-// which raises a JS Error.
+// `raise` raises an interrupt as a statement. Accepted forms:
+//   raise interrupt("x")            — wraps an interrupt expression → effect "unknown"
+//   raise interrupt std::write("x") — wraps an interrupt expression → effect "std::write"
+//   raise std::write("x")           — effect shorthand → effect "std::write"
+//   raise deploy("x")               — bare effect shorthand → effect "deploy"
+//   raise("x")                      — bare → effect "unknown"
+// Lowers to the same `interruptStatement` node as `interrupt(...)` (so codegen
+// and effect inference are unchanged); the `viaRaise` marker only drives
+// formatter output. NOTE: distinct from the `throw(...)` builtin (JS Error).
 const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
-  const structured = seqC(
-    set("type", "interruptStatement"),
-    set("viaRaise", true),
-    str("raise"),
-    spaces,
-    capture(effectIdentifier, "effect"),
-    captureCaptures(argumentListParser),
-  )(input);
-  if (structured.success) {
-    return success(structured.result as InterruptStatement, structured.rest);
+  // `raise ` (keyword + at least one space) introduces the long forms.
+  const head = seqC(str("raise"), spaces)(input);
+  if (head.success) {
+    // `raise interrupt(...)` — wrap a full interrupt expression. This is why
+    // `interrupt` is a reserved effect word: it routes here (effect "unknown"
+    // or the wrapped effect) instead of being read as a label named
+    // "interrupt".
+    const wrapped = _interruptExprParser(head.rest);
+    if (wrapped.success) {
+      return success(
+        { ...(wrapped.result as InterruptStatement), viaRaise: true },
+        wrapped.rest,
+      );
+    }
+    // `raise <effect>(args)` shorthand.
+    const structured = seqC(
+      set("type", "interruptStatement"),
+      set("viaRaise", true),
+      capture(effectIdentifier, "effect"),
+      captureCaptures(argumentListParser),
+    )(head.rest);
+    if (structured.success) {
+      return success(structured.result as InterruptStatement, structured.rest);
+    }
   }
+  // `raise(args)` — bare, effect "unknown" (no space before `(`).
   const bare = seqC(
     set("type", "interruptStatement"),
     set("viaRaise", true),

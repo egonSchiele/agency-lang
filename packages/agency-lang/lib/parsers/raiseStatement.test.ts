@@ -25,6 +25,28 @@ describe("raiseStatementParser", () => {
     });
   });
 
+  it("`raise interrupt(...)` wraps the interrupt expression → effect unknown", () => {
+    const r = raiseStatementParser('raise interrupt("Interrupting main")');
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result).toMatchObject({
+      type: "interruptStatement",
+      effect: "unknown",
+      viaRaise: true,
+    });
+  });
+
+  it("`raise interrupt EFFECT(...)` wraps a structured interrupt expression", () => {
+    const r = raiseStatementParser('raise interrupt std::write("m", {})');
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result).toMatchObject({
+      type: "interruptStatement",
+      effect: "std::write",
+      viaRaise: true,
+    });
+  });
+
   it("parses a bare raise with effect unknown", () => {
     const r = raiseStatementParser('raise("Are you sure?")');
     expect(r.success).toBe(true);

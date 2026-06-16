@@ -36,6 +36,28 @@ as is `raise myapp::deploy(...)`. Use the bare `interrupt(...)` /
 > `raise` is for interrupts. It is unrelated to the `throw(...)` builtin,
 > which raises a JavaScript exception.
 
+### Unlabeled (`unknown`) effects
+
+An interrupt with no effect label has the effect **`unknown`**. All of
+these produce `unknown`:
+
+```ts
+interrupt("Continue?")          // expression form
+raise("Continue?")              // statement form
+raise interrupt("Continue?")    // `raise` wrapping an interrupt expression
+```
+
+`unknown` is an ordinary effect label, so you declare it like any other:
+
+```ts
+def f() raises <unknown> { raise("Continue?") }   // precise: only unlabeled interrupts
+def g() raises <*>       { raise("Continue?") }   // broad: any effect at all
+```
+
+Use `raises <unknown>` when a function should raise *only* unlabeled
+interrupts — it's a tighter contract than `<*>`. `unknown` is reserved for
+this purpose, so don't use it as your own effect name.
+
 ## Declaring what a function raises
 
 Add a `raises` clause to a `def` or `node` to declare its effect set:

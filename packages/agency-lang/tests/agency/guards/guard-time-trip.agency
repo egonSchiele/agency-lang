@@ -6,7 +6,8 @@ import { guard } from "std::thread"
 // next runner step boundary then throws GuardExceededError("time",
 // ...). The stdlib guard's `try` converts it to a Failure with type
 // "timeoutFailure". Because sleep now wakes at the abort moment,
-// actualTime can be roughly equal to maxTime; we assert `>=`.
+// actualTime lands right around maxTime; we assert it reaches the
+// limit within a small tolerance.
 node main() {
   const result = guard(time: 20ms) as {
     sleep(150ms)
@@ -14,9 +15,14 @@ node main() {
     return "did not trip"
   }
   if (isFailure(result)) {
-    // actualTime >= maxTime catches a bug where actualTime is just set
-    // to 0 (or some sentinel); actualTime > 0 alone wouldn't.
-    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime}"
+    // actualTime is measured with performance.now(), while the guard's
+    // timer fires off libuv's coarser millisecond clock. Those two
+    // clocks can disagree by a fraction of a millisecond, so actualTime
+    // occasionally reads just under maxTime even though the limit was
+    // reached. Allow a 2ms tolerance: this still catches a bug where
+    // actualTime is left at 0 (or some sentinel), but no longer flakes
+    // on sub-millisecond clock skew.
+    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime - 2}"
   }
   return result.value
 }

@@ -79,3 +79,22 @@ describe("interruptExprParser", () => {
     expect(result.result.effect).toBe("unknown");
   });
 });
+
+describe("interrupt with non-namespaced effect", () => {
+  it("parses a bare named effect", () => {
+    const r = interruptStatementParser('interrupt deploy("confirm?", {})');
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result).toMatchObject({ type: "interruptStatement", effect: "deploy" });
+  });
+  it("still parses a namespaced effect", () => {
+    const r = interruptStatementParser('interrupt std::read("m")');
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.result.effect).toBe("std::read");
+  });
+  it("still parses bare interrupt() as unknown", () => {
+    const r = interruptStatementParser('interrupt("m")');
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.result.effect).toBe("unknown");
+  });
+});

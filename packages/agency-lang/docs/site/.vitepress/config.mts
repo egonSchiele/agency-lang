@@ -42,6 +42,10 @@ export default defineConfig({
               text: "Structured Interrupts",
               link: "/guide/structured-interrupts",
             },
+            {
+              text: "Effect Sets and raises",
+              link: "/guide/effects-and-raises",
+            },
             { text: "Partial Function Application", link: "/guide/partial-application" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             {
@@ -113,6 +117,7 @@ export default defineConfig({
             { text: "Functions", link: "/guide/functions" },
             { text: "Interrupts", link: "/guide/interrupts" },
             { text: "Handlers", link: "/guide/handlers" },
+            { text: "Effect Sets and raises", link: "/guide/effects-and-raises" },
             { text: "Testing", link: "/guide/testing" },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
             {

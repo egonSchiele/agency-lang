@@ -55,6 +55,9 @@ export type FunctionDefinition = BaseNode & {
   safe?: boolean;
   exported?: boolean;
   tags?: Tag[];
+  /** Declared effect set this function may raise (`raises <...>`).
+   *  Absent = unconstrained (may raise anything). */
+  raises?: VariableType;
 };
 
 export type FunctionCall = BaseNode & {

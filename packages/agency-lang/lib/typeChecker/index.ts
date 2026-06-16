@@ -39,6 +39,7 @@ import {
   checkCallbackBodyInterrupts,
   checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
+import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
@@ -311,6 +312,10 @@ export class TypeChecker {
     // 6b. Reject handlers whose body may itself raise an interrupt — that
     // re-enters the handler chain and recurses (see HandlerRecursionError).
     checkHandlerBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
+
+    // 6c. Verify each function/node's declared `raises` clause is not
+    // exceeded by its transitively-inferred effect set.
+    checkRaisesDeclarations(interruptEffectsByFunction, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

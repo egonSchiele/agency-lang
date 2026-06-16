@@ -516,10 +516,12 @@ export class AgencyGenerator {
 
   protected processInterruptStatement(node: InterruptStatement): string {
     const args = this.renderArgList(node.arguments);
+    // `raise` lowers to an interruptStatement; viaRaise drives the keyword.
+    const keyword = node.viaRaise ? "raise" : "interrupt";
     if (node.effect === "unknown") {
-      return this.indentStr(`interrupt${args}`);
+      return this.indentStr(`${keyword}${args}`);
     }
-    return this.indentStr(`interrupt ${node.effect}${args}`);
+    return this.indentStr(`${keyword} ${node.effect}${args}`);
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
@@ -677,6 +679,14 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
+    // An effectSet declaration uses the `effectSet` keyword; its RHS is a
+    // flagged effect-set union that `variableTypeToString` renders as `<...>`.
+    if (node.isEffectSet) {
+      return (
+        this.formatDocComment(node) +
+        this.indentStr(`${exportPrefix}effectSet ${node.aliasName} = ${aliasedTypeStr}`)
+      );
+    }
     const typeParamsStr = this.formatTypeParams(node.typeParams);
     const valueParamsStr = this.formatValueParams(node.valueParams);
     const tags = this.formatAttachedTags(node);
@@ -880,6 +890,18 @@ export class AgencyGenerator {
 
   // Function methods
 
+  // Render a ` raises <...>` clause for a def/node signature, or "" when
+  // absent. `<*>` (stored as the `any` primitive) prints verbatim; a named
+  // set reference prints bare; an inline flagged union renders via
+  // variableTypeToString. Single helper shared by def and node emit.
+  protected formatRaisesClause(raises: VariableType | undefined): string {
+    if (!raises) return "";
+    if (raises.type === "primitiveType" && raises.value === "any") {
+      return " raises <*>";
+    }
+    return ` raises ${variableTypeToString(raises, this.typeAliases, true)}`;
+  }
+
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { functionName, body, parameters } = node;
@@ -890,6 +912,7 @@ export class AgencyGenerator {
       variableTypeToString(node.returnType, this.typeAliases, true) +
       returnTypeBang
       : "";
+    const raisesStr = this.formatRaisesClause(node.raises);
 
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
@@ -903,7 +926,7 @@ export class AgencyGenerator {
       prefix,
       "(",
       ")",
-      `${returnTypeStr} {`,
+      `${returnTypeStr}${raisesStr} {`,
     );
 
     let result = this.indentStr(`${signature}\n`);
@@ -1345,6 +1368,7 @@ export class AgencyGenerator {
       variableTypeToString(node.returnType, this.typeAliases, true) +
       returnTypeBang
       : "";
+    const raisesStr = this.formatRaisesClause(node.raises);
     const exportPrefix = node.exported ? "export " : "";
     const prefix = `${exportPrefix}node ${nodeName}`;
     const renderedParams = this.renderParams(parameters);
@@ -1353,7 +1377,7 @@ export class AgencyGenerator {
       prefix,
       "(",
       ")",
-      `${returnTypeStr} {`,
+      `${returnTypeStr}${raisesStr} {`,
     );
 
     let result = this.indentStr(`${signature}\n`);

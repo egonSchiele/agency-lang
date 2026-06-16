@@ -1,0 +1,17 @@
+def doWrite(): string {
+  raise std::write("confirm?", {})
+  return "wrote"
+}
+
+node main(): string {
+  const result = doWrite() with approve
+  return result
+}
+
+node mainReject(): string {
+  const result = doWrite() with reject
+  if (isFailure(result)) {
+    return "rejected"
+  }
+  return "notrejected"
+}

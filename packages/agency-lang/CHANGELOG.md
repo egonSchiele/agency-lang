@@ -1,3 +1,20 @@
+## Unreleased
+
+### Language / Typechecker
+- **Effect sets and `raises` declarations.** Functions and nodes can now
+  declare the interrupt effects they may raise with a `raises <...>` clause,
+  verified at compile time: the typechecker reports any effect raised
+  (directly or transitively) that exceeds the declaration. `raises <>` means
+  "raises nothing"; `raises <*>` (or omitting the clause) means "raises
+  anything". Group effects into reusable, importable `effectSet`s
+  (`effectSet FsKinds = <std::read, std::write>`).
+- **`raise` statement.** `raise std::write("...", {...})` raises an interrupt
+  as a statement (continues on approve, bails with a `failure` on reject) —
+  a clearer spelling of the `return interrupt(...)` idiom. Distinct from the
+  JS-error `throw(...)` builtin.
+- Interrupt effects no longer need to be namespaced — `raise deploy(...)`
+  and `interrupt deploy(...)` work alongside `std::read`-style labels.
+
 ## Jun 12 2026 — v0.5
 
 ### Language / Typechecker

@@ -47,12 +47,14 @@ export class ScopedTypeAliases {
     typeParams?: TypeParam[],
     tags?: Tag[],
     valueParams?: ValueParam[],
+    isEffectSet?: boolean,
   ): void {
     if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
     const entry: TypeAliasEntry = { body };
     if (typeParams) entry.typeParams = typeParams;
     if (valueParams) entry.valueParams = valueParams;
     if (tags && tags.length > 0) entry.tags = tags;
+    if (isEffectSet) entry.isEffectSet = true;
     this.byScope[scopeKey][name] = entry;
   }
 
@@ -231,6 +233,7 @@ export function buildCompilationUnit(
         node.typeParams,
         tags,
         node.valueParams,
+        node.isEffectSet,
       );
     }
   }
@@ -284,6 +287,7 @@ export function buildCompilationUnit(
             r.symbol.typeParams,
             r.symbol.tags,
             r.symbol.valueParams,
+            r.symbol.isEffectSet,
           );
           // Imported type's body may reference other aliases from its
           // module — pull those transitively too.

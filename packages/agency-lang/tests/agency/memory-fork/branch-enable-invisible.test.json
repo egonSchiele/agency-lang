@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Branch-local enableMemory is invisible to isMemoryActive in that branch",
+      "input": "",
+      "expectedOutput": "[false,false,false,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

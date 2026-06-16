@@ -1,0 +1,17 @@
+import { enableMemory, isMemoryActive } from "std::memory"
+
+// CHARACTERIZATION (documents current behavior, which may be surprising):
+// Enabling memory INSIDE a branch is not observable in that branch.
+// `enableMemory` pushes a frame onto the branch's own stack (the ALS
+// slice), but `isMemoryActive` reads the top-level stack, so the
+// branch's freshly-pushed frame is invisible here. (This is the
+// `fork(range(10)) as i { if (i % 2 == 0) { enableMemory() } }` case.)
+node main() {
+  const results = fork([0, 1, 2, 3]) as i {
+    if (i % 2 == 0) {
+      enableMemory({ dir: ".agency-tmp/memory-fork-branch-${i}" }) with approve
+    }
+    return isMemoryActive()
+  }
+  return results
+}

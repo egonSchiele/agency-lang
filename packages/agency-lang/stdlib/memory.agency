@@ -9,6 +9,7 @@
 // `lib/stdlib/memory.ts` for the migration window.
 import {
   _setMemoryId,
+  _getMemoryId,
   _shouldRunMemory,
   _buildExtractionPrompt,
   _applyExtractionResult,
@@ -76,6 +77,17 @@ export def setMemoryId(id: string) {
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
   _setMemoryId(id)
+}
+
+export def getMemoryId(): string {
+  """
+  Return the current memory scope id (the value last passed to
+  `setMemoryId`, or "default" if it was never set or memory is not
+  active). Reads the scope visible to the current execution branch.
+
+  @returns The active memory scope id
+  """
+  return _getMemoryId()
 }
 
 export def enableMemory(config: MemoryConfig) {

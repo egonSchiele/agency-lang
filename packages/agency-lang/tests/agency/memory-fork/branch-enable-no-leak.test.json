@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Branch-local enableMemory does not leak to the parent after join",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "setMemoryId inside a branch leaks the id to the parent after join",
+      "input": "",
+      "expectedOutput": "\"branch\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

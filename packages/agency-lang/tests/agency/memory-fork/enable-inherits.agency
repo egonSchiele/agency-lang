@@ -1,0 +1,13 @@
+import { enableMemory, isMemoryActive } from "std::memory"
+
+// CHARACTERIZATION (documents current behavior, which may be surprising):
+// With memory enabled at the top level, each fork branch observes it as
+// active. Branch memory reads resolve through ctx.stateStack (the
+// top-level stack), so branches inherit the top-level frame.
+node main() {
+  enableMemory({ dir: ".agency-tmp/memory-fork-enable-inherits" }) with approve
+  const results = fork([1, 2, 3]) as i {
+    return isMemoryActive()
+  }
+  return results
+}

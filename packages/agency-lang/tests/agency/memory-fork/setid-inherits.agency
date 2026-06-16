@@ -1,0 +1,12 @@
+import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
+
+// CHARACTERIZATION: each fork branch inherits the memory id set at the
+// top level (id reads resolve through the top-level stack).
+node main() {
+  enableMemory({ dir: ".agency-tmp/memory-fork-setid-inherits" }) with approve
+  setMemoryId("base")
+  const results = fork([1, 2, 3]) as i {
+    return getMemoryId()
+  }
+  return results
+}

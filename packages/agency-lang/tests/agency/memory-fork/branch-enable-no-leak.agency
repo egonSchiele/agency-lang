@@ -1,0 +1,12 @@
+import { enableMemory, isMemoryActive } from "std::memory"
+
+// CHARACTERIZATION: a branch-local enableMemory does not affect the
+// parent after the fork joins (the branch frame lived on the branch's
+// own stack, which is discarded at join).
+node main(): boolean {
+  fork([0]) as i {
+    enableMemory({ dir: ".agency-tmp/memory-fork-no-leak" }) with approve
+    return isMemoryActive()
+  }
+  return isMemoryActive()
+}

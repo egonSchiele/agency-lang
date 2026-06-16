@@ -1,0 +1,16 @@
+import { enableMemory, setMemoryId, getMemoryId } from "std::memory"
+
+// CHARACTERIZATION (documents current behavior, which may be surprising):
+// setMemoryId inside a branch writes the shared top-level scope, so the
+// change LEAKS to the parent after the fork. (This is the
+// `fork(range(10)) as i { setMemoryId(i) }` case — with many branches it
+// also races; a single branch keeps the assertion deterministic.)
+node main(): string {
+  enableMemory({ dir: ".agency-tmp/memory-fork-setid-leaks" }) with approve
+  setMemoryId("base")
+  fork([0]) as i {
+    setMemoryId("branch")
+    return getMemoryId()
+  }
+  return getMemoryId()
+}

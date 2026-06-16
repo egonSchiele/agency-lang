@@ -135,6 +135,12 @@ export async function _setMemoryId(id: string): Promise<void> {
   manager.setMemoryId(id);
 }
 
+export function _getMemoryId(): string {
+  const { ctx } = getRuntimeContext();
+  const manager = ctx?.getActiveMemoryManager?.();
+  return manager?.getMemoryId?.() ?? "default";
+}
+
 export function _shouldRunMemory(): boolean {
   const { ctx } = getRuntimeContext();
   return ctx?.getActiveMemoryManager?.() !== undefined;

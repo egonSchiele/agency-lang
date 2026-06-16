@@ -22,6 +22,16 @@ describe("formatter: effect sets, raises clauses, raise statement", () => {
       expectedOutput: "export effectSet NetKinds = <std::http>",
     },
     {
+      description: "effectSet = <*> round-trips as <*> (not `any`)",
+      input: "effectSet Anything = <*>",
+      expectedOutput: "effectSet Anything = <*>",
+    },
+    {
+      description: "effectSet = <> round-trips",
+      input: "effectSet None = <>",
+      expectedOutput: "effectSet None = <>",
+    },
+    {
       description: "raises clause with inline set on a def + raise statement",
       input: 'def f(): string raises <std::read> { raise std::read("m", {}) }',
       expectedOutput: 'def f(): string raises <std::read> {\n  raise std::read("m", {})\n}',

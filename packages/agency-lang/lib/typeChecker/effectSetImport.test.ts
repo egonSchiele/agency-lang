@@ -9,16 +9,20 @@ import { typeCheck } from "./index.js";
 
 function typecheckImporter(files: Record<string, string>, entry: string) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-imp-"));
-  for (const [name, src] of Object.entries(files)) {
-    fs.writeFileSync(path.join(dir, name), src);
+  try {
+    for (const [name, src] of Object.entries(files)) {
+      fs.writeFileSync(path.join(dir, name), src);
+    }
+    const entryPath = path.join(dir, entry);
+    const src = files[entry];
+    const parsed = parseAgency(src);
+    if (!parsed.success) throw new Error(`parse failed: ${(parsed as { message?: string }).message}`);
+    const symbols = SymbolTable.build(entryPath);
+    const info = buildCompilationUnit(parsed.result, symbols, entryPath, src);
+    return typeCheck(parsed.result, {}, info).errors;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  const entryPath = path.join(dir, entry);
-  const src = files[entry];
-  const parsed = parseAgency(src);
-  if (!parsed.success) throw new Error(`parse failed: ${(parsed as { message?: string }).message}`);
-  const symbols = SymbolTable.build(entryPath);
-  const info = buildCompilationUnit(parsed.result, symbols, entryPath, src);
-  return typeCheck(parsed.result, {}, info).errors;
 }
 
 describe("cross-module effectSet import", () => {

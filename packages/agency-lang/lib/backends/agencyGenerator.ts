@@ -679,12 +679,15 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
-    // An effectSet declaration uses the `effectSet` keyword; its RHS is a
-    // flagged effect-set union that `variableTypeToString` renders as `<...>`.
+    // An effectSet declaration uses the `effectSet` keyword; its RHS is an
+    // effect set rendered via `effectSetTypeToString` so `<*>` (stored as the
+    // `any` primitive) round-trips as `<*>` rather than `any`.
     if (node.isEffectSet) {
       return (
         this.formatDocComment(node) +
-        this.indentStr(`${exportPrefix}effectSet ${node.aliasName} = ${aliasedTypeStr}`)
+        this.indentStr(
+          `${exportPrefix}effectSet ${node.aliasName} = ${this.effectSetTypeToString(node.aliasedType)}`,
+        )
       );
     }
     const typeParamsStr = this.formatTypeParams(node.typeParams);
@@ -890,16 +893,21 @@ export class AgencyGenerator {
 
   // Function methods
 
-  // Render a ` raises <...>` clause for a def/node signature, or "" when
-  // absent. `<*>` (stored as the `any` primitive) prints verbatim; a named
-  // set reference prints bare; an inline flagged union renders via
-  // variableTypeToString. Single helper shared by def and node emit.
+  // Render an effect-set TYPE to its surface form. `<*>` (stored as the `any`
+  // primitive) prints as `<*>`; a named set reference prints bare (`FsKinds`);
+  // an inline flagged union renders as `<...>` via variableTypeToString.
+  // Single source of truth for both effectSet declarations and raises clauses.
+  protected effectSetTypeToString(type: VariableType): string {
+    if (type.type === "primitiveType" && type.value === "any") {
+      return "<*>";
+    }
+    return variableTypeToString(type, this.typeAliases, true);
+  }
+
+  // Render a ` raises ...` clause for a def/node signature, or "" when absent.
   protected formatRaisesClause(raises: VariableType | undefined): string {
     if (!raises) return "";
-    if (raises.type === "primitiveType" && raises.value === "any") {
-      return " raises <*>";
-    }
-    return ` raises ${variableTypeToString(raises, this.typeAliases, true)}`;
+    return ` raises ${this.effectSetTypeToString(raises)}`;
   }
 
   protected processFunctionDefinition(node: FunctionDefinition): string {

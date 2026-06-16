@@ -29,6 +29,7 @@ export function checkRaisesDeclarations(
     name: string,
     raises: VariableType | undefined,
     loc: SourceLocation | undefined,
+    kind: "Function" | "Node",
   ): void => {
     if (!raises) return; // no clause = unconstrained
 
@@ -59,7 +60,7 @@ export function checkRaisesDeclarations(
       if (!declared.labels.includes(effect)) {
         ctx.errors.push({
           message:
-            `Function '${name}' raises effect '${effect}', which exceeds ` +
+            `${kind} '${name}' raises effect '${effect}', which exceeds ` +
             `its declared 'raises ${declaredStr}'. Add '${effect}' to the clause.`,
           severity: "error",
           loc,
@@ -69,9 +70,9 @@ export function checkRaisesDeclarations(
   };
 
   for (const [name, def] of Object.entries(ctx.functionDefs)) {
-    check(name, def.raises, def.loc);
+    check(name, def.raises, def.loc, "Function");
   }
   for (const [name, def] of Object.entries(ctx.nodeDefs)) {
-    check(name, def.raises, def.loc);
+    check(name, def.raises, def.loc, "Node");
   }
 }

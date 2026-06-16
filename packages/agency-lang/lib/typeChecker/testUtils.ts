@@ -23,11 +23,15 @@ export function typecheckSource(src: string): TypeCheckError[] {
     throw new Error(`parse failed: ${(parsed as { message?: string }).message ?? "unknown"}`);
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-tc-"));
-  const file = path.join(dir, "main.agency");
-  fs.writeFileSync(file, src);
-  const symbols = SymbolTable.build(file);
-  const info = buildCompilationUnit(parsed.result, symbols, file, src);
-  return typeCheck(parsed.result, {}, info).errors;
+  try {
+    const file = path.join(dir, "main.agency");
+    fs.writeFileSync(file, src);
+    const symbols = SymbolTable.build(file);
+    const info = buildCompilationUnit(parsed.result, symbols, file, src);
+    return typeCheck(parsed.result, {}, info).errors;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 export function raisesErrors(src: string): TypeCheckError[] {

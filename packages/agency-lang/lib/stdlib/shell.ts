@@ -227,17 +227,28 @@ export async function _ls(
   // dir as `dir`". All policy lives in `resolveDir` so future rules
   // (env vars, normalization, etc.) propagate automatically.
   const root = await resolveDir(dir, allowedPaths ?? []);
+  // Coerce the cap so a non-finite value (e.g. NaN) can't silently
+  // disable the bound and reintroduce unbounded recursion. `0` (and any
+  // value <= 0) is a valid request that yields an empty result.
+  const cap = Number.isFinite(maxResults) ? maxResults : DEFAULT_LS_MAX_RESULTS;
   const out: LsEntry[] = [];
 
-  // Returns false to signal "stop walking" (cap reached).
-  async function walk(current: string): Promise<boolean> {
+  // Returns false to signal "stop walking" (cap reached). `isRoot`
+  // surfaces a readdir failure on the scanned dir itself — matching the
+  // documented "fails if the directory cannot be read" contract — while
+  // an unreadable *subdirectory* during a recursive walk is skipped
+  // rather than failing the whole listing.
+  async function walk(current: string, isRoot: boolean): Promise<boolean> {
     let names: string[];
     try {
       names = await fs.readdir(current);
-    } catch {
+    } catch (err) {
+      if (isRoot) throw err;
       return true;
     }
     for (const name of names) {
+      // Check the cap before pushing so `cap <= 0` yields an empty result.
+      if (out.length >= cap) return false;
       // On a recursive walk, skip the heavyweight dirs entirely — don't
       // list them and don't descend. A non-recursive `ls` still shows
       // them (the user asked for exactly this directory's contents).
@@ -261,15 +272,14 @@ export async function _ls(
         type,
         size: st.size,
       });
-      if (out.length >= maxResults) return false;
       if (recursive && type === "dir") {
-        if (!(await walk(full))) return false;
+        if (!(await walk(full, false))) return false;
       }
     }
     return true;
   }
 
-  await walk(root);
+  await walk(root, true);
   return out;
 }
 

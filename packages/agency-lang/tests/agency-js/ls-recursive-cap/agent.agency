@@ -27,10 +27,28 @@ node main(args: { dir: string }): any {
     cappedCount = c.length
   }
 
+  // maxResults: 0 is a valid request for "no entries" — must yield an
+  // empty result, not one entry (cap is checked before each push).
+  let zeroCount = -1
+  const zero = ls(args.dir, recursive: true, maxResults: 0) with approve
+  if (zero is success(z)) {
+    zeroCount = z.length
+  }
+
+  // An unreadable / missing root must surface as a failure (matches the
+  // documented contract), not silently succeed with an empty list.
+  let missingFailed = false
+  const missing = ls("__agency_no_such_dir__", recursive: true) with approve
+  if (isFailure(missing)) {
+    missingFailed = true
+  }
+
   return {
     total: total,
     hasNodeModules: hasNodeModules,
     hasGit: hasGit,
-    cappedCount: cappedCount
+    cappedCount: cappedCount,
+    zeroCount: zeroCount,
+    missingFailed: missingFailed
   }
 }

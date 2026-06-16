@@ -1,0 +1,36 @@
+import { ls } from "std::shell"
+
+// Regression: a recursive `ls` must skip the heavyweight dirs
+// (node_modules, .git, ...) and honor `maxResults`, so listing a
+// project root can't return a multi-million-entry tree (which once fed
+// a 48MB / ~12M-token blob back to an LLM).
+node main(args: { dir: string }): any {
+  let total = 0
+  let hasNodeModules = false
+  let hasGit = false
+  const r = ls(args.dir, recursive: true) with approve
+  if (r is success(entries)) {
+    for (e in entries) {
+      total = total + 1
+      if (e.path.includes("node_modules")) {
+        hasNodeModules = true
+      }
+      if (e.path.includes(".git")) {
+        hasGit = true
+      }
+    }
+  }
+
+  let cappedCount = 0
+  const capped = ls(args.dir, recursive: true, maxResults: 2) with approve
+  if (capped is success(c)) {
+    cappedCount = c.length
+  }
+
+  return {
+    total: total,
+    hasNodeModules: hasNodeModules,
+    hasGit: hasGit,
+    cappedCount: cappedCount
+  }
+}

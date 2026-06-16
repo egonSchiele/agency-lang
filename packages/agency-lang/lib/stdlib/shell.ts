@@ -206,10 +206,18 @@ export type LsEntry = {
   size: number;
 };
 
+// Cap on how many entries a single `ls` returns. Without this, a
+// recursive listing of a project root could return a multi-million
+// entry tree (which once produced a ~48MB / ~12M-token blob fed back to
+// an LLM). The Agency `ls` wrapper passes an explicit value; this is a
+// safety default for direct callers.
+const DEFAULT_LS_MAX_RESULTS = 1000;
+
 export async function _ls(
   dir: string,
   recursive: boolean,
   allowedPaths?: string[],
+  maxResults: number = DEFAULT_LS_MAX_RESULTS,
 ): Promise<LsEntry[]> {
   // Resolve relative `dir` against the calling module's directory (same
   // policy as `read`/`write`), so co-located resource folders work no
@@ -221,9 +229,19 @@ export async function _ls(
   const root = await resolveDir(dir, allowedPaths ?? []);
   const out: LsEntry[] = [];
 
-  async function walk(current: string): Promise<void> {
-    const names = await fs.readdir(current);
+  // Returns false to signal "stop walking" (cap reached).
+  async function walk(current: string): Promise<boolean> {
+    let names: string[];
+    try {
+      names = await fs.readdir(current);
+    } catch {
+      return true;
+    }
     for (const name of names) {
+      // On a recursive walk, skip the heavyweight dirs entirely — don't
+      // list them and don't descend. A non-recursive `ls` still shows
+      // them (the user asked for exactly this directory's contents).
+      if (recursive && SKIP_DIRS.has(name)) continue;
       const full = path.join(current, name);
       let st: Awaited<ReturnType<typeof fs.lstat>>;
       try {
@@ -243,10 +261,12 @@ export async function _ls(
         type,
         size: st.size,
       });
+      if (out.length >= maxResults) return false;
       if (recursive && type === "dir") {
-        await walk(full);
+        if (!(await walk(full))) return false;
       }
     }
+    return true;
   }
 
   await walk(root);

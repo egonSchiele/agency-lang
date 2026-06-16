@@ -79,13 +79,16 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 ### ls
 
 ```ts
-ls(dir: string, recursive: boolean, allowedPaths: string[]): Result
+ls(dir: string, recursive: boolean, maxResults: number, allowedPaths: string[]): Result
 ```
 
 List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
 
+  A recursive listing skips the heavyweight dirs (node_modules, .git, dist, build, .next, .cache) entirely and stops at `maxResults` entries (default 1000), so listing a project root can't return a multi-million-entry tree. A non-recursive listing still shows those dirs. If you suspect entries were truncated, narrow `dir` or raise `maxResults`.
+
   @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
+  @param maxResults - Maximum number of entries to return
   @param allowedPaths - Only allow listing directories under these prefixes
 
 **Parameters:**
@@ -94,6 +97,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 |---|---|---|
 | dir | `string` | "." |
 | recursive | `boolean` | false |
+| maxResults | `number` | 1000 |
 | allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
@@ -134,7 +138,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L147))
 
 ### glob
 
@@ -162,7 +166,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxRe
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L177))
 
 ### stat
 
@@ -188,7 +192,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L207))
 
 ### exists
 
@@ -214,7 +218,7 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L224))
 
 ### which
 
@@ -232,4 +236,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L241))

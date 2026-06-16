@@ -11,6 +11,7 @@
  */
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
+import { setLlmOptions, pickProvider } from "std::llm"
 
 // Per-user state directory for the agent (persistent memory + saved
 // policy). We expand `~` ourselves via `env("HOME")` because
@@ -51,3 +52,75 @@ static const _memoryReady = enableMemory({
     model: "text-embedding-3-small"
   }
 }) with approve
+
+// Default models per provider. `slowProvider` pins the provider for the
+// deep-reasoning call: OpenAI needs the Responses API for reasoning /
+// extended thinking; native providers use their own. Used as fallbacks
+// when the user doesn't pass --model / --fastmodel / --slowmodel.
+type ProviderModels = { fast: string; slow: string; slowProvider: string }
+
+export static const MODELS: Record<string, ProviderModels> = {
+  openai: { fast: "gpt-4o-mini", slow: "gpt-5.5", slowProvider: "openai-responses" },
+  anthropic: { fast: "claude-haiku-4-5-20251001", slow: "claude-opus-4-8", slowProvider: "anthropic" },
+  google: { fast: "gemini-2.5-flash", slow: "gemini-2.5-pro", slowProvider: "google" }
+}
+
+// The slow ("deep reasoning") model + its provider, set once by
+// `configureModels()`. The deep subagents (oracle, explorer) read these.
+// An empty slowProvider means "let smoltalk resolve the provider from
+// the model name".
+let slowModel: string = "gpt-5.5"
+let slowProvider: string = "openai-responses"
+
+export def getSlowModel(): string {
+  return slowModel
+}
+
+export def getSlowProvider(): string {
+  return slowProvider
+}
+
+/** Resolve and apply the agent's models from CLI flag values (each
+ *  already normalized to "" when absent). The fast model becomes the
+ *  run-wide default; the slow model is stored for the deep subagents.
+ *  Explicit flags win; otherwise a provider is detected from API-key env
+ *  vars and its defaults are used (exits the process if none is found).
+ *  `provider` forces the provider when a model name doesn't imply one
+ *  (e.g. a custom or local model). */
+export def configureModels(model: string, fast: string, slow: string, provider: string) {
+  let detected = "openai"
+  const needFast = fast == "" && model == ""
+  const needSlow = slow == "" && model == ""
+  if (needFast || needSlow) {
+    const picked = pickProvider()
+    if (isSuccess(picked)) {
+      detected = picked.value
+    } else {
+      print(picked.error)
+      process.exit(1)
+    }
+  }
+
+  let fastModel = MODELS[detected].fast
+  if (fast != "") {
+    fastModel = fast
+  } else if (model != "") {
+    fastModel = model
+  }
+  setLlmOptions({ model: fastModel, provider: provider })
+
+  if (slow != "") {
+    slowModel = slow
+    slowProvider = provider
+  } else if (model != "") {
+    slowModel = model
+    slowProvider = provider
+  } else {
+    slowModel = MODELS[detected].slow
+    if (provider != "") {
+      slowProvider = provider
+    } else {
+      slowProvider = MODELS[detected].slowProvider
+    }
+  }
+}

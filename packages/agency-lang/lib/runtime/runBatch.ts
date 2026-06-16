@@ -239,20 +239,22 @@ function rehydrateInheritedGuards(
   branch.guardsRehydrated = true;
 }
 
-/** Seed a fresh branch's memory state (active id + frame stack) from the
- *  parent so the branch inherits the run-wide memory config, while its
- *  own later `setMemoryId`/`enableMemory`/`disableMemory` stay branch-
- *  local. Fresh-branch detection mirrors `seedBranchCost`: a value-based
- *  check (resume-safe — does not rely on a live-only flag) so a resumed
- *  branch, whose stack was restored from JSON with its own serialized
- *  memory state, is never re-seeded from the parent. */
+/** Seed a fresh branch's dynamic state (memory id + frame stack, and the
+ *  `std::llm` defaults) from the parent so the branch inherits the
+ *  run-wide config, while its own later `setMemoryId`/`enableMemory`/
+ *  `disableMemory`/`setLlmOptions` stay branch-local. Fresh-branch
+ *  detection mirrors `seedBranchCost`: a value-based check (resume-safe —
+ *  does not rely on a live-only flag) so a resumed branch, whose stack
+ *  was restored from JSON with its own serialized state, is never
+ *  re-seeded from the parent. */
 function inheritBranchMemory(
   branchStack: StateStack,
   parentStack: StateStack,
 ): void {
   const fresh =
     !branchStack.hasMemoryFrameStack() &&
-    branchStack.other.memoryId === undefined;
+    branchStack.other.memoryId === undefined &&
+    branchStack.other.llmDefaults === undefined;
   if (!fresh) return;
   branchStack.inheritMemoryFrom(parentStack);
 }

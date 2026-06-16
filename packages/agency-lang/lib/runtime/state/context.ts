@@ -359,13 +359,27 @@ export class RuntimeContext<T> {
     const stack = agencyStore.getStore()?.stack ?? this.stateStack;
     if (!stack) return undefined;
     let frame = stack.activeMemoryFrame();
-    if (!frame && this.jsonMemoryConfig && !stack.hasMemoryFrameStack()) {
-      // Old-checkpoint back-compat: stateStack restored from a
-      // pre-memoryFrames snapshot (the array key isn't present at
-      // all). Re-seed the JSON bottom frame so resume behaves like
-      // a fresh run. An empty-array stack (user explicitly called
-      // `disableMemory()`) is NOT re-seeded — that would silently
-      // resurrect what the user asked to turn off.
+    if (
+      !frame &&
+      // TOP-LEVEL ONLY. `stack === this.stateStack` is true at the top
+      // level and in bootstrap frames, false inside any fork/race/tool
+      // branch (a branch's ALS stack is its own slice — see node.ts).
+      // This back-compat re-seed must never run on a branch: branches
+      // receive memory via `inheritMemoryFrom` at fork time, so a branch
+      // with `jsonMemoryConfig` set already has a frame array
+      // (`hasMemoryFrameStack()` true) and never reaches here anyway —
+      // the guard just makes that impossible by construction.
+      stack === this.stateStack &&
+      this.jsonMemoryConfig &&
+      !stack.hasMemoryFrameStack()
+    ) {
+      // Triggers only when resuming a TOP-LEVEL stack from a checkpoint
+      // written before memory frames existed: `StateStack.fromJSON` has
+      // no `other.memoryFrames` key, and `restoreState` does not re-seed.
+      // Re-seed the JSON bottom frame so resume behaves like a fresh run.
+      // An empty-array stack (user explicitly called `disableMemory()`)
+      // has `hasMemoryFrameStack()` true and is NOT re-seeded — that
+      // would resurrect what the user asked to turn off.
       stack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
       frame = stack.activeMemoryFrame();
     }

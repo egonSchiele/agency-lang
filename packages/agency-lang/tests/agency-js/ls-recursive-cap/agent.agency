@@ -43,12 +43,26 @@ node main(args: { dir: string }): any {
     missingFailed = true
   }
 
+  // The skip-list is RECURSIVE-only: a non-recursive `ls` of a directory
+  // that contains node_modules must still list node_modules (the user
+  // asked for exactly this directory's contents).
+  let nonRecursiveHasNodeModules = false
+  const flat = ls(args.dir, recursive: false) with approve
+  if (flat is success(entries2)) {
+    for (e2 in entries2) {
+      if (e2.name == "node_modules") {
+        nonRecursiveHasNodeModules = true
+      }
+    }
+  }
+
   return {
     total: total,
     hasNodeModules: hasNodeModules,
     hasGit: hasGit,
     cappedCount: cappedCount,
     zeroCount: zeroCount,
-    missingFailed: missingFailed
+    missingFailed: missingFailed,
+    nonRecursiveHasNodeModules: nonRecursiveHasNodeModules
   }
 }

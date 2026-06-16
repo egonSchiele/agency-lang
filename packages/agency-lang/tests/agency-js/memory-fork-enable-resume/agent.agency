@@ -1,0 +1,18 @@
+import { enableMemory, isMemoryActive } from "std::memory"
+
+// Each branch enables memory on its own stack, then interrupts. After
+// resume, the branch's memory frame must still be active — i.e. the
+// branch-local frame survives serialize/restore (complements the
+// memory-fork-resume test, which covers the memory id).
+def confirmActive(item: string): boolean {
+  enableMemory({ dir: ".agency-tmp/memory-fork-enable-resume-${item}" }) with approve
+  interrupt("approve ${item}?")
+  return isMemoryActive()
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return confirmActive(item)
+  }
+  return results
+}

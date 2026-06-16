@@ -117,6 +117,15 @@ export interface AgencyConfig {
     defaultModel: string;
     openAiApiKey: string;
     googleApiKey: string;
+    /**
+     * Max characters of a single tool result fed back to the LLM.
+     * Results longer than this are truncated (with a marker) in what
+     * the model sees — the full value is still returned to Agency code.
+     * Prevents one tool (e.g. a recursive `ls`) from blowing the
+     * context window. Default 100000; `0` disables the cap. Override
+     * per call with `llm(..., { maxToolResultChars })`.
+     */
+    maxToolResultChars: number;
     statelog?: Partial<{
       host: string;
       projectId: string;
@@ -326,6 +335,7 @@ export const AgencyConfigSchema = z
         defaultModel: z.string(),
         openAiApiKey: z.string(),
         googleApiKey: z.string(),
+        maxToolResultChars: z.number(),
         statelog: z
           .object({
             host: z.string(),

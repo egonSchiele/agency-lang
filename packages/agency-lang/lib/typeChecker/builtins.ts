@@ -58,6 +58,9 @@ const llmOptions: VariableType = {
     // The object form is reserved for future config (e.g. per-call
     // model override); for now only the boolean form is wired.
     { key: "memory", value: optional(boolean) },
+    // Per-call cap on characters of a tool result fed back to the LLM
+    // (overrides agency.json `client.maxToolResultChars`). `0` disables.
+    { key: "maxToolResultChars", value: optional(number) },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
   ],

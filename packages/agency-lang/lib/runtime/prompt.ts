@@ -83,6 +83,48 @@ async function dispatchLLMRequest({
   };
 }
 
+/** Default cap on characters of a single tool result fed back to the
+ *  LLM. A recursive `ls`/`grep` can return megabytes; without a cap one
+ *  tool call can blow the context window. The FULL result is still
+ *  returned to Agency code — only what the model sees is truncated. */
+const DEFAULT_TOOL_RESULT_CHARS = 100_000;
+
+/** Coerce an arbitrary tool result to the string the LLM would see.
+ *  Strings pass through; everything else is JSON-stringified, with a
+ *  `String()` fallback for values JSON can't represent (e.g. circular). */
+function stringifyToolResult(result: any): string {
+  if (typeof result === "string") return result;
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
+}
+
+/** Truncate a tool result for the LLM if its serialized form exceeds
+ *  `cap` characters. Returns the ORIGINAL value untouched when within
+ *  the cap (so smoltalk serializes it exactly as before) or when the cap
+ *  is disabled (`cap <= 0` or non-finite). Over the cap, returns the
+ *  first `cap` characters plus a marker noting the original length, so
+ *  the model knows it was cut. */
+function capToolResultForLlm(result: any, cap: number): any {
+  if (!Number.isFinite(cap) || cap <= 0) return result;
+  const text = stringifyToolResult(result);
+  if (text.length <= cap) return result;
+  return (
+    text.slice(0, cap) +
+    `\n\n[tool result truncated: showing ${cap} of ${text.length} chars]`
+  );
+}
+
+/** Test-only surface for the pure tool-result-cap helpers. Not part of
+ *  the supported runtime API. */
+export const _internal = {
+  DEFAULT_TOOL_RESULT_CHARS,
+  stringifyToolResult,
+  capToolResultForLlm,
+};
+
 async function _runPrompt({
   ctx,
   messages,
@@ -336,12 +378,22 @@ export async function runPrompt(args: {
   const {
     tools: _extractedTools,
     memory: memoryOption,
+    maxToolResultChars: callMaxToolResultChars,
     ...restClientConfig
   } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> & {
     tools?: any[];
     memory?: boolean | { model?: string };
+    maxToolResultChars?: number;
   };
   const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
+
+  // Cap on characters of a single tool result fed back to the LLM. The
+  // full result is still cached for Agency code via `setResultOnBranch`;
+  // only what the model sees is truncated. Resolution precedence:
+  // per-call `llm(..., { maxToolResultChars })` > agency.json
+  // (`ctx.maxToolResultChars`) > default. `0`/non-finite disables.
+  const toolResultCap =
+    callMaxToolResultChars ?? ctx.maxToolResultChars ?? DEFAULT_TOOL_RESULT_CHARS;
 
   // Restore or initialize messages.
   //
@@ -541,7 +593,7 @@ export async function runPrompt(args: {
           (toolErrorCounts[handler.name] || 0) + 1;
         messages.push(
           smoltalk.toolMessage(
-            `Error: ${errorMessage}. This tool failed after performing side effects and cannot be retried.`,
+            `Error: ${String(capToolResultForLlm(errorMessage, toolResultCap))}. This tool failed after performing side effects and cannot be retried.`,
             { tool_call_id: toolCall.id, name: toolCall.name },
           ),
         );
@@ -557,6 +609,10 @@ export async function runPrompt(args: {
           typeof toolResult.error === "string"
             ? toolResult.error
             : String(toolResult.error);
+        // Cap only what the LLM sees; statelog keeps the full message.
+        const cappedError = String(
+          capToolResultForLlm(errorMessage, toolResultCap),
+        );
         toolErrorCounts[handler.name] =
           (toolErrorCounts[handler.name] || 0) + 1;
         ctx.statelogClient.error({
@@ -568,14 +624,14 @@ export async function runPrompt(args: {
         if (toolResult.retryable && toolErrorCounts[handler.name] < 5) {
           messages.push(
             smoltalk.toolMessage(
-              `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
+              `Error: ${cappedError}. You may retry this tool call with corrected arguments.`,
               { tool_call_id: toolCall.id, name: toolCall.name },
             ),
           );
         } else if (toolResult.retryable) {
           messages.push(
             smoltalk.toolMessage(
-              `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
+              `Error: ${cappedError}. This tool has failed too many times and can no longer be called.`,
               { tool_call_id: toolCall.id, name: toolCall.name },
             ),
           );
@@ -583,7 +639,7 @@ export async function runPrompt(args: {
         } else {
           messages.push(
             smoltalk.toolMessage(
-              `Error: ${errorMessage}. This operation failed and cannot be retried.`,
+              `Error: ${cappedError}. This operation failed and cannot be retried.`,
               { tool_call_id: toolCall.id, name: toolCall.name },
             ),
           );
@@ -599,7 +655,7 @@ export async function runPrompt(args: {
             ? toolResult.value
             : "Tool call rejected by policy";
         messages.push(
-          smoltalk.toolMessage(message, {
+          smoltalk.toolMessage(capToolResultForLlm(message, toolResultCap), {
             tool_call_id: toolCall.id,
             name: toolCall.name,
           }),
@@ -628,7 +684,7 @@ export async function runPrompt(args: {
         `${handler.name} ran successfully but did not return a value`;
       stack.setResultOnBranch(branchKey, toolResult);
       messages.push(
-        smoltalk.toolMessage(toolResult, {
+        smoltalk.toolMessage(capToolResultForLlm(toolResult, toolResultCap), {
           tool_call_id: toolCall.id,
           name: toolCall.name,
         }),

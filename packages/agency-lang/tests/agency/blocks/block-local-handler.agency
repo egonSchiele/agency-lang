@@ -1,0 +1,25 @@
+const log = []
+
+def doInterrupt() {
+  log.push("start")
+  let x = interrupt("q")
+  log.push("end")
+}
+
+def myApprove(data: any): any {
+  return approve()
+}
+
+def run(b: () -> void) {
+  b()
+}
+
+node main(): any {
+  run() as {
+    let h = myApprove
+    handle {
+      doInterrupt()
+    } with h
+  }
+  return log
+}

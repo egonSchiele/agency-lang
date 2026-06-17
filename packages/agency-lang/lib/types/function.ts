@@ -64,6 +64,9 @@ export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
   scope?: ScopeType;
+  /** For block/blockArgs callee scope only: how many block scopes up the
+   *  lexical chain the owning block is. 0 (or absent) = the current block. */
+  blockDepth?: number;
   arguments: (Expression | SplatExpression | NamedArgument)[];
   block?: BlockArgument;
   async?: boolean;

@@ -344,6 +344,7 @@ __stack.locals.results = await __call(twice, {
             const __bsetup = setupFunction();
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
+const __bframe___block_0 = __bstack;
 
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "inlineBlockBasic.agency", scopeName: "__block_0" });
 try {

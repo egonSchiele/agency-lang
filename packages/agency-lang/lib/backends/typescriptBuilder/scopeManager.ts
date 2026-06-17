@@ -50,6 +50,30 @@ export class ScopeManager {
     return "";
   }
 
+  /**
+   * Resolve a relative block depth to the frame binding to read through.
+   *
+   * `depth` counts block scopes outward from the innermost block: 0 = the
+   * current block, 1 = its enclosing block, etc. Depth 0 returns
+   * `undefined` so callers keep emitting the existing `__bstack` alias
+   * (no fixture churn for non-nested blocks). Depth > 0 returns the
+   * unique `__bframe_<blockName>` binding that the block-setup template
+   * declares for the owning block, which is in lexical closure scope.
+   */
+  blockFrameVar(depth: number): string | undefined {
+    if (!depth) return undefined;
+    const blocks = this.stack.filter(
+      (s): s is Extract<Scope, { type: "block" }> => s.type === "block",
+    );
+    const idx = blocks.length - 1 - depth;
+    if (idx < 0) {
+      throw new Error(
+        `blockFrameVar: depth ${depth} exceeds block nesting (${blocks.length})`,
+      );
+    }
+    return `__bframe_${blocks[idx].blockName}`;
+  }
+
   // ---- Safe-function flag ----
 
   get inSafeFunction(): boolean {

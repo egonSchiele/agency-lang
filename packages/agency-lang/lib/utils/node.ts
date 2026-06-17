@@ -388,6 +388,13 @@ export function* walkNodes(
           scopes,
         );
       }
+    } else if (node.type === "blockArgument") {
+      // A standalone block expression (a `\… -> …` lambda passed as a
+      // named-arg / positional value, or assigned to a variable). Descend
+      // into its body with the block pushed onto `ancestors` so block-scope
+      // resolution treats it as a frame and resolves references to enclosing
+      // block locals (otherwise they emit bare, unscoped identifiers).
+      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
       for (const caseItem of node.cases) {

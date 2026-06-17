@@ -292,6 +292,11 @@ export interface TsScopedVar {
   | "blockArgs"
   | "functionRef";
   moduleId?: string;
+  /** For `block`/`blockArgs` scope: the unique frame binding to read
+   *  through (`__bframe_<blockName>`). Set by the builder when the var
+   *  is owned by an *ancestor* block (blockDepth > 0). When absent the
+   *  printer falls back to `__bstack` (the current/innermost block). */
+  blockFrameVar?: string;
   /** True when this scopedVar is being emitted at module top level
    *  (eager-evaluated tool description docstring interpolation).
    *  When set, the pretty-printer reads through `__globalCtx` instead

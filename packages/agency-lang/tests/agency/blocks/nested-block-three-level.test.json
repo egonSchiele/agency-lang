@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "writes resolve to the correct enclosing block at depths 1 and 2",
+      "input": "",
+      "expectedOutput": "131",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "nested block inside a handle body writes the outer block's local; closure capture holds",
+      "input": "",
+      "expectedOutput": "\"set\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

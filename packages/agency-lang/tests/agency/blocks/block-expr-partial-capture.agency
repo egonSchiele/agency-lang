@@ -1,0 +1,20 @@
+def run(b: () -> void) {
+  b()
+}
+
+def callIt(f: () -> number): number {
+  return f()
+}
+
+node main(): number {
+  let result = 0
+  run() as {
+    let y = 7
+    // The lambda is passed as a NAMED-ARG value to `.partial` (not a
+    // trailing block). Its body reads the enclosing block's `y`, which
+    // must resolve to the block frame rather than a bare identifier.
+    let bound = callIt.partial(f: \-> y)
+    result = bound()
+  }
+  return result
+}

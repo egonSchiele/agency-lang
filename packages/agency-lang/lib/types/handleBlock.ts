@@ -7,5 +7,5 @@ export type HandleBlock = BaseNode & {
   body: AgencyNode[];
   handler:
     | { kind: "inline"; param: FunctionParameter; body: AgencyNode[] }
-    | { kind: "functionRef"; functionName: string; scope?: ScopeType };
+    | { kind: "functionRef"; functionName: string; scope?: ScopeType; blockDepth?: number };
 };

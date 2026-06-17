@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "calling an outer block's function variable from a nested block (callee at depth 1)",
+      "input": "",
+      "expectedOutput": "15",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

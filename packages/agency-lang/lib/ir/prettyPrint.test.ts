@@ -486,4 +486,22 @@ describe("prettyPrint", () => {
     expect(printTs(node).endsWith(")()")).toBe(true);
   });
 
+  describe("scopedVar block frame addressing", () => {
+    it("uses __bstack for a current-block var (no frame var)", () => {
+      expect(printTs(ts.scopedVar("y", "block", "m"))).toBe("__bstack.locals.y");
+    });
+
+    it("uses the ancestor frame binding when blockFrameVar is set", () => {
+      expect(
+        printTs(ts.scopedVar("y", "block", "m", "__bframe___block_0")),
+      ).toBe("__bframe___block_0.locals.y");
+    });
+
+    it("addresses ancestor block args via blockFrameVar", () => {
+      expect(
+        printTs(ts.scopedVar("p", "blockArgs", "m", "__bframe___block_0")),
+      ).toBe("__bframe___block_0.args.p");
+    });
+  });
+
 });

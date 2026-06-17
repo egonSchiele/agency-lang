@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "nested block writes the fork-block's own local; per-branch returns are 2*item",
+      "input": "",
+      "expectedOutput": "\"2_4_6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

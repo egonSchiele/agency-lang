@@ -359,6 +359,7 @@ __stack.locals.doubled = await __call(mapItems, {
             const __bsetup = setupFunction();
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
+const __bframe___block_0 = __bstack;
 
 __bstack.args["x"] = x;
 

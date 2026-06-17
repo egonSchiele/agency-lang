@@ -424,8 +424,9 @@ export const ts = {
     name: string,
     scope: TsScopedVar["scope"],
     moduleId?: string,
+    blockFrameVar?: string,
   ): TsScopedVar {
-    return { kind: "scopedVar", name, scope, moduleId };
+    return { kind: "scopedVar", name, scope, moduleId, blockFrameVar };
   },
 
   functionReturn(value: TsNode): TsStatements {

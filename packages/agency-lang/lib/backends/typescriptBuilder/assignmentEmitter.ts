@@ -16,6 +16,9 @@ export type AssignmentEmitterDeps = {
   processNode: (node: AgencyNode) => TsNode;
   buildCallDescriptor: (call: FunctionCall) => TsNode;
   buildStateConfig: () => TsNode | undefined;
+  /** Resolve a relative block depth to the owning block's frame binding
+   *  (`__bframe_<blockName>`), or undefined for the current block. */
+  resolveBlockFrameVar: (blockDepth: number) => string | undefined;
 };
 
 /**
@@ -52,24 +55,34 @@ export class AssignmentEmitter {
     varName: string,
     value: TsNode,
     accessChain?: AccessChainElement[],
+    blockDepth = 0,
   ): TsNode {
     if (
       accessChain &&
       accessChain.length > 0 &&
       accessChain[accessChain.length - 1].kind === "slice"
     ) {
-      return this.sliceAssign(scope, varName, value, accessChain);
+      return this.sliceAssign(scope, varName, value, accessChain, blockDepth);
     }
     if (scope === "global" && (!accessChain || accessChain.length === 0)) {
       return ts.globalSet(this.deps.moduleId, varName, value);
     }
-    return ts.assign(this.lhs(scope, varName, accessChain), value);
+    return ts.assign(this.lhs(scope, varName, accessChain, blockDepth), value);
   }
 
   /** Build the assignment target node (no value) for `scope.varName.chain`. */
-  lhs(scope: ScopeType, variableName: string, chain?: AccessChainElement[]): TsNode {
+  lhs(
+    scope: ScopeType,
+    variableName: string,
+    chain?: AccessChainElement[],
+    blockDepth = 0,
+  ): TsNode {
+    const blockFrameVar =
+      scope === "block" || scope === "blockArgs"
+        ? this.deps.resolveBlockFrameVar(blockDepth)
+        : undefined;
     return this.accessChain(
-      ts.scopedVar(variableName, scope, this.deps.moduleId),
+      ts.scopedVar(variableName, scope, this.deps.moduleId, blockFrameVar),
       chain,
     );
   }
@@ -120,13 +133,14 @@ export class AssignmentEmitter {
     varName: string,
     value: TsNode,
     accessChain: AccessChainElement[],
+    blockDepth = 0,
   ): TsNode {
     const sliceEl = accessChain[accessChain.length - 1] as Extract<
       AccessChainElement,
       { kind: "slice" }
     >;
     const baseChain = accessChain.length > 1 ? accessChain.slice(0, -1) : undefined;
-    const base = this.lhs(scope, varName, baseChain);
+    const base = this.lhs(scope, varName, baseChain, blockDepth);
 
     const startNode = sliceEl.start ? this.deps.processNode(sliceEl.start) : ts.raw("0");
     const endNode = sliceEl.end

@@ -308,6 +308,8 @@ export class TypeScriptBuilder {
       processNode: (n) => this.processNode(n),
       buildCallDescriptor: (call) => this.buildCallDescriptor(call),
       buildStateConfig: () => this.buildStateConfig(),
+      resolveBlockFrameVar: (blockDepth: number) =>
+        this.scopes.blockFrameVar(blockDepth),
     });
     this.moduleId = moduleId;
     this.outputFile = outputFile;
@@ -839,7 +841,16 @@ export class TypeScriptBuilder {
           }
           return ts.id(literal.value);
         }
-        return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
+        const blockFrameVar =
+          literal.scope === "block" || literal.scope === "blockArgs"
+            ? this.scopes.blockFrameVar(literal.blockDepth ?? 0)
+            : undefined;
+        return ts.scopedVar(
+          literal.value,
+          literal.scope!,
+          this.moduleId,
+          blockFrameVar,
+        );
       }
       case "boolean":
         return ts.bool(literal.value);
@@ -2705,7 +2716,16 @@ export class TypeScriptBuilder {
     // If the type annotation has !, wrap the assigned value in __validateType
     // (or __validateChainRecursive if the type carries @validate tags).
     if (node.validated && node.typeHint) {
-      const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
+      const blockFrameVar =
+        node.scope === "block" || node.scope === "blockArgs"
+          ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
+          : undefined;
+      const varRef = ts.scopedVar(
+        node.variableName,
+        node.scope!,
+        this.moduleId,
+        blockFrameVar,
+      );
       const validateStmt = ts.assign(
         varRef,
         this.validateExpr(node.typeHint, varRef),
@@ -2733,6 +2753,7 @@ export class TypeScriptBuilder {
             variableName,
             ts.raw(val),
             node.accessChain,
+            node.blockDepth ?? 0,
           ),
         );
       const opts = this.checkpointOpts();
@@ -2752,6 +2773,7 @@ export class TypeScriptBuilder {
         node.scope!,
         variableName,
         node.accessChain,
+        node.blockDepth ?? 0,
       );
       const stmts: TsNode[] = [
         this.assigns.scopedAssign(
@@ -2759,6 +2781,7 @@ export class TypeScriptBuilder {
           variableName,
           this.processNode(value),
           node.accessChain,
+          node.blockDepth ?? 0,
         ),
       ];
 
@@ -2775,6 +2798,7 @@ export class TypeScriptBuilder {
               stateStack: ts.id("__forked"),
             }),
             node.accessChain,
+            node.blockDepth ?? 0,
           );
         }
 
@@ -2830,6 +2854,7 @@ export class TypeScriptBuilder {
         variableName,
         this.processNode(value),
         node.accessChain,
+        node.blockDepth ?? 0,
       );
     }
   }
@@ -2998,6 +3023,7 @@ export class TypeScriptBuilder {
           assignTo.variableName,
           ts.methodCall(ts.threads.active(), "cloneMessages"),
           assignTo.accessChain,
+          assignTo.blockDepth ?? 0,
         ),
       );
     }

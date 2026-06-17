@@ -306,6 +306,17 @@ export function printTs(node: TsNode, indent = 0): string {
         const moduleIdLit = JSON.stringify(node.moduleId ?? "");
         return `__readStatic(${node.name}, ${JSON.stringify(node.name)}, ${moduleIdLit})`;
       }
+      if (
+        (node.scope === "block" || node.scope === "blockArgs") &&
+        node.blockFrameVar
+      ) {
+        // An ancestor block's variable: address its uniquely-named frame
+        // binding (in lexical closure scope) instead of the nearest
+        // `__bstack`. Absent blockFrameVar (current/innermost block)
+        // falls through to scopeToPrefix's `__bstack.*` default.
+        const sub = node.scope === "block" ? "locals" : "args";
+        return `${node.blockFrameVar}.${sub}.${node.name}`;
+      }
       const prefix = scopeToPrefix(node.scope);
       if (prefix === "") return node.name;
       return `${prefix}.${node.name}`;

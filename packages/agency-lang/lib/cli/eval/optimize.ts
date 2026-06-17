@@ -4,7 +4,8 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadTasks, taskFromGoal } from "@/eval/loadTasks.js";
-import { optimizeLoop } from "@/optimize/loop.js";
+import type { Optimizer } from "@/optimize/optimizer.js";
+import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import { createOptimizeReporter, type OptimizeVerbosity } from "@/optimize/reporter.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targets.js";
 import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
@@ -28,6 +29,7 @@ export type EvalOptimizeOptions = {
   runsDir?: string;
   runId?: string;
   mutatorModel?: string;
+  optimizer?: string;
   config?: AgencyConfig;
 };
 
@@ -37,6 +39,7 @@ export function resolveVerbosity(opts: { silent?: boolean }): OptimizeVerbosity 
 
 export type EvalOptimizeDeps = {
   optimizeLoop?: (config: OptimizeLoopConfig) => Promise<OptimizeResult>;
+  getOptimizer?: (name: string) => Optimizer;
   makeId?: () => string;
   makeRunId?: () => string;
 };
@@ -61,7 +64,9 @@ export async function evalOptimize(
     getRuntimeContext().ctx.pushHandler(async () => approve());
     try {
       if (deps.optimizeLoop) return await deps.optimizeLoop(config);
-      return await optimizeLoop(config, { reporter: createOptimizeReporter(verbosity) });
+      const resolve = deps.getOptimizer ?? getOptimizer;
+      const optimizer = resolve(opts.optimizer ?? DEFAULT_OPTIMIZER);
+      return await optimizer.optimize(config, { reporter: createOptimizeReporter(verbosity) });
     } finally {
       getRuntimeContext().ctx.popHandler();
     }

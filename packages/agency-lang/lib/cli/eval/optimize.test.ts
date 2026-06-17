@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getRuntimeContext } from "@/runtime/asyncContext.js";
 import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
@@ -208,6 +208,44 @@ node main() {}
       runId: "run-id",
     });
     expect(config.policy.iterations).toBe(5);
+  });
+
+  it("resolves and runs the optimizer named by --optimizer", async () => {
+    const agentFile = writeAgent();
+    const sentinel = { runId: "sentinel" } as OptimizeResult;
+    const optimizeSpy = vi.fn(async () => sentinel);
+    let requestedName: string | undefined;
+
+    const result = await evalOptimize(
+      { agent: agentFile, goal: "g", optimizer: "fake", silent: true, config: {} },
+      {
+        getOptimizer: (name) => {
+          requestedName = name;
+          return { name, optimize: optimizeSpy };
+        },
+      },
+    );
+
+    expect(requestedName).toBe("fake");
+    expect(optimizeSpy).toHaveBeenCalledTimes(1);
+    expect(result).toBe(sentinel);
+  });
+
+  it("defaults to the greedy optimizer when --optimizer is omitted", async () => {
+    const agentFile = writeAgent();
+    let requestedName: string | undefined;
+
+    await evalOptimize(
+      { agent: agentFile, goal: "g", silent: true, config: {} },
+      {
+        getOptimizer: (name) => {
+          requestedName = name;
+          return { name, optimize: async () => ({}) as OptimizeResult };
+        },
+      },
+    );
+
+    expect(requestedName).toBe("greedy");
   });
 });
 

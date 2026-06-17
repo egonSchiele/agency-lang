@@ -27,6 +27,7 @@ import {
   getAllVariablesInBodyArray,
   isInsideBlock,
   walkNodesArray,
+  type WalkAncestor,
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
@@ -1247,6 +1248,120 @@ export class TypescriptPreprocessor {
    * After this pass, every VariableNameLiteral, InterpolationSegment, and Assignment
    * will have a `scope` property indicating whether the variable is global, local, or args.
    */
+  /**
+   * Resolve variable scopes inside block bodies with full lexical nesting.
+   *
+   * Each block in the function/node body gets a frame of declared names
+   * (params -> "blockArgs", let/const + implicit locals -> "block"). A
+   * reference resolves innermost-first across the block chain; the relative
+   * distance to the owning block is recorded as `blockDepth` (0 = current
+   * block). Names not owned by any block fall back to `lookupScope`
+   * (node-local/global/imported) or are left unscoped for the node-body
+   * pass / final imported pass.
+   *
+   * Blocks are identified by their `BlockArgument` AST-node identity, and a
+   * node's block-ancestor chain (outermost-first) is read from the
+   * `blockArgument` entries in its `walkNodes` ancestor list.
+   */
+  // eslint-disable-next-line max-lines-per-function -- self-contained lexical block resolver
+  private resolveBlockScopes(
+    body: AgencyNode[],
+    nodeName: string,
+    lookupScope: (funcName: string, varName: string) => ScopeType | null,
+  ): void {
+    type Frame = { params: Set<string>; locals: Set<string> };
+    const frames = new Map<BlockArgument, Frame>();
+
+    // Outermost-first list of the block-ancestor chain for a walk result.
+    const blockChain = (ancestors: WalkAncestor[]): BlockArgument[] =>
+      ancestors.filter(
+        (a): a is BlockArgument => (a as AgencyNode).type === "blockArgument",
+      );
+
+    const ensureFrame = (b: BlockArgument): Frame => {
+      let f = frames.get(b);
+      if (!f) {
+        f = { params: new Set(b.params.map((p) => p.name)), locals: new Set() };
+        frames.set(b, f);
+      }
+      return f;
+    };
+
+    // Resolve a name against a chain; returns owner scope + relative depth,
+    // or null if not owned by any block in the chain.
+    const resolveInChain = (
+      name: string,
+      chain: BlockArgument[],
+    ): { scope: "block" | "blockArgs"; blockDepth: number } | null => {
+      for (let i = chain.length - 1; i >= 0; i--) {
+        const f = ensureFrame(chain[i]);
+        const depth = chain.length - 1 - i;
+        if (f.params.has(name)) return { scope: "blockArgs", blockDepth: depth };
+        if (f.locals.has(name)) return { scope: "block", blockDepth: depth };
+      }
+      return null;
+    };
+
+    const walk = walkNodesArray(body);
+
+    // Register every block frame (params) up front.
+    for (const { ancestors } of walk) {
+      for (const b of blockChain(ancestors)) ensureFrame(b);
+    }
+
+    // Pass A: let/const declarations always create a local in their own block.
+    for (const { node, ancestors } of walk) {
+      if (node.type !== "assignment" || !node.declKind) continue;
+      const chain = blockChain(ancestors);
+      if (chain.length === 0) continue; // node-body decl -> Phase 2 handles it
+      ensureFrame(chain[chain.length - 1]).locals.add(node.variableName);
+    }
+
+    // Pass B: implicit locals from bare assignments, shallow blocks first so
+    // an inner block can see an outer block's implicit local.
+    const bareAssignments = walk
+      .filter(({ node }) => node.type === "assignment" && !node.declKind)
+      .map((r) => ({ node: r.node as Assignment, chain: blockChain(r.ancestors) }))
+      .filter((r) => r.chain.length > 0)
+      .sort((a, b) => a.chain.length - b.chain.length);
+    for (const { node, chain } of bareAssignments) {
+      const name = node.variableName;
+      if (resolveInChain(name, chain)) continue; // existing block var
+      if (lookupScope(nodeName, name) !== null) continue; // node-local/global
+      ensureFrame(chain[chain.length - 1]).locals.add(name); // implicit local
+    }
+
+    // Pass C: set scope + blockDepth on every reference inside a block.
+    for (const { node, ancestors } of walk) {
+      const chain = blockChain(ancestors);
+      if (chain.length === 0) continue; // node-body node -> leave for Phase 2
+
+      if (node.type === "assignment") {
+        if (node.scope) continue;
+        const owned = resolveInChain(node.variableName, chain);
+        if (owned) {
+          node.scope = owned.scope;
+          node.blockDepth = owned.blockDepth;
+        } else {
+          const resolved = lookupScope(nodeName, node.variableName);
+          if (resolved) node.scope = resolved; // node-local/global, no depth
+          // else: unreachable — Pass B added it as an implicit block local
+        }
+      } else if (node.type === "variableName") {
+        if (node.scope) continue;
+        const owned = resolveInChain(node.value, chain);
+        if (owned) {
+          node.scope = owned.scope;
+          node.blockDepth = owned.blockDepth;
+        } else {
+          const resolved = lookupScope(nodeName, node.value);
+          if (resolved) node.scope = resolved;
+          // else: leave unscoped -> final imported pass resolves it
+        }
+      }
+    }
+  }
+
   // eslint-disable-next-line max-lines-per-function -- multi-pass scope resolution; refactor tracked separately
   protected resolveVariableScopes(): void {
     const globalVars = new Set<string>();
@@ -1343,53 +1458,13 @@ export class TypescriptPreprocessor {
           }
         }
 
-        // Phase 1: Resolve block body variables first.
-        // Block params get "blockArgs" scope, new variables inside blocks get "block" scope,
-        // and references to outer-scope variables keep their original scope (captured via closure).
-        // We do this before the main walk so that the main walk sees these variables
-        // already have scopes and skips them.
-        for (const { node: bodyNode } of walkNodesArray(node.body)) {
-          if (bodyNode.type === "functionCall" && bodyNode.block) {
-            const blockParamNames = new Set(bodyNode.block.params.map((p) => p.name));
-            const blockLocalNames = new Set<string>();
-
-            // First pass: identify block-local assignments
-            for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
-              if (blockVarNode.type === "assignment") {
-                const name = blockVarNode.variableName;
-                if (!blockParamNames.has(name) && lookupScope(nodeName, name) === null) {
-                  blockLocalNames.add(name);
-                }
-              }
-            }
-
-            // Second pass: set scopes on all variables in the block body
-            for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
-              if (blockVarNode.type === "assignment") {
-                if (blockParamNames.has(blockVarNode.variableName)) {
-                  blockVarNode.scope = "blockArgs";
-                } else if (blockLocalNames.has(blockVarNode.variableName)) {
-                  blockVarNode.scope = "block";
-                } else {
-                  const resolved = lookupScope(nodeName, blockVarNode.variableName);
-                  // eslint-disable-next-line max-depth -- block-scope variable resolution
-                  if (resolved) blockVarNode.scope = resolved;
-                  // else: leave unscoped — Phase 2 will resolve once locals are registered
-                }
-              } else if (blockVarNode.type === "variableName") {
-                if (blockParamNames.has(blockVarNode.value)) {
-                  blockVarNode.scope = "blockArgs";
-                } else if (blockLocalNames.has(blockVarNode.value)) {
-                  blockVarNode.scope = "block";
-                } else {
-                  const resolved = lookupScope(nodeName, blockVarNode.value);
-                  if (resolved) blockVarNode.scope = resolved;
-                  // else: leave unscoped — Phase 2 will resolve once locals are registered
-                }
-              }
-            }
-          }
-        }
+        // Phase 1: Resolve block body variables first, with full lexical
+        // nesting (see `resolveBlockScopes`). Block params get "blockArgs",
+        // new block locals get "block", and references to a variable owned
+        // by an *enclosing* block record the relative `blockDepth`. We do
+        // this before the main walk so it sees these variables already
+        // scoped and skips them.
+        this.resolveBlockScopes(node.body, nodeName, lookupScope);
 
         // Phase 2: Resolve function/node body variables.
         // Variables inside blocks already have scopes from Phase 1, so they are skipped.

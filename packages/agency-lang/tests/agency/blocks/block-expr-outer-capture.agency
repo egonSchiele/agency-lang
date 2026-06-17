@@ -1,0 +1,19 @@
+def run(b: () -> void) {
+  b()
+}
+
+def callIt(f: () -> number): number {
+  return f()
+}
+
+node main(): number {
+  let result = 0
+  run() as {
+    let y = 42
+    // A block-expression lambda passed to another function reads the
+    // enclosing block's `y`. Before the fix this emitted a bare,
+    // unscoped `y` (ReferenceError); now it must resolve to the block.
+    result = callIt(\-> y)
+  }
+  return result
+}

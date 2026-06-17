@@ -1366,6 +1366,18 @@ export class TypescriptPreprocessor {
           if (resolved) node.scope = resolved;
           // else: leave unscoped -> final imported pass resolves it
         }
+      } else if (node.type === "functionCall") {
+        // Calling a block-local / block-param function variable (e.g. a
+        // `.partial(...)` result stored in a block `let`). The callee must
+        // resolve to the owning block frame; otherwise the later
+        // functionRef/imported pass emits a bare identifier (ReferenceError).
+        // Names not owned by a block are left for that pass.
+        if (node.scope) continue;
+        const owned = resolveInChain(node.functionName, chain);
+        if (owned) {
+          node.scope = owned.scope;
+          node.blockDepth = owned.blockDepth;
+        }
       }
     }
   }

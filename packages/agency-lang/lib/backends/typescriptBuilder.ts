@@ -2160,8 +2160,12 @@ export class TypeScriptBuilder {
   ): TsNode {
     const descriptor = this.buildCallDescriptor(node);
 
+    const calleeBlockFrameVar =
+      node.scope === "block" || node.scope === "blockArgs"
+        ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
+        : undefined;
     const callee = node.scope
-      ? ts.scopedVar(functionName, node.scope, this.moduleId)
+      ? ts.scopedVar(functionName, node.scope, this.moduleId, calleeBlockFrameVar)
       : ts.id(functionName);
 
     const callExpr = ts.call(ts.id("__call"), [callee, descriptor]);

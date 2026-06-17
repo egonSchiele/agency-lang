@@ -1,0 +1,20 @@
+def run(b: () -> void) {
+  b()
+}
+
+def addTwo(a: number, b: number): number {
+  return a + b
+}
+
+node main(): number {
+  let result = 0
+  run() as {
+    let add5 = addTwo.partial(a: 5)   // owned by the OUTER block
+    run() as {
+      // Call the outer block's function variable from a nested block
+      // (callee at blockDepth 1).
+      result = add5(10)
+    }
+  }
+  return result
+}

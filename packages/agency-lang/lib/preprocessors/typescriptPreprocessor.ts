@@ -1269,8 +1269,12 @@ export class TypescriptPreprocessor {
     nodeName: string,
     lookupScope: (funcName: string, varName: string) => ScopeType | null,
   ): void {
-    type Frame = { params: Set<string>; locals: Set<string> };
-    const frames = new Map<BlockArgument, Frame>();
+    // One frame per block, keyed by `BlockArgument` object identity (looked
+    // up with `find` / `===`). Plain object + arrays per the repo coding
+    // standards (no Map/Set). `params`/`locals` are name lists tested with
+    // `includes`.
+    type Frame = { block: BlockArgument; params: string[]; locals: string[] };
+    const frames: Frame[] = [];
 
     // Outermost-first list of the block-ancestor chain for a walk result.
     const blockChain = (ancestors: WalkAncestor[]): BlockArgument[] =>
@@ -1279,12 +1283,16 @@ export class TypescriptPreprocessor {
       );
 
     const ensureFrame = (b: BlockArgument): Frame => {
-      let f = frames.get(b);
+      let f = frames.find((fr) => fr.block === b);
       if (!f) {
-        f = { params: new Set(b.params.map((p) => p.name)), locals: new Set() };
-        frames.set(b, f);
+        f = { block: b, params: b.params.map((p) => p.name), locals: [] };
+        frames.push(f);
       }
       return f;
+    };
+
+    const addLocal = (f: Frame, name: string): void => {
+      if (!f.locals.includes(name)) f.locals.push(name);
     };
 
     // Resolve a name against a chain; returns owner scope + relative depth,
@@ -1296,8 +1304,8 @@ export class TypescriptPreprocessor {
       for (let i = chain.length - 1; i >= 0; i--) {
         const f = ensureFrame(chain[i]);
         const depth = chain.length - 1 - i;
-        if (f.params.has(name)) return { scope: "blockArgs", blockDepth: depth };
-        if (f.locals.has(name)) return { scope: "block", blockDepth: depth };
+        if (f.params.includes(name)) return { scope: "blockArgs", blockDepth: depth };
+        if (f.locals.includes(name)) return { scope: "block", blockDepth: depth };
       }
       return null;
     };
@@ -1314,7 +1322,7 @@ export class TypescriptPreprocessor {
       if (node.type !== "assignment" || !node.declKind) continue;
       const chain = blockChain(ancestors);
       if (chain.length === 0) continue; // node-body decl -> Phase 2 handles it
-      ensureFrame(chain[chain.length - 1]).locals.add(node.variableName);
+      addLocal(ensureFrame(chain[chain.length - 1]), node.variableName);
     }
 
     // Pass B: implicit locals from bare assignments, shallow blocks first so
@@ -1328,7 +1336,7 @@ export class TypescriptPreprocessor {
       const name = node.variableName;
       if (resolveInChain(name, chain)) continue; // existing block var
       if (lookupScope(nodeName, name) !== null) continue; // node-local/global
-      ensureFrame(chain[chain.length - 1]).locals.add(name); // implicit local
+      addLocal(ensureFrame(chain[chain.length - 1]), name); // implicit local
     }
 
     // Pass C: set scope + blockDepth on every reference inside a block.

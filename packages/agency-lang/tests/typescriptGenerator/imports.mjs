@@ -62,6 +62,7 @@ const __globalCtx = new RuntimeContext({
   smoltalkDefaults: {
     openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
     googleApiKey: __process.env["GEMINI_API_KEY"] || "",
+    anthropicApiKey: __process.env["ANTHROPIC_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {

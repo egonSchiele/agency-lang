@@ -1344,6 +1344,7 @@ export class TypeScriptBuilder {
       })),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
+      frameVar: `__bframe_${blockName}`,
       body: bodyStr,
     });
 
@@ -1388,6 +1389,7 @@ export class TypeScriptBuilder {
       })),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
+      frameVar: `__bframe_${blockName}`,
       body: bodyStr,
     });
 
@@ -2318,6 +2320,7 @@ export class TypeScriptBuilder {
       paramNameQuoted: JSON.stringify(paramName),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
+      frameVar: `__bframe_${blockName}`,
       body: bodyStr,
       isNested: isNestedInForkBlock,
     });

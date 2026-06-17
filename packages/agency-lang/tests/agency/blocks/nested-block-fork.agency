@@ -1,0 +1,14 @@
+def run(b: () -> void) {
+  b()
+}
+
+node main(): string {
+  let results = fork([1, 2, 3]) as item {
+    let local = item
+    run() as {
+      local = local + item   // nested block (depth 1) writes the fork-block local
+    }
+    return local             // per-branch result: 2 * item
+  }
+  return "${results[0]}_${results[1]}_${results[2]}"
+}

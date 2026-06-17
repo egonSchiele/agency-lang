@@ -1,0 +1,16 @@
+def run(b: () -> void) {
+  b()
+}
+
+node main(): number {
+  let outer = 0
+  run() as {
+    let y = 1
+    run() as {
+      let y = 99     // shadows: a NEW inner-block local
+      y = y + 1      // touches the inner y only
+    }
+    outer = y        // outer block's y is still 1
+  }
+  return outer
+}

@@ -1,0 +1,19 @@
+def run(block: () -> void) {
+  block()
+}
+
+node main(): string {
+  let out = "none"
+  run() as {
+    let captured = "x"
+    handle {
+      run() as {
+        captured = "set"   // nested block inside a handle body writes the outer block (depth 1)
+      }
+    } with (intr) {
+      return approve()
+    }
+    out = captured
+  }
+  return out
+}

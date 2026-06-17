@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "interrupt inside a nested block; post-resume write to the outer block's local is visible",
+      "input": "",
+      "expectedOutput": "\"World\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "resolvedValue": "World",
+          "expectedMessage": "what is your name?"
+        }
+      ]
+    }
+  ]
+}

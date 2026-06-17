@@ -1,0 +1,16 @@
+def run(block: () -> void) {
+  block()
+}
+
+node main(): string {
+  let out = "none"
+  run() as {
+    let captured = "x"        // outer block local
+    run() as {
+      let answer = interrupt("what is your name?")  // interrupt inside nested block
+      captured = answer       // post-resume write to the outer block (depth 1)
+    }
+    out = captured            // read the outer block's captured
+  }
+  return out
+}

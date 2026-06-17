@@ -1339,45 +1339,50 @@ export class TypescriptPreprocessor {
       addLocal(ensureFrame(chain[chain.length - 1]), name); // implicit local
     }
 
+    // Resolve `name` against the block chain and, if owned by a block,
+    // stamp `scope` + `blockDepth` onto `target`. When `lookupFallback` is
+    // set, a name not owned by any block is resolved to its node-local /
+    // global / imported scope (used for plain variable references); for
+    // callee/handler names it is left for the later functionRef/imported
+    // pass instead. A `target` that already has a scope is left untouched.
+    const applyBlockScope = (
+      target: { scope?: ScopeType; blockDepth?: number },
+      name: string,
+      chain: BlockArgument[],
+      lookupFallback: boolean,
+    ): void => {
+      if (target.scope) return;
+      const owned = resolveInChain(name, chain);
+      if (owned) {
+        target.scope = owned.scope;
+        target.blockDepth = owned.blockDepth;
+      } else if (lookupFallback) {
+        const resolved = lookupScope(nodeName, name);
+        if (resolved) target.scope = resolved;
+      }
+    };
+
     // Pass C: set scope + blockDepth on every reference inside a block.
+    // Names appear in several node shapes: plain reads (`variableName`),
+    // assignment targets, function-call callees, and `handle … with NAME`
+    // handler refs. Each can name a block-local / block-param (e.g. a
+    // `.partial(...)` result stored in a block `let`), which must resolve
+    // to the owning block frame instead of a bare identifier.
     for (const { node, ancestors } of walk) {
       const chain = blockChain(ancestors);
       if (chain.length === 0) continue; // node-body node -> leave for Phase 2
 
       if (node.type === "assignment") {
-        if (node.scope) continue;
-        const owned = resolveInChain(node.variableName, chain);
-        if (owned) {
-          node.scope = owned.scope;
-          node.blockDepth = owned.blockDepth;
-        } else {
-          const resolved = lookupScope(nodeName, node.variableName);
-          if (resolved) node.scope = resolved; // node-local/global, no depth
-          // else: unreachable — Pass B added it as an implicit block local
-        }
+        applyBlockScope(node, node.variableName, chain, true);
       } else if (node.type === "variableName") {
-        if (node.scope) continue;
-        const owned = resolveInChain(node.value, chain);
-        if (owned) {
-          node.scope = owned.scope;
-          node.blockDepth = owned.blockDepth;
-        } else {
-          const resolved = lookupScope(nodeName, node.value);
-          if (resolved) node.scope = resolved;
-          // else: leave unscoped -> final imported pass resolves it
-        }
+        applyBlockScope(node, node.value, chain, true);
       } else if (node.type === "functionCall") {
-        // Calling a block-local / block-param function variable (e.g. a
-        // `.partial(...)` result stored in a block `let`). The callee must
-        // resolve to the owning block frame; otherwise the later
-        // functionRef/imported pass emits a bare identifier (ReferenceError).
-        // Names not owned by a block are left for that pass.
-        if (node.scope) continue;
-        const owned = resolveInChain(node.functionName, chain);
-        if (owned) {
-          node.scope = owned.scope;
-          node.blockDepth = owned.blockDepth;
-        }
+        applyBlockScope(node, node.functionName, chain, false);
+      } else if (
+        node.type === "handleBlock" &&
+        node.handler.kind === "functionRef"
+      ) {
+        applyBlockScope(node.handler, node.handler.functionName, chain, false);
       }
     }
   }

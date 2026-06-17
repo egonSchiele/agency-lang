@@ -3216,6 +3216,7 @@ export class TypeScriptBuilder {
   private buildHandlerArrow(
     handlerName: string,
     handlerScope?: ScopeType,
+    handlerBlockDepth?: number,
   ): TsNode {
     if (this.names.isDirectCallFunction(handlerName)) {
       // Built-in handler (approve/reject/propagate): call with no args
@@ -3237,8 +3238,12 @@ export class TypeScriptBuilder {
       args: ts.arr(args),
     });
     const configObj = this.buildStateConfig();
+    const handlerBlockFrameVar =
+      handlerScope === "block" || handlerScope === "blockArgs"
+        ? this.scopes.blockFrameVar(handlerBlockDepth ?? 0)
+        : undefined;
     const callee = handlerScope
-      ? ts.scopedVar(handlerName, handlerScope, this.moduleId)
+      ? ts.scopedVar(handlerName, handlerScope, this.moduleId, handlerBlockFrameVar)
       : ts.id(handlerName);
     const callArgs: TsNode[] = [callee, descriptor];
     if (configObj) callArgs.push(configObj);
@@ -3276,6 +3281,7 @@ export class TypeScriptBuilder {
       handler = this.buildHandlerArrow(
         node.handler.functionName,
         node.handler.scope,
+        node.handler.blockDepth,
       );
     }
 

@@ -1,16 +1,18 @@
-def run(block: () -> void) {
-  block()
+def run(b: () -> void) {
+  b()
 }
 
 node main(): string {
   let out = "none"
   run() as {
-    let captured = "x"        // outer block local
+    let captured = "x"
     run() as {
-      let answer = interrupt("what is your name?")  // interrupt inside nested block
-      captured = answer       // post-resume write to the outer block (depth 1)
+      // interrupt inside the nested block
+      let answer = interrupt("what is your name?")
+      // post-resume write to the outer block (depth 1)
+      captured = answer
     }
-    out = captured            // read the outer block's captured
+    out = captured
   }
   return out
 }

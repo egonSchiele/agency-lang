@@ -9,10 +9,12 @@ node main(): number {
     run() as {
       let b = 10
       run() as {
-        a = a + 100      // writes outermost block's a (depth 2)
-        b = b + 20       // writes middle block's b (depth 1)
+        // writes the outermost block's a (depth 2)
+        a = a + 100
+        // writes the middle block's b (depth 1)
+        b = b + 20
       }
-      total = a + b      // 101 + 30
+      total = a + b
     }
   }
   return total

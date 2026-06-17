@@ -1,5 +1,5 @@
-def run(block: () -> void) {
-  block()
+def run(b: () -> void) {
+  b()
 }
 
 node main(): string {
@@ -8,7 +8,8 @@ node main(): string {
     let captured = "x"
     handle {
       run() as {
-        captured = "set"   // nested block inside a handle body writes the outer block (depth 1)
+        // nested block inside a handle body writes the outer block (depth 1)
+        captured = "set"
       }
     } with (intr) {
       return approve()

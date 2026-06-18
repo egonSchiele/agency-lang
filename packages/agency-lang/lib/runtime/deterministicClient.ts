@@ -29,7 +29,7 @@ export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock;
 
 /**
  * Per-agent mock queues. Keys are matched against the executing module:
- * the exact module id ("lib/agents/mutatePrompt.agency"), then its
+ * the exact module id ("lib/agents/optimize/mutatePrompt.agency"), then its
  * basename without the extension ("mutatePrompt"), then the "*" fallback
  * queue. Each queue is consumed in order, independently of the others,
  * so tests that span several agents (e.g. a full optimize iteration:

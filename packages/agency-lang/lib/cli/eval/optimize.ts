@@ -41,7 +41,7 @@ const DEFAULT_ITERATIONS = 5;
 const DEFAULT_MINIBATCH = 8;
 
 /** Bundled scalar goal judge: scores how well an output satisfies the input's goal. */
-const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "goalJudge.agency");
+const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "eval", "goalJudge.agency");
 
 export async function evalOptimize(
   opts: EvalOptimizeOptions,

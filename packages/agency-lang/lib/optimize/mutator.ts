@@ -94,7 +94,7 @@ export function buildMutatorSections(inputs: MutatorPromptInputs): MutatorMessag
 /**
  * Asks the mutator model for declarative mutation operations against the
  * supplied optimize targets. The prompt itself lives in
- * `lib/agents/mutatePrompt.agency` — an Agency agent owns the LLM call,
+ * `lib/agents/optimize/mutatePrompt.agency` — an Agency agent owns the LLM call,
  * the task instructions, and structured output; this module only renders
  * the deterministic data sections, exposes the `callModel` test seam, and
  * validates the response shape at the process boundary. Semantic
@@ -137,7 +137,7 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
     delete config.distDir;
     const result = await executeNodeAsync({
       config,
-      agencyFile: path.resolve(currentDir, "../agents/mutatePrompt.agency"),
+      agencyFile: path.resolve(currentDir, "../agents/optimize/mutatePrompt.agency"),
       nodeName: "mutatePrompt",
       hasArgs: true,
       argsString: [

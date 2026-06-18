@@ -489,7 +489,7 @@ export async function executeJudgeAsync(
   stderr: string;
 }> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
-  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+  const judgeAgencyFile = path.resolve(currentDir, "../agents/eval/judge.agency");
   const { raw, stdout, stderr } = await runAgencyJudge<
     {
       actualOutput: string;

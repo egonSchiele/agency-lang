@@ -1,4 +1,5 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
+import { breakdown } from "../gradeBreakdown.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import type { Scorecard } from "../grading/scorecard.js";
 import type { Input } from "../grading/types.js";
@@ -71,6 +72,7 @@ export class GreedyReflective extends BaseOptimizer {
       championIter: champion.iter, championFiles: champion.files,
       attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
     });
+    result.championBreakdown = breakdown(champion.scorecard);   // the headline DX artifact
     this.reporter.runFinished({
       result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
     });

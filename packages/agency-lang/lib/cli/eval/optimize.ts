@@ -10,6 +10,7 @@ import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
 import type { Input } from "@/optimize/grading/types.js";
 import { loadGradingModule } from "@/optimize/gradingModule.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
+import { writeReport } from "@/optimize/report.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targets.js";
 import type { OptimizeResult } from "@/optimize/types.js";
@@ -58,6 +59,10 @@ export async function evalOptimize(
   if (result.runDir) {
     fs.mkdirSync(result.runDir, { recursive: true });
     fs.writeFileSync(path.join(result.runDir, "summary.json"), JSON.stringify(result, null, 2));
+    writeReport(result.runDir, result, {
+      optimizer: opts.optimizer ?? DEFAULT_OPTIMIZER,
+      graders: config.graders.map((g) => g.name()),
+    });
   }
   return result;
 }

@@ -106,10 +106,10 @@ export const SILENT_POINTWISE_REPORTER: PointwiseReporter = {
   runFinished() { },
 };
 
-/** Champion/candidate eval record paths for one task, read lazily when the
+/** Champion/candidate eval record paths for one input, read lazily when the
  *  reporter renders response diffs. */
-export type TaskRecordPair = {
-  taskId: string;
+export type InputRecordPair = {
+  inputId: string;
   championRecordPath?: string;
   candidateRecordPath?: string;
 };
@@ -122,7 +122,7 @@ export type TaskRecordPair = {
  * every optimized variable's start and end value.
  */
 export type OptimizeReporter = {
-  runStarted(args: { runId: string; targetSet: OptimizeTargetSet; taskCount: number }): void;
+  runStarted(args: { runId: string; targetSet: OptimizeTargetSet; inputCount: number }): void;
   phase(args: { iter: number; total: number; message: string }): void;
   validationFailed(args: { iter: number; total: number; diagnostics: OptimizeMutationDiagnostic[] }): void;
   iterationRejected(args: { iter: number; total: number; phase: string; error: string }): void;
@@ -133,7 +133,7 @@ export type OptimizeReporter = {
     verdict: SuiteVerdict;
     changes: OptimizeAppliedChange[];
     rationale: string;
-    records: TaskRecordPair[];
+    records: InputRecordPair[];
   }): void;
   runFinished(args: {
     result: OptimizeResult;
@@ -161,12 +161,12 @@ export function createOptimizeReporter(
   };
 
   return {
-    runStarted({ runId, targetSet, taskCount }) {
+    runStarted({ runId, targetSet, inputCount }) {
       log(color.yellow(`\n== Run ${runId}: ${targetSet.targets.length} optimize target(s) discovered ==`));
       for (const target of targetSet.targets) {
         log(`  - ${color.blue(target.id)} = ${JSON.stringify(truncate(target.value, LIST_VALUE_LIMIT))}`);
       }
-      log(`\nEvaluating baseline on ${taskCount} task(s)`);
+      log(`\nEvaluating baseline on ${inputCount} input(s)`);
     },
     phase({ iter, total, message }) {
       separate(iter);
@@ -191,7 +191,7 @@ export function createOptimizeReporter(
         logValueDiff(log, change.target, change.oldValue, change.newValue);
       }
       for (const record of records) {
-        log(color.blue(`  ~ ${record.taskId} response:`));
+        log(color.blue(`  ~ ${record.inputId} response:`));
         logBlock(log, responseDiff(record, log));
       }
       log(`\n  Rationale: ${rationale}\n`);
@@ -231,7 +231,7 @@ function logValueDiff(log: (line: string) => void, target: string, oldValue: str
   logBlock(log, formatDiff(truncate(oldValue, DIFF_VALUE_LIMIT), truncate(newValue, DIFF_VALUE_LIMIT)));
 }
 
-function responseDiff(record: TaskRecordPair, log: (line: string) => void): string {
+function responseDiff(record: InputRecordPair, log: (line: string) => void): string {
   const championResponse = readResponse(record.championRecordPath, log);
   const candidateResponse = readResponse(record.candidateRecordPath, log);
   if (championResponse === null && candidateResponse === null) return color.red("(both responses missing)");

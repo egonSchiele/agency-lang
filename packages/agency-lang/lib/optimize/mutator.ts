@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import type { AgencyConfig } from "@/config.js";
 import { executeNodeAsync } from "@/cli/util.js";
-import type { EvalTask } from "@/eval/runTypes.js";
+import type { Input } from "@/eval/runTypes.js";
 import { getAgentsDir } from "@/importPaths.js";
 
 import type { OptimizeMutationDiagnostic } from "./sourceMutator.js";
@@ -39,7 +39,7 @@ export const MutationProposalSchema = z.object({
 
 export type MutatorPromptInputs = {
   targets: OptimizeTarget[];
-  tasks: EvalTask[];
+  inputs: Input[];
   history: string;
   diagnostics?: OptimizeMutationDiagnostic[];
 };
@@ -75,20 +75,20 @@ export function renderTargetsSection(targets: OptimizeTarget[]): string {
     .join("\n");
 }
 
-export function buildMutatorSections(inputs: MutatorPromptInputs): MutatorMessageSections {
-  const targets = renderTargetsSection(inputs.targets);
-  const goals = [...inputs.tasks]
-    .sort((a, b) => a.task_id.localeCompare(b.task_id))
-    .map((task) => `- [${task.task_id}] ${task.goal}`)
+export function buildMutatorSections(promptInputs: MutatorPromptInputs): MutatorMessageSections {
+  const targets = renderTargetsSection(promptInputs.targets);
+  const goals = [...promptInputs.inputs]
+    .sort((a, b) => (a.id ?? "").localeCompare(b.id ?? ""))
+    .map((input) => `- [${input.id ?? ""}] ${input.goal ?? ""}`)
     .join("\n");
-  const diagnostics = (inputs.diagnostics ?? []).length === 0
+  const diagnostics = (promptInputs.diagnostics ?? []).length === 0
     ? ""
     : [
       "Your previous proposal failed validation:",
-      ...(inputs.diagnostics ?? []).map((entry) => `- [${entry.code}] ${entry.message}`),
+      ...(promptInputs.diagnostics ?? []).map((entry) => `- [${entry.code}] ${entry.message}`),
       "Fix every problem listed above and propose corrected operations.",
     ].join("\n");
-  return { targets, goals, history: inputs.history, diagnostics };
+  return { targets, goals, history: promptInputs.history, diagnostics };
 }
 
 /**

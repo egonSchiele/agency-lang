@@ -60,8 +60,8 @@ describe("eval run CLI", () => {
     );
 
     expect(result).toMatchObject({ runId: "r1", okCount: 1, errorCount: 0 });
-    expect(result.tasks[0]).toMatchObject({ status: "success" });
-    expect(fs.existsSync(path.join(runsDir, "r1", "tasks", result.tasks[0].taskId, "eval-record.json"))).toBe(true);
+    expect(result.inputs[0]).toMatchObject({ status: "success" });
+    expect(fs.existsSync(path.join(runsDir, "r1", "tasks", result.inputs[0].inputId, "eval-record.json"))).toBe(true);
   });
 
   it("throws setup failures before creating a run directory", async () => {
@@ -104,11 +104,11 @@ describe("eval run CLI", () => {
       },
     );
 
-    const taskResult = result.tasks[0];
-    expect(taskResult).toMatchObject({ status: "success" });
-    expect(extractorStatelogPath).toBe(taskResult.statelogPath);
-    expect(fs.readFileSync(taskResult.statelogPath, "utf-8")).toBe("{}\n");
-    expect(fs.existsSync(taskResult.evalRecordPath)).toBe(true);
+    const inputResult = result.inputs[0];
+    expect(inputResult).toMatchObject({ status: "success" });
+    expect(extractorStatelogPath).toBe(inputResult.statelogPath);
+    expect(fs.readFileSync(inputResult.statelogPath, "utf-8")).toBe("{}\n");
+    expect(fs.existsSync(inputResult.evalRecordPath)).toBe(true);
   });
 
   it("stops after the first task error when continueOnError is false", async () => {
@@ -142,13 +142,13 @@ describe("eval run CLI", () => {
     );
 
     expect(runs).toBe(1);
-    expect(result.tasks).toHaveLength(1);
-    expect(result.tasks[0]).toMatchObject({ taskId: "first", status: "error", errorMessage: "nope" });
+    expect(result.inputs).toHaveLength(1);
+    expect(result.inputs[0]).toMatchObject({ inputId: "first", status: "error", errorMessage: "nope" });
     expect(fs.readFileSync(path.join(runsDir, "stop", "tasks", "first", "error.txt"), "utf-8")).toBe("nope");
     expect(JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8"))).toMatchObject({
       okCount: 0,
       errorCount: 1,
-      tasks: [{ taskId: "first", status: "error", errorMessage: "nope" }],
+      inputs: [{ inputId: "first", status: "error", errorMessage: "nope" }],
     });
   });
 });

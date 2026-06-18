@@ -1,11 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import type { EvalRunResult, EvalRunTaskResult, EvalTask } from "./runTypes.js";
+import type { EvalRunResult, EvalRunInputResult, Input } from "./runTypes.js";
 
-export type ReadEvalRunTask = {
-  taskId: string;
-  task?: EvalTask;
+export type ReadEvalRunInput = {
+  inputId: string;
+  input?: Input;
   recordPath?: string;
   status: "ok" | "missing" | "failed";
   errorMessage?: string;
@@ -13,36 +13,36 @@ export type ReadEvalRunTask = {
 
 export type ReadEvalRunResult = {
   runDir: string;
-  tasksById: Record<string, ReadEvalRunTask>;
+  inputsById: Record<string, ReadEvalRunInput>;
 };
 
 export function readEvalRun(runDir: string): ReadEvalRunResult {
   const resolvedRunDir = path.resolve(runDir);
   const summary = readJson<EvalRunResult>(path.join(resolvedRunDir, "summary.json"));
-  const tasksById: Record<string, ReadEvalRunTask> = {};
+  const inputsById: Record<string, ReadEvalRunInput> = {};
 
-  for (const result of summary.tasks) {
-    const taskDir = path.join(resolvedRunDir, "tasks", result.taskId);
-    const task = readOptionalJson<EvalTask>(path.join(taskDir, "task.json"));
-    const recordPath = result.evalRecordPath || path.join(taskDir, "eval-record.json");
-    const status = taskStatus(result, recordPath);
+  for (const result of summary.inputs) {
+    const inputDir = path.join(resolvedRunDir, "tasks", result.inputId);
+    const input = readOptionalJson<Input>(path.join(inputDir, "task.json"));
+    const recordPath = result.evalRecordPath || path.join(inputDir, "eval-record.json");
+    const status = inputStatus(result, recordPath);
     const errorMessage = status === "failed"
-      ? readOptionalText(path.join(taskDir, "error.txt")) ?? result.errorMessage
+      ? readOptionalText(path.join(inputDir, "error.txt")) ?? result.errorMessage
       : undefined;
 
-    tasksById[result.taskId] = {
-      taskId: result.taskId,
-      ...(task ? { task } : {}),
+    inputsById[result.inputId] = {
+      inputId: result.inputId,
+      ...(input ? { input } : {}),
       ...(recordPath ? { recordPath } : {}),
       status,
       ...(errorMessage ? { errorMessage } : {}),
     };
   }
 
-  return { runDir: resolvedRunDir, tasksById };
+  return { runDir: resolvedRunDir, inputsById };
 }
 
-function taskStatus(result: EvalRunTaskResult, recordPath: string): ReadEvalRunTask["status"] {
+function inputStatus(result: EvalRunInputResult, recordPath: string): ReadEvalRunInput["status"] {
   if (result.status === "error") return "failed";
   return fs.existsSync(recordPath) ? "ok" : "missing";
 }

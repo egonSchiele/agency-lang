@@ -1,18 +1,16 @@
+import type { Input } from "@/eval/runTypes.js";
+
 import type { AgencyRunner } from "./agencyRunner.js";
+
+/** The unified run-spec type lives in the eval layer; re-export it so the many
+ *  `import { Input } from "./types.js"` sites in the optimizer keep working. */
+export type { Input };
 
 /** A JSON-compatible value. */
 export type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON };
 
 /** A path of object keys / array indices into a JSON value. */
 export type JSONPath = (string | number)[];
-
-/** One invocation of the agent under optimization. */
-export type Input = {
-  id?: string;                       // optional; callers auto-derive when omitted
-  node?: string;                     // defaults to "main" at run time
-  args: Record<string, JSON>;
-  metadata?: Record<string, JSON>;   // freeform, grader-agnostic (title, expectedOutput, tags, …)
-};
 
 /** The result of running the agent on one input. */
 export type AgentRun = {

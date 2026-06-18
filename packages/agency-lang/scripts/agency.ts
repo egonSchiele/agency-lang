@@ -279,7 +279,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       verbose?: boolean;
     }) => {
       const result = await evalRun({ ...opts, config: getConfig() });
-      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.tasks.length} tasks ok`);
+      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} tasks ok`);
       console.log(path.join(result.runDir, "summary.json"));
       if (result.errorCount > 0 && opts.continueOnError === false) {
         process.exit(2);

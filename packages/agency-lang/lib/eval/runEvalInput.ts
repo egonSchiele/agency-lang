@@ -2,22 +2,22 @@ import * as fs from "fs";
 import * as path from "path";
 
 import {
-  prepareEvalTask,
-  recordEvalTaskPrepareFailure,
-  recordEvalTaskRunFailure,
-  recordEvalTaskSuccess,
+  prepareInput,
+  recordInputPrepareFailure,
+  recordInputRunFailure,
+  recordInputSuccess,
   shouldExtractStatelog,
   type EvalRunState,
-  type PreparedEvalTask,
+  type PreparedInput,
 } from "./runArtifacts.js";
 import type {
   EvalRunCompiledAgent,
-  EvalTask,
-  EvalRunTaskResult,
+  Input,
+  EvalRunInputResult,
 } from "./runTypes.js";
 
 /**
- * How to actually invoke the compiled agent for a task. The CLI plugs in a
+ * How to actually invoke the compiled agent for an input. The CLI plugs in a
  * subprocess fork; alternative callers (tests, in-process variants) can
  * plug in their own runner. Must never throw — failures are returned as
  * `{ ok: false, errorMessage }`.
@@ -26,7 +26,7 @@ import type {
  * statelog. When omitted, the framework uses the `statelogPath` it provided
  * to the runner.
  */
-export type EvalTaskRunner = (args: {
+export type EvalInputRunner = (args: {
   compiled: EvalRunCompiledAgent;
   node: string;
   args: Record<string, any>;
@@ -36,18 +36,18 @@ export type EvalTaskRunner = (args: {
 
 /**
  * How to turn a written statelog into an eval-record.json. Must never throw
- * — failures should be raised by the caller, not encoded as task errors,
- * because they indicate a bug in the extractor rather than a task failure.
- * Errors are still caught here so they get routed into the task result.
+ * — failures should be raised by the caller, not encoded as input errors,
+ * because they indicate a bug in the extractor rather than an input failure.
+ * Errors are still caught here so they get routed into the input result.
  */
 export type EvalRecordExtractor = (args: {
   statelogPath: string;
   outPath: string;
-  task: EvalTask;
+  input: Input;
 }) => Promise<void>;
 
 /**
- * Single source of truth for "run one eval task end-to-end."
+ * Single source of truth for "run one eval input end-to-end."
  *
  * Both the CLI (`agency eval run`) and the stdlib (`std::agency/eval.evalRun`)
  * route through this function so the prepare → invoke → extract → record
@@ -55,34 +55,35 @@ export type EvalRecordExtractor = (args: {
  * invoking the agent; the *what* (artifact layout, error routing, summary
  * shape) is fixed here.
  *
- * Never throws — every failure path is reified as an `EvalRunTaskResult`.
+ * Never throws — every failure path is reified as an `EvalRunInputResult`.
  */
-export async function runEvalTask(args: {
+export async function runEvalInput(args: {
   state: EvalRunState;
-  task: EvalTask;
+  input: Input;
   compiled: EvalRunCompiledAgent;
   defaultNode: string;
-  runner: EvalTaskRunner;
+  runner: EvalInputRunner;
   extractor: EvalRecordExtractor;
-}): Promise<EvalRunTaskResult> {
-  let prepared: PreparedEvalTask;
+}): Promise<EvalRunInputResult> {
+  const inputId = args.input.id ?? "";
+  let prepared: PreparedInput;
   try {
-    prepared = prepareEvalTask(args.state, args.task);
+    prepared = prepareInput(args.state, args.input);
   } catch (err) {
     const message = errMessage(err);
-    console.error(`[evalRun] prepare failed for task ${args.task.task_id}: ${message}`);
-    return recordEvalTaskPrepareFailure(args.task.task_id, message);
+    console.error(`[evalRun] prepare failed for input ${inputId}: ${message}`);
+    return recordInputPrepareFailure(inputId, message);
   }
 
   const runResult = await args.runner({
     compiled: args.compiled,
-    node: args.task.node ?? args.defaultNode,
-    args: args.task.args,
+    node: args.input.node ?? args.defaultNode,
+    args: args.input.args,
     cwd: prepared.workdirPath,
     statelogPath: prepared.statelogPath,
   });
   if (!runResult.ok) {
-    return recordEvalTaskRunFailure(prepared, runResult.errorMessage);
+    return recordInputRunFailure(prepared, runResult.errorMessage);
   }
 
   const statelogPath = runResult.statelogPath ?? prepared.statelogPath;
@@ -92,19 +93,19 @@ export async function runEvalTask(args: {
       await args.extractor({
         statelogPath,
         outPath: prepared.evalRecordPath,
-        task: args.task,
+        input: args.input,
       });
     } catch (err) {
       const message = errMessage(err);
-      console.error(`[evalRun] extract failed for task ${args.task.task_id}: ${message}`);
-      return recordEvalTaskRunFailure(prepared, message);
+      console.error(`[evalRun] extract failed for input ${inputId}: ${message}`);
+      return recordInputRunFailure(prepared, message);
     }
   }
 
-  return recordEvalTaskSuccess(prepared);
+  return recordInputSuccess(prepared);
 }
 
-function ensureStatelogAtExpectedPath(prepared: PreparedEvalTask, statelogPath: string): void {
+function ensureStatelogAtExpectedPath(prepared: PreparedInput, statelogPath: string): void {
   if (statelogPath !== prepared.statelogPath || shouldExtractStatelog(statelogPath)) return;
 
   const fallbackPath = path.join(prepared.workdirPath, "statelog.log");

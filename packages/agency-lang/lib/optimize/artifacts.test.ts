@@ -25,7 +25,7 @@ describe("createOptimizeArtifacts", () => {
       workingDir: tmpDir,
       entryFile: "agent.agency",
       node: "main",
-      tasksSource: "inline:--goal",
+      inputsSource: "inline:--goal",
       iterations: 3,
       judgePolicy: { samples: 3, confidenceThreshold: 50, marginThreshold: 0, positionBias: "swap" },
       mutatorModel: "test-model",
@@ -39,7 +39,7 @@ describe("createOptimizeArtifacts", () => {
       runId: "run-1",
       entryFile: "agent.agency",
       node: "main",
-      tasksSource: "inline:--goal",
+      inputsSource: "inline:--goal",
       iterations: 3,
       judgePolicy: { samples: 3 },
       mutatorModel: "test-model",
@@ -176,7 +176,7 @@ describe("createOptimizeArtifacts", () => {
       winsB: 1,
       ties: 0,
       winner: "B",
-      perTask: [],
+      perInput: [],
     });
     const championDir = artifacts.writeFinalChampion({ "agent.agency": "champion source\n" }, 1);
     const summaryPath = artifacts.writeSummary({

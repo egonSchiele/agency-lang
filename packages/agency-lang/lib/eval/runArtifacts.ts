@@ -1,26 +1,26 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { assertEvalRunId, assertEvalTaskId } from "./ids.js";
+import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
   EvalRunResult,
-  EvalTask,
-  EvalRunTaskResult,
+  Input,
+  EvalRunInputResult,
 } from "./runTypes.js";
 
 export type EvalRunState = {
   runId: string;
   runDir: string;
-  tasksDir: string;
+  inputsDir: string;
   agent: string;
-  tasksSource: string;
+  inputsSource: string;
   continueOnError: boolean;
 };
 
-export type PreparedEvalTask = {
-  task: EvalTask;
-  taskDir: string;
-  taskJsonPath: string;
+export type PreparedInput = {
+  input: Input;
+  inputDir: string;
+  inputJsonPath: string;
   statelogPath: string;
   evalRecordPath: string;
   workdirPath: string;
@@ -31,28 +31,28 @@ export function initializeEvalRun(args: {
   runId: string;
   runsDir: string;
   agent: string;
-  tasksSource: string;
-  tasks: EvalTask[];
+  inputsSource: string;
+  inputs: Input[];
   continueOnError: boolean;
   startedAt: Date;
 }): EvalRunState {
   assertEvalRunId(args.runId);
 
   const runDir = path.resolve(args.runsDir, args.runId);
-  const tasksDir = path.join(runDir, "tasks");
+  const inputsDir = path.join(runDir, "tasks");
   if (fs.existsSync(runDir)) {
     throw new Error(
       `Run directory already exists: ${runDir}.
 Choose a different --run-id or delete the existing directory.`,
     );
   }
-  fs.mkdirSync(tasksDir, { recursive: true });
+  fs.mkdirSync(inputsDir, { recursive: true });
 
   writeJson(path.join(runDir, "config.json"), {
     runId: args.runId,
     agent: args.agent,
-    tasksSource: args.tasksSource,
-    tasks: args.tasks,
+    tasksSource: args.inputsSource,
+    tasks: args.inputs,
     continueOnError: args.continueOnError,
     startedAt: args.startedAt.toISOString(),
   });
@@ -60,68 +60,69 @@ Choose a different --run-id or delete the existing directory.`,
   return {
     runId: args.runId,
     runDir,
-    tasksDir,
+    inputsDir,
     agent: args.agent,
-    tasksSource: args.tasksSource,
+    inputsSource: args.inputsSource,
     continueOnError: args.continueOnError,
   };
 }
 
-export function prepareEvalTask(
+export function prepareInput(
   state: EvalRunState,
-  task: EvalTask,
-): PreparedEvalTask {
-  assertEvalTaskId(task.task_id);
+  input: Input,
+): PreparedInput {
+  const id = input.id ?? "";
+  assertEvalInputId(id);
 
-  const taskDir = path.join(state.tasksDir, task.task_id);
-  const workdirPath = path.join(taskDir, "workdir");
-  fs.mkdirSync(taskDir, { recursive: true });
+  const inputDir = path.join(state.inputsDir, id);
+  const workdirPath = path.join(inputDir, "workdir");
+  fs.mkdirSync(inputDir, { recursive: true });
 
-  if (task.working_dir) {
-    const workingDirStat = fs.statSync(task.working_dir);
+  if (input.working_dir) {
+    const workingDirStat = fs.statSync(input.working_dir);
     if (!workingDirStat.isDirectory()) {
       throw new Error("Eval task working_dir must be a directory");
     }
-    fs.cpSync(task.working_dir, workdirPath, { recursive: true });
+    fs.cpSync(input.working_dir, workdirPath, { recursive: true });
   } else {
     fs.mkdirSync(workdirPath, { recursive: true });
   }
 
-  const prepared: PreparedEvalTask = {
-    task,
-    taskDir,
-    taskJsonPath: path.join(taskDir, "task.json"),
-    statelogPath: path.join(taskDir, "statelog.jsonl"),
-    evalRecordPath: path.join(taskDir, "eval-record.json"),
+  const prepared: PreparedInput = {
+    input,
+    inputDir,
+    inputJsonPath: path.join(inputDir, "task.json"),
+    statelogPath: path.join(inputDir, "statelog.jsonl"),
+    evalRecordPath: path.join(inputDir, "eval-record.json"),
     workdirPath,
-    errorPath: path.join(taskDir, "error.txt"),
+    errorPath: path.join(inputDir, "error.txt"),
   };
 
-  // Defensive cleanup so re-runs of the same task_id don't see stale
+  // Defensive cleanup so re-runs of the same input id don't see stale
   // artifacts. We use raw rmSync (not utils.safeDeleteFile) because the
   // user can point runsDir at any path — including /tmp — and
   // safeDeleteFile refuses anything outside a project root. The targets
-  // here are paths *we* just constructed under the validated taskDir, so
+  // here are paths *we* just constructed under the validated inputDir, so
   // the project-root containment check is the wrong safeguard.
   for (const filePath of [prepared.statelogPath, prepared.evalRecordPath, prepared.errorPath]) {
     fs.rmSync(filePath, { force: true });
   }
 
-  writeJson(prepared.taskJsonPath, task);
+  writeJson(prepared.inputJsonPath, input);
   return prepared;
 }
 
 /**
- * Build an EvalRunTaskResult for a task that failed before any artifacts
- * were prepared (e.g. invalid task_id, working_dir validation). The result
+ * Build an EvalRunInputResult for an input that failed before any artifacts
+ * were prepared (e.g. invalid id, working_dir validation). The result
  * carries no on-disk paths because none were allocated.
  */
-export function recordEvalTaskPrepareFailure(
-  taskId: string,
+export function recordInputPrepareFailure(
+  inputId: string,
   errorMessage: string,
-): EvalRunTaskResult {
+): EvalRunInputResult {
   return {
-    taskId,
+    inputId,
     status: "error",
     evalRecordPath: "",
     statelogPath: "",
@@ -131,17 +132,17 @@ export function recordEvalTaskPrepareFailure(
 }
 
 /**
- * Build an EvalRunTaskResult for a prepared task that failed during run or
- * extract. Writes the error message to the task's error.txt for offline
+ * Build an EvalRunInputResult for a prepared input that failed during run or
+ * extract. Writes the error message to the input's error.txt for offline
  * inspection.
  */
-export function recordEvalTaskRunFailure(
-  prepared: PreparedEvalTask,
+export function recordInputRunFailure(
+  prepared: PreparedInput,
   errorMessage: string,
-): EvalRunTaskResult {
+): EvalRunInputResult {
   fs.writeFileSync(prepared.errorPath, errorMessage);
   return {
-    taskId: prepared.task.task_id,
+    inputId: prepared.input.id ?? "",
     status: "error",
     evalRecordPath: prepared.evalRecordPath,
     statelogPath: prepared.statelogPath,
@@ -150,11 +151,11 @@ export function recordEvalTaskRunFailure(
   };
 }
 
-export function recordEvalTaskSuccess(
-  prepared: PreparedEvalTask,
-): EvalRunTaskResult {
+export function recordInputSuccess(
+  prepared: PreparedInput,
+): EvalRunInputResult {
   return {
-    taskId: prepared.task.task_id,
+    inputId: prepared.input.id ?? "",
     status: "success",
     evalRecordPath: prepared.evalRecordPath,
     statelogPath: prepared.statelogPath,
@@ -175,15 +176,15 @@ export function shouldExtractStatelog(statelogPath: string): boolean {
 
 export function writeEvalRunSummary(
   state: EvalRunState,
-  tasks: EvalRunTaskResult[],
+  inputs: EvalRunInputResult[],
 ): EvalRunResult {
   const summary: EvalRunResult = {
     runId: state.runId,
     runDir: state.runDir,
     agent: state.agent,
-    tasks,
-    okCount: tasks.filter((task) => task.status === "success").length,
-    errorCount: tasks.filter((task) => task.status === "error").length,
+    inputs,
+    okCount: inputs.filter((input) => input.status === "success").length,
+    errorCount: inputs.filter((input) => input.status === "error").length,
   };
   writeJson(path.join(state.runDir, "summary.json"), summary);
   return summary;

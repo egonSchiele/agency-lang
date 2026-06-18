@@ -33,7 +33,8 @@ export type JudgeSample = {
   order: "AB" | "BA";
 };
 
-export type TaskVerdictInput = {
+/** One side (run A or run B) of a pairwise comparison for a single input. */
+export type VerdictSide = {
   path?: string;
   status: "ok" | "missing" | "failed";
   response?: string | null;
@@ -41,10 +42,10 @@ export type TaskVerdictInput = {
   errorMessage?: string;
 };
 
-export type TaskVerdict = {
-  taskId: string;
+export type InputVerdict = {
+  inputId: string;
   goal: string;
-  inputs: [TaskVerdictInput, TaskVerdictInput];
+  inputs: [VerdictSide, VerdictSide];
   winner: JudgeWinner;
   confidence: number;
   reasoning: string;
@@ -60,5 +61,5 @@ export type SuiteVerdict = {
   winsB: number;
   ties: number;
   winner: JudgeWinner;
-  perTask: TaskVerdict[];
+  perInput: InputVerdict[];
 };

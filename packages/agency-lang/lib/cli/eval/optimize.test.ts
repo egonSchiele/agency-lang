@@ -62,17 +62,17 @@ describe("eval optimize CLI", () => {
     return captured;
   }
 
-  it("desugars --goal into a single task-1 input with the goal in metadata", async () => {
+  it("desugars --goal into a single input-1 input with a first-class goal", async () => {
     const agentFile = writeAgent();
     const { target } = await capture({ agent: agentFile, goal: "Return Paris" });
-    expect(target?.inputs).toEqual([{ id: "task-1", node: "main", args: {}, metadata: { goal: "Return Paris" } }]);
+    expect(target?.inputs).toEqual([{ id: "input-1", node: "main", args: {}, goal: "Return Paris" }]);
   });
 
-  it("builds one input per task from --tasks, carrying each goal in metadata", async () => {
+  it("builds one input per task from --tasks, carrying each goal first-class", async () => {
     const agentFile = writeAgent();
     const tasksFile = writeTasks([{ task_id: "first", goal: "be correct", args: { text: "hi" } }]);
     const { target } = await capture({ agent: `${agentFile}:main`, tasks: tasksFile });
-    expect(target?.inputs).toEqual([{ id: "first", node: "main", args: { text: "hi" }, metadata: { goal: "be correct" } }]);
+    expect(target?.inputs).toEqual([{ id: "first", goal: "be correct", args: { text: "hi" }, node: "main" }]);
   });
 
   it("requires exactly one of --tasks or --goal", async () => {

@@ -1,22 +1,22 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { evalRunLoadedTasks } from "@/cli/eval/run.js";
+import { evalRunLoadedInputs } from "@/cli/eval/run.js";
 import type { AgencyConfig } from "@/config.js";
 import { judgeSuite, type JudgeSuiteArgs } from "@/eval/judge/suite.js";
 import type { SuiteVerdict } from "@/eval/judge/types.js";
-import type { EvalRunResult, EvalTask } from "@/eval/runTypes.js";
+import type { EvalRunResult, Input } from "@/eval/runTypes.js";
 
 import { createOptimizeArtifacts, sha256Text, type OptimizeArtifacts } from "./artifacts.js";
 import { buildMutationHistory, type MutationHistoryEntry } from "./history.js";
 import { proposeMutation, type ProposeMutationArgs } from "./mutator.js";
-import { SILENT_OPTIMIZE_REPORTER, type OptimizeReporter, type TaskRecordPair } from "./reporter.js";
+import { SILENT_OPTIMIZE_REPORTER, type OptimizeReporter, type InputRecordPair } from "./reporter.js";
 import {
   OptimizeSourceMutator,
   type OptimizeMutationDiagnostic,
   type OptimizeMutationPreview,
 } from "./sourceMutator.js";
-import { normalizeOptimizeTasks } from "./tasks.js";
+import { normalizeOptimizeInputs } from "./inputs.js";
 import type { OptimizeTargetSet } from "./targets.js";
 import type {
   IterationResult,
@@ -33,7 +33,7 @@ export type OptimizeLoopDeps = {
   mutate?: (args: ProposeMutationArgs) => Promise<MutationProposal>;
   evalRun?: (args: {
     agent: string;
-    tasks: EvalTask[];
+    inputs: Input[];
     runsDir: string;
     runId: string;
     config: AgencyConfig;
@@ -60,7 +60,7 @@ export async function optimizeLoop(
       "Mark declarations to optimize with the optimize modifier, for example: optimize const prompt = \"...\"",
     );
   }
-  const tasks = normalizeOptimizeTasks(config.runtime.tasks, config.target.workingDir);
+  const inputs = normalizeOptimizeInputs(config.runtime.inputs, config.target.workingDir);
   const reporter = deps.reporter ?? SILENT_OPTIMIZE_REPORTER;
 
   const artifacts = createOptimizeArtifacts({
@@ -69,17 +69,17 @@ export async function optimizeLoop(
     workingDir: config.target.workingDir,
     entryFile: config.target.entryFile,
     node: config.target.node,
-    tasksSource: config.runtime.tasksSource,
+    inputsSource: config.runtime.inputsSource,
     iterations: config.policy.iterations,
     judgePolicy: config.judgePolicy,
     mutatorModel: config.policy.mutatorModel,
   });
   artifacts.writeTargets(targetSet);
 
-  reporter.runStarted({ runId: config.artifacts.runId, targetSet, taskCount: tasks.length });
+  reporter.runStarted({ runId: config.artifacts.runId, targetSet, inputCount: inputs.length });
   const baselineFiles = sourceFileMap(targetSet);
   artifacts.writeIterationAgent(0, baselineFiles);
-  const baselineEval = await runIterationEval(deps, config, artifacts, 0, baselineFiles, tasks);
+  const baselineEval = await runIterationEval(deps, config, artifacts, 0, baselineFiles, inputs);
   assertBaselineSucceeded(baselineEval);
 
   let champion: ChampionState = {
@@ -103,7 +103,7 @@ export async function optimizeLoop(
   let validationFailedCount = 0;
 
   for (let iter = 1; iter <= config.policy.iterations; iter += 1) {
-    const outcome = await runCandidateIteration({ iter, config, deps, reporter, artifacts, champion, history, tasks });
+    const outcome = await runCandidateIteration({ iter, config, deps, reporter, artifacts, champion, history, inputs });
     iterations.push(outcome.iteration);
     history.push(outcome.historyEntry);
     if (outcome.newChampion) {
@@ -154,9 +154,9 @@ async function runCandidateIteration(args: {
   artifacts: OptimizeArtifacts;
   champion: ChampionState;
   history: MutationHistoryEntry[];
-  tasks: EvalTask[];
+  inputs: Input[];
 }): Promise<IterationOutcome> {
-  const { iter, config, deps, reporter, artifacts, champion, history, tasks } = args;
+  const { iter, config, deps, reporter, artifacts, champion, history, inputs } = args;
   const total = config.policy.iterations;
 
   reporter.phase({ iter, total, message: "proposing mutation operations" });
@@ -197,7 +197,7 @@ async function runCandidateIteration(args: {
         mutationPath: mutationArtifact.mutationMarkdownPath,
         winsA: 0,
         winsB: 0,
-        ties: tasks.length,
+        ties: inputs.length,
       },
       historyEntry: {
         iter,
@@ -214,7 +214,7 @@ async function runCandidateIteration(args: {
   let candidateEval: EvalRunResult;
   try {
     reporter.phase({ iter, total, message: "evaluating candidate" });
-    candidateEval = await runIterationEval(deps, config, artifacts, iter, preview.files, tasks);
+    candidateEval = await runIterationEval(deps, config, artifacts, iter, preview.files, inputs);
   } catch (error) {
     return rejection("eval", error);
   }
@@ -225,7 +225,7 @@ async function runCandidateIteration(args: {
     suiteVerdict = await (deps.judgeSuite ?? judgeSuite)({
       runA: champion.evalRun,
       runB: candidateEval,
-      tasks: config.runtime.tasks,
+      inputs: config.runtime.inputs,
       policy: config.judgePolicy,
     });
   } catch (error) {
@@ -242,7 +242,7 @@ async function runCandidateIteration(args: {
     verdict: suiteVerdict,
     changes: preview.changes,
     rationale,
-    records: pairTaskRecords(config.runtime.tasks, champion.evalRun, candidateEval),
+    records: pairInputRecords(config.runtime.inputs, champion.evalRun, candidateEval),
   });
   return {
     iteration: {
@@ -263,9 +263,9 @@ async function runCandidateIteration(args: {
       winsB: suiteVerdict.winsB,
       rationale,
       operations,
-      lossReasons: suiteVerdict.perTask
-        .filter((task) => task.winner === "A")
-        .map((task) => task.reasoning),
+      lossReasons: suiteVerdict.perInput
+        .filter((verdict) => verdict.winner === "A")
+        .map((verdict) => verdict.reasoning),
     },
     ...(accepted
       ? { newChampion: { iter, files: preview.files, targetSet: preview.targetSet, evalRun: candidateEval } }
@@ -312,7 +312,7 @@ async function proposeValidMutation(
     const proposal = await (deps.mutate ?? proposeMutation)({
       config: config.runtime.config,
       targets: champion.targetSet.targets,
-      tasks: config.runtime.tasks,
+      inputs: config.runtime.inputs,
       history: buildMutationHistory(history),
       model: config.policy.mutatorModel,
       ...(diagnostics ? { diagnostics } : {}),
@@ -342,12 +342,12 @@ async function runIterationEval(
   artifacts: OptimizeArtifacts,
   iter: number,
   files: Record<string, string>,
-  tasks: EvalTask[],
+  inputs: Input[],
 ): Promise<EvalRunResult> {
   const workspace = artifacts.writeIterationWorkspace(iter, files);
   return (deps.evalRun ?? defaultEvalRun)({
     agent: path.join(workspace.workspaceDir, config.target.entryFile),
-    tasks,
+    inputs,
     runsDir: path.join(artifacts.runDir, `iter-${iter}`),
     runId: EVAL_RUN_DIR_NAME,
     config: config.runtime.config,
@@ -357,15 +357,15 @@ async function runIterationEval(
 
 async function defaultEvalRun(args: {
   agent: string;
-  tasks: EvalTask[];
+  inputs: Input[];
   runsDir: string;
   runId: string;
   config: AgencyConfig;
   pipeAgentOutput: boolean;
 }): Promise<EvalRunResult> {
-  return evalRunLoadedTasks({
+  return evalRunLoadedInputs({
     ...args,
-    tasksSource: "optimize:tasks",
+    inputsSource: "optimize:inputs",
     continueOnError: true,
     quietCompile: true,
   });
@@ -373,36 +373,39 @@ async function defaultEvalRun(args: {
 
 /**
  * The baseline runs the unmutated program: any failure means the program
- * or the task suite is broken, so optimizing would be meaningless. Abort
- * with the failing tasks instead of continuing.
+ * or the input suite is broken, so optimizing would be meaningless. Abort
+ * with the failing inputs instead of continuing.
  */
 function assertBaselineSucceeded(result: EvalRunResult): void {
-  const failed = result.tasks.filter((task) => task.status === "error");
+  const failed = result.inputs.filter((input) => input.status === "error");
   if (failed.length === 0) return;
   const details = failed
-    .map((task) => `- ${task.taskId}: ${task.errorMessage ?? "unknown error"}`)
+    .map((input) => `- ${input.inputId}: ${input.errorMessage ?? "unknown error"}`)
     .join("\n");
   throw new Error(
-    `Baseline eval failed before any mutation was made, so the program (or task suite) is broken — fix it before optimizing:\n${details}\nSee ${result.runDir} for artifacts.`,
+    `Baseline eval failed before any mutation was made, so the program (or input suite) is broken — fix it before optimizing:\n${details}\nSee ${result.runDir} for artifacts.`,
   );
 }
 
-function pairTaskRecords(
-  tasks: EvalTask[],
+function pairInputRecords(
+  inputs: Input[],
   championEval: EvalRunResult,
   candidateEval: EvalRunResult,
-): TaskRecordPair[] {
-  return tasks.map((task) => ({
-    taskId: task.task_id,
-    ...(recordPath(championEval, task.task_id) ? { championRecordPath: recordPath(championEval, task.task_id) } : {}),
-    ...(recordPath(candidateEval, task.task_id) ? { candidateRecordPath: recordPath(candidateEval, task.task_id) } : {}),
-  }));
+): InputRecordPair[] {
+  return inputs.map((input) => {
+    const id = input.id ?? "";
+    return {
+      inputId: id,
+      ...(recordPath(championEval, id) ? { championRecordPath: recordPath(championEval, id) } : {}),
+      ...(recordPath(candidateEval, id) ? { candidateRecordPath: recordPath(candidateEval, id) } : {}),
+    };
+  });
 }
 
-function recordPath(result: EvalRunResult, taskId: string): string | undefined {
-  const task = result.tasks.find((candidate) => candidate.taskId === taskId);
-  if (!task || task.status !== "success" || !task.evalRecordPath) return undefined;
-  return task.evalRecordPath;
+function recordPath(result: EvalRunResult, inputId: string): string | undefined {
+  const input = result.inputs.find((candidate) => candidate.inputId === inputId);
+  if (!input || input.status !== "success" || !input.evalRecordPath) return undefined;
+  return input.evalRecordPath;
 }
 
 function sourceFileMap(targetSet: OptimizeTargetSet): Record<string, string> {

@@ -1,23 +1,23 @@
 import type {
   EvalRunResult,
-  EvalTask,
+  Input,
 } from "../runTypes.js";
-import { readEvalRun, type ReadEvalRunResult, type ReadEvalRunTask } from "../readRun.js";
+import { readEvalRun, type ReadEvalRunResult, type ReadEvalRunInput } from "../readRun.js";
 import { judgePair, type JudgePairArgs } from "./pairwise.js";
 import type {
   JudgeAggregationPolicy,
   JudgeSample,
   JudgeWinner,
   SuiteVerdict,
-  TaskVerdict,
+  InputVerdict,
 } from "./types.js";
 
 export type JudgeSuiteArgs = {
   runA: EvalRunResult | ReadEvalRunResult | string;
   runB: EvalRunResult | ReadEvalRunResult | string;
-  tasks: EvalTask[];
+  inputs: Input[];
   policy: JudgeAggregationPolicy;
-  judgePair?: (args: JudgePairArgs) => Promise<TaskVerdict>;
+  judgePair?: (args: JudgePairArgs) => Promise<InputVerdict>;
 };
 
 export function orderForSample(index: number, positionBias: "swap" | "none"): "AB" | "BA" {
@@ -31,17 +31,17 @@ export function mapWinnerToOriginal(winner: JudgeWinner, order: "AB" | "BA"): Ju
 }
 
 export function reduceSamples(args: {
-  taskId: string;
+  inputId: string;
   goal: string;
   samples: JudgeSample[];
-  inputs: TaskVerdict["inputs"];
-}): TaskVerdict {
+  inputs: InputVerdict["inputs"];
+}): InputVerdict {
   const mappedSamples = args.samples.map((sample) => ({
     ...sample,
     winner: mapWinnerToOriginal(sample.winner, sample.order),
   }));
   return {
-    taskId: args.taskId,
+    inputId: args.inputId,
     goal: args.goal,
     inputs: args.inputs,
     winner: winnerFromCounts(mappedSamples),
@@ -52,12 +52,12 @@ export function reduceSamples(args: {
   };
 }
 
-export function aggregateSuite(perTask: TaskVerdict[], policy: JudgeAggregationPolicy): SuiteVerdict {
+export function aggregateSuite(perInput: InputVerdict[], policy: JudgeAggregationPolicy): SuiteVerdict {
   let winsA = 0;
   let winsB = 0;
   let ties = 0;
-  for (const task of perTask) {
-    const countedWinner = task.confidence < policy.confidenceThreshold ? "tie" : task.winner;
+  for (const verdict of perInput) {
+    const countedWinner = verdict.confidence < policy.confidenceThreshold ? "tie" : verdict.winner;
     if (countedWinner === "A") {
       winsA += 1;
     } else if (countedWinner === "B") {
@@ -75,21 +75,22 @@ export function aggregateSuite(perTask: TaskVerdict[], policy: JudgeAggregationP
     winsB,
     ties,
     winner: suiteWinner(winsA, winsB, policy.marginThreshold),
-    perTask,
+    perInput,
   };
 }
 
 export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
   const runA = coerceRun(args.runA);
   const runB = coerceRun(args.runB);
-  const perTask: TaskVerdict[] = [];
+  const perInput: InputVerdict[] = [];
   const judge = args.judgePair ?? judgePair;
 
-  for (const task of args.tasks) {
-    const taskA = runA.tasksById[task.task_id] ?? missingTask(task.task_id);
-    const taskB = runB.tasksById[task.task_id] ?? missingTask(task.task_id);
-    if (taskA.status !== "ok" || taskB.status !== "ok") {
-      perTask.push(missingDataVerdict(task, taskA, taskB));
+  for (const input of args.inputs) {
+    const id = input.id ?? "";
+    const inputA = runA.inputsById[id] ?? missingInput(id);
+    const inputB = runB.inputsById[id] ?? missingInput(id);
+    if (inputA.status !== "ok" || inputB.status !== "ok") {
+      perInput.push(missingDataVerdict(input, inputA, inputB));
       continue;
     }
 
@@ -97,23 +98,23 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
     for (let index = 0; index < args.policy.samples; index += 1) {
       const order = orderForSample(index, args.policy.positionBias);
       const verdict = await judge({
-        taskId: task.task_id,
-        goal: task.goal,
-        recordPathA: taskA.recordPath ?? "",
-        recordPathB: taskB.recordPath ?? "",
+        inputId: id,
+        goal: input.goal ?? "",
+        recordPathA: inputA.recordPath ?? "",
+        recordPathB: inputB.recordPath ?? "",
         order,
       });
       samples.push(...verdict.samples);
     }
-    perTask.push(reduceSamples({
-      taskId: task.task_id,
-      goal: task.goal,
+    perInput.push(reduceSamples({
+      inputId: id,
+      goal: input.goal ?? "",
       samples,
-      inputs: [inputFromTask(taskA), inputFromTask(taskB)],
+      inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
     }));
   }
 
-  return aggregateSuite(perTask, args.policy);
+  return aggregateSuite(perInput, args.policy);
 }
 
 function winnerFromCounts(samples: JudgeSample[]): JudgeWinner {
@@ -137,47 +138,47 @@ function mean(values: number[]): number {
 
 function coerceRun(run: EvalRunResult | ReadEvalRunResult | string): ReadEvalRunResult {
   if (typeof run === "string") return readEvalRun(run);
-  if ("tasksById" in run) return run;
-  const tasksById: Record<string, ReadEvalRunTask> = {};
-  for (const task of run.tasks) {
-    tasksById[task.taskId] = {
-      taskId: task.taskId,
-      recordPath: task.evalRecordPath,
-      status: task.status === "success" ? "ok" : "failed",
-      ...(task.errorMessage ? { errorMessage: task.errorMessage } : {}),
+  if ("inputsById" in run) return run;
+  const inputsById: Record<string, ReadEvalRunInput> = {};
+  for (const input of run.inputs) {
+    inputsById[input.inputId] = {
+      inputId: input.inputId,
+      recordPath: input.evalRecordPath,
+      status: input.status === "success" ? "ok" : "failed",
+      ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
     };
   }
-  return { runDir: run.runDir, tasksById };
+  return { runDir: run.runDir, inputsById };
 }
 
-function missingTask(taskId: string): ReadEvalRunTask {
-  return { taskId, status: "missing" };
+function missingInput(inputId: string): ReadEvalRunInput {
+  return { inputId, status: "missing" };
 }
 
-function missingDataVerdict(task: EvalTask, taskA: ReadEvalRunTask, taskB: ReadEvalRunTask): TaskVerdict {
-  const winner = missingDataWinner(taskA.status, taskB.status);
+function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: ReadEvalRunInput): InputVerdict {
+  const winner = missingDataWinner(inputA.status, inputB.status);
   return {
-    taskId: task.task_id,
-    goal: task.goal,
-    inputs: [inputFromTask(taskA), inputFromTask(taskB)],
+    inputId: input.id ?? "",
+    goal: input.goal ?? "",
+    inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
     winner,
     confidence: 100,
-    reasoning: `A status: ${taskA.status}; B status: ${taskB.status}`,
+    reasoning: `A status: ${inputA.status}; B status: ${inputB.status}`,
     samples: [{ winner, confidence: 100, reasoning: "deterministic missing-data verdict", order: "AB" }],
     generatedAt: new Date().toISOString(),
   };
 }
 
-function missingDataWinner(statusA: ReadEvalRunTask["status"], statusB: ReadEvalRunTask["status"]): JudgeWinner {
+function missingDataWinner(statusA: ReadEvalRunInput["status"], statusB: ReadEvalRunInput["status"]): JudgeWinner {
   if (statusA === "ok" && statusB !== "ok") return "A";
   if (statusB === "ok" && statusA !== "ok") return "B";
   return "tie";
 }
 
-function inputFromTask(task: ReadEvalRunTask): TaskVerdict["inputs"][number] {
+function verdictSideOf(input: ReadEvalRunInput): InputVerdict["inputs"][number] {
   return {
-    ...(task.recordPath ? { path: task.recordPath } : {}),
-    status: task.status,
-    ...(task.errorMessage ? { errorMessage: task.errorMessage } : {}),
+    ...(input.recordPath ? { path: input.recordPath } : {}),
+    status: input.status,
+    ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
   };
 }

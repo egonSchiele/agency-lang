@@ -1,8 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { evalRunLoadedTasks, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
-import type { EvalTask } from "@/eval/runTypes.js";
+import { evalRunLoadedInputs, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
 
 import { EvalCache } from "./evalCache.js";
 import { AgencyRunner } from "./grading/agencyRunner.js";
@@ -149,17 +148,14 @@ export abstract class BaseOptimizer {
 
   /** Default runInput: run the agent for one input via the eval-run subprocess path (named args). */
   private async runInputViaEval(ws: Workspace, entryFile: string, input: Input, id: string): Promise<AgentRun> {
-    const task: EvalTask = {
-      task_id: id,
-      goal: "",
-      args: input.args,
-      ...(input.node ? { node: input.node } : {}),
-    };
+    // Now that eval and optimize share the Input type, the input flows straight
+    // through — we only pin the id so artifacts land in a predictable directory.
+    const spec: Input = { ...input, id };
     this.runCounter += 1;
-    const result = await evalRunLoadedTasks({
+    const result = await evalRunLoadedInputs({
       agent: path.join(ws.dir, entryFile),
-      tasks: [task],
-      tasksSource: "optimize",
+      inputs: [spec],
+      inputsSource: "optimize",
       runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
       runId: `run-${this.runCounter}`,
       config: this.config.config,
@@ -172,13 +168,13 @@ export abstract class BaseOptimizer {
       // applies to optimize: inputs come from the input spec, output is the return.
       extractor: optimizeEvalRecordExtractor,
     });
-    const taskResult = result.tasks[0];
-    if (!taskResult || taskResult.status !== "success") {
-      throw new Error(`agent run failed for input ${input.id ?? "(no id)"}: ${taskResult?.errorMessage ?? "unknown error"}`);
+    const inputResult = result.inputs[0];
+    if (!inputResult || inputResult.status !== "success") {
+      throw new Error(`agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`);
     }
-    const record = JSON.parse(fs.readFileSync(taskResult.evalRecordPath, "utf8")) as { evalOutputs?: { value: unknown }[] };
+    const record = JSON.parse(fs.readFileSync(inputResult.evalRecordPath, "utf8")) as { evalOutputs?: { value: unknown }[] };
     const output = gradedOutput(record.evalOutputs ?? [], input.id ?? id);
-    return { output: output as AgentRun["output"], recordPath: taskResult.evalRecordPath };
+    return { output: output as AgentRun["output"], recordPath: inputResult.evalRecordPath };
   }
 
   protected async eachIteration(step: (iter: number) => Promise<void>): Promise<void> {

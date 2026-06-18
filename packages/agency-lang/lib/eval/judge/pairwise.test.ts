@@ -68,7 +68,7 @@ describe("judgePairwise", () => {
     const b = path.join(fixturesDir, "v2-B.eval.json");
 
     const verdict = await judgePair({
-      taskId: "capital-india",
+      inputId: "capital-india",
       goal: "name the capital of India",
       recordPathA: a,
       recordPathB: b,
@@ -85,7 +85,7 @@ describe("judgePairwise", () => {
       config: {},
     }));
     expect(verdict).toMatchObject({
-      taskId: "capital-india",
+      inputId: "capital-india",
       goal: "name the capital of India",
       winner: "A",
       confidence: 87,
@@ -106,7 +106,7 @@ describe("judgePairwise", () => {
       goal: "name the capital of India",
       recordPathA: a,
       recordPathB: b,
-    } as any)).rejects.toThrow(/taskId/);
+    } as any)).rejects.toThrow(/inputId/);
     expect(mockedRunAgencyAgent).not.toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe("judgePairwise", () => {
     const b = path.join(fixturesDir, "v2-B.eval.json");
 
     const verdict = await judgePair({
-      taskId: "capital-india",
+      inputId: "capital-india",
       goal: "name the capital of India",
       recordPathA: a,
       recordPathB: b,

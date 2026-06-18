@@ -1,5 +1,3 @@
-import type { EvalTask } from "@/eval/runTypes.js";
-
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import type { Scorecard } from "../grading/scorecard.js";
@@ -107,7 +105,7 @@ export class GreedyReflective extends BaseOptimizer {
       (diagnostics) => (this.greedyDeps.propose ?? proposeMutation)({
         config: this.config.config,
         targets: champion.targetSet.targets,
-        tasks: inputsAsTasks(inputs),
+        inputs,
         history: renderHistory(history),
         model: this.config.mutatorModel,
         diagnostics,
@@ -141,10 +139,6 @@ export class GreedyReflective extends BaseOptimizer {
     return candidate.scorecard.gatesPassed() && candidate.scorecard.objective() > champion.scorecard.objective();
   }
 
-}
-
-function inputsAsTasks(inputs: Input[]): EvalTask[] {
-  return inputs.map((input) => ({ task_id: input.id ?? "input", goal: String(input.metadata?.goal ?? ""), args: input.args }));
 }
 
 function lastAccepted(attempts: Attempt[]): Attempt | undefined {

@@ -60,7 +60,7 @@ const verdict: SuiteVerdict = {
   winsB: 2,
   ties: 0,
   winner: "B",
-  perTask: [],
+  perInput: [],
 };
 
 const result: OptimizeResult = {
@@ -89,7 +89,7 @@ function capture(verbosity: "silent" | "default"): { reporter: OptimizeReporter;
 function decidedArgs(overrides: {
   iter?: number;
   changes?: { oldValue: string; newValue: string }[];
-  records?: { taskId: string; championRecordPath?: string; candidateRecordPath?: string }[];
+  records?: { inputId: string; championRecordPath?: string; candidateRecordPath?: string }[];
 } = {}) {
   return {
     iter: overrides.iter ?? 1,
@@ -121,7 +121,7 @@ describe("createOptimizeReporter", () => {
   it("emits nothing when silent", () => {
     const { reporter, lines } = capture("silent");
 
-    reporter.runStarted({ runId: "run", targetSet, taskCount: 1 });
+    reporter.runStarted({ runId: "run", targetSet, inputCount: 1 });
     reporter.phase({ iter: 1, total: 5, message: "evaluating candidate" });
     reporter.iterationDecided(decidedArgs());
     reporter.runFinished(finishedArgs());
@@ -132,7 +132,7 @@ describe("createOptimizeReporter", () => {
   it("does not prefix lines with a tag", () => {
     const { reporter, lines } = capture("default");
 
-    reporter.runStarted({ runId: "run", targetSet, taskCount: 1 });
+    reporter.runStarted({ runId: "run", targetSet, inputCount: 1 });
     reporter.iterationDecided(decidedArgs());
 
     expect(lines.join("\n")).not.toContain("[optimize]");
@@ -141,7 +141,7 @@ describe("createOptimizeReporter", () => {
   it("lists discovered targets with truncated values at run start", () => {
     const { reporter, lines } = capture("default");
 
-    reporter.runStarted({ runId: "run", targetSet, taskCount: 2 });
+    reporter.runStarted({ runId: "run", targetSet, inputCount: 2 });
 
     const text = lines.join("\n");
     expect(text).toContain("2 optimize target(s)");
@@ -209,7 +209,7 @@ describe("createOptimizeReporter", () => {
     const { reporter, lines } = capture("default");
 
     reporter.iterationDecided(decidedArgs({
-      records: [{ taskId: "task-1", championRecordPath: championRecord, candidateRecordPath: candidateRecord }],
+      records: [{ inputId: "task-1", championRecordPath: championRecord, candidateRecordPath: candidateRecord }],
     }));
 
     const text = lines.join("\n");
@@ -220,7 +220,7 @@ describe("createOptimizeReporter", () => {
   it("notes missing responses instead of diffing them", () => {
     const { reporter, lines } = capture("default");
 
-    reporter.iterationDecided(decidedArgs({ records: [{ taskId: "task-1" }] }));
+    reporter.iterationDecided(decidedArgs({ records: [{ inputId: "task-1" }] }));
 
     expect(lines.join("\n")).toContain("task-1");
     expect(lines.join("\n")).toMatch(/missing/i);

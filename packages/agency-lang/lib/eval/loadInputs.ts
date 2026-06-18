@@ -3,43 +3,43 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
-import { assertEvalTaskId } from "./ids.js";
-import type { EvalTask } from "./runTypes.js";
+import { assertEvalInputId } from "./ids.js";
+import type { Input } from "./runTypes.js";
 
 type MakeId = () => string;
 
-export function taskFromGoal(goal: string): EvalTask {
+export function inputFromGoal(goal: string): Input {
   if (typeof goal !== "string" || goal.length === 0) {
     throw new Error("--goal must be a non-empty string");
   }
-  return { task_id: "task-1", goal, args: {} };
+  return { id: "input-1", goal, args: {} };
 }
 
-export function loadTasks(sourcePath: string, makeId: MakeId = nanoid): EvalTask[] {
+export function loadInputs(sourcePath: string, makeId: MakeId = nanoid): Input[] {
   const stat = fs.statSync(sourcePath);
   if (stat.isDirectory()) {
-    return loadTasksFromDirectory(sourcePath, makeId);
+    return loadInputsFromDirectory(sourcePath, makeId);
   }
-  return loadTasksFromFile(sourcePath, makeId);
+  return loadInputsFromFile(sourcePath, makeId);
 }
 
-export function loadTasksFromFile(filePath: string, makeId: MakeId = nanoid): EvalTask[] {
+export function loadInputsFromFile(filePath: string, makeId: MakeId = nanoid): Input[] {
   const parsed = readJson(filePath);
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as any).tasks)) {
     throw new Error(`Task suite ${filePath} must contain a top-level tasks array`);
   }
-  return validateTasks(
-    (parsed as any).tasks.map((raw: unknown) => normalizeTask(raw, path.dirname(filePath), makeId)),
+  return validateInputs(
+    (parsed as any).tasks.map((raw: unknown) => normalizeInput(raw, path.dirname(filePath), makeId)),
   );
 }
 
-function loadTasksFromDirectory(directoryPath: string, makeId: MakeId): EvalTask[] {
+function loadInputsFromDirectory(directoryPath: string, makeId: MakeId): Input[] {
   const files = fs
     .readdirSync(directoryPath)
     .filter((file) => file.endsWith(".json"))
     .sort();
-  return validateTasks(
-    files.map((file) => normalizeTask(readJson(path.join(directoryPath, file)), directoryPath, makeId)),
+  return validateInputs(
+    files.map((file) => normalizeInput(readJson(path.join(directoryPath, file)), directoryPath, makeId)),
   );
 }
 
@@ -51,7 +51,7 @@ function readJson(filePath: string): unknown {
   }
 }
 
-function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalTask {
+function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId): Input {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Eval task must be a JSON object");
   }
@@ -71,8 +71,8 @@ function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalTask 
   if (task.working_dir !== undefined && typeof task.working_dir !== "string") {
     throw new Error("Eval task working_dir must be a string when provided");
   }
-  const out: EvalTask = {
-    task_id: typeof task.task_id === "string" ? task.task_id : makeId(),
+  const out: Input = {
+    id: typeof task.task_id === "string" ? task.task_id : makeId(),
     goal: task.goal,
     args: (task.args ?? {}) as Record<string, any>,
   };
@@ -81,14 +81,15 @@ function normalizeTask(raw: unknown, baseDir: string, makeId: MakeId): EvalTask 
   return out;
 }
 
-function validateTasks(tasks: EvalTask[]): EvalTask[] {
+function validateInputs(inputs: Input[]): Input[] {
   const seen: Record<string, true> = {};
-  for (const task of tasks) {
-    assertEvalTaskId(task.task_id);
-    if (seen[task.task_id]) {
-      throw new Error(`Duplicate task_id "${task.task_id}"`);
+  for (const input of inputs) {
+    const id = input.id ?? "";
+    assertEvalInputId(id);
+    if (seen[id]) {
+      throw new Error(`Duplicate task_id "${id}"`);
     }
-    seen[task.task_id] = true;
+    seen[id] = true;
   }
-  return tasks;
+  return inputs;
 }

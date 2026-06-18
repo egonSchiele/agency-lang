@@ -6,25 +6,25 @@ import { nanoid } from "nanoid";
 import { judgePairwise } from "../eval/judge/pairwise.js";
 import { judgeSuite, type JudgeSuiteArgs } from "../eval/judge/suite.js";
 import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
-import { taskFromGoal } from "../eval/loadTasks.js";
+import { inputFromGoal } from "../eval/loadInputs.js";
 import { StatelogParser } from "../eval/statelogParser.js";
 import { createOptimizeReporter, type OptimizeVerbosity } from "../optimize/reporter.js";
 import { discoverOptimizeTargets } from "../optimize/targets.js";
 import {
   initializeEvalRun,
-  prepareEvalTask,
-  recordEvalTaskPrepareFailure,
-  recordEvalTaskRunFailure,
-  recordEvalTaskSuccess,
+  prepareInput,
+  recordInputPrepareFailure,
+  recordInputRunFailure,
+  recordInputSuccess,
   shouldExtractStatelog,
   writeEvalRunSummary,
   type EvalRunState,
-  type PreparedEvalTask,
+  type PreparedInput,
 } from "../eval/runArtifacts.js";
 import type {
   EvalRunResult,
-  EvalTask,
-  EvalRunTaskResult,
+  Input,
+  EvalRunInputResult,
 } from "../eval/runTypes.js";
 import type { EvalRecord } from "../eval/types.js";
 import { optimizeLoop } from "../optimize/loop.js";
@@ -32,13 +32,13 @@ import type { OptimizeLoopConfig, OptimizeResult } from "../optimize/types.js";
 
 /**
  * State carried by the Agency-side `evalRun` loop. Note: this is just the
- * underlying `EvalRunState` plus the parsed task list — we deliberately do
- * not stash a mutable `results: EvalRunTaskResult[]` here. The Agency loop
+ * underlying `EvalRunState` plus the parsed input list — we deliberately do
+ * not stash a mutable `results: EvalRunInputResult[]` here. The Agency loop
  * accumulates results in its own local array so the data flow is visible
  * at the call site instead of hidden as a side effect.
  */
 export type AgencyEvalRunState = EvalRunState & {
-  tasks: EvalTask[];
+  inputs: Input[];
 };
 
 /**
@@ -47,12 +47,12 @@ export type AgencyEvalRunState = EvalRunState & {
  * thrown errors from the TS helper.
  */
 export type AgencyPrepareResult =
-  | { ok: true; prepared: PreparedEvalTask }
-  | { ok: false; result: EvalRunTaskResult };
+  | { ok: true; prepared: PreparedInput }
+  | { ok: false; result: EvalRunInputResult };
 
 export function _initEvalRun(
   compiled: { moduleId: string },
-  tasks: EvalTask[],
+  inputs: Input[],
   node: string,
   runsDir: string,
   runId: string,
@@ -62,48 +62,48 @@ export function _initEvalRun(
     runId: runId || nanoid(),
     runsDir,
     agent: `${compiled.moduleId}:${node}`,
-    tasksSource: "stdlib:evalRun",
-    tasks,
+    inputsSource: "stdlib:evalRun",
+    inputs,
     continueOnError,
     startedAt: new Date(),
   });
-  return { ...state, tasks };
+  return { ...state, inputs };
 }
 
 /**
- * Prepare a task's artifacts. Never throws — validation errors are returned
+ * Prepare an input's artifacts. Never throws — validation errors are returned
  * as a `{ ok: false, result }` so the Agency loop has a single branching
  * pattern (`if (prep.ok)`) instead of an extra `try` per iteration.
  */
-export function _prepareEvalTask(
+export function _prepareInput(
   state: AgencyEvalRunState,
-  task: EvalTask,
+  input: Input,
 ): AgencyPrepareResult {
   try {
-    return { ok: true, prepared: prepareEvalTask(state, task) };
+    return { ok: true, prepared: prepareInput(state, input) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[evalRun] prepare failed for task ${task.task_id}: ${message}`);
+    console.error(`[evalRun] prepare failed for input ${input.id ?? ""}: ${message}`);
     return {
       ok: false,
-      result: recordEvalTaskPrepareFailure(task.task_id, message),
+      result: recordInputPrepareFailure(input.id ?? "", message),
     };
   }
 }
 
 /**
- * Finalize a prepared task after `std::agency.run` returned. `runError` is
+ * Finalize a prepared input after `std::agency.run` returned. `runError` is
  * empty on success, otherwise a flattened error message from the Agency
  * `try`/`isFailure` branch. Extracts the eval record when a statelog was
  * written. Never throws — any extract failure is turned into an error
  * result so the Agency loop never has to wrap this call in `try`.
  */
-export async function _finalizeEvalTask(
-  prepared: PreparedEvalTask,
+export async function _finalizeInput(
+  prepared: PreparedInput,
   runError: string,
-): Promise<EvalRunTaskResult> {
+): Promise<EvalRunInputResult> {
   if (runError) {
-    return recordEvalTaskRunFailure(prepared, runError);
+    return recordInputRunFailure(prepared, runError);
   }
   if (shouldExtractStatelog(prepared.statelogPath)) {
     try {
@@ -111,16 +111,16 @@ export async function _finalizeEvalTask(
       fs.writeFileSync(prepared.evalRecordPath, JSON.stringify(record, null, 2));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[evalRun] extract failed for task ${prepared.task.task_id}: ${message}`);
-      return recordEvalTaskRunFailure(prepared, message);
+      console.error(`[evalRun] extract failed for input ${prepared.input.id ?? ""}: ${message}`);
+      return recordInputRunFailure(prepared, message);
     }
   }
-  return recordEvalTaskSuccess(prepared);
+  return recordInputSuccess(prepared);
 }
 
 export function _finishEvalRun(
   state: AgencyEvalRunState,
-  results: EvalRunTaskResult[],
+  results: EvalRunInputResult[],
 ): EvalRunResult {
   return writeEvalRunSummary(state, results);
 }
@@ -166,13 +166,13 @@ export async function _evalJudge(
 
 /**
  * Stdlib binding for suite-aware eval judging. Compares two eval run
- * directories by task id and returns the suite verdict produced by the core
+ * directories by input id and returns the suite verdict produced by the core
  * judgeSuite helper.
  */
 export async function _evalJudgeSuite(
   runA: string,
   runB: string,
-  tasks: EvalTask[],
+  inputs: Input[],
   samples: number,
   confidenceThreshold: number,
   marginThreshold: number,
@@ -185,7 +185,7 @@ export async function _evalJudgeSuite(
   return judge({
     runA,
     runB,
-    tasks,
+    inputs,
     policy: { samples, confidenceThreshold, marginThreshold, positionBias },
   });
 }
@@ -194,8 +194,8 @@ export async function _evalJudgeSuite(
  * Stdlib binding for `agency.eval.optimize`. This deliberately does not
  * install any approval handler; callers decide which handlers are in scope.
  *
- * Mirrors the `agency eval optimize` CLI: exactly one of `tasks` or `goal`
- * selects the suite, a goal desugars through `taskFromGoal()`, and a
+ * Mirrors the `agency eval optimize` CLI: exactly one of `inputs` or `goal`
+ * selects the suite, a goal desugars through `inputFromGoal()`, and a
  * candidate is accepted iff the judge suite returns winner `B`.
  */
 export async function _optimize(
@@ -203,7 +203,7 @@ export async function _optimize(
   entryFile: string,
   workingDir: string,
   node: string,
-  tasks: EvalTask[],
+  inputs: Input[],
   goal: string,
   iterations: number,
   samples: number,
@@ -216,23 +216,23 @@ export async function _optimize(
   verbosity: string,
   loop: typeof optimizeLoop = optimizeLoop,
 ): Promise<OptimizeResult> {
-  const hasTasks = tasks.length > 0;
+  const hasInputs = inputs.length > 0;
   const hasGoal = goal !== "";
-  if (hasTasks === hasGoal) {
+  if (hasInputs === hasGoal) {
     throw new Error("Provide exactly one of --tasks or --goal");
   }
   if (verbosity !== "silent" && verbosity !== "default") {
     throw new Error('verbosity must be "silent" or "default"');
   }
-  const selectedTasks = hasGoal ? [taskFromGoal(goal)] : tasks;
+  const selectedInputs = hasGoal ? [inputFromGoal(goal)] : inputs;
   const resolvedEntryFile = path.resolve(workingDir || ".", entryFile);
   const targetSet = discoverOptimizeTargets(resolvedEntryFile);
   const reporter = createOptimizeReporter(verbosity as OptimizeVerbosity);
   return loop({
     runtime: {
       config,
-      tasks: selectedTasks,
-      tasksSource: hasGoal ? "inline:goal" : "stdlib:tasks",
+      inputs: selectedInputs,
+      inputsSource: hasGoal ? "inline:goal" : "stdlib:inputs",
     },
     target: {
       entryFile: targetSet.entryFile,

@@ -20,82 +20,82 @@ describe("readEvalRun", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("indexes successful task records by task id", () => {
-    writeTask("task-1", { task_id: "task-1", goal: "Return Paris", args: {} });
+  it("indexes successful input records by input id", () => {
+    writeInput("task-1", { id: "task-1", goal: "Return Paris", args: {} });
     writeRecord("task-1", { recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] });
-    writeSummary([{ taskId: "task-1", status: "success", evalRecordPath: recordPath("task-1"), statelogPath: "", workdirPath: "" }]);
+    writeSummary([{ inputId: "task-1", status: "success", evalRecordPath: recordPath("task-1"), statelogPath: "", workdirPath: "" }]);
 
     const run = readEvalRun(runDir);
 
     expect(run.runDir).toBe(runDir);
-    expect(run.tasksById["task-1"]).toMatchObject({
-      taskId: "task-1",
-      task: { task_id: "task-1", goal: "Return Paris", args: {} },
+    expect(run.inputsById["task-1"]).toMatchObject({
+      inputId: "task-1",
+      input: { id: "task-1", goal: "Return Paris", args: {} },
       recordPath: recordPath("task-1"),
       status: "ok",
     });
   });
 
-  it("marks successful summary tasks with missing eval records as missing", () => {
-    writeTask("missing-record", { task_id: "missing-record", goal: "Return Paris", args: {} });
-    writeSummary([{ taskId: "missing-record", status: "success", evalRecordPath: recordPath("missing-record"), statelogPath: "", workdirPath: "" }]);
+  it("marks successful summary inputs with missing eval records as missing", () => {
+    writeInput("missing-record", { id: "missing-record", goal: "Return Paris", args: {} });
+    writeSummary([{ inputId: "missing-record", status: "success", evalRecordPath: recordPath("missing-record"), statelogPath: "", workdirPath: "" }]);
 
-    expect(readEvalRun(runDir).tasksById["missing-record"]).toMatchObject({
-      taskId: "missing-record",
+    expect(readEvalRun(runDir).inputsById["missing-record"]).toMatchObject({
+      inputId: "missing-record",
       status: "missing",
       recordPath: recordPath("missing-record"),
     });
   });
 
-  it("marks failed summary tasks as failed and reads error text", () => {
-    writeTask("failed", { task_id: "failed", goal: "Return Paris", args: {} });
+  it("marks failed summary inputs as failed and reads error text", () => {
+    writeInput("failed", { id: "failed", goal: "Return Paris", args: {} });
     writeError("failed", "boom");
-    writeSummary([{ taskId: "failed", status: "error", evalRecordPath: recordPath("failed"), statelogPath: "", workdirPath: "", errorMessage: "summary boom" }]);
+    writeSummary([{ inputId: "failed", status: "error", evalRecordPath: recordPath("failed"), statelogPath: "", workdirPath: "", errorMessage: "summary boom" }]);
 
-    expect(readEvalRun(runDir).tasksById.failed).toMatchObject({
-      taskId: "failed",
+    expect(readEvalRun(runDir).inputsById.failed).toMatchObject({
+      inputId: "failed",
       status: "failed",
       errorMessage: "boom",
     });
   });
 
-  it("ignores task directories that are not present in summary.json", () => {
-    writeTask("task-1", { task_id: "task-1", goal: "Return Paris", args: {} });
+  it("ignores input directories that are not present in summary.json", () => {
+    writeInput("task-1", { id: "task-1", goal: "Return Paris", args: {} });
     writeRecord("task-1", { recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] });
-    writeTask("extra", { task_id: "extra", goal: "Ignore me", args: {} });
+    writeInput("extra", { id: "extra", goal: "Ignore me", args: {} });
     writeRecord("extra", { recordVersion: 2, evalOutputs: [{ value: "extra", tMs: 1 }] });
-    writeSummary([{ taskId: "task-1", status: "success", evalRecordPath: recordPath("task-1"), statelogPath: "", workdirPath: "" }]);
+    writeSummary([{ inputId: "task-1", status: "success", evalRecordPath: recordPath("task-1"), statelogPath: "", workdirPath: "" }]);
 
-    expect(Object.keys(readEvalRun(runDir).tasksById)).toEqual(["task-1"]);
+    expect(Object.keys(readEvalRun(runDir).inputsById)).toEqual(["task-1"]);
   });
 
-  function writeSummary(tasks: any[]): void {
+  function writeSummary(inputs: any[]): void {
     fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
       runId: "run-a",
       runDir,
       agent: "agent.agency:main",
-      tasks,
-      okCount: tasks.filter((task) => task.status === "success").length,
-      errorCount: tasks.filter((task) => task.status === "error").length,
+      inputs,
+      okCount: inputs.filter((input) => input.status === "success").length,
+      errorCount: inputs.filter((input) => input.status === "error").length,
     }, null, 2));
   }
 
-  function writeTask(taskId: string, task: unknown): void {
-    fs.mkdirSync(path.join(runDir, "tasks", taskId), { recursive: true });
-    fs.writeFileSync(path.join(runDir, "tasks", taskId, "task.json"), JSON.stringify(task, null, 2));
+  function writeInput(inputId: string, input: unknown): void {
+    fs.mkdirSync(path.join(runDir, "tasks", inputId), { recursive: true });
+    fs.writeFileSync(path.join(runDir, "tasks", inputId, "task.json"), JSON.stringify(input, null, 2));
   }
 
-  function writeRecord(taskId: string, record: unknown): void {
-    fs.mkdirSync(path.join(runDir, "tasks", taskId), { recursive: true });
-    fs.writeFileSync(recordPath(taskId), JSON.stringify(record, null, 2));
+  function writeRecord(inputId: string, record: unknown): void {
+    fs.mkdirSync(path.join(runDir, "tasks", inputId), { recursive: true });
+    fs.writeFileSync(recordPath(inputId), JSON.stringify(record, null, 2));
   }
 
-  function writeError(taskId: string, message: string): void {
-    fs.mkdirSync(path.join(runDir, "tasks", taskId), { recursive: true });
-    fs.writeFileSync(path.join(runDir, "tasks", taskId, "error.txt"), message);
+  function writeError(inputId: string, message: string): void {
+    fs.mkdirSync(path.join(runDir, "tasks", inputId), { recursive: true });
+    fs.writeFileSync(path.join(runDir, "tasks", inputId, "error.txt"), message);
   }
 
-  function recordPath(taskId: string): string {
-    return path.join(runDir, "tasks", taskId, "eval-record.json");
+  function recordPath(inputId: string): string {
+    return path.join(runDir, "tasks", inputId, "eval-record.json");
   }
 });

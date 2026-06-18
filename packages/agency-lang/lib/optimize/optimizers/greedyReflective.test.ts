@@ -123,4 +123,31 @@ describe("GreedyReflective (pointwise)", () => {
     expect(result.iterations).toHaveLength(2); // baseline + 1 accepted, then stop (not all 5)
     expect(propose).toHaveBeenCalledTimes(1);
   });
+
+  it("writes back the candidate with the best validation objective, not the best train objective", async () => {
+    const trainCurve = [0.2, 0.4, 0.6];   // baseline, c1, c2 — climbing → both accepted; train champion = c2
+    const valCurve   = [0.3, 0.9, 0.5];   // baseline, c1, c2 — peaks at c1
+    let ti = 0;
+    let vi = 0;
+    const keyed = new (class extends BaseGrader {
+      protected readonly defaultName = "keyed";
+      protected _run({ input }: GraderInput): Promise<Grade> {
+        const value = input.id === "v"
+          ? valCurve[Math.min(vi++, valCurve.length - 1)]
+          : trainCurve[Math.min(ti++, trainCurve.length - 1)];
+        return Promise.resolve({ score: { kind: "scalar", value } });
+      }
+    })();
+    const opt = new GreedyReflective(
+      { graders: [keyed], iterations: 2, config: {}, runsDir: root, runId: "valpick", writeback: false },
+      deps(),   // deps().propose returns valid empty-op proposals → every iteration is accepted
+    );
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", args: {} }],
+      validationInputs: [{ id: "v", args: {} }],
+    });
+    expect(result.championIter).toBe(1);                  // val winner, though iter 2 had the higher train objective
+    expect(result.validationObjective).toBeCloseTo(0.9, 5);
+  });
 });

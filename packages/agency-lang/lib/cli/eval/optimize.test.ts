@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BaseOptimizerConfig, OptimizeTarget } from "@/optimize/optimizer.js";
 import type { OptimizeResult } from "@/optimize/types.js";
 
-import { evalOptimize, resolveVerbosity, type EvalOptimizeOptions } from "./optimize.js";
+import { evalOptimize, type EvalOptimizeOptions } from "./optimize.js";
 
 describe("eval optimize CLI", () => {
   let tmpDir: string;
@@ -125,10 +125,5 @@ describe("eval optimize CLI", () => {
     const agentFile = writeAgent();
     const { config } = await capture({ agent: agentFile, goal: "g", config: { eval: { optimizeRunsDir: path.join(tmpDir, "configured-runs") } } });
     expect(config?.runsDir).toBe(path.join(tmpDir, "configured-runs"));
-  });
-
-  it("maps --silent to a verbosity", () => {
-    expect(resolveVerbosity({})).toBe("default");
-    expect(resolveVerbosity({ silent: true })).toBe("silent");
   });
 });

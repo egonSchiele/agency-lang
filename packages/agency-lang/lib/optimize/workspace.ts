@@ -5,17 +5,23 @@ import { sha256Text, type OptimizeTargetSet } from "./targets.js";
 
 export type Workspace = { dir: string; key: string };
 
+/** Heavy/irrelevant directories never copied into a workspace fork. */
+const FORK_EXCLUDED = ["node_modules", ".git", "dist", "runs", ".worktrees"];
+
 /** Owns per-iteration workspace directories and resolves paths against them. */
 export class WorkspaceManager {
   private counter = 0;
   constructor(private readonly rootDir: string) {}
 
-  /** Copy `sourceDir` into a fresh workspace directory. */
+  /** Copy `sourceDir` into a fresh workspace directory, skipping heavy/irrelevant dirs. */
   fork(sourceDir: string): Workspace {
     this.counter += 1;
     const key = `ws-${this.counter}`;
     const dir = path.join(this.rootDir, key);
-    fs.cpSync(sourceDir, dir, { recursive: true });
+    fs.cpSync(sourceDir, dir, {
+      recursive: true,
+      filter: (src) => path.relative(sourceDir, src) === "" || !FORK_EXCLUDED.includes(path.basename(src)),
+    });
     return { dir, key };
   }
 

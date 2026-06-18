@@ -14,7 +14,7 @@ import type { OptimizeResult } from "./types.js";
 import { WorkspaceManager, type Workspace } from "./workspace.js";
 
 /** A function that runs the agent for one input in a workspace and returns its run. */
-export type RunInput = (ws: Workspace, entryFile: string, input: Input) => Promise<AgentRun>;
+export type RunInput = (ws: Workspace, entryFile: string, input: Input, id: string) => Promise<AgentRun>;
 
 export type BaseOptimizerDeps = {
   workspaceRoot?: string;
@@ -35,7 +35,7 @@ export abstract class BaseOptimizer {
     this.workspace = new WorkspaceManager(deps.workspaceRoot ?? path.join(config.runsDir, config.runId, "ws"));
     this.agencyRunner = deps.agencyRunner ?? new AgencyRunner(config.config);
     this.cache = deps.cache ?? new EvalCache();
-    this.runInput = deps.runInput ?? ((ws, entryFile, input) => this.runInputViaEval(ws, entryFile, input));
+    this.runInput = deps.runInput ?? ((ws, entryFile, input, id) => this.runInputViaEval(ws, entryFile, input, id));
   }
 
   abstract readonly name: string;
@@ -47,12 +47,14 @@ export abstract class BaseOptimizer {
 
   /** Run the agent once per input (cached by (workspace,input)), grade each, return a Scorecard. */
   protected async evaluate(ws: Workspace, entryFile: string, inputs: Input[]): Promise<Scorecard> {
-    const perInput = await Promise.all(inputs.map((input) => this.gradeInput(ws, entryFile, input)));
+    const perInput = await Promise.all(
+      inputs.map((input, index) => this.gradeInput(ws, entryFile, input, inputId(input, index))),
+    );
     return new Scorecard(perInput);
   }
 
-  private async gradeInput(ws: Workspace, entryFile: string, input: Input): Promise<InputGrades> {
-    const run = await this.cache.get(ws.key, input.id ?? "", () => this.runInput(ws, entryFile, input));
+  private async gradeInput(ws: Workspace, entryFile: string, input: Input, id: string): Promise<InputGrades> {
+    const run = await this.cache.get(ws.key, id, () => this.runInput(ws, entryFile, input, id));
     const gates = this.config.graders.filter((g) => g.mustPass() && g.gradesInput(input));
     const advisory = this.config.graders.filter((g) => !g.mustPass() && g.gradesInput(input));
 
@@ -69,9 +71,9 @@ export abstract class BaseOptimizer {
   }
 
   /** Default runInput: run the agent for one input via the eval-run subprocess path (named args). */
-  private async runInputViaEval(ws: Workspace, entryFile: string, input: Input): Promise<AgentRun> {
+  private async runInputViaEval(ws: Workspace, entryFile: string, input: Input, id: string): Promise<AgentRun> {
     const task: EvalTask = {
-      task_id: input.id ?? "input",
+      task_id: id,
       goal: "",
       args: input.args,
       ...(input.node ? { node: input.node } : {}),
@@ -105,4 +107,9 @@ export abstract class BaseOptimizer {
   protected get graders(): BaseGrader[] {
     return this.config.graders;
   }
+}
+
+/** A stable id for an input: its own id when present, otherwise its position. */
+function inputId(input: Input, index: number): string {
+  return input.id && input.id.trim() !== "" ? input.id : `input-${index}`;
 }

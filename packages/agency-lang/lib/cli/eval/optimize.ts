@@ -1,14 +1,13 @@
 import * as path from "path";
-import { fileURLToPath } from "url";
 
 import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadTasks } from "@/eval/loadTasks.js";
+import { getAgentsDir } from "@/importPaths.js";
 import { LlmJudge } from "@/optimize/grading/llmJudge.js";
 import type { Input, JSON as AgencyJSON } from "@/optimize/grading/types.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
-import { type OptimizeVerbosity } from "@/optimize/reporter.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targets.js";
 import type { OptimizeResult } from "@/optimize/types.js";
@@ -30,10 +29,6 @@ export type EvalOptimizeOptions = {
   config?: AgencyConfig;
 };
 
-export function resolveVerbosity(opts: { silent?: boolean }): OptimizeVerbosity {
-  return opts.silent ? "silent" : "default";
-}
-
 export type EvalOptimizeDeps = {
   getOptimizer?: (name: string, config: BaseOptimizerConfig) => Optimizer;
   makeId?: () => string;
@@ -43,7 +38,7 @@ export type EvalOptimizeDeps = {
 const DEFAULT_ITERATIONS = 5;
 
 /** Bundled scalar goal judge: scores how well an output satisfies the input's goal. */
-const GOAL_JUDGE_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../agents/goalJudge.agency");
+const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "goalJudge.agency");
 
 export async function evalOptimize(
   opts: EvalOptimizeOptions,

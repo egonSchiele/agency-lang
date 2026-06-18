@@ -46,6 +46,17 @@ describe("WorkspaceManager", () => {
     expect(wsm.fork(src).key).not.toBe(wsm.fork(src).key);
   });
 
+  it("fork skips heavy directories like node_modules", () => {
+    const src = path.join(root, "src");
+    fs.mkdirSync(src);
+    fs.writeFileSync(path.join(src, "agent.agency"), "node main() {}\n");
+    fs.mkdirSync(path.join(src, "node_modules"));
+    fs.writeFileSync(path.join(src, "node_modules", "big.js"), "x");
+    const ws = new WorkspaceManager(path.join(root, "ws")).fork(src);
+    expect(fs.existsSync(path.join(ws.dir, "agent.agency"))).toBe(true);
+    expect(fs.existsSync(path.join(ws.dir, "node_modules"))).toBe(false);
+  });
+
   it("refuses paths that escape the workspace (traversal / absolute)", () => {
     const src = path.join(root, "src");
     fs.mkdirSync(src);

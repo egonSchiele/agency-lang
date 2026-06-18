@@ -69,3 +69,20 @@ describe("SimilarityGrader", () => {
     expect(grade.score.value).toBeLessThan(1);
   });
 });
+
+describe("matcher pre-flight validation", () => {
+  it("describe names the grader and its matchOn path", () => {
+    const grader = new ExactMatchGrader({ matchOn: ["metadata", "expected"] });
+    expect(grader.describe()).toContain("metadata");
+  });
+
+  it("validateInput throws when matchOn does not resolve on the input", () => {
+    const grader = new ExactMatchGrader({ matchOn: ["metadata", "expected"] });
+    expect(() => grader.validateInput({ id: "a", args: {} })).toThrow(/matchOn .* did not resolve/);
+  });
+
+  it("validateInput passes when matchOn resolves", () => {
+    const grader = new ExactMatchGrader({ matchOn: ["metadata", "expected"] });
+    expect(() => grader.validateInput({ id: "a", args: {}, metadata: { expected: "x" } })).not.toThrow();
+  });
+});

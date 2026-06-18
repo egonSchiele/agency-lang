@@ -5,12 +5,26 @@ import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "../type
 /** Graders that compare the agent output against a value read from the input. */
 type MatchOptions = GraderOptions & { matchOn: JSONPath };
 
-/** Binary: the agent output deep-equals the referenced value. */
-export class ExactMatchGrader extends BaseGrader {
-  protected readonly defaultName = "exact-match";
+/** Shared base for graders that compare the output against a value read from the
+ *  input via a `matchOn` JSONPath. Centralizes the constructor, the human
+ *  description, and the pre-flight matchOn check. */
+abstract class MatchGrader extends BaseGrader {
   constructor(protected readonly options: MatchOptions) {
     super(options);
   }
+
+  describe(): string {
+    return `${this.name()} (matchOn ${stringify(this.options.matchOn)})`;
+  }
+
+  validateInput(input: Input): void {
+    resolveMatch(input, this.options.matchOn, this.name());   // throws if unresolved
+  }
+}
+
+/** Binary: the agent output deep-equals the referenced value. */
+export class ExactMatchGrader extends MatchGrader {
+  protected readonly defaultName = "exact-match";
 
   protected async _run({ input, run }: GraderInput): Promise<Grade> {
     const expected = this.reference(input);
@@ -29,11 +43,8 @@ export class ExactMatchGrader extends BaseGrader {
 }
 
 /** Binary: the stringified agent output contains the referenced needle. */
-export class ContainsGrader extends BaseGrader {
+export class ContainsGrader extends MatchGrader {
   protected readonly defaultName = "contains";
-  constructor(protected readonly options: MatchOptions) {
-    super(options);
-  }
 
   protected async _run({ input, run }: GraderInput): Promise<Grade> {
     const needle = String(resolveMatch(input, this.options.matchOn, this.name()));
@@ -45,11 +56,8 @@ export class ContainsGrader extends BaseGrader {
 }
 
 /** Scalar: normalized Levenshtein similarity between output and the referenced value. */
-export class SimilarityGrader extends BaseGrader {
+export class SimilarityGrader extends MatchGrader {
   protected readonly defaultName = "similarity";
-  constructor(protected readonly options: MatchOptions) {
-    super(options);
-  }
 
   protected async _run({ input, run }: GraderInput): Promise<Grade> {
     const expected = String(resolveMatch(input, this.options.matchOn, this.name()));

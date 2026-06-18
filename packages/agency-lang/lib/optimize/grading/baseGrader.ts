@@ -14,6 +14,15 @@ export abstract class BaseGrader {
     return this.options.name ?? this.defaultName;
   }
 
+  /** One-line human description for the startup echo. Default: the grader name. */
+  describe(): string {
+    return this.name();
+  }
+
+  /** Pre-flight check against an input before the run. Default: nothing to check.
+   *  Match-based graders override this to fail fast on an unresolved matchOn. */
+  validateInput(_input: Input): void { /* no-op */ }
+
   /** Single-shot grade. Declarative: no sampling, no aggregation. */
   protected abstract _run(input: GraderInput): Promise<Grade>;
 

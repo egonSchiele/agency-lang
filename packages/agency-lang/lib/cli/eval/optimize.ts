@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadInputs } from "@/eval/loadInputs.js";
-import { getAgentsDir } from "@/importPaths.js";
+import { goalJudgeFile } from "@/optimize/goalJudgeFile.js";
 import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
 import type { Input } from "@/optimize/grading/types.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
@@ -40,9 +40,6 @@ export type EvalOptimizeDeps = {
 
 const DEFAULT_ITERATIONS = 5;
 const DEFAULT_MINIBATCH = 8;
-
-/** Bundled scalar goal judge: scores how well an output satisfies the input's goal. */
-const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "eval", "goalJudge.agency");
 
 export async function evalOptimize(
   opts: EvalOptimizeOptions,
@@ -79,7 +76,7 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
 export function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): BaseOptimizerConfig {
   const config = opts.config ?? {};
   const base: BaseOptimizerConfig = {
-    graders: [new LlmJudge({ name: "goal", agencyFile: GOAL_JUDGE_FILE, goalPath: ["goal"] })],
+    graders: [new LlmJudge({ name: "goal", agencyFile: goalJudgeFile(), goalPath: ["goal"] })],
     iterations: opts.iterations ?? DEFAULT_ITERATIONS,
     seed: opts.seed,
     config,

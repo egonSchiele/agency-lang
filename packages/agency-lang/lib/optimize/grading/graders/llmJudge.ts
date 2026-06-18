@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { asJudgeText, ScalarVerdict } from "../../goalJudgeFile.js";
 import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
@@ -11,7 +12,6 @@ type LlmJudgeOptions = GraderOptions & {
   node?: string;        // judge node (default "main")
 };
 
-const ScalarVerdict = z.object({ score: z.number(), reasoning: z.string() });
 const BinaryVerdict = z.object({ pass: z.boolean(), reasoning: z.string() });
 
 /** Grades an output by running a judge .agency file and reading its structured verdict. */
@@ -31,7 +31,7 @@ export class LlmJudge extends BaseGrader {
     }
     // Judges take a string output; stringify structured outputs so they read as JSON
     // rather than "[object Object]".
-    const output = typeof run.output === "string" ? run.output : globalThis.JSON.stringify(run.output);
+    const output = asJudgeText(run.output);
     const args = [String(raw), output];
     const node = this.options.node ?? "main";
     if (this.options.binary) {

@@ -1,5 +1,6 @@
 import * as readline from "readline/promises";
 
+import { asJudgeText } from "../../goalJudgeFile.js";
 import { BaseGrader } from "../baseGrader.js";
 import type { Grade, GraderInput, GraderOptions } from "../types.js";
 
@@ -33,7 +34,7 @@ export class HumanGrader extends BaseGrader {
     const scale = this.humanOptions.scale;
     const response = await read({
       prompt: this.humanOptions.prompt ?? `Review this output (${this.name()}):`,
-      artifact: typeof run.output === "string" ? run.output : globalThis.JSON.stringify(run.output),
+      artifact: asJudgeText(run.output),
       scale,
     });
     const note = response.note ? { feedback: response.note } : {};

@@ -18,6 +18,7 @@ export type OptimizeVerbosity = "silent" | "default";
  */
 export type PointwiseReporter = {
   runStarted(args: { optimizer: string; runId: string; targets: OptimizeTarget[]; inputCount: number; iterations: number }): void;
+  gradingSetup(args: { graders: { name: string; describe: string }[]; firstInput?: { id: string; goal?: string } }): void;
   baselineScored(args: { objective: number }): void;
   iterationDecided(args: {
     iter: number;
@@ -66,6 +67,11 @@ export function createPointwiseReporter(
         log(`  - ${color.blue(target.id)} = ${JSON.stringify(truncate(target.value, LIST_VALUE_LIMIT))}`);
       }
     },
+    gradingSetup({ graders, firstInput }) {
+      log(color.yellow("  grading:"));
+      for (const g of graders) log(`    - ${g.describe}`);
+      if (firstInput) log(color.dim(`    first input: ${firstInput.id}${firstInput.goal ? ` — goal: ${truncate(firstInput.goal, 80)}` : ""}`));
+    },
     baselineScored({ objective }) {
       log(`  baseline   objective ${objective.toFixed(3)}`);
     },
@@ -100,6 +106,7 @@ export function createPointwiseReporter(
 
 export const SILENT_POINTWISE_REPORTER: PointwiseReporter = {
   runStarted() { },
+  gradingSetup() { },
   baselineScored() { },
   iterationDecided() { },
   note() { },

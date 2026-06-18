@@ -120,6 +120,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4]));
     const events: string[] = [];
     const reporter = {
+      gradingSetup: () => {},
       runStarted: (a: { optimizer: string; iterations: number }) => events.push(`start ${a.optimizer} x${a.iterations}`),
       baselineScored: (a: { objective: number }) => events.push(`baseline ${a.objective.toFixed(1)}`),
       iterationDecided: (a: { iter: number; decision: string; durationMs?: number }) =>

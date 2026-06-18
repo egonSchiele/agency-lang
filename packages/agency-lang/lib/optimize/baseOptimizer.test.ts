@@ -66,6 +66,36 @@ describe("BaseOptimizer.evaluate", () => {
     expect(sc.gatesPassed()).toBe(true);
   });
 
+  it("fails fast when a grader's validateInput rejects the first input, before running the agent", async () => {
+    class NeedsExpected extends BaseGrader {
+      protected readonly defaultName = "needs-expected";
+      validateInput(input: Input): void {
+        if (!input.metadata?.expected) throw new Error("matchOn [metadata,expected] did not resolve");
+      }
+      protected _run(): Promise<Grade> { return Promise.resolve({ score: { kind: "scalar", value: 1 } }); }
+    }
+    const runInput = vi.fn(fixedRun);
+    const opt = new (class extends BaseOptimizer {
+      readonly name = "probe2";
+      protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
+    })(
+      { graders: [new NeedsExpected()], iterations: 1, config: {}, runsDir: root, runId: "ff" },
+      {
+        workspaceRoot: path.join(root, "ws"),
+        runInput,
+        discover: () => ({
+          baseDir: src,
+          entryFile: "agent.agency",
+          files: {},
+          targets: [{ id: "t", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "p", valueKind: "string", value: "x" }],
+        }),
+      },
+    );
+    await expect(opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] }))
+      .rejects.toThrow(/did not resolve/);
+    expect(runInput).not.toHaveBeenCalled();
+  });
+
   it("short-circuits advisory graders when a gate fails for an input", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true });
     const advisory = new FixedGrader({ score: { kind: "scalar", value: 1 } });

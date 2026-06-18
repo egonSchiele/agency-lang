@@ -68,7 +68,22 @@ export abstract class BaseOptimizer {
     if (source.targets.length === 0) {
       throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
     }
+    this.echoAndValidateGrading(target.inputs);
     return this.optimizeTargets(source, target.inputs);
+  }
+
+  /** Print the resolved grading setup and fail fast on a misconfigured grader,
+   *  checked against the first input before any agent run. */
+  private echoAndValidateGrading(inputs: Input[]): void {
+    this.reporter.gradingSetup({
+      graders: this.config.graders.map((g) => ({ name: g.name(), describe: g.describe() })),
+      firstInput: inputs[0] ? { id: inputs[0].id ?? "(no id)", goal: inputs[0].goal } : undefined,
+    });
+    const first = inputs[0];
+    if (!first) return;
+    for (const grader of this.config.graders) {
+      if (grader.gradesInput(first)) grader.validateInput(first);
+    }
   }
 
   /** Run the search over already-discovered targets. The one method an optimizer must implement. */

@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import type { AgencyConfig } from "@/config.js";
 import { loadTasks } from "@/eval/loadTasks.js";
 import { getAgentsDir } from "@/importPaths.js";
-import { LlmJudge } from "@/optimize/grading/llmJudge.js";
+import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
 import type { Input, JSON as AgencyJSON } from "@/optimize/grading/types.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";

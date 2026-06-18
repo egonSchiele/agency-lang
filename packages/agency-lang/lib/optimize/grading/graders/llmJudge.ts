@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { BaseGrader } from "./baseGrader.js";
-import { getPath } from "./getPath.js";
-import type { Grade, GraderInput, GraderOptions, JSONPath } from "./types.js";
+import { BaseGrader } from "../baseGrader.js";
+import { getPath } from "../getPath.js";
+import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
 
 type LlmJudgeOptions = GraderOptions & {
   agencyFile: string;   // judge .agency file

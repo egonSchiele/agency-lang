@@ -1,7 +1,7 @@
 import * as readline from "readline/promises";
 
-import { BaseGrader } from "./baseGrader.js";
-import type { Grade, GraderInput, GraderOptions } from "./types.js";
+import { BaseGrader } from "../baseGrader.js";
+import type { Grade, GraderInput, GraderOptions } from "../types.js";
 
 export type Scale = { min: number; max: number };
 export type HumanReviewRequest = { prompt: string; artifact: string; scale?: Scale };

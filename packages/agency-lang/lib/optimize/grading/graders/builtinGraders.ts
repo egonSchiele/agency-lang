@@ -1,6 +1,6 @@
-import { BaseGrader } from "./baseGrader.js";
-import { getPath } from "./getPath.js";
-import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "./types.js";
+import { BaseGrader } from "../baseGrader.js";
+import { getPath } from "../getPath.js";
+import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "../types.js";
 
 /** Graders that compare the agent output against a value read from the input. */
 type MatchOptions = GraderOptions & { matchOn: JSONPath };

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { AgencyRunner } from "./agencyRunner.js";
+import { AgencyRunner } from "../agencyRunner.js";
 import { LlmJudge } from "./llmJudge.js";
-import type { GraderInput, Input } from "./types.js";
+import type { GraderInput, Input } from "../types.js";
 
 const graderInput = (
   verdict: { score?: number; pass?: boolean; reasoning: string },

@@ -26,6 +26,7 @@ export type PointwiseReporter = {
     objective?: number;
     rationale?: string;
     changes?: OptimizeAppliedChange[];
+    diagnostics?: OptimizeMutationDiagnostic[];
     durationMs?: number;
   }): void;
   /** Free-form, verbosity-gated line for optimizer-specific detail (e.g. which parent GEPA sampled). */
@@ -48,6 +49,11 @@ function formatMs(ms: number): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** One-line summary of why a mutation was rejected at validation. */
+export function formatDiagnostics(diagnostics: OptimizeMutationDiagnostic[]): string {
+  return diagnostics.map((d) => `[${d.code}] ${d.message}`).join("; ");
+}
+
 export function createPointwiseReporter(
   verbosity: OptimizeVerbosity,
   log: (line: string) => void = (line) => console.error(line),
@@ -63,10 +69,13 @@ export function createPointwiseReporter(
     baselineScored({ objective }) {
       log(`  baseline   objective ${objective.toFixed(3)}`);
     },
-    iterationDecided({ iter, total, decision, objective, rationale, changes, durationMs }) {
+    iterationDecided({ iter, total, decision, objective, rationale, changes, diagnostics, durationMs }) {
       const obj = objective === undefined ? "" : ` objective ${objective.toFixed(3)}`;
       const timing = durationMs === undefined ? "" : color.dim(` (${formatMs(durationMs)})`);
       log(`  iter ${iter}/${total}  ${decisionTag(decision)}${obj}${timing}`);
+      for (const diagnostic of diagnostics ?? []) {
+        log(`      ${color.red(`[${diagnostic.code}]`)} ${diagnostic.message}`);
+      }
       for (const change of changes ?? []) {
         logValueDiff(log, change.target, change.oldValue, change.newValue);
       }

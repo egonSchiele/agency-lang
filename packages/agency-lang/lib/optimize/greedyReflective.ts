@@ -5,7 +5,8 @@ import { proposeMutation, type ProposeMutationArgs } from "./mutator.js";
 import type { Scorecard } from "./grading/scorecard.js";
 import type { Input } from "./grading/types.js";
 import type { BaseOptimizerConfig } from "./optimizer.js";
-import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
+import { formatDiagnostics } from "./reporter.js";
+import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
 import { fileMap, type OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
@@ -28,7 +29,13 @@ type Candidate = {
 
 type Decision = "accepted" | "rejected" | "validation-failed";
 /** The immutable record of one iteration; all run stats are derived from these. */
-type Attempt = { iter: number; decision: Decision; rationale: string; objective?: number; changes?: OptimizeAppliedChange[]; candidate?: Candidate };
+type Attempt = { iter: number; decision: Decision; rationale: string; objective?: number; changes?: OptimizeAppliedChange[]; diagnostics?: OptimizeMutationDiagnostic[]; candidate?: Candidate };
+
+/** Why an iteration ended up the way it did: validation diagnostics, else the proposal rationale. */
+function attemptDetail(a: Attempt): string | undefined {
+  if (a.diagnostics?.length) return formatDiagnostics(a.diagnostics);
+  return a.rationale || undefined;
+}
 
 /** Champion–challenger hill-climb with pointwise grading (replaces the pairwise judge). */
 export class GreedyReflective extends BaseOptimizer {
@@ -53,7 +60,10 @@ export class GreedyReflective extends BaseOptimizer {
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
-    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    const result = this.buildPointwiseResult({
+      championIter: champion.iter, championFiles: champion.files,
+      attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
+    });
     this.reporter.runFinished({
       result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
     });
@@ -72,7 +82,7 @@ export class GreedyReflective extends BaseOptimizer {
       this.reporter.iterationDecided({
         iter, total: this.config.iterations,
         decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
-        changes: attempt.changes, durationMs: Date.now() - startedAt,
+        changes: attempt.changes, diagnostics: attempt.diagnostics, durationMs: Date.now() - startedAt,
       });
     }
     return attempts;
@@ -89,7 +99,7 @@ export class GreedyReflective extends BaseOptimizer {
     });
     const preview = (this.greedyDeps.preview ?? defaultPreview)(champion.targetSet, proposal.operations);
     if (preview.diagnostics.length > 0) {
-      return { iter, decision: "validation-failed", rationale: proposal.rationale };
+      return { iter, decision: "validation-failed", rationale: proposal.rationale, diagnostics: preview.diagnostics };
     }
     const candidate = await this.makeCandidate(iter, this.fork(champion.ws.dir), preview.targetSet, inputs, preview.files);
     const decision: Decision = this.beats(candidate, champion) ? "accepted" : "rejected";

@@ -298,7 +298,10 @@ describe("createPointwiseReporter", () => {
       durationMs: 1500,
     });
     reporter.iterationDecided({ iter: 2, total: 5, decision: "rejected", objective: 0.3, durationMs: 800 });
-    reporter.iterationDecided({ iter: 3, total: 5, decision: "validation-failed", rationale: "bad op" });
+    reporter.iterationDecided({
+      iter: 3, total: 5, decision: "validation-failed", rationale: "bad op",
+      diagnostics: [{ target: "foo.agency:bar:prompt", code: "interpolation-mismatch", message: "you removed ${x} from the prompt" }],
+    });
     reporter.runFinished({
       result,
       initialTargets: [prompt],
@@ -317,6 +320,8 @@ describe("createPointwiseReporter", () => {
     expect(out).toMatch(/1\.5s/);                  // per-iteration timing
     expect(out).toMatch(/iter 2\/5.*rejected.*0\.300/);
     expect(out).toMatch(/iter 3\/5.*invalid/);
+    expect(out).toContain("[interpolation-mismatch]"); // validation reason surfaced
+    expect(out).toContain("you removed ${x} from the prompt");
     expect(out).toContain("== Optimized variables ==");
     expect(out).toMatch(/champion iteration 1.*4\.2s/); // final summary + total time
   });

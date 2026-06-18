@@ -106,7 +106,7 @@ describe("BaseOptimizer.evaluate", () => {
       attempts: [
         { iter: 1, decision: "rejected" },
         { iter: 2, decision: "accepted" },
-        { iter: 3, decision: "validation-failed" },
+        { iter: 3, decision: "validation-failed", detail: "[interpolation-mismatch] you removed ${x}" },
       ],
     });
     expect(result.iterations[0].decision).toBe("baseline");
@@ -115,5 +115,8 @@ describe("BaseOptimizer.evaluate", () => {
     expect(result.rejectedCount).toBe(1);
     expect(result.validationFailedCount).toBe(1);
     expect(result.championIter).toBe(2);
+    // detail (validation reason / rationale) is persisted into the iteration record.
+    expect(result.iterations[3].detail).toBe("[interpolation-mismatch] you removed ${x}");
+    expect(result.iterations[1].detail).toBeUndefined();
   });
 });

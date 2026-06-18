@@ -7,8 +7,9 @@ import { inputObjective, type InputGrades, type Scorecard } from "./grading/scor
 import type { Input } from "./grading/types.js";
 import { renderTargetsSection } from "./mutator.js";
 import type { BaseOptimizerConfig } from "./optimizer.js";
+import { formatDiagnostics } from "./reporter.js";
 import { makeRng, sampleWithoutReplacement, type Rng } from "./rng.js";
-import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
+import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
 import { fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
@@ -40,8 +41,15 @@ type Attempt = {
   rationale: string;
   objective?: number;
   changes?: OptimizeAppliedChange[];
+  diagnostics?: OptimizeMutationDiagnostic[];
   candidate?: Candidate;
 };
+
+/** Why an iteration ended up the way it did: validation diagnostics, else the proposal rationale. */
+function attemptDetail(a: Attempt): string | undefined {
+  if (a.diagnostics?.length) return formatDiagnostics(a.diagnostics);
+  return a.rationale || undefined;
+}
 
 /** GEPA: reflective evolution with a Pareto candidate pool and minibatched promotion. */
 export class Gepa extends BaseOptimizer {
@@ -74,7 +82,10 @@ export class Gepa extends BaseOptimizer {
 
     const champion = pool.best().value;
     if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
-    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    const result = this.buildPointwiseResult({
+      championIter: champion.iter, championFiles: champion.files,
+      attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
+    });
     this.reporter.runFinished({
       result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
     });
@@ -96,7 +107,7 @@ export class Gepa extends BaseOptimizer {
       this.reporter.iterationDecided({
         iter, total: this.config.iterations,
         decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
-        changes: attempt.changes, durationMs: Date.now() - startedAt,
+        changes: attempt.changes, diagnostics: attempt.diagnostics, durationMs: Date.now() - startedAt,
       });
     }
     return attempts;
@@ -106,7 +117,7 @@ export class Gepa extends BaseOptimizer {
   private async attempt(parent: Candidate, minibatch: Input[], paretoInputs: Input[], iter: number): Promise<Attempt> {
     const proposal = await this.proposeFrom(parent, minibatch, iter);
     const preview = (this.gepaDeps.preview ?? defaultPreview)(parent.targetSet, proposal.operations);
-    if (preview.diagnostics.length > 0) return { iter, decision: "validation-failed", rationale: proposal.rationale };
+    if (preview.diagnostics.length > 0) return { iter, decision: "validation-failed", rationale: proposal.rationale, diagnostics: preview.diagnostics };
 
     const childWs = this.fork(parent.ws.dir);
     this.workspace.applyFiles(childWs, preview.files);

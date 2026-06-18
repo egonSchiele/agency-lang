@@ -150,7 +150,7 @@ export abstract class BaseOptimizer {
   protected buildPointwiseResult(args: {
     championIter: number | "baseline";
     championFiles: Record<string, string>;
-    attempts: { iter: number; decision: OptimizeDecision }[];
+    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[];
   }): OptimizeResult {
     const count = (decision: OptimizeDecision): number => args.attempts.filter((a) => a.decision === decision).length;
     const baselineIteration: IterationResult = { iter: 0, decision: "baseline", winsA: 0, winsB: 0, ties: 0 };
@@ -164,7 +164,10 @@ export abstract class BaseOptimizer {
       validationFailedCount: count("validation-failed"),
       iterations: [
         baselineIteration,
-        ...args.attempts.map((a) => ({ iter: a.iter, decision: a.decision, winsA: 0, winsB: 0, ties: 0 })),
+        ...args.attempts.map((a) => ({
+          iter: a.iter, decision: a.decision, winsA: 0, winsB: 0, ties: 0,
+          ...(a.detail ? { detail: a.detail } : {}),
+        })),
       ],
     };
   }

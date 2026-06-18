@@ -351,7 +351,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  evalCmd
+  // Registered under both `agency eval optimize` and the top-level `agency optimize`.
+  const addOptimizeCommand = (parent: Command): void => {
+    parent
     .command("optimize")
     .description("Optimize marked Agency declarations against an eval goal or task suite")
     .argument("<agent>", "Agency file target: file.agency[:node]")
@@ -391,6 +393,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(path.join(result.runDir, "summary.json"));
       }
     });
+  };
+  addOptimizeCommand(evalCmd);
+  addOptimizeCommand(program);
 
   program
     .command("format")

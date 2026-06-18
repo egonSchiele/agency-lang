@@ -1,5 +1,3 @@
-import type { EvalTask } from "@/eval/runTypes.js";
-
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import type { Input } from "../grading/types.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
@@ -65,7 +63,7 @@ export class ExampleOptimizer extends BaseOptimizer {
       (diagnostics) => (this.exampleDeps.propose ?? proposeMutation)({
         config: this.config.config,
         targets: source.targets,
-        tasks: inputsAsTasks(inputs),
+        inputs,
         history: "",
         model: this.config.mutatorModel,
         diagnostics,
@@ -107,13 +105,4 @@ export class ExampleOptimizer extends BaseOptimizer {
     this.reporter.runFinished({ result, initialTargets: source.targets, finalTargets: source.targets, durationMs: Date.now() - startedAt });
     return result;
   }
-}
-
-/** Map the optimize inputs to the EvalTask shape the mutator prompt expects (it reads each task's goal). */
-function inputsAsTasks(inputs: Input[]): EvalTask[] {
-  return inputs.map((input, index) => ({
-    task_id: input.id ?? `input-${index}`,
-    goal: String(input.metadata?.goal ?? ""),
-    args: input.args,
-  }));
 }

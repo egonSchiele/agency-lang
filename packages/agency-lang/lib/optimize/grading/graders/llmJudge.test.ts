@@ -6,9 +6,9 @@ import type { GraderInput, Input } from "../types.js";
 
 const graderInput = (
   verdict: { score?: number; pass?: boolean; reasoning: string },
-  metadata: Record<string, string> = { goal: "Return the capital" },
+  goal: string = "Return the capital",
 ): GraderInput => {
-  const input: Input = { id: "i1", args: {}, metadata };
+  const input: Input = { id: "i1", args: {}, goal };
   return { input, run: { output: "New Delhi", recordPath: "" }, runAgency: new AgencyRunner({}, async () => ({ data: verdict })) };
 };
 
@@ -29,6 +29,6 @@ describe("LlmJudge", () => {
 
   it("throws when no goal is present (an LLM judge needs something to judge against)", async () => {
     const judge = new LlmJudge({ name: "quality", agencyFile: "./quality.agency" });
-    await expect(judge.run(graderInput({ score: 1, reasoning: "x" }, {}))).rejects.toThrow(/needs a goal/);
+    await expect(judge.run(graderInput({ score: 1, reasoning: "x" }, ""))).rejects.toThrow(/needs a goal/);
   });
 });

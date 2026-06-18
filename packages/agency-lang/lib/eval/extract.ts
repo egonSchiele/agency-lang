@@ -32,9 +32,9 @@ export type ExtractOptions = {
    *  Explicit `evalOutput()` calls always take precedence. The optimizer uses
    *  "returnValue" because it grades what the node returns, not its last LLM reply. */
   outputFallback?: "llm" | "returnValue";
-  /** Emit the "no evalInput()" warning when `evalInput()` was not called. Default true.
-   *  The optimizer sets this false: inputs come from the task, not evalInput(). */
-  warnMissingInput?: boolean;
+  /** Emit the "no evalValue()" warning when `evalValue()` was not called. Default true.
+   *  The optimizer sets this false: inputs come from the input spec, not evalValue(). */
+  warnMissingValue?: boolean;
 };
 
 type WithWarnings<T> = { result: T; warnings: string[] };
@@ -42,8 +42,8 @@ type WithWarnings<T> = { result: T; warnings: string[] };
 const DEFAULT_PREVIEW_CHARS = 200;
 const DEFAULT_EVAL_MAX_VALUE_BYTES = 100_000;
 const EVAL_MAX_VALUE_BYTES = parseEvalMaxValueBytes();
-const NO_EVAL_INPUT_WARNING =
-  "no evalInput() calls in trace; user input inferred from last user-role message of first promptCompletion on the top-level thread. Call evalInput(prompt) in your agent code to record the actual user input.";
+const NO_EVAL_VALUE_WARNING =
+  "no evalValue() calls in trace; user input inferred from last user-role message of first promptCompletion on the top-level thread. Call evalValue(prompt) in your agent code to record the actual user input.";
 const NO_EVAL_OUTPUT_WARNING =
   "no evalOutput() calls in trace; final response inferred from last promptCompletion completion on the top-level thread. Call evalOutput(reply) in your agent code to record the actual user-facing response.";
 
@@ -82,8 +82,8 @@ export function extractEvalRecord(
   const incomplete = findIncompleteInvocations(n);
   const metrics = computeMetrics(n);
   const topThreadProms = topLevelPromptCompletions(n, threads);
-  const evalInputs =
-    collectExplicit("evalInputRecorded", n) ?? heuristicInputs(topThreadProms, opts.warnMissingInput ?? true);
+  const evalValues =
+    collectExplicit("evalValueRecorded", n) ?? heuristicValues(topThreadProms, opts.warnMissingValue ?? true);
   const evalOutputs =
     collectExplicit("evalOutputRecorded", n) ?? fallbackOutputs(n, topThreadProms, opts.outputFallback ?? "llm");
 
@@ -95,7 +95,7 @@ export function extractEvalRecord(
     formatVersion: events[0].format_version,
     durationMs: last.tMs,
     source,
-    evalInputs: capValues(evalInputs.result),
+    evalValues: capValues(evalValues.result),
     evalOutputs: capValues(evalOutputs.result),
     threads,
     events: normalized.result,
@@ -110,7 +110,7 @@ export function extractEvalRecord(
       ...errors.warnings,
       ...incomplete.warnings,
       ...metrics.warnings,
-      ...evalInputs.warnings,
+      ...evalValues.warnings,
       ...evalOutputs.warnings,
     ],
   };
@@ -351,7 +351,7 @@ function collectExplicit(
   };
 }
 
-function heuristicInputs(prompts: NormalizedEnvelope[], warn: boolean): WithWarnings<EvalValue[]> {
+function heuristicValues(prompts: NormalizedEnvelope[], warn: boolean): WithWarnings<EvalValue[]> {
   const extracted = extractUserMessage(prompts);
   if (extracted.value === null || extracted.source === null) {
     return { result: [], warnings: [] };
@@ -364,7 +364,7 @@ function heuristicInputs(prompts: NormalizedEnvelope[], warn: boolean): WithWarn
         tMs: extracted.source.tMs,
       },
     ],
-    warnings: warn ? [NO_EVAL_INPUT_WARNING] : [],
+    warnings: warn ? [NO_EVAL_VALUE_WARNING] : [],
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { EvalTask } from "@/eval/runTypes.js";
+import type { Input } from "@/eval/runTypes.js";
 
 import type { OptimizeTarget } from "./targets.js";
 import { buildMutatorSections, proposeMutation } from "./mutator.js";
@@ -28,9 +28,9 @@ const targets: OptimizeTarget[] = [
   },
 ];
 
-const tasks: EvalTask[] = [
-  { task_id: "task-2", goal: "Mention the city", args: {} },
-  { task_id: "task-1", goal: "Return Paris", args: {} },
+const inputs: Input[] = [
+  { id: "task-2", goal: "Mention the city", args: {} },
+  { id: "task-1", goal: "Return Paris", args: {} },
 ];
 
 const proposalJson = {
@@ -48,7 +48,7 @@ const proposalJson = {
 
 describe("buildMutatorSections", () => {
   it("lists targets sorted by id with kind and current value", () => {
-    const sections = buildMutatorSections({ targets, tasks, history: "" });
+    const sections = buildMutatorSections({ targets, inputs, history: "" });
 
     expect(sections.targets.indexOf("foo.agency:bar:prompt")).toBeLessThan(
       sections.targets.indexOf("foo.agency:global:systemPrompt"),
@@ -59,7 +59,7 @@ describe("buildMutatorSections", () => {
   });
 
   it("lists suite goals in task id order", () => {
-    const sections = buildMutatorSections({ targets, tasks, history: "" });
+    const sections = buildMutatorSections({ targets, inputs, history: "" });
 
     expect(sections.goals.indexOf("[task-1] Return Paris")).toBeLessThan(
       sections.goals.indexOf("[task-2] Mention the city"),
@@ -69,7 +69,7 @@ describe("buildMutatorSections", () => {
   it("passes history through verbatim", () => {
     const sections = buildMutatorSections({
       targets,
-      tasks,
+      inputs,
       history: "HISTORY (most recent first):\n- iter 1",
     });
 
@@ -79,7 +79,7 @@ describe("buildMutatorSections", () => {
   it("renders validation diagnostics from a prior rejected preview", () => {
     const sections = buildMutatorSections({
       targets,
-      tasks,
+      inputs,
       history: "",
       diagnostics: [
         { target: "foo.agency:bar:prompt", code: "interpolation-mismatch", message: "you removed an interpolation" },
@@ -91,7 +91,7 @@ describe("buildMutatorSections", () => {
   });
 
   it("renders no diagnostics section when there are none", () => {
-    const sections = buildMutatorSections({ targets, tasks, history: "" });
+    const sections = buildMutatorSections({ targets, inputs, history: "" });
 
     expect(sections.diagnostics).toBe("");
   });
@@ -102,7 +102,7 @@ describe("proposeMutation", () => {
     const proposal = await proposeMutation({
       config: {},
       targets,
-      tasks,
+      inputs,
       history: "",
       callModel: async () => proposalJson,
     });
@@ -114,7 +114,7 @@ describe("proposeMutation", () => {
     const proposal = await proposeMutation({
       config: {},
       targets,
-      tasks,
+      inputs,
       history: "",
       callModel: async () => JSON.stringify(proposalJson),
     });
@@ -126,7 +126,7 @@ describe("proposeMutation", () => {
     await expect(proposeMutation({
       config: {},
       targets,
-      tasks,
+      inputs,
       history: "",
       callModel: async () => ({ prompt: "legacy shape", rationale: "nope" }),
     })).rejects.toThrow(/malformed/i);
@@ -139,7 +139,7 @@ describe("proposeMutation", () => {
       const proposal = await proposeMutation({
         config: { distDir: "/does/not/exist" },
         targets,
-        tasks,
+        inputs,
         history: "",
       });
 

@@ -650,7 +650,7 @@ export class StatelogClient {
     });
   }
 
-  async evalInputRecorded({
+  async evalValueRecorded({
     value,
     threadId,
   }: {
@@ -658,7 +658,7 @@ export class StatelogClient {
     threadId: string | null;
   }): Promise<void> {
     await this.post({
-      type: "evalInputRecorded",
+      type: "evalValueRecorded",
       value,
       threadId: threadId ?? null,
     });

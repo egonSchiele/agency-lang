@@ -56,7 +56,7 @@ export function createOptimizeArtifacts(args: {
   workingDir: string;
   entryFile: string;
   node: string;
-  tasksSource: string;
+  inputsSource: string;
   iterations: number;
   judgePolicy: JudgeAggregationPolicy;
   mutatorModel?: string;
@@ -71,7 +71,7 @@ export function createOptimizeArtifacts(args: {
     entryFile: args.entryFile,
     node: args.node,
     workingDir: args.workingDir,
-    tasksSource: args.tasksSource,
+    inputsSource: args.inputsSource,
     iterations: args.iterations,
     judgePolicy: args.judgePolicy,
     mutatorModel: args.mutatorModel,

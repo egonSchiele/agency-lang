@@ -4,21 +4,21 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
-import { loadTasks } from "@/eval/loadTasks.js";
+import { loadInputs } from "@/eval/loadInputs.js";
 import { getAgentsDir } from "@/importPaths.js";
 import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
-import type { Input, JSON as AgencyJSON } from "@/optimize/grading/types.js";
+import type { Input } from "@/optimize/grading/types.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targets.js";
 import type { OptimizeResult } from "@/optimize/types.js";
 import { parseAgency } from "@/parser.js";
 
-import { resolveEvalRunTarget, validateTaskSelection } from "./run.js";
+import { resolveEvalRunTarget, validateInputSelection } from "./run.js";
 
 export type EvalOptimizeOptions = {
   agent: string;
-  tasks?: string;
+  inputs?: string;
   goal?: string;
   iterations?: number;
   writeback?: boolean;
@@ -61,22 +61,17 @@ export async function evalOptimize(
   return result;
 }
 
-/** Build the optimize target: the agent plus the inputs to run it on (from --goal or --tasks). */
+/** Build the optimize target: the agent plus the inputs to run it on (from --goal or --inputs). */
 export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
-  const selection = validateTaskSelection(opts);
+  const selection = validateInputSelection(opts);
   const resolved = resolveEvalRunTarget(opts.agent);
   if (selection === "goal") {
     const targetSet = discoverOptimizeTargets(resolved.agentFile);
     rejectGoalForNodeWithRequiredArgs(targetSet, resolved.node);
-    return { agent: opts.agent, inputs: [{ id: "task-1", node: resolved.node, args: {}, metadata: { goal: opts.goal ?? "" } }] };
+    return { agent: opts.agent, inputs: [{ id: "input-1", node: resolved.node, args: {}, goal: opts.goal ?? "" }] };
   }
-  const tasks = loadTasks(path.resolve(opts.tasks ?? ""), deps.makeId ?? nanoid);
-  const inputs: Input[] = tasks.map((t) => ({
-    id: t.task_id,
-    node: t.node ?? resolved.node,
-    args: t.args as Record<string, AgencyJSON>,
-    metadata: { goal: t.goal },
-  }));
+  const loaded = loadInputs(path.resolve(opts.inputs ?? ""), deps.makeId ?? nanoid);
+  const inputs: Input[] = loaded.map((input) => ({ ...input, node: input.node ?? resolved.node }));
   return { agent: opts.agent, inputs };
 }
 
@@ -84,7 +79,7 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
 export function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): BaseOptimizerConfig {
   const config = opts.config ?? {};
   const base: BaseOptimizerConfig = {
-    graders: [new LlmJudge({ name: "goal", agencyFile: GOAL_JUDGE_FILE, goalPath: ["metadata", "goal"] })],
+    graders: [new LlmJudge({ name: "goal", agencyFile: GOAL_JUDGE_FILE, goalPath: ["goal"] })],
     iterations: opts.iterations ?? DEFAULT_ITERATIONS,
     seed: opts.seed,
     config,
@@ -113,7 +108,7 @@ function rejectGoalForNodeWithRequiredArgs(targetSet: OptimizeTargetSet, node: s
     if (required.length > 0) {
       throw new Error(
         `Node ${node} requires arguments, but --goal creates a no-argument input.\n` +
-        "Use --tasks tasks.json to provide args for this agent.",
+        "Use --inputs inputs.json to provide args for this agent.",
       );
     }
   }

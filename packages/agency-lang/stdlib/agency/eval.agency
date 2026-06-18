@@ -1,8 +1,8 @@
 import { run, CompiledProgram } from "std::agency"
 import {
   _initEvalRun,
-  _prepareEvalTask,
-  _finalizeEvalTask,
+  _prepareInput,
+  _finalizeInput,
   _finishEvalRun,
   _formatEvalRunFailure,
   _evalExtract,
@@ -14,7 +14,7 @@ import {
 /** @module
   Helpers for running and judging eval suites from Agency code.
 
-  ## Run a task suite
+  ## Run an input suite
 
   ```ts
   import { compile } from "std::agency"
@@ -23,7 +23,7 @@ import {
   node main() {
     const agent = compile("agent.agency")
     const result = evalRun(agent, [
-      { task_id: "capital-france", goal: "Return Paris", args: {} },
+      { id: "capital-france", goal: "Return Paris", args: {} },
     ])
     print(result.runDir)
   }
@@ -35,13 +35,13 @@ import {
   import { evalExtract, evalJudge } from "std::agency/eval"
 
   node main() {
-    const record = evalExtract("runs/demo/tasks/capital-france/statelog.jsonl")
+    const record = evalExtract("runs/demo/inputs/capital-france/statelog.jsonl")
     print(record.evalOutputs)
 
     const verdict = evalJudge(
       "Prefer the answer that names the capital exactly.",
-      "runs/a/tasks/capital-france/eval-record.json",
-      "runs/b/tasks/capital-france/eval-record.json",
+      "runs/a/inputs/capital-france/eval-record.json",
+      "runs/b/inputs/capital-france/eval-record.json",
     )
     print(verdict.winner)
   }
@@ -54,7 +54,7 @@ import {
 
   node main() {
     const verdict = evalJudgeSuite("runs/baseline", "runs/candidate", [
-      { task_id: "capital-france", goal: "Return Paris", args: {} },
+      { id: "capital-france", goal: "Return Paris", args: {} },
     ])
     print(verdict.winner)
   }
@@ -67,23 +67,24 @@ import {
 
   node main() {
     const result = optimize({}, "agent.agency", ".", [
-      { task_id: "capital-france", goal: "Return Paris", args: {} },
+      { id: "capital-france", goal: "Return Paris", args: {} },
     ], "Prefer concise, exact answers.")
     print(result.championIter)
   }
   ```
 */
 
-export type EvalTask = {
-  task_id: string;
-  goal: string;
+export type Input = {
+  id?: string;
+  goal?: string;
   args: Record<string, any>;
   node?: string;
-  working_dir?: string
+  working_dir?: string;
+  metadata?: Record<string, any>
 }
 
-export type EvalRunTaskResult = {
-  taskId: string;
+export type EvalRunInputResult = {
+  inputId: string;
   status: "success" | "error";
   evalRecordPath: string;
   statelogPath: string;
@@ -95,44 +96,44 @@ export type EvalRunResult = {
   runId: string;
   runDir: string;
   agent: string;
-  tasks: EvalRunTaskResult[];
+  inputs: EvalRunInputResult[];
   okCount: number;
   errorCount: number
 }
 
 export def evalRun(
   compiled: CompiledProgram,
-  tasks: EvalTask[],
+  inputs: Input[],
   node: string = "main",
   runsDir: string = "runs/",
   runId: string = "",
   continueOnError: boolean = true,
 ): EvalRunResult {
   """
-  Run a compiled Agency program against eval tasks, writing per-task
+  Run a compiled Agency program against eval inputs, writing per-input
   statelog and eval artifacts under runsDir/runId. Subprocess execution goes
   through std::agency.run so caller handlers still approve subprocess
   execution and child interrupts.
 
   @param compiled - Compiled program from std::agency.compile
-  @param tasks - Eval tasks to run sequentially
-  @param node - Default node to invoke when a task does not specify one
+  @param inputs - Eval inputs to run sequentially
+  @param node - Default node to invoke when an input does not specify one
   @param runsDir - Output directory for eval runs
   @param runId - Optional run id; generated when empty
-  @param continueOnError - Continue remaining tasks after a task error
+  @param continueOnError - Continue remaining inputs after an input error
   """
-  const state = _initEvalRun(compiled, tasks, node, runsDir, runId, continueOnError)
-  const results: EvalRunTaskResult[] = []
+  const state = _initEvalRun(compiled, inputs, node, runsDir, runId, continueOnError)
+  const results: EvalRunInputResult[] = []
   let lastStatus = "success"
 
-  for (task in state.tasks) {
-    const prep = _prepareEvalTask(state, task)
+  for (input in state.inputs) {
+    const prep = _prepareInput(state, input)
     if (prep.ok) {
       const prepared = prep.prepared
       const runResult = run(
         compiled: compiled,
-        node: task.node ?? node,
-        args: task.args,
+        node: input.node ?? node,
+        args: input.args,
         logFile: prepared.statelogPath,
         cwd: prepared.workdirPath,
       )
@@ -140,9 +141,9 @@ export def evalRun(
       if (isFailure(runResult)) {
         runError = _formatEvalRunFailure(runResult)
       }
-      const taskResult = _finalizeEvalTask(prepared, runError)
-      results.push(taskResult)
-      lastStatus = taskResult.status
+      const inputResult = _finalizeInput(prepared, runError)
+      results.push(inputResult)
+      lastStatus = inputResult.status
     } else {
       results.push(prep.result)
       lastStatus = prep.result.status
@@ -173,7 +174,7 @@ export type EvalRecord = {
   formatVersion: number;
   durationMs: number;
   source: string;
-  evalInputs: EvalValue[];
+  evalValues: EvalValue[];
   evalOutputs: EvalValue[];
   threads: Record<string, any>[];
   events: Record<string, any>[];
@@ -192,14 +193,14 @@ export def evalExtract(statelogPath: string): EvalRecord {
   through a temporary file.
 
   The shape mirrors the on-disk eval-record format. Top-level fields
-  (traceId, durationMs, evalInputs, evalOutputs, warnings) are the
+  (traceId, durationMs, evalValues, evalOutputs, warnings) are the
   most commonly consumed; nested arrays (threads, events, interrupts,
   errors, incomplete) are loosely typed because their schemas are
   large and evolve independently — consumers can JSON-inspect as
   needed.
 
   @param statelogPath - Path to a .statelog.jsonl file produced by an
-    agent run (e.g. the file under `runs/<run-id>/tasks/<task-id>/`
+    agent run (e.g. the file under `runs/<run-id>/inputs/<input-id>/`
     after `evalRun`).
   """
   return _evalExtract(statelogPath)
@@ -247,7 +248,7 @@ export def evalJudge(
   high-precision callers should invoke twice with swapped order and
   reconcile the verdicts.
 
-  @param goal - What the judge should grade against. Per-task goals
+  @param goal - What the judge should grade against. Per-input goals
     from an eval suite are the typical input.
   @param recordPathA - Path to the first eval record JSON file
   @param recordPathB - Path to the second eval record JSON file
@@ -262,7 +263,7 @@ export type JudgeAggregationPolicy = {
   positionBias: string
 }
 
-export type TaskVerdictInput = {
+export type VerdictSide = {
   path?: string;
   status: string;
   response?: string;
@@ -277,10 +278,10 @@ export type JudgeSample = {
   order: string
 }
 
-export type TaskVerdict = {
-  taskId: string;
+export type InputVerdict = {
+  inputId: string;
   goal: string;
-  inputs: TaskVerdictInput[];
+  inputs: VerdictSide[];
   winner: string;
   confidence: number;
   reasoning: string;
@@ -296,32 +297,32 @@ export type SuiteVerdict = {
   winsB: number;
   ties: number;
   winner: string;
-  perTask: TaskVerdict[]
+  perInput: InputVerdict[]
 }
 
 export def evalJudgeSuite(
   runA: string,
   runB: string,
-  tasks: EvalTask[],
+  inputs: Input[],
   samples: number = 3,
   confidenceThreshold: number = 50,
   marginThreshold: number = 0,
   positionBias: string = "swap",
 ): SuiteVerdict {
   """
-  Judge two eval run directories by task id and aggregate the results into a
-  suite verdict. Missing or failed task records are handled deterministically
-  without calling the LLM judge; successful tasks are judged pairwise.
+  Judge two eval run directories by input id and aggregate the results into a
+  suite verdict. Missing or failed input records are handled deterministically
+  without calling the LLM judge; successful inputs are judged pairwise.
 
   @param runA - Path to the first eval run directory
   @param runB - Path to the second eval run directory
-  @param tasks - Task suite defining task ids and goals to compare
-  @param samples - Judge samples per task
-  @param confidenceThreshold - Minimum task confidence counted as a suite win
+  @param inputs - Input suite defining input ids and goals to compare
+  @param samples - Judge samples per input
+  @param confidenceThreshold - Minimum input confidence counted as a suite win
   @param marginThreshold - Suite win margin required to avoid an overall tie
   @param positionBias - Position bias control: "swap" or "none"
   """
-  return _evalJudgeSuite(runA, runB, tasks, samples, confidenceThreshold, marginThreshold, positionBias)
+  return _evalJudgeSuite(runA, runB, inputs, samples, confidenceThreshold, marginThreshold, positionBias)
 }
 
 // ---------------------------------------------------------------------------
@@ -357,7 +358,7 @@ export def optimize(
   config: Record<string, any>,
   entryFile: string,
   workingDir: string = ".",
-  tasks: EvalTask[] = [],
+  inputs: Input[] = [],
   goal: string = "",
   node: string = "main",
   iterations: number = 5,
@@ -374,11 +375,11 @@ export def optimize(
   Optimize declarations marked with the `optimize` modifier in an Agency
   file. For example, `optimize const prompt = "..."` marks a string
   declaration the optimizer may mutate while evaluating candidates against
-  eval tasks. Targets are discovered across the local Agency import tree of
+  eval inputs. Targets are discovered across the local Agency import tree of
   entryFile.
 
-  Provide exactly one of tasks or goal: a goal desugars to a single
-  no-argument task. Each candidate is compared against the current champion
+  Provide exactly one of inputs or goal: a goal desugars to a single
+  no-argument input. Each candidate is compared against the current champion
   with the shared eval judge suite, and a candidate is accepted iff the
   suite verdict winner is "B" (the candidate side).
 
@@ -389,12 +390,12 @@ export def optimize(
   @param config - Agency config to use for eval compilation and LLM calls
   @param entryFile - Agency file containing the eval entrypoint
   @param workingDir - Directory used to resolve a relative entryFile
-  @param tasks - Eval tasks to run for each candidate (exclusive with goal)
-  @param goal - Single optimization goal (exclusive with tasks)
+  @param inputs - Eval inputs to run for each candidate (exclusive with goal)
+  @param goal - Single optimization goal (exclusive with inputs)
   @param node - Node to evaluate while optimizing discovered declarations
   @param iterations - Maximum candidate iterations after the baseline
-  @param samples - Judge samples per task
-  @param confidenceThreshold - Minimum task confidence counted as a suite win
+  @param samples - Judge samples per input
+  @param confidenceThreshold - Minimum input confidence counted as a suite win
   @param marginThreshold - Suite win margin required to avoid an overall tie
   @param runsDir - Directory where optimization artifacts are written
   @param runId - Run id; generated by default
@@ -407,7 +408,7 @@ export def optimize(
     entryFile,
     workingDir,
     node,
-    tasks,
+    inputs,
     goal,
     iterations,
     samples,

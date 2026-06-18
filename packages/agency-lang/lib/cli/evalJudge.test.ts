@@ -42,7 +42,7 @@ describe("evalJudge", () => {
       winsB: 0,
       ties: 0,
       winner: "A",
-      perTask: [],
+      perInput: [],
     });
     logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
   });
@@ -103,16 +103,16 @@ describe("evalJudge", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-runs-"));
     const runA = writeRun(dir, "a", ["capital-france"]);
     const runB = writeRun(dir, "b", ["capital-france"]);
-    const tasks = path.join(dir, "tasks.json");
+    const inputsFile = path.join(dir, "inputs.json");
     const out = path.join(dir, "suite-verdict.json");
-    fs.writeFileSync(tasks, JSON.stringify({ tasks: [{ task_id: "capital-france", goal: "Return Paris", args: {} }] }));
+    fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }] }));
 
-    await evalJudge(runA, runB, { tasks, out });
+    await evalJudge(runA, runB, { inputs: inputsFile, out });
 
     expect(mockedJudgeSuite).toHaveBeenCalledWith(expect.objectContaining({
       runA,
       runB,
-      tasks: [{ task_id: "capital-france", goal: "Return Paris", args: {} }],
+      inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }],
       policy: { samples: 3, confidenceThreshold: 50, marginThreshold: 0, positionBias: "swap" },
     }));
     expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toMatchObject({ verdictVersion: 2, winner: "A" });
@@ -127,7 +127,7 @@ describe("evalJudge", () => {
     await evalJudge(runA, runB, { goal: "Return Paris" });
 
     expect(mockedJudgeSuite).toHaveBeenCalledWith(expect.objectContaining({
-      tasks: [{ task_id: "capital-france", goal: "Return Paris", args: {} }],
+      inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }],
     }));
   });
 
@@ -136,7 +136,7 @@ describe("evalJudge", () => {
     const runA = writeRun(dir, "a", ["capital-france"]);
     const runB = writeRun(dir, "b", ["capital-germany"]);
 
-    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/task ids differ/i);
+    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/input ids differ/i);
     expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
 
@@ -168,23 +168,23 @@ describe("evalJudge", () => {
   });
 });
 
-function writeRun(baseDir: string, runId: string, taskIds: string[]): string {
+function writeRun(baseDir: string, runId: string, inputIds: string[]): string {
   const runDir = path.join(baseDir, runId);
-  fs.mkdirSync(path.join(runDir, "tasks"), { recursive: true });
-  const tasks = taskIds.map((taskId) => {
-    const taskDir = path.join(runDir, "tasks", taskId);
-    fs.mkdirSync(taskDir, { recursive: true });
-    const evalRecordPath = path.join(taskDir, "eval-record.json");
-    fs.writeFileSync(path.join(taskDir, "task.json"), JSON.stringify({ task_id: taskId, goal: "Return Paris", args: {} }));
+  fs.mkdirSync(path.join(runDir, "inputs"), { recursive: true });
+  const inputs = inputIds.map((inputId) => {
+    const inputDir = path.join(runDir, "inputs", inputId);
+    fs.mkdirSync(inputDir, { recursive: true });
+    const evalRecordPath = path.join(inputDir, "eval-record.json");
+    fs.writeFileSync(path.join(inputDir, "input.json"), JSON.stringify({ id: inputId, goal: "Return Paris", args: {} }));
     fs.writeFileSync(evalRecordPath, JSON.stringify({ recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] }));
-    return { taskId, status: "success", evalRecordPath, statelogPath: "", workdirPath: "" };
+    return { inputId, status: "success", evalRecordPath, statelogPath: "", workdirPath: "" };
   });
   fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
     runId,
     runDir,
     agent: "agent.agency:main",
-    tasks,
-    okCount: tasks.length,
+    inputs,
+    okCount: inputs.length,
     errorCount: 0,
   }));
   return runDir;

@@ -9,21 +9,21 @@ import { compile } from "@/cli/commands.js";
 import { parseTarget } from "@/cli/util.js";
 import { RunStrategy } from "@/importStrategy.js";
 import { StatelogParser } from "@/eval/statelogParser.js";
-import { loadTasks, taskFromGoal } from "@/eval/loadTasks.js";
+import { loadInputs, inputFromGoal } from "@/eval/loadInputs.js";
 import {
   initializeEvalRun,
   writeEvalRunSummary,
 } from "@/eval/runArtifacts.js";
 import {
-  runEvalTask,
+  runEvalInput,
   type EvalRecordExtractor,
-  type EvalTaskRunner,
-} from "@/eval/runEvalTask.js";
+  type EvalInputRunner,
+} from "@/eval/runEvalInput.js";
 import type {
   EvalRunCompiledAgent,
   EvalRunResult,
-  EvalTask,
-  EvalRunTaskResult,
+  Input,
+  EvalRunInputResult,
 } from "@/eval/runTypes.js";
 import {
   buildForkOptions,
@@ -34,7 +34,7 @@ import {
 
 export type EvalRunCliOptions = {
   agent: string;
-  tasks?: string;
+  inputs?: string;
   goal?: string;
   runId?: string;
   runsDir?: string;
@@ -43,10 +43,10 @@ export type EvalRunCliOptions = {
   config?: AgencyConfig;
 };
 
-export type EvalRunLoadedTasksOptions = {
+export type EvalRunLoadedInputsOptions = {
   agent: string;
-  tasks: EvalTask[];
-  tasksSource: string;
+  inputs: Input[];
+  inputsSource: string;
   runId?: string;
   runsDir?: string;
   continueOnError?: boolean;
@@ -87,45 +87,44 @@ export function resolveEvalRunTarget(target: string): {
   return { agentFile, node, label: `${agentFile}:${node}` };
 }
 
-export function validateTaskSelection(opts: {
-  tasks?: string;
+export function validateInputSelection(opts: {
+  inputs?: string;
   goal?: string;
-}): "tasks" | "goal" {
-  const count = (opts.tasks ? 1 : 0) + (opts.goal ? 1 : 0);
+}): "inputs" | "goal" {
+  const count = (opts.inputs ? 1 : 0) + (opts.goal ? 1 : 0);
   if (count !== 1) {
-    throw new Error("Provide exactly one of --tasks or --goal");
+    throw new Error("Provide exactly one of --inputs or --goal");
   }
-  return opts.goal ? "goal" : "tasks";
+  return opts.goal ? "goal" : "inputs";
 }
 
 /**
- * Run a compiled agent against a task suite and write per-task artifacts.
+ * Run a compiled agent against an input suite and write per-input artifacts.
  *
  * The orchestration here is intentionally tiny: build the run state, loop
- * through tasks calling `runEvalTask` (the shared boundary), write a
- * summary. All per-task error handling lives inside `runEvalTask`.
+ * through inputs calling `runEvalInput` (the shared boundary), write a
+ * summary. All per-input error handling lives inside `runEvalInput`.
  */
 export async function evalRun(
   opts: EvalRunCliOptions,
   overrides: {
-    runner?: EvalTaskRunner;
+    runner?: EvalInputRunner;
     extractor?: EvalRecordExtractor;
   } = {},
 ): Promise<EvalRunResult> {
-  const target = resolveEvalRunTarget(opts.agent);
-  const taskSelection = validateTaskSelection(opts);
-  const tasks =
-    taskSelection === "goal"
-      ? [taskFromGoal(opts.goal ?? "")]
-      : loadTasks(path.resolve(opts.tasks ?? ""), nanoid);
+  const selection = validateInputSelection(opts);
+  const inputs =
+    selection === "goal"
+      ? [inputFromGoal(opts.goal ?? "")]
+      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid);
 
-  return evalRunLoadedTasks({
+  return evalRunLoadedInputs({
     agent: opts.agent,
-    tasks,
-    tasksSource:
-      taskSelection === "goal"
+    inputs,
+    inputsSource:
+      selection === "goal"
         ? "inline:--goal"
-        : path.resolve(opts.tasks ?? ""),
+        : path.resolve(opts.inputs ?? ""),
     runId: opts.runId,
     runsDir: opts.runsDir,
     continueOnError: opts.continueOnError,
@@ -134,10 +133,10 @@ export async function evalRun(
   }, overrides);
 }
 
-export async function evalRunLoadedTasks(
-  opts: EvalRunLoadedTasksOptions,
+export async function evalRunLoadedInputs(
+  opts: EvalRunLoadedInputsOptions,
   overrides: {
-    runner?: EvalTaskRunner;
+    runner?: EvalInputRunner;
     extractor?: EvalRecordExtractor;
   } = {},
 ): Promise<EvalRunResult> {
@@ -159,20 +158,20 @@ export async function evalRunLoadedTasks(
     runId,
     runsDir,
     agent: target.label,
-    tasksSource: opts.tasksSource,
-    tasks: opts.tasks,
+    inputsSource: opts.inputsSource,
+    inputs: opts.inputs,
     continueOnError,
     startedAt: new Date(),
   });
 
-  const runner = overrides.runner ?? makeSubprocessEvalTaskRunner(opts.pipeAgentOutput ?? true);
+  const runner = overrides.runner ?? makeSubprocessEvalInputRunner(opts.pipeAgentOutput ?? true);
   const extractor = overrides.extractor ?? defaultEvalRecordExtractor;
 
-  const results: EvalRunTaskResult[] = [];
-  for (const task of opts.tasks) {
-    const result = await runEvalTask({
+  const results: EvalRunInputResult[] = [];
+  for (const input of opts.inputs) {
+    const result = await runEvalInput({
       state,
-      task,
+      input,
       compiled,
       defaultNode: target.node,
       runner,
@@ -214,8 +213,8 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
 /**
  * Extractor for the optimizer: grades the entry node's return value (not the
  * last LLM completion) when `evalOutput()` wasn't called, and omits the
- * evalInput/evalOutput "did you forget to call…" warnings — inputs come from
- * the task and the graded output is the return value, so neither applies.
+ * evalValue/evalOutput "did you forget to call…" warnings — inputs come from
+ * the input spec and the graded output is the return value, so neither applies.
  */
 export const optimizeEvalRecordExtractor: EvalRecordExtractor = async ({
   statelogPath,
@@ -223,12 +222,12 @@ export const optimizeEvalRecordExtractor: EvalRecordExtractor = async ({
 }) => {
   const record = new StatelogParser(statelogPath, {
     outputFallback: "returnValue",
-    warnMissingInput: false,
+    warnMissingValue: false,
   }).evalRecord();
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };
 
-function makeSubprocessEvalTaskRunner(pipeAgentOutput: boolean): EvalTaskRunner {
+function makeSubprocessEvalInputRunner(pipeAgentOutput: boolean): EvalInputRunner {
   return async ({ compiled, node, args, cwd, statelogPath }) => {
     if (!compiled.path) {
       return { ok: false, errorMessage: "Compiled agent has no path" };

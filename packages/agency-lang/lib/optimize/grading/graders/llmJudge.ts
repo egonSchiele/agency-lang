@@ -6,7 +6,7 @@ import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
 
 type LlmJudgeOptions = GraderOptions & {
   agencyFile: string;   // judge .agency file
-  goalPath?: JSONPath;  // where to read the goal from the input (default ["metadata","goal"])
+  goalPath?: JSONPath;  // where to read the goal from the input (default ["goal"])
   binary?: boolean;     // expect a pass/fail verdict instead of a 0..1 score
   node?: string;        // judge node (default "main")
 };
@@ -22,7 +22,7 @@ export class LlmJudge extends BaseGrader {
   }
 
   protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
-    const goalPath = this.options.goalPath ?? ["metadata", "goal"];
+    const goalPath = this.options.goalPath ?? ["goal"];
     const raw = getPath(input, goalPath);
     // An LLM judge with no goal has nothing to judge against — fail loudly rather
     // than ask the model to grade output against an empty criterion.

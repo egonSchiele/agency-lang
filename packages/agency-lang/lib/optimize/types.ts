@@ -1,6 +1,6 @@
 import type { AgencyConfig } from "@/config.js";
 import type { JudgeAggregationPolicy } from "@/eval/judge/types.js";
-import type { EvalTask } from "@/eval/runTypes.js";
+import type { Input } from "@/eval/runTypes.js";
 
 import type { OptimizeMutationOperation } from "./sourceMutator.js";
 import type { OptimizeTargetSet } from "./targets.js";
@@ -46,8 +46,8 @@ export type OptimizeResult = {
 export type OptimizeLoopConfig = {
   runtime: {
     config: AgencyConfig;
-    tasks: EvalTask[];
-    tasksSource: string;
+    inputs: Input[];
+    inputsSource: string;
   };
   target: {
     /** Relative entry file, from `targetSet.entryFile`. */

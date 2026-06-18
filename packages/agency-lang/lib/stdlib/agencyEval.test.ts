@@ -5,13 +5,13 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  _finalizeEvalTask,
+  _finalizeInput,
   _finishEvalRun,
   _formatEvalRunFailure,
   _initEvalRun,
   _evalJudgeSuite,
   _optimize,
-  _prepareEvalTask,
+  _prepareInput,
 } from "./agencyEval.js";
 import type { OptimizeLoopConfig, OptimizeResult } from "@/optimize/types.js";
 
@@ -29,7 +29,7 @@ describe("agency eval stdlib helpers", () => {
   it("initializes runs with generated ids and reports prepare failures", () => {
     const state = _initEvalRun(
       { moduleId: "agent" },
-      [{ task_id: "../escape", goal: "g", args: {} }],
+      [{ id: "../escape", goal: "g", args: {} }],
       "main",
       tmpDir,
       "",
@@ -37,11 +37,11 @@ describe("agency eval stdlib helpers", () => {
     );
     expect(state.runId).not.toBe("");
 
-    const prep = _prepareEvalTask(state, state.tasks[0]);
+    const prep = _prepareInput(state, state.inputs[0]);
     expect(prep.ok).toBe(false);
     if (!prep.ok) {
       expect(prep.result).toMatchObject({
-        taskId: "../escape",
+        inputId: "../escape",
         status: "error",
       });
     }
@@ -51,25 +51,25 @@ describe("agency eval stdlib helpers", () => {
     expect(fs.existsSync(path.join(state.runDir, "summary.json"))).toBe(true);
   });
 
-  it("finalizes prepared tasks with success or error results", async () => {
+  it("finalizes prepared inputs with success or error results", async () => {
     const state = _initEvalRun(
       { moduleId: "agent" },
-      [{ task_id: "t1", goal: "g", args: {} }],
+      [{ id: "t1", goal: "g", args: {} }],
       "main",
       tmpDir,
       "r1",
       true,
     );
-    const prep = _prepareEvalTask(state, state.tasks[0]);
+    const prep = _prepareInput(state, state.inputs[0]);
     expect(prep.ok).toBe(true);
     if (!prep.ok) return;
 
     // No statelog file written → finalize skips extraction and succeeds.
-    const success = await _finalizeEvalTask(prep.prepared, "");
-    const error = await _finalizeEvalTask(prep.prepared, "boom");
+    const success = await _finalizeInput(prep.prepared, "");
+    const error = await _finalizeInput(prep.prepared, "boom");
 
-    expect(success).toMatchObject({ taskId: "t1", status: "success" });
-    expect(error).toMatchObject({ taskId: "t1", status: "error", errorMessage: "boom" });
+    expect(success).toMatchObject({ inputId: "t1", status: "success" });
+    expect(error).toMatchObject({ inputId: "t1", status: "error", errorMessage: "boom" });
   });
 
   it("formats failure-like values", () => {
@@ -82,7 +82,7 @@ describe("agency eval stdlib helpers", () => {
     const result = await _evalJudgeSuite(
       "run-a",
       "run-b",
-      [{ task_id: "task-1", goal: "g", args: {} }],
+      [{ id: "task-1", goal: "g", args: {} }],
       5,
       60,
       1,
@@ -95,7 +95,7 @@ describe("agency eval stdlib helpers", () => {
         winsB: 1,
         ties: 0,
         winner: "B",
-        perTask: [],
+        perInput: [],
       }),
     );
 
@@ -115,7 +115,7 @@ describe("agency eval stdlib helpers", () => {
       entryFile,
       tmpDir,
       "main",
-      [{ task_id: "t1", goal: "g", args: {} }],
+      [{ id: "t1", goal: "g", args: {} }],
       "",
       2,
       3,
@@ -134,8 +134,8 @@ describe("agency eval stdlib helpers", () => {
 
     expect(loopConfig).toMatchObject({
       runtime: {
-        tasks: [{ task_id: "t1", goal: "g", args: {} }],
-        tasksSource: "stdlib:tasks",
+        inputs: [{ id: "t1", goal: "g", args: {} }],
+        inputsSource: "stdlib:inputs",
       },
       target: {
         node: "main",
@@ -164,7 +164,7 @@ describe("agency eval stdlib helpers", () => {
     expect(result).toMatchObject({ runId: "run", championIter: "baseline" });
   });
 
-  it("desugars a goal into a single task-1 task", async () => {
+  it("desugars a goal into a single input-1 input", async () => {
     let loopConfig: OptimizeLoopConfig | null = null;
     const entryFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
@@ -193,20 +193,20 @@ describe("agency eval stdlib helpers", () => {
 
     expect(loopConfig).toMatchObject({
       runtime: {
-        tasks: [{ task_id: "task-1", goal: "improve", args: {} }],
-        tasksSource: "inline:goal",
+        inputs: [{ id: "input-1", goal: "improve", args: {} }],
+        inputsSource: "inline:goal",
       },
     });
   });
 
-  it("requires exactly one of tasks or goal", async () => {
+  it("requires exactly one of inputs or goal", async () => {
     const entryFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
-    const reject = (tasks: { task_id: string; goal: string; args: Record<string, unknown> }[], goal: string) =>
-      _optimize({}, entryFile, tmpDir, "main", tasks, goal, 1, 1, 50, 0, tmpDir, "run", "", false, "silent", async (config) => optimizeResult(config));
+    const reject = (inputs: { id: string; goal: string; args: Record<string, unknown> }[], goal: string) =>
+      _optimize({}, entryFile, tmpDir, "main", inputs, goal, 1, 1, 50, 0, tmpDir, "run", "", false, "silent", async (config) => optimizeResult(config));
 
-    await expect(reject([], "")).rejects.toThrow(/exactly one of --tasks or --goal/i);
-    await expect(reject([{ task_id: "t1", goal: "g", args: {} }], "both")).rejects.toThrow(/exactly one of --tasks or --goal/i);
+    await expect(reject([], "")).rejects.toThrow(/exactly one of --inputs or --goal/i);
+    await expect(reject([{ id: "t1", goal: "g", args: {} }], "both")).rejects.toThrow(/exactly one of --inputs or --goal/i);
   });
 
   it("rejects unknown verbosity values", async () => {
@@ -214,7 +214,7 @@ describe("agency eval stdlib helpers", () => {
     fs.writeFileSync(entryFile, "optimize const prompt = \"hi\"\nnode main() {}\n");
 
     await expect(
-      _optimize({}, entryFile, tmpDir, "main", [{ task_id: "t1", goal: "g", args: {} }], "", 1, 1, 50, 0, tmpDir, "run", "", false, "loud", async (config) => optimizeResult(config)),
+      _optimize({}, entryFile, tmpDir, "main", [{ id: "t1", goal: "g", args: {} }], "", 1, 1, 50, 0, tmpDir, "run", "", false, "loud", async (config) => optimizeResult(config)),
     ).rejects.toThrow(/verbosity must be/);
   });
 
@@ -229,7 +229,7 @@ describe("agency eval stdlib helpers", () => {
       "agents/agent.agency",
       tmpDir,
       "main",
-      [{ task_id: "t1", goal: "g", args: {} }],
+      [{ id: "t1", goal: "g", args: {} }],
       "",
       2,
       3,

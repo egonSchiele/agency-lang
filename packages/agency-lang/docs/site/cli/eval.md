@@ -8,24 +8,24 @@ description: Documents the `agency eval extract` command for converting a captur
 `agency eval` is the umbrella for tools that run, grade, compare, and analyze agent runs from their captured statelog traces. The main subcommands are:
 
 ```
-agency eval run --agent <file>[:<node>] (--tasks <file|dir> | --goal <text>)
-agency eval optimize <file>[:<node>] (--tasks <file|dir> | --goal <text>)
+agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>)
+agency eval optimize <file>[:<node>] (--inputs <file|dir> | --goal <text>)
 agency eval extract <file>
 ```
 
-## Running a task suite
+## Running an input suite
 
-`agency eval run` executes an Agency agent against one or more eval tasks and writes a structured run directory:
+`agency eval run` executes an Agency agent against one or more eval inputs and writes a structured run directory:
 
 ```bash
-agency eval run --agent agent.agency:evalMain --tasks tasks.json --run-id smoke
+agency eval run --agent agent.agency:evalMain --inputs inputs.json --run-id smoke
 ```
 
-Task suites can be either a JSON file with `{ "tasks": [...] }` or a directory containing one `.json` file per task. A task has this shape:
+Input suites can be either a JSON file with `{ "inputs": [...] }` or a directory containing one `.json` file per input. An input has this shape:
 
 ```json
 {
-  "task_id": "fizzbuzz-write",
+  "id": "fizzbuzz-write",
   "goal": "Should produce a typechecking fizzbuzz program.",
   "args": { "prompt": "Write fizzbuzz in Agency" },
   "node": "evalMain",
@@ -33,9 +33,9 @@ Task suites can be either a JSON file with `{ "tasks": [...] }` or a directory c
 }
 ```
 
-`goal` is required. `args` defaults to `{}`. `task_id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the task workdir before the subprocess runs, so each task can mutate its own isolated fixture copy.
+`goal` is required. `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the input workdir before the subprocess runs, so each input can mutate its own isolated fixture copy.
 
-For a single ad-hoc run, use `--goal` instead of `--tasks`:
+For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
 ```bash
 agency eval run --agent agent.agency --goal "Answer with a concise summary"
@@ -44,19 +44,19 @@ agency eval run --agent agent.agency --goal "Answer with a concise summary"
 Options:
 
 - `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
-- `--tasks <file|dir>` — task suite file or directory. Mutually exclusive with `--goal`.
-- `--goal <text>` — create one inline task with this goal. Mutually exclusive with `--tasks`.
+- `--inputs <file|dir>` — input suite file or directory. Mutually exclusive with `--goal`.
+- `--goal <text>` — create one inline input with this goal. Mutually exclusive with `--inputs`.
 - `--run-id <id>` — output run id. Defaults to a generated id.
 - `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
-- `--no-continue-on-error` — stop after the first task failure. By default, remaining tasks continue.
+- `--no-continue-on-error` — stop after the first input failure. By default, remaining inputs continue.
 
 Each run writes:
 
 ```text
 runs/<run-id>/
   config.json
-  tasks/<task-id>/
-    task.json
+  inputs/<input-id>/
+    input.json
     statelog.jsonl
     eval-record.json
     workdir/
@@ -64,7 +64,7 @@ runs/<run-id>/
   summary.json
 ```
 
-`summary.json` contains the run id, agent label, task results, and success/error counts. `eval-record.json` is produced with the same extractor described below whenever the task produced a non-empty statelog.
+`summary.json` contains the run id, agent label, input results, and success/error counts. `eval-record.json` is produced with the same extractor described below whenever the input produced a non-empty statelog.
 
 ## Optimizing marked declarations
 
@@ -72,8 +72,8 @@ runs/<run-id>/
 
 ```bash
 agency eval optimize agent.agency --goal "Return Paris with no extra words."
-agency eval optimize agent.agency --tasks tasks.json --iterations 5 --samples 3
-agency eval optimize agent.agency:main --tasks tasks.json --no-writeback
+agency eval optimize agent.agency --inputs inputs.json --iterations 5 --samples 3
+agency eval optimize agent.agency:main --inputs inputs.json --no-writeback
 ```
 
 Mark each string declaration the optimizer may change:
@@ -93,11 +93,11 @@ Legacy `@optimize(...)` tags are no longer supported. Use `optimize const` or `o
 Options:
 
 - `<file>[:<node>]` — required positional agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
-- `--tasks <file|dir>` — task suite file or directory. Mutually exclusive with `--goal`; exactly one is required.
-- `--goal <text>` — create one inline no-argument task with this goal, exactly like `eval run`. The suite task goals are also the mutator's objectives. Fails upfront if the selected node requires arguments.
+- `--inputs <file|dir>` — input suite file or directory. Mutually exclusive with `--goal`; exactly one is required.
+- `--goal <text>` — create one inline no-argument input with this goal, exactly like `eval run`. The suite input goals are also the mutator's objectives. Fails upfront if the selected node requires arguments.
 - `--iterations <n>` — maximum candidate iterations after the baseline. Defaults to `5`.
-- `--samples <n>` — judge samples per task. Defaults to `3`.
-- `--confidence-threshold <n>` — minimum task confidence counted as a suite win. Defaults to `50`.
+- `--samples <n>` — judge samples per input. Defaults to `3`.
+- `--confidence-threshold <n>` — minimum input confidence counted as a suite win. Defaults to `50`.
 - `--margin-threshold <n>` — suite win margin required to avoid an overall tie. Defaults to `0`.
 - `--no-writeback` — do not write the champion file set back to the source files at the end.
 - `--silent` — print nothing; artifacts are still written.
@@ -107,7 +107,7 @@ Options:
 
 The judge flags are the same ones `agency eval judge` uses, with the same defaults. Each `iter-N/verdict.json` is the judge suite verdict with side A = champion and side B = candidate.
 
-By default the optimizer prints the discovered targets at startup (a gut check that it will mutate what you expect), then per iteration: progress phases, the decision with win counts, a colored line diff of each proposed declaration value (dimmed when a proposal left a value unchanged), the mutator's rationale, and a champion-vs-candidate diff of each task's final response. At the end it prints every optimized variable with its start and end value. Pass `--silent` to print nothing. The baseline runs the unmutated program: if any baseline task fails, the run aborts immediately and reports the failing tasks — a failure before any mutation means the program or task suite is broken, not the optimization.
+By default the optimizer prints the discovered targets at startup (a gut check that it will mutate what you expect), then per iteration: progress phases, the decision with win counts, a colored line diff of each proposed declaration value (dimmed when a proposal left a value unchanged), the mutator's rationale, and a champion-vs-candidate diff of each input's final response. At the end it prints every optimized variable with its start and end value. Pass `--silent` to print nothing. The baseline runs the unmutated program: if any baseline input fails, the run aborts immediately and reports the failing inputs — a failure before any mutation means the program or input suite is broken, not the optimization.
 
 Each optimize run writes:
 
@@ -162,27 +162,27 @@ The extractor output is deliberately **generic** — it knows nothing about spec
 
 The two semantic anchors the extractor does surface at the top level are:
 
-- `evalInputs` — chronological values recorded by `evalInput(value)`.
+- `evalValues` — chronological values recorded by `evalValue(value)`.
 - `evalOutputs` — chronological values recorded by `evalOutput(value)`.
 
 Both are hoisted because they're load-bearing for eval consumers and judges. Everything else — thread tree, per-event sequence, interrupts, errors, incomplete tool calls, aggregated metrics — lives in `events`, `threads`, `interrupts`, `errors`, `incomplete`, and `metrics`.
 
 ## How to annotate a run
 
-Import `std::statelog` and call `evalInput` / `evalOutput` where values cross the user-facing boundary:
+Import `std::statelog` and call `evalValue` / `evalOutput` where values cross the user-facing boundary:
 
 ```ts
-import { evalInput, evalOutput } from "std::statelog"
+import { evalValue, evalOutput } from "std::statelog"
 
 node main(prompt: string): string {
-  evalInput(prompt)
+  evalValue(prompt)
   const reply = doWork(prompt)
   evalOutput(reply)
   return reply
 }
 ```
 
-Without annotations, `extract` falls back to approximate trace-level heuristics: the last user-role message of the first top-level `promptCompletion` for `evalInputs`, and the last top-level `promptCompletion` completion for `evalOutputs`. Falling back is supported for backwards compatibility, but the inference is approximate. Annotate your agent for trustworthy evals.
+Without annotations, `extract` falls back to approximate trace-level heuristics: the last user-role message of the first top-level `promptCompletion` for `evalValues`, and the last top-level `promptCompletion` completion for `evalOutputs`. Falling back is supported for backwards compatibility, but the inference is approximate. Annotate your agent for trustworthy evals.
 
 ## Record shape (overview)
 
@@ -193,7 +193,7 @@ Without annotations, `extract` falls back to approximate trace-level heuristics:
   "formatVersion": 1,
   "durationMs": 12345,
   "source": "/path/to/run.statelog.jsonl",
-  "evalInputs": [{ "value": "what the user asked", "threadId": "0", "tMs": 120 }],
+  "evalValues": [{ "value": "what the user asked", "threadId": "0", "tMs": 120 }],
   "evalOutputs": [{ "value": "what the agent replied", "threadId": "0", "tMs": 420 }],
   "threads": [{ "threadId": "0", "label": "main", "parentThreadId": null, ... }],
   "events":  [{ "kind": "llm", "threadId": "0", "model": "gpt-5", ... }, ...],
@@ -213,13 +213,13 @@ Every entry in `events` is one of three discriminated shapes:
 
 All three carry `threadId`, `spanId`, `parentSpanId`, and `tMs` (milliseconds from the start of the run).
 
-Every entry in `evalInputs` and `evalOutputs` has this shape:
+Every entry in `evalValues` and `evalOutputs` has this shape:
 
 ```jsonc
 { "value": unknown, "threadId": "0", "tMs": 420, "truncated": true }
 ```
 
-- `value` is the JSON-serializable value passed to `evalInput` / `evalOutput`, or a heuristic fallback value when annotations are missing.
+- `value` is the JSON-serializable value passed to `evalValue` / `evalOutput`, or a heuristic fallback value when annotations are missing.
 - `threadId` identifies the active thread that recorded the value, or `null` when unavailable.
 - `tMs` is milliseconds from the trace start, derived from the statelog envelope timestamp.
 - `truncated` is present only when the serialized value exceeded `STATELOG_EVAL_MAX_VALUE_BYTES`. The default cap is 100KB; set that environment variable before running `agency eval extract` to override it. Oversized string values are kept as readable string prefixes; oversized non-string values are converted to JSON-preview strings.
@@ -250,7 +250,7 @@ If a convention emerges (a set of rules every project wants), it can be promoted
 
 ## Downstream chain
 
-`evalInputs` and `evalOutputs` are hoisted to the top level specifically because eval consumers and pairwise judges need the user-facing inputs and outputs without digging through raw `promptCompletion` events. `threads[*].label` is what consumer behavioral queries grep on. These are the two seams that connect `extract` to its sibling commands.
+`evalValues` and `evalOutputs` are hoisted to the top level specifically because eval consumers and pairwise judges need the user-facing inputs and outputs without digging through raw `promptCompletion` events. `threads[*].label` is what consumer behavioral queries grep on. These are the two seams that connect `extract` to its sibling commands.
 
 Next: use [`agency eval judge`](./eval-judge.md) to compare two eval records against a plain-English goal.
 

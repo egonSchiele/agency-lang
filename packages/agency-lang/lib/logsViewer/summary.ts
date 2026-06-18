@@ -54,8 +54,8 @@ export function summarize(evt: EventEnvelope): string {
       const hiddenSuffix = d.hidden ? " hidden" : "";
       return `threadCreated ${d.threadType ?? "?"} #${shortId(d.threadId)}${tag}${hiddenSuffix}`;
     }
-    case "evalInputRecorded":
-      return `evalInputRecorded ${truncate(stringifyValue(d.value), 60)}`;
+    case "evalValueRecorded":
+      return `evalValueRecorded ${truncate(stringifyValue(d.value), 60)}`;
     case "evalOutputRecorded":
       return `evalOutputRecorded ${truncate(stringifyValue(d.value), 60)}`;
     case "agentStart":

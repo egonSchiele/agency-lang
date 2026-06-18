@@ -1,4 +1,4 @@
-import node { mutatePrompt } from "../../lib/agents/mutatePrompt.agency"
+import node { mutatePrompt } from "../../lib/agents/optimize/mutatePrompt.agency"
 
 type OptimizeMutationOperation = {
   target: string;

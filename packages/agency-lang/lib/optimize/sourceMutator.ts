@@ -353,9 +353,19 @@ export class OptimizeSourceMutator {
     operation: ReplaceVariableInitializerOperation,
     target: OptimizeTarget,
   ): ValidationOutcome {
-    const parsed = exprParser(operation.value);
+    let parsed = exprParser(operation.value);
     if (!parsed.success || parsed.rest.trim() !== "") {
-      return diagnostic({ operation, code: "invalid-replacement-syntax", message: `Replacement value for ${operation.target} is not a single valid Agency expression: ${JSON.stringify(operation.value)}` });
+      // The model frequently returns the raw prompt text without the surrounding
+      // quotes. Recover by wrapping it in the target's quote style and re-parsing.
+      // This is self-validating — values that don't wrap into a clean single
+      // expression (e.g. embedded quotes, or newlines under single-quote style)
+      // fall through to the diagnostic, so we never emit broken source.
+      const quote = target.valueKind === "multilineString" ? `"""` : `"`;
+      const wrapped = exprParser(`${quote}${operation.value}${quote}`);
+      if (!wrapped.success || wrapped.rest.trim() !== "") {
+        return diagnostic({ operation, code: "invalid-replacement-syntax", message: `Replacement value for ${operation.target} must be a quoted Agency string literal (e.g. "new prompt"), but it did not parse as one even after wrapping it in quotes. Received: ${JSON.stringify(operation.value)}` });
+      }
+      parsed = wrapped;
     }
     const replacement = parsed.result;
     if (replacement.type !== "string" && replacement.type !== "multiLineString") {

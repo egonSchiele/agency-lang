@@ -351,8 +351,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  // Registered under `agency eval optimize` only; the legacy top-level
-  // `agency optimize` command has been removed.
+  // Registered under both `agency eval optimize` and the top-level `agency optimize`.
   const addOptimizeCommand = (parent: Command): void => {
     parent
     .command("optimize")
@@ -396,6 +395,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
   };
   addOptimizeCommand(evalCmd);
+  addOptimizeCommand(program);
 
   program
     .command("format")

@@ -31,20 +31,34 @@ export class WorkspaceManager {
    * because the runs directory — and thus `dir` itself — usually lives *inside*
    * `sourceDir` (so the forked agent resolves `node_modules` by walking up to the
    * package root). A whole-directory copy would hit Node's "cannot copy into a
-   * subdirectory of self" guard before the `runs` exclusion could apply. Skipping
-   * the excluded entries at the top level means the subtree containing `dir` is
-   * never descended into.
+   * subdirectory of self" guard. Beyond the static excludes, we also skip the
+   * top-level entry that actually contains the workspace root, so any runs-dir
+   * name (`runs`, `optimize-runs`, or a custom `--runs-dir`) is handled, not
+   * just the literal `runs`.
    */
   fork(sourceDir: string): Workspace {
     this.counter += 1;
     const key = `ws-${this.counter}`;
     const dir = path.join(this.rootDir, key);
     fs.mkdirSync(dir, { recursive: true });
+    const containingEntry = this.topLevelEntryContainingRoot(sourceDir);
     for (const entry of fs.readdirSync(sourceDir)) {
       if (FORK_EXCLUDED.includes(entry)) continue;
+      if (entry === containingEntry) continue;
       fs.cpSync(path.join(sourceDir, entry), path.join(dir, entry), { recursive: true });
     }
     return { dir, key };
+  }
+
+  /**
+   * The top-level entry of `sourceDir` whose subtree contains this manager's
+   * workspace root, or null when the root lives outside `sourceDir`. Skipping it
+   * during a fork prevents copying a directory into its own descendant.
+   */
+  private topLevelEntryContainingRoot(sourceDir: string): string | null {
+    const rel = path.relative(sourceDir, this.rootDir);
+    if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+    return rel.split(path.sep)[0];
   }
 
   read(ws: Workspace, relPath: string): string {

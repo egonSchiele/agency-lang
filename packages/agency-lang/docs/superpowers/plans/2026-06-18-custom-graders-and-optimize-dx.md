@@ -26,7 +26,7 @@
 
 **Phase 1 — custom graders**
 - Create `lib/optimize/grading/functionGrader.ts` — the `GraderContext`/`GraderFn`/`Grader` types, the `FunctionGrader` adapter (function → `BaseGrader`), the `grader(fn, opts)` wrapper, and `toGrader(spec)` normalizer.
-- Create `lib/optimize/goalJudgeFile.ts` — single source of truth for the bundled goal-judge path + the `ScalarVerdict` schema (shared by `LlmJudge`'s default wiring and `FunctionGrader`'s `judge` helper).
+- Create `lib/optimize/goalJudgeFile.ts` — single source of truth for the bundled goal-judge path, the `ScalarVerdict` schema, and `asJudgeText()` (output→judge-string, consolidating the dupes in `llmJudge.ts`/`humanGrader.ts`).
 - Create `lib/optimize/gradingModule.ts` — `loadGradingModule(filePath, config)`: esbuild-transpile the user TS, import its default export, normalize to `BaseGrader[]`.
 - Create `lib/optimize/public.ts` — the `agency-lang/optimize` public surface (re-exports graders, `grader`, types).
 - Modify `lib/eval/loadInputs.ts` — make `goal` optional via a `requireGoal` option.
@@ -39,16 +39,17 @@
 - Create `lib/optimize/gradeBreakdown.ts` — `breakdown(scorecard)`: a serializable per-input/per-grader view.
 - Create `lib/optimize/report.ts` — `renderReport(...)` (pure) + `writeReport(runDir, …)`.
 - Modify `lib/optimize/grading/baseGrader.ts` — add `describe()` (default = name) and `validateInput(input)` (default no-op).
-- Modify `lib/optimize/grading/graders/builtinGraders.ts` — `validateInput` checks `matchOn` resolves; `describe()` names the path.
+- Modify `lib/optimize/grading/graders/builtinGraders.ts` — extract an `abstract class MatchGrader` (shared constructor + `describe()` + `validateInput()`); the three match graders extend it instead of duplicating.
 - Modify `lib/optimize/reporter.ts` — add `gradingSetup(...)` to `PointwiseReporter`.
 - Modify `lib/optimize/baseOptimizer.ts` — echo + eager-validate before search; write the report at the end.
 
 **Phase 3 — validation set**
-- Create `lib/optimize/validationSplit.ts` — `splitInputs(inputs, ratio, seed)` (seeded).
+- Create `lib/optimize/validationSplit.ts` — `splitInputs(inputs, ratio, seed)`, reusing `rng.ts`'s `makeRng`/`sampleWithoutReplacement` (no new PRNG).
 - Modify `lib/optimize/optimizer.ts` — `OptimizeTarget.validationInputs?`.
 - Modify `lib/optimize/types.ts` — `OptimizeResult.trainObjective?` / `validationObjective?`.
-- Modify `lib/optimize/baseOptimizer.ts` — store `validationInputs`; add `scoreFiles(...)` helper; include val objective in the report.
-- Modify `lib/optimize/optimizers/greedyReflective.ts` — pick writeback champion by validation objective; record both objectives.
+- Modify `lib/optimize/baseOptimizer.ts` — store `validationInputs`; add the canonical `scoreFiles(...)` primitive; include val objective in the report.
+- Modify `lib/optimize/optimizers/example.ts` — refactor `score` onto `scoreFiles` (remove duplicate fork+apply+evaluate).
+- Modify `lib/optimize/optimizers/greedyReflective.ts` — pick writeback champion by validation objective (declarative `pickChampion`); record both objectives.
 - Modify `lib/cli/eval/optimize.ts` — load validation inputs (file) or split (ratio) into `target.validationInputs`.
 - Modify `scripts/agency.ts` — add `--validation-inputs` / `--validation-split`.
 
@@ -61,7 +62,10 @@
 **Files:**
 - Create: `lib/optimize/goalJudgeFile.ts`
 - Modify: `lib/cli/eval/optimize.ts` (use the shared constant)
+- Modify: `lib/optimize/grading/graders/llmJudge.ts` + `lib/optimize/grading/graders/humanGrader.ts` (use the shared `asJudgeText`)
 - Test: `lib/optimize/goalJudgeFile.test.ts`
+
+This task also extracts `asJudgeText` — the "stringify the agent output for a judge" one-liner currently **duplicated** at `llmJudge.ts:34` and `humanGrader.ts:36`. Consolidate both onto the shared helper so Task 2's `FunctionGrader.judge` reuses it instead of adding a third copy (anti-pattern: duplicating existing code).
 
 - [ ] **Step 1: Write the failing test.**
 
@@ -69,7 +73,7 @@
 // lib/optimize/goalJudgeFile.test.ts
 import * as fs from "fs";
 import { describe, expect, it } from "vitest";
-import { goalJudgeFile, ScalarVerdict } from "./goalJudgeFile.js";
+import { asJudgeText, goalJudgeFile, ScalarVerdict } from "./goalJudgeFile.js";
 
 describe("goalJudgeFile", () => {
   it("points at the bundled goalJudge.agency that exists on disk", () => {
@@ -80,6 +84,12 @@ describe("goalJudgeFile", () => {
 
   it("ScalarVerdict accepts a {score, reasoning} object", () => {
     expect(ScalarVerdict.parse({ score: 0.5, reasoning: "ok" })).toEqual({ score: 0.5, reasoning: "ok" });
+  });
+
+  it("asJudgeText returns strings unchanged and JSON-stringifies everything else", () => {
+    expect(asJudgeText("Paris")).toBe("Paris");
+    expect(asJudgeText({ a: 1 })).toBe('{"a":1}');
+    expect(asJudgeText(42)).toBe("42");
   });
 });
 ```
@@ -105,7 +115,15 @@ export function goalJudgeFile(): string {
 
 /** Structured verdict shape the goal judge returns (0..1 score + reasoning). */
 export const ScalarVerdict = z.object({ score: z.number(), reasoning: z.string() });
+
+/** Render an agent output as the string a judge reads: strings pass through,
+ *  everything else is JSON so it reads as data rather than "[object Object]". */
+export function asJudgeText(output: unknown): string {
+  return typeof output === "string" ? output : globalThis.JSON.stringify(output);
+}
 ```
+
+- [ ] **Step 3b: Consolidate the two existing duplicate sites.** In `lib/optimize/grading/graders/llmJudge.ts`, replace the inline `const output = typeof run.output === "string" ? run.output : globalThis.JSON.stringify(run.output);` with `const output = asJudgeText(run.output);` and `import { asJudgeText } from "../../goalJudgeFile.js";`. In `lib/optimize/grading/graders/humanGrader.ts`, replace `artifact: typeof run.output === "string" ? run.output : globalThis.JSON.stringify(run.output),` with `artifact: asJudgeText(run.output),` and add the same import. (Confirm the relative import depth — both graders live in `lib/optimize/grading/graders/`, so `../../goalJudgeFile.js`.)
 
 - [ ] **Step 4: Point `optimize.ts` at the shared constant.** In `lib/cli/eval/optimize.ts`, delete the local `GOAL_JUDGE_FILE` constant (currently `const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "eval", "goalJudge.agency");`) and its now-unused `getAgentsDir` import if nothing else uses it; import `goalJudgeFile` and use `goalJudgeFile()` where `GOAL_JUDGE_FILE` was referenced in `buildConfig`.
 
@@ -123,8 +141,9 @@ Run: `pnpm run build 2>&1 | tee /tmp/t1-build.log` → tsc clean
 - [ ] **Step 6: Commit.**
 
 ```bash
-git add lib/optimize/goalJudgeFile.ts lib/optimize/goalJudgeFile.test.ts lib/cli/eval/optimize.ts
-git commit -F /tmp/msg.txt   # "Extract shared goal-judge file path and verdict schema"
+git add lib/optimize/goalJudgeFile.ts lib/optimize/goalJudgeFile.test.ts lib/cli/eval/optimize.ts \
+  lib/optimize/grading/graders/llmJudge.ts lib/optimize/grading/graders/humanGrader.ts
+git commit -F /tmp/msg.txt   # "Extract shared goal-judge path, verdict schema, and asJudgeText helper"
 ```
 
 ---
@@ -214,7 +233,7 @@ Run: `pnpm test:run lib/optimize/grading/functionGrader.test.ts 2>&1 | tee /tmp/
 // lib/optimize/grading/functionGrader.ts
 import { AgencyRunner } from "./agencyRunner.js";
 import { BaseGrader } from "./baseGrader.js";
-import { goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
+import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
 import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js";
 
 /** What a metric function receives. `input` is the typed Input; per-input grading
@@ -241,11 +260,8 @@ export class FunctionGrader extends BaseGrader {
   }
 
   protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
-    const judge = async ({ goal, output }: { goal: string; output?: JSON }) => {
-      const text = output ?? run.output;
-      const str = typeof text === "string" ? text : globalThis.JSON.stringify(text);
-      return runAgency.runStructured(goalJudgeFile(), "main", [goal, str], ScalarVerdict);
-    };
+    const judge = ({ goal, output }: { goal: string; output?: JSON }) =>
+      runAgency.runStructured(goalJudgeFile(), "main", [goal, asJudgeText(output ?? run.output)], ScalarVerdict);
     const result = await this.fn({ output: run.output, input, judge });
     return coerce(result);
   }
@@ -896,9 +912,19 @@ describe("matcher pre-flight validation", () => {
 
 (`Input` is already imported in `baseGrader.ts`.)
 
-- [ ] **Step 4: Override on the match-based graders.** In `builtinGraders.ts`, add to `ExactMatchGrader`, `ContainsGrader`, and `SimilarityGrader` (they all have `options.matchOn`). Add a shared helper and the two methods. Put the helper near `resolveMatch`:
+- [ ] **Step 4: Extract a shared `MatchGrader` base instead of duplicating.** `ExactMatchGrader`, `ContainsGrader`, and `SimilarityGrader` already share `MatchOptions` and an identical constructor; `describe()`/`validateInput()` would be identical across all three. Introduce one abstract base and have the three extend it — do **not** copy the methods three times (anti-pattern: duplicating code / inconsistent patterns).
+
+In `builtinGraders.ts`, add the base (place it above `ExactMatchGrader`, after the `MatchOptions` type):
 
 ```ts
+/** Shared base for graders that compare the output against a value read from the
+ *  input via a `matchOn` JSONPath. Centralizes the constructor, the human
+ *  description, and the pre-flight matchOn check. */
+abstract class MatchGrader extends BaseGrader {
+  constructor(protected readonly options: MatchOptions) {
+    super(options);
+  }
+
   describe(): string {
     return `${this.name()} (matchOn ${stringify(this.options.matchOn)})`;
   }
@@ -906,9 +932,10 @@ describe("matcher pre-flight validation", () => {
   validateInput(input: Input): void {
     resolveMatch(input, this.options.matchOn, this.name());   // throws if unresolved
   }
+}
 ```
 
-Add these identical two methods to each of the three classes (repeat the code in each — do not share via inheritance, they already each carry `options.matchOn`). `Input` is imported already.
+Then change the three classes from `extends BaseGrader` to `extends MatchGrader` and **delete their now-redundant `constructor(protected readonly options: MatchOptions) { super(options); }`** (inherited from `MatchGrader`). Their `defaultName` and `_run` stay. `Input` is imported already; ensure `BaseGrader` remains imported (still the base of `MatchGrader`).
 
 - [ ] **Step 5: Run** → PASS. **Step 6: Build** → tsc clean.
 
@@ -1154,11 +1181,13 @@ describe("splitInputs", () => {
 
 - [ ] **Step 2: Run; expect failure.** Run: `pnpm test:run lib/optimize/validationSplit.test.ts 2>&1 | tee /tmp/t11.log`
 
-- [ ] **Step 3: Implement** (deterministic mulberry32 PRNG — no `Math.random`).
+- [ ] **Step 3: Implement** by reusing the existing deterministic PRNG. `lib/optimize/rng.ts` already exports `makeRng(seed): Rng` (mulberry32) and `sampleWithoutReplacement(items, k, rng)` — do **not** hand-roll a new PRNG or shuffle (anti-pattern: duplicating existing code). The held-out set is `sampleWithoutReplacement`; train is the rest, kept disjoint by reference identity (no `Set` — coding standard prefers arrays).
 
 ```ts
 // lib/optimize/validationSplit.ts
 import type { Input } from "@/eval/runTypes.js";
+
+import { makeRng, sampleWithoutReplacement } from "./rng.js";
 
 export type Split = { train: Input[]; validation: Input[] };
 
@@ -1166,30 +1195,11 @@ export type Split = { train: Input[]; validation: Input[] };
  *  Always keeps at least one training input. */
 export function splitInputs(inputs: Input[], ratio: number, seed = 0): Split {
   const clamped = Math.max(0, Math.min(1, ratio));
-  const shuffled = shuffle(inputs, seed);
-  const maxHoldout = Math.max(0, inputs.length - 1);
+  const maxHoldout = Math.max(0, inputs.length - 1);          // always keep ≥1 for training
   const holdout = Math.min(maxHoldout, Math.floor(clamped * inputs.length));
-  return { validation: shuffled.slice(0, holdout), train: shuffled.slice(holdout) };
-}
-
-function shuffle(items: Input[], seed: number): Input[] {
-  const out = [...items];
-  const rand = mulberry32(seed);
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rand() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  const validation = sampleWithoutReplacement(inputs, holdout, makeRng(seed));
+  const train = inputs.filter((input) => !validation.includes(input));
+  return { train, validation };
 }
 ```
 
@@ -1207,7 +1217,8 @@ Run: `pnpm test:run lib/optimize/validationSplit.test.ts 2>&1 | tee /tmp/t11.log
 - Modify: `lib/optimize/optimizer.ts` (`OptimizeTarget.validationInputs?`)
 - Modify: `lib/optimize/types.ts` (`OptimizeResult.trainObjective?` / `validationObjective?`)
 - Modify: `lib/optimize/baseOptimizer.ts` (store `validationInputs`; add `scoreFiles` helper)
-- Test: `lib/optimize/baseOptimizer.test.ts`
+- Modify: `lib/optimize/optimizers/example.ts` (refactor `score` onto `scoreFiles`)
+- Test: `lib/optimize/baseOptimizer.test.ts`, `lib/optimize/optimizers/example.test.ts` (if present — run it to confirm the refactor is behavior-preserving)
 
 - [ ] **Step 1: Extend the types.** In `optimizer.ts`:
 ```ts
@@ -1245,9 +1256,9 @@ In `optimize()`, right after resolving `source`:
 ```ts
     this.validationInputs = target.validationInputs ?? [];
 ```
-Add the helper (mirrors greedy's `makeCandidate` fork+apply+evaluate):
+Add the helper as the **canonical fresh-scoring primitive** (fork from the source, apply a candidate's files, grade). `fork+applyFiles+evaluate` is currently open-coded in `example.score` and `greedy.makeCandidate`; this becomes the one place that sequence lives for fresh scoring.
 ```ts
-  /** Fork the agent, apply a candidate's files, and grade it on the given inputs. */
+  /** Fork the agent from source, apply a candidate's files, and grade it on the given inputs. */
   protected async scoreFiles(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
     const ws = this.fork(source.baseDir);
     this.workspace.applyFiles(ws, files);
@@ -1255,11 +1266,21 @@ Add the helper (mirrors greedy's `makeCandidate` fork+apply+evaluate):
   }
 ```
 
+- [ ] **Step 4b: Refactor `example.score` onto `scoreFiles`** (remove the duplicate fork+apply+evaluate). In `lib/optimize/optimizers/example.ts`, replace the body of the private `score(source, files, inputs)` with:
+```ts
+    const scorecard = await this.scoreFiles(source, files, inputs);
+    return scorecard.gatesPassed() ? scorecard.objective() : 0;
+```
+(Delete the now-unused local `ws`/`applyFiles`/`evaluate` lines; keep the `gatesPassed() ? objective() : 0` gate-aware result.)
+
+> **Why not also greedy/gepa:** `greedy.makeCandidate` and `gepa` fork from a *specific* parent workspace (`champion.ws.dir`) and **keep** the forked `ws` to thread across iterations, so they can't use `scoreFiles` (which forks from `source.baseDir` and discards the ws). Their remaining `applyFiles` + `this.evaluate(...)` is already built on the shared `evaluate` primitive — not a meaningful duplicate. Leave them as-is.
+
 - [ ] **Step 5: Run** → PASS. **Step 6: Build** → tsc clean.
 
-Run: `pnpm test:run lib/optimize/baseOptimizer.test.ts 2>&1 | tee /tmp/t12.log`; `pnpm run build 2>&1 | tee /tmp/t12-build.log`
+Run: `pnpm test:run lib/optimize/baseOptimizer.test.ts lib/optimize/optimizers/example.test.ts 2>&1 | tee /tmp/t12.log` (drop the example path if no such test file exists)
+Run: `pnpm run build 2>&1 | tee /tmp/t12-build.log`
 
-- [ ] **Step 7: Commit.** (msg: "Thread validation inputs and scoreFiles helper through BaseOptimizer")
+- [ ] **Step 7: Commit.** (msg: "Add scoreFiles primitive + validation plumbing; refactor example onto it")
 
 ---
 
@@ -1330,16 +1351,7 @@ it("writes back the candidate with the best validation objective, not the best t
     attempts: Attempt[],
     startedAt: number,
   ): Promise<OptimizeResult> {
-    let champion = trainChampion;
-    let validationObjective: number | undefined;
-    if (this.validationInputs.length > 0) {
-      let best = -1;
-      for (const candidate of candidates) {
-        const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
-        const obj = sc.gatesPassed() ? sc.objective() : 0;
-        if (obj > best) { best = obj; champion = candidate; validationObjective = obj; }
-      }
-    }
+    const { champion, validationObjective } = await this.pickChampion(source, trainChampion, candidates);
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
@@ -1352,9 +1364,28 @@ it("writes back the candidate with the best validation objective, not the best t
     this.reporter.runFinished({ result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt });
     return result;
   }
+
+  /** Pick the writeback champion. With no validation set, that is the train
+   *  champion. With one, score every candidate on validation (the "how") and
+   *  take the max (the "what") — no order-dependent mutable accumulation. */
+  private async pickChampion(
+    source: OptimizeTargetSet,
+    trainChampion: Candidate,
+    candidates: Candidate[],
+  ): Promise<{ champion: Candidate; validationObjective?: number }> {
+    if (this.validationInputs.length === 0) return { champion: trainChampion };
+    const scored = await Promise.all(
+      candidates.map(async (candidate) => {
+        const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
+        return { candidate, objective: sc.gatesPassed() ? sc.objective() : 0 };
+      }),
+    );
+    const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
+    return { champion: winner.candidate, validationObjective: winner.objective };
+  }
 ```
 
-`optimizeTargets` is already `async`; `finish` is now `async` and awaited (it's `return this.finish(...)`, which returns a Promise — fine). Update the two call sites to `return this.finish(...)` (already returning). Note `buildPointwiseResult` returns a fresh object so assigning `result.trainObjective` is safe.
+`optimizeTargets` is already `async`; `finish` and `pickChampion` are `async` and awaited. The two `finish` call sites already `return this.finish(...)` (now a Promise — fine). Note `buildPointwiseResult` returns a fresh object so assigning `result.trainObjective` is safe.
 
 - [ ] **Step 4: Run** → PASS. **Step 5: Build** → tsc clean. Run the full optimizer test file to confirm no-validation runs are unchanged.
 
@@ -1488,4 +1519,11 @@ Run: `grep -rln "agency optimize\|--optimizer\|eval optimize" docs/site --includ
 
 **2. Placeholder scan:** Each code step shows full code; commands give exact files + expected PASS/clean. The two test fixtures that need input-id-dependent grading (Task 13) carry an explicit implementer note with the shape to write, not a vague "add a test." No "TBD"/"handle edge cases."
 
-**3. Type consistency:** `loadGradingModule(filePath, config)`, `toGrader(spec)`, `grader(fn, opts)`, `FunctionGrader`, `GraderContext{output,input,judge}`, `breakdown(scorecard): InputBreakdown[]`, `renderReport(result, meta)`/`writeReport(runDir, result, meta)`, `splitInputs(inputs, ratio, seed): {train, validation}`, `OptimizeTarget.validationInputs?`, `OptimizeResult.trainObjective?`/`validationObjective?`, `BaseGrader.describe()`/`validateInput(input)`, `PointwiseReporter.gradingSetup(...)`, `scoreFiles(source, files, inputs)` — names used consistently across tasks. `buildConfig`/`buildTarget` signatures match their callers (`buildConfig` becomes async; `evalOptimize` awaits it). ✓
+**3. Type consistency:** `loadGradingModule(filePath, config)`, `toGrader(spec)`, `grader(fn, opts)`, `FunctionGrader`, `GraderContext{output,input,judge}`, `asJudgeText(output)`, `MatchGrader`, `breakdown(scorecard): InputBreakdown[]`, `renderReport(result, meta)`/`writeReport(runDir, result, meta)`, `splitInputs(inputs, ratio, seed): {train, validation}`, `OptimizeTarget.validationInputs?`, `OptimizeResult.trainObjective?`/`validationObjective?`, `BaseGrader.describe()`/`validateInput(input)`, `PointwiseReporter.gradingSetup(...)`, `scoreFiles(source, files, inputs)`, `pickChampion(...)` — names used consistently across tasks. `buildConfig`/`buildTarget` signatures match their callers (`buildConfig` becomes async; `evalOptimize` awaits it). ✓
+
+**4. Anti-pattern audit (`docs/dev/anti-patterns.md`):** Reviewed and corrected before finalizing.
+- *Duplicating existing code:* `splitInputs` reuses `rng.ts` (`makeRng`/`sampleWithoutReplacement`) instead of a hand-rolled PRNG (Task 11); `asJudgeText` consolidates the output-stringify dupes in `llmJudge.ts`/`humanGrader.ts` and is reused by `FunctionGrader` (Tasks 1–2); `scoreFiles` is the canonical fork+apply+evaluate primitive with `example.score` refactored onto it (Task 12).
+- *Imperative code / order-dependent mutable state:* greedy's validation selection is `pickChampion` — score-via-`map`, select-via-`reduce`, no mutable `best`/`champion` accumulation (Task 13).
+- *Inconsistent patterns / duplication:* the three match graders share an `abstract class MatchGrader` rather than copy-pasted `describe()`/`validateInput()` (Task 8).
+- *Declarative interfaces over imperative code:* the user-facing surface (metric functions, `grader()`, `ctx.judge`, `loadGradingModule`, `agency-lang/optimize`) encapsulates the "how" (running judges, esbuild loading, Scorecard integration) behind a declarative "what."
+- *Clean:* no nested ternaries, no silent try-catch (the `loadGradingModule` `try/finally` re-throws by not catching), no useless special cases. `renderReport`'s line-building matches the existing `reporter.ts` house style.

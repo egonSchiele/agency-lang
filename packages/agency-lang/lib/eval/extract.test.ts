@@ -495,3 +495,48 @@ describe("extractEvalRecord", () => {
     });
   });
 });
+
+describe("output fallback + warning options (used by the optimizer)", () => {
+  function eventsWithReturn(): EventEnvelope[] {
+    resetClock();
+    return [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("promptCompletion", {
+        threadId: "0",
+        model: '"gpt-5"',
+        messages: [{ role: "user", content: "capital of India?" }],
+        completion: { output: "Paris" }, // a "wrong" last LLM reply
+      }, "span-llm"),
+      ev("agentEnd", { threadId: "0", entryNode: "main", result: "New Delhi" }),
+    ];
+  }
+
+  it("defaults to the last LLM completion and warns (unchanged behavior)", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src");
+    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["Paris"]);
+    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(true);
+    expect(rec.warnings.some((w) => w.includes("Call evalInput(prompt)"))).toBe(true);
+  });
+
+  it("outputFallback 'returnValue' grades the node return value with no output warning", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src", { outputFallback: "returnValue" });
+    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["New Delhi"]);
+    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(false);
+  });
+
+  it("warnMissingInput false suppresses the evalInput warning", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src", { warnMissingInput: false });
+    expect(rec.warnings.some((w) => w.includes("Call evalInput(prompt)"))).toBe(false);
+  });
+
+  it("explicit evalOutput() still wins over the returnValue fallback", () => {
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("evalOutputRecorded", { threadId: "0", value: "explicit answer" }),
+      ev("agentEnd", { threadId: "0", entryNode: "main", result: "New Delhi" }),
+    ];
+    const rec = extractEvalRecord(events, "src", { outputFallback: "returnValue" });
+    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["explicit answer"]);
+  });
+});

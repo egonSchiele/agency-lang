@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { evalRunLoadedTasks, resolveEvalRunTarget } from "@/cli/eval/run.js";
+import { evalRunLoadedTasks, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
 import type { EvalTask } from "@/eval/runTypes.js";
 
 import { EvalCache } from "./evalCache.js";
@@ -115,6 +115,11 @@ export abstract class BaseOptimizer {
       continueOnError: true,
       quietCompile: true,
       pipeAgentOutput: false,
+    }, {
+      // Grade the node's return value (not its last LLM reply) and skip the
+      // evalInput/evalOutput "did you forget to call…" warnings — neither
+      // applies to optimize: inputs come from the task, output is the return.
+      extractor: optimizeEvalRecordExtractor,
     });
     const taskResult = result.tasks[0];
     if (!taskResult || taskResult.status !== "success") {

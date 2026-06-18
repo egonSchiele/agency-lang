@@ -9,7 +9,7 @@ description: Documents the `agency eval extract` command for converting a captur
 
 ```
 agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>)
-agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir>]
+agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
 ```
 

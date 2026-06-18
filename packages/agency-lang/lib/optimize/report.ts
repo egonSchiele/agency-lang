@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { asJudgeText } from "./goalJudgeFile.js";
 import type { InputBreakdown } from "./gradeBreakdown.js";
 import type { OptimizeResult } from "./types.js";
 
@@ -48,7 +49,7 @@ function championGrades(breakdown?: InputBreakdown[]): string {
   const rows = breakdown.flatMap((b) =>
     b.grades.map((g) => {
       const score = g.kind === "scalar" ? g.value.toFixed(3) : g.pass ? "pass" : "fail";
-      const out = String(b.output).replace(/\|/g, "\\|").replace(/\n/g, " ").slice(0, 80);
+      const out = asJudgeText(b.output).replace(/\|/g, "\\|").replace(/\n/g, " ").slice(0, 80);
       return `| ${b.inputId} | ${g.grader} | ${score} | ${(g.feedback ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ")} | ${out} |`;
     }),
   );

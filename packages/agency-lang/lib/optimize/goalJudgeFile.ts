@@ -13,7 +13,9 @@ export function goalJudgeFile(): string {
 export const ScalarVerdict = z.object({ score: z.number(), reasoning: z.string() });
 
 /** Render an agent output as the string a judge reads: strings pass through,
- *  everything else is JSON so it reads as data rather than "[object Object]". */
+ *  everything else is JSON so it reads as data rather than "[object Object]".
+ *  Top-level `undefined` (where JSON.stringify returns undefined) becomes "". */
 export function asJudgeText(output: unknown): string {
-  return typeof output === "string" ? output : globalThis.JSON.stringify(output);
+  if (typeof output === "string") return output;
+  return globalThis.JSON.stringify(output) ?? "";
 }

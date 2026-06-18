@@ -24,4 +24,8 @@ describe("splitInputs", () => {
     expect(train.length).toBeGreaterThanOrEqual(1);
     expect(train.length + validation.length).toBe(2);
   });
+
+  it("throws a clear error on a non-finite ratio (e.g. a malformed --validation-split)", () => {
+    expect(() => splitInputs(inputs(10), NaN, 1)).toThrow(/finite number/);
+  });
 });

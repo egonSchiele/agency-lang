@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { BaseOptimizerConfig } from "./optimizer.js";
 import {
   DEFAULT_OPTIMIZER,
   getOptimizer,
@@ -8,14 +9,16 @@ import {
 } from "./registry.js";
 import type { OptimizeResult } from "./types.js";
 
+const config: BaseOptimizerConfig = { graders: [], iterations: 1, config: {}, runsDir: ".", runId: "r" };
+
 describe("optimizer registry", () => {
   it("resolves the built-in greedy optimizer", () => {
-    expect(getOptimizer("greedy").name).toBe("greedy");
+    expect(getOptimizer("greedy", config).name).toBe("greedy");
   });
 
   it("defaults to greedy", () => {
     expect(DEFAULT_OPTIMIZER).toBe("greedy");
-    expect(getOptimizer(DEFAULT_OPTIMIZER).name).toBe("greedy");
+    expect(getOptimizer(DEFAULT_OPTIMIZER, config).name).toBe("greedy");
   });
 
   it("lists registered optimizers", () => {
@@ -23,7 +26,7 @@ describe("optimizer registry", () => {
   });
 
   it("throws a helpful error naming the unknown optimizer and the available ones", () => {
-    expect(() => getOptimizer("nope")).toThrow(/Unknown optimizer "nope".*greedy/);
+    expect(() => getOptimizer("nope", config)).toThrow(/Unknown optimizer "nope".*greedy/);
   });
 
   it("registers and resolves a custom optimizer", () => {
@@ -31,12 +34,12 @@ describe("optimizer registry", () => {
       name: "custom-test",
       optimize: async () => ({}) as OptimizeResult,
     }));
-    expect(getOptimizer("custom-test").name).toBe("custom-test");
+    expect(getOptimizer("custom-test", config).name).toBe("custom-test");
   });
 
   it("treats reserved object keys as unknown optimizers, not prototype lookups", () => {
     for (const reserved of ["__proto__", "constructor", "toString"]) {
-      expect(() => getOptimizer(reserved)).toThrow(/Unknown optimizer/);
+      expect(() => getOptimizer(reserved, config)).toThrow(/Unknown optimizer/);
     }
   });
 });

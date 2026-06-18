@@ -4,12 +4,20 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { sha256Text, type OptimizeTargetSet } from "./targets.js";
 import { WorkspaceManager } from "./workspace.js";
 
 describe("WorkspaceManager", () => {
   let root: string;
   beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), "wsm-")); });
   afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  const sourceFor = (file: string, source: string, sha: string): OptimizeTargetSet => ({
+    baseDir: root,
+    entryFile: "a.agency",
+    targets: [],
+    files: { "a.agency": { file: "a.agency", absoluteFile: file, source, sha256: sha } },
+  });
 
   it("forks a source dir into an isolated copy; edits do not touch the source", () => {
     const src = path.join(root, "src");
@@ -38,6 +46,17 @@ describe("WorkspaceManager", () => {
     expect(wsm.fork(src).key).not.toBe(wsm.fork(src).key);
   });
 
+  it("fork skips heavy directories like node_modules", () => {
+    const src = path.join(root, "src");
+    fs.mkdirSync(src);
+    fs.writeFileSync(path.join(src, "agent.agency"), "node main() {}\n");
+    fs.mkdirSync(path.join(src, "node_modules"));
+    fs.writeFileSync(path.join(src, "node_modules", "big.js"), "x");
+    const ws = new WorkspaceManager(path.join(root, "ws")).fork(src);
+    expect(fs.existsSync(path.join(ws.dir, "agent.agency"))).toBe(true);
+    expect(fs.existsSync(path.join(ws.dir, "node_modules"))).toBe(false);
+  });
+
   it("refuses paths that escape the workspace (traversal / absolute)", () => {
     const src = path.join(root, "src");
     fs.mkdirSync(src);
@@ -45,5 +64,23 @@ describe("WorkspaceManager", () => {
     const ws = wsm.fork(src);
     expect(() => wsm.write(ws, "../escape.txt", "x")).toThrow(/escapes the workspace/);
     expect(() => wsm.read(ws, "../../etc/passwd")).toThrow(/escapes the workspace/);
+  });
+
+  it("writeBack writes changed champion files back to source", () => {
+    const file = path.join(root, "a.agency");
+    fs.writeFileSync(file, "original");
+    const wsm = new WorkspaceManager(path.join(root, "ws"));
+    wsm.writeBack(sourceFor(file, "original", sha256Text("original")), { "a.agency": "mutated" });
+    expect(fs.readFileSync(file, "utf8")).toBe("mutated");
+  });
+
+  it("writeBack aborts when a source file changed on disk since discovery", () => {
+    const file = path.join(root, "a.agency");
+    fs.writeFileSync(file, "original");
+    const wsm = new WorkspaceManager(path.join(root, "ws"));
+    // sha recorded at discovery no longer matches the on-disk content
+    expect(() => wsm.writeBack(sourceFor(file, "stale", sha256Text("stale")), { "a.agency": "mutated" }))
+      .toThrow(/modified externally/);
+    expect(fs.readFileSync(file, "utf8")).toBe("original");
   });
 });

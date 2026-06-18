@@ -1,5 +1,5 @@
 import { GreedyReflective } from "./greedyReflective.js";
-import type { Optimizer, OptimizerFactory } from "./optimizer.js";
+import type { BaseOptimizerConfig, Optimizer, OptimizerFactory } from "./optimizer.js";
 
 export const DEFAULT_OPTIMIZER = "greedy";
 
@@ -15,13 +15,13 @@ export function listOptimizers(): string[] {
   return Object.keys(registry).sort();
 }
 
-export function getOptimizer(name: string): Optimizer {
+export function getOptimizer(name: string, config: BaseOptimizerConfig): Optimizer {
   if (!Object.hasOwn(registry, name)) {
     throw new Error(
       `Unknown optimizer "${name}". Available optimizers: ${listOptimizers().join(", ")}.`,
     );
   }
-  return registry[name]();
+  return registry[name](config);
 }
 
-registerOptimizer("greedy", () => new GreedyReflective());
+registerOptimizer("greedy", (config) => new GreedyReflective(config));

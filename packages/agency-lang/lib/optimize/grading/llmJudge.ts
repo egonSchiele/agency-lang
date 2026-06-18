@@ -29,7 +29,10 @@ export class LlmJudge extends BaseGrader {
     if (raw === undefined || raw === null || String(raw).trim() === "") {
       throw new Error(`${this.name()}: no goal found at ${globalThis.JSON.stringify(goalPath)} on input ${input.id ?? "(no id)"}; an LLM judge needs a goal.`);
     }
-    const args = [String(raw), run.output];
+    // Judges take a string output; stringify structured outputs so they read as JSON
+    // rather than "[object Object]".
+    const output = typeof run.output === "string" ? run.output : globalThis.JSON.stringify(run.output);
+    const args = [String(raw), output];
     const node = this.options.node ?? "main";
     if (this.options.binary) {
       const v = await runAgency.runStructured(this.options.agencyFile, node, args, BinaryVerdict);

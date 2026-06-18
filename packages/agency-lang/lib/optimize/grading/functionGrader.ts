@@ -48,8 +48,22 @@ export function grader(fn: GraderFn, options: GraderOptions = {}): BaseGrader {
 /** Normalize a user-supplied grader (function or instance) into a BaseGrader. */
 export function toGrader(spec: Grader): BaseGrader {
   if (spec instanceof BaseGrader) return spec;
+  // A grader loaded from a user module may be a BaseGrader from a *different*
+  // realm (its own resolved copy of agency-lang), so `instanceof` can miss it.
+  // Duck-type the BaseGrader public surface to accept it across the boundary.
+  if (isGraderLike(spec)) return spec as BaseGrader;
   if (typeof spec === "function") return new FunctionGrader(spec);
   throw new Error(
     `Invalid grader: expected a grader function or grader instance, got ${spec === null ? "null" : typeof spec}.`,
+  );
+}
+
+function isGraderLike(spec: unknown): spec is BaseGrader {
+  return (
+    !!spec &&
+    typeof spec === "object" &&
+    typeof (spec as { run?: unknown }).run === "function" &&
+    typeof (spec as { name?: unknown }).name === "function" &&
+    typeof (spec as { mustPass?: unknown }).mustPass === "function"
   );
 }

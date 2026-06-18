@@ -50,14 +50,14 @@ describe("eval run input loading", () => {
   });
 
   it("loads input files from a directory in lexical order", () => {
-    writeJson("tasks/b.json", { id: "b", goal: "B", working_dir: "fixtures/b" });
-    writeJson("tasks/a.json", { id: "a", goal: "A", args: { n: 1 } });
+    writeJson("suite/b.json", { id: "b", goal: "B", working_dir: "fixtures/b" });
+    writeJson("suite/a.json", { id: "a", goal: "A", args: { n: 1 } });
 
-    const inputs = loadInputs(path.join(tmpDir, "tasks"));
+    const inputs = loadInputs(path.join(tmpDir, "suite"));
 
     expect(inputs.map((input) => input.id)).toEqual(["a", "b"]);
     expect(inputs[0].args).toEqual({ n: 1 });
-    expect(inputs[1].working_dir).toBe(path.join(tmpDir, "tasks", "fixtures/b"));
+    expect(inputs[1].working_dir).toBe(path.join(tmpDir, "suite", "fixtures/b"));
   });
 
   it("returns an empty list for a directory with no json files", () => {

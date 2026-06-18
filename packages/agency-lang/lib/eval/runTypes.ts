@@ -5,7 +5,7 @@ export type Input = {
    *  via nanoid; the optimizer derives it positionally (`input-<index>`). */
   id?: string;
   /** What the agent should accomplish — read by the goal judge and the
-   *  pairwise judge suite. Optional; the task-file loader requires it. */
+   *  pairwise judge suite. Optional; the input-file loader requires it. */
   goal?: string;
   /** Named arguments passed to the node. */
   args: Record<string, any>;

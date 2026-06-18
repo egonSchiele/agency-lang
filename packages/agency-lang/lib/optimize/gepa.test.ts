@@ -71,6 +71,13 @@ describe("Gepa (reflective Pareto optimizer)", () => {
 
   const threeInputs = [{ id: "a", args: {} }, { id: "b", args: {} }, { id: "c", args: {} }];
 
+  it("rejects a non-positive or non-integer minibatch at construction", () => {
+    expect(() => new Gepa(config({ minibatch: 0 }))).toThrow(/positive integer minibatch/);
+    expect(() => new Gepa(config({ minibatch: -3 }))).toThrow(/minibatch/);
+    expect(() => new Gepa(config({ minibatch: 2.5 }))).toThrow(/minibatch/);
+    expect(() => new Gepa(config({ minibatch: NaN }))).toThrow(/minibatch/);
+  });
+
   it("admits the baseline and grows the pool when children improve on the minibatch", async () => {
     const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4])); // baseline 0.1, each child strictly better
     const proposeSpy = vi.fn<NonNullable<GepaDeps["propose"]>>(async () => ({ rationale: "r", operations: [{ target: "t-alpha", kind: "variable", op: "replaceInitializer", value: '"x"', rationale: "c" }] }));

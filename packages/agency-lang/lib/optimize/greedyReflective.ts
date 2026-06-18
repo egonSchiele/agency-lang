@@ -1,19 +1,18 @@
-import { resolveEvalRunTarget } from "@/cli/eval/run.js";
 import type { EvalTask } from "@/eval/runTypes.js";
 
 import { BaseOptimizer, type BaseOptimizerDeps } from "./baseOptimizer.js";
 import { proposeMutation, type ProposeMutationArgs } from "./mutator.js";
 import type { Scorecard } from "./grading/scorecard.js";
 import type { Input } from "./grading/types.js";
-import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
+import type { BaseOptimizerConfig } from "./optimizer.js";
 import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
-import { discoverOptimizeTargets, fileMap, type OptimizeTargetSet } from "./targets.js";
+import { fileMap, type OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
 
-/** Test seams: inject discovery / proposal / preview so the loop can run without real LLM or AST work. */
+/** Test seams: inject proposal / preview so the loop can run without real LLM or AST work.
+ *  (Target discovery is injected via BaseOptimizerDeps.discover.) */
 export type GreedyDeps = BaseOptimizerDeps & {
-  discover?: (agentFile: string) => OptimizeTargetSet;
   propose?: (args: ProposeMutationArgs) => Promise<MutationProposal>;
   preview?: (targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]) => OptimizeMutationPreview;
 };
@@ -38,23 +37,17 @@ export class GreedyReflective extends BaseOptimizer {
     super(config, greedyDeps);
   }
 
-  async optimize(target: OptimizeTarget): Promise<OptimizeResult> {
-    const agentFile = resolveEvalRunTarget(target.agent).agentFile;
-    const source = (this.greedyDeps.discover ?? discoverOptimizeTargets)(agentFile);
-    if (source.targets.length === 0) {
-      throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
-    }
-
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
     const startedAt = Date.now();
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
-      targets: source.targets, inputCount: target.inputs.length, iterations: this.config.iterations,
+      targets: source.targets, inputCount: inputs.length, iterations: this.config.iterations,
     });
-    const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, target.inputs);
+    const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, inputs);
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
-    const attempts = await this.hillClimb(baseline, target.inputs);
+    const attempts = await this.hillClimb(baseline, inputs);
     const champion = lastAccepted(attempts)?.candidate ?? baseline;
 
     if (this.config.writeback && champion.iter !== "baseline") {

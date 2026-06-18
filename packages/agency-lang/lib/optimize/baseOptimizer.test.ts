@@ -20,7 +20,7 @@ class FixedGrader extends BaseGrader {
 /** Concrete subclass exposing `evaluate` for testing. */
 class Probe extends BaseOptimizer {
   readonly name = "probe";
-  async optimize(_t: OptimizeTarget): Promise<OptimizeResult> { return {} as OptimizeResult; }
+  protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
   evaluateAt(ws: ReturnType<Probe["fork"]>, entry: string, inputs: Input[]): Promise<Scorecard> {
     return this.evaluate(ws, entry, inputs);
   }

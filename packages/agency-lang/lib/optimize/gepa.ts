@@ -1,5 +1,3 @@
-import { resolveEvalRunTarget } from "@/cli/eval/run.js";
-
 import { BaseOptimizer, type BaseOptimizerDeps } from "./baseOptimizer.js";
 import { CandidatePool, type PoolCandidate } from "./candidatePool.js";
 import { renderReflectionFeedback } from "./gepaFeedback.js";
@@ -8,10 +6,10 @@ import type { AgencyRunner } from "./grading/agencyRunner.js";
 import { inputObjective, type InputGrades, type Scorecard } from "./grading/scorecard.js";
 import type { Input } from "./grading/types.js";
 import { renderTargetsSection } from "./mutator.js";
-import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
+import type { BaseOptimizerConfig } from "./optimizer.js";
 import { makeRng, sampleWithoutReplacement, type Rng } from "./rng.js";
 import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
-import { discoverOptimizeTargets, fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "./targets.js";
+import { fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
 
@@ -22,7 +20,6 @@ export type GepaConfig = BaseOptimizerConfig & {
 };
 
 export type GepaDeps = BaseOptimizerDeps & {
-  discover?: (agentFile: string) => OptimizeTargetSet;
   propose?: (runAgency: AgencyRunner, sections: ReflectionSections) => Promise<MutationProposal>;
   preview?: (targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]) => OptimizeMutationPreview;
 };
@@ -53,29 +50,27 @@ export class Gepa extends BaseOptimizer {
 
   constructor(config: GepaConfig, private readonly gepaDeps: GepaDeps = {}) {
     super(config, gepaDeps);
+    if (!Number.isInteger(config.minibatch) || config.minibatch < 1) {
+      throw new Error(`GEPA requires a positive integer minibatch size; got ${String(config.minibatch)}.`);
+    }
     this.gepaConfig = config;
   }
 
-  async optimize(target: OptimizeTarget): Promise<OptimizeResult> {
-    const agentFile = resolveEvalRunTarget(target.agent).agentFile;
-    const source = (this.gepaDeps.discover ?? discoverOptimizeTargets)(agentFile);
-    if (source.targets.length === 0) {
-      throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
-    }
-    const paretoInputs = this.gepaConfig.paretoSet ?? target.inputs;
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+    const paretoInputs = this.gepaConfig.paretoSet ?? inputs;
     const rng = makeRng(this.config.seed ?? 0);
 
     const startedAt = Date.now();
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
-      targets: source.targets, inputCount: target.inputs.length, iterations: this.config.iterations,
+      targets: source.targets, inputCount: inputs.length, iterations: this.config.iterations,
     });
     const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, paretoInputs, fileMap(source));
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
     const pool = new CandidatePool<Candidate>([toPoolCandidate(baseline)]);
-    const attempts = await this.evolve(pool, target.inputs, paretoInputs, rng);
+    const attempts = await this.evolve(pool, inputs, paretoInputs, rng);
 
     const champion = pool.best().value;
     if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);

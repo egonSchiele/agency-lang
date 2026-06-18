@@ -1,13 +1,13 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { fileURLToPath } from "url";
 
 import { z } from "zod";
 
 import type { AgencyConfig } from "@/config.js";
 import { executeNodeAsync } from "@/cli/util.js";
 import type { EvalTask } from "@/eval/runTypes.js";
+import { getAgentsDir } from "@/importPaths.js";
 
 import type { OptimizeMutationDiagnostic } from "./sourceMutator.js";
 import type { OptimizeTarget } from "./targets.js";
@@ -127,7 +127,6 @@ function parseModelOutput(raw: unknown): unknown {
 }
 
 const defaultCallModel: MutatorModelCaller = async (args) => {
-  const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-mutator-"));
   try {
     const config = {
@@ -137,7 +136,7 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
     delete config.distDir;
     const result = await executeNodeAsync({
       config,
-      agencyFile: path.resolve(currentDir, "../agents/optimize/mutatePrompt.agency"),
+      agencyFile: path.join(getAgentsDir(), "optimize", "mutatePrompt.agency"),
       nodeName: "mutatePrompt",
       hasArgs: true,
       argsString: [

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { evalRunLoadedTasks } from "@/cli/eval/run.js";
+import { evalRunLoadedTasks, resolveEvalRunTarget } from "@/cli/eval/run.js";
 import type { EvalTask } from "@/eval/runTypes.js";
 
 import { EvalCache } from "./evalCache.js";
@@ -11,6 +11,7 @@ import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scoreca
 import type { AgentRun, Input } from "./grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
+import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
 import type { IterationResult, OptimizeDecision, OptimizeResult } from "./types.js";
 import { WorkspaceManager, type Workspace } from "./workspace.js";
 
@@ -25,6 +26,8 @@ export type BaseOptimizerDeps = {
   runInput?: RunInput;
   /** Override the progress reporter (tests inject one that captures lines). */
   reporter?: PointwiseReporter;
+  /** Override target discovery (tests inject a fixed target set; default parses the agent file). */
+  discover?: (agentFile: string) => OptimizeTargetSet;
 };
 
 export abstract class BaseOptimizer {
@@ -33,6 +36,7 @@ export abstract class BaseOptimizer {
   protected readonly cache: EvalCache;
   protected readonly reporter: PointwiseReporter;
   private readonly runInput: RunInput;
+  private readonly discover: (agentFile: string) => OptimizeTargetSet;
   private runCounter = 0;
 
   constructor(protected readonly config: BaseOptimizerConfig, deps: BaseOptimizerDeps = {}) {
@@ -41,10 +45,27 @@ export abstract class BaseOptimizer {
     this.cache = deps.cache ?? new EvalCache();
     this.reporter = deps.reporter ?? createPointwiseReporter(config.verbosity ?? "silent");
     this.runInput = deps.runInput ?? ((ws, entryFile, input, id) => this.runInputViaEval(ws, entryFile, input, id));
+    this.discover = deps.discover ?? discoverOptimizeTargets;
   }
 
   abstract readonly name: string;
-  abstract optimize(target: OptimizeTarget): Promise<OptimizeResult>;
+
+  /**
+   * Resolve the agent file and discover its optimize targets once, then hand the
+   * target set to the subclass. Every optimizer needs this preamble, so it lives
+   * here — subclasses implement {@link optimizeTargets} and never touch discovery.
+   */
+  async optimize(target: OptimizeTarget): Promise<OptimizeResult> {
+    const agentFile = resolveEvalRunTarget(target.agent).agentFile;
+    const source = this.discover(agentFile);
+    if (source.targets.length === 0) {
+      throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
+    }
+    return this.optimizeTargets(source, target.inputs);
+  }
+
+  /** Run the search over already-discovered targets. The one method an optimizer must implement. */
+  protected abstract optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult>;
 
   protected fork(sourceDir: string): Workspace {
     return this.workspace.fork(sourceDir);

@@ -4,11 +4,11 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BaseGrader } from "./grading/baseGrader.js";
-import type { Grade, GraderInput, GraderOptions } from "./grading/types.js";
+import { BaseGrader } from "../grading/baseGrader.js";
+import type { Grade, GraderInput, GraderOptions } from "../grading/types.js";
 import { GreedyReflective, type GreedyDeps } from "./greedyReflective.js";
-import type { OptimizeMutationPreview } from "./sourceMutator.js";
-import type { OptimizeTargetSet } from "./targets.js";
+import type { OptimizeMutationPreview } from "../sourceMutator.js";
+import type { OptimizeTargetSet } from "../targets.js";
 
 class ValueGrader extends BaseGrader {
   protected readonly defaultName = "value";

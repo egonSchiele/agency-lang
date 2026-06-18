@@ -1,18 +1,18 @@
-import { BaseOptimizer, type BaseOptimizerDeps } from "./baseOptimizer.js";
-import { CandidatePool, type PoolCandidate } from "./candidatePool.js";
-import { renderReflectionFeedback } from "./gepaFeedback.js";
-import { proposeReflective, type ReflectionSections } from "./gepaReflect.js";
-import type { AgencyRunner } from "./grading/agencyRunner.js";
-import { inputObjective, type InputGrades, type Scorecard } from "./grading/scorecard.js";
-import type { Input } from "./grading/types.js";
-import { renderTargetsSection } from "./mutator.js";
-import type { BaseOptimizerConfig } from "./optimizer.js";
-import { formatDiagnostics } from "./reporter.js";
-import { makeRng, sampleWithoutReplacement, type Rng } from "./rng.js";
-import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
-import { fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "./targets.js";
-import type { MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
-import type { Workspace } from "./workspace.js";
+import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
+import { CandidatePool, type PoolCandidate } from "../candidatePool.js";
+import { renderReflectionFeedback } from "../gepaFeedback.js";
+import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
+import type { AgencyRunner } from "../grading/agencyRunner.js";
+import { inputObjective, type InputGrades, type Scorecard } from "../grading/scorecard.js";
+import type { Input } from "../grading/types.js";
+import { renderTargetsSection } from "../mutator.js";
+import type { BaseOptimizerConfig } from "../optimizer.js";
+import { formatDiagnostics } from "../reporter.js";
+import { makeRng, sampleWithoutReplacement, type Rng } from "../rng.js";
+import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
+import { fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "../targets.js";
+import type { MutationProposal, OptimizeDecision, OptimizeResult } from "../types.js";
+import type { Workspace } from "../workspace.js";
 
 export type GepaConfig = BaseOptimizerConfig & {
   minibatch: number;

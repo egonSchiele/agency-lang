@@ -5,11 +5,11 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Gepa, type GepaConfig, type GepaDeps } from "./gepa.js";
-import { BaseGrader } from "./grading/baseGrader.js";
-import type { Grade, GraderInput } from "./grading/types.js";
-import type { RunInput } from "./baseOptimizer.js";
-import type { OptimizeMutationPreview } from "./sourceMutator.js";
-import type { OptimizeTargetSet } from "./targets.js";
+import { BaseGrader } from "../grading/baseGrader.js";
+import type { Grade, GraderInput } from "../grading/types.js";
+import type { RunInput } from "../baseOptimizer.js";
+import type { OptimizeMutationPreview } from "../sourceMutator.js";
+import type { OptimizeTargetSet } from "../targets.js";
 
 /** Scores an input by reading the numeric value the fake runner put in `run.output`. */
 class OutputScoreGrader extends BaseGrader {

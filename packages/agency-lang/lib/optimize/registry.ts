@@ -1,6 +1,7 @@
-import { Gepa, type GepaConfig } from "./gepa.js";
-import { GreedyReflective } from "./greedyReflective.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizerFactory } from "./optimizer.js";
+import { ExampleOptimizer } from "./optimizers/example.js";
+import { Gepa, type GepaConfig } from "./optimizers/gepa.js";
+import { GreedyReflective } from "./optimizers/greedyReflective.js";
 
 export const DEFAULT_OPTIMIZER = "greedy";
 
@@ -27,3 +28,6 @@ export function getOptimizer(name: string, config: BaseOptimizerConfig): Optimiz
 
 registerOptimizer("greedy", (config) => new GreedyReflective(config));
 registerOptimizer("gepa", (config) => new Gepa(config as GepaConfig));
+// A minimal, single-round optimizer kept as a copy-paste template for users
+// writing their own. See lib/optimize/optimizers/example.ts.
+registerOptimizer("example", (config) => new ExampleOptimizer(config));

@@ -1,15 +1,15 @@
 import type { EvalTask } from "@/eval/runTypes.js";
 
-import { BaseOptimizer, type BaseOptimizerDeps } from "./baseOptimizer.js";
-import { proposeMutation, type ProposeMutationArgs } from "./mutator.js";
-import type { Scorecard } from "./grading/scorecard.js";
-import type { Input } from "./grading/types.js";
-import type { BaseOptimizerConfig } from "./optimizer.js";
-import { formatDiagnostics } from "./reporter.js";
-import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
-import { fileMap, type OptimizeTargetSet } from "./targets.js";
-import type { MutationProposal, OptimizeResult } from "./types.js";
-import type { Workspace } from "./workspace.js";
+import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
+import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
+import type { Scorecard } from "../grading/scorecard.js";
+import type { Input } from "../grading/types.js";
+import type { BaseOptimizerConfig } from "../optimizer.js";
+import { formatDiagnostics } from "../reporter.js";
+import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
+import { fileMap, type OptimizeTargetSet } from "../targets.js";
+import type { MutationProposal, OptimizeResult } from "../types.js";
+import type { Workspace } from "../workspace.js";
 
 /** Test seams: inject proposal / preview so the loop can run without real LLM or AST work.
  *  (Target discovery is injected via BaseOptimizerDeps.discover.) */

@@ -9,7 +9,7 @@ import type { JudgeAggregationPolicy } from "@/eval/judge/types.js";
 
 export type EvalJudgeOptions = {
   goal?: string;
-  tasks?: string;
+  inputs?: string;
   out?: string;
   samples?: number;
   confidenceThreshold?: number;
@@ -29,7 +29,7 @@ export async function evalJudge(
 
   if (mode === "files") {
     if (!opts.goal) throw new Error("--goal is required when judging eval record files");
-    if (opts.tasks) throw new Error("--tasks is only supported for run-directory comparison");
+    if (opts.inputs) throw new Error("--inputs is only supported for run-directory comparison");
     const verdict = await judgePairwise(opts.goal, inputA, inputB);
     const outPath = opts.out ?? defaultOutPath(inputA, inputB);
     fs.writeFileSync(outPath, JSON.stringify(verdict, null, 2));
@@ -40,8 +40,8 @@ export async function evalJudge(
     return;
   }
 
-  const selection = validateTaskSelection(opts);
-  const inputs = selection === "goal" ? inputsFromInlineGoal(inputA, inputB, opts.goal ?? "") : loadInputs(path.resolve(opts.tasks ?? ""));
+  const selection = validateInputSelection(opts);
+  const inputs = selection === "goal" ? inputsFromInlineGoal(inputA, inputB, opts.goal ?? "") : loadInputs(path.resolve(opts.inputs ?? ""));
   const verdict = await judgeSuite({
     runA: inputA,
     runB: inputB,
@@ -63,12 +63,12 @@ function inputMode(inputA: string, inputB: string): "files" | "dirs" | "mixed" {
   return "mixed";
 }
 
-function validateTaskSelection(opts: EvalJudgeOptions): "tasks" | "goal" {
-  const count = (opts.tasks ? 1 : 0) + (opts.goal ? 1 : 0);
+function validateInputSelection(opts: EvalJudgeOptions): "inputs" | "goal" {
+  const count = (opts.inputs ? 1 : 0) + (opts.goal ? 1 : 0);
   if (count !== 1) {
-    throw new Error("Provide exactly one of --tasks or --goal");
+    throw new Error("Provide exactly one of --inputs or --goal");
   }
-  return opts.goal ? "goal" : "tasks";
+  return opts.goal ? "goal" : "inputs";
 }
 
 function inputsFromInlineGoal(runA: string, runB: string, goal: string) {
@@ -77,7 +77,7 @@ function inputsFromInlineGoal(runA: string, runB: string, goal: string) {
   const inputIdA = onlyInputId(summaryA);
   const inputIdB = onlyInputId(summaryB);
   if (inputIdA !== inputIdB) {
-    throw new Error(`Inline --goal run input ids differ (${inputIdA} vs ${inputIdB}); use --tasks instead`);
+    throw new Error(`Inline --goal run input ids differ (${inputIdA} vs ${inputIdB}); use --inputs instead`);
   }
   return [{ id: inputIdA, goal, args: {} }];
 }
@@ -94,10 +94,10 @@ function policyFromOptions(opts: EvalJudgeOptions): JudgeAggregationPolicy {
 function onlyInputId(run: ReadEvalRunResult): string {
   const inputIds = Object.keys(run.inputsById);
   if (inputIds.length !== 1) {
-    throw new Error("--goal is ambiguous for multi-input run directories; use --tasks instead");
+    throw new Error("--goal is ambiguous for multi-input run directories; use --inputs instead");
   }
   const inputId = inputIds[0];
-  if (!inputId) throw new Error("--goal requires run directories with one input; use --tasks instead");
+  if (!inputId) throw new Error("--goal requires run directories with one input; use --inputs instead");
   return inputId;
 }
 

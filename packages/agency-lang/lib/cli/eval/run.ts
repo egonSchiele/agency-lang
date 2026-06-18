@@ -34,7 +34,7 @@ import {
 
 export type EvalRunCliOptions = {
   agent: string;
-  tasks?: string;
+  inputs?: string;
   goal?: string;
   runId?: string;
   runsDir?: string;
@@ -87,15 +87,15 @@ export function resolveEvalRunTarget(target: string): {
   return { agentFile, node, label: `${agentFile}:${node}` };
 }
 
-export function validateTaskSelection(opts: {
-  tasks?: string;
+export function validateInputSelection(opts: {
+  inputs?: string;
   goal?: string;
-}): "tasks" | "goal" {
-  const count = (opts.tasks ? 1 : 0) + (opts.goal ? 1 : 0);
+}): "inputs" | "goal" {
+  const count = (opts.inputs ? 1 : 0) + (opts.goal ? 1 : 0);
   if (count !== 1) {
-    throw new Error("Provide exactly one of --tasks or --goal");
+    throw new Error("Provide exactly one of --inputs or --goal");
   }
-  return opts.goal ? "goal" : "tasks";
+  return opts.goal ? "goal" : "inputs";
 }
 
 /**
@@ -112,11 +112,11 @@ export async function evalRun(
     extractor?: EvalRecordExtractor;
   } = {},
 ): Promise<EvalRunResult> {
-  const selection = validateTaskSelection(opts);
+  const selection = validateInputSelection(opts);
   const inputs =
     selection === "goal"
       ? [inputFromGoal(opts.goal ?? "")]
-      : loadInputs(path.resolve(opts.tasks ?? ""), nanoid);
+      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid);
 
   return evalRunLoadedInputs({
     agent: opts.agent,
@@ -124,7 +124,7 @@ export async function evalRun(
     inputsSource:
       selection === "goal"
         ? "inline:--goal"
-        : path.resolve(opts.tasks ?? ""),
+        : path.resolve(opts.inputs ?? ""),
     runId: opts.runId,
     runsDir: opts.runsDir,
     continueOnError: opts.continueOnError,

@@ -22,8 +22,8 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
   const inputsById: Record<string, ReadEvalRunInput> = {};
 
   for (const result of summary.inputs) {
-    const inputDir = path.join(resolvedRunDir, "tasks", result.inputId);
-    const input = readOptionalJson<Input>(path.join(inputDir, "task.json"));
+    const inputDir = path.join(resolvedRunDir, "inputs", result.inputId);
+    const input = readOptionalJson<Input>(path.join(inputDir, "input.json"));
     const recordPath = result.evalRecordPath || path.join(inputDir, "eval-record.json");
     const status = inputStatus(result, recordPath);
     const errorMessage = status === "failed"

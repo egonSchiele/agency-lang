@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { evalRun, resolveEvalRunTarget, validateTaskSelection } from "./run.js";
+import { evalRun, resolveEvalRunTarget, validateInputSelection } from "./run.js";
 
 describe("eval run CLI", () => {
   let tmpDir: string;
@@ -29,10 +29,10 @@ describe("eval run CLI", () => {
     expect(resolveEvalRunTarget(dir)).toEqual({ agentFile: path.join(dir, "main.agency"), node: "main", label: `${path.join(dir, "main.agency")}:main` });
   });
 
-  it("requires exactly one of tasks or goal", () => {
-    expect(() => validateTaskSelection({})).toThrow(/one of/i);
-    expect(() => validateTaskSelection({ tasks: "tasks.json", goal: "goal" })).toThrow(/one of/i);
-    expect(validateTaskSelection({ goal: "goal" })).toBe("goal");
+  it("requires exactly one of inputs or goal", () => {
+    expect(() => validateInputSelection({})).toThrow(/one of/i);
+    expect(() => validateInputSelection({ inputs: "inputs.json", goal: "goal" })).toThrow(/one of/i);
+    expect(validateInputSelection({ goal: "goal" })).toBe("goal");
   });
 
   it("compiles, runs each task through the injected runner, and writes artifacts", async () => {
@@ -61,7 +61,7 @@ describe("eval run CLI", () => {
 
     expect(result).toMatchObject({ runId: "r1", okCount: 1, errorCount: 0 });
     expect(result.inputs[0]).toMatchObject({ status: "success" });
-    expect(fs.existsSync(path.join(runsDir, "r1", "tasks", result.inputs[0].inputId, "eval-record.json"))).toBe(true);
+    expect(fs.existsSync(path.join(runsDir, "r1", "inputs", result.inputs[0].inputId, "eval-record.json"))).toBe(true);
   });
 
   it("throws setup failures before creating a run directory", async () => {
@@ -115,11 +115,11 @@ describe("eval run CLI", () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");
     const runsDir = path.join(tmpDir, "runs");
-    const tasksFile = path.join(tmpDir, "tasks.json");
-    fs.writeFileSync(tasksFile, JSON.stringify({
-      tasks: [
-        { task_id: "first", goal: "g1", args: {} },
-        { task_id: "second", goal: "g2", args: {} },
+    const inputsFile = path.join(tmpDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [
+        { id: "first", goal: "g1", args: {} },
+        { id: "second", goal: "g2", args: {} },
       ],
     }));
 
@@ -127,7 +127,7 @@ describe("eval run CLI", () => {
     const result = await evalRun(
       {
         agent: agentFile,
-        tasks: tasksFile,
+        inputs: inputsFile,
         runsDir,
         runId: "stop",
         continueOnError: false,
@@ -144,7 +144,7 @@ describe("eval run CLI", () => {
     expect(runs).toBe(1);
     expect(result.inputs).toHaveLength(1);
     expect(result.inputs[0]).toMatchObject({ inputId: "first", status: "error", errorMessage: "nope" });
-    expect(fs.readFileSync(path.join(runsDir, "stop", "tasks", "first", "error.txt"), "utf-8")).toBe("nope");
+    expect(fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "error.txt"), "utf-8")).toBe("nope");
     expect(JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8"))).toMatchObject({
       okCount: 0,
       errorCount: 1,

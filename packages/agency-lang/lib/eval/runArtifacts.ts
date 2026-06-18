@@ -39,7 +39,7 @@ export function initializeEvalRun(args: {
   assertEvalRunId(args.runId);
 
   const runDir = path.resolve(args.runsDir, args.runId);
-  const inputsDir = path.join(runDir, "tasks");
+  const inputsDir = path.join(runDir, "inputs");
   if (fs.existsSync(runDir)) {
     throw new Error(
       `Run directory already exists: ${runDir}.
@@ -51,8 +51,8 @@ Choose a different --run-id or delete the existing directory.`,
   writeJson(path.join(runDir, "config.json"), {
     runId: args.runId,
     agent: args.agent,
-    tasksSource: args.inputsSource,
-    tasks: args.inputs,
+    inputsSource: args.inputsSource,
+    inputs: args.inputs,
     continueOnError: args.continueOnError,
     startedAt: args.startedAt.toISOString(),
   });
@@ -81,7 +81,7 @@ export function prepareInput(
   if (input.working_dir) {
     const workingDirStat = fs.statSync(input.working_dir);
     if (!workingDirStat.isDirectory()) {
-      throw new Error("Eval task working_dir must be a directory");
+      throw new Error("Eval input working_dir must be a directory");
     }
     fs.cpSync(input.working_dir, workdirPath, { recursive: true });
   } else {
@@ -91,7 +91,7 @@ export function prepareInput(
   const prepared: PreparedInput = {
     input,
     inputDir,
-    inputJsonPath: path.join(inputDir, "task.json"),
+    inputJsonPath: path.join(inputDir, "input.json"),
     statelogPath: path.join(inputDir, "statelog.jsonl"),
     evalRecordPath: path.join(inputDir, "eval-record.json"),
     workdirPath,

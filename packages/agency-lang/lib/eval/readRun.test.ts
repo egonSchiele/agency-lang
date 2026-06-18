@@ -13,7 +13,7 @@ describe("readEvalRun", () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "eval-read-run-"));
     runDir = path.join(tmpDir, "run-a");
-    fs.mkdirSync(path.join(runDir, "tasks"), { recursive: true });
+    fs.mkdirSync(path.join(runDir, "inputs"), { recursive: true });
   });
 
   afterEach(() => {
@@ -81,21 +81,21 @@ describe("readEvalRun", () => {
   }
 
   function writeInput(inputId: string, input: unknown): void {
-    fs.mkdirSync(path.join(runDir, "tasks", inputId), { recursive: true });
-    fs.writeFileSync(path.join(runDir, "tasks", inputId, "task.json"), JSON.stringify(input, null, 2));
+    fs.mkdirSync(path.join(runDir, "inputs", inputId), { recursive: true });
+    fs.writeFileSync(path.join(runDir, "inputs", inputId, "input.json"), JSON.stringify(input, null, 2));
   }
 
   function writeRecord(inputId: string, record: unknown): void {
-    fs.mkdirSync(path.join(runDir, "tasks", inputId), { recursive: true });
+    fs.mkdirSync(path.join(runDir, "inputs", inputId), { recursive: true });
     fs.writeFileSync(recordPath(inputId), JSON.stringify(record, null, 2));
   }
 
   function writeError(inputId: string, message: string): void {
-    fs.mkdirSync(path.join(runDir, "tasks", inputId), { recursive: true });
-    fs.writeFileSync(path.join(runDir, "tasks", inputId, "error.txt"), message);
+    fs.mkdirSync(path.join(runDir, "inputs", inputId), { recursive: true });
+    fs.writeFileSync(path.join(runDir, "inputs", inputId, "error.txt"), message);
   }
 
   function recordPath(inputId: string): string {
-    return path.join(runDir, "tasks", inputId, "eval-record.json");
+    return path.join(runDir, "inputs", inputId, "eval-record.json");
   }
 });

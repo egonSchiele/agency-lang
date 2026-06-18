@@ -14,11 +14,11 @@ import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targ
 import type { OptimizeResult } from "@/optimize/types.js";
 import { parseAgency } from "@/parser.js";
 
-import { resolveEvalRunTarget, validateTaskSelection } from "./run.js";
+import { resolveEvalRunTarget, validateInputSelection } from "./run.js";
 
 export type EvalOptimizeOptions = {
   agent: string;
-  tasks?: string;
+  inputs?: string;
   goal?: string;
   iterations?: number;
   writeback?: boolean;
@@ -61,16 +61,16 @@ export async function evalOptimize(
   return result;
 }
 
-/** Build the optimize target: the agent plus the inputs to run it on (from --goal or --tasks). */
+/** Build the optimize target: the agent plus the inputs to run it on (from --goal or --inputs). */
 export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
-  const selection = validateTaskSelection(opts);
+  const selection = validateInputSelection(opts);
   const resolved = resolveEvalRunTarget(opts.agent);
   if (selection === "goal") {
     const targetSet = discoverOptimizeTargets(resolved.agentFile);
     rejectGoalForNodeWithRequiredArgs(targetSet, resolved.node);
     return { agent: opts.agent, inputs: [{ id: "input-1", node: resolved.node, args: {}, goal: opts.goal ?? "" }] };
   }
-  const loaded = loadInputs(path.resolve(opts.tasks ?? ""), deps.makeId ?? nanoid);
+  const loaded = loadInputs(path.resolve(opts.inputs ?? ""), deps.makeId ?? nanoid);
   const inputs: Input[] = loaded.map((input) => ({ ...input, node: input.node ?? resolved.node }));
   return { agent: opts.agent, inputs };
 }
@@ -108,7 +108,7 @@ function rejectGoalForNodeWithRequiredArgs(targetSet: OptimizeTargetSet, node: s
     if (required.length > 0) {
       throw new Error(
         `Node ${node} requires arguments, but --goal creates a no-argument input.\n` +
-        "Use --tasks tasks.json to provide args for this agent.",
+        "Use --inputs inputs.json to provide args for this agent.",
       );
     }
   }

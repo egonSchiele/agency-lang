@@ -219,7 +219,7 @@ export async function _optimize(
   const hasInputs = inputs.length > 0;
   const hasGoal = goal !== "";
   if (hasInputs === hasGoal) {
-    throw new Error("Provide exactly one of --tasks or --goal");
+    throw new Error("Provide exactly one of --inputs or --goal");
   }
   if (verbosity !== "silent" && verbosity !== "default") {
     throw new Error('verbosity must be "silent" or "default"');

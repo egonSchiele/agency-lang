@@ -27,13 +27,13 @@ Helpers for running and judging eval suites from Agency code.
   import { evalExtract, evalJudge } from "std::agency/eval"
 
   node main() {
-    const record = evalExtract("runs/demo/tasks/capital-france/statelog.jsonl")
+    const record = evalExtract("runs/demo/inputs/capital-france/statelog.jsonl")
     print(record.evalOutputs)
 
     const verdict = evalJudge(
       "Prefer the answer that names the capital exactly.",
-      "runs/a/tasks/capital-france/eval-record.json",
-      "runs/b/tasks/capital-france/eval-record.json",
+      "runs/a/inputs/capital-france/eval-record.json",
+      "runs/b/inputs/capital-france/eval-record.json",
     )
     print(verdict.winner)
   }
@@ -351,7 +351,7 @@ Extract a structured eval record from a statelog file. Equivalent to
   needed.
 
   @param statelogPath - Path to a .statelog.jsonl file produced by an
-    agent run (e.g. the file under `runs/<run-id>/tasks/<input-id>/`
+    agent run (e.g. the file under `runs/<run-id>/inputs/<input-id>/`
     after `evalRun`).
 
 **Parameters:**

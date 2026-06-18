@@ -205,8 +205,8 @@ describe("agency eval stdlib helpers", () => {
     const reject = (inputs: { id: string; goal: string; args: Record<string, unknown> }[], goal: string) =>
       _optimize({}, entryFile, tmpDir, "main", inputs, goal, 1, 1, 50, 0, tmpDir, "run", "", false, "silent", async (config) => optimizeResult(config));
 
-    await expect(reject([], "")).rejects.toThrow(/exactly one of --tasks or --goal/i);
-    await expect(reject([{ id: "t1", goal: "g", args: {} }], "both")).rejects.toThrow(/exactly one of --tasks or --goal/i);
+    await expect(reject([], "")).rejects.toThrow(/exactly one of --inputs or --goal/i);
+    await expect(reject([{ id: "t1", goal: "g", args: {} }], "both")).rejects.toThrow(/exactly one of --inputs or --goal/i);
   });
 
   it("rejects unknown verbosity values", async () => {

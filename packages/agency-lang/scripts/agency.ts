@@ -262,16 +262,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("run")
     .description("Run an Agency agent against an eval task suite")
     .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
-    .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
-    .option("--goal <text>", "Run one inline task with this goal")
+    .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+    .option("--goal <text>", "Run one inline input with this goal")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
-    .option("--no-continue-on-error", "Stop after first task failure")
-    .option("-v, --verbose", "Log per-task progress to stderr")
+    .option("--no-continue-on-error", "Stop after first input failure")
+    .option("-v, --verbose", "Log per-input progress to stderr")
     .action(async (opts: {
       agent: string;
-      tasks?: string;
+      inputs?: string;
       goal?: string;
       runId?: string;
       runsDir?: string;
@@ -279,7 +279,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       verbose?: boolean;
     }) => {
       const result = await evalRun({ ...opts, config: getConfig() });
-      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} tasks ok`);
+      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`);
       console.log(path.join(result.runDir, "summary.json"));
       if (result.errorCount > 0 && opts.continueOnError === false) {
         process.exit(2);
@@ -327,8 +327,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
     .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
     .option("--goal <text>", "Goal used to judge responses")
-    .option("--tasks <fileOrDir>", "Eval task suite for run-directory comparison")
-    .option("--samples <n>", "Judge samples per task", parseInt)
+    .option("--inputs <fileOrDir>", "Eval input suite for run-directory comparison")
+    .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
     .option("--position-bias <mode>", "Position bias control: swap or none", "swap")
@@ -339,7 +339,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         inputB: string,
         opts: {
           goal?: string;
-          tasks?: string;
+          inputs?: string;
           out?: string;
           samples?: number;
           confidenceThreshold?: number;
@@ -355,10 +355,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
   const addOptimizeCommand = (parent: Command): void => {
     parent
     .command("optimize")
-    .description("Optimize marked Agency declarations against an eval goal or task suite")
+    .description("Optimize marked Agency declarations against an eval goal or input suite")
     .argument("<agent>", "Agency file target: file.agency[:node]")
     .option("--goal <text>", "Goal to optimize for")
-    .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
+    .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
     .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Optimizer runs output directory")
@@ -367,13 +367,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--optimizer <name>", "Optimization strategy to use (default: greedy)")
     .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
     .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
-    .option("--samples <n>", "Judge samples per task", parseInt)
+    .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
     .option("--silent", "Print nothing; artifacts are still written")
     .action(async (agent: string, opts: {
       goal?: string;
-      tasks?: string;
+      inputs?: string;
       iterations?: number;
       runId?: string;
       runsDir?: string;

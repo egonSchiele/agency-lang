@@ -103,11 +103,11 @@ describe("evalJudge", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-runs-"));
     const runA = writeRun(dir, "a", ["capital-france"]);
     const runB = writeRun(dir, "b", ["capital-france"]);
-    const tasks = path.join(dir, "tasks.json");
+    const inputsFile = path.join(dir, "inputs.json");
     const out = path.join(dir, "suite-verdict.json");
-    fs.writeFileSync(tasks, JSON.stringify({ tasks: [{ task_id: "capital-france", goal: "Return Paris", args: {} }] }));
+    fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }] }));
 
-    await evalJudge(runA, runB, { tasks, out });
+    await evalJudge(runA, runB, { inputs: inputsFile, out });
 
     expect(mockedJudgeSuite).toHaveBeenCalledWith(expect.objectContaining({
       runA,
@@ -170,12 +170,12 @@ describe("evalJudge", () => {
 
 function writeRun(baseDir: string, runId: string, inputIds: string[]): string {
   const runDir = path.join(baseDir, runId);
-  fs.mkdirSync(path.join(runDir, "tasks"), { recursive: true });
+  fs.mkdirSync(path.join(runDir, "inputs"), { recursive: true });
   const inputs = inputIds.map((inputId) => {
-    const inputDir = path.join(runDir, "tasks", inputId);
+    const inputDir = path.join(runDir, "inputs", inputId);
     fs.mkdirSync(inputDir, { recursive: true });
     const evalRecordPath = path.join(inputDir, "eval-record.json");
-    fs.writeFileSync(path.join(inputDir, "task.json"), JSON.stringify({ id: inputId, goal: "Return Paris", args: {} }));
+    fs.writeFileSync(path.join(inputDir, "input.json"), JSON.stringify({ id: inputId, goal: "Return Paris", args: {} }));
     fs.writeFileSync(evalRecordPath, JSON.stringify({ recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] }));
     return { inputId, status: "success", evalRecordPath, statelogPath: "", workdirPath: "" };
   });

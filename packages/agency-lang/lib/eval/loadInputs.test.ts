@@ -26,7 +26,7 @@ describe("eval run input loading", () => {
 
   it("loads inputs from a suite file and fills defaults", () => {
     const suitePath = writeJson("suite.json", {
-      tasks: [{ goal: "do it", args: { prompt: "x" } }],
+      inputs: [{ goal: "do it", args: { prompt: "x" } }],
     });
 
     expect(loadInputsFromFile(suitePath, () => "generated-id")).toEqual([
@@ -35,23 +35,23 @@ describe("eval run input loading", () => {
   });
 
   it("validates required goals and input ids", () => {
-    expect(() => loadInputsFromFile(writeJson("missing-goal.json", { tasks: [{}] }))).toThrow(/goal/i);
-    expect(() => loadInputsFromFile(writeJson("bad-id.json", { tasks: [{ task_id: "bad/id", goal: "x" }] }))).toThrow(/invalid id/i);
-    expect(() => loadInputsFromFile(writeJson("duplicate-id.json", { tasks: [{ task_id: "same", goal: "a" }, { task_id: "same", goal: "b" }] }))).toThrow(/duplicate/i);
+    expect(() => loadInputsFromFile(writeJson("missing-goal.json", { inputs: [{}] }))).toThrow(/goal/i);
+    expect(() => loadInputsFromFile(writeJson("bad-id.json", { inputs: [{ id: "bad/id", goal: "x" }] }))).toThrow(/invalid id/i);
+    expect(() => loadInputsFromFile(writeJson("duplicate-id.json", { inputs: [{ id: "same", goal: "a" }, { id: "same", goal: "b" }] }))).toThrow(/duplicate/i);
   });
 
   it("rejects rubric-shaped input files", () => {
-    expect(() => loadInputsFromFile(writeJson("rubric-only.json", { tasks: [{ rubric: "x" }] }))).toThrow(/goal/i);
-    expect(() => loadInputsFromFile(writeJson("goal-and-rubric.json", { tasks: [{ goal: "x", rubric: "y" }] }))).toThrow(/both goal and rubric/i);
+    expect(() => loadInputsFromFile(writeJson("rubric-only.json", { inputs: [{ rubric: "x" }] }))).toThrow(/goal/i);
+    expect(() => loadInputsFromFile(writeJson("goal-and-rubric.json", { inputs: [{ goal: "x", rubric: "y" }] }))).toThrow(/both goal and rubric/i);
   });
 
   it("allows an empty suite", () => {
-    expect(loadInputsFromFile(writeJson("empty.json", { tasks: [] }))).toEqual([]);
+    expect(loadInputsFromFile(writeJson("empty.json", { inputs: [] }))).toEqual([]);
   });
 
   it("loads input files from a directory in lexical order", () => {
-    writeJson("tasks/b.json", { task_id: "b", goal: "B", working_dir: "fixtures/b" });
-    writeJson("tasks/a.json", { task_id: "a", goal: "A", args: { n: 1 } });
+    writeJson("tasks/b.json", { id: "b", goal: "B", working_dir: "fixtures/b" });
+    writeJson("tasks/a.json", { id: "a", goal: "A", args: { n: 1 } });
 
     const inputs = loadInputs(path.join(tmpDir, "tasks"));
 

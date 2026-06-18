@@ -35,11 +35,11 @@ describe("eval run artifacts", () => {
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
     });
 
-    expect(fs.existsSync(path.join(tmpDir, "r1", "tasks"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "r1", "inputs"))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "r1", "config.json"), "utf-8"))).toMatchObject({
       runId: "r1",
       agent: "agent.agency:main",
-      tasksSource: "tasks.json",
+      inputsSource: "tasks.json",
       continueOnError: true,
       startedAt: "2026-06-09T14:30:00.000Z",
     });
@@ -62,7 +62,7 @@ describe("eval run artifacts", () => {
 Choose a different --run-id or delete the existing directory.`,
     );
 
-    expect(fs.existsSync(path.join(tmpDir, "existing", "tasks"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "existing", "inputs"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, "existing", "config.json"))).toBe(false);
   });
 
@@ -71,10 +71,10 @@ Choose a different --run-id or delete the existing directory.`,
 
     const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {} });
 
-    expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "tasks", "t1", "task.json"), "utf-8"))).toMatchObject({ id: "t1", goal: "goal" });
+    expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8"))).toMatchObject({ id: "t1", goal: "goal" });
     expect(fs.existsSync(prepared.workdirPath)).toBe(true);
-    expect(prepared.statelogPath).toBe(path.join(state.runDir, "tasks", "t1", "statelog.jsonl"));
-    expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "tasks", "t1", "eval-record.json"));
+    expect(prepared.statelogPath).toBe(path.join(state.runDir, "inputs", "t1", "statelog.jsonl"));
+    expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "inputs", "t1", "eval-record.json"));
   });
 
   it("rejects run ids that escape the runs directory", () => {
@@ -140,7 +140,7 @@ Choose a different --run-id or delete the existing directory.`,
     const result = recordInputRunFailure(prepared, "boom");
     const summary = writeEvalRunSummary(state, [result]);
 
-    expect(fs.readFileSync(path.join(state.runDir, "tasks", "t1", "error.txt"), "utf-8")).toBe("boom");
+    expect(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "error.txt"), "utf-8")).toBe("boom");
     expect(summary.errorCount).toBe(1);
     expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "summary.json"), "utf-8"))).toMatchObject({ errorCount: 1 });
   });

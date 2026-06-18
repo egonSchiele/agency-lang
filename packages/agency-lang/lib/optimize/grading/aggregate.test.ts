@@ -9,7 +9,8 @@ const binary = (pass: boolean, feedback?: string): Grade => ({ score: { kind: "b
 describe("aggregateGrades", () => {
   it("averages scalar trials", () => {
     const result = aggregateGrades([scalar(0.2), scalar(0.4), scalar(0.6)], "all");
-    expect(result.score).toEqual({ kind: "scalar", value: 0.4 });
+    if (result.score.kind !== "scalar") throw new Error("expected scalar");
+    expect(result.score.value).toBeCloseTo(0.4, 10);
   });
 
   it("binary 'all' passes only when every trial passes", () => {

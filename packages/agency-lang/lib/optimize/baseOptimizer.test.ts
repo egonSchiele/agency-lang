@@ -34,6 +34,9 @@ class Probe extends BaseOptimizer {
     max?: number,
   ): Promise<MutationOutcome> { return this.proposeValidMutation(propose, preview, max); }
   buildResultAt(args: Parameters<Probe["buildPointwiseResult"]>[0]): OptimizeResult { return this.buildPointwiseResult(args); }
+  scoreFilesAt(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
+    return this.scoreFiles(source, files, inputs);
+  }
 }
 
 describe("BaseOptimizer.evaluate", () => {
@@ -64,6 +67,18 @@ describe("BaseOptimizer.evaluate", () => {
     expect(runInput).toHaveBeenCalledTimes(2);
     expect(sc.objective()).toBeCloseTo(0.5, 10);
     expect(sc.gatesPassed()).toBe(true);
+  });
+
+  it("scoreFiles forks, applies files, and grades the given inputs", async () => {
+    const p = probe([new FixedGrader({ score: { kind: "scalar", value: 0.4 } })], fixedRun);
+    const source: OptimizeTargetSet = {
+      baseDir: src,
+      entryFile: "agent.agency",
+      files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "node main() {}\n", sha256: "x" } },
+      targets: [],
+    };
+    const sc = await p.scoreFilesAt(source, { "agent.agency": "node main() {}\n" }, [{ id: "a", args: {} }]);
+    expect(sc.objective()).toBeCloseTo(0.4, 10);
   });
 
   it("fails fast when a grader's validateInput rejects the first input, before running the agent", async () => {

@@ -45,6 +45,8 @@ export abstract class BaseOptimizer {
   private readonly runInput: RunInput;
   private readonly discover: (agentFile: string) => OptimizeTargetSet;
   private runCounter = 0;
+  /** Held-out validation inputs (empty when none); set in optimize(). */
+  protected validationInputs: Input[] = [];
 
   constructor(protected readonly config: BaseOptimizerConfig, deps: BaseOptimizerDeps = {}) {
     this.workspace = new WorkspaceManager(deps.workspaceRoot ?? path.join(config.runsDir, config.runId, "ws"));
@@ -68,6 +70,7 @@ export abstract class BaseOptimizer {
     if (source.targets.length === 0) {
       throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
     }
+    this.validationInputs = target.validationInputs ?? [];
     this.echoAndValidateGrading(target.inputs);
     return this.optimizeTargets(source, target.inputs);
   }
@@ -134,6 +137,14 @@ export abstract class BaseOptimizer {
 
   protected fork(sourceDir: string): Workspace {
     return this.workspace.fork(sourceDir);
+  }
+
+  /** Fork the agent from source, apply a candidate's files, and grade it on the
+   *  given inputs. The canonical fresh-scoring primitive (used for validation). */
+  protected async scoreFiles(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
+    const ws = this.fork(source.baseDir);
+    this.workspace.applyFiles(ws, files);
+    return this.evaluate(ws, source.entryFile, inputs);
   }
 
   /** Run the agent once per input (cached by (workspace,input)), grade each, return a Scorecard. */

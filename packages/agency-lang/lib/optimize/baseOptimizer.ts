@@ -11,9 +11,17 @@ import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scoreca
 import type { AgentRun, Input } from "./grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
+import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
-import type { IterationResult, OptimizeDecision, OptimizeResult } from "./types.js";
+import type { IterationResult, MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
 import { WorkspaceManager, type Workspace } from "./workspace.js";
+
+/** Result of proposing a mutation: a clean preview, or the reason it couldn't be produced. */
+export type MutationOutcome =
+  | { ok: true; preview: OptimizeMutationPreview; rationale: string }
+  | { ok: false; rationale: string; diagnostics: OptimizeMutationDiagnostic[] };
+
+const MAX_PROPOSE_ATTEMPTS = 3;
 
 /** A function that runs the agent for one input in a workspace and returns its run. */
 export type RunInput = (ws: Workspace, entryFile: string, input: Input, id: string) => Promise<AgentRun>;
@@ -74,6 +82,40 @@ export abstract class BaseOptimizer {
    */
   protected isMaxObjective(scorecard: Scorecard): boolean {
     return scorecard.objective() >= 1;
+  }
+
+  /**
+   * Propose a mutation and validate it, with bounded retries. Two failure modes
+   * are handled here so a single bad LLM response never aborts the run:
+   *   - the proposer throws (malformed/unparseable response) — caught and retried;
+   *   - the proposal is well-formed but fails validation (e.g. dropped an
+   *     interpolation) — the diagnostics are fed back into the next `propose`
+   *     call so the model can correct itself.
+   * Returns the first clean preview, or `{ ok: false }` with the last failure's
+   * reason after `maxAttempts`. Optimizers turn that into a failed iteration.
+   */
+  protected async proposeValidMutation(
+    propose: (priorDiagnostics: OptimizeMutationDiagnostic[]) => Promise<MutationProposal>,
+    preview: (operations: OptimizeMutationOperation[]) => OptimizeMutationPreview,
+    maxAttempts = MAX_PROPOSE_ATTEMPTS,
+  ): Promise<MutationOutcome> {
+    let diagnostics: OptimizeMutationDiagnostic[] = [];
+    let rationale = "";
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let proposal: MutationProposal;
+      try {
+        proposal = await propose(diagnostics);
+      } catch (error) {
+        rationale = `proposer returned a malformed response: ${error instanceof Error ? error.message : String(error)}`;
+        diagnostics = [];
+        continue;
+      }
+      rationale = proposal.rationale;
+      const result = preview(proposal.operations);
+      if (result.diagnostics.length === 0) return { ok: true, preview: result, rationale };
+      diagnostics = result.diagnostics;
+    }
+    return { ok: false, rationale, diagnostics };
   }
 
   protected fork(sourceDir: string): Workspace {

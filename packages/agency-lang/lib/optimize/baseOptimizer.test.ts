@@ -7,9 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BaseGrader } from "./grading/baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "./grading/types.js";
 import type { Scorecard } from "./grading/scorecard.js";
-import { BaseOptimizer, gradedOutput, type RunInput } from "./baseOptimizer.js";
+import { BaseOptimizer, gradedOutput, type MutationOutcome, type RunInput } from "./baseOptimizer.js";
 import type { OptimizeTarget } from "./optimizer.js";
-import type { OptimizeResult } from "./types.js";
+import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
+import type { OptimizeTargetSet } from "./targets.js";
+import type { MutationProposal, OptimizeResult } from "./types.js";
 
 class FixedGrader extends BaseGrader {
   protected readonly defaultName = "fixed";
@@ -26,6 +28,11 @@ class Probe extends BaseOptimizer {
   }
   forkAt(dir: string) { return this.fork(dir); }
   requireBaselineGatesPassAt(sc: Scorecard): void { this.requireBaselineGatesPass(sc); }
+  proposeValidMutationAt(
+    propose: (d: OptimizeMutationDiagnostic[]) => Promise<MutationProposal>,
+    preview: (ops: OptimizeMutationOperation[]) => OptimizeMutationPreview,
+    max?: number,
+  ): Promise<MutationOutcome> { return this.proposeValidMutation(propose, preview, max); }
   buildResultAt(args: Parameters<Probe["buildPointwiseResult"]>[0]): OptimizeResult { return this.buildPointwiseResult(args); }
 }
 
@@ -96,6 +103,38 @@ describe("BaseOptimizer.evaluate", () => {
     const p = probe([gate], fixedRun);
     const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).not.toThrow();
+  });
+
+  describe("proposeValidMutation", () => {
+    const probeFor = () => probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], fixedRun);
+    const op: OptimizeMutationOperation = { target: "t", kind: "variable", op: "replaceInitializer", value: '"x"' };
+    const proposal = (rationale: string): MutationProposal => ({ rationale, operations: [op] });
+    const cleanPreview = (): OptimizeMutationPreview => ({ files: {}, changes: [], diff: "", diagnostics: [], targetSet: {} as OptimizeTargetSet });
+    const badPreview = (): OptimizeMutationPreview => ({ files: {}, changes: [], diff: "", diagnostics: [{ target: "t", code: "interpolation-mismatch", message: "dropped ${x}" }], targetSet: {} as OptimizeTargetSet });
+
+    it("returns the preview on the first clean proposal", async () => {
+      const propose = vi.fn(async () => proposal("r"));
+      const out = await probeFor().proposeValidMutationAt(propose, () => cleanPreview());
+      expect(out.ok).toBe(true);
+      expect(propose).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries with the diagnostics fed back, then succeeds", async () => {
+      const propose = vi.fn(async (d: OptimizeMutationDiagnostic[]) => proposal(d.length ? "fixed" : "first"));
+      let calls = 0;
+      const out = await probeFor().proposeValidMutationAt(propose, () => (calls++ === 0 ? badPreview() : cleanPreview()));
+      expect(out.ok).toBe(true);
+      expect(propose).toHaveBeenCalledTimes(2);
+      expect(propose.mock.calls[1][0]).toHaveLength(1); // 2nd call received the prior diagnostics
+    });
+
+    it("does not throw when the proposer keeps failing; returns ok:false after maxAttempts", async () => {
+      const propose = vi.fn(async () => { throw new Error("bad json"); });
+      const out = await probeFor().proposeValidMutationAt(propose, () => cleanPreview(), 3);
+      expect(out.ok).toBe(false);
+      if (!out.ok) expect(out.rationale).toMatch(/malformed/);
+      expect(propose).toHaveBeenCalledTimes(3);
+    });
   });
 
   it("gradedOutput returns the last value, or throws a clear error when the agent produced none", () => {

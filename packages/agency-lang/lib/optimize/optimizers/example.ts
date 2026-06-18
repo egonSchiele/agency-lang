@@ -59,23 +59,27 @@ export class ExampleOptimizer extends BaseOptimizer {
     const baseline = await this.score(source, fileMap(source), inputs);
     this.reporter.baselineScored({ objective: baseline });
 
-    // 2. Ask the built-in mutator for one new set of target values.
-    const proposal = await (this.exampleDeps.propose ?? proposeMutation)({
-      config: this.config.config,
-      targets: source.targets,
-      tasks: inputsAsTasks(inputs),
-      history: "",
-      model: this.config.mutatorModel,
-    });
-    const preview = (this.exampleDeps.preview ?? defaultPreview)(source, proposal.operations);
+    // 2. Ask the built-in mutator for one new set of target values. proposeValidMutation
+    //    (from BaseOptimizer) retries on validation errors and never throws on a bad response.
+    const outcome = await this.proposeValidMutation(
+      (diagnostics) => (this.exampleDeps.propose ?? proposeMutation)({
+        config: this.config.config,
+        targets: source.targets,
+        tasks: inputsAsTasks(inputs),
+        history: "",
+        model: this.config.mutatorModel,
+        diagnostics,
+      }),
+      (operations) => (this.exampleDeps.preview ?? defaultPreview)(source, operations),
+    );
 
-    // 3. If the proposal is well-formed, score it and keep it only if it beats the baseline.
-    if (preview.diagnostics.length === 0) {
-      const candidate = await this.score(source, preview.files, inputs);
+    // 3. If we got a valid proposal, score it and keep it only if it beats the baseline.
+    if (outcome.ok) {
+      const candidate = await this.score(source, outcome.preview.files, inputs);
       if (candidate > baseline) {
-        if (this.config.writeback) this.workspace.writeBack(source, preview.files);
-        this.reporter.iterationDecided({ iter: 1, total: 1, decision: "accepted", objective: candidate, changes: preview.changes, rationale: proposal.rationale });
-        return this.result(source, 1, preview.files, "accepted", startedAt);
+        if (this.config.writeback) this.workspace.writeBack(source, outcome.preview.files);
+        this.reporter.iterationDecided({ iter: 1, total: 1, decision: "accepted", objective: candidate, changes: outcome.preview.changes, rationale: outcome.rationale });
+        return this.result(source, 1, outcome.preview.files, "accepted", startedAt);
       }
     }
 

@@ -84,6 +84,18 @@ describe("GreedyReflective (pointwise)", () => {
     expect(result.rejectedCount).toBe(1);
   });
 
+  it("does not crash when the proposer throws; records the iteration as invalid after retries", async () => {
+    const propose = vi.fn(async () => { throw new Error("malformed mutator response"); });
+    const opt = new GreedyReflective(
+      { graders: [new ValueGrader(() => 0.5)], iterations: 1, config: {}, runsDir: root, runId: "throw", writeback: false },
+      { ...deps(), propose },
+    );
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
+    expect(result.validationFailedCount).toBe(1);
+    expect(result.championIter).toBe("baseline");
+    expect(propose).toHaveBeenCalledTimes(3); // retried up to maxAttempts before giving up
+  });
+
   it("exits early without iterating when the baseline already scores the maximum objective", async () => {
     const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
     const opt = new GreedyReflective(

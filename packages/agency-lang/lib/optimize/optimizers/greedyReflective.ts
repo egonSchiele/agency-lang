@@ -103,20 +103,24 @@ export class GreedyReflective extends BaseOptimizer {
 
   /** Propose → apply → evaluate one candidate, deciding accept/reject against the champion. */
   private async attempt(champion: Candidate, inputs: Input[], iter: number, history: Attempt[]): Promise<Attempt> {
-    const proposal = await (this.greedyDeps.propose ?? proposeMutation)({
-      config: this.config.config,
-      targets: champion.targetSet.targets,
-      tasks: inputsAsTasks(inputs),
-      history: renderHistory(history),
-      model: this.config.mutatorModel,
-    });
-    const preview = (this.greedyDeps.preview ?? defaultPreview)(champion.targetSet, proposal.operations);
-    if (preview.diagnostics.length > 0) {
-      return { iter, decision: "validation-failed", rationale: proposal.rationale, diagnostics: preview.diagnostics };
+    const outcome = await this.proposeValidMutation(
+      (diagnostics) => (this.greedyDeps.propose ?? proposeMutation)({
+        config: this.config.config,
+        targets: champion.targetSet.targets,
+        tasks: inputsAsTasks(inputs),
+        history: renderHistory(history),
+        model: this.config.mutatorModel,
+        diagnostics,
+      }),
+      (operations) => (this.greedyDeps.preview ?? defaultPreview)(champion.targetSet, operations),
+    );
+    if (!outcome.ok) {
+      return { iter, decision: "validation-failed", rationale: outcome.rationale, diagnostics: outcome.diagnostics };
     }
+    const preview = outcome.preview;
     const candidate = await this.makeCandidate(iter, this.fork(champion.ws.dir), preview.targetSet, inputs, preview.files);
     const decision: Decision = this.beats(candidate, champion) ? "accepted" : "rejected";
-    return { iter, decision, rationale: proposal.rationale, objective: candidate.scorecard.objective(), changes: preview.changes, candidate };
+    return { iter, decision, rationale: outcome.rationale, objective: candidate.scorecard.objective(), changes: preview.changes, candidate };
   }
 
   /** Apply the candidate's file set (if any) into its forked workspace and grade it. */

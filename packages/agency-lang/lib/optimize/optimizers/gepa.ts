@@ -127,9 +127,19 @@ export class Gepa extends BaseOptimizer {
 
   /** One reflective iteration: propose → validate → minibatch filter → (maybe) full eval. */
   private async attempt(parent: Candidate, minibatch: Input[], paretoInputs: Input[], iter: number): Promise<Attempt> {
-    const proposal = await this.proposeFrom(parent, minibatch, iter);
-    const preview = (this.gepaDeps.preview ?? defaultPreview)(parent.targetSet, proposal.operations);
-    if (preview.diagnostics.length > 0) return { iter, decision: "validation-failed", rationale: proposal.rationale, diagnostics: preview.diagnostics };
+    const selected = this.selectTargets(parent.targetSet.targets, iter);
+    const feedback = renderReflectionFeedback(this.focus(parent, minibatch));
+    const outcome = await this.proposeValidMutation(
+      (diagnostics) => (this.gepaDeps.propose ?? proposeReflective)(this.agencyRunner, {
+        targets: renderTargetsSection(selected),
+        feedback,
+        // Feed validation errors from the previous attempt back so the model corrects itself.
+        history: diagnostics.length === 0 ? "" : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these and keep every interpolation placeholder.`,
+      }),
+      (operations) => (this.gepaDeps.preview ?? defaultPreview)(parent.targetSet, operations),
+    );
+    if (!outcome.ok) return { iter, decision: "validation-failed", rationale: outcome.rationale, diagnostics: outcome.diagnostics };
+    const preview = outcome.preview;
 
     const childWs = this.fork(parent.ws.dir);
     this.workspace.applyFiles(childWs, preview.files);
@@ -137,22 +147,11 @@ export class Gepa extends BaseOptimizer {
     const childMini = await this.evaluate(childWs, entry, minibatch);
     const parentMini = await this.evaluate(parent.ws, parent.targetSet.entryFile, minibatch);   // cache hits
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
-      return { iter, decision: "rejected", rationale: proposal.rationale, objective: childMini.objective(), changes: preview.changes };
+      return { iter, decision: "rejected", rationale: outcome.rationale, objective: childMini.objective(), changes: preview.changes };
     }
     const full = await this.evaluate(childWs, entry, paretoInputs);
     const candidate: Candidate = { iter, ws: childWs, scorecard: full, targetSet: preview.targetSet, files: preview.files };
-    return { iter, decision: "accepted", rationale: proposal.rationale, objective: full.objective(), changes: preview.changes, candidate };
-  }
-
-  /** Build the reflection context (selected target + weakest-input traces) and ask the proposer. */
-  private proposeFrom(parent: Candidate, minibatch: Input[], iter: number): Promise<MutationProposal> {
-    const selected = this.selectTargets(parent.targetSet.targets, iter);
-    const sections: ReflectionSections = {
-      targets: renderTargetsSection(selected),
-      feedback: renderReflectionFeedback(this.focus(parent, minibatch)),
-      history: "",
-    };
-    return (this.gepaDeps.propose ?? proposeReflective)(this.agencyRunner, sections);
+    return { iter, decision: "accepted", rationale: outcome.rationale, objective: full.objective(), changes: preview.changes, candidate };
   }
 
   /** Round-robin one target per iteration (SelectModule); `"all"` shows every target. */

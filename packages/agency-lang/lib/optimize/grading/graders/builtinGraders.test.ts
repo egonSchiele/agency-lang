@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { AgencyRunner } from "./agencyRunner.js";
+import { AgencyRunner } from "../agencyRunner.js";
 import { ContainsGrader, ExactMatchGrader, SimilarityGrader } from "./builtinGraders.js";
-import type { GraderInput, Input, JSON } from "./types.js";
+import type { GraderInput, Input, JSON } from "../types.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const graderInput = (output: JSON, metadata: Record<string, JSON>): GraderInput => {

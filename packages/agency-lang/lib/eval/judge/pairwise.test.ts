@@ -42,7 +42,7 @@ describe("judgePairwise", () => {
     const verdict = await judgePairwise("name the capital of India", a, b);
 
     expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
-      agent: "judgePairwise.agency",
+      agent: "eval/judgePairwise.agency",
       node: "judgePairwise",
       args: {
         goal: "name the capital of India",
@@ -75,7 +75,7 @@ describe("judgePairwise", () => {
     });
 
     expect(mockedRunAgencyAgent).toHaveBeenCalledWith(expect.objectContaining({
-      agent: "judgePairwise.agency",
+      agent: "eval/judgePairwise.agency",
       node: "judgePairwise",
       args: {
         goal: "name the capital of India",

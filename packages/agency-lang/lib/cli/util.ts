@@ -222,6 +222,9 @@ type ExecuteNodeArgs = {
   // Suppress compile progress lines. Internal agent invocations (judge,
   // mutator) set this so their ephemeral compiles don't clutter user logs.
   quietCompile?: boolean;
+  // Reuse a precompiled `.js` sibling when present instead of recompiling.
+  // See RunAgencyNodeArgs.preferCompiled.
+  preferCompiled?: boolean;
 };
 
 export type RunAgencyNodeArgs = {
@@ -239,6 +242,13 @@ export type RunAgencyNodeArgs = {
   quietCompile?: boolean;
   /** Extra env merged over process.env for the spawned subprocess. */
   env?: Record<string, string>;
+  /**
+   * Reuse a precompiled `.js` sitting next to the `.agency` source instead of
+   * recompiling, when one exists. Bundled agents (judges, proposers) ship such
+   * a sibling in `dist`, so repeated invocations (e.g. per optimize iteration)
+   * skip the redundant compile. No-op when running from uncompiled source.
+   */
+  preferCompiled?: boolean;
 };
 
 /**
@@ -261,15 +271,21 @@ export async function runAgencyNode({
   maxBufferBytes,
   quietCompile,
   env,
+  preferCompiled,
 }: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
   try {
     const distDir = config.distDir;
+    const siblingJs = agencyFile.replace(/\.agency$/, ".js");
     let compiledPath: string;
 
     if (distDir) {
       compiledPath = resolveCompiledFile(distDir, agencyFile);
+    } else if (preferCompiled && agencyFile.endsWith(".agency") && fs.existsSync(siblingJs)) {
+      // A precompiled sibling exists (bundled agents in dist) — reuse it
+      // instead of recompiling the same unchanging source every call.
+      compiledPath = siblingJs;
     } else {
       compiledPath = compile(config, agencyFile, undefined, {
         importStrategy: new RunStrategy(),
@@ -489,7 +505,7 @@ export async function executeJudgeAsync(
   stderr: string;
 }> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
-  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+  const judgeAgencyFile = path.resolve(currentDir, "../agents/eval/judge.agency");
   const { raw, stdout, stderr } = await runAgencyJudge<
     {
       actualOutput: string;

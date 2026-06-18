@@ -248,9 +248,25 @@ describe("OptimizeSourceMutator replacement value validation", () => {
     ]);
   });
 
-  it("rejects valid TypeScript that is not valid Agency source", () => {
-    const diagnostics = previewDiagnostics([
+  it("wraps unquoted prose into a string literal (recovers a model that omits quotes)", () => {
+    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
+      { ...validOperation, value: "What is the capital of India?" },
+    ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe("What is the capital of India?");
+  });
+
+  it("wraps unquoted text even when it looks like code", () => {
+    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
       { ...validOperation, value: "x => x + 1" },
+    ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe("x => x + 1");
+  });
+
+  it("still rejects unquoted text with embedded quotes that cannot be wrapped cleanly", () => {
+    const diagnostics = previewDiagnostics([
+      { ...validOperation, value: 'Say "hi" to them' },
     ]);
     expect(diagnostics).toMatchObject([
       { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },

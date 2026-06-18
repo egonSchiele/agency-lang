@@ -18,6 +18,7 @@ export type NodeRunner = (args: {
   argsString: string;
   scratchDir: string;
   quietCompile: boolean;
+  preferCompiled?: boolean;
 }) => Promise<{ data: unknown }>;
 
 const defaultRunner: NodeRunner = (args) => runAgencyNode(args);
@@ -55,7 +56,9 @@ export class AgencyRunner {
       const config = { ...this.config };
       delete config.distDir;
       const argsString = args.map((v) => globalThis.JSON.stringify(v)).join(", ");
-      return await this.runNode({ config, agencyFile, nodeName, hasArgs: args.length > 0, argsString, scratchDir, quietCompile: true });
+      // Judges/proposers are bundled agents with a precompiled .js in dist;
+      // reuse it instead of recompiling on every grade/proposal call.
+      return await this.runNode({ config, agencyFile, nodeName, hasArgs: args.length > 0, argsString, scratchDir, quietCompile: true, preferCompiled: true });
     } finally {
       fs.rmSync(scratchDir, { recursive: true, force: true });
     }

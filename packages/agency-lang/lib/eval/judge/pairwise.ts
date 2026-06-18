@@ -85,7 +85,7 @@ async function runPairwiseJudge(
   responseB: string,
 ): Promise<PairwiseJudgeResult> {
   const result = await runAgencyAgent({
-    agent: "judgePairwise.agency",
+    agent: "eval/judgePairwise.agency",
     node: "judgePairwise",
     args: { goal, responseA, responseB },
     config: {},

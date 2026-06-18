@@ -23,6 +23,9 @@ export type IterationResult = {
   mutationPath?: string;
   evalRunDir?: string;
   verdictPath?: string;
+  /** Human-readable reason for the decision: validation diagnostics for
+   *  "validation-failed", otherwise the proposal rationale. */
+  detail?: string;
   winsA: number;
   winsB: number;
   ties: number;

@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 
 import { nanoid } from "nanoid";
@@ -5,7 +6,7 @@ import { nanoid } from "nanoid";
 import type { AgencyConfig } from "@/config.js";
 import { loadTasks } from "@/eval/loadTasks.js";
 import { getAgentsDir } from "@/importPaths.js";
-import { LlmJudge } from "@/optimize/grading/llmJudge.js";
+import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
 import type { Input, JSON as AgencyJSON } from "@/optimize/grading/types.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
@@ -26,6 +27,8 @@ export type EvalOptimizeOptions = {
   runId?: string;
   mutatorModel?: string;
   optimizer?: string;
+  minibatch?: number;
+  seed?: number;
   config?: AgencyConfig;
 };
 
@@ -36,9 +39,10 @@ export type EvalOptimizeDeps = {
 };
 
 const DEFAULT_ITERATIONS = 5;
+const DEFAULT_MINIBATCH = 8;
 
 /** Bundled scalar goal judge: scores how well an output satisfies the input's goal. */
-const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "goalJudge.agency");
+const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "eval", "goalJudge.agency");
 
 export async function evalOptimize(
   opts: EvalOptimizeOptions,
@@ -48,7 +52,13 @@ export async function evalOptimize(
   const config = buildConfig(opts, deps);
   const resolve = deps.getOptimizer ?? getOptimizer;
   const optimizer = resolve(opts.optimizer ?? DEFAULT_OPTIMIZER, config);
-  return optimizer.optimize(target);
+  const result = await optimizer.optimize(target);
+  // Persist the run summary so the path printed by the CLI actually exists.
+  if (result.runDir) {
+    fs.mkdirSync(result.runDir, { recursive: true });
+    fs.writeFileSync(path.join(result.runDir, "summary.json"), JSON.stringify(result, null, 2));
+  }
+  return result;
 }
 
 /** Build the optimize target: the agent plus the inputs to run it on (from --goal or --tasks). */
@@ -73,15 +83,20 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
 /** Build the optimizer config: the goal-judge grader plus run policy/artifacts settings. */
 export function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): BaseOptimizerConfig {
   const config = opts.config ?? {};
-  return {
+  const base: BaseOptimizerConfig = {
     graders: [new LlmJudge({ name: "goal", agencyFile: GOAL_JUDGE_FILE, goalPath: ["metadata", "goal"] })],
     iterations: opts.iterations ?? DEFAULT_ITERATIONS,
+    seed: opts.seed,
     config,
     runsDir: path.resolve(opts.runsDir ?? config.eval?.optimizeRunsDir ?? path.join(config.eval?.runsDir ?? "runs", "optimize")),
     runId: opts.runId ?? (deps.makeRunId ?? nanoid)(),
     writeback: opts.writeback ?? true,
     mutatorModel: opts.mutatorModel,
+    verbosity: opts.silent ? "silent" : "default",
   };
+  // GEPA needs a minibatch size; it rides on the shared config and the factory casts to GepaConfig.
+  if (opts.optimizer === "gepa") return { ...base, minibatch: opts.minibatch ?? DEFAULT_MINIBATCH } as BaseOptimizerConfig;
+  return base;
 }
 
 /**

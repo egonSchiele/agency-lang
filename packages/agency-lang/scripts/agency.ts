@@ -351,18 +351,22 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  evalCmd
+  // Registered under both `agency eval optimize` and the top-level `agency optimize`.
+  const addOptimizeCommand = (parent: Command): void => {
+    parent
     .command("optimize")
     .description("Optimize marked Agency declarations against an eval goal or task suite")
     .argument("<agent>", "Agency file target: file.agency[:node]")
     .option("--goal <text>", "Goal to optimize for")
     .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
-    .option("--iterations <n>", "Maximum candidate iterations", parseInt)
+    .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Optimizer runs output directory")
     .option("--no-writeback", "Do not write the champion back to source files")
     .option("--mutator-model <model>", "Model to use for proposing mutations")
     .option("--optimizer <name>", "Optimization strategy to use (default: greedy)")
+    .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
+    .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
     .option("--samples <n>", "Judge samples per task", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
@@ -376,6 +380,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       writeback: boolean;
       mutatorModel?: string;
       optimizer?: string;
+      minibatch?: number;
+      seed?: number;
       samples?: number;
       confidenceThreshold?: number;
       marginThreshold?: number;
@@ -387,6 +393,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(path.join(result.runDir, "summary.json"));
       }
     });
+  };
+  addOptimizeCommand(evalCmd);
+  addOptimizeCommand(program);
 
   program
     .command("format")

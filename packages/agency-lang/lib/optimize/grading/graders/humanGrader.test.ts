@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { AgencyRunner } from "./agencyRunner.js";
+import { AgencyRunner } from "../agencyRunner.js";
 import { HumanGrader, parseBinaryAnswer, parseScalarAnswer, type HumanRead } from "./humanGrader.js";
-import type { GraderInput, Input, JSON } from "./types.js";
+import type { GraderInput, Input, JSON } from "../types.js";
 
 const graderInput = (output: JSON): GraderInput => {
   const input: Input = { id: "i1", args: {} };

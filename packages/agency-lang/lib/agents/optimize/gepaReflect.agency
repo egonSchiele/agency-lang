@@ -1,0 +1,53 @@
+type OptimizeMutationOperation = {
+  target: string;
+  kind: string;
+  op: string;
+  value: string;
+  rationale: string
+}
+
+type OptimizeMutationProposal = {
+  operations: OptimizeMutationOperation[];
+  rationale: string
+}
+
+node gepaReflect(
+  targets: string,
+  feedback: string,
+  history: string,
+): OptimizeMutationProposal {
+  const prompt = """
+  I provided an assistant with the following instructions to perform a task for me.
+  Each OPTIMIZE TARGET below is one current instruction you may rewrite:
+
+  OPTIMIZE TARGETS:
+  ${targets}
+
+  The following are examples of task inputs given to the assistant, the assistant's
+  response for each, its execution trace (errors and tool calls), and feedback on how
+  the response could be better:
+
+  ${feedback}
+
+  ${history}
+
+  YOUR TASK:
+  Write new instructions for the optimize target(s) above so the assistant performs better.
+
+  Read the inputs carefully and identify the input format and infer a detailed task
+  description for what the assistant must do. Read all the assistant responses, traces, and
+  feedback. Identify all niche and domain-specific factual information about the task and
+  include it in the instruction — a lot of it may not be available to the assistant in the
+  future. If the assistant used a generalizable strategy to solve the task, include that too.
+
+  Return JSON with:
+  - "operations": one record per target you change. Each record needs "target" and "kind"
+    copied exactly from the list above, "op" set to "replaceInitializer", "value" with the
+    rewritten instruction as Agency source text including the surrounding quotes, and
+    "rationale" with one sentence on what you changed. The replacement MUST preserve every
+    interpolation placeholder the current value uses (no drops, no additions).
+  - "rationale": 2-4 sentences explaining the overall change.
+  """
+  const proposal: OptimizeMutationProposal = llm(prompt)
+  return proposal
+}

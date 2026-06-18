@@ -25,6 +25,16 @@ describe("optimizer registry", () => {
     expect(listOptimizers()).toContain("greedy");
   });
 
+  it("resolves the built-in gepa optimizer", () => {
+    expect(getOptimizer("gepa", { ...config, minibatch: 4 } as BaseOptimizerConfig).name).toBe("gepa");
+    expect(listOptimizers()).toContain("gepa");
+  });
+
+  it("resolves the built-in example optimizer", () => {
+    expect(getOptimizer("example", config).name).toBe("example");
+    expect(listOptimizers()).toContain("example");
+  });
+
   it("throws a helpful error naming the unknown optimizer and the available ones", () => {
     expect(() => getOptimizer("nope", config)).toThrow(/Unknown optimizer "nope".*greedy/);
   });

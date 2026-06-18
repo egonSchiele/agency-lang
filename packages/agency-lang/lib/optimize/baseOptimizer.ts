@@ -10,7 +10,7 @@ import type { BaseGrader } from "./grading/baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scorecard.js";
 import type { AgentRun, Input } from "./grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
-import type { OptimizeResult } from "./types.js";
+import type { IterationResult, OptimizeDecision, OptimizeResult } from "./types.js";
 import { WorkspaceManager, type Workspace } from "./workspace.js";
 
 /** A function that runs the agent for one input in a workspace and returns its run. */
@@ -107,6 +107,49 @@ export abstract class BaseOptimizer {
   protected get graders(): BaseGrader[] {
     return this.config.graders;
   }
+
+  /** Refuse to optimize a program whose baseline already fails a must-pass grader. */
+  protected requireBaselineGatesPass(scorecard: Scorecard): void {
+    if (scorecard.gatesPassed()) return;
+    const failed = failingGraders(scorecard);
+    throw new Error(
+      `Baseline fails must-pass grader(s) [${failed.join(", ")}] — fix the program or those graders before optimizing.`,
+    );
+  }
+
+  /**
+   * Build the pointwise OptimizeResult shared by greedy and GEPA. `winsA`/`winsB`/`ties`
+   * are pairwise-judge artifacts that pointwise optimizers leave at 0.
+   */
+  protected buildPointwiseResult(args: {
+    championIter: number | "baseline";
+    championFiles: Record<string, string>;
+    attempts: { iter: number; decision: OptimizeDecision }[];
+  }): OptimizeResult {
+    const count = (decision: OptimizeDecision): number => args.attempts.filter((a) => a.decision === decision).length;
+    const baselineIteration: IterationResult = { iter: 0, decision: "baseline", winsA: 0, winsB: 0, ties: 0 };
+    return {
+      runId: this.config.runId,
+      runDir: path.join(this.config.runsDir, this.config.runId),
+      championIter: args.championIter,
+      championFiles: args.championFiles,
+      acceptedCount: count("accepted"),
+      rejectedCount: count("rejected"),
+      validationFailedCount: count("validation-failed"),
+      iterations: [
+        baselineIteration,
+        ...args.attempts.map((a) => ({ iter: a.iter, decision: a.decision, winsA: 0, winsB: 0, ties: 0 })),
+      ],
+    };
+  }
+}
+
+/** Names of the must-pass graders that failed on at least one input. */
+function failingGraders(scorecard: Scorecard): string[] {
+  const names = scorecard.perInput.flatMap((input) =>
+    input.grades.filter((g) => g.grader.mustPass() && !g.grader.passes(g.grade)).map((g) => g.grader.name()),
+  );
+  return names.filter((name, i) => names.indexOf(name) === i);
 }
 
 /** A stable id for an input: its own id when present, otherwise its position. */

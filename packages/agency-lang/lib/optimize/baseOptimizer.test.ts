@@ -25,6 +25,8 @@ class Probe extends BaseOptimizer {
     return this.evaluate(ws, entry, inputs);
   }
   forkAt(dir: string) { return this.fork(dir); }
+  requireBaselineGatesPassAt(sc: Scorecard): void { this.requireBaselineGatesPass(sc); }
+  buildResultAt(args: Parameters<Probe["buildPointwiseResult"]>[0]): OptimizeResult { return this.buildPointwiseResult(args); }
 }
 
 describe("BaseOptimizer.evaluate", () => {
@@ -80,5 +82,38 @@ describe("BaseOptimizer.evaluate", () => {
     const p = probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], runInput);
     await p.evaluateAt(p.forkAt(src), "agent.agency", [{ args: {} }, { args: {} }]); // both omit id
     expect(runInput).toHaveBeenCalledTimes(2);
+  });
+
+  it("requireBaselineGatesPass throws naming the failing must-pass grader", async () => {
+    const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true, name: "must-be-json" });
+    const p = probe([gate], fixedRun);
+    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
+    expect(() => p.requireBaselineGatesPassAt(sc)).toThrow(/must-be-json/);
+  });
+
+  it("requireBaselineGatesPass does not throw when gates pass", async () => {
+    const gate = new FixedGrader({ score: { kind: "binary", pass: true } }, { mustPass: true });
+    const p = probe([gate], fixedRun);
+    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
+    expect(() => p.requireBaselineGatesPassAt(sc)).not.toThrow();
+  });
+
+  it("buildPointwiseResult builds a baseline-led result with correct decision counts", () => {
+    const p = probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], fixedRun);
+    const result = p.buildResultAt({
+      championIter: 2,
+      championFiles: { "agent.agency": "node main() {}\n" },
+      attempts: [
+        { iter: 1, decision: "rejected" },
+        { iter: 2, decision: "accepted" },
+        { iter: 3, decision: "validation-failed" },
+      ],
+    });
+    expect(result.iterations[0].decision).toBe("baseline");
+    expect(result.iterations).toHaveLength(4);
+    expect(result.acceptedCount).toBe(1);
+    expect(result.rejectedCount).toBe(1);
+    expect(result.validationFailedCount).toBe(1);
+    expect(result.championIter).toBe(2);
   });
 });

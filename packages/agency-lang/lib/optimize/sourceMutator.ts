@@ -408,6 +408,11 @@ function operationForTarget(target: OptimizeTarget, value: string): OptimizeMuta
   return { target: target.id, kind: "type", op: "replaceTypeDefinition", value };
 }
 
+/** Preview a set of operations against a target set. Shared by greedy and GEPA. */
+export function defaultPreview(targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]): OptimizeMutationPreview {
+  return new OptimizeSourceMutator({ targetSet }).preview(operations);
+}
+
 function writeFileEnsuringDir(filePath: string, content: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);

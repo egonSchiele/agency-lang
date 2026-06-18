@@ -246,3 +246,8 @@ export function promptSegmentsToString(segments: PromptSegment[]): string {
 function relativeFile(baseDir: string, absoluteFile: string): string {
   return path.relative(baseDir, absoluteFile).split(path.sep).join("/");
 }
+
+/** A relpath→source map for a target set (e.g. the unchanged baseline file set). */
+export function fileMap(source: OptimizeTargetSet): Record<string, string> {
+  return Object.fromEntries(Object.entries(source.files).map(([rel, sf]) => [rel, sf.source]));
+}

@@ -1,5 +1,3 @@
-import * as path from "path";
-
 import { resolveEvalRunTarget } from "@/cli/eval/run.js";
 import type { EvalTask } from "@/eval/runTypes.js";
 
@@ -8,9 +6,9 @@ import { proposeMutation, type ProposeMutationArgs } from "./mutator.js";
 import type { Scorecard } from "./grading/scorecard.js";
 import type { Input } from "./grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
-import { OptimizeSourceMutator, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
-import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
-import type { IterationResult, MutationProposal, OptimizeResult } from "./types.js";
+import { defaultPreview, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
+import { discoverOptimizeTargets, fileMap, type OptimizeTargetSet } from "./targets.js";
+import type { MutationProposal, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
 
 /** Test seams: inject discovery / proposal / preview so the loop can run without real LLM or AST work. */
@@ -48,7 +46,7 @@ export class GreedyReflective extends BaseOptimizer {
     }
 
     const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, target.inputs);
-    this.requireBaselineGatesPass(baseline);
+    this.requireBaselineGatesPass(baseline.scorecard);
 
     const attempts = await this.hillClimb(baseline, target.inputs);
     const champion = lastAccepted(attempts)?.candidate ?? baseline;
@@ -56,7 +54,7 @@ export class GreedyReflective extends BaseOptimizer {
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
-    return this.buildResult(champion, attempts);
+    return this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
   }
 
   /** The one place the champion is threaded across iterations. */
@@ -107,36 +105,6 @@ export class GreedyReflective extends BaseOptimizer {
     return candidate.scorecard.gatesPassed() && candidate.scorecard.objective() > champion.scorecard.objective();
   }
 
-  private requireBaselineGatesPass(baseline: Candidate): void {
-    if (baseline.scorecard.gatesPassed()) return;
-    const failed = failingGraders(baseline.scorecard);
-    throw new Error(
-      `Baseline fails must-pass grader(s) [${failed.join(", ")}] — fix the program or those graders before optimizing.`,
-    );
-  }
-
-  private buildResult(champion: Candidate, attempts: Attempt[]): OptimizeResult {
-    const count = (decision: Decision): number => attempts.filter((a) => a.decision === decision).length;
-    const baselineIteration: IterationResult = { iter: 0, decision: "baseline", winsA: 0, winsB: 0, ties: 0 };
-    return {
-      runId: this.config.runId,
-      runDir: path.join(this.config.runsDir, this.config.runId),
-      championIter: champion.iter,
-      championFiles: champion.files,
-      acceptedCount: count("accepted"),
-      rejectedCount: count("rejected"),
-      validationFailedCount: count("validation-failed"),
-      iterations: [baselineIteration, ...attempts.map((a) => ({ iter: a.iter, decision: a.decision, winsA: 0, winsB: 0, ties: 0 }))],
-    };
-  }
-}
-
-function defaultPreview(targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]): OptimizeMutationPreview {
-  return new OptimizeSourceMutator({ targetSet }).preview(operations);
-}
-
-function fileMap(source: OptimizeTargetSet): Record<string, string> {
-  return Object.fromEntries(Object.entries(source.files).map(([rel, sf]) => [rel, sf.source]));
 }
 
 function inputsAsTasks(inputs: Input[]): EvalTask[] {
@@ -145,14 +113,6 @@ function inputsAsTasks(inputs: Input[]): EvalTask[] {
 
 function lastAccepted(attempts: Attempt[]): Attempt | undefined {
   return [...attempts].reverse().find((a) => a.decision === "accepted");
-}
-
-/** Names of the must-pass graders that failed on at least one input. */
-function failingGraders(scorecard: Scorecard): string[] {
-  const names = scorecard.perInput.flatMap((input) =>
-    input.grades.filter((g) => g.grader.mustPass() && !g.grader.passes(g.grade)).map((g) => g.grader.name()),
-  );
-  return names.filter((name, i) => names.indexOf(name) === i);
 }
 
 function renderHistory(attempts: Attempt[]): string {

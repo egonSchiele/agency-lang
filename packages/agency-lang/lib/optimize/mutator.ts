@@ -32,7 +32,7 @@ const MutationOperationSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const MutationProposalSchema = z.object({
+export const MutationProposalSchema = z.object({
   operations: z.array(MutationOperationSchema).min(1),
   rationale: z.string().min(1),
 });
@@ -63,8 +63,9 @@ export type ProposeMutationArgs = MutatorPromptInputs & {
   callModel?: MutatorModelCaller;
 };
 
-export function buildMutatorSections(inputs: MutatorPromptInputs): MutatorMessageSections {
-  const targets = [...inputs.targets]
+/** Render a list of optimize targets as the prompt's TARGETS section. Shared by greedy and GEPA. */
+export function renderTargetsSection(targets: OptimizeTarget[]): string {
+  return [...targets]
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((target) => [
       `- id: ${target.id}`,
@@ -72,6 +73,10 @@ export function buildMutatorSections(inputs: MutatorPromptInputs): MutatorMessag
       `  current value: ${JSON.stringify(target.value)}`,
     ].join("\n"))
     .join("\n");
+}
+
+export function buildMutatorSections(inputs: MutatorPromptInputs): MutatorMessageSections {
+  const targets = renderTargetsSection(inputs.targets);
   const goals = [...inputs.tasks]
     .sort((a, b) => a.task_id.localeCompare(b.task_id))
     .map((task) => `- [${task.task_id}] ${task.goal}`)

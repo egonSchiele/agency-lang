@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { sha256Text, type OptimizeTargetSet } from "./targets.js";
+
 export type Workspace = { dir: string; key: string };
 
 /** Owns per-iteration workspace directories and resolves paths against them. */
@@ -40,5 +42,21 @@ export class WorkspaceManager {
   /** Materialize a file map (e.g. OptimizeSourceMutator.preview().files) into the workspace. */
   applyFiles(ws: Workspace, files: Record<string, string>): void {
     for (const [rel, source] of Object.entries(files)) this.write(ws, rel, source);
+  }
+
+  /**
+   * Write a champion file set back to the original sources, sha-checked: every
+   * discovered file must still match its discovery-time hash, or the whole
+   * writeback aborts (as PR #283). Only changed files are written.
+   */
+  writeBack(source: OptimizeTargetSet, championFiles: Record<string, string>): void {
+    for (const sf of Object.values(source.files)) {
+      if (sha256Text(fs.readFileSync(sf.absoluteFile, "utf8")) !== sf.sha256) {
+        throw new Error(`Source file ${sf.absoluteFile} was modified externally; writeback aborted.`);
+      }
+    }
+    for (const [rel, contents] of Object.entries(championFiles)) {
+      if (contents !== source.files[rel]?.source) fs.writeFileSync(source.files[rel].absoluteFile, contents);
+    }
   }
 }

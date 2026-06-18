@@ -68,13 +68,13 @@ describe("runCli", () => {
 });
 
 describe("agency CLI command tree", () => {
-  it("exposes eval optimize and not the legacy top-level optimize command", () => {
+  it("exposes optimize under both `eval optimize` and the top-level `optimize` alias", () => {
     const program = createProgram();
     const topLevelCommands = program.commands.map((command) => command.name());
     const evalCommand = program.commands.find((command) => command.name() === "eval");
     const evalCommands = evalCommand?.commands.map((command) => command.name()) ?? [];
 
-    expect(topLevelCommands).not.toContain("optimize");
+    expect(topLevelCommands).toContain("optimize");
     expect(evalCommands).toContain("optimize");
   });
 });

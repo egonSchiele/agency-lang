@@ -76,6 +76,21 @@ describe("WorkspaceManager", () => {
     expect(fs.existsSync(path.join(ws.dir, "package.json"))).toBe(false);
   });
 
+  it("forks when the workspace root is inside a custom-named runs dir (--runs-dir optimize-runs)", () => {
+    // Reproduces the integration-test layout: agent at the base dir, but the
+    // runs dir is named "optimize-runs", not "runs". The fork must still skip
+    // the subtree containing the workspace root or cpSync self-copies.
+    fs.writeFileSync(path.join(root, "agent.agency"), "node main() {}\n");
+    fs.mkdirSync(path.join(root, "optimize-runs"), { recursive: true });
+    fs.writeFileSync(path.join(root, "optimize-runs", "stale.txt"), "old");
+
+    const wsm = new WorkspaceManager(path.join(root, "optimize-runs", "smoke", "ws"));
+    const ws = wsm.fork(root);
+
+    expect(fs.existsSync(path.join(ws.dir, "agent.agency"))).toBe(true);
+    expect(fs.existsSync(path.join(ws.dir, "optimize-runs"))).toBe(false); // skipped → no self-copy
+  });
+
   it("refuses paths that escape the workspace (traversal / absolute)", () => {
     const src = path.join(root, "src");
     fs.mkdirSync(src);

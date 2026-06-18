@@ -56,7 +56,7 @@ describe("StatelogParser", () => {
   it("projects eval values and records through a readable sync API", () => {
     const events = [
       event("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
-      event("evalInputRecorded", { threadId: "0", value: "question" }),
+      event("evalValueRecorded", { threadId: "0", value: "question" }),
       event("evalOutputRecorded", { threadId: "0", value: "draft" }),
       event("evalOutputRecorded", { threadId: "0", value: "answer" }),
     ];
@@ -66,7 +66,7 @@ describe("StatelogParser", () => {
 
     expect(log.evalRecord()).toEqual(expected);
     expect(log.normalized()).toEqual(normalize(events));
-    expect(log.evalInputs()).toEqual(expected.evalInputs);
+    expect(log.evalValues()).toEqual(expected.evalValues);
     expect(log.evalOutputs()).toEqual(expected.evalOutputs);
     expect(log.finalEvalOutput()).toEqual(expected.evalOutputs[1]);
     expect(log.threads()).toEqual(expected.threads);

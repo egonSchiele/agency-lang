@@ -39,16 +39,16 @@ function serializeEvalValue(value: unknown): unknown {
   const json = JSON.stringify(value ?? null);
   if (json === undefined) {
     throw new TypeError(
-      "evalInput/evalOutput value must be JSON-serializable; top-level functions and symbols cannot be recorded",
+      "evalValue/evalOutput value must be JSON-serializable; top-level functions and symbols cannot be recorded",
     );
   }
   return JSON.parse(json);
 }
 
-export async function _evalInput(value: unknown): Promise<void> {
+export async function _evalValue(value: unknown): Promise<void> {
   const prepared = prepareEvalEvent(value);
   if (!prepared) return;
-  await prepared.client.evalInputRecorded(prepared.payload);
+  await prepared.client.evalValueRecorded(prepared.payload);
 }
 
 export async function _evalOutput(value: unknown): Promise<void> {
@@ -65,12 +65,12 @@ export async function _evalRecord(
     .evalRecord();
 }
 
-export async function _evalInputs(
+export async function _evalValues(
   statelogPath: string,
   allowedPaths: string[] = [],
 ): Promise<EvalValue[]> {
   return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths))
-    .evalInputs();
+    .evalValues();
 }
 
 export async function _evalOutputs(

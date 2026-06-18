@@ -116,13 +116,13 @@ describe("extractEvalRecord", () => {
       expect(rec.incomplete).toEqual([]);
     });
 
-    it("evalInputs / evalOutputs populated from heuristic", () => {
-      expect(rec.evalInputs.at(-1)?.value).toBe("do the thing");
-      expect(rec.evalInputs.at(-1)?.threadId).toBe("0");
+    it("evalValues / evalOutputs populated from heuristic", () => {
+      expect(rec.evalValues.at(-1)?.value).toBe("do the thing");
+      expect(rec.evalValues.at(-1)?.threadId).toBe("0");
       expect(rec.evalOutputs.at(-1)?.value).toBe("done.");
       expect(rec.evalOutputs.at(-1)?.threadId).toBe("0");
       expect(
-        rec.warnings.some((w) => w.includes("Call evalInput(prompt)")),
+        rec.warnings.some((w) => w.includes("Call evalValue(prompt)")),
       ).toBe(true);
       expect(
         rec.warnings.some((w) => w.includes("Call evalOutput(reply)")),
@@ -138,7 +138,7 @@ describe("extractEvalRecord", () => {
 
     it("only warns about heuristic eval extraction", () => {
       expect(rec.warnings).toEqual([
-        expect.stringContaining("Call evalInput(prompt)"),
+        expect.stringContaining("Call evalValue(prompt)"),
         expect.stringContaining("Call evalOutput(reply)"),
       ]);
     });
@@ -177,7 +177,7 @@ describe("extractEvalRecord", () => {
 
     it("only warns about the heuristic eval input it can extract", () => {
       expect(rec.warnings).toEqual([
-        expect.stringContaining("Call evalInput(prompt)"),
+        expect.stringContaining("Call evalValue(prompt)"),
       ]);
     });
   });
@@ -231,9 +231,9 @@ describe("extractEvalRecord", () => {
       for (const e of toolEvents) expect(e.threadId).toBe("1");
     });
 
-    it("evalInputs uses the TOP-LEVEL thread's user prompt, not the subagent's", () => {
-      expect(rec.evalInputs[0].value).toBe("delegate");
-      expect(rec.evalInputs[0].threadId).toBe("0");
+    it("evalValues uses the TOP-LEVEL thread's user prompt, not the subagent's", () => {
+      expect(rec.evalValues[0].value).toBe("delegate");
+      expect(rec.evalValues[0].threadId).toBe("0");
     });
 
     it("evalOutputs uses the TOP-LEVEL thread's last completion, not the subagent's", () => {
@@ -265,9 +265,9 @@ describe("extractEvalRecord", () => {
       expect(rec.warnings.some((w) => /no threadId field/i.test(w))).toBe(true);
     });
 
-    it("falls back to all promptCompletions for evalInputs / evalOutputs", () => {
-      expect(rec.evalInputs[0].value).toBe("hello");
-      expect(rec.evalInputs[0].threadId).toBeNull();
+    it("falls back to all promptCompletions for evalValues / evalOutputs", () => {
+      expect(rec.evalValues[0].value).toBe("hello");
+      expect(rec.evalValues[0].threadId).toBeNull();
       expect(rec.evalOutputs[0].value).toBe("hi");
       expect(rec.evalOutputs[0].threadId).toBeNull();
     });
@@ -349,16 +349,16 @@ describe("extractEvalRecord", () => {
   });
 
   describe("explicit eval annotation extraction", () => {
-    it("uses explicit evalInputRecorded / evalOutputRecorded events without fallback warnings", () => {
+    it("uses explicit evalValueRecorded / evalOutputRecorded events without fallback warnings", () => {
       resetClock();
       const events: EventEnvelope[] = [
         ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
-        ev("evalInputRecorded", { threadId: "0", value: { prompt: "real input" } }),
+        ev("evalValueRecorded", { threadId: "0", value: { prompt: "real input" } }),
         ev("evalOutputRecorded", { threadId: "0", value: "real output" }),
       ];
       const rec = extractEvalRecord(events, "test:explicit");
 
-      expect(rec.evalInputs).toEqual([
+      expect(rec.evalValues).toEqual([
         { value: { prompt: "real input" }, threadId: "0", tMs: 100 },
       ]);
       expect(rec.evalOutputs).toEqual([
@@ -372,14 +372,14 @@ describe("extractEvalRecord", () => {
     it("preserves chronological order for multiple firings", () => {
       resetClock();
       const events: EventEnvelope[] = [
-        ev("evalInputRecorded", { threadId: "0", value: "first in" }),
+        ev("evalValueRecorded", { threadId: "0", value: "first in" }),
         ev("evalOutputRecorded", { threadId: "0", value: "first out" }),
-        ev("evalInputRecorded", { threadId: "0", value: "second in" }),
+        ev("evalValueRecorded", { threadId: "0", value: "second in" }),
         ev("evalOutputRecorded", { threadId: "0", value: "second out" }),
       ];
       const rec = extractEvalRecord(events, "test:multiple");
 
-      expect(rec.evalInputs.map((v) => v.value)).toEqual(["first in", "second in"]);
+      expect(rec.evalValues.map((v) => v.value)).toEqual(["first in", "second in"]);
       expect(rec.evalOutputs.map((v) => v.value)).toEqual([
         "first out",
         "second out",
@@ -390,7 +390,7 @@ describe("extractEvalRecord", () => {
       resetClock();
       const rec = extractEvalRecord([ev("agentStart", { entryNode: "main" })], "test:none");
 
-      expect(rec.evalInputs).toEqual([]);
+      expect(rec.evalValues).toEqual([]);
       expect(rec.evalOutputs).toEqual([]);
       expect(rec.warnings).not.toEqual(
         expect.arrayContaining([expect.stringMatching(/eval(Input|Output)\(\)/)]),
@@ -415,14 +415,14 @@ describe("extractEvalRecord", () => {
       ];
       const rec = extractEvalRecord(events, "test:mixed");
 
-      expect(rec.evalInputs).toEqual([
+      expect(rec.evalValues).toEqual([
         { value: "heuristic input", threadId: "0", tMs: 100 },
       ]);
       expect(rec.evalOutputs).toEqual([
         { value: "real output", threadId: "0", tMs: 200 },
       ]);
       expect(rec.warnings).toEqual([
-        expect.stringContaining("Call evalInput(prompt)"),
+        expect.stringContaining("Call evalValue(prompt)"),
       ]);
     });
 
@@ -430,17 +430,17 @@ describe("extractEvalRecord", () => {
       resetClock();
       const huge = "x".repeat(100_100);
       const events: EventEnvelope[] = [
-        ev("evalInputRecorded", { threadId: "0", value: huge }),
-        ev("evalInputRecorded", { threadId: "0", value: "small" }),
+        ev("evalValueRecorded", { threadId: "0", value: huge }),
+        ev("evalValueRecorded", { threadId: "0", value: "small" }),
         ev("evalOutputRecorded", { threadId: "0", value: "ok" }),
       ];
       const rec = extractEvalRecord(events, "test:truncate");
 
-      expect(rec.evalInputs[0].truncated).toBe(true);
-      expect(typeof rec.evalInputs[0].value).toBe("string");
-      expect(String(rec.evalInputs[0].value)).toContain("[truncated");
-      expect(String(rec.evalInputs[0].value).length).toBeLessThan(huge.length);
-      expect(rec.evalInputs[1]).toEqual({
+      expect(rec.evalValues[0].truncated).toBe(true);
+      expect(typeof rec.evalValues[0].value).toBe("string");
+      expect(String(rec.evalValues[0].value)).toContain("[truncated");
+      expect(String(rec.evalValues[0].value).length).toBeLessThan(huge.length);
+      expect(rec.evalValues[1]).toEqual({
         value: "small",
         threadId: "0",
         tMs: 100,
@@ -515,7 +515,7 @@ describe("output fallback + warning options (used by the optimizer)", () => {
     const rec = extractEvalRecord(eventsWithReturn(), "src");
     expect(rec.evalOutputs.map((o) => o.value)).toEqual(["Paris"]);
     expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(true);
-    expect(rec.warnings.some((w) => w.includes("Call evalInput(prompt)"))).toBe(true);
+    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(true);
   });
 
   it("outputFallback 'returnValue' grades the node return value with no output warning", () => {
@@ -524,9 +524,9 @@ describe("output fallback + warning options (used by the optimizer)", () => {
     expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(false);
   });
 
-  it("warnMissingInput false suppresses the evalInput warning", () => {
-    const rec = extractEvalRecord(eventsWithReturn(), "src", { warnMissingInput: false });
-    expect(rec.warnings.some((w) => w.includes("Call evalInput(prompt)"))).toBe(false);
+  it("warnMissingValue false suppresses the evalValue warning", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src", { warnMissingValue: false });
+    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(false);
   });
 
   it("explicit evalOutput() still wins over the returnValue fallback", () => {

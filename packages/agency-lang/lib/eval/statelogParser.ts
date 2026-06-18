@@ -52,8 +52,8 @@ export class StatelogParser {
     return this.evalRecordCache;
   }
 
-  evalInputs(): EvalValue[] {
-    return this.evalRecord().evalInputs;
+  evalValues(): EvalValue[] {
+    return this.evalRecord().evalValues;
   }
 
   evalOutputs(): EvalValue[] {

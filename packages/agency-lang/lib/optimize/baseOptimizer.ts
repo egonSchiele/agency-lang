@@ -168,8 +168,8 @@ export abstract class BaseOptimizer {
       pipeAgentOutput: false,
     }, {
       // Grade the node's return value (not its last LLM reply) and skip the
-      // evalInput/evalOutput "did you forget to call…" warnings — neither
-      // applies to optimize: inputs come from the task, output is the return.
+      // evalValue/evalOutput "did you forget to call…" warnings — neither
+      // applies to optimize: inputs come from the input spec, output is the return.
       extractor: optimizeEvalRecordExtractor,
     });
     const taskResult = result.tasks[0];

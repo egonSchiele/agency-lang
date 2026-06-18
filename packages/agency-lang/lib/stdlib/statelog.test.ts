@@ -11,8 +11,8 @@ import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { StatelogClient } from "../statelogClient.js";
 import {
-  _evalInput,
-  _evalInputs,
+  _evalValue,
+  _evalValues,
   _evalOutput,
   _evalOutputs,
   _evalRecord,
@@ -57,14 +57,14 @@ function makeCtx(): RuntimeContext<any> {
 }
 
 function spyClient(ctx: RuntimeContext<any>) {
-  const evalInputRecorded = vi.fn(async () => undefined);
+  const evalValueRecorded = vi.fn(async () => undefined);
   const evalOutputRecorded = vi.fn(async () => undefined);
   ctx.statelogClient = {
     ...ctx.statelogClient,
-    evalInputRecorded,
+    evalValueRecorded,
     evalOutputRecorded,
   } as any;
-  return { evalInputRecorded, evalOutputRecorded };
+  return { evalValueRecorded, evalOutputRecorded };
 }
 
 async function withFrame(
@@ -95,11 +95,11 @@ describe("std::statelog eval annotations", () => {
     const spies = spyClient(ctx);
 
     await runInTestContext(ctx, new StateStack(), threads, async () => {
-      await _evalInput("hello");
+      await _evalValue("hello");
     });
 
-    expect(spies.evalInputRecorded).toHaveBeenCalledOnce();
-    expect(spies.evalInputRecorded).toHaveBeenCalledWith({
+    expect(spies.evalValueRecorded).toHaveBeenCalledOnce();
+    expect(spies.evalValueRecorded).toHaveBeenCalledWith({
       value: "hello",
       threadId,
     });
@@ -111,10 +111,10 @@ describe("std::statelog eval annotations", () => {
     const spies = spyClient(ctx);
 
     await runInTestContext(ctx, new StateStack(), threads, async () => {
-      await _evalInput({ foo: 1 });
+      await _evalValue({ foo: 1 });
     });
 
-    expect(spies.evalInputRecorded).toHaveBeenCalledWith({
+    expect(spies.evalValueRecorded).toHaveBeenCalledWith({
       value: { foo: 1 },
       threadId: threads.activeId(),
     });
@@ -141,20 +141,20 @@ describe("std::statelog eval annotations", () => {
   });
 
   it("no-ops outside an Agency execution frame", async () => {
-    await expect(_evalInput("hello")).resolves.toBeUndefined();
+    await expect(_evalValue("hello")).resolves.toBeUndefined();
   });
 
   it("rejects circular values at the call site", async () => {
     const circular: any = {};
     circular.self = circular;
     await withFrame(ThreadStore.withDefaultActive(makeCtx().statelogClient), async () => {
-      await expect(_evalInput(circular)).rejects.toThrow(TypeError);
+      await expect(_evalValue(circular)).rejects.toThrow(TypeError);
     });
   });
 
   it("rejects top-level functions with a clear serialization error", async () => {
     await withFrame(ThreadStore.withDefaultActive(makeCtx().statelogClient), async () => {
-      await expect(_evalInput(() => "nope")).rejects.toThrow(
+      await expect(_evalValue(() => "nope")).rejects.toThrow(
         /must be JSON-serializable/i,
       );
     });
@@ -178,7 +178,7 @@ describe("std::statelog eval annotations", () => {
       observability: false,
     });
     await runInTestContext(ctx, new StateStack(), new ThreadStore(), async () => {
-      await expect(_evalInput("x")).resolves.toBeUndefined();
+      await expect(_evalValue("x")).resolves.toBeUndefined();
       await expect(_evalOutput("y")).resolves.toBeUndefined();
     });
   });
@@ -201,12 +201,12 @@ describe("std::statelog eval annotations", () => {
   it("exposes parser projections for agents", async () => {
     const statelogPath = writeJsonl(tmpDir, [
       event("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
-      event("evalInputRecorded", { threadId: "0", value: "question" }),
+      event("evalValueRecorded", { threadId: "0", value: "question" }),
       event("evalOutputRecorded", { threadId: "0", value: "draft" }),
       event("evalOutputRecorded", { threadId: "0", value: "answer" }),
     ]);
 
-    await expect(_evalInputs(statelogPath)).resolves.toMatchObject([
+    await expect(_evalValues(statelogPath)).resolves.toMatchObject([
       { value: "question", threadId: "0" },
     ]);
     await expect(_evalOutputs(statelogPath)).resolves.toMatchObject([

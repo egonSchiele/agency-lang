@@ -214,8 +214,8 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
 /**
  * Extractor for the optimizer: grades the entry node's return value (not the
  * last LLM completion) when `evalOutput()` wasn't called, and omits the
- * evalInput/evalOutput "did you forget to call…" warnings — inputs come from
- * the task and the graded output is the return value, so neither applies.
+ * evalValue/evalOutput "did you forget to call…" warnings — inputs come from
+ * the input spec and the graded output is the return value, so neither applies.
  */
 export const optimizeEvalRecordExtractor: EvalRecordExtractor = async ({
   statelogPath,
@@ -223,7 +223,7 @@ export const optimizeEvalRecordExtractor: EvalRecordExtractor = async ({
 }) => {
   const record = new StatelogParser(statelogPath, {
     outputFallback: "returnValue",
-    warnMissingInput: false,
+    warnMissingValue: false,
   }).evalRecord();
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };

@@ -133,7 +133,7 @@ export type EvalRecord = {
   formatVersion: number;
   durationMs: number;
   source: string;
-  evalInputs: EvalValue[];
+  evalValues: EvalValue[];
   evalOutputs: EvalValue[];
   threads: Record<string, any>[];
   events: Record<string, any>[];
@@ -343,7 +343,7 @@ Extract a structured eval record from a statelog file. Equivalent to
   through a temporary file.
 
   The shape mirrors the on-disk eval-record format. Top-level fields
-  (traceId, durationMs, evalInputs, evalOutputs, warnings) are the
+  (traceId, durationMs, evalValues, evalOutputs, warnings) are the
   most commonly consumed; nested arrays (threads, events, interrupts,
   errors, incomplete) are loosely typed because their schemas are
   large and evolve independently — consumers can JSON-inspect as

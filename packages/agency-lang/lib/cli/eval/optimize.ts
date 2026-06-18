@@ -11,6 +11,7 @@ import type { Input } from "@/optimize/grading/types.js";
 import { loadGradingModule } from "@/optimize/gradingModule.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
 import { writeReport } from "@/optimize/report.js";
+import { splitInputs } from "@/optimize/validationSplit.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targets.js";
 import type { OptimizeResult } from "@/optimize/types.js";
@@ -59,9 +60,14 @@ export async function evalOptimize(
   if (result.runDir) {
     fs.mkdirSync(result.runDir, { recursive: true });
     fs.writeFileSync(path.join(result.runDir, "summary.json"), JSON.stringify(result, null, 2));
+    const optimizerName = opts.optimizer ?? DEFAULT_OPTIMIZER;
+    const ignoresValidation = optimizerName !== "greedy";   // only greedy selects by validation
     writeReport(result.runDir, result, {
-      optimizer: opts.optimizer ?? DEFAULT_OPTIMIZER,
+      optimizer: optimizerName,
       graders: config.graders.map((g) => g.name()),
+      trainObjective: result.trainObjective,
+      validationObjective: result.validationObjective,
+      validationConfiguredButUnused: ignoresValidation && (target.validationInputs?.length ?? 0) > 0,
     });
   }
   return result;
@@ -97,16 +103,23 @@ function withDefaults(inputs: Input[], node: string, goal?: string): Input[] {
   }));
 }
 
-/** Load + normalize the train inputs. (Task 14 extends this with validation.) */
+/** Load + normalize the train inputs, plus a validation set when configured.
+ *  The `load` closure is reused for both — no duplicated normalization. */
 function provisionInputs(
   s: ReturnType<typeof resolveOptimizeSettings>,
   node: string,
   requireGoal: boolean,
   deps: EvalOptimizeDeps,
-): { inputs: Input[] } {
+): { inputs: Input[]; validationInputs?: Input[] } {
   const load = (p: string) =>
     withDefaults(loadInputs(path.resolve(p), deps.makeId ?? nanoid, { requireGoal }), node, s.goal);
-  return { inputs: load(s.inputsPath ?? "") };
+  const inputs = load(s.inputsPath ?? "");
+  if (s.validationInputsPath) return { inputs, validationInputs: load(s.validationInputsPath) };
+  if (s.validationSplit !== undefined) {
+    const { train, validation } = splitInputs(inputs, s.validationSplit, s.seed);
+    return { inputs: train, validationInputs: validation };
+  }
+  return { inputs };
 }
 
 /** Build the optimize target: the agent plus the inputs to run it on (from --goal or --inputs). */
@@ -117,8 +130,8 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
   // A per-input goal is required only when nothing else supplies one: no custom
   // grading module AND no overall --goal default to fall back on.
   const requireGoal = !s.gradersPath && s.goal === undefined;
-  const { inputs } = provisionInputs(s, resolved.node, requireGoal, deps);
-  return { agent: opts.agent, inputs };
+  const { inputs, validationInputs } = provisionInputs(s, resolved.node, requireGoal, deps);
+  return { agent: opts.agent, inputs, ...(validationInputs ? { validationInputs } : {}) };
 }
 
 /** The --goal-only case: one synthetic no-arg input carrying the overall goal. */

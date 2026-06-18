@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BaseOptimizerConfig, OptimizeTarget } from "@/optimize/optimizer.js";
 import type { OptimizeResult } from "@/optimize/types.js";
 
-import { evalOptimize, type EvalOptimizeOptions } from "./optimize.js";
+import { buildTarget, evalOptimize, type EvalOptimizeOptions } from "./optimize.js";
 
 describe("eval optimize CLI", () => {
   let tmpDir: string;
@@ -164,5 +164,26 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     const agentFile = writeAgent();
     const { config } = await capture({ agent: agentFile, goal: "g", minibatch: 4 });
     expect((config as { minibatch?: number }).minibatch).toBeUndefined();
+  });
+
+  it("loads validation inputs from a file into the target", () => {
+    const agentFile = writeAgent();
+    const trainFile = path.join(tmpDir, "train.json");
+    const valFile = path.join(tmpDir, "val.json");
+    fs.writeFileSync(trainFile, JSON.stringify({ inputs: [{ id: "t", goal: "g", args: {} }] }));
+    fs.writeFileSync(valFile, JSON.stringify({ inputs: [{ id: "v", goal: "g", args: {} }] }));
+    const target = buildTarget({ agent: `${agentFile}:main`, inputs: trainFile, validationInputs: valFile }, {});
+    expect(target.validationInputs?.map((i) => i.id)).toEqual(["v"]);
+    expect(target.inputs.map((i) => i.id)).toEqual(["t"]);
+  });
+
+  it("splits train inputs by ratio when --validation-split is given", () => {
+    const agentFile = writeAgent();
+    const trainFile = path.join(tmpDir, "train.json");
+    const inputs = Array.from({ length: 10 }, (_u, i) => ({ id: `t${i}`, goal: "g", args: {} }));
+    fs.writeFileSync(trainFile, JSON.stringify({ inputs }));
+    const target = buildTarget({ agent: `${agentFile}:main`, inputs: trainFile, validationSplit: 0.3, seed: 1 }, {});
+    expect(target.validationInputs).toHaveLength(3);
+    expect(target.inputs).toHaveLength(7);
   });
 });

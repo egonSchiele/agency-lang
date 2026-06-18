@@ -65,6 +65,9 @@ export class Gepa extends BaseOptimizer {
   }
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+    if (this.validationInputs.length > 0) {
+      this.reporter.note(`validation set provided, but ${this.name} selects the champion on the training objective`);
+    }
     const paretoInputs = this.gepaConfig.paretoSet ?? inputs;
     const rng = makeRng(this.config.seed ?? 0);
 

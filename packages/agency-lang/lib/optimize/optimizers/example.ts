@@ -48,6 +48,9 @@ export class ExampleOptimizer extends BaseOptimizer {
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
     const startedAt = Date.now();
+    if (this.validationInputs.length > 0) {
+      this.reporter.note(`validation set provided, but ${this.name} selects the champion on the training objective`);
+    }
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
       targets: source.targets, inputCount: inputs.length, iterations: 1,

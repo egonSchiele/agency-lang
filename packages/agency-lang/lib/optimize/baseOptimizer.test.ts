@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BaseGrader } from "./grading/baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "./grading/types.js";
 import type { Scorecard } from "./grading/scorecard.js";
-import { BaseOptimizer, type RunInput } from "./baseOptimizer.js";
+import { BaseOptimizer, gradedOutput, type RunInput } from "./baseOptimizer.js";
 import type { OptimizeTarget } from "./optimizer.js";
 import type { OptimizeResult } from "./types.js";
 
@@ -96,6 +96,11 @@ describe("BaseOptimizer.evaluate", () => {
     const p = probe([gate], fixedRun);
     const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).not.toThrow();
+  });
+
+  it("gradedOutput returns the last value, or throws a clear error when the agent produced none", () => {
+    expect(gradedOutput([{ value: "a" }, { value: "b" }], "q1")).toBe("b");
+    expect(() => gradedOutput([], "q1")).toThrow(/no output to grade for input "q1".*evalOutput\(\)/s);
   });
 
   it("buildPointwiseResult builds a baseline-led result with correct decision counts", () => {

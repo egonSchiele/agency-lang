@@ -71,6 +71,23 @@ describe("Gepa (reflective Pareto optimizer)", () => {
 
   const threeInputs = [{ id: "a", args: {} }, { id: "b", args: {} }, { id: "c", args: {} }];
 
+  it("exits early without iterating when the baseline is already optimal", async () => {
+    const runInput = vi.fn(scoredRunner([1.0])); // baseline scores the max objective
+    const opt = new Gepa(config({ runId: "perfect" }), deps(runInput));
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+    expect(result.championIter).toBe("baseline");
+    expect(result.acceptedCount).toBe(0);
+    expect(result.iterations).toHaveLength(1); // baseline only
+  });
+
+  it("stops early once a candidate reaches the maximum objective", async () => {
+    const runInput = vi.fn(scoredRunner([0.0, 1.0, 1.0, 1.0])); // baseline 0, first child 1.0
+    const opt = new Gepa(config({ runId: "stop", iterations: 5 }), deps(runInput));
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+    expect(result.acceptedCount).toBe(1);
+    expect(result.iterations).toHaveLength(2); // baseline + 1 accepted, then stop (not all 5)
+  });
+
   it("rejects a non-positive or non-integer minibatch at construction", () => {
     expect(() => new Gepa(config({ minibatch: 0 }))).toThrow(/positive integer minibatch/);
     expect(() => new Gepa(config({ minibatch: -3 }))).toThrow(/minibatch/);

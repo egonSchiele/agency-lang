@@ -67,6 +67,15 @@ export abstract class BaseOptimizer {
   /** Run the search over already-discovered targets. The one method an optimizer must implement. */
   protected abstract optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult>;
 
+  /**
+   * A scorecard at the maximum objective can't be improved, so optimizers stop
+   * early (or skip the loop when the baseline is already there). Assumes graders
+   * are normalized to [0, 1]; binary-only setups score 0 and never trip this.
+   */
+  protected isMaxObjective(scorecard: Scorecard): boolean {
+    return scorecard.objective() >= 1;
+  }
+
   protected fork(sourceDir: string): Workspace {
     return this.workspace.fork(sourceDir);
   }
@@ -126,8 +135,7 @@ export abstract class BaseOptimizer {
       throw new Error(`agent run failed for input ${input.id ?? "(no id)"}: ${taskResult?.errorMessage ?? "unknown error"}`);
     }
     const record = JSON.parse(fs.readFileSync(taskResult.evalRecordPath, "utf8")) as { evalOutputs?: { value: unknown }[] };
-    const outputs = record.evalOutputs ?? [];
-    const output = outputs.length > 0 ? outputs[outputs.length - 1].value : null;
+    const output = gradedOutput(record.evalOutputs ?? [], input.id ?? id);
     return { output: output as AgentRun["output"], recordPath: taskResult.evalRecordPath };
   }
 
@@ -189,4 +197,18 @@ function failingGraders(scorecard: Scorecard): string[] {
 /** A stable id for an input: its own id when present, otherwise its position. */
 function inputId(input: Input, index: number): string {
   return input.id && input.id.trim() !== "" ? input.id : `input-${index}`;
+}
+
+/**
+ * The last graded output value, or a clear error when there is none — the agent
+ * returned nothing AND didn't call evalOutput(), so there is nothing to grade.
+ */
+export function gradedOutput(evalOutputs: { value: unknown }[], inputLabel: string): unknown {
+  if (evalOutputs.length === 0) {
+    throw new Error(
+      `Agent produced no output to grade for input "${inputLabel}": the entry node returned nothing and ` +
+      `evalOutput() was not called. Return a value from the node, or call evalOutput(value) to record what the optimizer should grade.`,
+    );
+  }
+  return evalOutputs[evalOutputs.length - 1].value;
 }

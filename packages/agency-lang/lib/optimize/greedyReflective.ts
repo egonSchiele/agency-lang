@@ -54,9 +54,18 @@ export class GreedyReflective extends BaseOptimizer {
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
+    if (this.isMaxObjective(baseline.scorecard)) {
+      this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
+      return this.finish(source, baseline, [], startedAt);
+    }
+
     const attempts = await this.hillClimb(baseline, inputs);
     const champion = lastAccepted(attempts)?.candidate ?? baseline;
+    return this.finish(source, champion, attempts, startedAt);
+  }
 
+  /** Write back the champion (if enabled), build the result, and report completion. */
+  private finish(source: OptimizeTargetSet, champion: Candidate, attempts: Attempt[], startedAt: number): OptimizeResult {
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
@@ -84,6 +93,10 @@ export class GreedyReflective extends BaseOptimizer {
         decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
         changes: attempt.changes, diagnostics: attempt.diagnostics, durationMs: Date.now() - startedAt,
       });
+      if (this.isMaxObjective(champion.scorecard)) {
+        this.reporter.note("reached the maximum objective (1.000) — stopping early");
+        break;
+      }
     }
     return attempts;
   }

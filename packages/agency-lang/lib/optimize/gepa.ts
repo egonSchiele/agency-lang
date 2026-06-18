@@ -77,10 +77,18 @@ export class Gepa extends BaseOptimizer {
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
+    if (this.isMaxObjective(baseline.scorecard)) {
+      this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
+      return this.finish(source, baseline, [], startedAt);
+    }
+
     const pool = new CandidatePool<Candidate>([toPoolCandidate(baseline)]);
     const attempts = await this.evolve(pool, inputs, paretoInputs, rng);
+    return this.finish(source, pool.best().value, attempts, startedAt);
+  }
 
-    const champion = pool.best().value;
+  /** Write back the champion (if enabled), build the result, and report completion. */
+  private finish(source: OptimizeTargetSet, champion: Candidate, attempts: Attempt[], startedAt: number): OptimizeResult {
     if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
     const result = this.buildPointwiseResult({
       championIter: champion.iter, championFiles: champion.files,
@@ -109,6 +117,10 @@ export class Gepa extends BaseOptimizer {
         decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
         changes: attempt.changes, diagnostics: attempt.diagnostics, durationMs: Date.now() - startedAt,
       });
+      if (this.isMaxObjective(pool.best().value.scorecard)) {
+        this.reporter.note("reached the maximum objective (1.000) — stopping early");
+        break;
+      }
     }
     return attempts;
   }

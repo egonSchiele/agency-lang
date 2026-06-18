@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BaseGrader } from "./grading/baseGrader.js";
 import type { Grade, GraderInput, GraderOptions } from "./grading/types.js";
@@ -72,7 +72,9 @@ describe("GreedyReflective (pointwise)", () => {
       protected readonly defaultName = "gate";
       protected _run(): Promise<Grade> { return Promise.resolve({ score: { kind: "binary", pass: ++n === 1 } }); }
     })({ mustPass: true });
-    const scalar = new ValueGrader(() => 1); // would beat baseline, but the gate fails after baseline
+    // 0.5 keeps the baseline below the max objective (so the run doesn't early-exit);
+    // the candidate then fails the gate and is rejected regardless of its scalar.
+    const scalar = new ValueGrader(() => 0.5);
     const opt = new GreedyReflective(
       { graders: [gate, scalar], iterations: 1, config: {}, runsDir: root, runId: "r3", writeback: false },
       deps(),
@@ -80,5 +82,33 @@ describe("GreedyReflective (pointwise)", () => {
     const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
     expect(result.acceptedCount).toBe(0);
     expect(result.rejectedCount).toBe(1);
+  });
+
+  it("exits early without iterating when the baseline already scores the maximum objective", async () => {
+    const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
+    const opt = new GreedyReflective(
+      { graders: [new ValueGrader(() => 1)], iterations: 3, config: {}, runsDir: root, runId: "perfect", writeback: false },
+      { ...deps(), propose },
+    );
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
+    expect(result.championIter).toBe("baseline");
+    expect(result.acceptedCount).toBe(0);
+    expect(result.rejectedCount).toBe(0);
+    expect(result.iterations).toHaveLength(1); // baseline only
+    expect(propose).not.toHaveBeenCalled();
+  });
+
+  it("stops early once a candidate reaches the maximum objective", async () => {
+    let calls = 0;
+    const scalar = new ValueGrader(() => (calls++ === 0 ? 0.5 : 1)); // baseline 0.5, first candidate 1.0
+    const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
+    const opt = new GreedyReflective(
+      { graders: [scalar], iterations: 5, config: {}, runsDir: root, runId: "stop", writeback: false },
+      { ...deps(), propose },
+    );
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
+    expect(result.acceptedCount).toBe(1);
+    expect(result.iterations).toHaveLength(2); // baseline + 1 accepted, then stop (not all 5)
+    expect(propose).toHaveBeenCalledTimes(1);
   });
 });

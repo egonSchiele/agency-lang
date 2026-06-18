@@ -33,4 +33,10 @@ describe("optimizer registry", () => {
     }));
     expect(getOptimizer("custom-test").name).toBe("custom-test");
   });
+
+  it("treats reserved object keys as unknown optimizers, not prototype lookups", () => {
+    for (const reserved of ["__proto__", "constructor", "toString"]) {
+      expect(() => getOptimizer(reserved)).toThrow(/Unknown optimizer/);
+    }
+  });
 });

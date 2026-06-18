@@ -5,7 +5,6 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadInputs } from "@/eval/loadInputs.js";
-import { goalJudgeFile } from "@/optimize/goalJudgeFile.js";
 import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
 import type { Input } from "@/optimize/grading/types.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
@@ -76,7 +75,7 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
 export function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): BaseOptimizerConfig {
   const config = opts.config ?? {};
   const base: BaseOptimizerConfig = {
-    graders: [new LlmJudge({ name: "goal", agencyFile: goalJudgeFile(), goalPath: ["goal"] })],
+    graders: [new LlmJudge({ name: "goal" })],
     iterations: opts.iterations ?? DEFAULT_ITERATIONS,
     seed: opts.seed,
     config,

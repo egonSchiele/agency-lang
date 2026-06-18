@@ -1,14 +1,28 @@
-import type { OptimizeLoopDeps } from "./loop.js";
-import type { OptimizeLoopConfig, OptimizeResult } from "./types.js";
+import type { AgencyConfig } from "@/config.js";
 
-/**
- * A pluggable optimization strategy. Phase 1 keeps the contract shaped around the existing
- * OptimizeLoopConfig/OptimizeResult; later phases generalize it (graders, inputs) per
- * docs/superpowers/specs/2026-06-17-pluggable-optimizer-framework-design.md.
- */
-export type Optimizer = {
-  readonly name: string;
-  optimize(config: OptimizeLoopConfig, deps?: OptimizeLoopDeps): Promise<OptimizeResult>;
+import type { BaseGrader } from "./grading/baseGrader.js";
+import type { Input } from "./grading/types.js";
+import type { OptimizeResult } from "./types.js";
+
+/** What to optimize: an agent (file[:node]) and the inputs to run it on. */
+export type OptimizeTarget = { agent: string; inputs: Input[] };
+
+/** Cross-cutting config every optimizer needs; each optimizer may extend it. */
+export type BaseOptimizerConfig = {
+  graders: BaseGrader[];
+  iterations: number;
+  seed?: number;
+  config: AgencyConfig;
+  runsDir: string;
+  runId: string;
+  writeback?: boolean;
+  mutatorModel?: string;
 };
 
-export type OptimizerFactory = () => Optimizer;
+/** A pluggable optimization strategy. */
+export type Optimizer = {
+  readonly name: string;
+  optimize(target: OptimizeTarget): Promise<OptimizeResult>;
+};
+
+export type OptimizerFactory = (config: BaseOptimizerConfig) => Optimizer;

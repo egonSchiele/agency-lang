@@ -87,7 +87,7 @@ export function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
     mutatorModel: opts.mutatorModel,
   };
   // GEPA needs a minibatch size; it rides on the shared config and the factory casts to GepaConfig.
-  if (opts.optimizer === "gepa") return { ...base, minibatch: opts.minibatch ?? DEFAULT_MINIBATCH };
+  if (opts.optimizer === "gepa") return { ...base, minibatch: opts.minibatch ?? DEFAULT_MINIBATCH } as BaseOptimizerConfig;
   return base;
 }
 

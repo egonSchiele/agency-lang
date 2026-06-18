@@ -33,8 +33,8 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   });
   afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
-  const target = (id: string) => ({
-    id, kind: "variable" as const, file: "agent.agency", absoluteFile: path.join(src, "agent.agency"),
+  const target = (id: string): OptimizeTargetSet["targets"][number] => ({
+    id, kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"),
     scope: "global", name: id, valueKind: "string", value: `"${id}"`,
   });
 
@@ -73,7 +73,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
 
   it("admits the baseline and grows the pool when children improve on the minibatch", async () => {
     const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4])); // baseline 0.1, each child strictly better
-    const proposeSpy = vi.fn(async () => ({ rationale: "r", operations: [{ target: "t-alpha", kind: "variable" as const, op: "replaceInitializer" as const, value: '"x"', rationale: "c" }] }));
+    const proposeSpy = vi.fn<NonNullable<GepaDeps["propose"]>>(async () => ({ rationale: "r", operations: [{ target: "t-alpha", kind: "variable", op: "replaceInitializer", value: '"x"', rationale: "c" }] }));
     const opt = new Gepa(config({ runId: "accept" }), deps(runInput, proposeSpy));
 
     const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });

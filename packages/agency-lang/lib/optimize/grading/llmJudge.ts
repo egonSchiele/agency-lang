@@ -22,8 +22,14 @@ export class LlmJudge extends BaseGrader {
   }
 
   protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
-    const goal = String(getPath(input, this.options.goalPath ?? ["metadata", "goal"]) ?? "");
-    const args = { goal, output: run.output };
+    const goalPath = this.options.goalPath ?? ["metadata", "goal"];
+    const raw = getPath(input, goalPath);
+    // An LLM judge with no goal has nothing to judge against — fail loudly rather
+    // than ask the model to grade output against an empty criterion.
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      throw new Error(`${this.name()}: no goal found at ${globalThis.JSON.stringify(goalPath)} on input ${input.id ?? "(no id)"}; an LLM judge needs a goal.`);
+    }
+    const args = [String(raw), run.output];
     const node = this.options.node ?? "main";
     if (this.options.binary) {
       const v = await runAgency.runStructured(this.options.agencyFile, node, args, BinaryVerdict);

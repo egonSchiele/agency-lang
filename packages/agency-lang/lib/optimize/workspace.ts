@@ -18,13 +18,23 @@ export class WorkspaceManager {
   }
 
   read(ws: Workspace, relPath: string): string {
-    return fs.readFileSync(path.join(ws.dir, relPath), "utf8");
+    return fs.readFileSync(this.resolveWithin(ws, relPath), "utf8");
   }
 
   write(ws: Workspace, relPath: string, content: string): void {
-    const abs = path.join(ws.dir, relPath);
+    const abs = this.resolveWithin(ws, relPath);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, content);
+  }
+
+  /** Resolve `relPath` against the workspace and refuse paths that escape it (`..`, absolute). */
+  private resolveWithin(ws: Workspace, relPath: string): string {
+    const root = path.resolve(ws.dir);
+    const abs = path.resolve(root, relPath);
+    if (abs !== root && !abs.startsWith(root + path.sep)) {
+      throw new Error(`Path ${JSON.stringify(relPath)} escapes the workspace ${root}`);
+    }
+    return abs;
   }
 
   /** Materialize a file map (e.g. OptimizeSourceMutator.preview().files) into the workspace. */

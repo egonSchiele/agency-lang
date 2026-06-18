@@ -21,4 +21,13 @@ describe("EvalCache", () => {
     await cache.get("ws1", "in2", produce);
     expect(produce).toHaveBeenCalledTimes(3);
   });
+
+  it("does not collide when components share a separator-like boundary", async () => {
+    const cache = new EvalCache();
+    const produce = vi.fn(async (): Promise<AgentRun> => ({ output: "x", recordPath: "p" }));
+    // Under a flat "a-b-c" key these two pairs would collide; they must stay distinct.
+    await cache.get("ws-1", "2-x", produce);
+    await cache.get("ws-1-2", "x", produce);
+    expect(produce).toHaveBeenCalledTimes(2);
+  });
 });

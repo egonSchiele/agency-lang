@@ -33,14 +33,14 @@ export class AgencyRunner {
     private readonly runNode: NodeRunner = defaultRunner,
   ) {}
 
-  /** Run an agent node and return its raw value. */
-  async run(agencyFile: string, nodeName: string, args: Record<string, JSON>): Promise<JSON> {
+  /** Run an agent node and return its raw value. `args` are positional, in node-parameter order. */
+  async run(agencyFile: string, nodeName: string, args: JSON[]): Promise<JSON> {
     const { data } = await this.exec(agencyFile, nodeName, args);
     return data as JSON;
   }
 
   /** Run a judge/proposer node and validate its structured return against a schema. */
-  async runStructured<T>(agencyFile: string, nodeName: string, args: Record<string, JSON>, schema: ZodSchema<T>): Promise<T> {
+  async runStructured<T>(agencyFile: string, nodeName: string, args: JSON[], schema: ZodSchema<T>): Promise<T> {
     const { data } = await this.exec(agencyFile, nodeName, args);
     const parsed = schema.safeParse(data);
     if (!parsed.success) {
@@ -49,13 +49,13 @@ export class AgencyRunner {
     return parsed.data;
   }
 
-  private async exec(agencyFile: string, nodeName: string, args: Record<string, JSON>): Promise<{ data: unknown }> {
+  private async exec(agencyFile: string, nodeName: string, args: JSON[]): Promise<{ data: unknown }> {
     const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-runner-"));
     try {
       const config = { ...this.config };
       delete config.distDir;
-      const argsString = Object.values(args).map((v) => globalThis.JSON.stringify(v)).join(", ");
-      return await this.runNode({ config, agencyFile, nodeName, hasArgs: argsString.length > 0, argsString, scratchDir, quietCompile: true });
+      const argsString = args.map((v) => globalThis.JSON.stringify(v)).join(", ");
+      return await this.runNode({ config, agencyFile, nodeName, hasArgs: args.length > 0, argsString, scratchDir, quietCompile: true });
     } finally {
       fs.rmSync(scratchDir, { recursive: true, force: true });
     }

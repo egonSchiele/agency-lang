@@ -37,4 +37,13 @@ describe("WorkspaceManager", () => {
     const wsm = new WorkspaceManager(path.join(root, "ws"));
     expect(wsm.fork(src).key).not.toBe(wsm.fork(src).key);
   });
+
+  it("refuses paths that escape the workspace (traversal / absolute)", () => {
+    const src = path.join(root, "src");
+    fs.mkdirSync(src);
+    const wsm = new WorkspaceManager(path.join(root, "ws"));
+    const ws = wsm.fork(src);
+    expect(() => wsm.write(ws, "../escape.txt", "x")).toThrow(/escapes the workspace/);
+    expect(() => wsm.read(ws, "../../etc/passwd")).toThrow(/escapes the workspace/);
+  });
 });

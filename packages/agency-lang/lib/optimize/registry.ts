@@ -1,3 +1,4 @@
+import { Gepa, type GepaConfig } from "./gepa.js";
 import { GreedyReflective } from "./greedyReflective.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizerFactory } from "./optimizer.js";
 
@@ -25,3 +26,4 @@ export function getOptimizer(name: string, config: BaseOptimizerConfig): Optimiz
 }
 
 registerOptimizer("greedy", (config) => new GreedyReflective(config));
+registerOptimizer("gepa", (config) => new Gepa(config as GepaConfig));

@@ -26,6 +26,8 @@ export type EvalOptimizeOptions = {
   runId?: string;
   mutatorModel?: string;
   optimizer?: string;
+  minibatch?: number;
+  seed?: number;
   config?: AgencyConfig;
 };
 
@@ -36,6 +38,7 @@ export type EvalOptimizeDeps = {
 };
 
 const DEFAULT_ITERATIONS = 5;
+const DEFAULT_MINIBATCH = 8;
 
 /** Bundled scalar goal judge: scores how well an output satisfies the input's goal. */
 const GOAL_JUDGE_FILE = path.join(getAgentsDir(), "goalJudge.agency");
@@ -73,15 +76,19 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
 /** Build the optimizer config: the goal-judge grader plus run policy/artifacts settings. */
 export function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): BaseOptimizerConfig {
   const config = opts.config ?? {};
-  return {
+  const base: BaseOptimizerConfig = {
     graders: [new LlmJudge({ name: "goal", agencyFile: GOAL_JUDGE_FILE, goalPath: ["metadata", "goal"] })],
     iterations: opts.iterations ?? DEFAULT_ITERATIONS,
+    seed: opts.seed,
     config,
     runsDir: path.resolve(opts.runsDir ?? config.eval?.optimizeRunsDir ?? path.join(config.eval?.runsDir ?? "runs", "optimize")),
     runId: opts.runId ?? (deps.makeRunId ?? nanoid)(),
     writeback: opts.writeback ?? true,
     mutatorModel: opts.mutatorModel,
   };
+  // GEPA needs a minibatch size; it rides on the shared config and the factory casts to GepaConfig.
+  if (opts.optimizer === "gepa") return { ...base, minibatch: opts.minibatch ?? DEFAULT_MINIBATCH };
+  return base;
 }
 
 /**

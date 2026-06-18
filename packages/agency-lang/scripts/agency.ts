@@ -363,6 +363,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--no-writeback", "Do not write the champion back to source files")
     .option("--mutator-model <model>", "Model to use for proposing mutations")
     .option("--optimizer <name>", "Optimization strategy to use (default: greedy)")
+    .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", parseInt)
+    .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", parseInt)
     .option("--samples <n>", "Judge samples per task", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
@@ -376,6 +378,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       writeback: boolean;
       mutatorModel?: string;
       optimizer?: string;
+      minibatch?: number;
+      seed?: number;
       samples?: number;
       confidenceThreshold?: number;
       marginThreshold?: number;

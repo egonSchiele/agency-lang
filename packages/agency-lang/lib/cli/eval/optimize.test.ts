@@ -126,4 +126,22 @@ describe("eval optimize CLI", () => {
     const { config } = await capture({ agent: agentFile, goal: "g", config: { eval: { optimizeRunsDir: path.join(tmpDir, "configured-runs") } } });
     expect(config?.runsDir).toBe(path.join(tmpDir, "configured-runs"));
   });
+
+  it("includes the minibatch size in the config for the gepa optimizer", async () => {
+    const agentFile = writeAgent();
+    const { config } = await capture({ agent: agentFile, goal: "g", optimizer: "gepa", minibatch: 4 });
+    expect((config as { minibatch?: number }).minibatch).toBe(4);
+  });
+
+  it("defaults the gepa minibatch when not provided", async () => {
+    const agentFile = writeAgent();
+    const { config } = await capture({ agent: agentFile, goal: "g", optimizer: "gepa" });
+    expect((config as { minibatch?: number }).minibatch).toBe(8);
+  });
+
+  it("omits minibatch from the config for non-gepa optimizers", async () => {
+    const agentFile = writeAgent();
+    const { config } = await capture({ agent: agentFile, goal: "g", minibatch: 4 });
+    expect((config as { minibatch?: number }).minibatch).toBeUndefined();
+  });
 });

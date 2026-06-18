@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { AgencyRunner } from "./agencyRunner.js";
 import { BaseGrader } from "./baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
 
+const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const input = (over: Partial<Input> = {}): Input => ({ id: "i1", args: {}, ...over });
-const gi = (over: Partial<Input> = {}): GraderInput => ({ input: input(over), run: { output: null, recordPath: "" } });
+const graderInput = (over: Partial<Input> = {}): GraderInput => ({ input: input(over), run: { output: null, recordPath: "" }, runAgency: stubRunner });
 
 /** Test grader whose single-shot grade is supplied per instance. */
 class StubGrader extends BaseGrader {
@@ -35,16 +37,16 @@ describe("BaseGrader", () => {
   it("runs _run `samples` times and aggregates", async () => {
     const produce = vi.fn(() => ({ score: { kind: "scalar", value: 0.5 } as const }));
     const g = new StubGrader(produce, { samples: 4 });
-    const grade = await g.run(gi());
+    const grade = await g.run(graderInput());
     expect(produce).toHaveBeenCalledTimes(4);
     expect(grade.score).toEqual({ kind: "scalar", value: 0.5 });
   });
 
   it("rejects a non-positive or non-integer samples", async () => {
     const zero = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { samples: 0 });
-    await expect(zero.run(gi())).rejects.toThrow(/samples must be a positive integer/);
+    await expect(zero.run(graderInput())).rejects.toThrow(/samples must be a positive integer/);
     const frac = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { samples: 1.5 });
-    await expect(frac.run(gi())).rejects.toThrow(/samples must be a positive integer/);
+    await expect(frac.run(graderInput())).rejects.toThrow(/samples must be a positive integer/);
   });
 
   it("passes() reads binary pass, and scalar against threshold", () => {

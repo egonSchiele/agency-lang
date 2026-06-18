@@ -1,3 +1,5 @@
+import type { AgencyRunner } from "./agencyRunner.js";
+
 /** A JSON-compatible value. */
 export type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON };
 
@@ -40,8 +42,9 @@ export type GraderOptions = {
   name?: string;                 // overrides the grader's defaultName
 };
 
-/** What a grader's `_run` receives. Phase 3 extends this with run-agency capabilities. */
+/** What a grader's `_run` receives. */
 export type GraderInput = {
   input: Input;
   run: AgentRun;
+  runAgency: AgencyRunner;   // capability to invoke a judge .agency file
 };

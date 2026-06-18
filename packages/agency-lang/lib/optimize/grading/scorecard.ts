@@ -4,10 +4,13 @@ import type { AgentRun, Grade, Input } from "./types.js";
 export type GraderGrade = { grader: BaseGrader; grade: Grade };
 export type InputGrades = { input: Input; run: AgentRun; grades: GraderGrade[]; gatesPassed: boolean };
 
-/** Weighted mean of the non-gating scalar grades for one input. */
+/**
+ * Weighted mean of the scalar grades for one input. Every scalar grade
+ * contributes, including a scalar gate's; binary grades (gate or not) have no
+ * scalar value and so contribute nothing.
+ */
 export function inputObjective(grades: GraderGrade[]): number {
   const contributions = grades
-    .filter((g) => !g.grader.mustPass())
     .flatMap((g) => (g.grade.score.kind === "scalar" ? [{ weight: g.grader.weight(), value: g.grade.score.value }] : []));
   const totalWeight = contributions.reduce((sum, c) => sum + c.weight, 0);
   if (totalWeight === 0) return 0;

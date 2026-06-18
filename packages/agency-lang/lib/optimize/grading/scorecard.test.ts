@@ -29,7 +29,7 @@ describe("Scorecard", () => {
     expect(new Scorecard(perInput).objective()).toBeCloseTo(0.625, 10);
   });
 
-  it("excludes gating graders from the objective", () => {
+  it("binary gates contribute nothing to the objective (they have no scalar value)", () => {
     const gate = new StubGrader({ mustPass: true });
     const advisory = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
@@ -44,6 +44,21 @@ describe("Scorecard", () => {
       },
     ];
     expect(new Scorecard(perInput).objective()).toBeCloseTo(0.5, 10);
+  });
+
+  it("a passing scalar gate contributes its value to the objective", () => {
+    const scalarGate = new StubGrader({ mustPass: true, weight: 1 });
+    const advisory = new StubGrader({ weight: 1 });
+    const perInput: InputGrades[] = [
+      {
+        input: input("a"),
+        run: { output: null, recordPath: "" },
+        gatesPassed: true,
+        grades: [scalarGrade(scalarGate, 0.4), scalarGrade(advisory, 0.8)],
+      },
+    ];
+    // (1*0.4 + 1*0.8)/2 = 0.6
+    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.6, 10);
   });
 
   it("a gate-failed input scores 0 and drags the objective down", () => {

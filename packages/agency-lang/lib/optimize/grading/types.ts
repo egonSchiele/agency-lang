@@ -1,0 +1,47 @@
+/** A JSON-compatible value. */
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+/** A path of object keys / array indices into a Json value. */
+export type JsonPath = (string | number)[];
+
+/** One invocation of the agent under optimization. */
+export type Input = {
+  id?: string;                       // optional; callers auto-derive when omitted
+  node?: string;                     // defaults to "main" at run time
+  args: Record<string, Json>;
+  metadata?: Record<string, Json>;   // freeform, grader-agnostic (title, expectedOutput, tags, …)
+};
+
+/** The result of running the agent on one input. */
+export type AgentRun = {
+  output: Json;        // the agent's return value
+  recordPath: string;  // path to the full execution trace (eval record)
+};
+
+/** A grader's score: pass/fail or a continuous value. */
+export type Score =
+  | { kind: "binary"; pass: boolean }
+  | { kind: "scalar"; value: number };
+
+/** A grader's output: a score plus optional natural-language feedback. */
+export type Grade = { score: Score; feedback?: string };
+
+/** Restricts a grader to a subset of inputs. */
+export type GraderScope = { tag: string } | { ids: string[] };
+
+/** Options common to every grader; subclasses extend this with their own fields. */
+export type GraderOptions = {
+  mustPass?: boolean;            // gate: failure fails the whole iteration for this input
+  threshold?: number;            // scalar passing bar (binary reads `pass`)
+  weight?: number;               // contribution to the scalarized objective (default 1)
+  samples?: number;              // k repetitions (default 1)
+  aggregate?: "any" | "all";     // binary only; scalar always averages
+  inputScope?: GraderScope;      // restrict to a subset of inputs (default: all)
+  name?: string;                 // overrides the grader's defaultName
+};
+
+/** What a grader's `_run` receives. Phase 3 extends this with run-agency capabilities. */
+export type GraderInput = {
+  input: Input;
+  run: AgentRun;
+};

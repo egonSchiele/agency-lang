@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { AgencyRunner } from "./agencyRunner.js";
 import { ContainsGrader, ExactMatchGrader, SimilarityGrader } from "./builtinGraders.js";
 import type { GraderInput, Input, JSON } from "./types.js";
 
+const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const gi = (output: JSON, metadata: Record<string, JSON>): GraderInput => {
   const input: Input = { id: "i1", args: {}, metadata };
-  return { input, run: { output, recordPath: "" } };
+  return { input, run: { output, recordPath: "" }, runAgency: stubRunner };
 };
 
 describe("ExactMatchGrader", () => {

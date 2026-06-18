@@ -36,6 +36,7 @@ export async function loadGradingModule(filePath: string, _config: AgencyConfig)
       logLevel: "silent",
       external: ["agency-lang", "agency-lang/*"],
     });
+    // eslint-disable-next-line no-restricted-syntax -- CLI-layer loading of a user artifact; the bundle path is only known at runtime
     const mod = await import(pathToFileURL(out).href);
     const exported = mod.default;
     if (exported === undefined) {

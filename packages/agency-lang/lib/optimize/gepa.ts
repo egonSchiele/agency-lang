@@ -37,7 +37,13 @@ type Candidate = {
 };
 
 /** The immutable record of one iteration. */
-type Attempt = { iter: number; decision: Exclude<OptimizeDecision, "baseline">; rationale: string; candidate?: Candidate };
+type Attempt = {
+  iter: number;
+  decision: Exclude<OptimizeDecision, "baseline">;
+  rationale: string;
+  objective?: number;
+  candidate?: Candidate;
+};
 
 /** GEPA: reflective evolution with a Pareto candidate pool and minibatched promotion. */
 export class Gepa extends BaseOptimizer {
@@ -58,8 +64,13 @@ export class Gepa extends BaseOptimizer {
     const paretoInputs = this.gepaConfig.paretoSet ?? target.inputs;
     const rng = makeRng(this.config.seed ?? 0);
 
+    this.reporter.runStarted({
+      optimizer: this.name, runId: this.config.runId,
+      targetCount: source.targets.length, inputCount: target.inputs.length, iterations: this.config.iterations,
+    });
     const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, paretoInputs, fileMap(source));
     this.requireBaselineGatesPass(baseline.scorecard);
+    this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
     const pool = new CandidatePool<Candidate>([toPoolCandidate(baseline)]);
     const attempts = await this.evolve(pool, target.inputs, paretoInputs, rng);
@@ -78,6 +89,10 @@ export class Gepa extends BaseOptimizer {
       const attempt = await this.attempt(parent, minibatch, paretoInputs, iter);
       if (attempt.decision === "accepted" && attempt.candidate) pool.add(toPoolCandidate(attempt.candidate));
       attempts.push(attempt);
+      this.reporter.iterationDecided({
+        iter, total: this.config.iterations,
+        decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
+      });
     }
     return attempts;
   }
@@ -94,11 +109,11 @@ export class Gepa extends BaseOptimizer {
     const childMini = await this.evaluate(childWs, entry, minibatch);
     const parentMini = await this.evaluate(parent.ws, parent.targetSet.entryFile, minibatch);   // cache hits
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
-      return { iter, decision: "rejected", rationale: proposal.rationale };
+      return { iter, decision: "rejected", rationale: proposal.rationale, objective: childMini.objective() };
     }
     const full = await this.evaluate(childWs, entry, paretoInputs);
     const candidate: Candidate = { iter, ws: childWs, scorecard: full, targetSet: preview.targetSet, files: preview.files };
-    return { iter, decision: "accepted", rationale: proposal.rationale, candidate };
+    return { iter, decision: "accepted", rationale: proposal.rationale, objective: full.objective(), candidate };
   }
 
   /** Build the reflection context (selected target + weakest-input traces) and ask the proposer. */

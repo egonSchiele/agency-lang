@@ -17,6 +17,8 @@ export type BaseOptimizerConfig = {
   runId: string;
   writeback?: boolean;
   mutatorModel?: string;
+  /** Progress output verbosity. Defaults to silent (programmatic use); the CLI sets "default". */
+  verbosity?: "silent" | "default";
 };
 
 /** A pluggable optimization strategy. */

@@ -10,6 +10,7 @@ import type { BaseGrader } from "./grading/baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scorecard.js";
 import type { AgentRun, Input } from "./grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
+import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
 import type { IterationResult, OptimizeDecision, OptimizeResult } from "./types.js";
 import { WorkspaceManager, type Workspace } from "./workspace.js";
 
@@ -22,12 +23,15 @@ export type BaseOptimizerDeps = {
   cache?: EvalCache;
   /** Override how the agent under test runs (tests inject a fake; default uses the eval-run path). */
   runInput?: RunInput;
+  /** Override the progress reporter (tests inject one that captures lines). */
+  reporter?: PointwiseReporter;
 };
 
 export abstract class BaseOptimizer {
   protected readonly workspace: WorkspaceManager;
   protected readonly agencyRunner: AgencyRunner;
   protected readonly cache: EvalCache;
+  protected readonly reporter: PointwiseReporter;
   private readonly runInput: RunInput;
   private runCounter = 0;
 
@@ -35,6 +39,7 @@ export abstract class BaseOptimizer {
     this.workspace = new WorkspaceManager(deps.workspaceRoot ?? path.join(config.runsDir, config.runId, "ws"));
     this.agencyRunner = deps.agencyRunner ?? new AgencyRunner(config.config);
     this.cache = deps.cache ?? new EvalCache();
+    this.reporter = deps.reporter ?? createPointwiseReporter(config.verbosity ?? "silent");
     this.runInput = deps.runInput ?? ((ws, entryFile, input, id) => this.runInputViaEval(ws, entryFile, input, id));
   }
 

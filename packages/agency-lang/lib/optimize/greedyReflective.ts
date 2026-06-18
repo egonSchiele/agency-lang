@@ -45,8 +45,13 @@ export class GreedyReflective extends BaseOptimizer {
       throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
     }
 
+    this.reporter.runStarted({
+      optimizer: this.name, runId: this.config.runId,
+      targetCount: source.targets.length, inputCount: target.inputs.length, iterations: this.config.iterations,
+    });
     const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, target.inputs);
     this.requireBaselineGatesPass(baseline.scorecard);
+    this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
     const attempts = await this.hillClimb(baseline, target.inputs);
     const champion = lastAccepted(attempts)?.candidate ?? baseline;
@@ -65,6 +70,10 @@ export class GreedyReflective extends BaseOptimizer {
       const attempt = await this.attempt(champion, inputs, iter, attempts);
       if (attempt.decision === "accepted" && attempt.candidate) champion = attempt.candidate;
       attempts.push(attempt);
+      this.reporter.iterationDecided({
+        iter, total: this.config.iterations,
+        decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
+      });
     }
     return attempts;
   }

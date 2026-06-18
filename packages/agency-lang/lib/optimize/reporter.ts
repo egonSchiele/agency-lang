@@ -6,9 +6,53 @@ import { formatDiff } from "@/utils/diff.js";
 import { color } from "@/utils/termcolors.js";
 import type { OptimizeAppliedChange, OptimizeMutationDiagnostic } from "./sourceMutator.js";
 import type { OptimizeTarget, OptimizeTargetSet } from "./targets.js";
-import type { OptimizeResult } from "./types.js";
+import type { OptimizeDecision, OptimizeResult } from "./types.js";
 
 export type OptimizeVerbosity = "silent" | "default";
+
+/**
+ * Presentation boundary for the pointwise optimizers (greedy, GEPA). They speak
+ * in a scalar objective + decision per iteration rather than the pairwise
+ * judge's win counts, so they get their own reporter shape. Same silent/default
+ * gating as the pairwise reporter: `silent` renders nothing.
+ */
+export type PointwiseReporter = {
+  runStarted(args: { optimizer: string; runId: string; targetCount: number; inputCount: number; iterations: number }): void;
+  baselineScored(args: { objective: number }): void;
+  iterationDecided(args: { iter: number; total: number; decision: OptimizeDecision; objective?: number; rationale?: string }): void;
+};
+
+function decisionTag(decision: OptimizeDecision): string {
+  if (decision === "accepted") return color.green("accepted");
+  if (decision === "validation-failed") return color.red("invalid ");
+  return color.red("rejected");
+}
+
+export function createPointwiseReporter(
+  verbosity: OptimizeVerbosity,
+  log: (line: string) => void = (line) => console.error(line),
+): PointwiseReporter {
+  if (verbosity === "silent") return SILENT_POINTWISE_REPORTER;
+  return {
+    runStarted({ optimizer, runId, targetCount, inputCount, iterations }) {
+      log(color.yellow(`\n== optimize ${optimizer} (run ${runId}): ${targetCount} target(s), ${inputCount} input(s), up to ${iterations} iteration(s) ==`));
+    },
+    baselineScored({ objective }) {
+      log(`  baseline   objective ${objective.toFixed(3)}`);
+    },
+    iterationDecided({ iter, total, decision, objective, rationale }) {
+      const obj = objective === undefined ? "" : ` objective ${objective.toFixed(3)}`;
+      const why = rationale ? `   ${truncate(rationale, 80)}` : "";
+      log(`  iter ${iter}/${total}  ${decisionTag(decision)}${obj}${why}`);
+    },
+  };
+}
+
+export const SILENT_POINTWISE_REPORTER: PointwiseReporter = {
+  runStarted() { },
+  baselineScored() { },
+  iterationDecided() { },
+};
 
 /** Champion/candidate eval record paths for one task, read lazily when the
  *  reporter renders response diffs. */

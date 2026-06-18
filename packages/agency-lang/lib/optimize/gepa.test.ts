@@ -92,6 +92,23 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     expect(targetSections[2]).toContain("t-alpha");
   });
 
+  it("reports run start, baseline, and a decision per iteration through the injected reporter", async () => {
+    const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4]));
+    const events: string[] = [];
+    const reporter = {
+      runStarted: (a: { optimizer: string; iterations: number }) => events.push(`start ${a.optimizer} x${a.iterations}`),
+      baselineScored: (a: { objective: number }) => events.push(`baseline ${a.objective.toFixed(1)}`),
+      iterationDecided: (a: { iter: number; decision: string }) => events.push(`iter ${a.iter} ${a.decision}`),
+    };
+    const opt = new Gepa(config({ runId: "report" }), { ...deps(runInput), reporter });
+
+    await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+
+    expect(events[0]).toBe("start gepa x3");
+    expect(events[1]).toBe("baseline 0.1");
+    expect(events.filter((e) => e.startsWith("iter"))).toEqual(["iter 1 accepted", "iter 2 accepted", "iter 3 accepted"]);
+  });
+
   it("rejects non-improving children, skips the full eval, and re-grades the parent from cache", async () => {
     const runInput = vi.fn(scoredRunner([0.9, 0.1, 0.1, 0.1])); // baseline 0.9, children 0.1 → always rejected
     const opt = new Gepa(config({ runId: "reject" }), deps(runInput));

@@ -148,6 +148,8 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
       ].map((value) => JSON.stringify(value)).join(", "),
       scratchDir,
       quietCompile: true,
+      // mutatePrompt is a bundled agent with a precompiled .js in dist; reuse it.
+      preferCompiled: true,
     });
     return result.data;
   } finally {

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { SuiteVerdict } from "@/eval/judge/types.js";
 import { color } from "@/utils/termcolors.js";
 
-import { createOptimizeReporter, type OptimizeReporter } from "./reporter.js";
+import { createOptimizeReporter, createPointwiseReporter, type OptimizeReporter } from "./reporter.js";
 import type { OptimizeTarget, OptimizeTargetSet } from "./targets.js";
 import type { OptimizeResult } from "./types.js";
 
@@ -269,5 +269,32 @@ describe("createOptimizeReporter", () => {
     reporter.runFinished({ ...finishedArgs(), writebackApplied: true });
 
     expect(lines.join("\n")).toMatch(/written back/i);
+  });
+});
+
+describe("createPointwiseReporter", () => {
+  it("silent renders nothing", () => {
+    const lines: string[] = [];
+    const reporter = createPointwiseReporter("silent", (l) => lines.push(l));
+    reporter.runStarted({ optimizer: "gepa", runId: "r", targetCount: 1, inputCount: 2, iterations: 5 });
+    reporter.baselineScored({ objective: 0.1 });
+    reporter.iterationDecided({ iter: 1, total: 5, decision: "accepted", objective: 0.9, rationale: "tightened" });
+    expect(lines).toEqual([]);
+  });
+
+  it("default renders run header, baseline, and per-iteration decisions", () => {
+    const lines: string[] = [];
+    const reporter = createPointwiseReporter("default", (l) => lines.push(l));
+    reporter.runStarted({ optimizer: "gepa", runId: "abc", targetCount: 1, inputCount: 2, iterations: 5 });
+    reporter.baselineScored({ objective: 0.1 });
+    reporter.iterationDecided({ iter: 1, total: 5, decision: "accepted", objective: 0.9, rationale: "ask about India" });
+    reporter.iterationDecided({ iter: 2, total: 5, decision: "rejected", objective: 0.3 });
+    reporter.iterationDecided({ iter: 3, total: 5, decision: "validation-failed", rationale: "bad op" });
+    const out = lines.join("\n");
+    expect(out).toMatch(/optimize gepa.*abc/);
+    expect(out).toMatch(/baseline.*0\.100/);
+    expect(out).toMatch(/iter 1\/5.*accepted.*0\.900.*India/);
+    expect(out).toMatch(/iter 2\/5.*rejected.*0\.300/);
+    expect(out).toMatch(/iter 3\/5.*invalid/);
   });
 });

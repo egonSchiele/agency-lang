@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AgencyRunner } from "./agencyRunner.js";
-import { HumanGrader, type HumanRead } from "./humanGrader.js";
+import { HumanGrader, parseBinaryAnswer, parseScalarAnswer, type HumanRead } from "./humanGrader.js";
 import type { GraderInput, Input, JSON } from "./types.js";
 
 const graderInput = (output: JSON): GraderInput => {
@@ -38,5 +38,46 @@ describe("HumanGrader", () => {
     expect(seen?.prompt).toBe("Rate it");
     expect(seen?.scale).toEqual({ min: 0, max: 2 });
     expect(seen?.artifact).toBe("{\"a\":1}");   // structured output stringified
+  });
+
+  it("rejects an invalid scale (min >= max) at construction", () => {
+    expect(() => new HumanGrader({ scale: { min: 5, max: 5 } })).toThrow(/finite min < max/);
+  });
+
+  it("fails fast on a non-finite or out-of-range rating", async () => {
+    const outOfRange: HumanRead = async () => ({ rating: 99 });
+    await expect(new HumanGrader({ scale: { min: 1, max: 10 }, read: outOfRange }).run(graderInput("x")))
+      .rejects.toThrow(/expected a rating in \[1, 10\]/);
+    const noRating: HumanRead = async () => ({ note: "only a note" });
+    await expect(new HumanGrader({ scale: { min: 1, max: 10 }, read: noRating }).run(graderInput("x")))
+      .rejects.toThrow(/expected a rating/);
+  });
+
+  it("fails fast when a binary grader gets no verdict", async () => {
+    const noVerdict: HumanRead = async () => ({ note: "hmm" });
+    await expect(new HumanGrader({ read: noVerdict }).run(graderInput("x"))).rejects.toThrow(/expected a pass\/fail/);
+  });
+});
+
+describe("parseScalarAnswer", () => {
+  it("reads a leading number as the rating and the rest as a note, robust to extra spaces", () => {
+    expect(parseScalarAnswer("5 great   work")).toEqual({ rating: 5, note: "great work" });
+    expect(parseScalarAnswer("   8   ")).toEqual({ rating: 8, note: undefined });
+  });
+
+  it("treats a non-numeric answer as a note with no rating", () => {
+    expect(parseScalarAnswer("looks good")).toEqual({ note: "looks good" });
+    expect(parseScalarAnswer("   ")).toEqual({ note: undefined });
+  });
+});
+
+describe("parseBinaryAnswer", () => {
+  it("reads y/n (and yes/no) as the verdict and the rest as a note", () => {
+    expect(parseBinaryAnswer("y looks good")).toEqual({ pass: true, note: "looks good" });
+    expect(parseBinaryAnswer("no")).toEqual({ pass: false, note: undefined });
+  });
+
+  it("treats a non-verdict answer as a note with no pass", () => {
+    expect(parseBinaryAnswer("looks good")).toEqual({ note: "looks good" });
   });
 });

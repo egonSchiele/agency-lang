@@ -9,7 +9,7 @@ description: Documents the `agency eval extract` command for converting a captur
 
 ```
 agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>)
-agency eval optimize <file>[:<node>] (--inputs <file|dir> | --goal <text>)
+agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir>]
 agency eval extract <file>
 ```
 
@@ -93,8 +93,11 @@ Legacy `@optimize(...)` tags are no longer supported. Use `optimize const` or `o
 Options:
 
 - `<file>[:<node>]` — required positional agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
-- `--inputs <file|dir>` — input suite file or directory. Mutually exclusive with `--goal`; exactly one is required.
-- `--goal <text>` — create one inline no-argument input with this goal, exactly like `eval run`. The suite input goals are also the mutator's objectives. Fails upfront if the selected node requires arguments.
+- `--inputs <file|dir>` — input suite file or directory. May be combined with `--goal` (then `--goal` is the overall-goal default for inputs that omit one). At least one of `--inputs`/`--goal` is required.
+- `--goal <text>` — with `--inputs`, the overall goal applied to every input that lacks its own; alone, creates one inline no-argument input with this goal (fails upfront if the selected node requires arguments).
+- `--graders <file>` — a TypeScript grading module that replaces the default goal judge. See [Custom graders](#custom-graders).
+- `--validation-inputs <file|dir>` — a held-out validation suite. With `greedy`, the champion written back is the one with the best validation objective.
+- `--validation-split <ratio>` — when `--validation-inputs` is absent, hold out this fraction of `--inputs` (seeded by `--seed`) as the validation set.
 - `--iterations <n>` — maximum candidate iterations after the baseline. Defaults to `5`.
 - `--samples <n>` — judge samples per input. Defaults to `3`.
 - `--confidence-threshold <n>` — minimum input confidence counted as a suite win. Defaults to `50`.
@@ -134,6 +137,59 @@ runs/optimize/<run-id>/
 ```
 
 `iter-N/agent/` holds the full discovered Agency file set for that candidate (changed and unchanged files). `iter-N/workspace/` is the runnable copy of the working directory with the candidate files overlaid; evals run against the workspace. Writeback at the end verifies every discovered source file is unchanged on disk since discovery (by content hash) and aborts entirely on any mismatch.
+
+The run directory also contains a human-readable `report.md` (resolved grading setup, the per-iteration table, and the champion's per-input grade breakdown) and, for the champion, `champion/grades.json` — per input, the output plus each grader's score and feedback. The breakdown is the quickest way to spot a gamed metric: a high objective alongside off-topic outputs.
+
+## Custom graders
+
+By default a run is graded by one built-in LLM judge that scores each output against the input's `goal` (or the overall `--goal`). To grade differently — exact-match against a known answer, a deterministic check, several graders combined — pass `--graders ./grading.ts` (or set `eval.optimize.graders` in `agency.json`). The module replaces the default judge entirely.
+
+A grading module **default-exports one grader or an array of graders**. A "grader" is any of:
+
+```ts
+import { grader, ExactMatch, LlmJudge, type Grader } from "agency-lang/optimize";
+
+// (a) a metric function: ctx = { output, input, judge }
+//     `input` is the typed Input; your per-input data lives under `input.metadata`.
+const exact: Grader = ({ output, input }) =>
+  output === input.metadata?.expectedCapital ? 1 : 0;   // number (0..1), boolean, or {score, feedback}
+
+// (b) a wrapped function carrying policy (mustPass gate, weight, threshold, samples, inputScope)
+const gate = grader(exact, { mustPass: true, name: "capital-exact" });
+
+// (c) a configured built-in
+const judge = new LlmJudge({ goal: "Return the capital.", weight: 0.5, samples: 3 });
+
+export default [gate, judge];   // or `export default exact` for the simple case
+```
+
+Because graders read their own data from `input.metadata`, input files can carry whatever fields your graders need:
+
+```json
+{ "inputs": [{ "id": "brazil", "args": { "country": "Brazil" }, "metadata": { "expectedCapital": "Brasília" } }] }
+```
+
+When a grading module is configured, a per-input `goal` is optional. `ctx.judge({ goal, output })` runs the bundled LLM goal judge from inside a metric function, so you can mix deterministic and LLM grading.
+
+## Validation sets
+
+Pass `--validation-inputs <file|dir>` to grade the champion against held-out inputs, or `--validation-split <ratio>` to hold out a seeded fraction of `--inputs`. The search and candidate acceptance run on the training inputs; with the default `greedy` optimizer the champion written back is the one with the best **validation** objective, and `report.md` shows train-vs-validation side by side so an overfit prompt (high train, flat validation) is visible. `gepa` and `example` report a validation objective but select the champion on the training objective; the report says so.
+
+Configuration can also live under `eval.optimize` in `agency.json`:
+
+```jsonc
+{
+  "eval": {
+    "optimize": {
+      "goal": "Return the capital of the given country.",
+      "graders": "./grading.ts",
+      "validation": { "inputs": "./validation-inputs.json" }
+    }
+  }
+}
+```
+
+CLI flags override `agency.json`.
 
 The CLI installs an approval handler for the internal `std::agency.run(...)` calls used by eval execution. The stdlib `agency.eval.optimize(...)` function does not install a handler; Agency callers should wrap it in their own handler when they want auto-approval.
 

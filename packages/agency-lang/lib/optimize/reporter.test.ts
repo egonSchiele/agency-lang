@@ -273,28 +273,51 @@ describe("createOptimizeReporter", () => {
 });
 
 describe("createPointwiseReporter", () => {
+  const prompt = makeTarget({ id: "foo.agency:bar:prompt", name: "prompt", value: "France?" });
+
   it("silent renders nothing", () => {
     const lines: string[] = [];
     const reporter = createPointwiseReporter("silent", (l) => lines.push(l));
-    reporter.runStarted({ optimizer: "gepa", runId: "r", targetCount: 1, inputCount: 2, iterations: 5 });
+    reporter.runStarted({ optimizer: "gepa", runId: "r", targets: [prompt], inputCount: 2, iterations: 5 });
     reporter.baselineScored({ objective: 0.1 });
     reporter.iterationDecided({ iter: 1, total: 5, decision: "accepted", objective: 0.9, rationale: "tightened" });
+    reporter.note("parent: baseline");
+    reporter.runFinished({ result, initialTargets: [prompt], finalTargets: [prompt], durationMs: 1234 });
     expect(lines).toEqual([]);
   });
 
-  it("default renders run header, baseline, and per-iteration decisions", () => {
+  it("default renders header with discovered targets, baseline, decisions with diffs, timing, and a final summary", () => {
     const lines: string[] = [];
     const reporter = createPointwiseReporter("default", (l) => lines.push(l));
-    reporter.runStarted({ optimizer: "gepa", runId: "abc", targetCount: 1, inputCount: 2, iterations: 5 });
+    reporter.runStarted({ optimizer: "gepa", runId: "abc", targets: [prompt], inputCount: 2, iterations: 5 });
     reporter.baselineScored({ objective: 0.1 });
-    reporter.iterationDecided({ iter: 1, total: 5, decision: "accepted", objective: 0.9, rationale: "ask about India" });
-    reporter.iterationDecided({ iter: 2, total: 5, decision: "rejected", objective: 0.3 });
+    reporter.note("parent: baseline (objective 0.100, pool size 1)");
+    reporter.iterationDecided({
+      iter: 1, total: 5, decision: "accepted", objective: 0.9, rationale: "ask about India",
+      changes: [{ target: "foo.agency:bar:prompt", kind: "variable", op: "replaceInitializer", oldValue: "France?", newValue: "India?" }],
+      durationMs: 1500,
+    });
+    reporter.iterationDecided({ iter: 2, total: 5, decision: "rejected", objective: 0.3, durationMs: 800 });
     reporter.iterationDecided({ iter: 3, total: 5, decision: "validation-failed", rationale: "bad op" });
+    reporter.runFinished({
+      result,
+      initialTargets: [prompt],
+      finalTargets: [makeTarget({ id: "foo.agency:bar:prompt", name: "prompt", value: "India?" })],
+      durationMs: 4200,
+    });
+
     const out = lines.join("\n");
     expect(out).toMatch(/optimize gepa.*abc/);
+    expect(out).toContain("foo.agency:bar:prompt"); // discovered target listed at start
     expect(out).toMatch(/baseline.*0\.100/);
-    expect(out).toMatch(/iter 1\/5.*accepted.*0\.900.*India/);
+    expect(out).toContain("parent: baseline"); // note() escape hatch
+    expect(out).toMatch(/iter 1\/5.*accepted.*0\.900/);
+    expect(out).toContain(color.red("France"));  // mutation diff (word-level: "?" is unchanged)
+    expect(out).toContain(color.green("India"));
+    expect(out).toMatch(/1\.5s/);                  // per-iteration timing
     expect(out).toMatch(/iter 2\/5.*rejected.*0\.300/);
     expect(out).toMatch(/iter 3\/5.*invalid/);
+    expect(out).toContain("== Optimized variables ==");
+    expect(out).toMatch(/champion iteration 1.*4\.2s/); // final summary + total time
   });
 });

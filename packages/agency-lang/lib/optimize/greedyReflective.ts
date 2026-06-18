@@ -6,7 +6,7 @@ import { proposeMutation, type ProposeMutationArgs } from "./mutator.js";
 import type { Scorecard } from "./grading/scorecard.js";
 import type { Input } from "./grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
-import { defaultPreview, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
+import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
 import { discoverOptimizeTargets, fileMap, type OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
@@ -29,7 +29,7 @@ type Candidate = {
 
 type Decision = "accepted" | "rejected" | "validation-failed";
 /** The immutable record of one iteration; all run stats are derived from these. */
-type Attempt = { iter: number; decision: Decision; rationale: string; objective?: number; candidate?: Candidate };
+type Attempt = { iter: number; decision: Decision; rationale: string; objective?: number; changes?: OptimizeAppliedChange[]; candidate?: Candidate };
 
 /** Champion–challenger hill-climb with pointwise grading (replaces the pairwise judge). */
 export class GreedyReflective extends BaseOptimizer {
@@ -45,9 +45,10 @@ export class GreedyReflective extends BaseOptimizer {
       throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
     }
 
+    const startedAt = Date.now();
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
-      targetCount: source.targets.length, inputCount: target.inputs.length, iterations: this.config.iterations,
+      targets: source.targets, inputCount: target.inputs.length, iterations: this.config.iterations,
     });
     const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, target.inputs);
     this.requireBaselineGatesPass(baseline.scorecard);
@@ -59,7 +60,11 @@ export class GreedyReflective extends BaseOptimizer {
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
-    return this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    this.reporter.runFinished({
+      result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   /** The one place the champion is threaded across iterations. */
@@ -67,12 +72,14 @@ export class GreedyReflective extends BaseOptimizer {
     const attempts: Attempt[] = [];
     let champion = baseline;
     for (let iter = 1; iter <= this.config.iterations; iter += 1) {
+      const startedAt = Date.now();
       const attempt = await this.attempt(champion, inputs, iter, attempts);
       if (attempt.decision === "accepted" && attempt.candidate) champion = attempt.candidate;
       attempts.push(attempt);
       this.reporter.iterationDecided({
         iter, total: this.config.iterations,
         decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
+        changes: attempt.changes, durationMs: Date.now() - startedAt,
       });
     }
     return attempts;
@@ -93,7 +100,7 @@ export class GreedyReflective extends BaseOptimizer {
     }
     const candidate = await this.makeCandidate(iter, this.fork(champion.ws.dir), preview.targetSet, inputs, preview.files);
     const decision: Decision = this.beats(candidate, champion) ? "accepted" : "rejected";
-    return { iter, decision, rationale: proposal.rationale, objective: candidate.scorecard.objective(), candidate };
+    return { iter, decision, rationale: proposal.rationale, objective: candidate.scorecard.objective(), changes: preview.changes, candidate };
   }
 
   /** Apply the candidate's file set (if any) into its forked workspace and grade it. */

@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 
 import { nanoid } from "nanoid";
@@ -51,7 +52,13 @@ export async function evalOptimize(
   const config = buildConfig(opts, deps);
   const resolve = deps.getOptimizer ?? getOptimizer;
   const optimizer = resolve(opts.optimizer ?? DEFAULT_OPTIMIZER, config);
-  return optimizer.optimize(target);
+  const result = await optimizer.optimize(target);
+  // Persist the run summary so the path printed by the CLI actually exists.
+  if (result.runDir) {
+    fs.mkdirSync(result.runDir, { recursive: true });
+    fs.writeFileSync(path.join(result.runDir, "summary.json"), JSON.stringify(result, null, 2));
+  }
+  return result;
 }
 
 /** Build the optimize target: the agent plus the inputs to run it on (from --goal or --tasks). */

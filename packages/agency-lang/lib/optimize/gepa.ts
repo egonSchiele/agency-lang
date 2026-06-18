@@ -10,7 +10,7 @@ import type { Input } from "./grading/types.js";
 import { renderTargetsSection } from "./mutator.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { makeRng, sampleWithoutReplacement, type Rng } from "./rng.js";
-import { defaultPreview, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
+import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationOperation, type OptimizeMutationPreview } from "./sourceMutator.js";
 import { discoverOptimizeTargets, fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
 import type { Workspace } from "./workspace.js";
@@ -42,6 +42,7 @@ type Attempt = {
   decision: Exclude<OptimizeDecision, "baseline">;
   rationale: string;
   objective?: number;
+  changes?: OptimizeAppliedChange[];
   candidate?: Candidate;
 };
 
@@ -64,9 +65,10 @@ export class Gepa extends BaseOptimizer {
     const paretoInputs = this.gepaConfig.paretoSet ?? target.inputs;
     const rng = makeRng(this.config.seed ?? 0);
 
+    const startedAt = Date.now();
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
-      targetCount: source.targets.length, inputCount: target.inputs.length, iterations: this.config.iterations,
+      targets: source.targets, inputCount: target.inputs.length, iterations: this.config.iterations,
     });
     const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, paretoInputs, fileMap(source));
     this.requireBaselineGatesPass(baseline.scorecard);
@@ -77,14 +79,21 @@ export class Gepa extends BaseOptimizer {
 
     const champion = pool.best().value;
     if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
-    return this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    this.reporter.runFinished({
+      result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   /** Run the optimization loop, threading the pool. */
   private async evolve(pool: CandidatePool<Candidate>, inputs: Input[], paretoInputs: Input[], rng: Rng): Promise<Attempt[]> {
     const attempts: Attempt[] = [];
     for (let iter = 1; iter <= this.config.iterations; iter += 1) {
+      const startedAt = Date.now();
       const parent = pool.sampleParent(rng).value;
+      const parentLabel = parent.iter === "baseline" ? "baseline" : `iter ${parent.iter}`;
+      this.reporter.note(`parent: ${parentLabel} (objective ${parent.scorecard.objective().toFixed(3)}, pool size ${pool.size()})`);
       const minibatch = sampleWithoutReplacement(inputs, this.gepaConfig.minibatch, rng);
       const attempt = await this.attempt(parent, minibatch, paretoInputs, iter);
       if (attempt.decision === "accepted" && attempt.candidate) pool.add(toPoolCandidate(attempt.candidate));
@@ -92,6 +101,7 @@ export class Gepa extends BaseOptimizer {
       this.reporter.iterationDecided({
         iter, total: this.config.iterations,
         decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
+        changes: attempt.changes, durationMs: Date.now() - startedAt,
       });
     }
     return attempts;
@@ -109,11 +119,11 @@ export class Gepa extends BaseOptimizer {
     const childMini = await this.evaluate(childWs, entry, minibatch);
     const parentMini = await this.evaluate(parent.ws, parent.targetSet.entryFile, minibatch);   // cache hits
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
-      return { iter, decision: "rejected", rationale: proposal.rationale, objective: childMini.objective() };
+      return { iter, decision: "rejected", rationale: proposal.rationale, objective: childMini.objective(), changes: preview.changes };
     }
     const full = await this.evaluate(childWs, entry, paretoInputs);
     const candidate: Candidate = { iter, ws: childWs, scorecard: full, targetSet: preview.targetSet, files: preview.files };
-    return { iter, decision: "accepted", rationale: proposal.rationale, objective: full.objective(), candidate };
+    return { iter, decision: "accepted", rationale: proposal.rationale, objective: full.objective(), changes: preview.changes, candidate };
   }
 
   /** Build the reflection context (selected target + weakest-input traces) and ask the proposer. */

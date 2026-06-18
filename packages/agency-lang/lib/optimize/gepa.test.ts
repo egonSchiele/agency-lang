@@ -98,7 +98,10 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     const reporter = {
       runStarted: (a: { optimizer: string; iterations: number }) => events.push(`start ${a.optimizer} x${a.iterations}`),
       baselineScored: (a: { objective: number }) => events.push(`baseline ${a.objective.toFixed(1)}`),
-      iterationDecided: (a: { iter: number; decision: string }) => events.push(`iter ${a.iter} ${a.decision}`),
+      iterationDecided: (a: { iter: number; decision: string; durationMs?: number }) =>
+        events.push(`iter ${a.iter} ${a.decision} timed=${typeof a.durationMs === "number"}`),
+      note: () => events.push("note"),
+      runFinished: () => events.push("finished"),
     };
     const opt = new Gepa(config({ runId: "report" }), { ...deps(runInput), reporter });
 
@@ -106,7 +109,11 @@ describe("Gepa (reflective Pareto optimizer)", () => {
 
     expect(events[0]).toBe("start gepa x3");
     expect(events[1]).toBe("baseline 0.1");
-    expect(events.filter((e) => e.startsWith("iter"))).toEqual(["iter 1 accepted", "iter 2 accepted", "iter 3 accepted"]);
+    expect(events).toContain("note"); // GEPA notes the sampled Pareto parent each iteration
+    expect(events.filter((e) => e.startsWith("iter"))).toEqual([
+      "iter 1 accepted timed=true", "iter 2 accepted timed=true", "iter 3 accepted timed=true",
+    ]);
+    expect(events.at(-1)).toBe("finished");
   });
 
   it("rejects non-improving children, skips the full eval, and re-grades the parent from cache", async () => {

@@ -57,6 +57,22 @@ describe("WorkspaceManager", () => {
     expect(fs.existsSync(path.join(ws.dir, "node_modules"))).toBe(false);
   });
 
+  it("forks when the workspace root lives inside the source dir (runs/ under the package)", () => {
+    // Mirrors the real layout: agent at the package root, runsDir = <root>/runs/optimize.
+    fs.writeFileSync(path.join(root, "agent.agency"), "node main() {}\n");
+    fs.mkdirSync(path.join(root, "node_modules"));
+    fs.writeFileSync(path.join(root, "node_modules", "big.js"), "x");
+    fs.mkdirSync(path.join(root, "runs"), { recursive: true });
+    fs.writeFileSync(path.join(root, "runs", "stale.txt"), "old");
+
+    const wsm = new WorkspaceManager(path.join(root, "runs", "optimize", "r", "ws"));
+    const ws = wsm.fork(root);
+
+    expect(fs.existsSync(path.join(ws.dir, "agent.agency"))).toBe(true);
+    expect(fs.existsSync(path.join(ws.dir, "node_modules"))).toBe(false); // excluded
+    expect(fs.existsSync(path.join(ws.dir, "runs"))).toBe(false);          // excluded → no self-copy
+  });
+
   it("refuses paths that escape the workspace (traversal / absolute)", () => {
     const src = path.join(root, "src");
     fs.mkdirSync(src);

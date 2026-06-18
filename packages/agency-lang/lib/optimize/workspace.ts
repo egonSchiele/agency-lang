@@ -13,15 +13,26 @@ export class WorkspaceManager {
   private counter = 0;
   constructor(private readonly rootDir: string) {}
 
-  /** Copy `sourceDir` into a fresh workspace directory, skipping heavy/irrelevant dirs. */
+  /**
+   * Copy `sourceDir` into a fresh workspace directory, skipping heavy/irrelevant dirs.
+   *
+   * We copy top-level entries one by one (rather than `cpSync(sourceDir, dir)`)
+   * because the runs directory — and thus `dir` itself — usually lives *inside*
+   * `sourceDir` (so the forked agent resolves `node_modules` by walking up to the
+   * package root). A whole-directory copy would hit Node's "cannot copy into a
+   * subdirectory of self" guard before the `runs` exclusion could apply. Skipping
+   * the excluded entries at the top level means the subtree containing `dir` is
+   * never descended into.
+   */
   fork(sourceDir: string): Workspace {
     this.counter += 1;
     const key = `ws-${this.counter}`;
     const dir = path.join(this.rootDir, key);
-    fs.cpSync(sourceDir, dir, {
-      recursive: true,
-      filter: (src) => path.relative(sourceDir, src) === "" || !FORK_EXCLUDED.includes(path.basename(src)),
-    });
+    fs.mkdirSync(dir, { recursive: true });
+    for (const entry of fs.readdirSync(sourceDir)) {
+      if (FORK_EXCLUDED.includes(entry)) continue;
+      fs.cpSync(path.join(sourceDir, entry), path.join(dir, entry), { recursive: true });
+    }
     return { dir, key };
   }
 

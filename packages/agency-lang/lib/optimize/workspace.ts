@@ -5,8 +5,19 @@ import { sha256Text, type OptimizeTargetSet } from "./targets.js";
 
 export type Workspace = { dir: string; key: string };
 
-/** Heavy/irrelevant directories never copied into a workspace fork. */
-const FORK_EXCLUDED = ["node_modules", ".git", "dist", "runs", ".worktrees"];
+/**
+ * Entries never copied into a workspace fork.
+ *
+ * `package.json` is excluded deliberately: the generated agent imports the
+ * Agency runtime via the bare specifier `agency-lang`, which resolves by
+ * self-reference to the *nearest* `package.json` named `agency-lang`. Copying
+ * the package's own `package.json` into the workspace would make the workspace
+ * that nearest scope — and resolve the runtime to the workspace's (excluded,
+ * absent) `dist/`. Leaving it out lets the self-reference climb to the real
+ * package root, so the forked agent resolves the runtime exactly as an
+ * in-place run does.
+ */
+const FORK_EXCLUDED = ["node_modules", ".git", "dist", "runs", ".worktrees", "package.json"];
 
 /** Owns per-iteration workspace directories and resolves paths against them. */
 export class WorkspaceManager {

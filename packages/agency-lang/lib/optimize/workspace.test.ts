@@ -64,6 +64,7 @@ describe("WorkspaceManager", () => {
     fs.writeFileSync(path.join(root, "node_modules", "big.js"), "x");
     fs.mkdirSync(path.join(root, "runs"), { recursive: true });
     fs.writeFileSync(path.join(root, "runs", "stale.txt"), "old");
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "agency-lang" }));
 
     const wsm = new WorkspaceManager(path.join(root, "runs", "optimize", "r", "ws"));
     const ws = wsm.fork(root);
@@ -71,6 +72,8 @@ describe("WorkspaceManager", () => {
     expect(fs.existsSync(path.join(ws.dir, "agent.agency"))).toBe(true);
     expect(fs.existsSync(path.join(ws.dir, "node_modules"))).toBe(false); // excluded
     expect(fs.existsSync(path.join(ws.dir, "runs"))).toBe(false);          // excluded → no self-copy
+    // package.json excluded so the agent's `agency-lang` self-import climbs to the real package root.
+    expect(fs.existsSync(path.join(ws.dir, "package.json"))).toBe(false);
   });
 
   it("refuses paths that escape the workspace (traversal / absolute)", () => {

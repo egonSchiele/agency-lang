@@ -362,6 +362,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--runs-dir <path>", "Optimizer runs output directory")
     .option("--no-writeback", "Do not write the champion back to source files")
     .option("--mutator-model <model>", "Model to use for proposing mutations")
+    .option("--optimizer <name>", "Optimization strategy to use (default: greedy)")
     .option("--samples <n>", "Judge samples per task", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
@@ -374,6 +375,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       runsDir?: string;
       writeback: boolean;
       mutatorModel?: string;
+      optimizer?: string;
       samples?: number;
       confidenceThreshold?: number;
       marginThreshold?: number;

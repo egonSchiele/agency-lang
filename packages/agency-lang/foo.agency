@@ -1,12 +1,11 @@
-import { colorSchemes, highlight } from "std::syntax"
-const data = read("foo.agency") with approve
+def foo(block) {
+  block()
+}
 
-node main(): string {
-
-  for (theme in colorSchemes) {
-    print(theme)
-    print("------------------")
-    print(highlight(data, theme: theme, language: "ts"))
-    print("\n\n")
+node main() {
+  const obj = {
+    "foo-asd": "bar"
   }
+  obj["foo-asd"] = "baz"
+  print(obj)
 }

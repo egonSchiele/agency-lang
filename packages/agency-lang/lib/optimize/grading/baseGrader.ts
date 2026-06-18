@@ -8,20 +8,20 @@ import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
 export abstract class BaseGrader {
   constructor(protected readonly options: GraderOptions = {}) {}
 
-  /** Subclasses set a default; `options.name` overrides it. A getter avoids field init-order issues. */
+  /** Subclasses set a default; `options.name` overrides it. */
   protected abstract readonly defaultName: string;
-  get name(): string {
+  name(): string {
     return this.options.name ?? this.defaultName;
   }
 
   /** Single-shot grade. Declarative: no sampling, no aggregation. */
   protected abstract _run(input: GraderInput): Promise<Grade>;
 
-  get isGate(): boolean {
+  mustPass(): boolean {
     return this.options.mustPass ?? false;
   }
 
-  get weight(): number {
+  weight(): number {
     return this.options.weight ?? 1;
   }
 
@@ -39,6 +39,9 @@ export abstract class BaseGrader {
   /** Orchestration: run `_run` k times, aggregate by score kind. */
   async run(input: GraderInput): Promise<Grade> {
     const samples = this.options.samples ?? 1;
+    if (!Number.isInteger(samples) || samples < 1) {
+      throw new Error(`${this.name()}: samples must be a positive integer, got ${samples}`);
+    }
     const trials = await Promise.all(Array.from({ length: samples }, () => this._run(input)));
     return aggregateGrades(trials, this.options.aggregate ?? "all");
   }

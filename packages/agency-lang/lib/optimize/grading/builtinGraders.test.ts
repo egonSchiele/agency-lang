@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { ContainsGrader, ExactMatchGrader, SimilarityGrader } from "./builtinGraders.js";
-import type { GraderInput, Input, Json } from "./types.js";
+import type { GraderInput, Input, JSON } from "./types.js";
 
-const gi = (output: Json, metadata: Record<string, Json>): GraderInput => {
+const gi = (output: JSON, metadata: Record<string, JSON>): GraderInput => {
   const input: Input = { id: "i1", args: {}, metadata };
   return { input, run: { output, recordPath: "" } };
 };
@@ -23,9 +23,13 @@ describe("ExactMatchGrader", () => {
     expect(grade.feedback).toContain("Mumbai");
   });
 
-  it("compares structured values deeply", async () => {
-    const grade = await grader.run(gi({ a: [1, 2] } as Json, { expected: { a: [1, 2] } as Json }));
+  it("compares structured values deeply, regardless of key order", async () => {
+    const grade = await grader.run(gi({ a: 1, b: [2, 3] } as JSON, { expected: { b: [2, 3], a: 1 } as JSON }));
     expect(grade.score).toEqual({ kind: "binary", pass: true });
+  });
+
+  it("throws when matchOn does not resolve on the input", async () => {
+    await expect(grader.run(gi("x", { other: "y" }))).rejects.toThrow(/matchOn .* did not resolve/);
   });
 });
 
@@ -38,6 +42,10 @@ describe("ContainsGrader", () => {
 
   it("fails when the output does not contain the needle", async () => {
     expect((await grader.run(gi("the capital is Mumbai", { needle: "New Delhi" }))).score).toEqual({ kind: "binary", pass: false });
+  });
+
+  it("throws (rather than spuriously passing) when the needle is missing", async () => {
+    await expect(grader.run(gi("anything", { other: "y" }))).rejects.toThrow(/matchOn .* did not resolve/);
   });
 });
 

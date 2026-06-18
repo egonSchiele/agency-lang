@@ -1,9 +1,9 @@
 import { BaseGrader } from "./baseGrader.js";
 import { getPath } from "./getPath.js";
-import type { Grade, GraderInput, GraderOptions, JsonPath } from "./types.js";
+import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "./types.js";
 
 /** Graders that compare the agent output against a value read from the input. */
-type MatchOptions = GraderOptions & { matchOn: JsonPath };
+type MatchOptions = GraderOptions & { matchOn: JSONPath };
 
 /** Binary: the agent output deep-equals the referenced value. */
 export class ExactMatchGrader extends BaseGrader {
@@ -11,13 +11,20 @@ export class ExactMatchGrader extends BaseGrader {
   constructor(protected readonly options: MatchOptions) {
     super(options);
   }
-  protected _run({ input, run }: GraderInput): Promise<Grade> {
-    const expected = getPath(input, this.options.matchOn);
-    const pass = JSON.stringify(expected) === JSON.stringify(run.output);
-    return Promise.resolve({
-      score: { kind: "binary", pass },
-      ...(pass ? {} : { feedback: `expected ${JSON.stringify(expected)}, got ${JSON.stringify(run.output)}` }),
-    });
+
+  protected async _run({ input, run }: GraderInput): Promise<Grade> {
+    const expected = this.reference(input);
+    if (deepEqual(expected, run.output)) {
+      return { score: { kind: "binary", pass: true } };
+    }
+    return {
+      score: { kind: "binary", pass: false },
+      feedback: `expected ${stringify(expected)}, got ${stringify(run.output)}`,
+    };
+  }
+
+  private reference(input: Input): unknown {
+    return resolveMatch(input, this.options.matchOn, this.name());
   }
 }
 
@@ -27,13 +34,13 @@ export class ContainsGrader extends BaseGrader {
   constructor(protected readonly options: MatchOptions) {
     super(options);
   }
-  protected _run({ input, run }: GraderInput): Promise<Grade> {
-    const needle = String(getPath(input, this.options.matchOn) ?? "");
-    const pass = String(run.output ?? "").includes(needle);
-    return Promise.resolve({
-      score: { kind: "binary", pass },
-      ...(pass ? {} : { feedback: `output did not contain ${JSON.stringify(needle)}` }),
-    });
+
+  protected async _run({ input, run }: GraderInput): Promise<Grade> {
+    const needle = String(resolveMatch(input, this.options.matchOn, this.name()));
+    if (String(run.output ?? "").includes(needle)) {
+      return { score: { kind: "binary", pass: true } };
+    }
+    return { score: { kind: "binary", pass: false }, feedback: `output did not contain ${stringify(needle)}` };
   }
 }
 
@@ -43,21 +50,50 @@ export class SimilarityGrader extends BaseGrader {
   constructor(protected readonly options: MatchOptions) {
     super(options);
   }
-  protected _run({ input, run }: GraderInput): Promise<Grade> {
-    const expected = String(getPath(input, this.options.matchOn) ?? "");
+
+  protected async _run({ input, run }: GraderInput): Promise<Grade> {
+    const expected = String(resolveMatch(input, this.options.matchOn, this.name()));
     const actual = String(run.output ?? "");
     const longest = Math.max(expected.length, actual.length);
     const value = longest === 0 ? 1 : 1 - levenshtein(expected, actual) / longest;
-    return Promise.resolve({ score: { kind: "scalar", value } });
+    return { score: { kind: "scalar", value } };
   }
+}
+
+/** Read a grader's reference value; a `matchOn` that does not resolve is a misconfiguration. */
+function resolveMatch(input: Input, matchOn: JSONPath, graderName: string): unknown {
+  const value = getPath(input, matchOn);
+  if (value === undefined) {
+    throw new Error(`${graderName}: matchOn ${stringify(matchOn)} did not resolve on input ${input.id ?? "(no id)"}`);
+  }
+  return value;
+}
+
+function stringify(value: unknown): string {
+  return globalThis.JSON.stringify(value);
+}
+
+/** Order-insensitive deep equality for JSON-shaped values. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => deepEqual(v, b[i]));
+  }
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((k) => Object.hasOwn(bObj, k) && deepEqual(aObj[k], bObj[k]));
 }
 
 /** Classic Levenshtein edit distance (deterministic, dependency-free). */
 function levenshtein(a: string, b: string): number {
-  const rows = a.length + 1;
   const cols = b.length + 1;
   let prev = Array.from({ length: cols }, (_unused, j) => j);
-  for (let i = 1; i < rows; i += 1) {
+  for (let i = 1; i <= a.length; i += 1) {
     const curr = [i];
     for (let j = 1; j < cols; j += 1) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;

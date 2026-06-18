@@ -1,20 +1,20 @@
 /** A JSON-compatible value. */
-export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+export type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON };
 
-/** A path of object keys / array indices into a Json value. */
-export type JsonPath = (string | number)[];
+/** A path of object keys / array indices into a JSON value. */
+export type JSONPath = (string | number)[];
 
 /** One invocation of the agent under optimization. */
 export type Input = {
   id?: string;                       // optional; callers auto-derive when omitted
   node?: string;                     // defaults to "main" at run time
-  args: Record<string, Json>;
-  metadata?: Record<string, Json>;   // freeform, grader-agnostic (title, expectedOutput, tags, …)
+  args: Record<string, JSON>;
+  metadata?: Record<string, JSON>;   // freeform, grader-agnostic (title, expectedOutput, tags, …)
 };
 
 /** The result of running the agent on one input. */
 export type AgentRun = {
-  output: Json;        // the agent's return value
+  output: JSON;        // the agent's return value
   recordPath: string;  // path to the full execution trace (eval record)
 };
 
@@ -34,7 +34,7 @@ export type GraderOptions = {
   mustPass?: boolean;            // gate: failure fails the whole iteration for this input
   threshold?: number;            // scalar passing bar (binary reads `pass`)
   weight?: number;               // contribution to the scalarized objective (default 1)
-  samples?: number;              // k repetitions (default 1)
+  samples?: number;              // k repetitions (default 1; must be a positive integer)
   aggregate?: "any" | "all";     // binary only; scalar always averages
   inputScope?: GraderScope;      // restrict to a subset of inputs (default: all)
   name?: string;                 // overrides the grader's defaultName

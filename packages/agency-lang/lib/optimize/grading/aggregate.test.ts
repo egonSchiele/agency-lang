@@ -35,4 +35,8 @@ describe("aggregateGrades", () => {
   it("returns the single trial unchanged for samples=1", () => {
     expect(aggregateGrades([binary(true, "ok")], "all")).toEqual(binary(true, "ok"));
   });
+
+  it("throws on an empty trials array instead of reporting a spurious pass", () => {
+    expect(() => aggregateGrades([], "all")).toThrow(/at least one trial/);
+  });
 });

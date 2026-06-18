@@ -19,17 +19,17 @@ class StubGrader extends BaseGrader {
 
 describe("BaseGrader", () => {
   it("uses defaultName, overridable via options.name", () => {
-    expect(new StubGrader(() => ({ score: { kind: "binary", pass: true } })).name).toBe("stub");
-    expect(new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { name: "custom" }).name).toBe("custom");
+    expect(new StubGrader(() => ({ score: { kind: "binary", pass: true } })).name()).toBe("stub");
+    expect(new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { name: "custom" }).name()).toBe("custom");
   });
 
-  it("exposes isGate and weight from options with defaults", () => {
+  it("exposes mustPass and weight from options with defaults", () => {
     const g = new StubGrader(() => ({ score: { kind: "scalar", value: 1 } }), { mustPass: true, weight: 3 });
-    expect(g.isGate).toBe(true);
-    expect(g.weight).toBe(3);
+    expect(g.mustPass()).toBe(true);
+    expect(g.weight()).toBe(3);
     const d = new StubGrader(() => ({ score: { kind: "scalar", value: 1 } }));
-    expect(d.isGate).toBe(false);
-    expect(d.weight).toBe(1);
+    expect(d.mustPass()).toBe(false);
+    expect(d.weight()).toBe(1);
   });
 
   it("runs _run `samples` times and aggregates", async () => {
@@ -38,6 +38,13 @@ describe("BaseGrader", () => {
     const grade = await g.run(gi());
     expect(produce).toHaveBeenCalledTimes(4);
     expect(grade.score).toEqual({ kind: "scalar", value: 0.5 });
+  });
+
+  it("rejects a non-positive or non-integer samples", async () => {
+    const zero = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { samples: 0 });
+    await expect(zero.run(gi())).rejects.toThrow(/samples must be a positive integer/);
+    const frac = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { samples: 1.5 });
+    await expect(frac.run(gi())).rejects.toThrow(/samples must be a positive integer/);
   });
 
   it("passes() reads binary pass, and scalar against threshold", () => {

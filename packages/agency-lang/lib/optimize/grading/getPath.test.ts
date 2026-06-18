@@ -19,6 +19,14 @@ describe("getPath", () => {
     expect(getPath({ a: 5 }, ["a", "b"])).toBeUndefined();
   });
 
+  it("returns undefined for a numeric segment on an object (numbers index arrays only)", () => {
+    expect(getPath({ "1": "x" }, [1])).toBeUndefined();
+  });
+
+  it("returns undefined for a string segment on an array (strings index objects only)", () => {
+    expect(getPath(["a", "b"], ["0"])).toBeUndefined();
+  });
+
   it("returns undefined for null/undefined roots", () => {
     expect(getPath(null, ["a"])).toBeUndefined();
     expect(getPath(undefined, ["a"])).toBeUndefined();

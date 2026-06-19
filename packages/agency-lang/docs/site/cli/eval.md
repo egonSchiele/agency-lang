@@ -168,6 +168,8 @@ const judge = new LlmJudge({ goal: "Return the capital.", weight: 0.5, samples: 
 export default [gate, judge];   // or `export default exact` for the simple case
 ```
 
+Every grade counts toward the objective the optimizer maximizes: a number contributes its value (0..1), and a boolean / `ExactMatch` / `Contains` result contributes `1.0` (pass) or `0.0` (fail) — so a binary-only grader gives you plain accuracy. `mustPass` is an orthogonal gate: a failed `mustPass` grader zeroes that input regardless of the other grades.
+
 Each input carries its gold answer in the first-class `expected` field (any JSON); extra grader-specific data can go under `metadata`:
 
 ```json

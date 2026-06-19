@@ -5,13 +5,17 @@ export type GraderGrade = { grader: BaseGrader; grade: Grade };
 export type InputGrades = { input: Input; run: AgentRun; grades: GraderGrade[]; gatesPassed: boolean };
 
 /**
- * Weighted mean of the scalar grades for one input. Every scalar grade
- * contributes, including a scalar gate's; binary grades (gate or not) have no
- * scalar value and so contribute nothing.
+ * Weighted mean of every grade for one input: a scalar grade contributes its
+ * value, a binary grade contributes 1.0 (pass) or 0.0 (fail). `mustPass` is an
+ * orthogonal gate (a failed gate zeroes the whole input via the Scorecard); it
+ * does not change whether a grade contributes here. An input with no grades
+ * scores 0.
  */
 export function inputObjective(grades: GraderGrade[]): number {
-  const contributions = grades
-    .flatMap((g) => (g.grade.score.kind === "scalar" ? [{ weight: g.grader.weight(), value: g.grade.score.value }] : []));
+  const contributions = grades.map((g) => ({
+    weight: g.grader.weight(),
+    value: g.grade.score.kind === "scalar" ? g.grade.score.value : (g.grade.score.pass ? 1 : 0),
+  }));
   const totalWeight = contributions.reduce((sum, c) => sum + c.weight, 0);
   if (totalWeight === 0) return 0;
   return contributions.reduce((sum, c) => sum + c.weight * c.value, 0) / totalWeight;

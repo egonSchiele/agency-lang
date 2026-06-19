@@ -29,8 +29,35 @@ describe("Scorecard", () => {
     expect(new Scorecard(perInput).objective()).toBeCloseTo(0.625, 10);
   });
 
-  it("binary gates contribute nothing to the objective (they have no scalar value)", () => {
-    const gate = new StubGrader({ mustPass: true });
+  it("a binary grade contributes 1.0/0.0 to the objective, like any metric", () => {
+    const passing = new StubGrader({ weight: 1 });
+    const failing = new StubGrader({ weight: 1 });
+    const perInput: InputGrades[] = [
+      {
+        input: input("a"),
+        run: { output: null, recordPath: "" },
+        gatesPassed: true,
+        grades: [
+          { grader: passing, grade: { score: { kind: "binary", pass: true } } },
+          { grader: failing, grade: { score: { kind: "binary", pass: false } } },
+        ],
+      },
+    ];
+    // (1*1 + 1*0)/2 = 0.5
+    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.5, 10);
+  });
+
+  it("a binary-only grader (e.g. ExactMatch) yields a meaningful objective = accuracy", () => {
+    const exact = new StubGrader({ weight: 1 });
+    const perInput: InputGrades[] = [
+      { input: input("a"), run: { output: null, recordPath: "" }, gatesPassed: true, grades: [{ grader: exact, grade: { score: { kind: "binary", pass: true } } }] },
+      { input: input("b"), run: { output: null, recordPath: "" }, gatesPassed: true, grades: [{ grader: exact, grade: { score: { kind: "binary", pass: false } } }] },
+    ];
+    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.5, 10);   // mean(1, 0)
+  });
+
+  it("a passing binary gate (mustPass) still contributes 1.0 to the objective", () => {
+    const gate = new StubGrader({ mustPass: true, weight: 1 });
     const advisory = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
       {
@@ -43,7 +70,8 @@ describe("Scorecard", () => {
         ],
       },
     ];
-    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.5, 10);
+    // (1*1 + 1*0.5)/2 = 0.75
+    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.75, 10);
   });
 
   it("a passing scalar gate contributes its value to the objective", () => {
@@ -80,10 +108,9 @@ describe("Scorecard", () => {
     expect(new Scorecard([passing, failing]).gatesPassed()).toBe(false);
   });
 
-  it("an input with no scalar contributions scores 0", () => {
-    const gate = new StubGrader({ mustPass: true });
+  it("an input with no grades scores 0", () => {
     const perInput: InputGrades[] = [
-      { input: input("a"), run: { output: null, recordPath: "" }, gatesPassed: true, grades: [{ grader: gate, grade: { score: { kind: "binary", pass: true } } }] },
+      { input: input("a"), run: { output: null, recordPath: "" }, gatesPassed: true, grades: [] },
     ];
     expect(new Scorecard(perInput).inputScores()).toEqual([0]);
   });

@@ -9,6 +9,7 @@ import type { BaseGrader } from "@/optimize/grading/baseGrader.js";
 import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
 import type { Input } from "@/optimize/grading/types.js";
 import { loadGradingModule } from "@/optimize/gradingModule.js";
+import { loadOptimizerModule } from "@/optimize/optimizerModule.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
 import { writeReport } from "@/optimize/report.js";
 import { splitInputs } from "@/optimize/validationSplit.js";
@@ -53,17 +54,16 @@ export async function evalOptimize(
 ): Promise<OptimizeResult> {
   const target = buildTarget(opts, deps);
   const config = await buildConfig(opts, deps);
-  const resolve = deps.getOptimizer ?? getOptimizer;
-  const optimizer = resolve(opts.optimizer ?? DEFAULT_OPTIMIZER, config);
+  const optimizerRef = opts.optimizer ?? opts.config?.eval?.optimize?.optimizer ?? DEFAULT_OPTIMIZER;
+  const optimizer = await resolveOptimizer(optimizerRef, config, deps);
   const result = await optimizer.optimize(target);
   // Persist the run summary so the path printed by the CLI actually exists.
   if (result.runDir) {
     fs.mkdirSync(result.runDir, { recursive: true });
     fs.writeFileSync(path.join(result.runDir, "summary.json"), JSON.stringify(result, null, 2));
-    const optimizerName = opts.optimizer ?? DEFAULT_OPTIMIZER;
-    const ignoresValidation = optimizerName !== "greedy";   // only greedy selects by validation
+    const ignoresValidation = optimizer.name !== "greedy";   // only greedy selects by validation
     writeReport(result.runDir, result, {
-      optimizer: optimizerName,
+      optimizer: optimizer.name,
       graders: config.graders.map((g) => g.name()),
       trainObjective: result.trainObjective,
       validationObjective: result.validationObjective,
@@ -71,6 +71,23 @@ export async function evalOptimize(
     });
   }
   return result;
+}
+
+/** A built-in name vs a path to a TS/JS module. */
+function looksLikePath(ref: string): boolean {
+  return /[\\/]/.test(ref) || ref.endsWith(".ts") || ref.endsWith(".js") || ref.endsWith(".mjs");
+}
+
+/** Resolve `--optimizer` to an Optimizer: a path loads a user module, a bare name
+ *  uses the built-in registry. The result is used structurally ({ name, optimize }). */
+async function resolveOptimizer(ref: string, config: BaseOptimizerConfig, deps: EvalOptimizeDeps): Promise<Optimizer> {
+  if (!looksLikePath(ref)) return (deps.getOptimizer ?? getOptimizer)(ref, config);
+  const factory = await loadOptimizerModule(ref);
+  const optimizer = factory(config);
+  if (!optimizer || typeof optimizer.optimize !== "function" || typeof optimizer.name !== "string") {
+    throw new Error(`Optimizer module ${ref} must default-export (config) => Optimizer ({ name, optimize }).`);
+  }
+  return optimizer;
 }
 
 /** Optimize allows --inputs and --goal together (--inputs = data, --goal =
@@ -93,6 +110,7 @@ function resolveOptimizeSettings(opts: EvalOptimizeOptions) {
   return {
     goal: opts.goal ?? cfg?.goal,
     gradersPath: opts.graders ?? cfg?.graders,
+    optimizer: opts.optimizer ?? cfg?.optimizer,
     inputsPath: opts.inputs,
     validationInputsPath: opts.validationInputs ?? cfg?.validation?.inputs,
     validationSplit: opts.validationSplit ?? cfg?.validation?.split,
@@ -168,7 +186,7 @@ export async function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeD
     verbosity: opts.silent ? "silent" : "default",
   };
   // GEPA needs a minibatch size; it rides on the shared config and the factory casts to GepaConfig.
-  if (opts.optimizer === "gepa") return { ...base, minibatch: opts.minibatch ?? DEFAULT_MINIBATCH } as BaseOptimizerConfig;
+  if (s.optimizer === "gepa") return { ...base, minibatch: opts.minibatch ?? DEFAULT_MINIBATCH } as BaseOptimizerConfig;
   return base;
 }
 

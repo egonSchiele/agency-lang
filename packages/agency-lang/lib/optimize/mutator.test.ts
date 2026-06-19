@@ -66,6 +66,21 @@ describe("buildMutatorSections", () => {
     );
   });
 
+  it("includes a feedback section when feedback is provided", () => {
+    const sections = buildMutatorSections({
+      targets,
+      inputs,
+      history: "",
+      feedback: "### Input india\nExpected: New Delhi",
+    });
+    expect(sections.feedback).toContain("Expected: New Delhi");
+  });
+
+  it("defaults the feedback section to empty when omitted", () => {
+    const sections = buildMutatorSections({ targets, inputs, history: "" });
+    expect(sections.feedback).toBe("");
+  });
+
   it("passes history through verbatim", () => {
     const sections = buildMutatorSections({
       targets,

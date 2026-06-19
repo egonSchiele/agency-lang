@@ -41,12 +41,15 @@ export type MutatorPromptInputs = {
   targets: OptimizeTarget[];
   inputs: Input[];
   history: string;
+  /** Pre-rendered per-input feedback from the last run (expected answers + grader notes). */
+  feedback?: string;
   diagnostics?: OptimizeMutationDiagnostic[];
 };
 
 export type MutatorMessageSections = {
   targets: string;
   goals: string;
+  feedback: string;
   history: string;
   diagnostics: string;
 };
@@ -88,7 +91,7 @@ export function buildMutatorSections(promptInputs: MutatorPromptInputs): Mutator
       ...(promptInputs.diagnostics ?? []).map((entry) => `- [${entry.code}] ${entry.message}`),
       "Fix every problem listed above and propose corrected operations.",
     ].join("\n");
-  return { targets, goals, history: promptInputs.history, diagnostics };
+  return { targets, goals, feedback: promptInputs.feedback ?? "", history: promptInputs.history, diagnostics };
 }
 
 /**
@@ -142,6 +145,7 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
       argsString: [
         args.sections.targets,
         args.sections.goals,
+        args.sections.feedback,
         args.sections.history,
         args.sections.diagnostics,
       ].map((value) => JSON.stringify(value)).join(", "),

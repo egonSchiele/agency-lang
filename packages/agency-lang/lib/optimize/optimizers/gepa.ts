@@ -1,6 +1,6 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { CandidatePool, type PoolCandidate } from "../candidatePool.js";
-import { renderReflectionFeedback } from "../gepaFeedback.js";
+import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
 import type { AgencyRunner } from "../grading/agencyRunner.js";
 import { inputObjective, type InputGrades, type Scorecard } from "../grading/scorecard.js";

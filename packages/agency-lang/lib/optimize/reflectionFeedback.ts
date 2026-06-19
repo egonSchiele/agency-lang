@@ -19,6 +19,9 @@ export function renderInputFeedback(entry: InputGrades, opts: ReflectionRenderOp
   lines.push(`### Input ${entry.input.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`);
   lines.push(`Args: ${preview(JSON.stringify(entry.input.args), 400)}`);
   lines.push(`Output: ${preview(stringifyOutput(entry.run.output), 600)}`);
+  if (entry.input.expected !== undefined) {
+    lines.push(`Expected: ${preview(stringifyOutput(entry.input.expected), 400)}`);
+  }
 
   const errors = record?.errors ?? [];
   if (errors.length > 0) {

@@ -33,7 +33,7 @@ Input suites can be either a JSON file with `{ "inputs": [...] }` or a directory
 }
 ```
 
-`goal` is required. `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the input workdir before the subprocess runs, so each input can mutate its own isolated fixture copy.
+`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `working_dir` is copied into the input workdir before the subprocess runs, so each input can mutate its own isolated fixture copy.
 
 For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
@@ -150,26 +150,33 @@ A grading module **default-exports one grader or an array of graders**. A "grade
 import { grader, ExactMatch, LlmJudge, type Grader } from "agency-lang/optimize";
 
 // (a) a metric function: ctx = { output, input, judge }
-//     `input` is the typed Input; your per-input data lives under `input.metadata`.
+//     `input` is the typed Input; the gold answer is `input.expected`
+//     (extra per-input data can also live under `input.metadata`).
 const exact: Grader = ({ output, input }) =>
-  output === input.metadata?.expectedCapital ? 1 : 0;   // number (0..1), boolean, or {score, feedback}
+  output === input.expected ? 1 : 0;   // number (0..1), boolean, or {score, feedback}
 
 // (b) a wrapped function carrying policy (mustPass gate, weight, threshold, samples, inputScope)
 const gate = grader(exact, { mustPass: true, name: "capital-exact" });
 
-// (c) a configured built-in
+// (c) a configured built-in — matchOn defaults to ["expected"], so this compares
+//     the output to each input's `expected`
+const match = new ExactMatch({ mustPass: true });
+
+// or an LLM judge with a fixed goal
 const judge = new LlmJudge({ goal: "Return the capital.", weight: 0.5, samples: 3 });
 
 export default [gate, judge];   // or `export default exact` for the simple case
 ```
 
-Because graders read their own data from `input.metadata`, input files can carry whatever fields your graders need:
+Each input carries its gold answer in the first-class `expected` field (any JSON); extra grader-specific data can go under `metadata`:
 
 ```json
-{ "inputs": [{ "id": "brazil", "args": { "country": "Brazil" }, "metadata": { "expectedCapital": "Brasília" } }] }
+{ "inputs": [{ "id": "brazil", "args": { "country": "Brazil" }, "expected": "Brasília" }] }
 ```
 
 When a grading module is configured, a per-input `goal` is optional. `ctx.judge({ goal, output })` runs the bundled LLM goal judge from inside a metric function, so you can mix deterministic and LLM grading.
+
+**Steering the search without a goal.** The optimizer's reflection is fed each input's `expected` answer and each grader's `feedback`, so a self-explaining grader (one that returns `{ score, feedback }`) or labeled `expected` outputs can drive the prompt rewrites *without* a `--goal` — `--goal` is then an optional extra steer. A grader that returns only a bare score with no feedback and inputs with no `expected` leave the mutator with nothing to learn from, so it can only guess from the current prompt; provide one or the other. The mutator is instructed not to hard-code the expected answers into the prompt, and a validation set is the backstop that fails any prompt which memorizes them anyway.
 
 ## Validation sets
 

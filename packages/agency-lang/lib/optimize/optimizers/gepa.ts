@@ -1,6 +1,6 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { CandidatePool, type PoolCandidate } from "../candidatePool.js";
-import { renderReflectionFeedback } from "../gepaFeedback.js";
+import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
 import type { AgencyRunner } from "../grading/agencyRunner.js";
 import { inputObjective, type InputGrades, type Scorecard } from "../grading/scorecard.js";
@@ -65,6 +65,9 @@ export class Gepa extends BaseOptimizer {
   }
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+    if (this.validationInputs.length > 0) {
+      this.reporter.note(`validation set provided, but ${this.name} selects the champion on the training objective`);
+    }
     const paretoInputs = this.gepaConfig.paretoSet ?? inputs;
     const rng = makeRng(this.config.seed ?? 0);
 

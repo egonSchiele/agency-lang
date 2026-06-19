@@ -14,6 +14,7 @@ type OptimizeMutationProposal = {
 node mutatePrompt(
   targets: string,
   goals: string,
+  feedback: string,
   history: string,
   diagnostics: string = "",
 ): OptimizeMutationProposal {
@@ -24,12 +25,17 @@ node mutatePrompt(
   GOALS:
   ${goals}
 
+  PER-INPUT FEEDBACK FROM THE LAST RUN (expected answers and grader notes):
+  ${feedback}
+
   ${history}
 
   YOUR TASK:
-  Propose replacement values for one or more of the optimize targets listed above so the agent better achieves the goals. Return JSON with:
+  Propose replacement values for one or more of the optimize targets listed above so the agent better achieves the goals and the per-input feedback. Return JSON with:
   - "operations": one record per target you change. Each record needs "target" and "kind" copied exactly from the list above, "op" set to "replaceInitializer", "value" with the replacement as Agency source text including the surrounding quotes, and "rationale" with one sentence on what you changed. The replacement must preserve every interpolation placeholder the current value uses (no drops, no additions).
   - "rationale": 2-4 sentences explaining the overall change.
+
+  Write a general instruction that works for any input of this kind. Do NOT hard-code the specific expected answers shown in the feedback into the value — an answer that only works for these inputs will fail on held-out validation inputs.
 
   ${diagnostics}
   """

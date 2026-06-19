@@ -48,6 +48,9 @@ export class ExampleOptimizer extends BaseOptimizer {
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
     const startedAt = Date.now();
+    if (this.validationInputs.length > 0) {
+      this.reporter.note(`validation set provided, but ${this.name} selects the champion on the training objective`);
+    }
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
       targets: source.targets, inputCount: inputs.length, iterations: 1,
@@ -88,9 +91,7 @@ export class ExampleOptimizer extends BaseOptimizer {
 
   /** Apply a candidate file set into a fresh workspace, run + grade it; return its objective (0 if a gate fails). */
   private async score(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<number> {
-    const ws = this.fork(source.baseDir);
-    this.workspace.applyFiles(ws, files);
-    const scorecard = await this.evaluate(ws, source.entryFile, inputs);
+    const scorecard = await this.scoreFiles(source, files, inputs);
     return scorecard.gatesPassed() ? scorecard.objective() : 0;
   }
 

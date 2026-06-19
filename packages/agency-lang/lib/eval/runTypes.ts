@@ -7,6 +7,9 @@ export type Input = {
   /** What the agent should accomplish — read by the goal judge and the
    *  pairwise judge suite. Optional; the input-file loader requires it. */
   goal?: string;
+  /** Gold/expected output for this input (any JSON). Read by match graders
+   *  (default matchOn) and surfaced to the optimizer's reflection. */
+  expected?: any;
   /** Named arguments passed to the node. */
   args: Record<string, any>;
   /** Entry node to run. Defaults to the agent's default node at run time. */

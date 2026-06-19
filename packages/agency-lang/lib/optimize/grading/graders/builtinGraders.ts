@@ -2,15 +2,34 @@ import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "../types.js";
 
-/** Graders that compare the agent output against a value read from the input. */
-type MatchOptions = GraderOptions & { matchOn: JSONPath };
+/** Graders that compare the agent output against a value read from the input.
+ *  `matchOn` defaults to the first-class `expected` field. */
+type MatchOptions = GraderOptions & { matchOn?: JSONPath };
 
-/** Binary: the agent output deep-equals the referenced value. */
-export class ExactMatchGrader extends BaseGrader {
-  protected readonly defaultName = "exact-match";
+/** Shared base for graders that compare the output against a value read from the
+ *  input via a `matchOn` JSONPath. Centralizes the constructor, the resolved
+ *  match path (default `["expected"]`), the description, and the pre-flight check. */
+abstract class MatchGrader extends BaseGrader {
   constructor(protected readonly options: MatchOptions) {
     super(options);
   }
+
+  protected matchPath(): JSONPath {
+    return this.options.matchOn ?? ["expected"];
+  }
+
+  describe(): string {
+    return `${this.name()} (matchOn ${stringify(this.matchPath())})`;
+  }
+
+  validateInput(input: Input): void {
+    resolveMatch(input, this.matchPath(), this.name());   // throws if unresolved
+  }
+}
+
+/** Binary: the agent output deep-equals the referenced value. */
+export class ExactMatchGrader extends MatchGrader {
+  protected readonly defaultName = "exact-match";
 
   protected async _run({ input, run }: GraderInput): Promise<Grade> {
     const expected = this.reference(input);
@@ -24,19 +43,16 @@ export class ExactMatchGrader extends BaseGrader {
   }
 
   private reference(input: Input): unknown {
-    return resolveMatch(input, this.options.matchOn, this.name());
+    return resolveMatch(input, this.matchPath(), this.name());
   }
 }
 
 /** Binary: the stringified agent output contains the referenced needle. */
-export class ContainsGrader extends BaseGrader {
+export class ContainsGrader extends MatchGrader {
   protected readonly defaultName = "contains";
-  constructor(protected readonly options: MatchOptions) {
-    super(options);
-  }
 
   protected async _run({ input, run }: GraderInput): Promise<Grade> {
-    const needle = String(resolveMatch(input, this.options.matchOn, this.name()));
+    const needle = String(resolveMatch(input, this.matchPath(), this.name()));
     if (String(run.output ?? "").includes(needle)) {
       return { score: { kind: "binary", pass: true } };
     }
@@ -45,14 +61,11 @@ export class ContainsGrader extends BaseGrader {
 }
 
 /** Scalar: normalized Levenshtein similarity between output and the referenced value. */
-export class SimilarityGrader extends BaseGrader {
+export class SimilarityGrader extends MatchGrader {
   protected readonly defaultName = "similarity";
-  constructor(protected readonly options: MatchOptions) {
-    super(options);
-  }
 
   protected async _run({ input, run }: GraderInput): Promise<Grade> {
-    const expected = String(resolveMatch(input, this.options.matchOn, this.name()));
+    const expected = String(resolveMatch(input, this.matchPath(), this.name()));
     const actual = String(run.output ?? "");
     const longest = Math.max(expected.length, actual.length);
     const value = longest === 0 ? 1 : 1 - levenshtein(expected, actual) / longest;

@@ -34,6 +34,28 @@ describe("eval run input loading", () => {
     ]);
   });
 
+  it("allows a missing goal when requireGoal is false and preserves metadata", () => {
+    const suitePath = writeJson("no-goal.json", {
+      inputs: [{ id: "a", args: { country: "Brazil" }, metadata: { expected: "Brasília" } }],
+    });
+    const inputs = loadInputsFromFile(suitePath, () => "a", { requireGoal: false });
+    expect(inputs[0].goal).toBeUndefined();
+    expect(inputs[0].metadata).toEqual({ expected: "Brasília" });
+  });
+
+  it("passes a first-class expected output through", () => {
+    const suitePath = writeJson("with-expected.json", {
+      inputs: [{ id: "india", args: { country: "India" }, expected: "New Delhi" }],
+    });
+    const inputs = loadInputsFromFile(suitePath, () => "india", { requireGoal: false });
+    expect(inputs[0].expected).toBe("New Delhi");
+  });
+
+  it("still requires a non-empty goal by default", () => {
+    const suitePath = writeJson("needs-goal.json", { inputs: [{ id: "a", args: {} }] });
+    expect(() => loadInputsFromFile(suitePath, () => "a")).toThrow(/goal must be a non-empty string/);
+  });
+
   it("validates required goals and input ids", () => {
     expect(() => loadInputsFromFile(writeJson("missing-goal.json", { inputs: [{}] }))).toThrow(/goal/i);
     expect(() => loadInputsFromFile(writeJson("bad-id.json", { inputs: [{ id: "bad/id", goal: "x" }] }))).toThrow(/invalid id/i);

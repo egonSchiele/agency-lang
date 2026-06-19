@@ -359,6 +359,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<agent>", "Agency file target: file.agency[:node]")
     .option("--goal <text>", "Goal to optimize for")
     .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
+    .option("--validation-split <ratio>", "Hold out this fraction of inputs for validation", (v) => parseFloat(v))
     .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Optimizer runs output directory")
@@ -374,6 +377,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (agent: string, opts: {
       goal?: string;
       inputs?: string;
+      graders?: string;
+      validationInputs?: string;
+      validationSplit?: number;
       iterations?: number;
       runId?: string;
       runsDir?: string;

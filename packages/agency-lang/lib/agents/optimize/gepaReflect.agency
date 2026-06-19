@@ -40,6 +40,11 @@ node gepaReflect(
   include it in the instruction — a lot of it may not be available to the assistant in the
   future. If the assistant used a generalizable strategy to solve the task, include that too.
 
+  However, do NOT hard-code the specific expected answers for the example inputs above —
+  those are only a sample, and an instruction that merely embeds their answers will fail on
+  unseen inputs. Encode general rules and domain knowledge that produce the right answer, not
+  the answer key itself.
+
   Return JSON with:
   - "operations": one record per target you change. Each record needs "target" and "kind"
     copied exactly from the list above, "op" set to "replaceInitializer", "value" with the

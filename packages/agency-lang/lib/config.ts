@@ -109,6 +109,11 @@ export interface AgencyConfig {
   eval?: {
     runsDir?: string;
     optimizeRunsDir?: string;
+    optimize?: {
+      goal?: string;
+      graders?: string;                              // path to a TS grading module
+      validation?: { inputs?: string; split?: number };
+    };
   };
 
   /** Smoltalk client config */
@@ -328,6 +333,14 @@ export const AgencyConfigSchema = z
       .object({
         runsDir: z.string(),
         optimizeRunsDir: z.string(),
+        optimize: z
+          .object({
+            goal: z.string().optional(),
+            graders: z.string().optional(),
+            validation: z.object({ inputs: z.string().optional(), split: z.number().optional() }).optional(),
+          })
+          .partial()
+          .optional(),
       })
       .partial(),
     client: z

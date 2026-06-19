@@ -4,8 +4,9 @@ import type { BaseGrader } from "./grading/baseGrader.js";
 import type { Input } from "./grading/types.js";
 import type { OptimizeResult } from "./types.js";
 
-/** What to optimize: an agent (file[:node]) and the inputs to run it on. */
-export type OptimizeTarget = { agent: string; inputs: Input[] };
+/** What to optimize: an agent (file[:node]) and the inputs to run it on,
+ *  plus an optional held-out validation set used to pick the champion. */
+export type OptimizeTarget = { agent: string; inputs: Input[]; validationInputs?: Input[] };
 
 /** Cross-cutting config every optimizer needs; each optimizer may extend it. */
 export type BaseOptimizerConfig = {

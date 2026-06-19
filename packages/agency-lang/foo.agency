@@ -1,11 +1,5 @@
-def foo(block) {
-  block()
-}
-
-node main() {
-  const obj = {
-    "foo-asd": "bar"
-  }
-  obj["foo-asd"] = "baz"
-  print(obj)
+node main(country) {
+  optimize const prompt = "What is the area of ${country}?"
+  const response = llm(prompt)
+  return response
 }

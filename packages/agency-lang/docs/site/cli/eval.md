@@ -9,7 +9,7 @@ description: Documents the `agency eval extract` command for converting a captur
 
 ```
 agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>)
-agency eval optimize <file>[:<node>] (--inputs <file|dir> | --goal <text>)
+agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
 ```
 
@@ -33,7 +33,7 @@ Input suites can be either a JSON file with `{ "inputs": [...] }` or a directory
 }
 ```
 
-`goal` is required. `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `working_dir` is copied into the input workdir before the subprocess runs, so each input can mutate its own isolated fixture copy.
+`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `working_dir` is copied into the input workdir before the subprocess runs, so each input can mutate its own isolated fixture copy.
 
 For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
@@ -68,74 +68,9 @@ runs/<run-id>/
 
 ## Optimizing marked declarations
 
-`agency eval optimize` runs an eval-driven optimization loop over declarations marked with the `optimize` modifier. Target discovery starts at the agent file and follows local relative `.agency` imports. The optimizer evaluates the baseline, asks the mutator model for declarative mutation operations against the discovered targets, materializes and evaluates each candidate with the shared eval runner, and judges champion-vs-candidate with the shared judge suite (champion is side A, candidate side B). A candidate is accepted iff the suite verdict winner is `B`; the accepted candidate becomes the next champion.
+`agency eval optimize` (also `agency optimize`) rewrites the declarations you mark with the `optimize` modifier, grading candidates against your inputs and keeping the best one. It has its own page — see **[Optimizing agents](optimize.md)** for marking targets, custom graders, validation sets, configuration, and run artifacts.
 
-```bash
-agency eval optimize agent.agency --goal "Return Paris with no extra words."
-agency eval optimize agent.agency --inputs inputs.json --iterations 5 --samples 3
-agency eval optimize agent.agency:main --inputs inputs.json --no-writeback
-```
-
-Mark each string declaration the optimizer may change:
-
-```agency
-optimize const systemPrompt = "Answer accurately."
-
-node main(question: string): string {
-  optimize const prompt = "Answer accurately: ${question}"
-  const answer: string = llm(prompt)
-  return answer
-}
-```
-
-Legacy `@optimize(...)` tags are no longer supported. Use `optimize const` or `optimize let` on the declaration itself.
-
-Options:
-
-- `<file>[:<node>]` — required positional agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
-- `--inputs <file|dir>` — input suite file or directory. Mutually exclusive with `--goal`; exactly one is required.
-- `--goal <text>` — create one inline no-argument input with this goal, exactly like `eval run`. The suite input goals are also the mutator's objectives. Fails upfront if the selected node requires arguments.
-- `--iterations <n>` — maximum candidate iterations after the baseline. Defaults to `5`.
-- `--samples <n>` — judge samples per input. Defaults to `3`.
-- `--confidence-threshold <n>` — minimum input confidence counted as a suite win. Defaults to `50`.
-- `--margin-threshold <n>` — suite win margin required to avoid an overall tie. Defaults to `0`.
-- `--no-writeback` — do not write the champion file set back to the source files at the end.
-- `--silent` — print nothing; artifacts are still written.
-- `--mutator-model <model>` — optional model override for proposing mutations.
-- `--run-id <id>` — output run id. Defaults to a generated id. The run directory must not already exist.
-- `--runs-dir <path>` — optimizer output root. Defaults to `eval.optimizeRunsDir` in `agency.json`, or `eval.runsDir/optimize`, or `runs/optimize`.
-
-The judge flags are the same ones `agency eval judge` uses, with the same defaults. Each `iter-N/verdict.json` is the judge suite verdict with side A = champion and side B = candidate.
-
-By default the optimizer prints the discovered targets at startup (a gut check that it will mutate what you expect), then per iteration: progress phases, the decision with win counts, a colored line diff of each proposed declaration value (dimmed when a proposal left a value unchanged), the mutator's rationale, and a champion-vs-candidate diff of each input's final response. At the end it prints every optimized variable with its start and end value. Pass `--silent` to print nothing. The baseline runs the unmutated program: if any baseline input fails, the run aborts immediately and reports the failing inputs — a failure before any mutation means the program or input suite is broken, not the optimization.
-
-Each optimize run writes:
-
-```text
-runs/optimize/<run-id>/
-  config.json
-  targets.json
-  iter-0/
-    agent/<file set>
-    workspace/
-    eval-run/
-  iter-1/
-    agent/<file set>
-    mutation.json
-    mutation.md
-    diff.txt
-    verdict.json
-    workspace/
-    eval-run/
-  champion/
-    agent/<file set>
-    championIter
-  summary.json
-```
-
-`iter-N/agent/` holds the full discovered Agency file set for that candidate (changed and unchanged files). `iter-N/workspace/` is the runnable copy of the working directory with the candidate files overlaid; evals run against the workspace. Writeback at the end verifies every discovered source file is unchanged on disk since discovery (by content hash) and aborts entirely on any mismatch.
-
-The CLI installs an approval handler for the internal `std::agency.run(...)` calls used by eval execution. The stdlib `agency.eval.optimize(...)` function does not install a handler; Agency callers should wrap it in their own handler when they want auto-approval.
+## Extracting eval records
 
 `extract` is **not** a tool for running the agent. It takes a `.statelog.jsonl` file you've already captured and turns it into a small, normalized JSON artifact — an **eval record** — that downstream tools can grade with an LLM judge, compare against another run, or pattern-match for behavioral assertions.
 

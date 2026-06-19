@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { describe, expect, it } from "vitest";
 
-import { renderInputFeedback, renderReflectionFeedback } from "./gepaFeedback.js";
+import { renderInputFeedback, renderReflectionFeedback } from "./reflectionFeedback.js";
 import type { InputGrades } from "./grading/scorecard.js";
 
 function writeRecord(record: unknown): string {
@@ -41,6 +41,12 @@ describe("renderInputFeedback", () => {
     expect(text).toContain("missing field x");
     expect(text).toContain("search");
     expect(text).toContain("too terse");
+  });
+
+  it("renders the expected output when the input carries one", () => {
+    const e = entry("/no/such/record.json");
+    e.input.expected = "New Delhi";
+    expect(renderInputFeedback(e)).toContain("Expected: New Delhi");
   });
 
   it("degrades to grades-only feedback when the trace is missing (never throws)", () => {

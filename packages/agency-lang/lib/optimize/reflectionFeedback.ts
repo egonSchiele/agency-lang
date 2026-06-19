@@ -19,6 +19,9 @@ export function renderInputFeedback(entry: InputGrades, opts: ReflectionRenderOp
   lines.push(`### Input ${entry.input.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`);
   lines.push(`Args: ${preview(JSON.stringify(entry.input.args), 400)}`);
   lines.push(`Output: ${preview(stringifyOutput(entry.run.output), 600)}`);
+  if (entry.input.expected !== undefined) {
+    lines.push(`Expected: ${preview(stringifyOutput(entry.input.expected), 400)}`);
+  }
 
   const errors = record?.errors ?? [];
   if (errors.length > 0) {
@@ -61,7 +64,7 @@ function loadRecord(recordPath: string): EvalRecord | null {
   try {
     return JSON.parse(fs.readFileSync(recordPath, "utf8")) as EvalRecord;
   } catch (e) {
-    console.warn(`gepa: could not read trace ${recordPath}: ${e instanceof Error ? e.message : String(e)}`);
+    console.warn(`reflection: could not read trace ${recordPath}: ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }

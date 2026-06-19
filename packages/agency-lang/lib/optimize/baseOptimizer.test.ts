@@ -34,6 +34,9 @@ class Probe extends BaseOptimizer {
     max?: number,
   ): Promise<MutationOutcome> { return this.proposeValidMutation(propose, preview, max); }
   buildResultAt(args: Parameters<Probe["buildPointwiseResult"]>[0]): OptimizeResult { return this.buildPointwiseResult(args); }
+  scoreFilesAt(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
+    return this.scoreFiles(source, files, inputs);
+  }
 }
 
 describe("BaseOptimizer.evaluate", () => {
@@ -64,6 +67,48 @@ describe("BaseOptimizer.evaluate", () => {
     expect(runInput).toHaveBeenCalledTimes(2);
     expect(sc.objective()).toBeCloseTo(0.5, 10);
     expect(sc.gatesPassed()).toBe(true);
+  });
+
+  it("scoreFiles forks, applies files, and grades the given inputs", async () => {
+    const p = probe([new FixedGrader({ score: { kind: "scalar", value: 0.4 } })], fixedRun);
+    const source: OptimizeTargetSet = {
+      baseDir: src,
+      entryFile: "agent.agency",
+      files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "node main() {}\n", sha256: "x" } },
+      targets: [],
+    };
+    const sc = await p.scoreFilesAt(source, { "agent.agency": "node main() {}\n" }, [{ id: "a", args: {} }]);
+    expect(sc.objective()).toBeCloseTo(0.4, 10);
+  });
+
+  it("fails fast when a grader's validateInput rejects the first input, before running the agent", async () => {
+    class NeedsExpected extends BaseGrader {
+      protected readonly defaultName = "needs-expected";
+      validateInput(input: Input): void {
+        if (!input.metadata?.expected) throw new Error("matchOn [metadata,expected] did not resolve");
+      }
+      protected _run(): Promise<Grade> { return Promise.resolve({ score: { kind: "scalar", value: 1 } }); }
+    }
+    const runInput = vi.fn(fixedRun);
+    const opt = new (class extends BaseOptimizer {
+      readonly name = "probe2";
+      protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
+    })(
+      { graders: [new NeedsExpected()], iterations: 1, config: {}, runsDir: root, runId: "ff" },
+      {
+        workspaceRoot: path.join(root, "ws"),
+        runInput,
+        discover: () => ({
+          baseDir: src,
+          entryFile: "agent.agency",
+          files: {},
+          targets: [{ id: "t", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "p", valueKind: "string", value: "x" }],
+        }),
+      },
+    );
+    await expect(opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] }))
+      .rejects.toThrow(/did not resolve/);
+    expect(runInput).not.toHaveBeenCalled();
   });
 
   it("short-circuits advisory graders when a gate fails for an input", async () => {

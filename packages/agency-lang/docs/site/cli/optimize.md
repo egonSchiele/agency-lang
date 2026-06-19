@@ -75,13 +75,19 @@ By default a run is graded by one built-in LLM judge that scores each output aga
 A grading module **default-exports one grader or an array of graders**. A "grader" is any of:
 
 ```ts
-import { grader, ExactMatch, Contains, LlmJudge, type Grader } from "agency-lang/optimize";
+import { grader, scalar, ExactMatch, Contains, LlmJudge, type Grader } from "agency-lang/optimize";
 
 // (a) a metric function: ctx = { output, input, judge }
 //     `input` is the typed Input; the gold answer is `input.expected`
 //     (extra per-input data can also live under `input.metadata`).
 const exact: Grader = ({ output, input }) =>
-  output === input.expected ? 1 : 0;   // return a number (0..1), boolean, or {score, feedback}
+  output === input.expected ? 1 : 0;   // return a number (0..1), a boolean, or a Grade
+
+// returning feedback too? use the scalar()/binary() constructors instead of a raw Grade literal:
+const judged: Grader = async ({ output, input, judge }) => {
+  const v = await judge({ goal: `Return ${input.expected}.`, output });
+  return scalar(v.score, v.reasoning);   // ← vs { score: { kind: "scalar", value: v.score }, feedback: v.reasoning }
+};
 
 // (b) a wrapped function carrying policy (mustPass gate, weight, threshold, samples, inputScope)
 const gate = grader(exact, { mustPass: true, name: "capital-exact" });
@@ -90,8 +96,10 @@ const gate = grader(exact, { mustPass: true, name: "capital-exact" });
 const has = new Contains({});                                    // output contains input.expected
 const judge = new LlmJudge({ goal: "Return the capital.", samples: 3 });
 
-export default [gate, judge];   // or `export default exact` for the simple case
+export default [gate, judged];   // or `export default exact` for the simple case
 ```
+
+A metric function returns a **number** (0..1 scalar), a **boolean** (1.0/0.0), or a full **Grade**. For a Grade with feedback, the `scalar(value, feedback?)` and `binary(pass, feedback?)` constructors are the ergonomic way to build one.
 
 **How grades become the objective.** Every grade counts: a number contributes its value (0..1), and a boolean / `ExactMatch` / `Contains` result contributes `1.0` (pass) or `0.0` (fail) — so a binary-only grader gives you plain accuracy. The objective for an input is the weighted mean of its grades, and the run objective is the mean across inputs. `mustPass` is an orthogonal **gate**: a failed `mustPass` grader zeroes that input regardless of its other grades.
 

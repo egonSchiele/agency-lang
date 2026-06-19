@@ -2,6 +2,7 @@
 //   import { grader, ExactMatch, LlmJudge, type Grader } from "agency-lang/optimize";
 export { grader, FunctionGrader, toGrader } from "./grading/functionGrader.js";
 export type { Grader, GraderFn, GraderContext } from "./grading/functionGrader.js";
+export { scalar, binary } from "./grading/grade.js";
 export { BaseGrader } from "./grading/baseGrader.js";
 export {
   ExactMatchGrader as ExactMatch,

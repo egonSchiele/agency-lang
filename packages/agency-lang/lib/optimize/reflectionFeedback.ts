@@ -64,7 +64,7 @@ function loadRecord(recordPath: string): EvalRecord | null {
   try {
     return JSON.parse(fs.readFileSync(recordPath, "utf8")) as EvalRecord;
   } catch (e) {
-    console.warn(`gepa: could not read trace ${recordPath}: ${e instanceof Error ? e.message : String(e)}`);
+    console.warn(`reflection: could not read trace ${recordPath}: ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }

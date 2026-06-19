@@ -124,6 +124,24 @@ describe("GreedyReflective (pointwise)", () => {
     expect(propose).toHaveBeenCalledTimes(1);
   });
 
+  it("feeds the champion's per-input expected answers and grader feedback to the mutator", async () => {
+    let captured: { feedback?: string } | undefined;
+    const grader = new (class extends BaseGrader {
+      protected readonly defaultName = "g";
+      protected _run({ input }: GraderInput): Promise<Grade> {
+        return Promise.resolve({ score: { kind: "scalar", value: 0 }, feedback: `wanted ${input.expected}` });
+      }
+    })();
+    const propose = vi.fn(async (a: { feedback?: string }) => { captured = a; return { rationale: "x", operations: [] }; });
+    const opt = new GreedyReflective(
+      { graders: [grader], iterations: 1, config: {}, runsDir: root, runId: "fb", writeback: false },
+      { ...deps(), propose },
+    );
+    await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "india", args: {}, expected: "New Delhi" }] });
+    expect(captured?.feedback).toContain("New Delhi");        // the expected answer surfaced
+    expect(captured?.feedback).toContain("wanted New Delhi"); // the grader's feedback surfaced
+  });
+
   it("writes back the candidate with the best validation objective, not the best train objective", async () => {
     const trainCurve = [0.2, 0.4, 0.6];   // baseline, c1, c2 — climbing → both accepted; train champion = c2
     const valCurve   = [0.3, 0.9, 0.5];   // baseline, c1, c2 — peaks at c1

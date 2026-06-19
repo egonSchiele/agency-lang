@@ -1,6 +1,7 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { breakdown } from "../gradeBreakdown.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
+import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import type { Scorecard } from "../grading/scorecard.js";
 import type { Input } from "../grading/types.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
@@ -138,6 +139,7 @@ export class GreedyReflective extends BaseOptimizer {
         config: this.config.config,
         targets: champion.targetSet.targets,
         inputs,
+        feedback: renderReflectionFeedback(champion.scorecard.perInput),
         history: renderHistory(history),
         model: this.config.mutatorModel,
         diagnostics,

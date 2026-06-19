@@ -54,7 +54,7 @@ export async function evalOptimize(
 ): Promise<OptimizeResult> {
   const target = buildTarget(opts, deps);
   const config = await buildConfig(opts, deps);
-  const optimizerRef = opts.optimizer ?? opts.config?.eval?.optimize?.optimizer ?? DEFAULT_OPTIMIZER;
+  const optimizerRef = resolveOptimizeSettings(opts).optimizer ?? DEFAULT_OPTIMIZER;
   const optimizer = await resolveOptimizer(optimizerRef, config, deps);
   const result = await optimizer.optimize(target);
   // Persist the run summary so the path printed by the CLI actually exists.

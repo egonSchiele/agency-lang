@@ -172,6 +172,13 @@ Two ways to make `--optimizer` resolve to your class:
 
 ```ts
 // myOptimizer.ts
+import { BaseOptimizer, type BaseOptimizerConfig, type Input, type OptimizeResult, type OptimizeTargetSet } from "agency-lang/optimize";
+
+class MyOptimizer extends BaseOptimizer {
+  readonly name = "mine";
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> { /* … */ }
+}
+
 export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
 ```
 ```bash

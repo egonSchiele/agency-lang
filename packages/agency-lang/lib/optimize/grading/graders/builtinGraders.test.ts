@@ -85,4 +85,12 @@ describe("matcher pre-flight validation", () => {
     const grader = new ExactMatchGrader({ matchOn: ["metadata", "expected"] });
     expect(() => grader.validateInput({ id: "a", args: {}, metadata: { expected: "x" } })).not.toThrow();
   });
+
+  it("defaults matchOn to ['expected']", async () => {
+    const grader = new ExactMatchGrader({});   // no matchOn
+    const input: Input = { id: "a", args: {}, expected: "New Delhi" };
+    const grade = await grader.run({ input, run: { output: "New Delhi", recordPath: "" }, runAgency: stubRunner });
+    expect(grade.score).toEqual({ kind: "binary", pass: true });
+    expect(grader.describe()).toContain("expected");
+  });
 });

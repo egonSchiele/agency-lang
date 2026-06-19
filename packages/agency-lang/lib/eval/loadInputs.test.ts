@@ -43,6 +43,14 @@ describe("eval run input loading", () => {
     expect(inputs[0].metadata).toEqual({ expected: "Brasília" });
   });
 
+  it("passes a first-class expected output through", () => {
+    const suitePath = writeJson("with-expected.json", {
+      inputs: [{ id: "india", args: { country: "India" }, expected: "New Delhi" }],
+    });
+    const inputs = loadInputsFromFile(suitePath, () => "india", { requireGoal: false });
+    expect(inputs[0].expected).toBe("New Delhi");
+  });
+
   it("still requires a non-empty goal by default", () => {
     const suitePath = writeJson("needs-goal.json", { inputs: [{ id: "a", args: {} }] });
     expect(() => loadInputsFromFile(suitePath, () => "a")).toThrow(/goal must be a non-empty string/);

@@ -87,6 +87,7 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     args: (spec.args ?? {}) as Record<string, any>,
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
+  if (spec.expected !== undefined) out.expected = spec.expected;
   if (typeof spec.node === "string") out.node = spec.node;
   if (typeof spec.working_dir === "string") out.working_dir = path.resolve(baseDir, spec.working_dir);
   if (spec.metadata && typeof spec.metadata === "object") out.metadata = spec.metadata as Record<string, any>;

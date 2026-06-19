@@ -11,7 +11,7 @@ An optimizer is a class that:
 1. extends `BaseOptimizer`,
 2. has a `readonly name`,
 3. implements `optimizeTargets(source, inputs)`, and
-4. is registered in `lib/optimize/registry.ts`.
+4. is made available to `--optimizer` (registry **or** a path module — see [Registering and using it](#registering-and-using-it)).
 
 ```ts
 import { BaseOptimizer } from "../baseOptimizer.js";
@@ -27,12 +27,7 @@ export class MyOptimizer extends BaseOptimizer {
 }
 ```
 
-```ts
-// registry.ts
-registerOptimizer("mine", (config) => new MyOptimizer(config));
-```
-
-That's all the CLI needs — `--optimizer mine` now resolves to your class.
+(In an **out-of-repo** module, import these from the package, not relative paths: `import { BaseOptimizer, type Input, type OptimizeTargetSet, type OptimizeResult } from "agency-lang/optimize"`.)
 
 ## What the base class does before you run
 
@@ -169,6 +164,36 @@ result.championBreakdown = breakdown(champion.scorecard);
 
 `writeback` is honored by you: `this.workspace.writeBack(source, championFiles)` writes the champion back to the real source files (it verifies each file is unchanged-on-disk by hash and aborts on a mismatch). Only do this when `this.config.writeback` is true and the champion isn't the baseline.
 
+## Registering and using it
+
+Two ways to make `--optimizer` resolve to your class:
+
+**A. A path module (no repo changes).** Default-export a factory `(config) => Optimizer` and point `--optimizer` at the file:
+
+```ts
+// myOptimizer.ts
+import { BaseOptimizer, type BaseOptimizerConfig, type Input, type OptimizeResult, type OptimizeTargetSet } from "agency-lang/optimize";
+
+class MyOptimizer extends BaseOptimizer {
+  readonly name = "mine";
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> { /* … */ }
+}
+
+export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
+```
+```bash
+agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
+```
+
+`--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. Can also be set as `eval.optimize.optimizer` in `agency.json`.
+
+**B. A built-in name (in-repo).** Register it so a bare `--optimizer <name>` resolves it:
+
+```ts
+// lib/optimize/registry.ts
+registerOptimizer("mine", (config) => new MyOptimizer(config));
+```
+
 ## Testing
 
 `BaseOptimizer`'s constructor takes a `deps` object of seams so you can unit-test without an LLM, real subprocess runs, or file edits:
@@ -186,5 +211,5 @@ See `lib/optimize/optimizers/greedyReflective.test.ts` and `baseOptimizer.test.t
 - [ ] Use `scoreFiles`/`evaluate` to grade; `proposeValidMutation` to mutate.
 - [ ] Honor `this.config.writeback` and `this.validationInputs` (or `note` that you ignore validation).
 - [ ] Emit reporter events and `buildPointwiseResult` (+ `championBreakdown`).
-- [ ] Register it in `registry.ts`.
+- [ ] Make it resolvable: a path module (`export default (config) => new …`) used via `--optimizer ./file.ts`, or `registerOptimizer(...)` in `registry.ts`.
 - [ ] Add a test with injected `deps` (no live LLM).

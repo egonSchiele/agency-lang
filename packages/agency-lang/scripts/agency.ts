@@ -367,7 +367,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--runs-dir <path>", "Optimizer runs output directory")
     .option("--no-writeback", "Do not write the champion back to source files")
     .option("--mutator-model <model>", "Model to use for proposing mutations")
-    .option("--optimizer <name>", "Optimization strategy to use (default: greedy)")
+    .option("--optimizer <nameOrPath>", "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)")
     .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
     .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
     .option("--samples <n>", "Judge samples per input", parseInt)

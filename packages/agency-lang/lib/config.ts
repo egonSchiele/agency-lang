@@ -112,6 +112,7 @@ export interface AgencyConfig {
     optimize?: {
       goal?: string;
       graders?: string;                              // path to a TS grading module
+      optimizer?: string;                            // built-in name or path to a TS/JS optimizer module
       validation?: { inputs?: string; split?: number };
     };
   };
@@ -337,6 +338,7 @@ export const AgencyConfigSchema = z
           .object({
             goal: z.string().optional(),
             graders: z.string().optional(),
+            optimizer: z.string().optional(),
             validation: z.object({ inputs: z.string().optional(), split: z.number().optional() }).optional(),
           })
           .partial()

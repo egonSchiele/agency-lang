@@ -142,6 +142,27 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     expect(name).toBe("greedy");
   });
 
+  it("loads a custom optimizer when --optimizer is a path", async () => {
+    const agentFile = writeAgent();
+    const inputsFile = writeInputs([{ id: "a", goal: "g", args: {} }]);
+    // Written inside the package so its `import` of agency-lang/optimize resolves.
+    const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimizer-"));
+    try {
+      const optFile = path.join(dir, "opt.ts");
+      fs.writeFileSync(optFile, `export default (config) => ({
+        name: "mine",
+        optimize: async () => ({ runId: "CUSTOM:" + config.runId, runDir: "", championIter: "baseline", championFiles: {}, acceptedCount: 0, rejectedCount: 0, validationFailedCount: 0, iterations: [] }),
+      });`);
+      const result = await evalOptimize(
+        { agent: `${agentFile}:main`, inputs: inputsFile, optimizer: optFile, config: {} },
+        { makeRunId: () => "run-id" },
+      );
+      expect(result.runId).toBe("CUSTOM:run-id");   // the path optimizer's optimize() produced the result
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("uses configured optimize runs dir defaults", async () => {
     const agentFile = writeAgent();
     const { config } = await capture({ agent: agentFile, goal: "g", config: { eval: { optimizeRunsDir: path.join(tmpDir, "configured-runs") } } });

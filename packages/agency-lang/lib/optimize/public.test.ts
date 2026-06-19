@@ -10,4 +10,15 @@ describe("public optimize surface", () => {
     expect(typeof api.Similarity).toBe("function");
     expect(typeof api.LlmJudge).toBe("function");
   });
+
+  it("exports the optimizer-authoring surface", () => {
+    expect(typeof api.BaseOptimizer).toBe("function");
+    expect(typeof api.fileMap).toBe("function");
+    expect(typeof api.proposeMutation).toBe("function");
+    expect(typeof api.defaultPreview).toBe("function");
+    expect(typeof api.renderReflectionFeedback).toBe("function");
+    expect(typeof api.splitInputs).toBe("function");
+    expect(typeof api.breakdown).toBe("function");
+    expect(typeof api.Scorecard).toBe("function");
+  });
 });

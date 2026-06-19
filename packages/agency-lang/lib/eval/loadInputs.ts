@@ -70,7 +70,7 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.goal !== undefined && typeof spec.goal !== "string") {
     throw new Error("Eval input goal must be a string when provided");
   }
-  if (spec.args !== undefined && (!spec.args || typeof spec.args !== "object" || Array.isArray(spec.args))) {
+  if (spec.args !== undefined && !isPlainObject(spec.args)) {
     throw new Error("Eval input args must be an object when provided");
   }
   if (spec.node !== undefined && typeof spec.node !== "string") {
@@ -79,19 +79,24 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.working_dir !== undefined && typeof spec.working_dir !== "string") {
     throw new Error("Eval input working_dir must be a string when provided");
   }
-  if (spec.metadata !== undefined && (!spec.metadata || typeof spec.metadata !== "object" || Array.isArray(spec.metadata))) {
+  if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
   }
   const out: Input = {
     id: typeof spec.id === "string" ? spec.id : makeId(),
     args: (spec.args ?? {}) as Record<string, any>,
+    expected: spec.expected,   // any JSON; absent stays undefined
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
-  if (spec.expected !== undefined) out.expected = spec.expected;
   if (typeof spec.node === "string") out.node = spec.node;
   if (typeof spec.working_dir === "string") out.working_dir = path.resolve(baseDir, spec.working_dir);
-  if (spec.metadata && typeof spec.metadata === "object") out.metadata = spec.metadata as Record<string, any>;
+  if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;
+}
+
+/** A non-null, non-array object — the shape `args`/`metadata` must have. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function validateInputs(inputs: Input[]): Input[] {

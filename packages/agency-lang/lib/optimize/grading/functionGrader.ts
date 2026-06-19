@@ -1,9 +1,11 @@
+import { z } from "zod";
+
 import { BaseGrader } from "./baseGrader.js";
 import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
 import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js";
 
-/** What a metric function receives. `input` is the typed Input; per-input grading
- *  data (an expected answer, tags) lives under `input.metadata`. */
+/** What a metric function receives. `input` is the typed Input; the gold answer is
+ *  `input.expected`, and any extra per-input data lives under `input.metadata`. */
 export type GraderContext = {
   output: JSON;
   input: Input;
@@ -33,11 +35,21 @@ export class FunctionGrader extends BaseGrader {
   }
 }
 
+/** A well-formed Grade: a scalar/binary score plus optional feedback. */
+const GradeSchema = z.object({
+  score: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("scalar"), value: z.number() }),
+    z.object({ kind: z.literal("binary"), pass: z.boolean() }),
+  ]),
+  feedback: z.string().optional(),
+});
+
 function coerce(result: number | boolean | Grade): Grade {
   if (typeof result === "number") return { score: { kind: "scalar", value: result } };
   if (typeof result === "boolean") return { score: { kind: "binary", pass: result } };
-  if (result && typeof result === "object" && "score" in result) return result;
-  throw new Error(`grader function must return a number, boolean, or {score} object; got ${typeof result}`);
+  const parsed = GradeSchema.safeParse(result);
+  if (parsed.success) return parsed.data;
+  throw new Error(`grader function must return a number, a boolean, or a Grade ({ score, feedback? }); got ${JSON.stringify(result)}`);
 }
 
 /** Wrap a metric function so it carries policy (mustPass/weight/threshold/inputScope/samples/name). */
@@ -58,12 +70,14 @@ export function toGrader(spec: Grader): BaseGrader {
   );
 }
 
+/** The BaseGrader public surface we rely on — enough to accept a grader instance
+ *  that came from a different realm (its own resolved copy of agency-lang). */
+const GraderLikeSchema = z.object({
+  run: z.function(),
+  name: z.function(),
+  mustPass: z.function(),
+});
+
 function isGraderLike(spec: unknown): spec is BaseGrader {
-  return (
-    !!spec &&
-    typeof spec === "object" &&
-    typeof (spec as { run?: unknown }).run === "function" &&
-    typeof (spec as { name?: unknown }).name === "function" &&
-    typeof (spec as { mustPass?: unknown }).mustPass === "function"
-  );
+  return GraderLikeSchema.safeParse(spec).success;
 }

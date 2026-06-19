@@ -135,6 +135,14 @@ export default [gate, judge];   // or `export default exact` for the simple case
 - `judge({ goal, output })` in `ctx` runs the bundled goal judge agent so users
   get LLM grading from inside a function without instantiating `LlmJudge`.
 
+> **Superseded (follow-up, 2026-06-19):** the gold answer became a **first-class
+> `Input.expected` field** (read via `ctx.input.expected`, the default `matchOn`
+> for built-in match graders). The wording below — "the expected answer lives
+> under `metadata`" — describes the original design; only *additional*
+> grader-specific data now lives under `metadata`. See
+> `docs/site/cli/optimize.md` and `docs/dev/writing-optimizers.md` for the
+> shipped shape.
+
 **Where custom per-input data lives.** `Input` is a typed shape
 (`id`, `goal?`, `args`, `node?`, `working_dir?`, `metadata?`); the loader reads
 those fields and any unrecognized top-level keys are not part of `Input`.

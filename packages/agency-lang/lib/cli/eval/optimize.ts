@@ -75,6 +75,12 @@ export async function evalOptimize(
 
 /** Optimize allows --inputs and --goal together (--inputs = data, --goal =
  *  overall-goal default). Only --goal → a single synthetic input. */
+/**
+ * Which input source to use. `--inputs` and `--goal` may be combined: when
+ * `--inputs` is present it wins (the suite is the data) and `--goal` becomes the
+ * overall-goal default for inputs that omit one (filled in by `withDefaults`).
+ * `--goal` alone means one synthetic no-arg input. At least one is required.
+ */
 function optimizeInputSelection(opts: EvalOptimizeOptions): "inputs" | "goal" {
   if (opts.inputs) return "inputs";
   if (opts.goal) return "goal";
@@ -96,11 +102,11 @@ function resolveOptimizeSettings(opts: EvalOptimizeOptions) {
 
 /** Fill in the default node and overall goal for inputs that omit them. */
 function withDefaults(inputs: Input[], node: string, goal?: string): Input[] {
-  return inputs.map((input) => ({
-    ...input,
-    node: input.node ?? node,
-    ...(input.goal === undefined && goal !== undefined ? { goal } : {}),
-  }));
+  return inputs.map((input) => {
+    const out: Input = { ...input, node: input.node ?? node };
+    if (out.goal === undefined && goal !== undefined) out.goal = goal;
+    return out;
+  });
 }
 
 /** Load + normalize the train inputs, plus a validation set when configured.
@@ -131,7 +137,9 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
   // grading module AND no overall --goal default to fall back on.
   const requireGoal = !s.gradersPath && s.goal === undefined;
   const { inputs, validationInputs } = provisionInputs(s, resolved.node, requireGoal, deps);
-  return { agent: opts.agent, inputs, ...(validationInputs ? { validationInputs } : {}) };
+  const target: OptimizeTarget = { agent: opts.agent, inputs };
+  if (validationInputs) target.validationInputs = validationInputs;
+  return target;
 }
 
 /** The --goal-only case: one synthetic no-arg input carrying the overall goal. */

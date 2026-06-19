@@ -107,6 +107,7 @@ Pipeline and architecture:
 - `docs/dev/debugger.md` — Interactive debugger for stepping through and rewinding execution
 - `docs/dev/concurrent-interrupts.md` — Supporting multiple concurrent threads that interrupt simultaneously
 - `docs/dev/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards
+- `docs/dev/writing-optimizers.md` — How to write a new `eval optimize` strategy on `BaseOptimizer`: the contract, helpers, grading semantics, reflection feedback, registration, testing
 - `docs/dev/pkg-imports.md` — Importing Agency code from npm packages using `pkg::` prefix
 - `docs/dev/trace.md` — Execution traces capturing checkpoints at every step
 - `docs/dev/binop-parser.md` — Binary expression parser using precedence climbing

@@ -154,7 +154,27 @@ By default the optimizer also prints progress to the console (the resolved gradi
 
 ## Writing your own optimizer
 
-`greedy`, `gepa`, and `example` are built on a shared `BaseOptimizer`; you can register your own strategy. `example` (`lib/optimize/optimizers/example.ts`) is the minimal copy-paste template. The authoring guide lives with the developer docs in the repository at `docs/dev/writing-optimizers.md`.
+`greedy`, `gepa`, and `example` are built on a shared `BaseOptimizer`, which you can extend. Write a module that default-exports a **factory** `(config) => Optimizer`, then point `--optimizer` (or `eval.optimize.optimizer`) at its path — exactly like `--graders`:
+
+```ts
+// myOptimizer.ts
+import { BaseOptimizer, fileMap, type BaseOptimizerConfig, type Input, type OptimizeResult, type OptimizeTargetSet } from "agency-lang/optimize";
+
+class MyOptimizer extends BaseOptimizer {
+  readonly name = "mine";
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+    // search with this.scoreFiles / this.proposeValidMutation / this.evaluate …
+  }
+}
+
+export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
+```
+
+```bash
+agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
+```
+
+`--optimizer` takes either a **built-in name** (`greedy`, `gepa`, `example`) or a **path** (a value with a `/` or a `.ts`/`.js`/`.mjs` extension). The module is loaded the same way as a grading module (esbuild + import), and its result is used structurally as an `Optimizer` (`{ name, optimize }`). `example` (`lib/optimize/optimizers/example.ts`) is the minimal copy-paste template; the full authoring guide is in the repo at `docs/dev/writing-optimizers.md`.
 
 ## Notes
 

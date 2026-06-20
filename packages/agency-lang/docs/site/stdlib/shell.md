@@ -11,7 +11,7 @@ name: "shell"
 ### exec
 
 ```ts
-exec(command: string, args: string[], cwd: string, timeout: number, stdin: string, allowedExecutables: string[], blockedCommands: string[], allowedPaths: string[]): ExecResult
+exec(command: string, args: string[], cwd: string, timeout: number, stdin: string, allowedExecutables: string[], blockedCommands: string[], allowedPaths: string[], useAgentCwd: boolean): ExecResult
 ```
 
 Run an executable directly with an array of arguments, bypassing the shell. This is safer than bash() because arguments are passed directly to the process without shell interpretation, preventing command injection. Use this when you have a known command and structured arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command. Set allowedExecutables to restrict which executables can be run. Set blockedCommands to reject specific executables. Set allowedPaths to require `cwd` to live under one of those prefixes.
@@ -24,6 +24,7 @@ Run an executable directly with an array of arguments, bypassing the shell. This
   @param allowedExecutables - Only allow running these executables (allow-list)
   @param blockedCommands - Block running these executables
   @param allowedPaths - Only allow cwd values under these path prefixes
+  @param useAgentCwd - When true and no explicit cwd is given, run in the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -37,17 +38,18 @@ Run an executable directly with an array of arguments, bypassing the shell. This
 | allowedExecutables | `string[]` | [] |
 | blockedCommands | `string[]` | [] |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** [ExecResult](#execresult)
 
 **Throws:** `std::exec`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L20))
 
 ### bash
 
 ```ts
-bash(command: string, cwd: string, timeout: number, stdin: string, blockedCommands: string[], allowedPaths: string[]): ExecResult
+bash(command: string, cwd: string, timeout: number, stdin: string, blockedCommands: string[], allowedPaths: string[], useAgentCwd: boolean): ExecResult
 ```
 
 Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command. Set blockedCommands to reject commands that start with specific strings. Set allowedPaths to require `cwd` to live under one of those prefixes; bash() cannot meaningfully restrict the shell string itself, so prefer exec() when capability narrowing matters.
@@ -58,6 +60,7 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
   @param stdin - Input to feed to the command
   @param blockedCommands - Block commands that start with these strings
   @param allowedPaths - Only allow cwd values under these path prefixes
+  @param useAgentCwd - When true and no explicit cwd is given, run in the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -69,17 +72,18 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 | stdin | `string` | "" |
 | blockedCommands | `string[]` | [] |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** [ExecResult](#execresult)
 
 **Throws:** `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L79))
 
 ### ls
 
 ```ts
-ls(dir: string, recursive: boolean, maxResults: number, allowedPaths: string[]): Result
+ls(dir: string, recursive: boolean, maxResults: number, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
@@ -90,6 +94,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
   @param recursive - Whether to walk subdirectories
   @param maxResults - Maximum number of entries to return
   @param allowedPaths - Only allow listing directories under these prefixes
+  @param useAgentCwd - When true, resolve a relative dir against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -99,17 +104,18 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 | recursive | `boolean` | false |
 | maxResults | `number` | 1000 |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L128))
 
 ### grep
 
 ```ts
-grep(pattern: string, dir: string, flags: string, maxResults: number, allowedPaths: string[]): Result
+grep(pattern: string, dir: string, flags: string, maxResults: number, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults. Fails if the pattern is not a valid regex or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
@@ -123,6 +129,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
   @param flags - Regex flags
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
+  @param useAgentCwd - When true, resolve a relative dir against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -133,17 +140,18 @@ Search for a regex pattern in files under a directory. Returns matches with file
 | flags | `string` | "" |
 | maxResults | `number` | 200 |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L164))
 
 ### glob
 
 ```ts
-glob(pattern: string, dir: string, maxResults: number, allowedPaths: string[]): Result
+glob(pattern: string, dir: string, maxResults: number, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
@@ -152,6 +160,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxRe
   @param dir - The directory to search in (relative paths resolve against the module directory)
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
+  @param useAgentCwd - When true, resolve a relative dir against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -161,17 +170,18 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxRe
 | dir | `string` | "." |
 | maxResults | `number` | 500 |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L199))
 
 ### stat
 
 ```ts
-stat(filename: string, dir: string, allowedPaths: string[]): StatInfo
+stat(filename: string, dir: string, allowedPaths: string[], useAgentCwd: boolean): StatInfo
 ```
 
 Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms. Set allowedPaths to restrict which paths may be stat-ed.
@@ -181,6 +191,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
   @param filename - The path to stat
   @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
+  @param useAgentCwd - When true, resolve a relative filename against the agent working directory (see setAgentCwd) if one is set. Absolute filenames are unaffected. Defaults to false.
 
 **Parameters:**
 
@@ -189,15 +200,16 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 | filename | `string` |  |
 | dir | `string` | "" |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L234))
 
 ### exists
 
 ```ts
-exists(filename: string, dir: string, allowedPaths: string[]): boolean
+exists(filename: string, dir: string, allowedPaths: string[], useAgentCwd: boolean): boolean
 ```
 
 Return true if a file or directory exists at the given path. Set allowedPaths to restrict which paths may be probed; probing outside the allow-list raises an error rather than silently returning false.
@@ -207,6 +219,7 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
   @param filename - The path to check
   @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
+  @param useAgentCwd - When true, resolve a relative filename against the agent working directory (see setAgentCwd) if one is set. Absolute filenames are unaffected. Defaults to false.
 
 **Parameters:**
 
@@ -215,10 +228,11 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
 | filename | `string` |  |
 | dir | `string` | "" |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L224))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L256))
 
 ### which
 
@@ -236,4 +250,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L278))

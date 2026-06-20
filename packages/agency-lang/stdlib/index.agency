@@ -143,7 +143,7 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export def read(filename: string, dir: string = ".", offset: number = 0, limit: number = 0): Result {
+export def read(filename: string, dir: string = ".", offset: number = 0, limit: number = 0, useAgentCwd: boolean = false): Result {
   """
   A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
 
@@ -157,8 +157,11 @@ export def read(filename: string, dir: string = ".", offset: number = 0, limit: 
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Opt-in: defaults to false so behavior is unchanged for everyone who hasn't intentionally enabled it.
   """
-  dir = applyAgentCwd(dir)
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
   return interrupt std::read("Are you sure you want to read this file?", {
     dir: dir,
     filename: filename,
@@ -173,6 +176,7 @@ export def write(
   content: string,
   dir: string = ".",
   mode: string = "overwrite",
+  useAgentCwd: boolean = false,
 ): Result {
   """
   A tool for writing content to a file. The filename is resolved relative to dir.
@@ -186,8 +190,11 @@ export def write(
   @param content - The content to write
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  dir = applyAgentCwd(dir)
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
   return interrupt std::write("Are you sure you want to write to this file?", {
     dir: dir,
     filename: filename,
@@ -197,14 +204,17 @@ export def write(
   return try _write(dir, filename, content, mode)
 }
 
-export def readImage(filename: string, dir: string = "."): Result {
+export def readImage(filename: string, dir: string = ".", useAgentCwd: boolean = false): Result {
   """
   A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
 
   @param filename - The image file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  dir = applyAgentCwd(dir)
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
   return interrupt std::readImage("Are you sure you want to read this image file?", {
     dir: dir,
     filename: filename

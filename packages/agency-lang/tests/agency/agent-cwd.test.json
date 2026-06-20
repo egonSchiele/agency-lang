@@ -8,6 +8,7 @@
     { "nodeName": "applyUnsetPassesThrough", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "unsetReadsModuleDir", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "setRedirectsRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "defaultIgnoresAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "bashRunsInAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "existsAbsoluteBypassesAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "branchInheritsAndIsolates", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },

@@ -11,16 +11,14 @@
  * and broad. Read-only — no write/edit/bash tools.
  */
 import { typecheck } from "std::agency"
-import { Workspace, openDir } from "std::fs"
+import { ls, glob, grep } from "std::shell"
 import { skillsDir } from "std::skills"
-import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
 import { getSlowModel, getSlowProvider } from "../shared.agency"
 
-// explorer gets its own read-only view of the project. Mirrors the
-// workspace setup in `code.agency` but only the read-side tools are
-// re-exported below.
-static const workspace: Workspace = openDir(cwd())
+// explorer gets a read-only view of the project via the raw read tools.
+// Relative paths resolve against the agent working directory (set by
+// `agent.agency` at startup), so no per-tool anchoring is needed.
 
 static const docSkill = skillsDir("../docs/guide", "flat") with approve
 static const cliSkill = skillsDir("../docs/cli", "flat") with approve
@@ -104,10 +102,10 @@ and produce structured overviews. Typical questions you answer:
 """
 
 export static const explorerTools: any[] = [
-  workspace.read,
-  workspace.ls,
-  workspace.glob,
-  workspace.grep,
+  read.partial(useAgentCwd: true),
+  ls.partial(useAgentCwd: true),
+  glob.partial(useAgentCwd: true),
+  grep.partial(useAgentCwd: true),
   docSkill,
   cliSkill,
   appendixSkill,

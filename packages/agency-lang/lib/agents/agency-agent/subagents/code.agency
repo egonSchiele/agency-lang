@@ -8,17 +8,18 @@ import { handoff } from "std::agent"
  * `agent.agency`. The router injects the `handoff` tool itself, so
  * we do NOT add it here. The Workspace state lives here (not in
  * `shared.agency`) because only the code subagent uses file-system
- * tools. `setCwd` re-anchors the bundle so a directory change in one
- * turn persists to the next.
+ * tools. Relative paths resolve against the agent working directory
+ * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
+ * cwd at startup.
  */
 import { todoWrite, todoList } from "std::agent"
 import { filter } from "std::array"
-import { Workspace, openDir } from "std::fs"
-import { exec } from "std::shell"
+import { edit } from "std::fs"
+import { exec, ls, glob, grep, bash } from "std::shell"
+import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
-import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
@@ -26,14 +27,10 @@ import { oracleAgent } from "./oracle.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
 
-// File-system tools handed to the LLM as a single bundle anchored to
-// one directory. `openDir(dir)` returns a Workspace whose `read` /
-// `write` / `edit` / `ls` / `glob` / `grep` / `bash` all resolve
-// their `filename` (or `pattern`) argument against `dir` and its
-// subtree. `setCwd` rebuilds the bundle to re-anchor. Module-level
-// `let` so the rebuilt bundle is visible to the next turn (Agency
-// stores module-level lets in the GlobalStore).
-static const workspace: Workspace = openDir(cwd())
+// The file-system tools (`read` / `write` / `edit` / `ls` / `glob` /
+// `grep` / `bash`) resolve relative paths against the agent working
+// directory, which `agent.agency` pins to the user's cwd at startup and
+// the LLM can change via `setAgentCwd`. No per-tool anchoring needed.
 
 // Bundled Superpowers skills (brainstorming, writing-plans,
 // executing-plans, TDD, systematic debugging, verification-before-
@@ -47,23 +44,6 @@ static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with a
 static const docSkill = skillsDir("../docs/guide", "flat") with approve
 static const cliSkill = skillsDir("../docs/cli", "flat") with approve
 static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
-
-export def setCwd(dir: string): string {
-  """
-  Use this when the user tells you to change your current working
-  directory. After you call this, every file-system tool (read,
-  write, edit, ls, glob, grep, bash) will resolve filenames against
-  the given directory and its subtree. Pass `"cwd"` to anchor to the
-  user's current working directory.
-
-  @param dir - The directory to anchor file operations against
-  """
-  if (dir == "cwd") {
-    dir = cwd()
-  }
-  //workspace = openDir(dir)
-  return "Working directory set to: ${dir}"
-}
 
 export def agencyCli(args: string[]): any {
   """
@@ -80,7 +60,7 @@ export def agencyCli(args: string[]): any {
   @param args - CLI arguments, e.g. ["typecheck", "foo.agency"]. The
     first element is the subcommand.
   """
-  return exec("agency", args)
+  return exec("agency", args, useAgentCwd: true)
 }
 
 export static const codeSysPrompt = """
@@ -206,9 +186,11 @@ live in `.agency` files you can `read` directly.
 
 ## Workflow
 
-1. Call `setCwd` with the user's project directory first. After
-   that, every file-system tool resolves filenames against that
-   directory and its subtree.
+1. You already start in the user's working directory, so relative
+   paths just work. Only if the user asks you to work in a different
+   directory, call `setAgentCwd` with that directory; every
+   file-system and shell tool then resolves relative paths against it.
+   Use `getAgentCwd` to check the current working directory.
 2. Read `AGENTS.md` and `CLAUDE.md` at the project root if either
    exists and you haven't yet this session. They contain project
    conventions you MUST follow.
@@ -311,15 +293,21 @@ they show **relationships** or **flow**. Keep them small; if your
 diagram needs scrolling, prose is probably better.
 """
 
+// The file-system / shell tools are partially applied with
+// `useAgentCwd: true` so that, as agent tools, they resolve relative
+// paths against the agent working directory (pinned to the user's cwd at
+// startup, changeable via setAgentCwd). The base functions default this
+// to false, so non-agent callers are unaffected.
 export static const codeTools: any[] = [
-  setCwd,
-  workspace.read,
-  workspace.write,
-  workspace.edit,
-  workspace.ls,
-  workspace.glob,
-  workspace.grep,
-  workspace.bash,
+  setAgentCwd,
+  getAgentCwd,
+  read.partial(useAgentCwd: true),
+  write.partial(useAgentCwd: true),
+  edit.partial(useAgentCwd: true),
+  ls.partial(useAgentCwd: true),
+  glob.partial(useAgentCwd: true),
+  grep.partial(useAgentCwd: true),
+  bash.partial(useAgentCwd: true),
   agencyCli,
   typecheck,
   parseAST,

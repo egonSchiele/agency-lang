@@ -14,7 +14,7 @@ type EditResult = {
   edits: number
 }
 
-export def edit(filename: string, edits: Edit[], dir: string = "."): Result {
+export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd: boolean = false): Result {
   """
   Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.
 
@@ -25,8 +25,11 @@ export def edit(filename: string, edits: Edit[], dir: string = "."): Result {
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, replaceAll
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  dir = applyAgentCwd(dir)
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
   const preview = _previewEdit(dir, filename, edits)
   return interrupt std::edit("Are you sure you want to apply these edits?", {
     dir: dir,
@@ -58,14 +61,17 @@ export def applyPatch(patch: string, allowedPaths: string[] = []): Result {
   return try _applyPatch(patch, allowedPaths)
 }
 
-export def mkdir(dir: string, allowedPaths: string[] = []): Result {
+export def mkdir(dir: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param dir - The directory to create
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve a relative dir against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  dir = applyAgentCwd(dir)
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
   return interrupt std::mkdir("Are you sure you want to create this directory?", {
     dir: dir
   })
@@ -73,16 +79,19 @@ export def mkdir(dir: string, allowedPaths: string[] = []): Result {
   return try _mkdir(dir, allowedPaths)
 }
 
-export def copy(src: string, dest: string, allowedPaths: string[] = []): Result {
+export def copy(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param src - The source path
   @param dest - The destination path
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  src = applyAgentCwd(src)
-  dest = applyAgentCwd(dest)
+  if (useAgentCwd) {
+    src = applyAgentCwd(src)
+    dest = applyAgentCwd(dest)
+  }
   return interrupt std::copy("Are you sure you want to copy this file or directory?", {
     src: src,
     dest: dest
@@ -91,16 +100,19 @@ export def copy(src: string, dest: string, allowedPaths: string[] = []): Result 
   return try _copy(src, dest, allowedPaths)
 }
 
-export def move(src: string, dest: string, allowedPaths: string[] = []): Result {
+export def move(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param src - The source path
   @param dest - The destination path
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  src = applyAgentCwd(src)
-  dest = applyAgentCwd(dest)
+  if (useAgentCwd) {
+    src = applyAgentCwd(src)
+    dest = applyAgentCwd(dest)
+  }
   return interrupt std::move("Are you sure you want to move this file or directory?", {
     src: src,
     dest: dest
@@ -109,14 +121,17 @@ export def move(src: string, dest: string, allowedPaths: string[] = []): Result 
   return try _move(src, dest, allowedPaths)
 }
 
-export def remove(target: string, allowedPaths: string[] = []): Result {
+export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param target - The path to delete
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve a relative target against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
-  target = applyAgentCwd(target)
+  if (useAgentCwd) {
+    target = applyAgentCwd(target)
+  }
   return interrupt std::remove("Are you sure you want to delete this file or directory? This cannot be undone.", {
     target: target
   })

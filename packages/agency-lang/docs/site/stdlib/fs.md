@@ -6,53 +6,12 @@ name: "fs"
 
 ## Types
 
-### Workspace
-
-* A bundle of file-system tools anchored to a single directory. Every
- * function inside resolves its `filename` / `pattern` argument relative
- * to `dir` (including subdirectories). Construct with `openDir(dir)`.
- *
- * The bundle is built via partial application — each function is a
- * fresh AgencyFunction with `dir` bound at construction time. Re-call
- * `openDir(newDir)` to re-anchor (the previous bundle keeps pointing
- * at the old dir).
-
-```ts
-/**
- * A bundle of file-system tools anchored to a single directory. Every
- * function inside resolves its `filename` / `pattern` argument relative
- * to `dir` (including subdirectories). Construct with `openDir(dir)`.
- *
- * The bundle is built via partial application — each function is a
- * fresh AgencyFunction with `dir` bound at construction time. Re-call
- * `openDir(newDir)` to re-anchor (the previous bundle keeps pointing
- * at the old dir).
- */
-export type Workspace = {
-  read: any;
-  write: any;
-  edit: any;
-  ls: any;
-  glob: any;
-  grep: any;
-  bash: any;
-  /**
-   * Every bundled tool as a flat array, in the same order they are
-   * documented above. Designed for splatting straight into a call:
-   * `llm(msg, { tools: [...workspace.tools, otherTool] })`.
-   */
-  tools: any[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L129))
-
 ## Functions
 
 ### edit
 
 ```ts
-edit(filename: string, edits: Edit[], dir: string): Result
+edit(filename: string, edits: Edit[], dir: string, useAgentCwd: boolean): Result
 ```
 
 Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.
@@ -64,6 +23,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, replaceAll
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -72,12 +32,13 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 | filename | `string` |  |
 | edits | `Edit[]` |  |
 | dir | `string` | "." |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::edit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L17))
 
 ### applyPatch
 
@@ -101,18 +62,19 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L50))
 
 ### mkdir
 
 ```ts
-mkdir(dir: string, allowedPaths: string[]): Result
+mkdir(dir: string, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param dir - The directory to create
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve a relative dir against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -120,17 +82,18 @@ Create a directory, including any missing parent directories. Idempotent: succee
 |---|---|---|
 | dir | `string` |  |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L64))
 
 ### copy
 
 ```ts
-copy(src: string, dest: string, allowedPaths: string[]): Result
+copy(src: string, dest: string, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written. Set allowedPaths to restrict which path prefixes are permitted.
@@ -138,6 +101,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
   @param src - The source path
   @param dest - The destination path
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -146,17 +110,18 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 | src | `string` |  |
 | dest | `string` |  |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L82))
 
 ### move
 
 ```ts
-move(src: string, dest: string, allowedPaths: string[]): Result
+move(src: string, dest: string, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist. Set allowedPaths to restrict which path prefixes are permitted.
@@ -164,6 +129,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
   @param src - The source path
   @param dest - The destination path
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -172,23 +138,25 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 | src | `string` |  |
 | dest | `string` |  |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L103))
 
 ### remove
 
 ```ts
-remove(target: string, allowedPaths: string[]): Result
+remove(target: string, allowedPaths: string[], useAgentCwd: boolean): Result
 ```
 
 Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param target - The path to delete
   @param allowedPaths - Only allow paths starting with these prefixes
+  @param useAgentCwd - When true, resolve a relative target against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
 **Parameters:**
 
@@ -196,61 +164,10 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 |---|---|---|
 | target | `string` |  |
 | allowedPaths | `string[]` | [] |
+| useAgentCwd | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L105))
-
-### openDir
-
-```ts
-openDir(dir: string, allowedPaths: string[]): Workspace
-```
-
-Build a Workspace anchored at `dir` — a bundle of file-system tools
-  (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that all
-  resolve filenames (or `cwd` for `bash`) against `dir` and its
-  subtree. Designed to be handed to an LLM as a coherent surface:
-  instead of giving the model a dozen tools that each take a `dir`
-  arg, give it the bundle's members so they only have to think about
-  the filename. The bundle also exposes a `tools` array containing
-  every member in order, so you can splat it into a tools list:
-  `tools: [...workspace.tools, otherTool]`.
-
-  Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
-  is captured at `openDir` time. To re-anchor an agent to a new
-  directory, call `openDir(newDir)` again and use the new bundle.
-
-  Defense-in-depth sandboxing: `allowedPaths` is bound on `ls`,
-  `glob`, and `grep`. It defaults to `[dir]` so those tools refuse to
-  operate outside the anchor directory unless you explicitly pass a
-  broader allow-list. Relative entries in `allowedPaths` resolve
-  against the same directory as `dir` (the calling module's
-  directory), matching how `ls`/`glob`/`grep` already resolve `dir`.
-
-  `bash` is NOT sandboxed by `allowedPaths`: that argument only
-  validates `cwd`, while the shell command itself can read or write
-  anywhere the process can reach. `bash` is included in the bundle
-  for convenience (its `cwd` is pinned to `dir`), but treat it as
-  unsandboxed — gate it with user approval or `blockedCommands` if
-  you care about confinement. `read`/`write`/`edit` do not accept
-  `allowedPaths` but are already confined to `dir` by `resolvePath`,
-  which rejects absolute filenames and `..` escapes.
-
-  @param dir - The directory to anchor every bundled tool against
-  @param allowedPaths - Sandbox roots bound on ls/glob/grep.
-    Defaults to `[dir]` when empty. Relative entries resolve against
-    the same base as `dir`.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| allowedPaths | `string[]` | [] |
-
-**Returns:** [Workspace](#workspace)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L124))

@@ -80,3 +80,58 @@ Then view the logs
 ```
 agency logs view logs.jsonl
 ```
+
+## Syntax gotchas
+
+Agency's parser has a few rules that surprise people coming from other
+languages. If a file fails to parse or typecheck, check it against these
+first:
+
+- **No comments inside object or array literals.** A `//` or `/* */`
+  comment placed *between* entries of an object/array literal fails to
+  parse, and the reported error location is often misleading (it points
+  at the enclosing declaration, not the comment). Move the comment above
+  the literal.
+
+  ```
+  // BAD — comment between entries fails to parse
+  const x = {
+    a: 1,
+    // the b field
+    b: 2,
+  }
+
+  // GOOD — comment above the literal
+  // the b field
+  const x = { a: 1, b: 2 }
+  ```
+
+- **`if` / `while` / `for` require parentheses around the condition and
+  braces around the body.** `if x > 5 { ... }` and `if (x > 5): ...` are
+  both wrong; write `if (x > 5) { ... }`. `for` loops use `in`:
+  `for (item in items) { ... }`.
+
+- **No Python-style `def`/`node` headers.** Use
+  `def foo(x: number): string { ... }` and `node main() { ... }`, not
+  `function foo() -> string:` or `node main -> end:`.
+
+- **Variables must be declared before use.** Bare assignment (`x = 5`)
+  without a prior `let`/`const` is not allowed; write `let x = 5`.
+
+- **Pattern binders can't bind inside a boolean expression.**
+  `return r is success(v) && v.ok` is a parse error ("binder has nowhere
+  to bind"). Use a statement form instead:
+
+  ```
+  if (r is success(v)) {
+    return v.ok
+  }
+  ```
+
+- **Avoid literal backslashes in string literals.** A backslash in a
+  string literal can currently compile to invalid JavaScript. Prefer a
+  regex character class (e.g. `re/[^a-zA-Z0-9]+/g`) over a string like
+  `"\\"` when sanitizing text.
+
+When in doubt, check the [Basic Syntax](/guide/basic-syntax) guide or run
+`agency ast <file>` to see whether the file parses.

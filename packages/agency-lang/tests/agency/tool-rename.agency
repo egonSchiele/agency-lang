@@ -1,0 +1,21 @@
+// Passing two copies of the same function as tools to one llm() call
+// collides on tool name (providers require unique names). `.rename()` gives
+// each copy a distinct name so the call goes through. The runtime backstop
+// (assertUniqueToolNames) rejects the un-renamed case before dispatch.
+
+def add(a: number, b: number): number {
+  return a + b
+}
+
+node renamedCopiesDoNotCollide(): boolean {
+  // Two copies of `add`, each renamed — no collision, the llm() call runs.
+  const r = try llm("ping", { tools: [add.rename("addOne"), add.rename("addTwo")] })
+  return isSuccess(r)
+}
+
+node duplicateCopiesRaise(): boolean {
+  // Two copies of `add` with the same name — the backstop fails the call
+  // before it reaches the provider.
+  const r = try llm("ping", { tools: [add, add] })
+  return isFailure(r)
+}

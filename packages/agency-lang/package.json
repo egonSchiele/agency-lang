@@ -8,6 +8,7 @@
     "test:run": "vitest run",
     "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
     "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
+    "test:agents": "time node ./dist/scripts/agency.js test lib/agents -p 12",
     "build": "make build",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",

@@ -4,7 +4,7 @@ import type {
   SplatExpression,
 } from "../types/dataStructures.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
+import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
 import { isAssignable, safeResolveType } from "./assignability.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
@@ -554,37 +554,12 @@ function validateAgencyFunctionMethod(
     return;
   }
 
-  if (methodName === "describe") {
-    const args = element.functionCall.arguments;
-    if (
-      args.length !== 1 ||
-      ("type" in args[0] && args[0].type === "namedArgument")
-    ) {
-      ctx.errors.push({
-        message: `.describe() requires exactly one string argument.`,
-        loc: expr.loc,
-      });
-    } else if (
-      "type" in args[0] &&
-      args[0].type !== "string" &&
-      args[0].type !== "multiLineString" &&
-      args[0].type !== "variableName"
-    ) {
-      ctx.errors.push({
-        message: `.describe() argument must be a string, got ${args[0].type}.`,
-        loc: expr.loc,
-      });
-    }
-  }
-
-  if (methodName === "preapprove") {
-    const args = element.functionCall.arguments;
-    if (args.length > 0) {
-      ctx.errors.push({
-        message: `.preapprove() takes no arguments.`,
-        loc: expr.loc,
-      });
-    }
+  // describe / preapprove / rename — validated generically from their
+  // declared signatures in AGENCY_FUNCTION_METHOD_TYPES (builtins.ts), so
+  // adding a new such method is a one-line type entry, not checker code.
+  const sig = AGENCY_FUNCTION_METHOD_TYPES[methodName];
+  if (sig) {
+    validatePrimitiveMethodCall(expr, element.functionCall, sig, scope, ctx);
   }
 }
 
@@ -602,7 +577,7 @@ export function synthValueAccess(
     // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.
     if (element.kind === "methodCall") {
       const methodName = element.functionCall.functionName;
-      if (methodName === "partial" || methodName === "describe" || methodName === "preapprove") {
+      if (methodName === "partial" || methodName in AGENCY_FUNCTION_METHOD_TYPES) {
         validateAgencyFunctionMethod(expr, element, methodName, scope, ctx);
         currentType = "any";
         continue;

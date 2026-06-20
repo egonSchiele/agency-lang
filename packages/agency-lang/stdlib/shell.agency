@@ -8,6 +8,8 @@ import {
   _exec,
   _bash,
  } from "agency-lang/stdlib-lib/shell.js"
+import { isAbsolute } from "std::path"
+import { applyAgentCwd } from "std::index"
 
 type ExecResult = {
   stdout: string;
@@ -37,6 +39,7 @@ export def exec(
   @param blockedCommands - Block running these executables
   @param allowedPaths - Only allow cwd values under these path prefixes
   """
+  cwd = applyAgentCwd(cwd)
   // `subcommand` is a synthetic, agent-facing summary of the first
   // positional argument. It lets policy files pin a rule to (command,
   // subcommand) — e.g. auto-approve `git log` but not `git push` —
@@ -87,6 +90,7 @@ export def bash(
   @param blockedCommands - Block commands that start with these strings
   @param allowedPaths - Only allow cwd values under these path prefixes
   """
+  cwd = applyAgentCwd(cwd)
   return interrupt std::bash("Are you sure you want to run this shell command?", {
     command: command,
     cwd: cwd,
@@ -129,6 +133,7 @@ export def ls(
   @param maxResults - Maximum number of entries to return
   @param allowedPaths - Only allow listing directories under these prefixes
   """
+  dir = applyAgentCwd(dir)
   return interrupt std::ls("Are you sure you want to list this directory?", {
     dir: dir,
     recursive: recursive,
@@ -164,6 +169,7 @@ export def grep(
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
   """
+  dir = applyAgentCwd(dir)
   return interrupt std::grep("Are you sure you want to search files with grep?", {
     pattern: pattern,
     dir: dir,
@@ -188,6 +194,7 @@ export def glob(
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
   """
+  dir = applyAgentCwd(dir)
   return interrupt std::glob("Are you sure you want to glob files?", {
     pattern: pattern,
     dir: dir,
@@ -218,6 +225,9 @@ export safe def stat(
   @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
   """
+  if (!isAbsolute(filename)) {
+    dir = applyAgentCwd(dir)
+  }
   return _stat(filename, dir, allowedPaths)
 }
 
@@ -235,6 +245,9 @@ export safe def exists(
   @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
   """
+  if (!isAbsolute(filename)) {
+    dir = applyAgentCwd(dir)
+  }
   return _exists(filename, dir, allowedPaths)
 }
 

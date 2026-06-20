@@ -41,6 +41,7 @@ import {
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
+import { _resolve } from "agency-lang/stdlib-lib/path.js"
 
 export safe def print(...messages) {
   """
@@ -48,6 +49,54 @@ export safe def print(...messages) {
   """
   _print(...messages)
   return "Message printed."
+}
+
+// The agent's working directory: a branch-scoped override that
+// path-taking stdlib tools resolve relative paths against. Empty string
+// means "unset" — tools keep their default base. Distinct from `cwd()`
+// (the OS process cwd) on purpose: an agent sets this to point the file
+// and shell tools at the user's directory without changing the process.
+// Lives here in `std::index` (not `std::system`) because `index` is the
+// auto-imported barrel: every stdlib module already imports it, so the
+// path wrappers can reach `applyAgentCwd` without an explicit import that
+// would create a circular dependency back into `index`.
+let _agentCwd = ""
+
+export safe def setAgentCwd(dir: string) {
+  """
+  Set the agent working directory. Path-taking tools (read, write, edit,
+  ls, glob, grep, exec, bash, ...) resolve relative paths against it.
+  Pass an absolute path. Branch-scoped: a fork/race/parallel branch can
+  change it without affecting the parent.
+
+  @param dir - Absolute directory to use as the agent working directory.
+  """
+  _agentCwd = dir
+}
+
+export safe def getAgentCwd(): string {
+  """
+  Return the agent working directory, or an empty string when none is
+  set. See setAgentCwd.
+  """
+  return _agentCwd
+}
+
+export safe def applyAgentCwd(dir: string): string {
+  """
+  Resolve `dir` against the agent working directory when one is set;
+  otherwise return `dir` unchanged. Used by the path-taking stdlib
+  wrappers so a set agent cwd overrides their default base. `_resolve`
+  short-circuits on an absolute `dir`, and resolve(base, "") returns
+  base, so this works for both the fs default (".") and shell default ("").
+
+  @param dir - The directory argument to resolve.
+  """
+  const base = getAgentCwd()
+  if (base == "") {
+    return dir
+  }
+  return _resolve([base, dir])
 }
 
 export safe def printJSON(obj: any, highlight: boolean = false) {
@@ -109,6 +158,7 @@ export def read(filename: string, dir: string = ".", offset: number = 0, limit: 
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
   """
+  dir = applyAgentCwd(dir)
   return interrupt std::read("Are you sure you want to read this file?", {
     dir: dir,
     filename: filename,
@@ -137,6 +187,7 @@ export def write(
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
   """
+  dir = applyAgentCwd(dir)
   return interrupt std::write("Are you sure you want to write to this file?", {
     dir: dir,
     filename: filename,
@@ -153,6 +204,7 @@ export def readImage(filename: string, dir: string = "."): Result {
   @param filename - The image file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
   """
+  dir = applyAgentCwd(dir)
   return interrupt std::readImage("Are you sure you want to read this image file?", {
     dir: dir,
     filename: filename

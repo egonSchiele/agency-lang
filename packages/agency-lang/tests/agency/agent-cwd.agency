@@ -1,4 +1,4 @@
-import { getAgentCwd, setAgentCwd, applyAgentCwd } from "std::system"
+import { getAgentCwd, setAgentCwd, applyAgentCwd } from "std::index"
 
 node defaultsToEmpty(): boolean {
   return getAgentCwd() == ""
@@ -26,4 +26,61 @@ node applyEmptyReturnsBase(): boolean {
 
 node applyUnsetPassesThrough(): boolean {
   return applyAgentCwd("foo") == "foo"
+}
+
+import { bash, exists } from "std::shell"
+import { cwd } from "std::system"
+import { join } from "std::path"
+
+// Gap 5 — with NO agent cwd set, a relative read resolves against the
+// test's own module directory (tests/agency/), reading "from module".
+node unsetReadsModuleDir(): boolean {
+  const r = read("cwd-probe.txt") with approve
+  if (r is success(v)) {
+    return v.trim() == "from module"
+  }
+  return false
+}
+
+// Two same-named files in different dirs prove the read SWITCHES based on
+// the agent cwd. With cwd = fixture-a, the SAME relative name now reads
+// "from A" instead of the module dir's "from module".
+node setRedirectsRead(): boolean {
+  setAgentCwd(join(cwd(), "tests/agency/cwd-fixture-a"))
+  const r = read("cwd-probe.txt") with approve
+  if (r is success(v)) {
+    return v.trim() == "from A"
+  }
+  return false
+}
+
+// Gap 1 — the shell path (`bash`, whose dir arg is `cwd`, not `dir`) also
+// honors the agent cwd. `pwd` prints the directory the command ran in.
+node bashRunsInAgentCwd(): boolean {
+  setAgentCwd(join(cwd(), "tests/agency/cwd-fixture-a"))
+  const r = bash("pwd") with approve
+  return r.stdout.trim().endsWith("cwd-fixture-a")
+}
+
+// #7 — an ABSOLUTE filename bypasses the agent cwd entirely. Even with the
+// cwd pointed at a nonexistent dir, an absolute path to a real file is
+// honored.
+node existsAbsoluteBypassesAgentCwd(): boolean {
+  setAgentCwd("/this/does/not/exist")
+  return exists(join(cwd(), "tests/agency/cwd-probe.txt"))
+}
+
+// Gap 3 — branch isolation, both directions: the branch INHERITS the
+// parent's cwd at fork, sees its OWN write, and the parent is UNAFFECTED
+// by the branch's write.
+node branchInheritsAndIsolates(): boolean {
+  setAgentCwd("/parent")
+  const results = fork(["x"]) as item {
+    const before = getAgentCwd()
+    setAgentCwd("/branch")
+    const after = getAgentCwd()
+    return "${before}|${after}"
+  }
+  const parentAfter = getAgentCwd()
+  return results[0] == "/parent|/branch" && parentAfter == "/parent"
 }

@@ -746,7 +746,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("debug")
+    .command("debug", { hidden: true })
     .description("Debug an Agency file interactively")
     .argument("<file>", "Agency file to debug")
     .option("--node <name>", "Node to execute")
@@ -858,7 +858,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("review")
+    .command("review", { hidden: true })
     .description("Review an Agency file for type errors and code quality")
     .argument("<file>", "The .agency file to review")
     .action((file: string) => {
@@ -1216,7 +1216,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   const policyCmd = program
-    .command("policy")
+    .command("policy", { hidden: true })
     .description("Policy management tools");
 
   policyCmd
@@ -1231,7 +1231,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("interrupts")
+    .command("interrupts", { hidden: true })
     .description("Print every interrupt site and the handle blocks that could enclose it")
     .argument("<file>", "The .agency file to analyze")
     .action((file: string) => {

@@ -733,6 +733,15 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
   // REPL — we leave it paused so the process can still exit cleanly.)
   const wasPaused = process.stdin.isPaused();
 
+  // `prompts` leaves `process.stdin` in cooked (canonical) mode when it
+  // closes its readline. The line-mode REPL runs in raw mode and renders
+  // input itself, so a cooked stdin makes the terminal ALSO echo every
+  // line — the user sees their next prompt printed twice, and it persists
+  // because nothing re-asserts raw afterward. Snapshot the raw state on
+  // entry and restore it on exit (mirrors `wasPaused` above) so the modal
+  // leaves the terminal exactly as it found it.
+  const wasRaw = !!(process.stdin.isTTY && process.stdin.isRaw);
+
   // Wrap any caller-supplied `onState` so we always get a shot at
   // detecting Escape, without clobbering custom state hooks.
   const userOnState = (question as any).onState;
@@ -779,6 +788,14 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
     process.stdin.off("data", onStdinData);
     if (!wasPaused && process.stdin.isPaused()) {
       process.stdin.resume();
+    }
+    // Restore the raw-mode state `prompts` clobbered (see `wasRaw` above).
+    if (
+      process.stdin.isTTY &&
+      typeof process.stdin.setRawMode === "function" &&
+      process.stdin.isRaw !== wasRaw
+    ) {
+      process.stdin.setRawMode(wasRaw);
     }
   }
 }

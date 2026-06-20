@@ -1,4 +1,4 @@
-import { typecheck } from "std::agency"
+import { typecheck, parseAST } from "std::agency"
 import { handoff } from "std::agent"
 /*
  * Code subagent — handles anything that touches code or the file
@@ -14,6 +14,7 @@ import { handoff } from "std::agent"
 import { todoWrite, todoList } from "std::agent"
 import { filter } from "std::array"
 import { Workspace, openDir } from "std::fs"
+import { exec } from "std::shell"
 import { remember, recall, setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
@@ -62,6 +63,23 @@ export def setCwd(dir: string): string {
   }
   //workspace = openDir(dir)
   return "Working directory set to: ${dir}"
+}
+
+export def agencyCli(args: string[]): string {
+  """
+  Run the `agency` CLI with the given arguments and return its output.
+  Use this for agency subcommands such as `parse`, `ast`, and
+  `typecheck` — e.g. agencyCli(["ast", "foo.agency"]) or
+  agencyCli(["typecheck", "foo.agency"]). Arguments are passed directly
+  to the executable (no shell interpretation), so they cannot be chained
+  or redirected. The default agent policies auto-approve the read-only
+  `parse`, `ast`, and `typecheck` subcommands; other subcommands still
+  prompt for approval. Prefer this over `bash` for running agency.
+
+  @param args - CLI arguments, e.g. ["typecheck", "foo.agency"]. The
+    first element is the subcommand.
+  """
+  return exec("agency", args)
 }
 
 export static const codeSysPrompt = """
@@ -301,7 +319,9 @@ export static const codeTools: any[] = [
   workspace.glob,
   workspace.grep,
   workspace.bash,
+  agencyCli,
   typecheck,
+  parseAST,
   highlight.partial(language: "ts"),
   print,
   remember,
@@ -337,9 +357,20 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
 
   let hasErrors = false
   let iterations = 0
+  // Declared per-call (was an implicit module global) so a value never
+  // leaks between codeAgent invocations.
+  let reply = ""
+  // Per-call primer so the loop always runs at least once. Do NOT reuse
+  // the module-level `_first` for this: `_first` persists across calls (it
+  // gates the one-time system message on the resumed "code" thread), so
+  // using it as the loop primer meant every call after the first skipped
+  // the tool-enabled llm() entirely — the agent appeared to "lose" its
+  // tools on the second turn.
+  let firstIteration = true
   thread(label: "code", summarize: true, session: "code") {
     setMemoryId("code")
-    while ((hasErrors || _first) && iterations < 5) {
+    while ((hasErrors || firstIteration) && iterations < 5) {
+      firstIteration = false
       iterations += 1
       if (_first) {
         systemMessage(codeSysPrompt)

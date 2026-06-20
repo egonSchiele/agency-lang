@@ -235,10 +235,9 @@ def _runTurn(msg: string): boolean {
     pushMessage("Tokens: ${getTokens()}")
     return true
   }
-  // Expand `/foo args` to the rendered command body. Unknown `/foo`
-  // inputs fall through unchanged — matches Claude Code.
-  const prompt = expandSlash(msg, projectCommands)
-  const reply = mainAgent(prompt)
+  // Hand the message to the agent. `agentReply` does the slash-command
+  // expansion and the actual agent work; the REPL just renders the reply.
+  const reply = agentReply(msg)
   if (reply != "" && reply != null && reply != undefined) {
     pushMessage(highlight("${reply}\n", language: "markdown"))
   } else {
@@ -429,6 +428,16 @@ def mainAgent(prompt: string): string {
   return result
 }
 
+// The agent's core turn, decoupled from the terminal: expand any project
+// slash command, then run the prompt through `mainAgent` and return the
+// reply. The REPL (`main` / `_runTurn`) owns input, output, and built-in
+// commands; everything the *agent* does for a user message lives here, so
+// it can be driven and tested without a terminal or user input. See
+// `tests/agentTurn.agency`.
+export def agentReply(userMsg: string): string {
+  return mainAgent(expandSlash(userMsg, projectCommands))
+}
+
 def roundedCost(): string {
   return "$${getCost().toFixed(4)}"
 }
@@ -560,7 +569,7 @@ def oneShotAgent(prompt: string): string {
   const handler = setupSession(false)
   let reply: string = ""
   handle {
-    reply = mainAgent(expandSlash(prompt, projectCommands))
+    reply = agentReply(prompt)
   } with (data) {
     renderEditDiff(data)
     return handler(data)

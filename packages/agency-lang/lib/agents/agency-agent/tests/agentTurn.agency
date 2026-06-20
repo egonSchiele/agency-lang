@@ -1,0 +1,15 @@
+/*
+ * Tests that the agent's per-message logic is callable without the REPL.
+ *
+ * `agentReply` is the seam extracted from `main`/`_runTurn`: it takes a
+ * user message and returns the agent's reply, with no terminal, no user
+ * input, and no policy handler required. That's what makes the agent
+ * testable — this harness just calls it with the deterministic LLM
+ * provider (see agentTurn.test.json) and checks the reply comes back.
+ */
+import { agentReply } from "../agent.agency"
+
+node respondsToAMessage(): boolean {
+  const reply = agentReply("hello")
+  return reply == "Hi from the agent!"
+}

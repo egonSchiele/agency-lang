@@ -1,0 +1,41 @@
+/*
+ * Tests that both default agent policies auto-approve the read-only
+ * `agency` subcommands (parse / ast / typecheck) the code agent runs via
+ * the exec-based `agencyCli` tool, while leaving other subcommands to
+ * prompt. Pure policy logic — no LLM, no real command execution.
+ */
+import { checkPolicy } from "std::policy"
+import {
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+ } from "../lib/defaultPolicy.agency"
+
+def execIntr(subcommand: string): any {
+  // Mirrors the shape `exec("agency", [subcommand, ...])` raises:
+  // effect std::exec with command + subcommand (subcommand = args[0]).
+  return {
+    effect: "std::exec",
+    data: {
+      command: "agency",
+      subcommand: subcommand,
+      args: [subcommand]
+    }
+  }
+}
+
+node minimalApprovesAst(): boolean {
+  return checkPolicy(minimalAutoApprovePolicy, execIntr("ast")).type == "approve"
+}
+
+node minimalApprovesParse(): boolean {
+  return checkPolicy(minimalAutoApprovePolicy, execIntr("parse")).type == "approve"
+}
+
+node recommendedApprovesTypecheck(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, execIntr("typecheck")).type == "approve"
+}
+
+node doesNotApproveOtherSubcommands(): boolean {
+  // `run` is not in the allow-list, so it must NOT be auto-approved.
+  return checkPolicy(minimalAutoApprovePolicy, execIntr("run")).type != "approve"
+}

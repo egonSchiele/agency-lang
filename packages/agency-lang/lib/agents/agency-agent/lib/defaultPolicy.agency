@@ -1,3 +1,7 @@
+// `std::exec` rules give basic agency functionality: auto-approve the
+// read-only `agency` subcommands the code agent runs via the exec-based
+// `agencyCli` tool (matched on command + subcommand — no shell, so no
+// chaining). Other subcommands (run, compile, ...) still prompt.
 export static const minimalAutoApprovePolicy = {
   "std::memory::remember": [{
     action: "approve"
@@ -13,7 +17,30 @@ export static const minimalAutoApprovePolicy = {
   }],
   "std::memory::disableMemory": [{
     action: "approve"
-  }]
+  }],
+  "std::exec": [
+    {
+    match: {
+      command: "agency",
+      subcommand: "parse"
+    },
+    action: "approve"
+  },
+    {
+    match: {
+      command: "agency",
+      subcommand: "ast"
+    },
+    action: "approve"
+  },
+    {
+    match: {
+      command: "agency",
+      subcommand: "typecheck"
+    },
+    action: "approve"
+  },
+  ]
 }
 
 export static const recommendedAutoApprovePolicy = {

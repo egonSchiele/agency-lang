@@ -175,3 +175,24 @@ Agency execution tests (no LLM), e.g. under
 - `applyPatch` path rewriting.
 - Per-call `workdir` override args on individual tools (the agent changes
   the one cwd via `setAgentCwd` instead).
+
+## Implementation notes (deviations adopted during the build)
+
+Two changes were made to this design while implementing it:
+
+1. **Opt-in `useAgentCwd` parameter instead of an unconditional redirect.**
+   Each path-taking function takes a `useAgentCwd: boolean = false`
+   parameter and only consults the agent cwd when it is true. This is
+   crucial: an unconditional redirect breaks *module-relative* reads such
+   as `skillsDir`'s `read.partial(dir: "../docs/guide")` and any package
+   reading its own co-located resources, because the agent sets a cwd at
+   startup. With the default false, every existing caller is unaffected and
+   only intentional opt-ins (the agent's tools) get cwd resolution. The
+   agent wires its tools with `.partial(useAgentCwd: true)`.
+
+2. **The cwd machinery lives in `std::index`, not `std::system`.**
+   `std::index` is the auto-imported barrel (it defines `read`/`write`), so
+   it cannot import another stdlib `.agency` module without a circular
+   dependency. `getAgentCwd`/`setAgentCwd`/`applyAgentCwd` therefore live in
+   `std::index` (using the TS `_resolve` to avoid importing `std::path`).
+   `cwd()` stays in `std::system`, unchanged.

@@ -616,3 +616,16 @@ git commit -m "feat(agent): use agent working directory; drop Workspace"
 - **Why no TS change:** `applyAgentCwd` returns an absolute path when the override is set, and the TS `resolveDir`/`resolvePath` already treat an absolute `dir` as authoritative (bypassing the module-dir / `process.cwd()` choice). When unset it returns the argument unchanged, preserving every existing default.
 - **Absolute paths always bypass the agent cwd; only relative paths are redirected.** For `dir`/`cwd`-arg functions this is automatic (`applyAgentCwd` → `resolve(base, dir)` returns an absolute `dir` unchanged). `exists`/`stat` are the only functions whose absolute path lives in `filename`, so they guard with `if (!isAbsolute(filename))` to keep accepting absolute filenames when a cwd is set. `read`/`write`/`edit`/`readImage` already reject absolute filenames (pre-existing sandboxing) and that is unchanged.
 - **applyPatch** is intentionally left unchanged (its paths live inside the patch text, not a `dir` argument).
+
+## Build deviations (kept in sync with the spec)
+
+- **Opt-in `useAgentCwd: boolean = false` on every path-taking function**
+  instead of an unconditional `dir = applyAgentCwd(dir)`. The body is
+  `if (useAgentCwd) { dir = applyAgentCwd(dir) }` (exists/stat also guard
+  on `!isAbsolute(filename)`). This preserves module-relative resource
+  reads (e.g. `skillsDir`) by default; only opt-in callers get cwd
+  resolution. The agent passes its tools via `.partial(useAgentCwd: true)`
+  and `agencyCli` runs `exec(..., useAgentCwd: true)`.
+- **cwd machinery homed in `std::index`** (not `std::system`) to avoid a
+  circular import — `std::index` is the auto-import barrel. Consumers
+  import `applyAgentCwd` / `getAgentCwd` / `setAgentCwd` from `std::index`.

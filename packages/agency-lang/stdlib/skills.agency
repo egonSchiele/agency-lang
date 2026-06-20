@@ -73,6 +73,37 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
   }
 }
 
+def skillToolName(dir: string): string {
+  """
+  Derive a unique, readable LLM tool name from a skills directory. The
+  returned tool is `read.partial(dir)`, and `.partial()` keeps the base
+  name `read`, so two `skillsDir(...)` results in one `tools:` list would
+  collide (providers require unique tool names). Naming each after its
+  directory keeps them distinct AND makes tool-call traces legible.
+
+  @param dir - The skills directory the tool reads from.
+  """
+  let cleaned = dir
+  cleaned = cleaned.replaceAll("../", "")
+  cleaned = cleaned.replaceAll("./", "")
+  cleaned = cleaned.replaceAll("/", "_")
+  cleaned = cleaned.replaceAll(".", "_")
+  cleaned = cleaned.replaceAll("-", "_")
+  cleaned = cleaned.replaceAll(" ", "_")
+  // Collapse any leading/trailing underscores left by the substitutions
+  // above (e.g. a trailing slash) so names read cleanly.
+  while (cleaned.startsWith("_")) {
+    cleaned = cleaned.slice(1)
+  }
+  while (cleaned.endsWith("_")) {
+    cleaned = cleaned.slice(0, cleaned.length - 1)
+  }
+  if (cleaned == "") {
+    cleaned = "root"
+  }
+  return "skills_${cleaned}"
+}
+
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
   """
   Build a SkillEntry for one skill in the standard SKILL.md layout.
@@ -135,7 +166,10 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   const header = "Read a skill file from the skills directory '${dir}' by passing its <location> as `filename` to the tool. Available skills:\n<available_skills>\n"
   const footer = "\n</available_skills>"
   const description = header + lines.join("\n") + footer
-  return read.partial(dir: dir).describe(description)
+  // `.rename(...)` is essential, not cosmetic: without it every skillsDir
+  // tool is named `read` (the base of `read.partial`), so two of them in one
+  // `tools:` list trip the provider's unique-name requirement.
+  return read.partial(dir: dir).describe(description).rename(skillToolName(dir))
 }
 
 // ============================================================

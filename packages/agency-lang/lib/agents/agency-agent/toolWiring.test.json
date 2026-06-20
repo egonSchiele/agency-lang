@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "nodeName": "codeToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }]
+    },
+    {
+      "nodeName": "researchToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }]
+    },
+    {
+      "nodeName": "oracleToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }]
+    },
+    {
+      "nodeName": "explorerToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }]
+    }
+  ]
+}

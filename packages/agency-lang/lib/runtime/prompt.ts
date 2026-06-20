@@ -118,12 +118,39 @@ function capToolResultForLlm(result: any, cap: number): any {
   );
 }
 
+/** Provider APIs (Anthropic, OpenAI) reject an LLM request whose tool list
+ *  contains duplicate names, and tool-call dispatch here matches handlers by
+ *  name — so duplicate names are always a bug. They're easy to introduce
+ *  by accident because `.partial()` / `.describe()` preserve the base
+ *  function's name (e.g. `skillsDir` returns `read.partial(dir)`, so four
+ *  skill tools are all named `read`). Catch it before the request hits the
+ *  wire with a message that names the collision and points at `.rename()`,
+ *  instead of an opaque transport-layer 400 that never reaches the statelog. */
+function assertUniqueToolNames(tools: { name: string }[]): void {
+  const counts: Record<string, number> = {};
+  for (const t of tools) {
+    counts[t.name] = (counts[t.name] || 0) + 1;
+  }
+  const dups = Object.keys(counts).filter((n) => counts[n] > 1);
+  if (dups.length > 0) {
+    const detail = dups.map((n) => `"${n}" (×${counts[n]})`).join(", ");
+    throw new Error(
+      `Duplicate tool name(s) passed to an LLM call: ${detail}. Tool names ` +
+        `must be unique. This usually happens when several tools are derived ` +
+        `from the same function via .partial() or .describe(), which preserve ` +
+        `the base name. Give each derived tool a distinct name with ` +
+        `.rename("...").`,
+    );
+  }
+}
+
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
 export const _internal = {
   DEFAULT_TOOL_RESULT_CHARS,
   stringifyToolResult,
   capToolResultForLlm,
+  assertUniqueToolNames,
 };
 
 async function _runPrompt({
@@ -192,12 +219,29 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  const { completion, toolCalls } = await dispatchLLMRequest({
-    ctx,
-    promptConfig,
-    prompt,
-    stream,
-  });
+  let completion: PromptResult;
+  let toolCalls: ToolCallJSON[];
+  try {
+    ({ completion, toolCalls } = await dispatchLLMRequest({
+      ctx,
+      promptConfig,
+      prompt,
+      stream,
+    }));
+  } catch (err) {
+    // The success-path `promptCompletion` event below is the only place the
+    // request payload (messages + tools) is logged, and it never runs when
+    // the dispatch throws — so a provider rejection (e.g. a 400 over the
+    // tool list) otherwise leaves no record of what was sent. Emit an
+    // `llmError` carrying the tool list so the failed request is
+    // diagnosable, then rethrow unchanged.
+    await ctx.statelogClient.error({
+      errorType: "llmError",
+      message: err instanceof Error ? err.message : String(err),
+      tools,
+    });
+    throw err;
+  }
 
   // Capture endTime AFTER the response has been fully received. The
   // request Promise is created above but only awaited inside the
@@ -371,6 +415,10 @@ export async function runPrompt(args: {
   let tools = exposedFunctions
     .filter((fn) => fn.toolDefinition)
     .map((fn) => fn.toolDefinition!);
+  // Pre-flight: reject duplicate tool names before they reach the provider,
+  // where they surface as an opaque 400 with no request payload in the
+  // statelog. See assertUniqueToolNames.
+  assertUniqueToolNames(tools);
   let toolFunctions = exposedFunctions;
 
   // Remove tools key from clientConfig before passing to smoltalk.

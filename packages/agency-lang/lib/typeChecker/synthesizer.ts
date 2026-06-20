@@ -586,6 +586,32 @@ function validateAgencyFunctionMethod(
       });
     }
   }
+
+  if (methodName === "rename") {
+    const args = element.functionCall.arguments;
+    if (
+      args.length !== 1 ||
+      ("type" in args[0] && args[0].type === "namedArgument")
+    ) {
+      ctx.errors.push({
+        message: `.rename() requires exactly one string argument.`,
+        loc: expr.loc,
+      });
+    } else {
+      // The argument can be any string-valued expression (literal,
+      // variable, or a call like `skillToolName(dir)`), so synthesize its
+      // type and check assignability rather than allow-listing AST node
+      // kinds. `any` passes (we can't prove it wrong).
+      const actual = synthType(args[0] as any, scope, ctx);
+      const stringType: VariableType = { type: "primitiveType", value: "string" };
+      if (actual !== "any" && !isAssignable(actual, stringType, ctx.getTypeAliases())) {
+        ctx.errors.push({
+          message: `.rename() argument must be a string, got ${formatTypeHint(actual)}.`,
+          loc: expr.loc,
+        });
+      }
+    }
+  }
 }
 
 export function synthValueAccess(
@@ -602,7 +628,7 @@ export function synthValueAccess(
     // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.
     if (element.kind === "methodCall") {
       const methodName = element.functionCall.functionName;
-      if (methodName === "partial" || methodName === "describe" || methodName === "preapprove") {
+      if (methodName === "partial" || methodName === "describe" || methodName === "preapprove" || methodName === "rename") {
         validateAgencyFunctionMethod(expr, element, methodName, scope, ctx);
         currentType = "any";
         continue;

@@ -579,3 +579,55 @@ describe("preapprove handler wiring", () => {
     expect(lenDuring).toBe(before);
   });
 });
+
+describe("rename()", () => {
+  it("changes both the function name and the tool-definition name", () => {
+    const fn = new AgencyFunction({
+      name: "read",
+      module: "test.agency",
+      fn: async (...args: unknown[]) => args,
+      params: [{ name: "filename", hasDefault: false, defaultValue: undefined, variadic: false }],
+      toolDefinition: { name: "read", description: "Read a file", schema: null },
+    });
+    const renamed = fn.rename("skills_docs_guide");
+    expect(renamed.name).toBe("skills_docs_guide");
+    expect(renamed.toolDefinition?.name).toBe("skills_docs_guide");
+    // Description is preserved.
+    expect(renamed.toolDefinition?.description).toBe("Read a file");
+    // Original is untouched (immutable copy).
+    expect(fn.name).toBe("read");
+  });
+
+  it("leaves toolDefinition null when the base has none", () => {
+    const fn = new AgencyFunction({
+      name: "helper",
+      module: "test.agency",
+      fn: async () => "ok",
+      params: [],
+      toolDefinition: null,
+    });
+    const renamed = fn.rename("renamedHelper");
+    expect(renamed.name).toBe("renamedHelper");
+    expect(renamed.toolDefinition).toBeNull();
+  });
+
+  it("composes with partial/describe and remains invocable under the new name", async () => {
+    const fn = new AgencyFunction({
+      name: "read",
+      module: "test.agency",
+      fn: async (...args: unknown[]) => args,
+      params: [
+        { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: { name: "read", description: "Read a file", schema: null },
+    });
+    const tool = fn.partial({ dir: "/tmp" }).describe("docs").rename("skills_tmp");
+    expect(tool.name).toBe("skills_tmp");
+    expect(tool.toolDefinition?.name).toBe("skills_tmp");
+    expect(tool.toolDefinition?.description).toBe("docs");
+    // The bound `dir` is still applied when invoked.
+    const result = await tool.invoke({ type: "positional", args: ["a.txt"] });
+    expect(result).toEqual(["/tmp", "a.txt"]);
+  });
+});

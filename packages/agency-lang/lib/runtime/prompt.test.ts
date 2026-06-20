@@ -1,8 +1,43 @@
 import { describe, it, expect } from "vitest";
 import { _internal } from "./prompt.js";
 
-const { DEFAULT_TOOL_RESULT_CHARS, stringifyToolResult, capToolResultForLlm } =
-  _internal;
+const {
+  DEFAULT_TOOL_RESULT_CHARS,
+  stringifyToolResult,
+  capToolResultForLlm,
+  assertUniqueToolNames,
+} = _internal;
+
+describe("assertUniqueToolNames", () => {
+  it("accepts a list of distinct tool names", () => {
+    expect(() =>
+      assertUniqueToolNames([{ name: "read" }, { name: "write" }]),
+    ).not.toThrow();
+  });
+
+  it("accepts an empty list", () => {
+    expect(() => assertUniqueToolNames([])).not.toThrow();
+  });
+
+  it("throws naming the duplicate (the skillsDir/read regression)", () => {
+    // Four skillsDir tools used to all be named `read` (read.partial keeps
+    // the base name), which Anthropic rejects with an opaque 400.
+    expect(() =>
+      assertUniqueToolNames([
+        { name: "read" },
+        { name: "read" },
+        { name: "read" },
+        { name: "write" },
+      ]),
+    ).toThrow(/Duplicate tool name\(s\).*"read" \(×3\)/s);
+  });
+
+  it("points at .rename() in the message", () => {
+    expect(() =>
+      assertUniqueToolNames([{ name: "x" }, { name: "x" }]),
+    ).toThrow(/\.rename\(/);
+  });
+});
 
 describe("stringifyToolResult", () => {
   it("passes strings through unchanged", () => {

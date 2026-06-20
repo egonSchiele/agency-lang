@@ -117,6 +117,23 @@ describe("StatelogClient", () => {
     });
   });
 
+  describe("error events", () => {
+    it("records an llmError with the request's tool list", async () => {
+      const file = newLogFile("llm-error-tools");
+      const client = fileClient(file);
+      await client.error({
+        errorType: "llmError",
+        message: "400 tool names must be unique",
+        tools: [{ name: "read" }, { name: "read" }],
+      });
+      const events = readEvents(file);
+      expect(events).toHaveLength(1);
+      expect(events[0].data.type).toBe("error");
+      expect(events[0].data.errorType).toBe("llmError");
+      expect(events[0].data.tools).toEqual([{ name: "read" }, { name: "read" }]);
+    });
+  });
+
   describe("sinks", () => {
     it("emits format_version: 1 on every event envelope", async () => {
       const file = newLogFile("format-version");

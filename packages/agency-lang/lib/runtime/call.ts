@@ -72,6 +72,12 @@ export async function __callMethod(
       }
       return obj.describe(descriptor.args[0] as string);
     }
+    if (prop === "rename") {
+      if (descriptor.type !== "positional" || descriptor.args.length !== 1) {
+        throw new Error(".rename() requires exactly one string argument");
+      }
+      return obj.rename(descriptor.args[0] as string);
+    }
     if (prop === "preapprove") {
       const hasArgs =
         descriptor.type === "named"

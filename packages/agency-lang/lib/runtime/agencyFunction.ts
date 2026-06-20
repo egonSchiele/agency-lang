@@ -231,6 +231,35 @@ export class AgencyFunction {
     return this.withToolDefinition(newToolDef);
   }
 
+  /**
+   * Return a copy of this function with a new name. The name is BOTH what the
+   * LLM sees as the tool name and what tool-call dispatch matches against
+   * (`prompt.ts` looks up the handler by `fn.name`), so `name` and
+   * `toolDefinition.name` are updated together.
+   *
+   * `.partial()` and `.describe()` deliberately preserve the base name, so
+   * deriving several tools from one function (e.g. `read.partial(dir)` as
+   * `skillsDir` does) produces several tools that all share that base name.
+   * Passing such a list to `llm({ tools })` is rejected by providers that
+   * require unique tool names (Anthropic returns a 400). `.rename(...)` gives
+   * each derived tool a distinct name.
+   */
+  rename(newName: string): AgencyFunction {
+    const newToolDef = this.toolDefinition
+      ? { ...this.toolDefinition, name: newName }
+      : null;
+    return new AgencyFunction({
+      name: newName,
+      module: this.module,
+      fn: this._fn,
+      params: this.params,
+      toolDefinition: newToolDef,
+      exported: this.exported,
+      safe: this.safe,
+      isPreapproved: this._isPreapproved,
+    });
+  }
+
   private mergeWithBound(unboundArgs: unknown[]): unknown[] {
     const fullArgs: unknown[] = [];
     let unboundIdx = 0;

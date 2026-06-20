@@ -999,12 +999,19 @@ export class StatelogClient {
     functionName,
     retryable,
     sourceLocation,
+    tools,
   }: {
     errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded";
     message: string;
     functionName?: string;
     retryable?: boolean;
     sourceLocation?: { moduleId: string; line?: number };
+    /** Tool definitions advertised on the failed request, if any. Lets an
+     *  `llmError` carry the request's tool list — otherwise lost, because
+     *  the `promptCompletion` event (which logs `tools`) only fires on
+     *  success. `toolsOf()` reads this the same way it reads
+     *  `promptCompletion.data.tools`. */
+    tools?: unknown[];
   }): Promise<void> {
     await this.post({
       type: "error",
@@ -1013,6 +1020,7 @@ export class StatelogClient {
       functionName,
       retryable,
       sourceLocation,
+      tools,
     });
   }
 

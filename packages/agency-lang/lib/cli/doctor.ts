@@ -23,7 +23,10 @@ export function buildDoctorPrompt(file: string, symptom?: string): string {
       'guide\'s "Syntax gotchas" section (via `docSkill`) and check the file ' +
       "against those known gotchas.",
     "",
-    "Report what you found and, if you can, how to fix it.",
+    "Report what you found. If you found a problem, explain the fix and " +
+      "offer to apply it. If the user agrees, make the change yourself with " +
+      "your edit tools (the user is asked to approve each edit), then " +
+      "re-run `typecheck` to confirm the file is clean.",
   ].join("\n");
 }
 

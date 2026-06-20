@@ -750,9 +750,12 @@ node main() {
   }
 
   // Seeded interactive: run the given prompt as the first turn, then hand
-  // the REPL to the user. Requires a TTY (the REPL reads stdin); without
-  // one we fall through to one-shot below.
-  if (wantInteractive && hasQuery && isTTY()) {
+  // the REPL to the user. Requires a seed prompt and a TTY (the REPL reads
+  // stdin). `--print` wins if both are passed — its whole job is to print
+  // and exit with no REPL. Without a TTY (or with `--print`) we fall
+  // through to one-shot below; `--interactive` with no prompt falls through
+  // to the plain REPL.
+  if (wantInteractive && hasQuery && isTTY() && !args.flags.print) {
     setTitle("Agency Agent")
     clearScreen()
     printHeader()
@@ -763,12 +766,15 @@ node main() {
 
   // One-shot invocation: run one turn through the same agent the REPL uses
   // and write the reply to stdout. No banner, no REPL. Entered when
-  // `--print` / `-p` is passed, a positional query is given, `--interactive`
-  // is passed without a TTY, or stdin is piped — so the agent behaves like a
-  // Unix filter: `echo "..." | agency agent`. The prompt comes from the
-  // positional when present, otherwise from stdin. (Title/clearScreen are
-  // skipped so piped output stays free of escape codes.)
-  const forceOneShot = args.flags.print || hasQuery || wantInteractive
+  // `--print` / `-p` is passed, a positional query is given, or stdin is
+  // piped (no TTY) — so the agent behaves like a Unix filter:
+  // `echo "..." | agency agent`. `--interactive` is NOT a one-shot trigger
+  // on its own: with a TTY and no prompt it falls through to the plain
+  // REPL; without a TTY the `!isTTY()` check below routes it here to
+  // degrade gracefully. The prompt comes from the positional when present,
+  // otherwise from stdin. (Title/clearScreen are skipped so piped output
+  // stays free of escape codes.)
+  const forceOneShot = args.flags.print || hasQuery
   if (forceOneShot || !isTTY()) {
     let prompt = positionalQuery
     if (!hasQuery) {

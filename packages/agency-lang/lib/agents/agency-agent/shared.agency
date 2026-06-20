@@ -9,9 +9,9 @@
  * Routing + handoff used to live here; those moved to `std::agent`'s
  * `route()` / `handoff()` and the agent now consumes them directly.
  */
+import { setLlmOptions, pickProvider } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
-import { setLlmOptions, pickProvider } from "std::llm"
 
 // Per-user state directory for the agent (persistent memory + saved
 // policy). We expand `~` ourselves via `env("HOME")` because
@@ -46,23 +46,41 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // which silently disables Tier 2 (embedding-similarity) recall.
 // `text-embedding-3-small` is the canonical default cited in the
 // memory guide; cheap and ubiquitous.
-static const _memoryReady = enableMemory({
+static const _memoryReady = enableMemory(
+  {
   dir: "${AGENCY_AGENT_DIR}/memory",
   embeddings: {
     model: "text-embedding-3-small"
   }
-}) with approve
+},
+) with approve
 
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
 // extended thinking; native providers use their own. Used as fallbacks
 // when the user doesn't pass --model / --fastmodel / --slowmodel.
-type ProviderModels = { fast: string; slow: string; slowProvider: string }
+type ProviderModels = {
+  fast: string;
+  slow: string;
+  slowProvider: string
+}
 
 export static const MODELS: Record<string, ProviderModels> = {
-  openai: { fast: "gpt-4o-mini", slow: "gpt-5.5", slowProvider: "openai-responses" },
-  anthropic: { fast: "claude-haiku-4-5-20251001", slow: "claude-opus-4-8", slowProvider: "anthropic" },
-  google: { fast: "gemini-2.5-flash", slow: "gemini-2.5-pro", slowProvider: "google" }
+  openai: {
+    fast: "gpt-4o-mini",
+    slow: "gpt-5.5",
+    slowProvider: "openai-responses"
+  },
+  anthropic: {
+    fast: "claude-sonnet-4-6",
+    slow: "claude-opus-4-8",
+    slowProvider: "anthropic"
+  },
+  google: {
+    fast: "gemini-3.5-flash",
+    slow: "gemini-3.1-pro-preview",
+    slowProvider: "google"
+  }
 }
 
 // The slow ("deep reasoning") model + its provider, set once by
@@ -87,7 +105,12 @@ export def getSlowProvider(): string {
  *  vars and its defaults are used (exits the process if none is found).
  *  `provider` forces the provider when a model name doesn't imply one
  *  (e.g. a custom or local model). */
-export def configureModels(model: string, fast: string, slow: string, provider: string) {
+export def configureModels(
+  model: string,
+  fast: string,
+  slow: string,
+  provider: string,
+) {
   let detected = "openai"
   const needFast = fast == "" && model == ""
   const needSlow = slow == "" && model == ""
@@ -107,7 +130,10 @@ export def configureModels(model: string, fast: string, slow: string, provider: 
   } else if (model != "") {
     fastModel = model
   }
-  setLlmOptions({ model: fastModel, provider: provider })
+  setLlmOptions({
+    model: fastModel,
+    provider: provider
+  })
 
   if (slow != "") {
     slowModel = slow

@@ -285,6 +285,7 @@ async function _runPrompt({
     globals: ctx.globals,
     usage: completion.usage,
     cost: completion.cost,
+    model: modelName,
   });
 
   // Per-branch accumulator: adds to the active stack so std::thread's

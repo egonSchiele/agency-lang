@@ -2,6 +2,7 @@ import { getVersion } from "std::agency"
 import { parseArgs } from "std::args"
 import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
 import { today } from "std::date"
+import { setAgentCwd } from "std::index"
 import { box, render } from "std::layout"
 import { setMemoryId } from "std::memory"
 import {
@@ -14,11 +15,9 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight, diff } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { setAgentCwd } from "std::index"
 import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
-import { configureModels } from "./shared.agency"
 import { figs, title } from "./images/images.agency"
 import { POLICY_PATH, HISTORY_PATH, ALWAYS_FIELDS } from "./lib/config.agency"
 import {
@@ -26,6 +25,7 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
+import { configureModels } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
@@ -745,7 +745,11 @@ node main() {
 
   // Validate the target subagent name up front (empty = coordinator).
   if (startAgent != "" && !START_AGENTS.includes(startAgent)) {
-    print(color.red("Unknown --agent value: ${startAgent}. Valid: ${START_AGENTS.join(", ")}"))
+    print(
+      color.red(
+      "Unknown --agent value: ${startAgent}. Valid: ${START_AGENTS.join(", ")}",
+    ),
+    )
     process.exit(1)
   }
 

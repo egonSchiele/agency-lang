@@ -1,8 +1,8 @@
-import { render, text } from "std::layout"
-import { table } from "std::table"
 import { withLock } from "std::concurrency"
+import { render, text } from "std::layout"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
+import { table } from "std::table"
 import { chooseOption, ChoiceItem } from "std::ui"
 
 import {

@@ -46,6 +46,9 @@ export class GlobalStore {
   static withTokenStats(): GlobalStore {
     const gs = new GlobalStore();
     gs.set(GlobalStore.INTERNAL_MODULE, "__tokenStats", {
+      // Model of the most recent LLM call; updated by updateTokenStats and
+      // read by the REPL footer. Empty until the first call.
+      lastModel: "",
       usage: {
         inputTokens: 0,
         outputTokens: 0,

@@ -427,30 +427,41 @@ type TurnStats = {
   elapsedMs: number;
   inputTokens: number;
   outputTokens: number;
+  model: string;
 };
 
 /** Read the cumulative input/output token counts from the active
  *  RuntimeContext's GlobalStore. Returns zeros when no context is
  *  active or the token-stats slot is missing (defensive — `_runLineRepl`
  *  always runs inside a context, but tests sometimes don't). */
-function readTokenSnapshot(): { inputTokens: number; outputTokens: number } {
+function readTokenSnapshot(): {
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+} {
   try {
     const { ctx } = getRuntimeContext();
     const stats = ctx?.globals?.getTokenStats?.();
     if (!stats || typeof stats !== "object") {
-      return { inputTokens: 0, outputTokens: 0 };
+      return { inputTokens: 0, outputTokens: 0, model: "" };
     }
     const usage = (stats as { usage?: Record<string, unknown> }).usage;
+    // `lastModel` is the model of the most recent LLM call (set in
+    // updateTokenStats). It's cumulative, not a delta — the footer uses
+    // the post-turn value to label which model produced the reply.
+    const lastModel = (stats as { lastModel?: unknown }).lastModel;
+    const model = typeof lastModel === "string" ? lastModel : "";
     if (!usage || typeof usage !== "object") {
-      return { inputTokens: 0, outputTokens: 0 };
+      return { inputTokens: 0, outputTokens: 0, model };
     }
     return {
       inputTokens: typeof usage.inputTokens === "number" ? usage.inputTokens : 0,
       outputTokens:
         typeof usage.outputTokens === "number" ? usage.outputTokens : 0,
+      model,
     };
   } catch {
-    return { inputTokens: 0, outputTokens: 0 };
+    return { inputTokens: 0, outputTokens: 0, model: "" };
   }
 }
 
@@ -492,13 +503,14 @@ async function printFooter(
     if (typeof v === "string" && v.length > 0) parts.push(v);
   }
   // Prepend the per-turn stats so they read left-to-right: tokens
-  // up, tokens down, then elapsed. `↑` / `↓` are universal arrow
-  // glyphs (no terminal font tantrums). Skipped when `turn` is
-  // omitted (e.g. older callers / tests).
+  // up, tokens down, elapsed, then the model that produced the turn.
+  // `↑` / `↓` are universal arrow glyphs (no terminal font tantrums).
+  // Skipped when `turn` is omitted (e.g. older callers / tests); the
+  // model is appended only when known.
   if (turn) {
-    parts.unshift(
-      `↑${fmtTokens(turn.inputTokens)} ↓${fmtTokens(turn.outputTokens)} ${fmtElapsed(turn.elapsedMs)}`,
-    );
+    let stats = `↑${fmtTokens(turn.inputTokens)} ↓${fmtTokens(turn.outputTokens)} ${fmtElapsed(turn.elapsedMs)}`;
+    if (turn.model.length > 0) stats += ` · ${turn.model}`;
+    parts.unshift(stats);
   }
   if (parts.length === 0) return;
   const text = parts.join(" · ");
@@ -669,6 +681,7 @@ export async function _runLineRepl(
           elapsedMs: Date.now() - turnStartMs,
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
           outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
+          model: tokensAfter.model,
         });
         continue;
       }
@@ -688,6 +701,7 @@ export async function _runLineRepl(
         elapsedMs: Date.now() - turnStartMs,
         inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
         outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
+        model: tokensAfter.model,
       });
     }
   } finally {

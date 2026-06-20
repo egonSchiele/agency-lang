@@ -115,10 +115,15 @@ export function updateTokenStats(args: {
   globals: GlobalStore;
   usage: any;
   cost: any;
+  model?: string;
 }): void {
-  const { globals, usage, cost } = args;
+  const { globals, usage, cost, model } = args;
   if (!usage || !cost) return;
   const tokenStats = globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats");
+  // Record the model of the most recent LLM call so the REPL footer can
+  // show which model produced the turn. Purely informational; doesn't
+  // affect billing/usage accumulation.
+  if (model) tokenStats.lastModel = model;
   tokenStats.usage.inputTokens += usage.inputTokens || 0;
   tokenStats.usage.outputTokens += usage.outputTokens || 0;
   tokenStats.usage.cachedInputTokens += usage.cachedInputTokens || 0;

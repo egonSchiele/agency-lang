@@ -44,8 +44,10 @@ this requires no runtime, ALS, or stack plumbing — the branch-scoping the
 session cwd needs comes for free.
 
 Globals cannot be exported directly, so the variable is private to one
-stdlib module and reached through exported `getCwd()` / `setCwd()`
-functions. Every path-taking stdlib wrapper consults it; when set, it
+stdlib module and reached through exported `getAgentCwd()` /
+`setAgentCwd()` functions. The `Agent` in the name distinguishes the
+agent's settable working directory from `cwd()`, which returns the OS
+process working directory. Every path-taking stdlib wrapper consults it; when set, it
 overrides both default bases, otherwise behavior is unchanged.
 
 ## Design
@@ -57,23 +59,23 @@ builtins, so there is no import cycle with `index`/`shell`/`fs`).
 
 ```ts
 // "" means "not set" — fall back to each function's default base.
-let _cwd = ""
+let _agentCwd = ""
 
-export safe def setCwd(dir: string) {
-  _cwd = dir
+export safe def setAgentCwd(dir: string) {
+  _agentCwd = dir
 }
 
-export safe def getCwd(): string {
-  return _cwd
+export safe def getAgentCwd(): string {
+  return _agentCwd
 }
 
-// Resolve `dir` against the working directory when one is set; otherwise
-// return `dir` unchanged so the caller keeps its existing default base.
-// `resolve` short-circuits on an absolute `dir`, and `resolve(base, "")`
-// returns `base`, so this one helper works for both the fs default (".")
-// and the shell default ("").
-export safe def applyCwd(dir: string): string {
-  const base = getCwd()
+// Resolve `dir` against the agent working directory when one is set;
+// otherwise return `dir` unchanged so the caller keeps its existing
+// default base. `resolve` short-circuits on an absolute `dir`, and
+// `resolve(base, "")` returns `base`, so this one helper works for both
+// the fs default (".") and the shell default ("").
+export safe def applyAgentCwd(dir: string): string {
+  const base = getAgentCwd()
   if (base == "") {
     return dir
   }
@@ -82,28 +84,30 @@ export safe def applyCwd(dir: string): string {
 ```
 
 `cwd()` is unchanged — it always returns the OS `process.cwd()`.
-`getCwd()` is the separate, possibly-unset override. The agent sets the
-override with `setCwd(cwd())`.
+`getAgentCwd()` is the separate, possibly-unset agent override. The agent
+sets the override with `setAgentCwd(cwd())`.
 
 ### Per-function change (one line each)
 
 Each path-taking wrapper resolves its directory argument through
-`applyCwd` before doing anything else, then proceeds exactly as today:
+`applyAgentCwd` before doing anything else, then proceeds exactly as
+today:
 
-- `stdlib/index.agency`: `read`, `write` — `dir = applyCwd(dir)`
+- `stdlib/index.agency`: `read`, `write` — `dir = applyAgentCwd(dir)`
 - `stdlib/fs.agency`: `edit`, `mkdir`, `copy` (both `src`/`dest`),
   `move` (both `src`/`dest`), `remove`
 - `stdlib/shell.agency`: `exec`, `bash` (their `cwd` param), `ls`,
   `glob`, `grep`, `exists`
 
-Because `applyCwd` returns an **absolute** path when the override is set,
+Because `applyAgentCwd` returns an **absolute** path when the override is
+set,
 the existing TS `resolveDir`/`resolvePath` need no change — an absolute
 `dir` already bypasses the module-dir/`process.cwd()` choice. When the
-override is unset, `applyCwd` returns the argument untouched, so all
+override is unset, `applyAgentCwd` returns the argument untouched, so all
 current behavior (module-dir defaults, `process.cwd()` defaults,
 co-located resource bundles) is preserved exactly.
 
-`copy`/`move` apply `applyCwd` to both `src` and `dest`. `applyPatch` is
+`copy`/`move` apply `applyAgentCwd` to both `src` and `dest`. `applyPatch` is
 out of scope (its paths live inside the patch text, not a `dir` arg) and
 keeps its current behavior; note this explicitly.
 
@@ -120,12 +124,13 @@ safety model.
 ### Agent integration (`lib/agents/agency-agent`)
 
 - At startup (in `setupSession`, before the first turn) call
-  `setCwd(cwd())` so the override is pinned to the user's launch
+  `setAgentCwd(cwd())` so the override is pinned to the user's launch
   directory. The override is one branch-scoped global, so the `code`,
   `oracle`, and `explorer` subagents — invoked as tool calls within the
   same run — all observe it.
-- Expose `getCwd` and `setCwd` as tools (replacing the code subagent's
-  no-op `setCwd` shim) so the user can ask the agent to change directory
+- Expose `getAgentCwd` and `setAgentCwd` as tools (replacing the code
+  subagent's no-op `setCwd` shim) so the user can ask the agent to change
+  directory
   and have it persist across turns.
 - Remove `static const workspace = openDir(cwd())` from `code.agency`,
   `oracle.agency`, and `explorer.agency`; replace the bundled
@@ -143,14 +148,14 @@ module docs accordingly.
 Agency execution tests (no LLM), e.g. under
 `lib/agents/agency-agent/tests/` or `tests/agency/`:
 
-- `getCwd()` returns `""` before any `setCwd`.
-- After `setCwd("/abs/dir")`, `getCwd()` returns it and `applyCwd("foo")`
-  returns `/abs/dir/foo`; `applyCwd("/other")` returns `/other`;
-  `applyCwd("")` returns `/abs/dir`.
-- A `read`/`exec` of a relative path after `setCwd(tmpdir)` hits a file
-  created under `tmpdir` (end-to-end resolution).
-- **Branch isolation:** a `fork` branch that calls `setCwd(...)` does not
-  change the parent's `getCwd()` after the fork completes.
+- `getAgentCwd()` returns `""` before any `setAgentCwd`.
+- After `setAgentCwd("/abs/dir")`, `getAgentCwd()` returns it and
+  `applyAgentCwd("foo")` returns `/abs/dir/foo`; `applyAgentCwd("/other")`
+  returns `/other`; `applyAgentCwd("")` returns `/abs/dir`.
+- A `read`/`exec` of a relative path after `setAgentCwd(tmpdir)` hits a
+  file created under `tmpdir` (end-to-end resolution).
+- **Branch isolation:** a `fork` branch that calls `setAgentCwd(...)` does
+  not change the parent's `getAgentCwd()` after the fork completes.
 - With the override unset, a co-located resource read still resolves
   against the module dir (regression guard for existing behavior).
 
@@ -160,4 +165,4 @@ Agency execution tests (no LLM), e.g. under
   single-directory model, like Pi/opencode).
 - `applyPatch` path rewriting.
 - Per-call `workdir` override args on individual tools (the agent changes
-  the one cwd via `setCwd` instead).
+  the one cwd via `setAgentCwd` instead).

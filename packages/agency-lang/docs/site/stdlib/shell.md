@@ -24,7 +24,7 @@ Run an executable directly with an array of arguments, bypassing the shell. This
   @param allowedExecutables - Only allow running these executables (allow-list)
   @param blockedCommands - Block running these executables
   @param allowedPaths - Only allow cwd values under these path prefixes
-  @param useAgentCwd - When true and no explicit cwd is given, run in the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - When true, a relative or empty cwd is resolved against the agent working directory (see setAgentCwd) if one is set; an absolute cwd is left unchanged. Defaults to false.
 
 **Parameters:**
 
@@ -60,7 +60,7 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
   @param stdin - Input to feed to the command
   @param blockedCommands - Block commands that start with these strings
   @param allowedPaths - Only allow cwd values under these path prefixes
-  @param useAgentCwd - When true and no explicit cwd is given, run in the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - When true, a relative or empty cwd is resolved against the agent working directory (see setAgentCwd) if one is set; an absolute cwd is left unchanged. Defaults to false.
 
 **Parameters:**
 

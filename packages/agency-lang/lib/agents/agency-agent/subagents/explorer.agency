@@ -10,7 +10,6 @@
  * synthesizes. Oracle is sharp and narrow; explorer is thorough
  * and broad. Read-only — no write/edit/bash tools.
  */
-import { typecheck } from "std::agency"
 import { ls, glob, grep } from "std::shell"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"

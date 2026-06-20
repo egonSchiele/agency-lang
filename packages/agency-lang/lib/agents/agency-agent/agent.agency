@@ -14,6 +14,7 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight, diff } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
+import { setAgentCwd } from "std::index"
 import { getCost, getTokens, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
@@ -510,6 +511,12 @@ def givePolicyChoice() {
 // writes still require approval, which a non-interactive run can't
 // grant — those tasks block, which is the safe behavior).
 def setupSession(interactive: boolean): any {
+  // Point every path-taking tool at the user's working directory so the
+  // agent's relative file/shell commands resolve against where the user
+  // launched it. The user (via the agent) can change this later with
+  // setAgentCwd.
+  setAgentCwd(cwd())
+
   // Grounding: the LLM shouldn't have to ask where it is or what day it
   // is. Project context: inline an AGENTS.md from the workspace root if
   // present so the LLM follows the project's conventions.

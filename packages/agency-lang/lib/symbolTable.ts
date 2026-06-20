@@ -120,7 +120,10 @@ export class SymbolTable {
     this.files = files;
   }
 
-  static build(entrypoint: string, config: AgencyConfig = {}): SymbolTable {
+  static build(
+    entrypoint: string | string[],
+    config: AgencyConfig = {},
+  ): SymbolTable {
     const parsed: Record<string, { symbols: FileSymbols; program: AgencyProgram }> = {};
     const visited = new Set<string>();
 
@@ -168,7 +171,10 @@ export class SymbolTable {
       }
     }
 
-    visit(entrypoint);
+    const entrypoints = Array.isArray(entrypoint) ? entrypoint : [entrypoint];
+    for (const e of entrypoints) {
+      visit(e);
+    }
     const files: Record<string, FileSymbols> = {};
     for (const [filePath, { symbols }] of Object.entries(parsed)) {
       files[filePath] = symbols;

@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "respondsToAMessage",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Hi from the agent!" }]
+    }
+  ]
+}

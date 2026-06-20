@@ -169,63 +169,111 @@ git commit -m "feat(stdlib): add agent working directory (getAgentCwd/setAgentCw
 **Files:**
 - Modify: `stdlib/index.agency` — `read` (line 97), `write` (line 121), `readImage` (line 149)
 - Modify: `stdlib/shell.agency` — `exec` (line 18), `bash` (line 72), `ls` (line 116), `grep` (line 147), `glob` (line 177), `stat` (line 207), `exists` (line 224)
-- Create fixture: `tests/agency/cwd-fixture/hello.txt`
+- Create fixtures: `tests/agency/cwd-probe.txt`, `tests/agency/cwd-fixture-a/cwd-probe.txt`
 - Test: extend `tests/agency/agent-cwd.agency` / `.test.json`
 
 **Interfaces:**
-- Consumes: `applyAgentCwd` from `std::system` (Task 1).
+- Consumes: `applyAgentCwd` from `std::system` (Task 1); `isAbsolute` from `std::path`.
 - Produces: no new signatures — same wrappers, now cwd-aware.
 
-- [ ] **Step 1: Write the failing integration test**
+**Absolute-path rule (applies to every wrapper):** the agent cwd only
+redirects **relative** paths. Absolute paths must pass through unchanged.
+For the `dir`/`cwd`-argument functions this is automatic — `applyAgentCwd`
+calls `resolve(base, dir)`, which returns an absolute `dir` untouched. The
+one exception is `exists`/`stat`, whose absolute path is the `filename`
+argument (not `dir`): they must only apply `applyAgentCwd` to `dir` when
+`filename` is **relative**, so an absolute `filename` keeps working when a
+cwd is set (see Step 4).
 
-Create the fixture file `tests/agency/cwd-fixture/hello.txt` with exactly:
+- [ ] **Step 1: Write the failing tests + fixtures**
+
+Create `tests/agency/cwd-probe.txt` (co-located with the test module) with exactly:
 
 ```
-hello-cwd
+from module
 ```
 
-Add to `tests/agency/agent-cwd.agency` (append):
+Create `tests/agency/cwd-fixture-a/cwd-probe.txt` with exactly:
+
+```
+from A
+```
+
+Append to `tests/agency/agent-cwd.agency`:
 
 ```ts
 import { read } from "std::index"
+import { bash, exists } from "std::shell"
 import { cwd } from "std::system"
 import { join } from "std::path"
 
-node readsRelativeToAgentCwd(): boolean {
-  // Without an agent cwd, read("hello.txt") would resolve against this
-  // test module's directory (tests/agency/), where there is no
-  // hello.txt. Setting the agent cwd to the fixture dir makes the
-  // relative read resolve there instead.
-  const fixtureDir = join(cwd(), "tests/agency/cwd-fixture")
-  setAgentCwd(fixtureDir)
-  const r = read("hello.txt") with approve
-  if (r is success(v)) {
-    return v.trim() == "hello-cwd"
-  }
-  return false
+// Gap 5 — with NO agent cwd set, a relative read resolves against the
+// test's own module directory (tests/agency/), reading "from module".
+node unsetReadsModuleDir(): boolean {
+  const r = read("cwd-probe.txt") with approve
+  return r is success(v) && v.trim() == "from module"
 }
 
-node branchCwdIsolated(): boolean {
+// Two same-named files in different dirs prove the read SWITCHES based on
+// the agent cwd. With cwd = fixture-a, the SAME relative name now reads
+// "from A" instead of the module dir's "from module".
+node setRedirectsRead(): boolean {
+  setAgentCwd(join(cwd(), "tests/agency/cwd-fixture-a"))
+  const r = read("cwd-probe.txt") with approve
+  return r is success(v) && v.trim() == "from A"
+}
+
+// Gap 1 — the shell path (`bash`, whose dir arg is `cwd`, not `dir`) also
+// honors the agent cwd. `pwd` prints the directory the command ran in.
+node bashRunsInAgentCwd(): boolean {
+  setAgentCwd(join(cwd(), "tests/agency/cwd-fixture-a"))
+  const r = bash("pwd") with approve
+  return r.stdout.trim().endsWith("cwd-fixture-a")
+}
+
+// #7 — an ABSOLUTE filename bypasses the agent cwd entirely. Even with the
+// cwd pointed at a nonexistent dir, an absolute path to a real file is
+// honored.
+node existsAbsoluteBypassesAgentCwd(): boolean {
+  setAgentCwd("/this/does/not/exist")
+  return exists(join(cwd(), "tests/agency/cwd-probe.txt"))
+}
+
+// Gap 3 — branch isolation, both directions: the branch INHERITS the
+// parent's cwd at fork, sees its OWN write, and the parent is UNAFFECTED
+// by the branch's write.
+node branchInheritsAndIsolates(): boolean {
   setAgentCwd("/parent")
-  fork(["a"]) as x {
+  const results = fork(["x"]) as item {
+    const before = getAgentCwd()
     setAgentCwd("/branch")
-    return getAgentCwd()
+    const after = getAgentCwd()
+    return "${before}|${after}"
   }
-  return getAgentCwd() == "/parent"
+  const parentAfter = getAgentCwd()
+  return results[0] == "/parent|/branch" && parentAfter == "/parent"
 }
 ```
 
 Add to `tests/agency/agent-cwd.test.json` `tests` array:
 
 ```json
-    { "nodeName": "readsRelativeToAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "branchCwdIsolated", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "unsetReadsModuleDir", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "setRedirectsRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "bashRunsInAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "existsAbsoluteBypassesAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "branchInheritsAndIsolates", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
 ```
 
-- [ ] **Step 2: Run to verify `readsRelativeToAgentCwd` fails**
+- [ ] **Step 2: Run to verify the new tests fail appropriately**
 
 Run: `node ./dist/scripts/agency.js test tests/agency/agent-cwd.agency`
-Expected: `readsRelativeToAgentCwd` FAILS (read still resolves against the module dir, so the file is not found / returns failure). `branchCwdIsolated` already passes (globals are branch-scoped).
+Expected:
+- `unsetReadsModuleDir` PASSES already (unset behavior is unchanged — this is the gap-5 regression guard).
+- `setRedirectsRead` FAILS (read still resolves against the module dir, so it reads "from module", not "from A").
+- `bashRunsInAgentCwd` FAILS (bash still runs in `process.cwd()`).
+- `existsAbsoluteBypassesAgentCwd` PASSES already (exists not yet wired, so it ignores the cwd — this case must STAY passing after Step 4, which is the point of the guard).
+- `branchInheritsAndIsolates` PASSES already (globals are branch-scoped).
 
 - [ ] **Step 3: Wire `applyAgentCwd` into `index.agency`**
 
@@ -266,9 +314,13 @@ In `readImage` (line 149), add after its docstring:
 
 - [ ] **Step 4: Wire `applyAgentCwd` into `shell.agency`**
 
-Add `import { applyAgentCwd } from "std::system"` near the top of `stdlib/shell.agency`.
+Add this import near the top of `stdlib/shell.agency`:
+```ts
+import { applyAgentCwd } from "std::system"
+import { isAbsolute } from "std::path"
+```
 
-In each function below, insert the resolve as the first statement after the docstring. For `exec` and `bash` the directory arg is named `cwd`; for the rest it is `dir`:
+For `exec`/`bash`/`ls`/`grep`/`glob`, insert the resolve as the first statement after the docstring. For `exec` and `bash` the directory arg is named `cwd`; for the rest it is `dir`:
 
 `exec` (line 18) — after its docstring:
 ```ts
@@ -290,16 +342,21 @@ In each function below, insert the resolve as the first statement after the docs
 ```ts
   dir = applyAgentCwd(dir)
 ```
-`stat` (line 207) — after its docstring:
+
+`stat` (line 207) and `exists` (line 224) take their path as `filename`
+with `dir` defaulting to `""` (which accepts an absolute `filename`). To
+preserve that, only redirect when `filename` is **relative** — after each
+docstring:
 ```ts
-  dir = applyAgentCwd(dir)
-```
-`exists` (line 224) — after its docstring:
-```ts
-  dir = applyAgentCwd(dir)
+  if (!isAbsolute(filename)) {
+    dir = applyAgentCwd(dir)
+  }
 ```
 
-(`which` takes no directory and is left unchanged.)
+(`which` takes no directory and is left unchanged. `read`/`write`/
+`edit`/`readImage` need no `isAbsolute` guard: they already reject an
+absolute `filename` via `resolvePath`, and `applyAgentCwd` preserves an
+absolute `dir`, so their absolute behavior is unchanged.)
 
 - [ ] **Step 5: Rebuild stdlib**
 
@@ -309,7 +366,10 @@ Expected: exit 0.
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `node ./dist/scripts/agency.js test tests/agency/agent-cwd.agency`
-Expected: PASS — all nodes pass, including `readsRelativeToAgentCwd` and `branchCwdIsolated`.
+Expected: PASS — all nodes pass. In particular `setRedirectsRead` and
+`bashRunsInAgentCwd` now pass (wiring works), while `unsetReadsModuleDir`
+and `existsAbsoluteBypassesAgentCwd` STILL pass (unset and absolute-path
+behavior preserved).
 
 - [ ] **Step 7: Run the broader fs/shell agency tests for regressions**
 
@@ -319,7 +379,7 @@ Expected: PASS (co-located resource resolution unchanged with agent cwd unset).
 - [ ] **Step 8: Commit**
 
 ```bash
-git add stdlib/index.agency stdlib/index.js stdlib/shell.agency stdlib/shell.js tests/agency/agent-cwd.agency tests/agency/agent-cwd.test.json tests/agency/cwd-fixture/hello.txt
+git add stdlib/index.agency stdlib/index.js stdlib/shell.agency stdlib/shell.js tests/agency/agent-cwd.agency tests/agency/agent-cwd.test.json tests/agency/cwd-probe.txt tests/agency/cwd-fixture-a/cwd-probe.txt
 git commit -m "feat(stdlib): index/shell path tools honor the agent working directory"
 ```
 
@@ -554,5 +614,5 @@ git commit -m "feat(agent): use agent working directory; drop Workspace"
 
 - **Param reassignment:** `dir = applyAgentCwd(dir)` reassigns a function parameter. That is allowed in Agency (parameters are mutable bindings). It runs before the `interrupt` line, so on interrupt-resume it simply recomputes (the helper is pure) — safe.
 - **Why no TS change:** `applyAgentCwd` returns an absolute path when the override is set, and the TS `resolveDir`/`resolvePath` already treat an absolute `dir` as authoritative (bypassing the module-dir / `process.cwd()` choice). When unset it returns the argument unchanged, preserving every existing default.
-- **exists/stat absolute filenames:** with an agent cwd set, `exists`/`stat` resolve their `dir` to the agent cwd, so a `filename` passed to them must be relative (the existing `dir`-set rule). This only changes behavior when the override is set; unset behavior (absolute filenames allowed) is unchanged.
+- **Absolute paths always bypass the agent cwd; only relative paths are redirected.** For `dir`/`cwd`-arg functions this is automatic (`applyAgentCwd` → `resolve(base, dir)` returns an absolute `dir` unchanged). `exists`/`stat` are the only functions whose absolute path lives in `filename`, so they guard with `if (!isAbsolute(filename))` to keep accepting absolute filenames when a cwd is set. `read`/`write`/`edit`/`readImage` already reject absolute filenames (pre-existing sandboxing) and that is unchanged.
 - **applyPatch** is intentionally left unchanged (its paths live inside the patch text, not a `dir` argument).

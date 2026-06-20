@@ -111,6 +111,15 @@ co-located resource bundles) is preserved exactly.
 out of scope (its paths live inside the patch text, not a `dir` arg) and
 keeps its current behavior; note this explicitly.
 
+**Absolute paths always bypass the agent cwd — only relative paths are
+redirected.** For the `dir`/`cwd`-argument functions this is automatic
+(`resolve(base, dir)` returns an absolute `dir` unchanged). `exists` and
+`stat` are special: their path is the `filename` argument and they accept
+an absolute `filename` today (with `dir` defaulting to `""`). They must
+guard with `if (!isAbsolute(filename))` so an absolute `filename` keeps
+working when a cwd is set. `read`/`write`/`edit`/`readImage` already reject
+absolute `filename`s (existing sandboxing) and are unchanged.
+
 ### Containment / sandboxing
 
 `resolvePath` still rejects `..` escapes relative to the resolved base, so

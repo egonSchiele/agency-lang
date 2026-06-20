@@ -1,0 +1,29 @@
+import { getAgentCwd, setAgentCwd, applyAgentCwd } from "std::system"
+
+node defaultsToEmpty(): boolean {
+  return getAgentCwd() == ""
+}
+
+node setThenGet(): boolean {
+  setAgentCwd("/abs/dir")
+  return getAgentCwd() == "/abs/dir"
+}
+
+node applyJoinsRelative(): boolean {
+  setAgentCwd("/abs/dir")
+  return applyAgentCwd("foo") == "/abs/dir/foo"
+}
+
+node applyKeepsAbsolute(): boolean {
+  setAgentCwd("/abs/dir")
+  return applyAgentCwd("/other") == "/other"
+}
+
+node applyEmptyReturnsBase(): boolean {
+  setAgentCwd("/abs/dir")
+  return applyAgentCwd("") == "/abs/dir"
+}
+
+node applyUnsetPassesThrough(): boolean {
+  return applyAgentCwd("foo") == "foo"
+}

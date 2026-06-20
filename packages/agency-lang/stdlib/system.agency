@@ -11,6 +11,7 @@ import {
   _readStdin,
   _setTitle,
  } from "agency-lang/stdlib-lib/system.js"
+import { resolve } from "std::path"
 
 export def screenshot(
   filepath: string,
@@ -62,6 +63,50 @@ export safe def cwd(): string {
   Return the absolute path of the current working directory of the Agency process.
   """
   return _cwd()
+}
+
+// The agent's working directory: a branch-scoped override that
+// path-taking stdlib tools resolve relative paths against. Empty string
+// means "unset" — tools keep their default base. Distinct from `cwd()`
+// (the OS process cwd) on purpose: an agent sets this to point the file
+// and shell tools at the user's directory without changing the process.
+let _agentCwd = ""
+
+export safe def setAgentCwd(dir: string) {
+  """
+  Set the agent working directory. Path-taking tools (read, write, edit,
+  ls, glob, grep, exec, bash, ...) resolve relative paths against it.
+  Pass an absolute path. Branch-scoped: a fork/race/parallel branch can
+  change it without affecting the parent.
+
+  @param dir - Absolute directory to use as the agent working directory.
+  """
+  _agentCwd = dir
+}
+
+export safe def getAgentCwd(): string {
+  """
+  Return the agent working directory, or an empty string when none is
+  set. See setAgentCwd.
+  """
+  return _agentCwd
+}
+
+export safe def applyAgentCwd(dir: string): string {
+  """
+  Resolve `dir` against the agent working directory when one is set;
+  otherwise return `dir` unchanged. Used by the path-taking stdlib
+  wrappers so a set agent cwd overrides their default base. `resolve`
+  short-circuits on an absolute `dir`, and resolve(base, "") returns
+  base, so this works for both the fs default (".") and shell default ("").
+
+  @param dir - The directory argument to resolve.
+  """
+  const base = getAgentCwd()
+  if (base == "") {
+    return dir
+  }
+  return resolve(base, dir)
 }
 
 export safe def dirname(): string {

@@ -29,6 +29,7 @@ node applyUnsetPassesThrough(): boolean {
 }
 
 import { bash, exists } from "std::shell"
+import { edit, remove } from "std::fs"
 import { cwd } from "std::system"
 import { join } from "std::path"
 
@@ -83,4 +84,19 @@ node branchInheritsAndIsolates(): boolean {
   }
   const parentAfter = getAgentCwd()
   return results[0] == "/parent|/branch" && parentAfter == "/parent"
+}
+
+// edit (fs.agency) resolves its relative filename against the agent cwd:
+// create a scratch file under the process cwd, point the agent cwd there,
+// edit by relative name, read back, and clean up.
+node editResolvesRelativeToAgentCwd(): boolean {
+  setAgentCwd(cwd())
+  const w = write("__cwd_edit__.txt", "alpha") with approve
+  const e = edit("__cwd_edit__.txt", [{ oldText: "alpha", newText: "beta", replaceAll: false }]) with approve
+  const r = read("__cwd_edit__.txt") with approve
+  remove("__cwd_edit__.txt") with approve
+  if (r is success(v)) {
+    return v.trim() == "beta"
+  }
+  return false
 }

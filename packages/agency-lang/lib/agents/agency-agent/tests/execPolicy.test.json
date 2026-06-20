@@ -19,6 +19,12 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "minimalApprovesDoc",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "doesNotApproveOtherSubcommands",
       "input": "",
       "expectedOutput": "true",

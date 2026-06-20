@@ -65,16 +65,17 @@ export def setCwd(dir: string): string {
   return "Working directory set to: ${dir}"
 }
 
-export def agencyCli(args: string[]): string {
+export def agencyCli(args: string[]): any {
   """
-  Run the `agency` CLI with the given arguments and return its output.
-  Use this for agency subcommands such as `parse`, `ast`, and
-  `typecheck` — e.g. agencyCli(["ast", "foo.agency"]) or
-  agencyCli(["typecheck", "foo.agency"]). Arguments are passed directly
-  to the executable (no shell interpretation), so they cannot be chained
-  or redirected. The default agent policies auto-approve the read-only
-  `parse`, `ast`, and `typecheck` subcommands; other subcommands still
-  prompt for approval. Prefer this over `bash` for running agency.
+  Run the `agency` CLI with the given arguments. Returns an object with
+  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). Use this for
+  agency subcommands such as `parse`, `ast`, and `typecheck` — e.g.
+  agencyCli(["ast", "foo.agency"]) or agencyCli(["typecheck",
+  "foo.agency"]). Arguments are passed directly to the executable (no
+  shell interpretation), so they cannot be chained or redirected. The
+  default agent policies auto-approve the read-only agency subcommands;
+  other subcommands still prompt for approval. Prefer this over `bash`
+  for running agency.
 
   @param args - CLI arguments, e.g. ["typecheck", "foo.agency"]. The
     first element is the subcommand.

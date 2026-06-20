@@ -35,6 +35,11 @@ node recommendedApprovesTypecheck(): boolean {
   return checkPolicy(recommendedAutoApprovePolicy, execIntr("typecheck")).type == "approve"
 }
 
+node minimalApprovesDoc(): boolean {
+  // One of the additional read-only subcommands in the allow-list.
+  return checkPolicy(minimalAutoApprovePolicy, execIntr("doc")).type == "approve"
+}
+
 node doesNotApproveOtherSubcommands(): boolean {
   // `run` is not in the allow-list, so it must NOT be auto-approved.
   return checkPolicy(minimalAutoApprovePolicy, execIntr("run")).type != "approve"

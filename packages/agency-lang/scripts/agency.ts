@@ -37,6 +37,7 @@ import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
+import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
 import { interruptsCmd } from "@/cli/interrupts.js";
@@ -855,6 +856,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action((args: string[]) => {
       const config = getConfig();
       agent(config, args);
+    });
+
+  program
+    .command("doctor")
+    .description("Diagnose problems with an Agency file using the agency agent")
+    .argument("<file>", "Path to the .agency file to diagnose")
+    .option("--symptom <text>", "Optional description of the problem you are seeing")
+    .action((file: string, opts: { symptom?: string }) => {
+      const config = getConfig();
+      doctor(config, file, opts);
     });
 
   program

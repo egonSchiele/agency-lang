@@ -98,10 +98,19 @@ export type CompiledClosure = {
  * surface the error (CLI: exit; in-memory: collect).
  */
 export function buildCompiledClosure(
-  entryFile: string,
+  entryFile: string | string[],
   config: AgencyConfig,
 ): CompiledClosure {
-  const entryModuleId = path.resolve(entryFile);
+  // Accept one entry (the common single-file compile) or many (a whole
+  // directory). With many, the closure covers the union of every entry's
+  // imports, so shared modules are analyzed once instead of once per
+  // entry. `entryModuleId` is kept as metadata (the first entry); the dep
+  // graph derives everything it needs from `programs`, which holds the
+  // full union regardless of which entry rooted it.
+  const entryFiles = (Array.isArray(entryFile) ? entryFile : [entryFile]).map(
+    (f) => path.resolve(f),
+  );
+  const entryModuleId = entryFiles[0];
   // SymbolTable must come first: it's the source of truth for re-export
   // relationships, and parseClosure needs it to expand each parsed file
   // via `resolveReExports` so the dep graph sees synthesized wrapper
@@ -109,8 +118,8 @@ export function buildCompiledClosure(
   // that, re-export chains like a→b→c produce wrappers in a.js / b.js
   // whose `__initializeStatic` never gets awaited because the dep graph
   // collapses straight to c.
-  const symbolTable = SymbolTable.build(entryModuleId, config);
-  const programs = parseClosure(entryModuleId, config, symbolTable);
+  const symbolTable = SymbolTable.build(entryFiles, config);
+  const programs = parseClosure(entryFiles, config, symbolTable);
 
   let staticGraph: InitDepGraph;
   let globalGraph: InitDepGraph;
@@ -187,7 +196,7 @@ export function buildCompiledClosure(
  * callers translate that into their preferred surface.
  */
 function parseClosure(
-  entryModuleId: string,
+  entryModuleIds: string[],
   config: AgencyConfig,
   symbolTable: SymbolTable,
 ): Record<string, AgencyProgram> {
@@ -200,7 +209,7 @@ function parseClosure(
   // would lose re-export edges.
   const raw: Record<string, AgencyProgram> = {};
   const visited: Record<string, true> = {};
-  const queue: string[] = [entryModuleId];
+  const queue: string[] = [...entryModuleIds];
 
   while (queue.length > 0) {
     const moduleId = queue.shift()!;

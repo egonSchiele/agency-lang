@@ -248,6 +248,12 @@ def _runTurn(msg: string): boolean {
 }
 
 let first = true
+
+// Valid `--agent` targets. Empty / "main" routes through the coordinator;
+// the rest route the starting prompt's first turn directly to that
+// subagent. Used to validate the flag and to dispatch in `agentReplyVia`.
+static const START_AGENTS = ["main", "code", "research", "oracle", "explorer", "review"]
+
 static const mainAgentSystemPrompt = """
 You are the top-level coordinator of an Agency-language assistant. You
 receive every user message and decide how to respond.
@@ -393,6 +399,15 @@ parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
 Keep diagrams small. Skip them where prose or code is clearer —
 diagrams earn their space by showing **relationships** or **flow**.
 
+## Be proactive
+
+When the user asks you to look at, debug, or change a file or some code,
+**delegate to `codeAgent` to do it** — don't ask the user to paste a file
+or describe code a subagent could read. The code agent has `read`, `glob`,
+and `ls` and resolves relative paths against the user's working directory
+automatically, so a bare filename like `foo.agency` is enough. Only ask
+the user for information you genuinely cannot obtain through a subagent.
+
 ## Answer before action
 
 When the user asks a question, asks for an opinion, or asks how to
@@ -429,6 +444,31 @@ def mainAgent(prompt: string): string {
   return result
 }
 
+// Dispatch one turn. `target` empty (or "main") runs the coordinator
+// `mainAgent`, which routes as usual; any subagent name routes the turn
+// directly to that subagent. All subagents share `(userMsg, allowHandoff)`
+// and the seed turn never hands off (allowHandoff: false). Used by both
+// the one-shot path and the interactive seed turn.
+export def agentReplyVia(target: string, userMsg: string): string {
+  const expanded = expandSlash(userMsg, projectCommands)
+  if (target == "code") {
+    return codeAgent(expanded, false)
+  }
+  if (target == "research") {
+    return researchAgent(expanded, false)
+  }
+  if (target == "oracle") {
+    return oracleAgent(expanded, false)
+  }
+  if (target == "explorer") {
+    return explorerAgent(expanded, false)
+  }
+  if (target == "review") {
+    return reviewAgent(expanded, false)
+  }
+  return mainAgent(expanded)
+}
+
 // The agent's core turn, decoupled from the terminal: expand any project
 // slash command, then run the prompt through `mainAgent` and return the
 // reply. The REPL (`main` / `_runTurn`) owns input, output, and built-in
@@ -436,7 +476,7 @@ def mainAgent(prompt: string): string {
 // it can be driven and tested without a terminal or user input. See
 // `tests/agentTurn.agency`.
 export def agentReply(userMsg: string): string {
-  return mainAgent(expandSlash(userMsg, projectCommands))
+  return agentReplyVia("", userMsg)
 }
 
 def roundedCost(): string {
@@ -571,17 +611,56 @@ def renderEditDiff(data: any) {
 // piped stdin. Slash commands are expanded so `-p /foo bar` works like
 // typing it in the REPL; the loop-only built-ins (`/exit` etc.) are
 // meaningless here and aren't checked.
-def oneShotAgent(prompt: string): string {
+def oneShotAgent(target: string, prompt: string): string {
   _isInteractive = false
   const handler = setupSession(false)
   let reply: string = ""
   handle {
-    reply = agentReply(prompt)
+    reply = agentReplyVia(target, prompt)
   } with (data) {
     renderEditDiff(data)
     return handler(data)
   }
   return reply
+}
+
+// Render one seeded turn into the REPL scroll area: echo the auto-run
+// prompt so the user sees what was asked, then push the agent's reply.
+// Mirrors the reply-rendering half of `_runTurn`.
+def _runSeedTurn(target: string, msg: string) {
+  pushMessage(color.dim("> ${msg}"))
+  const reply = agentReplyVia(target, msg)
+  if (reply != "" && reply != null && reply != undefined) {
+    pushMessage(highlight("${reply}\n", language: "markdown"))
+  } else {
+    pushMessage(color.red("No reply generated."))
+  }
+}
+
+// Start the interactive REPL. When `seedPrompt` is non-empty it is run as
+// the first turn (routed via `seedTarget`) *inside* the handle block so
+// its interrupts reach the policy `handler`; the user is then left at the
+// prompt. `seedPrompt == ""` is the plain REPL with no seed. Subsequent
+// turns always go through `_runTurn` (the coordinator) regardless of
+// `seedTarget` — the target only kicks off the first turn.
+def startInteractive(handler: any, seedTarget: string, seedPrompt: string) {
+  handle {
+    if (seedPrompt != "") {
+      _runSeedTurn(seedTarget, seedPrompt)
+    }
+    repl(
+      status: _buildStatus,
+      onSubmit: _runTurn,
+      prompt: "> ",
+      historyFile: HISTORY_PATH,
+      historyMax: 1000,
+      paletteCommands: mergedPalette(),
+    )
+  } with (data) {
+    renderEditDiff(data)
+    return handler(data)
+  }
+  print(color.cyan("\nGoodbye!"))
 }
 
 node main() {
@@ -621,6 +700,15 @@ node main() {
       provider: {
         type: "string",
         description: "Force the LLM provider (use when a model name doesn't imply one)"
+      },
+      interactive: {
+        type: "boolean",
+        short: "i",
+        description: "Run the given prompt as the first turn of an interactive session, then hand over the REPL (instead of one-shot)"
+      },
+      agent: {
+        type: "string",
+        description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
       }
     }
   },
@@ -648,18 +736,44 @@ node main() {
   )
 
   // Positional args (everything after flags) are joined with spaces to
-  // form the one-shot prompt. `--` ends flag parsing if a positional
+  // form the starting prompt. `--` ends flag parsing if a positional
   // would otherwise look like a flag.
   const positionalQuery = args.positionals.join(" ")
   const hasQuery = positionalQuery != ""
+  const startAgent = args.flags.agent ?? ""
+  const wantInteractive = args.flags.interactive
 
-  // Non-interactive invocation: run one turn through the same agent the
-  // REPL uses and write the reply to stdout. No banner, no REPL. Entered
-  // when `--print` / `-p` is passed, a positional query is given, or
-  // stdin is piped — so the agent behaves like a Unix filter:
-  // `echo "..." | agency agent`. The prompt comes from the positional
-  // when present, otherwise from stdin. (Title/clearScreen are skipped
-  // so piped output stays free of escape codes.)
+  // Validate the target subagent name up front (empty = coordinator).
+  if (startAgent != "" && !START_AGENTS.includes(startAgent)) {
+    print(color.red("Unknown --agent value: ${startAgent}. Valid: ${START_AGENTS.join(", ")}"))
+    process.exit(1)
+  }
+
+  // Seeded interactive: run the given prompt as the first turn, then hand
+  // the REPL to the user. Requires a seed prompt and a TTY (the REPL reads
+  // stdin). `--print` wins if both are passed — its whole job is to print
+  // and exit with no REPL. Without a TTY (or with `--print`) we fall
+  // through to one-shot below; `--interactive` with no prompt falls through
+  // to the plain REPL.
+  if (wantInteractive && hasQuery && isTTY() && !args.flags.print) {
+    setTitle("Agency Agent")
+    clearScreen()
+    printHeader()
+    const seededHandler = setupSession(true)
+    startInteractive(seededHandler, startAgent, positionalQuery)
+    process.exit(0)
+  }
+
+  // One-shot invocation: run one turn through the same agent the REPL uses
+  // and write the reply to stdout. No banner, no REPL. Entered when
+  // `--print` / `-p` is passed, a positional query is given, or stdin is
+  // piped (no TTY) — so the agent behaves like a Unix filter:
+  // `echo "..." | agency agent`. `--interactive` is NOT a one-shot trigger
+  // on its own: with a TTY and no prompt it falls through to the plain
+  // REPL; without a TTY the `!isTTY()` check below routes it here to
+  // degrade gracefully. The prompt comes from the positional when present,
+  // otherwise from stdin. (Title/clearScreen are skipped so piped output
+  // stays free of escape codes.)
   const forceOneShot = args.flags.print || hasQuery
   if (forceOneShot || !isTTY()) {
     let prompt = positionalQuery
@@ -670,33 +784,18 @@ node main() {
       }
       prompt = fromStdin
     }
-    print(oneShotAgent(prompt))
+    print(oneShotAgent(startAgent, prompt))
     process.exit(0)
   }
 
+  // Plain interactive REPL (no seed). `startInteractive` owns the runloop;
+  // every Enter dispatches into `_runTurn` which calls `mainAgent`.
+  // Interrupts raised during a turn propagate to the policy handler
+  // installed by the enclosing `handle` block via the AsyncLocalStorage
+  // handler stack.
   setTitle("Agency Agent")
   clearScreen()
   printHeader()
-
   const handler = setupSession(true)
-
-  // The `repl()` widget owns the runloop; every Enter dispatches into
-  // `_runTurn` which calls `mainAgent`. Interrupts raised during a turn
-  // propagate to the policy handler installed by the enclosing `handle`
-  // block via the AsyncLocalStorage handler stack.
-  handle {
-    repl(
-      status: _buildStatus,
-      onSubmit: _runTurn,
-      prompt: "> ",
-      historyFile: HISTORY_PATH,
-      historyMax: 1000,
-      paletteCommands: mergedPalette(),
-    )
-  } with (data) {
-    renderEditDiff(data)
-    return handler(data)
-  }
-
-  print(color.cyan("\nGoodbye!"))
+  startInteractive(handler, "", "")
 }

@@ -79,6 +79,43 @@ const llmOptions: VariableType = {
  * `llm` stays here — the runtime implements it as a primitive, not a
  * stdlib wrapper, and its argument is structurally typed.
  */
+/**
+ * Methods callable on any Agency function / tool value
+ * (`fn.describe("…")`, `fn.preapprove()`, `fn.rename("…")`). Declared here
+ * as plain {@link BuiltinSignature}s so adding a new one is a one-line type
+ * entry — the typechecker validates arity + arg types generically via
+ * `validatePrimitiveMethodCall` (see synthesizer.ts) rather than needing
+ * bespoke checker code.
+ *
+ * `partial` is intentionally NOT here: it takes named arguments validated
+ * against the *base* function's parameter list, which the generic
+ * signature path can't express, so it keeps its own logic in the checker.
+ *
+ * Return type is `any` for all three: each returns a new function/tool, and
+ * the chain (`fn.partial(...).describe(...).rename(...)`) is resolved as
+ * `any` so further method calls type-check.
+ */
+export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
+  describe: {
+    params: [string],
+    returnType: "any",
+    description:
+      "Override the tool description an LLM sees for this function. Returns a new tool.",
+  },
+  preapprove: {
+    params: [],
+    returnType: "any",
+    description:
+      "Auto-approve every interrupt this function raises. Returns a new tool.",
+  },
+  rename: {
+    params: [string],
+    returnType: "any",
+    description:
+      "Give this tool a distinct name (the name the LLM sees and that tool-call dispatch matches). Use when deriving several tools from one function — `.partial()`/`.describe()`/import aliases keep the base name, which collides in a single `llm({tools})` call. Returns a new tool.",
+  },
+};
+
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- LLM primitive ---
   llm: {

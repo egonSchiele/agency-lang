@@ -234,12 +234,18 @@ async function _runPrompt({
     // the dispatch throws — so a provider rejection (e.g. a 400 over the
     // tool list) otherwise leaves no record of what was sent. Emit an
     // `llmError` carrying the tool list so the failed request is
-    // diagnosable, then rethrow unchanged.
-    await ctx.statelogClient.error({
-      errorType: "llmError",
-      message: err instanceof Error ? err.message : String(err),
-      tools,
-    });
+    // diagnosable, then rethrow the ORIGINAL error unchanged. The emit is
+    // best-effort: a statelog failure (e.g. a JSON.stringify error inside
+    // post()) must not mask the real LLM/transport error, so swallow it.
+    try {
+      await ctx.statelogClient.error({
+        errorType: "llmError",
+        message: err instanceof Error ? err.message : String(err),
+        tools,
+      });
+    } catch {
+      // ignore — never let logging shadow the original failure
+    }
     throw err;
   }
 

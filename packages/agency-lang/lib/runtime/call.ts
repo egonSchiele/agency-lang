@@ -76,7 +76,16 @@ export async function __callMethod(
       if (descriptor.type !== "positional" || descriptor.args.length !== 1) {
         throw new Error(".rename() requires exactly one string argument");
       }
-      return obj.rename(descriptor.args[0] as string);
+      // The new name becomes the tool name the LLM sees and the key used
+      // for tool-call dispatch, so a non-string would corrupt both. The
+      // typechecker enforces this statically, but `any` values and direct
+      // JS callers bypass it — guard at runtime too.
+      if (typeof descriptor.args[0] !== "string") {
+        throw new Error(
+          `.rename() requires a string argument, got ${typeof descriptor.args[0]}`,
+        );
+      }
+      return obj.rename(descriptor.args[0]);
     }
     if (prop === "preapprove") {
       const hasArgs =

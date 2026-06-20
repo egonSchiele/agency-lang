@@ -83,15 +83,14 @@ def skillToolName(dir: string): string {
 
   @param dir - The skills directory the tool reads from.
   """
-  let cleaned = dir
-  cleaned = cleaned.replaceAll("../", "")
-  cleaned = cleaned.replaceAll("./", "")
-  cleaned = cleaned.replaceAll("/", "_")
-  cleaned = cleaned.replaceAll(".", "_")
-  cleaned = cleaned.replaceAll("-", "_")
-  cleaned = cleaned.replaceAll(" ", "_")
-  // Collapse any leading/trailing underscores left by the substitutions
-  // above (e.g. a trailing slash) so names read cleanly.
+  // Replace every run of non-alphanumeric characters with a single
+  // underscore. One pass handles all separators and unsafe characters —
+  // `/`, `.`, `-`, space, and crucially the Windows backslash and
+  // drive-letter colon (`C:\docs\guide`) — which providers reject in tool
+  // names and which would otherwise defeat the uniqueness fix.
+  let cleaned = dir.replaceAll(re/[^a-zA-Z0-9]+/g, "_")
+  // Trim the leading/trailing underscores left by edge separators (a
+  // leading `../` or a trailing slash) so names read cleanly.
   while (cleaned.startsWith("_")) {
     cleaned = cleaned.slice(1)
   }

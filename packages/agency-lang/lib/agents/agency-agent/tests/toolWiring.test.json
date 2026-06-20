@@ -5,7 +5,6 @@
       "input": "",
       "expectedOutput": "\"ok\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "useTestLLMProvider": true,
       "llmMocks": [{ "return": "pong" }]
     },
     {
@@ -13,7 +12,6 @@
       "input": "",
       "expectedOutput": "\"ok\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "useTestLLMProvider": true,
       "llmMocks": [{ "return": "pong" }]
     },
     {
@@ -21,7 +19,6 @@
       "input": "",
       "expectedOutput": "\"ok\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "useTestLLMProvider": true,
       "llmMocks": [{ "return": "pong" }]
     },
     {
@@ -29,7 +26,6 @@
       "input": "",
       "expectedOutput": "\"ok\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "useTestLLMProvider": true,
       "llmMocks": [{ "return": "pong" }]
     }
   ]

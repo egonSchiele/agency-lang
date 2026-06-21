@@ -10,6 +10,7 @@ import {
   cliPolicyHandler,
   parsePolicyFile,
   setPolicy,
+  willAutoApprove,
  } from "std::policy"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
@@ -584,8 +585,11 @@ def setupSession(interactive: boolean): any {
   return cliPolicyHandler(file: POLICY_PATH, fields: ALWAYS_FIELDS)
 }
 
-// Show a colored diff for an incoming `std::edit` interrupt. Shared by
-// the interactive and one-shot handlers. The handler receives the whole
+// Print a colored diff for an incoming `std::edit` interrupt. Called from
+// the handle blocks ONLY when the edit will be auto-approved by policy —
+// in that case the approval prompt (which renders its own diff via
+// `prettyPrintInterruptData`) is skipped, so the user would otherwise see
+// no indication of what was changed. The handler receives the whole
 // interrupt object ({effect, message, data, origin}); the edit's
 // filename / before / after live under `data.data`.
 def renderEditDiff(data: any) {
@@ -593,8 +597,8 @@ def renderEditDiff(data: any) {
     print(color.yellow("⏺ Edit: ${data.data.filename}"))
     print(
       diff(
-      data.data.before,
-      data.data.after,
+      data.data.before || "",
+      data.data.after || "",
       language: "auto",
       color: true,
       lineNumbers: true,
@@ -618,7 +622,12 @@ def oneShotAgent(target: string, prompt: string): string {
   handle {
     reply = agentReplyVia(target, prompt)
   } with (data) {
-    renderEditDiff(data)
+    // Auto-approved edits skip the approval prompt (which would show the
+    // diff), so surface it here. Prompted edits get their diff from the
+    // prompt itself — don't double-print.
+    if (data.effect == "std::edit" && willAutoApprove(data)) {
+      renderEditDiff(data)
+    }
     return handler(data)
   }
   return reply
@@ -657,7 +666,12 @@ def startInteractive(handler: any, seedTarget: string, seedPrompt: string) {
       paletteCommands: mergedPalette(),
     )
   } with (data) {
-    renderEditDiff(data)
+    // Auto-approved edits skip the approval prompt (which would show the
+    // diff), so surface it here. Prompted edits get their diff from the
+    // prompt itself — don't double-print.
+    if (data.effect == "std::edit" && willAutoApprove(data)) {
+      renderEditDiff(data)
+    }
     return handler(data)
   }
   print(color.cyan("\nGoodbye!"))

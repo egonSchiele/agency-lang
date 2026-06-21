@@ -263,26 +263,6 @@ export def checkPolicy(
   return _checkPolicy(policy, interrupt)
 }
 
-export def willAutoApprove(intr: any): boolean {
-  """
-  Return true if the active policy (the one installed via setPolicy /
-  loaded by the cliPolicyHandler) would auto-approve this interrupt
-  without prompting — i.e. a matching `approve` rule. Lets a caller
-  surface details the approval prompt would otherwise show: e.g. an agent
-  printing an auto-approved edit's diff, since the prompt is skipped.
-
-  Reads the already-loaded policy (setPolicy loads it eagerly), so it does
-  not perform file I/O on the hot path.
-
-  @param intr - The interrupt object ({effect, message, data, ...}).
-  """
-  maybeLoadPolicy()
-  if (_policy == null) {
-    return false
-  }
-  return checkPolicy(_policy, intr).type == "approve"
-}
-
 /**
  * Check that a `Policy` is structurally valid (every entry is an
  * array of `PolicyRule` with a recognised `action`, every `match`
@@ -815,6 +795,12 @@ export def _handler(intr: any): any {
 
   const decision = checkPolicy(_policy, intr)
   if (decision.type == "approve") {
+    // Auto-approved: the user never sees the approval prompt (which would
+    // render an edit as a diff), so surface an edit's diff here. Other
+    // effects auto-approve silently as before.
+    if (intr.effect == "std::edit") {
+      print(renderEditDiff(intr.data))
+    }
     return approve()
   }
   if (decision.type == "reject") {

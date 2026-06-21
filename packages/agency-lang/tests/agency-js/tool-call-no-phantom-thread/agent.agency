@@ -1,0 +1,11 @@
+// getArea is a leaf tool: it returns a value and never calls llm().
+// A tool like this should NOT produce its own `threadCreated` event —
+// the only thread the run needs is the root thread. See the statelog
+// assertion in test.js.
+def getArea(country: string): number {
+  return 100
+}
+
+node main() {
+  return llm("Get the area of France using your getArea tool.", { tools: [getArea] })
+}

@@ -675,7 +675,15 @@ export async function runPrompt(args: {
         // the same outcome via its `state.threads || new ThreadStore()`
         // fallback whenever a function was reached via tool dispatch.
         const parentFrame = agencyStore.getStore();
-        const freshThreads = ThreadStore.withDefaultActive(ctx.statelogClient);
+        // Lazy, NOT `withDefaultActive`: the latter eagerly creates and
+        // logs a default thread on every tool call, so a leaf tool that
+        // never calls llm() (the common case) emits a confusing phantom
+        // `threadCreated thread #0` in the trace. With a bare store the
+        // default thread is created + logged lazily by `getOrCreateActive`
+        // only if the tool body actually issues an llm()/userMessage()
+        // call — at which point the thread is real and worth logging.
+        const freshThreads = new ThreadStore();
+        freshThreads.setStatelogClient(ctx.statelogClient);
         const invokeAsTool = () =>
           handler.invoke({
             type: "named",

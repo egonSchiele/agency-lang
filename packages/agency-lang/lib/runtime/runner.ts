@@ -10,7 +10,11 @@ import { runBatch } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { BranchState, State } from "./state/stateStack.js";
-import { StateStack } from "./state/stateStack.js";
+import {
+  StateStack,
+  seedBranchCost as seedBranchCostImpl,
+  propagateBranchCost as propagateBranchCostImpl,
+} from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
 
@@ -344,21 +348,8 @@ export class Runner {
    *  before the winner resumes. See docs/superpowers/specs/2026-05-20-
    *  thread-builtins-and-stdlib-design.md. */
   private seedBranchCost(branchStack: StateStack, parentStack: StateStack): void {
-    // Fresh-branch detection: seedBranchCost can be called more than
-    // once for the same branch (e.g. a branch interrupts mid-flight
-    // and the parent resumes runBatch on the next response cycle).
-    // We must not clobber state the branch has already accumulated.
-    // A branch is "fresh" iff it has no cost AND no tokens. Guards are
-    // handled separately by `rehydrateInheritedGuards` in runBatch.ts —
-    // they have their own idempotency tracking via BranchState.
-    const isFresh =
-      branchStack.localCost === 0 && branchStack.localTokens === 0;
-    if (!isFresh) return;
-
-    branchStack.localCost = parentStack.localCost;
-    branchStack.localTokens = parentStack.localTokens;
-    branchStack.seedCost = parentStack.localCost;
-    branchStack.seedTokens = parentStack.localTokens;
+    // Shared with PromptRunner's tool-dispatch batches (see stateStack.ts).
+    seedBranchCostImpl(branchStack, parentStack);
   }
 
   /** Propagate cost/token deltas from a set of branches back to the
@@ -373,14 +364,8 @@ export class Runner {
     branches: BranchState[],
     parentStack: StateStack,
   ): void {
-    let costDelta = 0;
-    let tokensDelta = 0;
-    for (const branch of branches) {
-      costDelta += branch.stack.localCost - branch.stack.seedCost;
-      tokensDelta += branch.stack.localTokens - branch.stack.seedTokens;
-    }
-    parentStack.localCost += costDelta;
-    parentStack.localTokens += tokensDelta;
+    // Shared with PromptRunner's tool-dispatch batches (see stateStack.ts).
+    propagateBranchCostImpl(branches, parentStack);
   }
 
   // ── Core step method ──

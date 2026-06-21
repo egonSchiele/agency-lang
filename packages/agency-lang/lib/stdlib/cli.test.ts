@@ -10,6 +10,7 @@ const {
   classifyPasteKey,
   readMultiline,
   modelsUsedThisTurn,
+  fmtModels,
 } = _internal;
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
@@ -220,5 +221,25 @@ describe("modelsUsedThisTurn (footer model attribution)", () => {
     const before = snap({});
     const after = snap({ "model-b": [100, 0.01], "model-a": [100, 0.01] });
     expect(modelsUsedThisTurn(before, after)).toEqual(["model-a", "model-b"]);
+  });
+
+  it("includes a model whose cost grew even if its token count didn't", () => {
+    const before = snap({ "opus-4.8": [100, 0.01] });
+    const after = snap({ "opus-4.8": [100, 0.02] });
+    expect(modelsUsedThisTurn(before, after)).toEqual(["opus-4.8"]);
+  });
+});
+
+describe("fmtModels (footer cap)", () => {
+  it("joins up to three models in full", () => {
+    expect(fmtModels(["a", "b", "c"])).toBe("a, b, c");
+  });
+
+  it("collapses the tail to `+N more` past the cap", () => {
+    expect(fmtModels(["a", "b", "c", "d", "e"])).toBe("a, b, c +2 more");
+  });
+
+  it("renders a single model plainly", () => {
+    expect(fmtModels(["opus-4.8"])).toBe("opus-4.8");
   });
 });

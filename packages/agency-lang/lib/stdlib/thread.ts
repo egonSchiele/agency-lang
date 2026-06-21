@@ -1,6 +1,7 @@
 import * as smoltalk from "smoltalk";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
+import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -100,12 +101,7 @@ export async function _getTokens(): Promise<number> {
   return stack.localTokens;
 }
 
-export type ModelCost = {
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  cost: number;
-};
+export type ModelCost = ModelUsage;
 
 /**
  * Per-model usage breakdown from the global `__tokenStats.models`
@@ -119,19 +115,7 @@ export type ModelCost = {
 export async function _getModelCosts(): Promise<ModelCost[]> {
   const { ctx } = getRuntimeContext();
   const stats = ctx?.globals?.getTokenStats?.();
-  const models = stats?.models;
-  if (!models || typeof models !== "object") return [];
-  const out: ModelCost[] = [];
-  for (const [model, v] of Object.entries(models as Record<string, any>)) {
-    out.push({
-      model,
-      inputTokens: typeof v?.inputTokens === "number" ? v.inputTokens : 0,
-      outputTokens: typeof v?.outputTokens === "number" ? v.outputTokens : 0,
-      cost: typeof v?.totalCost === "number" ? v.totalCost : 0,
-    });
-  }
-  out.sort((a, b) => b.cost - a.cost || (a.model < b.model ? -1 : 1));
-  return out;
+  return normalizeModelUsage(stats?.models);
 }
 
 /**

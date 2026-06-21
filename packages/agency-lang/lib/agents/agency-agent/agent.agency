@@ -15,7 +15,7 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost, getTokens, getModelCosts, systemMessage } from "std::thread"
+import { getCost, getModelCosts, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
 import { figs, title } from "./images/images.agency"
@@ -232,12 +232,22 @@ def _runTurn(msg: string): boolean {
     return true
   }
   if (trimmed == "/cost") {
-    pushMessage("Cost:   $${getCost().toFixed(4)}")
-    pushMessage("Tokens: ${getTokens()}")
-    // Per-model breakdown so a turn that delegated to a subagent on a
-    // pricier model (e.g. the oracle on opus-4.8) shows where the spend
-    // went. Sorted by cost descending by getModelCosts().
+    // Derive BOTH the header total and the per-model breakdown from the
+    // same process-wide accumulator (getModelCosts), so the `Cost:` /
+    // `Tokens:` lines and the rows below them can never visibly disagree.
+    // (getCost()/getTokens() read the per-branch accumulator, a different
+    // scope — adjacent in the output, they could in principle diverge.)
+    // Rows are sorted by cost descending by getModelCosts(); a subagent
+    // on a pricier model (e.g. the oracle on opus-4.8) shows up here.
     const byModel = getModelCosts()
+    let totalCost = 0.0
+    let totalTokens = 0
+    for (m in byModel) {
+      totalCost = totalCost + m.cost
+      totalTokens = totalTokens + m.inputTokens + m.outputTokens
+    }
+    pushMessage("Cost:   $${totalCost.toFixed(4)}")
+    pushMessage("Tokens: ${totalTokens}")
     if (byModel.length > 0) {
       pushMessage("")
       pushMessage("By model:")

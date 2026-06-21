@@ -14,6 +14,7 @@ import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError } from "../runtime/errors.js";
+import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -506,17 +507,11 @@ function readTokenSnapshot(): TokenSnapshot {
     const stats = ctx?.globals?.getTokenStats?.();
     if (!stats || typeof stats !== "object") return empty;
     // Per-model breakdown (updateTokenStats). Snapshotted so the footer
-    // can diff before/after and list the models used *this turn*.
+    // can diff before/after and list the models used *this turn*. Shares
+    // the defensive field-narrowing in `normalizeModelUsage`.
     const models: ModelTotals = {};
-    const rawModels = (stats as { models?: Record<string, unknown> }).models;
-    if (rawModels && typeof rawModels === "object") {
-      for (const [name, v] of Object.entries(rawModels)) {
-        const e = v as { inputTokens?: unknown; outputTokens?: unknown; totalCost?: unknown };
-        const inTok = typeof e?.inputTokens === "number" ? e.inputTokens : 0;
-        const outTok = typeof e?.outputTokens === "number" ? e.outputTokens : 0;
-        const cost = typeof e?.totalCost === "number" ? e.totalCost : 0;
-        models[name] = { tokens: inTok + outTok, cost };
-      }
+    for (const m of normalizeModelUsage((stats as { models?: unknown }).models)) {
+      models[m.model] = { tokens: m.inputTokens + m.outputTokens, cost: m.cost };
     }
     const usage = (stats as { usage?: Record<string, unknown> }).usage;
     if (!usage || typeof usage !== "object") {
@@ -541,7 +536,12 @@ function modelsUsedThisTurn(before: TokenSnapshot, after: TokenSnapshot): string
   for (const [name, a] of Object.entries(after.models)) {
     const b = before.models[name];
     const tokenDelta = a.tokens - (b?.tokens ?? 0);
-    if (tokenDelta > 0) used.push({ name, cost: a.cost - (b?.cost ?? 0) });
+    const costDelta = a.cost - (b?.cost ?? 0);
+    // A model "did work this turn" if its tokens OR cost grew. With
+    // current providers every call adds tokens, so the cost check is a
+    // belt-and-suspenders guard against a (hypothetical) zero-token but
+    // non-zero-cost call being silently dropped from the footer.
+    if (tokenDelta > 0 || costDelta > 0) used.push({ name, cost: costDelta });
   }
   used.sort((x, y) => y.cost - x.cost || (x.name < y.name ? -1 : 1));
   return used.map((u) => u.name);
@@ -564,6 +564,18 @@ function fmtElapsed(ms: number): string {
   const mins = Math.floor(totalSec / 60);
   const secs = totalSec % 60;
   return `${mins}m ${secs}s`;
+}
+
+/** Render the per-turn model list for the footer. The list is already
+ *  ordered by spend descending; we show at most `FOOTER_MODEL_CAP` and
+ *  collapse the rest to `+N more` so a turn that touched many models
+ *  can't blow out the single-line footer. (Use `/cost` for the full
+ *  per-model breakdown.) */
+const FOOTER_MODEL_CAP = 3;
+function fmtModels(models: string[]): string {
+  if (models.length <= FOOTER_MODEL_CAP) return models.join(", ");
+  const shown = models.slice(0, FOOTER_MODEL_CAP).join(", ");
+  return `${shown} +${models.length - FOOTER_MODEL_CAP} more`;
 }
 
 async function printFooter(
@@ -591,7 +603,7 @@ async function printFooter(
   // model is appended only when known.
   if (turn) {
     let stats = `↑${fmtTokens(turn.inputTokens)} ↓${fmtTokens(turn.outputTokens)} ${fmtElapsed(turn.elapsedMs)}`;
-    if (turn.models.length > 0) stats += ` · ${turn.models.join(", ")}`;
+    if (turn.models.length > 0) stats += ` · ${fmtModels(turn.models)}`;
     parts.unshift(stats);
   }
   if (parts.length === 0) return;
@@ -1044,6 +1056,7 @@ export const _internal = {
   classifyPasteKey,
   readMultiline,
   modelsUsedThisTurn,
+  fmtModels,
 };
 
 export function _clearScreen(): void {

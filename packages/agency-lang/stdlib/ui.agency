@@ -1044,6 +1044,7 @@ export def autocomplete(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   hint: string = "",
+  cancelOnEscape: boolean = false,
 ): Result<string> {
   """
   Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
@@ -1061,8 +1062,12 @@ export def autocomplete(
   @param items - The {key, label} rows
   @param allowFreeText - Allow returning the typed input verbatim when no item matches
   @param hint - Dim hint shown after the message
+  @param cancelOnEscape - When true, pressing Escape raises a cancellation
+    (AgencyCancelledError) that unwinds the current run instead of
+    returning `failure("cancelled")`. Use for prompts where Escape should
+    abort the whole request rather than be re-asked.
   """
-  return _promptsAutocomplete(message, items, allowFreeText, hint)
+  return _promptsAutocomplete(message, items, allowFreeText, hint, cancelOnEscape)
 }
 
 export def prompt(
@@ -1137,6 +1142,7 @@ export def chooseOption(
   body: string,
   items: ChoiceItem[],
   allowFreeText: boolean = false,
+  allowCancel: boolean = false,
 ): string {
   """
   Show a modal choice prompt over the active repl() and block until
@@ -1163,6 +1169,10 @@ export def chooseOption(
   @param body - Multi-line context shown above the choices (or "")
   @param items - The set of {key, label} choices to pick from
   @param allowFreeText - Accept free-form text in addition to item keys
+  @param allowCancel - When true, Escape cancels the whole request
+    (raises a cancellation that unwinds the run) instead of re-prompting,
+    and the menu shows an "Esc to cancel" hint. Default false preserves
+    the "must answer" contract for callers where skipping isn't safe.
   """
   if (_activeRepl != null) {
     return _openChoicePrompt(
@@ -1224,11 +1234,20 @@ export def chooseOption(
     print(indent(body))
   }
   print("\n")
+  let cancelHint = ""
+  if (allowCancel) {
+    cancelHint = "Esc to cancel"
+  }
   while (true) {
+    // With `allowCancel`, autocomplete raises a cancellation on Escape
+    // (it never returns failure("cancelled") here), so the re-prompt loop
+    // below only runs for the must-answer callers.
     const result = autocomplete(
       message: "Do you want to continue?",
       items: items,
       allowFreeText: allowFreeText,
+      hint: cancelHint,
+      cancelOnEscape: allowCancel,
     )
     if (!isFailure(result)) {
       return result.value

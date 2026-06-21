@@ -689,6 +689,16 @@ export async function runPrompt(args: {
           )
           : await invokeAsTool();
       } catch (error: unknown) {
+        // A cancellation (user pressed Esc, race-loser, timeout) is not a
+        // tool crash. Let it propagate so the turn unwinds cleanly —
+        // logging it as an error and feeding a bogus failure message back
+        // to the model (as the crash path below does) would both spam
+        // "Tool call X crashed" for every tool on the stack and corrupt
+        // the thread. Mirrors the function/node catch re-throws.
+        if (isAbortError(error)) {
+          stack.deleteBranch(branchKey);
+          throw error;
+        }
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         console.error(

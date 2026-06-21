@@ -661,7 +661,6 @@ export async function _runLineRepl(
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal.
   const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
-  const userMessageHistory: string[] = [];
   try {
     while (true) {
       let line: string;
@@ -709,9 +708,6 @@ export async function _runLineRepl(
         trimmed = buffer;
       }
 
-      // History is one-entry-per-line on disk; a multi-line buffer would
-      // reload as several bogus entries, so keep it out of history.
-      if (!line.includes("\n")) userMessageHistory.push(line);
       const banner = line.includes("\n")
         ? ` User: ${line.split("\n")[0]} … (${line.split("\n").length} lines) \n`
         : ` User: ${line} \n`;
@@ -797,10 +793,19 @@ export async function _runLineRepl(
     teardownSlashTrigger();
     (globalThis as any)[overrideKey] = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
-    // Persist whatever entries readline accumulated. The `history`
-    // property is undocumented-ish but stable across Node versions
-    // we support and is the only way to read it back.
-    saveHistory(historyFile, userMessageHistory, historyMax);
+    // Persist whatever entries readline accumulated. `rl.history` is
+    // newest-first and already contains the history we loaded at startup
+    // PLUS everything added this session — so saving it preserves prior
+    // sessions instead of overwriting the file with just this run's input.
+    // The `history` property is undocumented-ish but stable across the Node
+    // versions we support, and is the only way to read it back. Drop
+    // multi-line entries (a `/paste` buffer) — the on-disk format is one
+    // entry per line, so a multi-line entry would reload as several bogus
+    // ones.
+    const accumulated = (
+      (rl as unknown as { history?: string[] }).history ?? []
+    ).filter((entry) => !entry.includes("\n"));
+    saveHistory(historyFile, accumulated, historyMax);
     rl.close();
   }
 }
@@ -810,6 +815,16 @@ export async function _runLineRepl(
  *  the question pending forever. */
 function askLine(rl: readline.Interface, prompt: string): Promise<string> {
   return new Promise<string>((resolve, reject) => {
+    // Start from an empty buffer. While a turn was running, a nested
+    // prompt/menu (the policy approval autocomplete) runs its own readline
+    // on the shared stdin, but the outer `rl` stays attached too — so
+    // keystrokes that drove the menu (e.g. arrow keys → history recall)
+    // can leave `rl.line` holding the previous prompt. Clearing it here
+    // guarantees each REPL prompt opens blank. (`rl.question` renders the
+    // current `rl.line`; it does not reset it.)
+    const rlAny = rl as unknown as { line: string; cursor: number };
+    rlAny.line = "";
+    rlAny.cursor = 0;
     const onClose = () => reject(new Error("closed"));
     rl.once("close", onClose);
     rl.question(prompt, (answer) => {

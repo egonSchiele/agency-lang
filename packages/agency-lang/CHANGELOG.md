@@ -1,3 +1,44 @@
+## Jun 20 2026 — v0.6
+
+### Language / Typechecker
+- New effect sets and `raises` declarations; interrupt "kind" renamed to "effect".
+- Builds are cached correctly when compiling a whole dir, where files may be imported multiple times. Previously the files would get recompiled multiple times.
+- Fire-and-forget statelog events.
+
+### Execution model
+- Memory functions are now branch-scoped, and the memory id is set correctly inside forks.
+
+### Eval
+- New pluggable optimizer framework: bring your own optimizer (`--optimizer ./module.ts`), custom graders, validation sets, and a HumanGrader.
+- Added the GEPA optimizer.
+- `withCriteria` helper for declarative eval criteria (judge anchoring).
+- Renamed "tasks" to "inputs" everywhere across evals and optimizers.
+
+### Stdlib
+- `std::chart` — new charting module.
+- `std::table` — new table module.
+- `std::syntax` — diff and patch functions, auto language detection, and themes (plus custom themes) for highlighting; removed `std::fs::printDiff`.
+- Syntax-highlight code inside diffs.
+- `std::llm` — user-selectable models via `setModel` / `setLlmOptions` / `pickProvider`, plus agent CLI flags.
+- `std::edit` interrupts now render as a diff (prompt + auto-approve).
+- `ls` caps its result count, and tool-call responses are size-capped.
+- Fixed center alignment in `std::layout`.
+
+### Agency Agent
+- Esc cancels the in-flight request.
+- Oneshot mode works.
+- `/paste` adds multi-line input to the line-mode REPL.
+- New `doctor` command
+- Updated default models, and the agent prints which model was used.
+- Fix for cwd - `getAgentCwd` / `setAgentCwd`.
+- Policies pre-approve read-only agency commands. Fixed an extra prompt echo after interrupts and the coding agent losing all its tools after the first round.
+- Stopped telling the agent to print highlighted code (removed the highlight/print tools).
+- Fix bug where history file kept getting reset (was only saving the most recent session's history, now appends to it instead).
+
+### Runtime / codegen / CLI
+- Upgraded smoltalk to v0.4.1.
+- Fixed duplicate tool names.
+
 ## Jun 12 2026 — v0.5
 
 ### Language / Typechecker

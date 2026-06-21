@@ -67,6 +67,22 @@ describe("summarize (leaf events)", () => {
     });
     expect(s).toBe("unknownEvent");
   });
+
+  it("renders an empty short id (not 'undefi') when the id is missing", () => {
+    // shortId previously did `(String(id) ?? "").slice(0,6)`, which for
+    // a missing id produced "undefi" (the head of "undefined").
+    const s = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: null,
+      parent_span_id: null,
+      // checkpointId omitted on purpose.
+      data: { type: "checkpointCreated", timestamp: "", reason: "fork" },
+    });
+    expect(s).toBe("checkpointCreated # (fork)");
+    expect(s).not.toContain("undefi");
+  });
 });
 
 describe("summarizeSpan", () => {

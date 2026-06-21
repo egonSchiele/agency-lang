@@ -244,7 +244,19 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   const logsCmd = program
     .command("logs")
-    .description("Inspect StateLog output");
+    .description("Inspect StateLog output")
+    // `view` is the default: `agency logs <file>` behaves like
+    // `agency logs view <file>`. The argument is optional so bare
+    // `agency logs` (no subcommand, no file) falls through to help.
+    .argument("[file]", "Path to a .statelog.jsonl file, or '-' for stdin")
+    .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
+    .action(async (file: string | undefined, options: { follow?: boolean }) => {
+      if (!file) {
+        logsCmd.help();
+        return;
+      }
+      await logsView(file, { follow: options.follow });
+    });
 
   logsCmd
     .command("view")

@@ -78,11 +78,19 @@ function promptCompletionChildren(
   const messages = Array.isArray(leaf.event!.data.messages)
     ? leaf.event!.data.messages
     : [];
+  const completion = leaf.event!.data.completion;
   const completionMessage = [];
-  if (leaf.event!.data.completion?.output) {
+  // Render the assistant turn whenever it has text OR tool calls. The
+  // common tool-calling completion has `output: null` and a non-empty
+  // `toolCalls` array — keying only on `output` dropped the tool call
+  // from the conversation view (it was visible only under "raw data").
+  // `formatConversation` already renders an assistant message's
+  // `toolCalls`, so just pass them through.
+  if (completion?.output || completion?.toolCalls?.length) {
     completionMessage.push({
       role: "assistant",
-      content: leaf.event!.data.completion.output,
+      content: completion.output,
+      toolCalls: completion.toolCalls,
     });
   }
   const convoLines = formatConversation([...messages, ...completionMessage]);

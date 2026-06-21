@@ -123,7 +123,8 @@ function fmtCost(c?: number): string {
 }
 
 function shortId(id?: string): string {
-  return (String(id) ?? "").slice(0, 6);
+  if (id === undefined || id === null) return "";
+  return String(id).slice(0, 6);
 }
 
 function stripQuotes(s?: string): string {

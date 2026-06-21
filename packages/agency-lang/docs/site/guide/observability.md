@@ -35,6 +35,12 @@ The log file will be in JSONL format, which means one JSON object per line. This
 agency logs view logs.jsonl
 ```
 
+`view` is the default subcommand, so you can drop it:
+
+```bash
+agency logs logs.jsonl
+```
+
 Read from stdin:
 
 ```bash

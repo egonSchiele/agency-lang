@@ -77,4 +77,18 @@ describe("agency CLI command tree", () => {
     expect(topLevelCommands).toContain("optimize");
     expect(evalCommands).toContain("optimize");
   });
+
+  it("makes `view` the default for `logs` so `agency logs <file>` works without the subcommand", () => {
+    const program = createProgram();
+    const logsCommand = program.commands.find((command) => command.name() === "logs");
+    expect(logsCommand).toBeDefined();
+    // `view` is still registered explicitly as a subcommand.
+    const logsSubcommands = logsCommand?.commands.map((command) => command.name()) ?? [];
+    expect(logsSubcommands).toContain("view");
+    // The parent `logs` command itself takes an optional [file] argument
+    // and has its own action handler — that's the default-view path.
+    expect(logsCommand?.usage()).toContain("[file]");
+    expect(typeof (logsCommand as unknown as { _actionHandler?: unknown })._actionHandler)
+      .toBe("function");
+  });
 });

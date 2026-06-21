@@ -177,6 +177,47 @@ describe("promptCompletion expansion", () => {
     expect(rows[4].node.id).toBe("evt-0:raw");
   });
 
+  // A tool-calling completion has `output: null` and a `toolCalls`
+  // array. The assistant's tool call must show up as a conversation
+  // line, not only under "raw data".
+  it("shows a tool call from the completion in the conversation view", () => {
+    const leaf: TreeNode = {
+      id: "evt-0",
+      traceId: "t",
+      parentId: "trace-t",
+      children: [],
+      nodeKind: "event",
+      label: "promptCompletion",
+      summary: "promptCompletion",
+      event: {
+        format_version: 1,
+        trace_id: "t",
+        project_id: "p",
+        span_id: null,
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-01-01T00:00:00Z",
+          messages: [{ role: "user", content: "Get the area of France" }],
+          completion: {
+            output: null,
+            toolCalls: [
+              { id: "call_1", name: "getArea", arguments: { country: "France" } },
+            ],
+          },
+        },
+      },
+    };
+    const t = trace([leaf]);
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0"]));
+    const convoRows = rows.filter((r) => r.node.nodeKind === "convoLine");
+    // [user] line + [assistant] tool call line.
+    expect(convoRows).toHaveLength(2);
+    expect(convoRows[1].node.summary).toBe(
+      `${color.green("[assistant]")} tool call: getArea({"country":"France"})`,
+    );
+  });
+
   it("expands the raw-data toggle into JSON lines", () => {
     const t = trace([pcLeaf()]);
     const rows = flattenVisibleRows(

@@ -1,5 +1,14 @@
-export node main(country) {
-  optimize const prompt = "What is the area of ${country}?"
+def getArea(country: string): string {
+  const prompt = "What is the area of ${country}?"
   const response = llm(prompt)
+  return response
+}
+
+export node main() {
+  const country = "France"
+  const prompt = "Get the area of ${country} using your getArea tool."
+  const response = llm(prompt, {
+    tools: [getArea]
+  })
   return response
 }

@@ -31,6 +31,16 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
       }
       return;
     }
+    // An `llmCall` span renders its one-or-more rounds as a single
+    // flattened conversation with tool executions spliced inline,
+    // instead of listing its raw promptCompletion/toolExecution
+    // children. See llmCallSpanChildren.
+    if (node.nodeKind === "span" && node.label === "llmCall") {
+      for (const child of llmCallSpanChildren(node, depth + 1, cols)) {
+        walk(child, depth + 1);
+      }
+      return;
+    }
     for (const c of node.children) walk(c, depth + 1);
   };
   for (const r of state.roots) walk(r, 0);
@@ -70,22 +80,20 @@ export function rawDataChildren(toggle: TreeNode): TreeNode[] {
   return jsonLineChildren(toggle, toggle.event);
 }
 
-function promptCompletionChildren(
-  leaf: TreeNode,
-  childDepth = 0,
-  cols?: number,
-): TreeNode[] {
-  const messages = Array.isArray(leaf.event!.data.messages)
-    ? leaf.event!.data.messages
+// Assemble the displayable transcript for a promptCompletion event:
+// the request `messages` plus the assistant turn from `completion`.
+// Render the assistant turn whenever it has text OR tool calls — the
+// common tool-calling completion has `output: null` and a non-empty
+// `toolCalls` array, and `formatConversation` already renders an
+// assistant message's `toolCalls`, so we just pass them through.
+function assembleTranscript(
+  event: NonNullable<TreeNode["event"]>,
+): any[] {
+  const messages = Array.isArray(event.data.messages)
+    ? event.data.messages
     : [];
-  const completion = leaf.event!.data.completion;
-  const completionMessage = [];
-  // Render the assistant turn whenever it has text OR tool calls. The
-  // common tool-calling completion has `output: null` and a non-empty
-  // `toolCalls` array — keying only on `output` dropped the tool call
-  // from the conversation view (it was visible only under "raw data").
-  // `formatConversation` already renders an assistant message's
-  // `toolCalls`, so just pass them through.
+  const completion = event.data.completion;
+  const completionMessage: any[] = [];
   if (completion?.output || completion?.toolCalls?.length) {
     completionMessage.push({
       role: "assistant",
@@ -93,39 +101,123 @@ function promptCompletionChildren(
       toolCalls: completion.toolCalls,
     });
   }
-  const convoLines = formatConversation([...messages, ...completionMessage]);
-  // renderRowText prefixes each row with `marker` (2 chars) + indent
-  // (`depth * 2` chars) before the convoLine summary. Subtract both
-  // so wrapped chunks fit without triggering the TUI clipper.
-  const available = cols !== undefined
-    ? Math.max(20, cols - childDepth * 2 - 2)
-    : undefined;
-  const convoNodes: TreeNode[] = [];
-  convoLines.forEach((line, i) => {
-    const chunks = available !== undefined ? wrapLine(line, available) : [line];
-    chunks.forEach((chunk, j) => {
-      convoNodes.push({
-        id: `${leaf.id}:convo:${i}:${j}`,
-        traceId: leaf.traceId,
-        parentId: leaf.id,
-        children: [],
-        nodeKind: "convoLine" as const,
-        label: "",
-        summary: chunk,
-      });
-    });
-  });
-  const toggle: TreeNode = {
-    id: `${leaf.id}:raw`,
-    traceId: leaf.traceId,
-    parentId: leaf.id,
+  return [...messages, ...completionMessage];
+}
+
+// Available text width for a synthetic child row at `childDepth`.
+// renderRowText prefixes each row with `marker` (2 chars) + indent
+// (`depth * 2` chars); subtract both so wrapped chunks fit without
+// triggering the TUI clipper. Undefined cols (tests) disables wrapping.
+function availableWidth(childDepth: number, cols?: number): number | undefined {
+  return cols !== undefined ? Math.max(20, cols - childDepth * 2 - 2) : undefined;
+}
+
+// Turn one conversation line into one-or-more wrapped `convoLine` nodes.
+function convoLineNodes(
+  idPrefix: string,
+  parent: TreeNode,
+  line: string,
+  lineIdx: number,
+  available?: number,
+): TreeNode[] {
+  const chunks = available !== undefined ? wrapLine(line, available) : [line];
+  return chunks.map((chunk, j) => ({
+    id: `${idPrefix}:${lineIdx}:${j}`,
+    traceId: parent.traceId,
+    parentId: parent.id,
+    children: [],
+    nodeKind: "convoLine" as const,
+    label: "",
+    summary: chunk,
+  }));
+}
+
+function rawDataToggleNode(
+  id: string,
+  parent: TreeNode,
+  event: TreeNode["event"],
+): TreeNode {
+  return {
+    id,
+    traceId: parent.traceId,
+    parentId: parent.id,
     children: [],
     nodeKind: "rawDataToggle" as const,
     label: "raw data",
     summary: "raw data",
-    event: leaf.event,
+    event,
   };
-  return [...convoNodes, toggle];
+}
+
+function promptCompletionChildren(
+  leaf: TreeNode,
+  childDepth = 0,
+  cols?: number,
+): TreeNode[] {
+  const convoLines = formatConversation(assembleTranscript(leaf.event!));
+  const available = availableWidth(childDepth, cols);
+  const convoNodes: TreeNode[] = [];
+  convoLines.forEach((line, i) => {
+    convoNodes.push(...convoLineNodes(`${leaf.id}:convo`, leaf, line, i, available));
+  });
+  return [...convoNodes, rawDataToggleNode(`${leaf.id}:raw`, leaf, leaf.event)];
+}
+
+// Synthetic children shown when an `llmCall` span is expanded — the
+// flattened, deduplicated conversation for one `llm()` call. Because a
+// tool-loop's final round resends the whole growing thread, the LAST
+// promptCompletion under the span holds the complete transcript; we
+// render that and splice each `toolExecution` child span inline right
+// after the assistant message whose tool calls triggered it (greedy by
+// tool-call count, in time order — the tree already sorts children by
+// time). The intermediate promptCompletion leaves are absorbed (their
+// content is a prefix of the final transcript). A nested `llm()` inside
+// a tool execution is itself an `llmCall` span, so it flattens
+// recursively when its tool execution is expanded.
+//
+// Exported so search.ts walks the same rows the renderer shows.
+export function llmCallSpanChildren(
+  span: TreeNode,
+  childDepth = 0,
+  cols?: number,
+): TreeNode[] {
+  const pcLeaves = span.children.filter(
+    (c) => c.event?.data.type === "promptCompletion",
+  );
+  // No promptCompletion under this span (e.g. the call errored before a
+  // response). Fall back to the raw children so nothing is hidden.
+  if (pcLeaves.length === 0) return span.children;
+
+  // Under an llmCall span the only child SPANS are tool executions, so
+  // match on nodeKind (robust to how the span happened to be labeled).
+  const toolExecs = span.children.filter((c) => c.nodeKind === "span");
+  const others = span.children.filter(
+    (c) => !pcLeaves.includes(c) && !toolExecs.includes(c),
+  );
+
+  const last = pcLeaves[pcLeaves.length - 1];
+  const transcript = assembleTranscript(last.event!);
+  const available = availableWidth(childDepth, cols);
+
+  const out: TreeNode[] = [];
+  const queue = [...toolExecs];
+  let lineIdx = 0;
+  for (const msg of transcript) {
+    for (const line of formatConversation([msg])) {
+      out.push(...convoLineNodes(`${span.id}:llm:convo`, span, line, lineIdx++, available));
+    }
+    const toolCallCount = (msg?.toolCalls ?? msg?.tool_calls ?? []).length;
+    for (let i = 0; i < toolCallCount && queue.length > 0; i++) {
+      out.push(queue.shift()!);
+    }
+  }
+  // Any tool executions or other children we couldn't place inline
+  // (defensive — e.g. a count mismatch or an error event) go at the end
+  // so nothing is silently dropped.
+  out.push(...queue, ...others);
+  // Raw-data toggle exposing the final promptCompletion envelope.
+  out.push(rawDataToggleNode(`${span.id}:llm:raw`, span, last.event));
+  return out;
 }
 
 // Word-aware hard wrap. Splits `text` into chunks of at most `width`

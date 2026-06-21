@@ -177,7 +177,11 @@ function inferSpanLabel(evt: EventEnvelope): string {
       // own label so the viewer can color/filter them separately and
       // cost roll-ups don't conflate the two.
       return "embedding";
+    case "toolCallStart":
     case "toolCall":
+      // A tool execution emits `toolCallStart` first, so the span is
+      // usually introduced by it — label both as `toolExecution` so the
+      // span reads consistently regardless of which event created it.
       return "toolExecution";
     case "forkStart":
     case "forkEnd":

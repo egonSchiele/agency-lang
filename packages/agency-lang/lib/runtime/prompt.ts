@@ -550,11 +550,14 @@ export async function runPrompt(args: {
     snapshotMessages: () => messages.toJSON().messages,
   });
 
-  // Manage llmCall spans across the prompt round-trip loop. Each
-  // llmCall span covers one `_runPrompt` call PLUS the tool executions
-  // triggered by its returned tool_calls, so toolExecution spans nest
-  // under their parent llmCall — matching the
-  // agentRun > nodeExecution > llmCall > toolExecution hierarchy.
+  // One llmCall span covers the WHOLE `llm()` call — every tool-loop
+  // round plus the tool executions they trigger. So all rounds'
+  // promptCompletion events and all toolExecution spans nest under a
+  // single llmCall span, matching the
+  // agentRun > nodeExecution > llmCall > toolExecution hierarchy and
+  // the "one llmCall span == one llm() call" model the viewer renders.
+  // Opened once below (outside `pr.step` so resume re-opens it on
+  // re-entry) and closed once in `finally`.
   let currentLlmSpanId: string | undefined;
   const closeLlmSpan = () => {
     if (currentLlmSpanId) {
@@ -568,6 +571,11 @@ export async function runPrompt(args: {
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
   let shouldPop = true;
+  // Open the single llmCall span before the round-trip loop. Done here
+  // (not inside the idempotent `initialLlmCall` step) so a resumed run —
+  // which skips completed steps — still re-opens the span that the tool
+  // loop expects to be active.
+  currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
   try {
     // Initial LLM call wrapped in pr.step so it's idempotent on resume
     // (re-entries after a later tool-batch bailout skip this step).
@@ -591,22 +599,17 @@ export async function runPrompt(args: {
         }
       }
       messages.push(smoltalk.userMessage(prompt));
-      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-      let result: RunPromptResult;
-      try {
-        result = await _runPrompt({
-          ctx,
-          messages,
-          tools: tools || [],
-          prompt,
-          responseFormat,
-          clientConfig,
-          stateStack,
-        });
-      } catch (e) {
-        closeLlmSpan();
-        throw e;
-      }
+      // The llmCall span is already open (before the loop). On error,
+      // the outer `finally` closes it.
+      const result = await _runPrompt({
+        ctx,
+        messages,
+        tools: tools || [],
+        prompt,
+        responseFormat,
+        clientConfig,
+        stateStack,
+      });
       messages = result.messages;
       toolCalls = result.toolCalls;
       if (injectedFactsContent !== null) {
@@ -624,13 +627,6 @@ export async function runPrompt(args: {
       self.messagesJSON = messages.toJSON().messages;
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
-
-    // After resume (initialLlmCall skipped), make sure there's an open
-    // llmCall span if we have pending tool calls — the tool loop expects
-    // one to be open so toolExecution spans nest correctly.
-    if (toolCalls.length > 0 && currentLlmSpanId === undefined) {
-      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-    }
 
     // Inner helper for the per-branch tool invocation. Extracted from
     // the pr.parallel branchFn so that arrow stays within the
@@ -1074,25 +1070,20 @@ export async function runPrompt(args: {
       );
 
       // Next LLM call wrapped in pr.step for resume idempotency. Once
-      // marked done, resume re-entries skip the LLM call.
+      // marked done, resume re-entries skip the LLM call. The llmCall
+      // span stays open across rounds (one span per llm() call), so we
+      // do NOT close/reopen it here — this round's promptCompletion
+      // nests under the same span as the first round's.
       await pr.step(`round.${round}.nextLlmCall`, async () => {
-        closeLlmSpan();
-        currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-        let nextResult: RunPromptResult;
-        try {
-          nextResult = await _runPrompt({
-            ctx,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-          });
-        } catch (e) {
-          closeLlmSpan();
-          throw e;
-        }
+        const nextResult = await _runPrompt({
+          ctx,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+        });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
         // Increment the round counter only after a successful LLM round,

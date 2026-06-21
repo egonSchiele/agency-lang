@@ -54,6 +54,21 @@
         { "return": "mid done" },
         { "return": "top done" }
       ]
+    },
+    {
+      "nodeName": "interruptResumeTokensRollUp",
+      "description": "A tool that pauses for approval and resumes counts its spend exactly once (seed idempotent + survives checkpoint)",
+      "input": "",
+      "expectedOutput": "8",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "interruptingTool" } },
+        { "return": "before result" },
+        { "return": "after result" },
+        { "return": "done" }
+      ],
+      "interruptHandlers": [{ "action": "approve" }]
     }
   ]
 }

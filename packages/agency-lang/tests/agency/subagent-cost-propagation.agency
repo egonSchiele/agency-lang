@@ -32,6 +32,14 @@ def nestedOuter(): string {
   return llm("mid", { tools: [nestedInner] })
 }
 
+def interruptingTool(): string {
+  """Calls the LLM, pauses for approval, then calls the LLM again."""
+  const before = llm("before")
+  interrupt("approve to continue")
+  const after = llm("after")
+  return "done"
+}
+
 // One tool, one round → 3 LLM calls → 6 tokens. (Was 4 before the fix.)
 node toolTokensRollUp(): number {
   llm("outer", { tools: [innerTool] })
@@ -59,5 +67,15 @@ node parallelToolTokensRollUp(): number {
 // top-continues = 5 calls → 10 tokens.
 node nestedToolTokensRollUp(): number {
   llm("top", { tools: [nestedOuter] })
+  return getTokens()
+}
+
+// A tool that pauses for an approval interrupt and resumes. Its spend must
+// be counted EXACTLY ONCE across the interrupt/resume cycle — the seed is
+// idempotent on resume (the branch isn't re-seeded) and its seed baseline
+// survives the checkpoint, so the delta math doesn't double-count or drop.
+// Calls: outer + before + after + outer-continues = 4 → 8 tokens.
+node interruptResumeTokensRollUp(): number {
+  llm("outer", { tools: [interruptingTool] })
   return getTokens()
 }

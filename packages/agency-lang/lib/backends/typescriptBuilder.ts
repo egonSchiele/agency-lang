@@ -2548,6 +2548,13 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof GuardExceededError"),
             ts.statements([ts.throw("__error")]),
           ),
+          // A cancellation (Esc / abort) must propagate untouched rather
+          // than be logged + converted to a Failure here. Mirrors the
+          // function catch template.
+          ts.if(
+            ts.raw("__isAbortError(__error)"),
+            ts.statements([ts.throw("__error")]),
+          ),
           // Surface the underlying exception via logger + statelog
           // before converting to a Failure. Mirrors the function catch
           // template; see the recordAlwaysScoped bug in

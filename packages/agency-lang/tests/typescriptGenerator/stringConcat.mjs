@@ -16,6 +16,7 @@ import {
   rewindFrom as _rewindFrom,
   RestoreSignal,
   GuardExceededError,
+  isAbortError as __isAbortError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -237,6 +238,9 @@ await callHook({
       throw __error
     }
     if (__error instanceof GuardExceededError) {
+      throw __error
+    }
+    if (__isAbortError(__error)) {
       throw __error
     }
     {

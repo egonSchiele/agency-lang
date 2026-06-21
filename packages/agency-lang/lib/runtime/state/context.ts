@@ -520,6 +520,18 @@ export class RuntimeContext<T> {
     }
   }
 
+  /**
+   * Swap in a fresh AbortController after a user-initiated cancel so the
+   * NEXT unit of work isn't immediately aborted. The REPL calls this once
+   * it has caught the AgencyCancelledError from a cancelled turn and is
+   * about to accept the next prompt. Safe only when nothing is in flight
+   * (the cancelled turn has fully unwound) — otherwise an in-flight call
+   * would keep a reference to the old, now-orphaned signal.
+   */
+  resetCancel(): void {
+    this.abortController = new AbortController();
+  }
+
   forkStack(): StateStack {
     return new StateStack();
   }

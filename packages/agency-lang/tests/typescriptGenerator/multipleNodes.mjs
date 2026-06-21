@@ -16,6 +16,7 @@ import {
   rewindFrom as _rewindFrom,
   RestoreSignal,
   GuardExceededError,
+  isAbortError as __isAbortError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -229,6 +230,9 @@ await callHook({
     if (__error instanceof GuardExceededError) {
       throw __error
     }
+    if (__isAbortError(__error)) {
+      throw __error
+    }
     {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
@@ -332,6 +336,9 @@ await callHook({
     if (__error instanceof GuardExceededError) {
       throw __error
     }
+    if (__isAbortError(__error)) {
+      throw __error
+    }
     {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
@@ -406,6 +413,9 @@ await callHook({
       throw __error
     }
     if (__error instanceof GuardExceededError) {
+      throw __error
+    }
+    if (__isAbortError(__error)) {
       throw __error
     }
     {

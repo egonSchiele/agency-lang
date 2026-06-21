@@ -77,5 +77,12 @@ export function isAbortError(error: unknown): boolean {
   if (error instanceof AgencyCancelledError) return true;
   if (error instanceof DOMException && error.name === "AbortError") return true;
   if (error instanceof Error && error.name === "AbortError") return true;
+  // Name-based fallback: `instanceof` fails when the error and this check
+  // resolve `AgencyCancelledError` from two different module instances
+  // (e.g. the spawned agent process under the resolver shim). The name is
+  // identity-independent, so a cancellation is still recognized as one.
+  if (error instanceof Error && error.name === "AgencyCancelledError") {
+    return true;
+  }
   return false;
 }

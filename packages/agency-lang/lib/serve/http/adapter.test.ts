@@ -5,6 +5,7 @@ import { createHttpHandler, startHttpServer } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ExportedItem } from "../types.js";
 import { createLogger } from "../../logger.js";
+import type { Logger } from "../../logger.js";
 
 function makeExports(): {
   exports: ExportedItem[];
@@ -327,5 +328,44 @@ describe("startHttpServer auth and host validation", () => {
       expect(body.error).not.toContain("sk-abc123");
       expect(body.error).not.toContain("internal secret");
     });
+  });
+});
+
+describe("startHttpServer route logging", () => {
+  function capturingLogger(): { logger: Logger; lines: string[] } {
+    const lines: string[] = [];
+    const sink = (msg: string) => {
+      lines.push(msg);
+    };
+    return {
+      lines,
+      logger: { debug: sink, info: sink, warn: sink, error: sink },
+    };
+  }
+
+  it("logs each exposed route with its params on startup", async () => {
+    const { exports } = makeExports();
+    const { logger, lines } = capturingLogger();
+    await withServer(
+      {
+        exports,
+        port: 0,
+        logger,
+        hasInterrupts: () => false,
+        respondToInterrupts: async () => ({ data: "resumed" }),
+      },
+      async () => {
+        // server is listening; the listen callback has already logged routes
+      },
+    );
+
+    expect(lines).toContain("Routes:");
+    const joined = lines.join("\n");
+    expect(joined).toContain("GET   /list");
+    // `add` has two required params a, b
+    expect(joined).toContain("POST  /function/add (a, b)");
+    // node `main` takes a single param
+    expect(joined).toContain("POST  /node/main (message)");
+    expect(joined).toContain("POST  /resume (interrupts, responses)");
   });
 });

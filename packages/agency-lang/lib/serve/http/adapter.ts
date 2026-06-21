@@ -183,6 +183,62 @@ export function createHttpHandler(config: HttpConfig): (
   };
 }
 
+/**
+ * Render a parameter list for display, e.g. `(name, count?, ...rest)`.
+ * `?` marks params with a default (optional), `...` marks a variadic.
+ * Returns "" when there are no params so the route prints bare.
+ */
+function describeParams(
+  params: Array<{ name: string; hasDefault?: boolean; variadic?: boolean }>,
+): string {
+  if (params.length === 0) return "";
+  const parts = params.map((p) => {
+    const prefix = p.variadic ? "..." : "";
+    const suffix = !p.variadic && p.hasDefault ? "?" : "";
+    return `${prefix}${p.name}${suffix}`;
+  });
+  return ` (${parts.join(", ")})`;
+}
+
+/**
+ * Log the routes the server exposes, one per line, e.g.
+ *   POST  /function/greet (name)
+ * so operators can see the available endpoints at a glance on startup.
+ */
+function logRoutes(config: HttpConfig): void {
+  const { logger, exports } = config;
+
+  type Route = { method: string; path: string; params: string };
+  const routes: Route[] = [{ method: "GET", path: "/list", params: "" }];
+
+  for (const item of exports) {
+    if (item.kind === "function") {
+      // Bound params are filled in at definition time and are not part of
+      // the request body, so only the unbound params are caller-facing.
+      const callerParams = item.agencyFunction.params.filter((p) => !p.isBound);
+      routes.push({
+        method: "POST",
+        path: `/function/${item.name}`,
+        params: describeParams(callerParams),
+      });
+    } else {
+      routes.push({
+        method: "POST",
+        path: `/node/${item.name}`,
+        params: describeParams(item.parameters),
+      });
+    }
+  }
+
+  routes.push({ method: "POST", path: "/resume", params: " (interrupts, responses)" });
+
+  const methodWidth = Math.max(...routes.map((r) => r.method.length));
+  logger.info("Routes:");
+  for (const r of routes) {
+    logger.info(`  ${r.method.padEnd(methodWidth)}  ${r.path}${r.params}`);
+  }
+}
+
 export function startHttpServer(config: HttpConfig): http.Server {
   const handler = createHttpHandler(config);
   const { logger, port, apiKey } = config;
@@ -206,6 +262,7 @@ export function startHttpServer(config: HttpConfig): http.Server {
 
   server.listen(port, host, () => {
     logServerStart(logger, "Agency HTTP server", host, port, apiKey);
+    logRoutes(config);
   });
 
   return server;

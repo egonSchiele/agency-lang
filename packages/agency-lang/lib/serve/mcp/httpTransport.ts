@@ -30,6 +30,11 @@ export type McpHttpConfig = {
    */
   allowedHosts?: string[];
   logger: Logger;
+  /**
+   * Lines listing the exposed tools (from `mcpToolSummaryLines`). Logged
+   * once at startup, after the "listening on …" message.
+   */
+  toolSummary?: string[];
 };
 
 /**
@@ -120,6 +125,7 @@ export function startMcpHttpServer(config: McpHttpConfig): http.Server {
 
   server.listen(port, host, () => {
     logServerStart(logger, `Agency MCP HTTP server (path: ${mcpPath})`, host, port, apiKey);
+    for (const line of config.toolSummary ?? []) logger.info(line);
   });
 
   return server;

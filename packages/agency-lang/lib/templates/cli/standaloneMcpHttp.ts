@@ -5,7 +5,7 @@ import { apply } from "typestache";
 
 export const template = `import * as mod from {{{compiledModulePath:string}}};
 import { discoverExports } from {{{discoveryPath:string}}};
-import { createMcpHandler } from {{{mcpAdapterPath:string}}};
+import { createMcpHandler, mcpToolSummaryLines } from {{{mcpAdapterPath:string}}};
 import { startMcpHttpServer } from {{{mcpHttpTransportPath:string}}};
 import { PolicyStore } from {{{policyStorePath:string}}};
 import { createLogger } from {{{loggerPath:string}}};
@@ -32,12 +32,13 @@ const interruptHandlers = {
   },
 };
 
-const handler = createMcpHandler({
+const mcpConfig = {
   serverName,
   serverVersion: {{{serverVersion:string}}},
   exports,
   policyConfig: { policyStore, interruptHandlers },
-});
+};
+const handler = createMcpHandler(mcpConfig);
 
 const rawPort = process.env.PORT ?? {{{defaultPort:string}}};
 const port = parseInt(rawPort, 10);
@@ -57,6 +58,7 @@ try {
     path: mcpPath,
     apiKey,
     logger: createLogger("info"),
+    toolSummary: mcpToolSummaryLines(mcpConfig),
   });
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err));

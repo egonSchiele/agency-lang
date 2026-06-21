@@ -1,4 +1,4 @@
-node main(country) {
+export node main(country) {
   optimize const prompt = "What is the area of ${country}?"
   const response = llm(prompt)
   return response

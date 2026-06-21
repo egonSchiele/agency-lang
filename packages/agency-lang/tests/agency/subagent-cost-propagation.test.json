@@ -1,8 +1,8 @@
 {
   "tests": [
     {
-      "nodeName": "main",
-      "description": "A tool's own LLM spend propagates to the parent stack, so getTokens() is cumulative across subagent/tool branches",
+      "nodeName": "toolTokensRollUp",
+      "description": "A tool's own LLM spend rolls up to the parent (getTokens cumulative across the tool branch)",
       "input": "",
       "expectedOutput": "6",
       "evaluationCriteria": [{ "type": "exact" }],
@@ -11,6 +11,48 @@
         { "toolCall": { "name": "innerTool" } },
         { "return": "inner result" },
         { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "toolCostRollsUp",
+      "description": "Cost (not just tokens) rolls up from the tool branch",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "innerTool" } },
+        { "return": "inner result" },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "parallelToolTokensRollUp",
+      "description": "Two tools in one round: both branch deltas sum into the parent",
+      "input": "",
+      "expectedOutput": "8",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "toolA" }, { "name": "toolB" }] },
+        { "return": "a result" },
+        { "return": "b result" },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "nestedToolTokensRollUp",
+      "description": "Nested tools: spend chains up through every level",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "nestedOuter" } },
+        { "toolCall": { "name": "nestedInner" } },
+        { "return": "deep result" },
+        { "return": "mid done" },
+        { "return": "top done" }
       ]
     }
   ]

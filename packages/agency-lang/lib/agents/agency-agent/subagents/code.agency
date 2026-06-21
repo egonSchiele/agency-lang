@@ -19,7 +19,6 @@ import { exec, ls, glob, grep, bash } from "std::shell"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
-import { highlight } from "std::syntax"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
@@ -257,14 +256,6 @@ live in `.agency` files you can `read` directly.
    Skip the skill for trivial one-line edits, single-file
    tweaks, or quick questions — the skills are for tasks where
    structure pays for itself.
-10. Whenever you want to show the user a multi-line code snippet,
-   call `print(highlight(code))` instead of including the raw
-   source in your reply. `highlight` returns a terminal-colored
-   string and `print` writes it directly to the user's console, so
-   the snippet appears with proper syntax highlighting. Skip this
-   for inline identifiers or one-token excerpts; use it for any
-   multi-line block. Your reply can then refer to the printed
-   snippet without repeating the source.
 
 ## Output style
 
@@ -329,8 +320,6 @@ export static const codeTools: any[] = [
   agencyCli,
   typecheck,
   parseAST,
-  highlight.partial(language: "ts"),
-  print,
   remember,
   recall,
   superpowersSkill,

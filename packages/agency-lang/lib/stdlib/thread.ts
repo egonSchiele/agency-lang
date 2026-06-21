@@ -100,6 +100,40 @@ export async function _getTokens(): Promise<number> {
   return stack.localTokens;
 }
 
+export type ModelCost = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+};
+
+/**
+ * Per-model usage breakdown from the global `__tokenStats.models`
+ * accumulator (populated by `updateTokenStats` on every LLM call,
+ * including subagent/tool branches that pointer-share it). Returned
+ * sorted by cost descending so callers can show the priciest model
+ * first. Unlike `_getCost`/`_getTokens`, this reads the process-wide
+ * total (not the per-branch accumulator), which is the right scope for
+ * a `/cost` summary that attributes spend across every model used.
+ */
+export async function _getModelCosts(): Promise<ModelCost[]> {
+  const { ctx } = getRuntimeContext();
+  const stats = ctx?.globals?.getTokenStats?.();
+  const models = stats?.models;
+  if (!models || typeof models !== "object") return [];
+  const out: ModelCost[] = [];
+  for (const [model, v] of Object.entries(models as Record<string, any>)) {
+    out.push({
+      model,
+      inputTokens: typeof v?.inputTokens === "number" ? v.inputTokens : 0,
+      outputTokens: typeof v?.outputTokens === "number" ? v.outputTokens : 0,
+      cost: typeof v?.totalCost === "number" ? v.totalCost : 0,
+    });
+  }
+  out.sort((a, b) => b.cost - a.cost || (a.model < b.model ? -1 : 1));
+  return out;
+}
+
 /**
  * Open 0..2 guard scopes on the caller's stack, depending on which
  * limits were passed. Returns the count actually pushed so the

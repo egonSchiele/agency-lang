@@ -120,10 +120,19 @@ export function updateTokenStats(args: {
   const { globals, usage, cost, model } = args;
   if (!usage || !cost) return;
   const tokenStats = globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats");
-  // Record the model of the most recent LLM call so the REPL footer can
-  // show which model produced the turn. Purely informational; doesn't
-  // affect billing/usage accumulation.
-  if (model) tokenStats.lastModel = model;
+  // Accumulate a per-model usage breakdown. Every LLM call (including
+  // subagent/tool branches, which pointer-share this object) lands here,
+  // so the footer can list which models a turn touched and `/cost` can
+  // attribute spend per model. Defensive against an absent `models` slot
+  // for token-stats objects restored from older checkpoints.
+  if (model) {
+    if (!tokenStats.models) tokenStats.models = {};
+    const m = tokenStats.models[model] ??
+      (tokenStats.models[model] = { inputTokens: 0, outputTokens: 0, totalCost: 0 });
+    m.inputTokens += usage.inputTokens || 0;
+    m.outputTokens += usage.outputTokens || 0;
+    m.totalCost += cost.totalCost || 0;
+  }
   tokenStats.usage.inputTokens += usage.inputTokens || 0;
   tokenStats.usage.outputTokens += usage.outputTokens || 0;
   tokenStats.usage.cachedInputTokens += usage.cachedInputTokens || 0;

@@ -10,6 +10,7 @@ import {
   _assistantMessage,
   _getCost,
   _getTokens,
+  _getModelCosts,
   _pushGuard,
   _popGuard,
  } from "agency-lang/stdlib-lib/thread.js"
@@ -72,6 +73,29 @@ export safe def getTokens(): number {
   Same per-branch semantics as getCost().
   """
   return _getTokens()
+}
+
+export type ModelCost = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number
+}
+
+export safe def getModelCosts(): ModelCost[] {
+  """
+  Get a per-model breakdown of cumulative LLM usage, one entry per
+  model that has been called, sorted by cost descending.
+
+  Unlike getCost()/getTokens() (which read the per-branch accumulator),
+  this reads the process-wide totals across every branch — including
+  subagents and tool calls that run on a different model. Useful for a
+  cost summary that attributes spend per model.
+
+  Each entry has `model` (the model name), `inputTokens`,
+  `outputTokens`, and `cost` (USD).
+  """
+  return _getModelCosts()
 }
 
 export type GuardFailureData = {

@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { deepFreeze } from "./utils.js";
+import { deepFreeze, updateTokenStats } from "./utils.js";
+import { GlobalStore } from "./state/globalStore.js";
+
+const usage = (i: number, o: number) => ({
+  inputTokens: i,
+  outputTokens: o,
+  totalTokens: i + o,
+});
+const cost = (c: number) => ({ inputCost: 0, outputCost: 0, totalCost: c });
 
 describe("deepFreeze", () => {
   it("freezes a plain object", () => {
@@ -60,5 +68,62 @@ describe("deepFreeze", () => {
     expect(Object.isFrozen(obj.data)).toBe(true);
     // Map internal state still mutable (known limitation)
     expect(() => obj.data.set("b", 2)).not.toThrow();
+  });
+});
+
+describe("updateTokenStats per-model breakdown", () => {
+  it("records a new model on first call", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    const stats = globals.getTokenStats();
+    expect(stats.models["opus-4.8"]).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalCost: 0.001,
+    });
+    // The aggregate totals still accumulate independently.
+    expect(stats.usage.inputTokens).toBe(10);
+    expect(stats.cost.totalCost).toBe(0.001);
+  });
+
+  it("accumulates repeated calls to the same model", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    updateTokenStats({ globals, usage: usage(2, 3), cost: cost(0.0005), model: "opus-4.8" });
+    expect(globals.getTokenStats().models["opus-4.8"]).toEqual({
+      inputTokens: 12,
+      outputTokens: 8,
+      totalCost: 0.0015,
+    });
+  });
+
+  it("tracks multiple models separately (e.g. a subagent on a different model)", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
+    updateTokenStats({ globals, usage: usage(20, 10), cost: cost(0.03), model: "opus-4.8" });
+    const models = globals.getTokenStats().models;
+    expect(models["gpt-5-mini"]).toEqual({ inputTokens: 10, outputTokens: 5, totalCost: 0.001 });
+    expect(models["opus-4.8"]).toEqual({ inputTokens: 20, outputTokens: 10, totalCost: 0.03 });
+  });
+
+  it("does not record a model entry when no model name is supplied", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001) });
+    expect(globals.getTokenStats().models).toEqual({});
+    // Aggregate totals still update even without a model name.
+    expect(globals.getTokenStats().usage.totalTokens).toBe(15);
+  });
+
+  it("backfills the models slot for token-stats restored from older checkpoints", () => {
+    const globals = GlobalStore.withTokenStats();
+    // Simulate a checkpoint written before per-model tracking existed.
+    const stats = globals.getTokenStats();
+    delete stats.models;
+    updateTokenStats({ globals, usage: usage(1, 1), cost: cost(0.0002), model: "opus-4.8" });
+    expect(globals.getTokenStats().models["opus-4.8"]).toEqual({
+      inputTokens: 1,
+      outputTokens: 1,
+      totalCost: 0.0002,
+    });
   });
 });

@@ -9,7 +9,18 @@ const {
   pasteJoin,
   classifyPasteKey,
   readMultiline,
+  modelsUsedThisTurn,
 } = _internal;
+
+/** Build a snapshot shaped like `readTokenSnapshot`'s return value from
+ *  a `{model: [tokens, cost]}` shorthand. */
+function snap(entries: Record<string, [number, number]>) {
+  const models: Record<string, { tokens: number; cost: number }> = {};
+  for (const [name, [tokens, cost]] of Object.entries(entries)) {
+    models[name] = { tokens, cost };
+  }
+  return { inputTokens: 0, outputTokens: 0, models };
+}
 
 // The readMultiline tests spy on process.stdout.write; restore after
 // every test so the global spy never leaks into other tests/files.
@@ -170,5 +181,44 @@ describe("readMultiline editor (drives the hijacked _ttyWrite)", () => {
     // Simulate a stdin EOF / readline close while editing.
     (fakeRl as unknown as { emitClose: () => void }).emitClose();
     expect(await promise).toBe("partial");
+  });
+});
+
+describe("modelsUsedThisTurn (footer model attribution)", () => {
+  it("returns nothing when no model did work this turn", () => {
+    const before = snap({ "opus-4.8": [10, 0.01] });
+    const after = snap({ "opus-4.8": [10, 0.01] });
+    expect(modelsUsedThisTurn(before, after)).toEqual([]);
+  });
+
+  it("lists the single model that grew this turn", () => {
+    const before = snap({});
+    const after = snap({ "opus-4.8": [100, 0.03] });
+    expect(modelsUsedThisTurn(before, after)).toEqual(["opus-4.8"]);
+  });
+
+  it("orders multiple models by cost spent this turn, descending", () => {
+    const before = snap({});
+    const after = snap({ "gpt-5-mini": [400, 0.011], "opus-4.8": [800, 0.03] });
+    expect(modelsUsedThisTurn(before, after)).toEqual(["opus-4.8", "gpt-5-mini"]);
+  });
+
+  it("uses the per-turn delta, not cumulative totals, to order", () => {
+    // opus has a bigger cumulative cost, but gpt spent more THIS turn.
+    const before = snap({ "opus-4.8": [1000, 0.50], "gpt-5-mini": [0, 0] });
+    const after = snap({ "opus-4.8": [1010, 0.505], "gpt-5-mini": [500, 0.40] });
+    expect(modelsUsedThisTurn(before, after)).toEqual(["gpt-5-mini", "opus-4.8"]);
+  });
+
+  it("excludes a model that was used in a prior turn but not this one", () => {
+    const before = snap({ "opus-4.8": [100, 0.03], "gpt-5-mini": [50, 0.005] });
+    const after = snap({ "opus-4.8": [100, 0.03], "gpt-5-mini": [80, 0.008] });
+    expect(modelsUsedThisTurn(before, after)).toEqual(["gpt-5-mini"]);
+  });
+
+  it("breaks cost ties by model name", () => {
+    const before = snap({});
+    const after = snap({ "model-b": [100, 0.01], "model-a": [100, 0.01] });
+    expect(modelsUsedThisTurn(before, after)).toEqual(["model-a", "model-b"]);
   });
 });

@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { deepFreeze, updateTokenStats } from "./utils.js";
+import {
+  deepFreeze,
+  updateTokenStats,
+  recordHumanWaitMs,
+  readHumanWaitMs,
+  measureHumanWait,
+} from "./utils.js";
 import { GlobalStore } from "./state/globalStore.js";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const usage = (i: number, o: number) => ({
   inputTokens: i,
@@ -125,5 +133,47 @@ describe("updateTokenStats per-model breakdown", () => {
       outputTokens: 1,
       totalCost: 0.0002,
     });
+  });
+});
+
+describe("human-wait clock", () => {
+  // The clock is process-global and monotonic, so every assertion is on a
+  // before/after DELTA rather than an absolute value.
+  it("accumulates recorded durations", () => {
+    const before = readHumanWaitMs();
+    recordHumanWaitMs(100);
+    recordHumanWaitMs(50);
+    expect(readHumanWaitMs() - before).toBe(150);
+  });
+
+  it("ignores non-positive durations", () => {
+    const before = readHumanWaitMs();
+    recordHumanWaitMs(0);
+    recordHumanWaitMs(-25);
+    expect(readHumanWaitMs() - before).toBe(0);
+  });
+
+  it("measureHumanWait charges the time fn spends blocked", async () => {
+    const before = readHumanWaitMs();
+    const result = await measureHumanWait(async () => {
+      await sleep(40);
+      return "done";
+    });
+    const charged = readHumanWaitMs() - before;
+    expect(result).toBe("done");
+    // Generous lower bound to stay non-flaky while proving the wait was
+    // measured around the awaited work.
+    expect(charged).toBeGreaterThanOrEqual(30);
+  });
+
+  it("measureHumanWait still charges when fn throws", async () => {
+    const before = readHumanWaitMs();
+    await expect(
+      measureHumanWait(async () => {
+        await sleep(40);
+        throw new Error("cancelled");
+      }),
+    ).rejects.toThrow("cancelled");
+    expect(readHumanWaitMs() - before).toBeGreaterThanOrEqual(30);
   });
 });

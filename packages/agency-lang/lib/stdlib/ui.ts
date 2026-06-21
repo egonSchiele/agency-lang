@@ -16,6 +16,7 @@ import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
+import { measureHumanWait } from "../runtime/utils.js";
 import prompts from "prompts";
 import { color } from "@/utils/termcolors.js";
 
@@ -707,6 +708,16 @@ const AUTOCOMPLETE_FREE_TEXT_PREFIX = "__FREETEXT__:";
 //      the user with no way to quit. 130 = 128 + SIGINT, the standard
 //      shell convention for "killed by Ctrl+C".
 async function _runPrompt(question: prompts.PromptObject): Promise<any> {
+  // Every line-mode human prompt (interrupt approval menus, prompt(),
+  // askUser, reject free-text) funnels through here, so this is the one
+  // place to charge time-blocked-on-the-human to the human-wait clock.
+  // The REPL footer subtracts that from wall-clock so the reported turn
+  // time excludes human deliberation. (Ctrl+C calls process.exit below,
+  // which skips the charge — fine, the process is leaving.)
+  return measureHumanWait(() => _runPromptInner(question));
+}
+
+async function _runPromptInner(question: prompts.PromptObject): Promise<any> {
   const stopSpinner = (globalThis as any).__agencyStopSpinner;
   if (typeof stopSpinner === "function") {
     stopSpinner();

@@ -11,6 +11,7 @@ const {
   readMultiline,
   modelsUsedThisTurn,
   fmtModels,
+  computeTurnElapsedMs,
 } = _internal;
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
@@ -227,6 +228,20 @@ describe("modelsUsedThisTurn (footer model attribution)", () => {
     const before = snap({ "opus-4.8": [100, 0.01] });
     const after = snap({ "opus-4.8": [100, 0.02] });
     expect(modelsUsedThisTurn(before, after)).toEqual(["opus-4.8"]);
+  });
+});
+
+describe("computeTurnElapsedMs (footer time excludes human wait)", () => {
+  it("subtracts human-wait time from wall-clock", () => {
+    expect(computeTurnElapsedMs(5000, 3000)).toBe(2000);
+  });
+
+  it("is a no-op when no human wait occurred", () => {
+    expect(computeTurnElapsedMs(5000, 0)).toBe(5000);
+  });
+
+  it("floors at 0 if human-wait somehow exceeds wall-clock", () => {
+    expect(computeTurnElapsedMs(1000, 1500)).toBe(0);
   });
 });
 

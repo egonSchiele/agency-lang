@@ -14,7 +14,7 @@ import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError } from "../runtime/errors.js";
-import { normalizeModelUsage } from "../runtime/utils.js";
+import { normalizeModelUsage, readHumanWaitMs } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -555,6 +555,15 @@ function fmtTokens(n: number): string {
   return `${(n / 1000).toFixed(1)}k`;
 }
 
+/** The turn's reported time: wall-clock minus the time spent blocked on
+ *  human input (approval menus, prompts) during it, floored at 0. So the
+ *  footer reflects LLM + tool + agent compute only — never how long the
+ *  human took to approve. `wallMs` and `humanWaitMs` are both deltas
+ *  measured across the same turn. */
+function computeTurnElapsedMs(wallMs: number, humanWaitMs: number): number {
+  return Math.max(0, wallMs - humanWaitMs);
+}
+
 /** Format an elapsed wall-clock duration. Under a minute we show
  *  fractional seconds (`3.2s`); past that we drop to whole minutes +
  *  seconds (`1m 45s`). */
@@ -762,6 +771,10 @@ export async function _runLineRepl(
       // is missing, so the footer never breaks a working turn.
       const turnStartMs = Date.now();
       const tokensBefore = readTokenSnapshot();
+      // Snapshot the human-wait clock too, so the footer can subtract any
+      // time this turn spends blocked on an approval menu / prompt (which
+      // run inline inside the turn) from the wall-clock elapsed.
+      const humanWaitBefore = readHumanWaitMs();
       activeStopSpinner = startSpinner(useTTY);
 
       // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
@@ -796,7 +809,10 @@ export async function _runLineRepl(
         // Still print the footer so the user sees how long the turn ran
         // and whether tokens flowed (useful on both cancel and error).
         await printFooter(status, useColor, {
-          elapsedMs: Date.now() - turnStartMs,
+          elapsedMs: computeTurnElapsedMs(
+            Date.now() - turnStartMs,
+            readHumanWaitMs() - humanWaitBefore,
+          ),
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
           outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
           models: modelsUsedThisTurn(tokensBefore, tokensAfter),
@@ -824,7 +840,10 @@ export async function _runLineRepl(
       // means our render pipeline ate it, non-zero means the LLM
       // actually streamed nothing further.
       await printFooter(status, useColor, {
-        elapsedMs: Date.now() - turnStartMs,
+        elapsedMs: computeTurnElapsedMs(
+          Date.now() - turnStartMs,
+          readHumanWaitMs() - humanWaitBefore,
+        ),
         inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
         outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
         models: modelsUsedThisTurn(tokensBefore, tokensAfter),
@@ -1057,6 +1076,7 @@ export const _internal = {
   readMultiline,
   modelsUsedThisTurn,
   fmtModels,
+  computeTurnElapsedMs,
 };
 
 export function _clearScreen(): void {

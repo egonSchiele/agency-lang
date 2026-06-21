@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped:timeoutFailure:20\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A time guard trips while its block's LAST statement (a sleep) is in flight, with no trailing step. The guard-owned abort is converted to a GuardExceededError at the aborting step and surfaced as a timeoutFailure, instead of escaping as a bare cancellation (which crashed the program) or being dropped for lack of a next step boundary."
+    }
+  ]
+}

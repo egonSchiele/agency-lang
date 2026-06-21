@@ -1,7 +1,8 @@
 import { nanoid } from "nanoid";
 import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
-import { RestoreSignal } from "./errors.js";
+import { RestoreSignal, isAbortError } from "./errors.js";
+import type { Guard } from "./guard.js";
 import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
@@ -240,18 +241,31 @@ export class Runner {
    *      abort (race-loser branch cancel). Halt silently as before. */
   private shouldSkip(): boolean {
     if (this.stack?.abortSignal?.aborted && !this.halted) {
-      // Walk innermost-first so the deepest guard reports its trip
-      // first. Mirrors the order in prompt.ts's cost-check loop.
-      for (let i = this.stack.guards.length - 1; i >= 0; i--) {
-        const err = this.stack.guards[i].check(this.stack);
-        if (err) throw err;
-      }
+      const guardError = this.firstTrippedGuardError();
+      if (guardError) throw guardError;
       const guardOwnsAbort = this.stack.guards.some((g) => g.isTripped());
       if (!guardOwnsAbort) {
         this.halt(undefined);
       }
     }
     return this.halted || this._break || this._continue;
+  }
+
+  /** Walk this stack's guards innermost-first and return the first one
+   *  reporting a trip (or null if none is tripped / all already
+   *  consumed). Innermost-first mirrors prompt.ts's cost-check loop, so
+   *  the deepest guard's limit wins. `check()` consumes the trip (so it
+   *  fires exactly once); `isTripped()` keeps returning true afterward
+   *  for the popGuard-cleanup path. Shared by `shouldSkip` (abort
+   *  noticed at a step boundary) and `step`'s catch (abort surfaced
+   *  mid-step as a bare cancellation from an aborted in-flight call). */
+  private firstTrippedGuardError(): ReturnType<Guard["check"]> {
+    if (!this.stack) return null;
+    for (let i = this.stack.guards.length - 1; i >= 0; i--) {
+      const err = this.stack.guards[i].check(this.stack);
+      if (err) return err;
+    }
+    return null;
   }
 
   // ── Debug hook ──
@@ -390,9 +404,27 @@ export class Runner {
       // codegen "halt + return" pattern) signals a halt by throwing
       // `HaltSignal` so the surrounding step body unwinds without
       // executing post-interrupt code. Absorb the signal here once the
-      // runner is in the halted state; everything else (real errors,
-      // RestoreSignal, etc.) propagates as usual.
-      if (!(e instanceof HaltSignal && this.halted)) throw e;
+      // runner is in the halted state.
+      if (e instanceof HaltSignal && this.halted) {
+        // absorbed — fall through to the post-callback halt handling
+      } else {
+        // A guard trip (e.g. `guard(time:)`) fires the stack's abort
+        // signal, so an abortable in-flight call (sleep, llm, fetch, …)
+        // wakes early and rejects with a bare AgencyCancelledError. Left
+        // as-is that cancellation would escape the guarded scope — past
+        // the stdlib `guard`'s `try`, which re-throws abort errors — and
+        // crash a standalone program instead of becoming a timeout/cost
+        // Failure. Re-route a *guard-owned* abort through the same check
+        // `shouldSkip` uses so it surfaces as the structured
+        // GuardExceededError, exactly as if the trip had been noticed at
+        // the next step boundary. A genuine cancellation (Esc, race
+        // loser) has no tripped guard and propagates untouched.
+        if (isAbortError(e) && this.stack?.abortSignal?.aborted) {
+          const guardError = this.firstTrippedGuardError();
+          if (guardError) throw guardError;
+        }
+        throw e;
+      }
     } finally {
       this.path.pop();
     }

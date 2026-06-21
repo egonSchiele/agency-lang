@@ -1,0 +1,21 @@
+import { guard } from "std::thread"
+
+// Regression guard for the abort-vs-cancellation fix: the guarded block
+// trips while its LAST statement (the sleep) is in flight, with NO
+// trailing statement to fall through to. The time guard fires its abort
+// signal, the abortable sleep wakes early and rejects with a bare
+// cancellation, and the runner step that owns the sleep re-routes that
+// guard-owned abort into the structured GuardExceededError on the spot —
+// rather than letting the cancellation escape the guard (which would
+// crash a standalone program) or relying on a non-existent next step
+// boundary to deliver the trip. The stdlib `guard`'s `try` then surfaces
+// it as a "timeoutFailure".
+node main() {
+  const result = guard(time: 20ms) as {
+    sleep(150ms)
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}:${result.error.maxTime}"
+  }
+  return "did not trip"
+}

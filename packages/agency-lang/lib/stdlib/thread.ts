@@ -1,6 +1,7 @@
 import * as smoltalk from "smoltalk";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
+import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -98,6 +99,23 @@ export async function __internal_getTokens(
 export async function _getTokens(): Promise<number> {
   const { stack } = getRuntimeContext();
   return stack.localTokens;
+}
+
+export type ModelCost = ModelUsage;
+
+/**
+ * Per-model usage breakdown from the global `__tokenStats.models`
+ * accumulator (populated by `updateTokenStats` on every LLM call,
+ * including subagent/tool branches that pointer-share it). Returned
+ * sorted by cost descending so callers can show the priciest model
+ * first. Unlike `_getCost`/`_getTokens`, this reads the process-wide
+ * total (not the per-branch accumulator), which is the right scope for
+ * a `/cost` summary that attributes spend across every model used.
+ */
+export async function _getModelCosts(): Promise<ModelCost[]> {
+  const { ctx } = getRuntimeContext();
+  const stats = ctx?.globals?.getTokenStats?.();
+  return normalizeModelUsage(stats?.models);
 }
 
 /**

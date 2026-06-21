@@ -1,0 +1,44 @@
+import { getModelCosts, getTokens } from "std::thread"
+
+// getModelCosts() exposes the per-model usage breakdown from the global
+// __tokenStats accumulator. The deterministic test provider tags every
+// LLM call as model "deterministic" (1 input + 1 output token, so 2 per
+// call), so under tests every call lands in a single "deterministic"
+// entry. These tests verify the end-to-end wiring: updateTokenStats ->
+// globalStore.models -> _getModelCosts -> the agency-side wrapper, and
+// that subagent/tool-branch spend (which pointer-shares __tokenStats)
+// is aggregated into the breakdown too.
+
+def innerTool(): string {
+  """Calls the LLM from inside a tool."""
+  return llm("inner")
+}
+
+// One LLM call → exactly one model entry, named "deterministic".
+node modelBreakdownName(): string {
+  llm("hello")
+  return getModelCosts()[0].model
+}
+
+// One LLM call → one entry. (The breakdown groups by model, not by call.)
+node modelBreakdownCount(): number {
+  llm("hello")
+  return getModelCosts().length
+}
+
+// A tool call runs in its own branch but pointer-shares __tokenStats, so
+// its LLM spend must show up in the breakdown. outer + inner +
+// outer-continues = 3 calls × 2 tokens = 6, all under the one model.
+node modelBreakdownAggregatesToolBranch(): number {
+  llm("outer", { tools: [innerTool] })
+  const byModel = getModelCosts()
+  return byModel[0].inputTokens + byModel[0].outputTokens
+}
+
+// The per-model token total matches getTokens() (no double-counting, no
+// dropped calls) when only one model is in play.
+node modelBreakdownMatchesTotal(): boolean {
+  llm("outer", { tools: [innerTool] })
+  const byModel = getModelCosts()
+  return byModel[0].inputTokens + byModel[0].outputTokens == getTokens()
+}

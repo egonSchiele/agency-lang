@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "modelBreakdownName",
+      "description": "Breakdown entry is keyed by the model name reported by the provider",
+      "input": "",
+      "expectedOutput": "\"deterministic\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "modelBreakdownCount",
+      "description": "Breakdown groups by model: one model used → one entry",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "modelBreakdownAggregatesToolBranch",
+      "description": "Tool-branch LLM spend is aggregated into the per-model breakdown (3 calls × 2 tokens = 6)",
+      "input": "",
+      "expectedOutput": "6",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "innerTool" } },
+        { "return": "inner result" },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "modelBreakdownMatchesTotal",
+      "description": "Per-model token total equals getTokens() (no double-count, no drop)",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "innerTool" } },
+        { "return": "inner result" },
+        { "return": "done" }
+      ]
+    }
+  ]
+}

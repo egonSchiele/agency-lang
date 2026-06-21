@@ -6,6 +6,19 @@ name: "thread"
 
 ## Types
 
+### ModelCost
+
+```ts
+export type ModelCost = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L78))
+
 ### GuardFailureData
 
 ```ts
@@ -18,7 +31,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L101))
 
 ## Functions
 
@@ -40,7 +53,7 @@ Add a system message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L18))
 
 ### userMessage
 
@@ -60,7 +73,7 @@ Add a user message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L29))
 
 ### assistantMessage
 
@@ -80,7 +93,7 @@ Add an assistant message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L40))
 
 ### getCost
 
@@ -104,7 +117,7 @@ Get the cumulative cost (USD, floating point) of all LLM calls
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L51))
 
 ### getTokens
 
@@ -117,7 +130,28 @@ Get the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L70))
+
+### getModelCosts
+
+```ts
+getModelCosts(): ModelCost[]
+```
+
+Get a per-model breakdown of cumulative LLM usage, one entry per
+  model that has been called, sorted by cost descending.
+
+  Unlike getCost()/getTokens() (which read the per-branch accumulator),
+  this reads the process-wide totals across every branch — including
+  subagents and tool calls that run on a different model. Useful for a
+  cost summary that attributes spend per model.
+
+  Each entry has `model` (the model name), `inputTokens`,
+  `outputTokens`, and `cost` (USD).
+
+**Returns:** `ModelCost[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L85))
 
 ### guard
 
@@ -191,4 +225,4 @@ Run a block under a cost limit, a time limit, or both. The block
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L113))

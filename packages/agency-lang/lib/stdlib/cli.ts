@@ -14,6 +14,7 @@ import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError } from "../runtime/errors.js";
+import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -480,42 +481,70 @@ type TurnStats = {
   elapsedMs: number;
   inputTokens: number;
   outputTokens: number;
-  model: string;
+  // Distinct models that did work during the turn, ordered by spend
+  // descending (most expensive first). Empty when no model is known.
+  models: string[];
 };
 
-/** Read the cumulative input/output token counts from the active
- *  RuntimeContext's GlobalStore. Returns zeros when no context is
- *  active or the token-stats slot is missing (defensive — `_runLineRepl`
- *  always runs inside a context, but tests sometimes don't). */
-function readTokenSnapshot(): {
+/** Cumulative per-model token+cost totals, keyed by model name. */
+type ModelTotals = Record<string, { tokens: number; cost: number }>;
+
+type TokenSnapshot = {
   inputTokens: number;
   outputTokens: number;
-  model: string;
-} {
+  models: ModelTotals;
+};
+
+/** Read the cumulative input/output token counts (and per-model
+ *  breakdown) from the active RuntimeContext's GlobalStore. Returns
+ *  zeros when no context is active or the token-stats slot is missing
+ *  (defensive — `_runLineRepl` always runs inside a context, but tests
+ *  sometimes don't). */
+function readTokenSnapshot(): TokenSnapshot {
+  const empty: TokenSnapshot = { inputTokens: 0, outputTokens: 0, models: {} };
   try {
     const { ctx } = getRuntimeContext();
     const stats = ctx?.globals?.getTokenStats?.();
-    if (!stats || typeof stats !== "object") {
-      return { inputTokens: 0, outputTokens: 0, model: "" };
+    if (!stats || typeof stats !== "object") return empty;
+    // Per-model breakdown (updateTokenStats). Snapshotted so the footer
+    // can diff before/after and list the models used *this turn*. Shares
+    // the defensive field-narrowing in `normalizeModelUsage`.
+    const models: ModelTotals = {};
+    for (const m of normalizeModelUsage((stats as { models?: unknown }).models)) {
+      models[m.model] = { tokens: m.inputTokens + m.outputTokens, cost: m.cost };
     }
     const usage = (stats as { usage?: Record<string, unknown> }).usage;
-    // `lastModel` is the model of the most recent LLM call (set in
-    // updateTokenStats). It's cumulative, not a delta — the footer uses
-    // the post-turn value to label which model produced the reply.
-    const lastModel = (stats as { lastModel?: unknown }).lastModel;
-    const model = typeof lastModel === "string" ? lastModel : "";
     if (!usage || typeof usage !== "object") {
-      return { inputTokens: 0, outputTokens: 0, model };
+      return { inputTokens: 0, outputTokens: 0, models };
     }
     return {
       inputTokens: typeof usage.inputTokens === "number" ? usage.inputTokens : 0,
       outputTokens:
         typeof usage.outputTokens === "number" ? usage.outputTokens : 0,
-      model,
+      models,
     };
   } catch {
-    return { inputTokens: 0, outputTokens: 0, model: "" };
+    return empty;
   }
+}
+
+/** Distinct models whose token count grew between two snapshots, ordered
+ *  by cost spent during the turn (descending), name as tiebreak. This is
+ *  what the footer lists after the per-turn token/time stats. */
+function modelsUsedThisTurn(before: TokenSnapshot, after: TokenSnapshot): string[] {
+  const used: { name: string; cost: number }[] = [];
+  for (const [name, a] of Object.entries(after.models)) {
+    const b = before.models[name];
+    const tokenDelta = a.tokens - (b?.tokens ?? 0);
+    const costDelta = a.cost - (b?.cost ?? 0);
+    // A model "did work this turn" if its tokens OR cost grew. With
+    // current providers every call adds tokens, so the cost check is a
+    // belt-and-suspenders guard against a (hypothetical) zero-token but
+    // non-zero-cost call being silently dropped from the footer.
+    if (tokenDelta > 0 || costDelta > 0) used.push({ name, cost: costDelta });
+  }
+  used.sort((x, y) => y.cost - x.cost || (x.name < y.name ? -1 : 1));
+  return used.map((u) => u.name);
 }
 
 /** Format a token count as a short, human-readable string. Below 1000
@@ -535,6 +564,18 @@ function fmtElapsed(ms: number): string {
   const mins = Math.floor(totalSec / 60);
   const secs = totalSec % 60;
   return `${mins}m ${secs}s`;
+}
+
+/** Render the per-turn model list for the footer. The list is already
+ *  ordered by spend descending; we show at most `FOOTER_MODEL_CAP` and
+ *  collapse the rest to `+N more` so a turn that touched many models
+ *  can't blow out the single-line footer. (Use `/cost` for the full
+ *  per-model breakdown.) */
+const FOOTER_MODEL_CAP = 3;
+function fmtModels(models: string[]): string {
+  if (models.length <= FOOTER_MODEL_CAP) return models.join(", ");
+  const shown = models.slice(0, FOOTER_MODEL_CAP).join(", ");
+  return `${shown} +${models.length - FOOTER_MODEL_CAP} more`;
 }
 
 async function printFooter(
@@ -562,7 +603,7 @@ async function printFooter(
   // model is appended only when known.
   if (turn) {
     let stats = `↑${fmtTokens(turn.inputTokens)} ↓${fmtTokens(turn.outputTokens)} ${fmtElapsed(turn.elapsedMs)}`;
-    if (turn.model.length > 0) stats += ` · ${turn.model}`;
+    if (turn.models.length > 0) stats += ` · ${fmtModels(turn.models)}`;
     parts.unshift(stats);
   }
   if (parts.length === 0) return;
@@ -758,7 +799,7 @@ export async function _runLineRepl(
           elapsedMs: Date.now() - turnStartMs,
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
           outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
-          model: tokensAfter.model,
+          models: modelsUsedThisTurn(tokensBefore, tokensAfter),
         });
         continue;
       } finally {
@@ -786,7 +827,7 @@ export async function _runLineRepl(
         elapsedMs: Date.now() - turnStartMs,
         inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
         outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
-        model: tokensAfter.model,
+        models: modelsUsedThisTurn(tokensBefore, tokensAfter),
       });
     }
   } finally {
@@ -1014,6 +1055,8 @@ export const _internal = {
   pasteJoin,
   classifyPasteKey,
   readMultiline,
+  modelsUsedThisTurn,
+  fmtModels,
 };
 
 export function _clearScreen(): void {

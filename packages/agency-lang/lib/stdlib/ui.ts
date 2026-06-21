@@ -15,6 +15,7 @@ import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
+import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
 import { color } from "@/utils/termcolors.js";
 
@@ -841,6 +842,7 @@ export async function _promptsAutocomplete(
   items: PromptsChoiceItem[],
   allowFreeText: boolean,
   hint: string = "",
+  cancelOnEscape: boolean = false,
 ): Promise<any> {
   _assertLineModeAvailable("autocomplete");
   const result = await _runPrompt({
@@ -851,7 +853,18 @@ export async function _promptsAutocomplete(
     choices: items.map((it) => ({ title: `${color.cyan(it.key)} - ${it.label}`, value: it.key })),
     suggest: _buildSuggest(items, allowFreeText),
   });
-  if (isFailure(result)) return result;
+  if (isFailure(result)) {
+    // When the caller opts in (e.g. a policy approval menu), Escape means
+    // "cancel the whole request" rather than "re-prompt". Escalate the
+    // cancellation to AgencyCancelledError: __tryCall and the generated
+    // function catches both re-throw it, so it unwinds to the REPL exactly
+    // like an Esc during the thinking phase. (Ctrl+C still exits the
+    // process inside _runPrompt before we get here.)
+    if (cancelOnEscape) {
+      throw new AgencyCancelledError("cancelled by user");
+    }
+    return result;
+  }
 
   const raw = String(result.value);
   if (raw.startsWith(AUTOCOMPLETE_FREE_TEXT_PREFIX)) {

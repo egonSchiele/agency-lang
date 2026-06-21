@@ -735,8 +735,12 @@ def askUser(intr: any): AskUserResult {
     label: "reject always"
   })
 
+  // `allowCancel: true` makes Escape cancel the whole request (raises a
+  // cancellation that unwinds the turn back to the REPL prompt) instead of
+  // re-prompting. Rejecting a single action (and optionally telling the
+  // agent what to do instead) is still available via the "r" option.
   const answer = withLock("std::tty") as {
-    return chooseOption(title, body, items, allowFreeText: true)
+    return chooseOption(title, body, items, allowFreeText: true, allowCancel: true)
   }
   match(answer) {
     "a" => return {
@@ -834,9 +838,10 @@ export def _handler(intr: any): any {
     return reject(answer.reason)
   }
 
-  // Interactive reject (user picked "r"): ask for an optional reason
-  // so the LLM sees concrete feedback as the tool's return value.
-  const reason = input("Why are you rejecting? (press enter to skip) ")
+  // Interactive reject (user picked "r"): ask for optional guidance so
+  // the LLM sees concrete feedback as the tool's return value and the
+  // agent can course-correct without ending the turn.
+  const reason = input("What should the agent do instead? (press enter to skip) ")
   if (reason == "") {
     return reject()
   }

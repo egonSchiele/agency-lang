@@ -13,6 +13,7 @@ import { modifiers, RESET, styles } from "@/utils/termcolors.js"
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { isFailure } from "../runtime/result.js";
+import { isAbortError } from "../runtime/errors.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -407,6 +408,58 @@ function installSlashTrigger(
 }
 
 /**
+ * While a turn is in flight, intercept a bare Esc keypress and invoke
+ * `onEscape` (which cancels the current request). Other keys pass through
+ * to readline as usual, so type-ahead still works. Returns a teardown that
+ * restores the original `_ttyWrite`; the caller MUST call it once the turn
+ * settles so idle-prompt Esc behaves normally again. No-op on non-TTY.
+ *
+ * Only a bare Esc fires: readline parses Esc to `key.name === "escape"`,
+ * while arrow keys and other escape sequences parse to their own names
+ * (`up`, `down`, ...), so they don't trip the cancel.
+ */
+function installCancelKey(
+  rl: readline.Interface,
+  useTTY: boolean,
+  onEscape: () => void,
+): () => void {
+  if (!useTTY) return () => { };
+  const rlAny = rl as unknown as {
+    _ttyWrite: (s: unknown, key: { name?: string; sequence?: string }) => void;
+  };
+  const originalTtyWrite = rlAny._ttyWrite;
+  rlAny._ttyWrite = function (
+    this: typeof rlAny,
+    s: unknown,
+    key: { name?: string; sequence?: string },
+  ): void {
+    if (key && key.name === "escape") {
+      onEscape();
+      return;
+    }
+    originalTtyWrite.call(this, s, key);
+  };
+  return (): void => {
+    rlAny._ttyWrite = originalTtyWrite;
+  };
+}
+
+/** Safely fetch the active RuntimeContext, or null when none is bound
+ *  (e.g. tests drive `_runLineRepl` without a runtime). */
+function activeCtxOrNull(): {
+  cancel: (r?: string) => void;
+  resetCancel: () => void;
+  readonly aborted: boolean;
+} | null {
+  try {
+    const { ctx } = getRuntimeContext();
+    return (ctx as any) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Snapshot of the per-turn stats `_runLineRepl` collects before
  * calling `onSubmit` and after it returns. `printFooter` projects the
  * delta into the footer so the user can see at a glance how many
@@ -534,6 +587,13 @@ export async function _runLineRepl(
     history: initialHistory,
     historySize: historyMax,
     removeHistoryDuplicates: true,
+    // A lone Esc is ambiguous (it's also the lead byte of escape sequences
+    // like arrow keys), so readline waits `escapeCodeTimeout` ms before
+    // delivering it as the `escape` key. The 500ms default made Esc-to-
+    // cancel feel laggy (~1s). 50ms keeps cancellation snappy while still
+    // leaving ample time for a real escape sequence's bytes — which arrive
+    // in one burst on a local TTY — to be parsed as a sequence.
+    escapeCodeTimeout: 50,
     // Tab completion fallback for the slash-command palette.
     // Submitting a bare `/` opens the `prompts.autocomplete` picker
     // (see `openSlashPalette`); the completer is the "Tab to fill"
@@ -667,16 +727,37 @@ export async function _runLineRepl(
       const tokensBefore = readTokenSnapshot();
       activeStopSpinner = startSpinner(useTTY);
 
+      // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
+      // which aborts the active LLM fetch; an AgencyCancelledError then
+      // propagates out of `onSubmit` and is caught below. Torn down in the
+      // `finally` so idle-prompt Esc is unaffected.
+      const turnCtx = activeCtxOrNull();
+      const teardownCancelKey = installCancelKey(rl, useTTY, () => {
+        // Stop the spinner the instant Esc is pressed so the user gets
+        // immediate feedback, then abort the in-flight request. The
+        // AgencyCancelledError propagates out and the catch below prints
+        // "cancelled".
+        stopActiveSpinner();
+        turnCtx?.cancel("cancelled by user");
+      });
+
       try {
         reply = await callBridgeFn(onSubmit, line);
       } catch (err: any) {
         stopActiveSpinner();
-        const msg = err?.message ?? String(err);
-        process.stdout.write(`Error: ${msg}\n`);
-        // Still print the footer on error so the user sees how long
-        // the failed turn ran and whether tokens flowed. Useful when
-        // the turn died after a partial LLM response.
         const tokensAfter = readTokenSnapshot();
+        if (isAbortError(err)) {
+          // User pressed Esc: the turn was cancelled, not a real failure.
+          // The thread was already repaired in runPrompt; the abort
+          // controller is reset in the `finally` below. Just print a
+          // notice and reprompt.
+          process.stdout.write(`${DIM}cancelled${COLOR_RESET}\n`);
+        } else {
+          const msg = err?.message ?? String(err);
+          process.stdout.write(`Error: ${msg}\n`);
+        }
+        // Still print the footer so the user sees how long the turn ran
+        // and whether tokens flowed (useful on both cancel and error).
         await printFooter(status, useColor, {
           elapsedMs: Date.now() - turnStartMs,
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
@@ -684,6 +765,14 @@ export async function _runLineRepl(
           model: tokensAfter.model,
         });
         continue;
+      } finally {
+        teardownCancelKey();
+        // Reset the abort controller whenever this turn left it aborted —
+        // covers both the cancelled-with-error path above AND the race
+        // where Esc fired but the turn finished before hitting a
+        // cancellation checkpoint. Without this, the next turn's first LLM
+        // call would see an already-aborted signal and fail immediately.
+        if (turnCtx?.aborted) turnCtx.resetCancel();
       }
       stopActiveSpinner();
       if (reply === false) break;

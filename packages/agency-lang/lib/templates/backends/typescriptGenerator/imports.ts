@@ -21,6 +21,7 @@ import {
   rewindFrom as _rewindFrom,
   RestoreSignal,
   GuardExceededError,
+  isAbortError as __isAbortError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,

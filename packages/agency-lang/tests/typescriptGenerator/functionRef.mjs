@@ -16,6 +16,7 @@ import {
   rewindFrom as _rewindFrom,
   RestoreSignal,
   GuardExceededError,
+  isAbortError as __isAbortError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -226,6 +227,15 @@ return;
 if (__error instanceof GuardExceededError) {
   throw __error;
 }
+// A cancellation (user pressed Esc / an abort fired) must propagate
+// untouched: converting it to a Failure here would (a) let the agent
+// limp onward through more soon-to-abort calls instead of stopping
+// promptly, and (b) surface the abort as a logged ERROR + a Failure the
+// REPL can't recognize as a cancel. The runtime is built to propagate
+// AgencyCancelledError (see prompt.ts / hooks.ts / result.ts); honor that.
+if (__isAbortError(__error)) {
+  throw __error;
+}
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
 // inspect the result (the common case for void side-effect calls)
@@ -362,6 +372,15 @@ return;
 // the trip and every guarded block would appear to succeed even
 // over budget. See lib/runtime/guard.ts.
 if (__error instanceof GuardExceededError) {
+  throw __error;
+}
+// A cancellation (user pressed Esc / an abort fired) must propagate
+// untouched: converting it to a Failure here would (a) let the agent
+// limp onward through more soon-to-abort calls instead of stopping
+// promptly, and (b) surface the abort as a logged ERROR + a Failure the
+// REPL can't recognize as a cancel. The runtime is built to propagate
+// AgencyCancelledError (see prompt.ts / hooks.ts / result.ts); honor that.
+if (__isAbortError(__error)) {
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -522,6 +541,15 @@ return;
 if (__error instanceof GuardExceededError) {
   throw __error;
 }
+// A cancellation (user pressed Esc / an abort fired) must propagate
+// untouched: converting it to a Failure here would (a) let the agent
+// limp onward through more soon-to-abort calls instead of stopping
+// promptly, and (b) surface the abort as a logged ERROR + a Failure the
+// REPL can't recognize as a cancel. The runtime is built to propagate
+// AgencyCancelledError (see prompt.ts / hooks.ts / result.ts); honor that.
+if (__isAbortError(__error)) {
+  throw __error;
+}
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
 // inspect the result (the common case for void side-effect calls)
@@ -666,6 +694,9 @@ await callHook({
       throw __error
     }
     if (__error instanceof GuardExceededError) {
+      throw __error
+    }
+    if (__isAbortError(__error)) {
       throw __error
     }
     {

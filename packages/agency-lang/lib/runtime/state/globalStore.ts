@@ -52,6 +52,11 @@ export class GlobalStore {
       // Read by the REPL footer (distinct models used this turn) and
       // `/cost` (cumulative per-model breakdown).
       models: {},
+      // Cumulative ms this execution spent blocked on human input
+      // (approval menus, prompts). The REPL footer subtracts the
+      // per-turn delta from wall-clock so reported time excludes human
+      // deliberation. See recordHumanWaitMs/readHumanWaitMs in utils.ts.
+      humanWaitMs: 0,
       usage: {
         inputTokens: 0,
         outputTokens: 0,

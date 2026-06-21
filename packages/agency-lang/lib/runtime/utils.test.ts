@@ -4,11 +4,8 @@ import {
   updateTokenStats,
   recordHumanWaitMs,
   readHumanWaitMs,
-  measureHumanWait,
 } from "./utils.js";
 import { GlobalStore } from "./state/globalStore.js";
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const usage = (i: number, o: number) => ({
   inputTokens: i,
@@ -137,43 +134,48 @@ describe("updateTokenStats per-model breakdown", () => {
 });
 
 describe("human-wait clock", () => {
-  // The clock is process-global and monotonic, so every assertion is on a
-  // before/after DELTA rather than an absolute value.
-  it("accumulates recorded durations", () => {
-    const before = readHumanWaitMs();
-    recordHumanWaitMs(100);
-    recordHumanWaitMs(50);
-    expect(readHumanWaitMs() - before).toBe(150);
+  // State lives in the per-execution GlobalStore (no process-global), so
+  // each test gets a fresh, isolated store — proving the isolation the
+  // owner asked for: two stores never share a counter.
+  it("accumulates recorded durations in the store", () => {
+    const globals = GlobalStore.withTokenStats();
+    recordHumanWaitMs(globals, 100);
+    recordHumanWaitMs(globals, 50);
+    expect(readHumanWaitMs(globals)).toBe(150);
+  });
+
+  it("starts at zero for a fresh store", () => {
+    expect(readHumanWaitMs(GlobalStore.withTokenStats())).toBe(0);
   });
 
   it("ignores non-positive durations", () => {
-    const before = readHumanWaitMs();
-    recordHumanWaitMs(0);
-    recordHumanWaitMs(-25);
-    expect(readHumanWaitMs() - before).toBe(0);
+    const globals = GlobalStore.withTokenStats();
+    recordHumanWaitMs(globals, 0);
+    recordHumanWaitMs(globals, -25);
+    expect(readHumanWaitMs(globals)).toBe(0);
   });
 
-  it("measureHumanWait charges the time fn spends blocked", async () => {
-    const before = readHumanWaitMs();
-    const result = await measureHumanWait(async () => {
-      await sleep(40);
-      return "done";
-    });
-    const charged = readHumanWaitMs() - before;
-    expect(result).toBe("done");
-    // Generous lower bound to stay non-flaky while proving the wait was
-    // measured around the awaited work.
-    expect(charged).toBeGreaterThanOrEqual(30);
+  it("isolates counters across concurrent executions", () => {
+    const a = GlobalStore.withTokenStats();
+    const b = GlobalStore.withTokenStats();
+    recordHumanWaitMs(a, 100);
+    recordHumanWaitMs(b, 30);
+    expect(readHumanWaitMs(a)).toBe(100);
+    expect(readHumanWaitMs(b)).toBe(30);
   });
 
-  it("measureHumanWait still charges when fn throws", async () => {
-    const before = readHumanWaitMs();
-    await expect(
-      measureHumanWait(async () => {
-        await sleep(40);
-        throw new Error("cancelled");
-      }),
-    ).rejects.toThrow("cancelled");
-    expect(readHumanWaitMs() - before).toBeGreaterThanOrEqual(30);
+  it("defaults to 0 for a token-stats blob missing the slot (old checkpoint)", () => {
+    const globals = GlobalStore.withTokenStats();
+    delete globals.getTokenStats().humanWaitMs;
+    expect(readHumanWaitMs(globals)).toBe(0);
+    // and recording backfills it
+    recordHumanWaitMs(globals, 42);
+    expect(readHumanWaitMs(globals)).toBe(42);
+  });
+
+  it("is a no-op (no throw) when the store has no token-stats slot", () => {
+    const globals = new GlobalStore();
+    expect(() => recordHumanWaitMs(globals, 50)).not.toThrow();
+    expect(readHumanWaitMs(globals)).toBe(0);
   });
 });

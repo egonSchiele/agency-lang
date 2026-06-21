@@ -173,37 +173,30 @@ export function updateTokenStats(args: {
 }
 
 // ── Human-wait clock ──────────────────────────────────────────────────
-// Cumulative milliseconds the process has spent BLOCKED on human input —
-// interrupt approval menus, prompt(), askUser, reject free-text. Every
-// line-mode human prompt funnels through ui.ts's `_runPrompt`, which wraps
-// its body in `measureHumanWait`. The REPL footer snapshots this counter
-// before/after a turn and subtracts the delta from wall-clock elapsed, so
-// the reported "time taken" reflects LLM + tool + agent compute only and
-// never the seconds a human spent deciding. Monotonic and process-global
-// (the single-process REPL serves one human at a time); `performance.now`
-// keeps it immune to wall-clock adjustments.
-let __humanWaitMs = 0;
+// Cumulative milliseconds an execution has spent BLOCKED on human input —
+// interrupt approval menus, prompt(), askUser, reject free-text. The REPL
+// footer snapshots this before/after a turn and subtracts the delta from
+// wall-clock elapsed, so the reported "time taken" reflects LLM + tool +
+// agent compute only, never the seconds a human spent deciding.
+//
+// State lives in the per-execution `GlobalStore` (the `__internal`
+// bookkeeping blob, alongside the token stats the footer already reads),
+// NOT a module-level variable — so concurrent agent runs each get their
+// own isolated counter. See docs/dev/globalstore.md.
 
-/** Add a measured human-input blocking duration (ms) to the cumulative
- *  clock. Non-positive durations are ignored. */
-export function recordHumanWaitMs(ms: number): void {
-  if (ms > 0) __humanWaitMs += ms;
+/** Add a measured human-input blocking duration (ms) to this execution's
+ *  human-wait clock. Non-positive durations and a missing store are
+ *  ignored (defensive — a prompt may run outside an agency execution). */
+export function recordHumanWaitMs(globals: GlobalStore, ms: number): void {
+  if (ms <= 0) return;
+  const stats = globals?.getTokenStats?.();
+  if (!stats) return;
+  stats.humanWaitMs = (typeof stats.humanWaitMs === "number" ? stats.humanWaitMs : 0) + ms;
 }
 
-/** Read the cumulative human-wait clock (ms). Snapshot before/after a turn
- *  and subtract the delta from wall-clock elapsed. */
-export function readHumanWaitMs(): number {
-  return __humanWaitMs;
-}
-
-/** Run `fn`, charging the time it spends blocked to the human-wait clock.
- *  Records on both the resolve and throw paths (so a cancelled prompt
- *  still doesn't count human deliberation as compute time). */
-export async function measureHumanWait<T>(fn: () => Promise<T>): Promise<T> {
-  const start = performance.now();
-  try {
-    return await fn();
-  } finally {
-    recordHumanWaitMs(performance.now() - start);
-  }
+/** Read this execution's cumulative human-wait clock (ms). Snapshot
+ *  before/after a turn and subtract the delta from wall-clock elapsed. */
+export function readHumanWaitMs(globals: GlobalStore): number {
+  const v = globals?.getTokenStats?.()?.humanWaitMs;
+  return typeof v === "number" ? v : 0;
 }

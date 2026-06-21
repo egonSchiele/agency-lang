@@ -528,6 +528,19 @@ function readTokenSnapshot(): TokenSnapshot {
   }
 }
 
+/** Read this execution's cumulative human-wait clock (ms) from the active
+ *  RuntimeContext's GlobalStore. Returns 0 when no context is active
+ *  (defensive, mirroring `readTokenSnapshot`). Snapshot before/after a
+ *  turn; the delta is the time the turn spent blocked on human input. */
+function readHumanWaitSnapshot(): number {
+  try {
+    const { ctx } = getRuntimeContext();
+    return ctx?.globals ? readHumanWaitMs(ctx.globals) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Distinct models whose token count grew between two snapshots, ordered
  *  by cost spent during the turn (descending), name as tiebreak. This is
  *  what the footer lists after the per-turn token/time stats. */
@@ -774,7 +787,7 @@ export async function _runLineRepl(
       // Snapshot the human-wait clock too, so the footer can subtract any
       // time this turn spends blocked on an approval menu / prompt (which
       // run inline inside the turn) from the wall-clock elapsed.
-      const humanWaitBefore = readHumanWaitMs();
+      const humanWaitBefore = readHumanWaitSnapshot();
       activeStopSpinner = startSpinner(useTTY);
 
       // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
@@ -811,7 +824,7 @@ export async function _runLineRepl(
         await printFooter(status, useColor, {
           elapsedMs: computeTurnElapsedMs(
             Date.now() - turnStartMs,
-            readHumanWaitMs() - humanWaitBefore,
+            readHumanWaitSnapshot() - humanWaitBefore,
           ),
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
           outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
@@ -842,7 +855,7 @@ export async function _runLineRepl(
       await printFooter(status, useColor, {
         elapsedMs: computeTurnElapsedMs(
           Date.now() - turnStartMs,
-          readHumanWaitMs() - humanWaitBefore,
+          readHumanWaitSnapshot() - humanWaitBefore,
         ),
         inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
         outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,

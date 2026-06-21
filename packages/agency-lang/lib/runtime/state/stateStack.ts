@@ -745,3 +745,44 @@ export class StateStack {
     return stateStack;
   }
 }
+
+/** Seed a child branch's `localCost` / `localTokens` from the parent stack
+ *  unless they're already populated (e.g. restored from a checkpoint on
+ *  resume). Idempotent — a branch is "fresh" iff it has zero cost AND zero
+ *  tokens. Also records the immutable `seedCost` / `seedTokens` baseline so
+ *  `propagateBranchCost` can compute this branch's delta independently of
+ *  the parent's later mutations (sibling branches may fold their spend into
+ *  the parent first). Shared by `Runner` (fork/parallel/race) and
+ *  `PromptRunner` (LLM tool dispatch) so `getCost()`/`getTokens()` are
+ *  cumulative across ALL child branches, including subagent tools. */
+export function seedBranchCost(
+  branchStack: StateStack,
+  parentStack: StateStack,
+): void {
+  const isFresh =
+    branchStack.localCost === 0 && branchStack.localTokens === 0;
+  if (!isFresh) return;
+  branchStack.localCost = parentStack.localCost;
+  branchStack.localTokens = parentStack.localTokens;
+  branchStack.seedCost = parentStack.localCost;
+  branchStack.seedTokens = parentStack.localTokens;
+}
+
+/** Propagate cost/token deltas from a set of branches back to the parent
+ *  stack. Delta = `branch.localCost - branch.seedCost` (the baseline
+ *  captured at seed time). Using the per-branch seed rather than the
+ *  parent's current totals keeps the math correct when sibling branches
+ *  already folded their spend in. Call BEFORE popBranches/deleteBranch. */
+export function propagateBranchCost(
+  branches: BranchState[],
+  parentStack: StateStack,
+): void {
+  let costDelta = 0;
+  let tokensDelta = 0;
+  for (const branch of branches) {
+    costDelta += branch.stack.localCost - branch.stack.seedCost;
+    tokensDelta += branch.stack.localTokens - branch.stack.seedTokens;
+  }
+  parentStack.localCost += costDelta;
+  parentStack.localTokens += tokensDelta;
+}

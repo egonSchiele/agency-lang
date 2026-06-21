@@ -1,0 +1,20 @@
+import { getTokens } from "std::thread"
+
+// A tool that itself makes an LLM call. When the outer llm() dispatches
+// this as a tool, it runs in its own branch stack — so its token/cost
+// spend must propagate back to the parent for getTokens()/getCost() to be
+// cumulative.
+def innerTool(): string {
+  """Calls the LLM from inside a tool."""
+  return llm("inner")
+}
+
+// Three LLM calls happen: (1) the outer call returns a tool call, (2) the
+// tool's own llm() runs, (3) the outer call resumes and returns. The
+// deterministic provider bills 2 synthetic tokens per call, so a correct
+// cumulative total is 6 — proving the tool (subagent) branch's spend rolled
+// up. Before the fix this returned 4 (the tool branch's 2 were dropped).
+node main(): number {
+  llm("outer", { tools: [innerTool] })
+  return getTokens()
+}

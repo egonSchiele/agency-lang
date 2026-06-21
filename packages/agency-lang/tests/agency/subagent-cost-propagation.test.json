@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A tool's own LLM spend propagates to the parent stack, so getTokens() is cumulative across subagent/tool branches",
+      "input": "",
+      "expectedOutput": "6",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "innerTool" } },
+        { "return": "inner result" },
+        { "return": "done" }
+      ]
+    }
+  ]
+}

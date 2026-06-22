@@ -106,6 +106,61 @@ type NumberInRange(low: number, high: number) = number
     expect(p.kind).toBe("type");
     expect(p.valueParams).toBeUndefined();
   });
+
+  it("records validatorImports for a value-parameterized validated alias", () => {
+    const symbols = parseAndClassify(`
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+`);
+    const r = symbols.NumberInRange as any;
+    expect(r.kind).toBe("type");
+    expect(r.validatorImports).toEqual([
+      { name: "min", modulePath: "std::validators" },
+      { name: "max", modulePath: "std::validators" },
+    ]);
+  });
+
+  it("honors import aliasing when recording validatorImports", () => {
+    const symbols = parseAndClassify(`
+import { min as atLeast } from "std::validators"
+
+@validate(atLeast.partial(n: low))
+type AtLeast(low: number) = number
+`);
+    const r = symbols.AtLeast as any;
+    expect(r.validatorImports).toEqual([
+      { name: "atLeast", modulePath: "std::validators" },
+    ]);
+  });
+
+  it("omits validatorImports for a locally-defined validator", () => {
+    const symbols = parseAndClassify(`
+safe def positive(n: number, value: number): Result { return success(value) }
+
+@validate(positive.partial(n: low))
+type AtLeast(low: number) = number
+`);
+    const r = symbols.AtLeast as any;
+    // The validator lives in this same module (not imported), so there is
+    // nothing to replay into a consumer — no validatorImports recorded.
+    expect(r.validatorImports).toBeUndefined();
+  });
+
+  it("does not record validatorImports for a bare (non-value-param) alias", () => {
+    const symbols = parseAndClassify(`
+import { isEmail } from "std::validators"
+
+@validate(isEmail)
+type Email = string
+`);
+    const e = symbols.Email as any;
+    expect(e.kind).toBe("type");
+    // Bare aliases emit their descriptor const in the defining module where
+    // validators are already in scope, so no transitive import is needed.
+    expect(e.validatorImports).toBeUndefined();
+  });
 });
 
 describe("SymbolTable direct interrupt collection", () => {

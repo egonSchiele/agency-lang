@@ -77,6 +77,27 @@ export type ValueParam = {
 };
 
 /**
+ * A validator function referenced by an alias's `@validate(...)` tag,
+ * together with the module path it was imported from in the alias's
+ * defining module.
+ *
+ * Value-parameterized aliases emit their validation descriptor *inline at
+ * every use site* (the schema differs per use, so no single descriptor
+ * const can live in the defining module). That inlined descriptor names
+ * the validator functions directly — e.g. `min.partial({ n: 1 })` — so the
+ * consuming module must import those functions too. We capture where each
+ * one came from at symbol-table build time (where the defining module's
+ * imports are visible) and replay those imports into the consumer's
+ * generated output. See `validatorImports` on TypeAliasEntry.
+ */
+export type ValidatorImport = {
+  /** Validator identifier as referenced in the `@validate(...)` tag. */
+  name: string;
+  /** Agency module path it was imported from (e.g. `"std::validators"`). */
+  modulePath: string;
+};
+
+/**
  * Entry in the type alias registry. For non-generic aliases `typeParams`
  * is absent; for generic aliases it carries the declared parameters.
  *
@@ -98,6 +119,14 @@ export type TypeAliasEntry = {
   /** True when the alias was declared with `effectSet` (not `type`).
    *  Lets the effect-set resolver tell an effect set from a plain alias. */
   isEffectSet?: boolean;
+  /**
+   * For value-parameterized aliases whose `@validate(...)` tags reference
+   * imported validator functions: where each validator was imported from in
+   * the defining module. Lets a consuming module that imports this alias
+   * replay those imports so the inlined validator chain resolves. See
+   * {@link ValidatorImport}.
+   */
+  validatorImports?: ValidatorImport[];
 };
 
 export type ResultType = {

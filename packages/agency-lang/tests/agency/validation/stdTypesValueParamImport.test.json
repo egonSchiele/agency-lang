@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"okNum\":true,\"lowNum\":false,\"highNum\":false,\"okStr\":true,\"shortStr\":false,\"longStr\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Importing value-parameterized validated aliases (NumberInRange, StringWithLength) from std::types transitively imports the min/max/minLength/maxLength validators their @validate tags reference, so runtime validation runs instead of crashing with 'min is not defined'."
+    }
+  ]
+}

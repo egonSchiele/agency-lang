@@ -7,6 +7,7 @@ import type {
   Tag,
   TypeAliasEntry,
   TypeParam,
+  ValidatorImport,
   ValueParam,
   VariableType,
 } from "./types.js";
@@ -48,6 +49,7 @@ export class ScopedTypeAliases {
     tags?: Tag[],
     valueParams?: ValueParam[],
     isEffectSet?: boolean,
+    validatorImports?: ValidatorImport[],
   ): void {
     if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
     const entry: TypeAliasEntry = { body };
@@ -55,6 +57,9 @@ export class ScopedTypeAliases {
     if (valueParams) entry.valueParams = valueParams;
     if (tags && tags.length > 0) entry.tags = tags;
     if (isEffectSet) entry.isEffectSet = true;
+    if (validatorImports && validatorImports.length > 0) {
+      entry.validatorImports = validatorImports;
+    }
     this.byScope[scopeKey][name] = entry;
   }
 
@@ -288,6 +293,7 @@ export function buildCompilationUnit(
             r.symbol.tags,
             r.symbol.valueParams,
             r.symbol.isEffectSet,
+            r.symbol.validatorImports,
           );
           // Imported type's body may reference other aliases from its
           // module — pull those transitively too.
@@ -370,6 +376,8 @@ function pullTransitiveAliases(
       found.typeParams,
       found.tags,
       found.valueParams,
+      undefined,
+      found.validatorImports,
     );
     // Nested aliases referenced by this type should resolve in the file
     // the type was actually found in (not the original preferFile) — the
@@ -391,7 +399,7 @@ function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType; typeParams?: TypeParam[]; valueParams?: ValueParam[]; tags?: Tag[]; file: string } | undefined {
+): { aliasedType: VariableType; typeParams?: TypeParam[]; valueParams?: ValueParam[]; tags?: Tag[]; validatorImports?: ValidatorImport[]; file: string } | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
     if (fileSym?.kind === "type") {
@@ -400,6 +408,7 @@ function resolveTypeFromFile(
         typeParams: fileSym.typeParams,
         valueParams: fileSym.valueParams,
         tags: fileSym.tags,
+        validatorImports: fileSym.validatorImports,
         file: preferFile,
       };
     }
@@ -412,6 +421,7 @@ function resolveTypeFromFile(
         typeParams: sym.typeParams,
         valueParams: sym.valueParams,
         tags: sym.tags,
+        validatorImports: sym.validatorImports,
         file,
       };
     }

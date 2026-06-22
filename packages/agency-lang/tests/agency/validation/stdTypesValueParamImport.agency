@@ -1,0 +1,33 @@
+// Regression test: importing a value-parameterized validated alias from
+// another module must transitively pull in the validator functions its
+// `@validate(...)` tag references. `NumberInRange` (std::types) references
+// `min`/`max` and `StringWithLength` references `minLength`/`maxLength`,
+// all defined in std::validators. Before the transitive-import fix this
+// crashed at runtime with `ReferenceError: min is not defined` because the
+// inlined validator chain emitted bare `min`/`max` identifiers that were
+// never imported into the consuming module.
+//
+// Uses BOTH aliases so the codegen has to resolve and dedupe several
+// validators across two value-parameterized aliases. Returns per-assertion
+// isSuccess() flags so a regression diff pinpoints which check failed.
+
+import { NumberInRange, StringWithLength } from "std::types"
+
+node main() {
+  const okNum: NumberInRange(1, 10)! = 5
+  const lowNum: NumberInRange(1, 10)! = 0
+  const highNum: NumberInRange(1, 10)! = 11
+
+  const okStr: StringWithLength(2, 5)! = "abc"
+  const shortStr: StringWithLength(2, 5)! = "a"
+  const longStr: StringWithLength(2, 5)! = "abcdef"
+
+  return {
+    okNum: isSuccess(okNum),
+    lowNum: isSuccess(lowNum),
+    highNum: isSuccess(highNum),
+    okStr: isSuccess(okStr),
+    shortStr: isSuccess(shortStr),
+    longStr: isSuccess(longStr)
+  }
+}

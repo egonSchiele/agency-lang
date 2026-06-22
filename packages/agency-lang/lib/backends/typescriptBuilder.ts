@@ -69,6 +69,7 @@ import { HandleBlock } from "../types/handleBlock.js";
 import { WithModifier } from "../types/withModifier.js";
 import { IfElse } from "../types/ifElse.js";
 import {
+  getImportedNames,
   ImportNodeStatement,
   ImportStatement,
 } from "../types/importStatement.js";
@@ -200,6 +201,14 @@ export class TypeScriptBuilder {
   // Import tracking
   private importStatements: TsNode[] = [];
   private toolRegistrations: TsNode[] = [];
+  /** Local names the user explicitly imported, across all import statements.
+   *  Used to dedupe transitive validator imports so we never re-declare a
+   *  name the module already binds. */
+  private directlyImportedNames: Set<string> = new Set();
+  /** Validators that imported value-parameterized aliases reference, grouped
+   *  by the (Agency) module path to import them from. Emitted, deduped,
+   *  after all import statements are processed. See ValidatorImport. */
+  private transitiveValidatorImports: Record<string, Set<string>> = {};
 
   // Function tracking
   private functionsUsed: Set<string> = new Set();
@@ -438,6 +447,8 @@ export class TypeScriptBuilder {
       globalOrder: this.initPlan?.globalLocalOrder,
     });
     this.generatedStatements.push(...partition.topLevelStatements);
+
+    this.emitTransitiveValidatorImports();
 
     return assembleSections({
       moduleId: this.moduleId,
@@ -1262,6 +1273,30 @@ export class TypeScriptBuilder {
       if (!entry?.valueParams || entry.valueParams.length === 0) return false;
       return !entry.typeParams || entry.typeParams.length === 0;
     };
+    // Record every local name the user imports so transitive validator
+    // imports can avoid re-declaring an already-bound name.
+    for (const nameType of node.importedNames) {
+      for (const local of getImportedNames(nameType)) {
+        this.directlyImportedNames.add(local);
+      }
+    }
+    // An imported value-parameterized validated alias inlines its validator
+    // chain at every use site, naming validator functions that live in the
+    // alias's defining module. Replay those imports into this module. (Bare
+    // aliases don't need this — their descriptor const is emitted in the
+    // defining module with validators already in scope.)
+    for (const nameType of node.importedNames) {
+      if (nameType.type !== "namedImport") continue;
+      for (const name of nameType.importedNames) {
+        const entry = aliasesFull[name];
+        if (!entry?.validatorImports) continue;
+        for (const vi of entry.validatorImports) {
+          (this.transitiveValidatorImports[vi.modulePath] ??= new Set()).add(
+            vi.name,
+          );
+        }
+      }
+    }
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport": {
@@ -1314,6 +1349,32 @@ export class TypeScriptBuilder {
       }
     }
     return importNode;
+  }
+
+  /**
+   * Emit import declarations for validator functions that imported
+   * value-parameterized aliases reference in their inlined validation
+   * chains (see ValidatorImport). Deduped against names the user already
+   * imports and against each other, so we never re-declare a binding.
+   * Called once, after every import statement has been processed.
+   */
+  private emitTransitiveValidatorImports(): void {
+    const fromFile = this.outputFile ?? path.resolve(this.moduleId);
+    const alreadyBound = new Set<string>(this.directlyImportedNames);
+    for (const [modulePath, names] of Object.entries(
+      this.transitiveValidatorImports,
+    )) {
+      const toImport = [...names].filter((n) => !alreadyBound.has(n)).sort();
+      if (toImport.length === 0) continue;
+      for (const n of toImport) alreadyBound.add(n);
+      this.importStatements.push(
+        ts.importDecl({
+          importKind: "named",
+          names: toImport,
+          from: toCompiledImportPath(modulePath, fromFile),
+        }),
+      );
+    }
   }
 
   private processImportNodeStatement(_node: ImportNodeStatement): TsNode {

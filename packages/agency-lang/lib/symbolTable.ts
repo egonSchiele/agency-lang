@@ -5,9 +5,11 @@ import type { AgencyConfig } from "./config.js";
 import type {
   AgencyNode,
   AgencyProgram,
+  Expression,
   FunctionParameter,
   Tag,
   TypeParam,
+  ValidatorImport,
   ValueParam,
   VariableType,
 } from "./types.js";
@@ -80,6 +82,11 @@ export type TypeSymbol = {
   /** True when declared via `effectSet` (not `type`). Carried through imports
    *  so an imported effect set is recognized as one. */
   isEffectSet?: boolean;
+  /** For value-parameterized aliases: where each validator function referenced
+   *  by a `@validate(...)` tag was imported from in this module. Lets a
+   *  consuming module replay those imports so the inlined validator chain
+   *  resolves. See {@link ValidatorImport}. */
+  validatorImports?: ValidatorImport[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -318,6 +325,70 @@ export function collectTypeAliasTags(program: AgencyProgram): Record<string, Tag
 }
 
 /**
+ * Head free identifier of a `@validate(...)` tag argument — the validator
+ * function that needs to be in scope at the use site:
+ *   - `isEmail`            → "isEmail"   (bare identifier)
+ *   - `min.partial(n: 0)`  → "min"       (PFA: identifier at the chain base)
+ *   - `makeValidator(...)` → "makeValidator" (direct call)
+ * Returns undefined for argument shapes that reference no free identifier
+ * (string/number/object literals, etc.).
+ */
+function validatorHeadIdentifier(expr: Expression): string | undefined {
+  switch (expr.type) {
+    case "variableName":
+      return (expr as { value: string }).value;
+    case "functionCall":
+      return (expr as { functionName: string }).functionName;
+    case "valueAccess":
+      return validatorHeadIdentifier((expr as { base: Expression }).base);
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * For a value-parameterized alias, resolve each validator referenced by its
+ * `@validate(...)` tags to the module it was imported from in `program`
+ * (the alias's defining module). Validators that are not imported by name
+ * (locally defined, or not found) are skipped — those don't need a replayed
+ * import. Returns undefined when there is nothing to record.
+ */
+function resolveValidatorImports(
+  tags: Tag[] | undefined,
+  program: AgencyProgram,
+): ValidatorImport[] | undefined {
+  if (!tags || tags.length === 0) return undefined;
+
+  // Build identifier → modulePath from this module's named imports.
+  const importedFrom: Record<string, string> = {};
+  for (const node of program.nodes) {
+    if (node.type !== "importStatement") continue;
+    for (const nameType of node.importedNames) {
+      if (nameType.type !== "namedImport") continue;
+      for (const originalName of nameType.importedNames) {
+        const localName = nameType.aliases[originalName] ?? originalName;
+        importedFrom[localName] = node.modulePath;
+      }
+    }
+  }
+
+  const out: ValidatorImport[] = [];
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    if (tag.name !== "validate") continue;
+    for (const arg of tag.arguments) {
+      const head = validatorHeadIdentifier(arg);
+      if (!head || seen.has(head)) continue;
+      const modulePath = importedFrom[head];
+      if (!modulePath) continue; // locally defined or unresolved — leave as-is
+      seen.add(head);
+      out.push({ name: head, modulePath });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/**
  * Classify symbols in a parsed Agency program.
  * Uses walkNodes to find symbols at all nesting levels (e.g. type aliases inside functions).
  */
@@ -369,6 +440,21 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           ...(node.isEffectSet ? { isEffectSet: true } : {}),
           ...(typeAliasTags[node.aliasName]?.length
             ? { tags: typeAliasTags[node.aliasName] }
+            : {}),
+          // Value-parameterized aliases inline their validator chain at every
+          // use site (see ValidatorImport). Record where each referenced
+          // validator was imported so a consuming module can replay those
+          // imports. Bare (non-value-param) aliases don't need this: their
+          // descriptor const is emitted in this module where validators are
+          // already in scope.
+          ...(node.valueParams?.length
+            ? (() => {
+                const vi = resolveValidatorImports(
+                  typeAliasTags[node.aliasName],
+                  program,
+                );
+                return vi ? { validatorImports: vi } : {};
+              })()
             : {}),
         };
         break;

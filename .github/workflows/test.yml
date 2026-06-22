@@ -68,6 +68,7 @@ jobs:
         node tests/integration/bundlers/test-esbuild.mjs ./agency-lang-*.tgz
         node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
         node tests/integration/cli/test.mjs ./agency-lang-*.tgz
+        node tests/integration/serve/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     - name: Main-only CLI command integration tests
       if: matrix.node-version == '22.x' && github.event_name == 'push' && github.ref == 'refs/heads/main'

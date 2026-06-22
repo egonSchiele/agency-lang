@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { findMatches, expandAncestorsOf, highlightMatches } from "./search.js";
-import { TreeNode, ViewerState } from "./types.js";
+import { buildForest } from "./tree.js";
+import { EventEnvelope, TreeNode, ViewerState } from "./types.js";
 
 function span(id: string, summary: string, children: TreeNode[] = [], parentId: string | null = null): TreeNode {
   return {
@@ -157,6 +158,94 @@ describe("findMatches — synthetic rows", () => {
     const next = expandAncestorsOf(state, ["evt-0:raw:json:5"]);
     expect(next.expanded.has("evt-0")).toBe(true);
     expect(next.expanded.has("evt-0:raw")).toBe(true);
+  });
+});
+
+describe("findMatches — llmCall span flatten", () => {
+  // A two-round tool call. The tool result + final answer ("551695")
+  // appear only in the flattened conversation under the llmCall span,
+  // not in any persistent forest node — search must still find them.
+  const evt = (over: Partial<EventEnvelope>): EventEnvelope => ({
+    format_version: 1,
+    trace_id: "T",
+    project_id: "p",
+    span_id: null,
+    parent_span_id: null,
+    data: { type: "debug", timestamp: "2026-06-21T00:00:00Z" },
+    ...over,
+  });
+
+  const events: EventEnvelope[] = [
+    evt({ span_id: "a", data: { type: "agentStart", timestamp: "2026-06-21T00:00:00Z" } }),
+    evt({
+      span_id: "L",
+      parent_span_id: "a",
+      data: {
+        type: "promptCompletion",
+        timestamp: "2026-06-21T00:00:01Z",
+        messages: [{ role: "user", content: "area of France" }],
+        completion: { output: null, toolCalls: [{ id: "c1", name: "getArea", arguments: {} }] },
+      },
+    }),
+    evt({ span_id: "T", parent_span_id: "L", data: { type: "toolCall", timestamp: "2026-06-21T00:00:02Z", toolName: "getArea", output: "551695" } }),
+    evt({
+      span_id: "L",
+      parent_span_id: "a",
+      data: {
+        type: "promptCompletion",
+        timestamp: "2026-06-21T00:00:03Z",
+        messages: [
+          { role: "user", content: "area of France" },
+          { role: "assistant", content: null, toolCalls: [{ id: "c1", name: "getArea", arguments: {} }] },
+          { role: "tool", name: "getArea", content: "551695", tool_call_id: "c1" },
+        ],
+        completion: { output: "The area is 551695", toolCalls: [] },
+      },
+    }),
+  ];
+
+  it("finds text that only exists in the flattened conversation", () => {
+    const roots = buildForest(events);
+    const matches = findMatches(roots, "551695");
+    // At least one match is a convoLine synthetic id under the L span.
+    expect(matches.some((id) => id.startsWith("L:llm:convo:"))).toBe(true);
+  });
+
+  it("expandAncestorsOf reveals a flattened-convo match by expanding the llmCall span", () => {
+    const roots = buildForest(events);
+    const state: ViewerState = {
+      roots,
+      expanded: new Set(),
+      cursorId: roots[0].id,
+      scrollTop: 0,
+      quit: false,
+    };
+    const next = expandAncestorsOf(state, ["L:llm:convo:3:0"]);
+    // The llmCall span itself and its ancestors (nodeExecution/agent
+    // span + trace) are expanded so the convo row becomes visible.
+    expect(next.expanded.has("L")).toBe(true);
+    expect(next.expanded.has("a")).toBe(true);
+    expect(next.expanded.has(roots[0].id)).toBe(true);
+  });
+
+  it("finds and reveals text inside a nested tool's llm() call", () => {
+    const nested: EventEnvelope[] = [
+      ...events.slice(0, 3),
+      evt({
+        span_id: "L2",
+        parent_span_id: "T",
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-06-21T00:00:025Z",
+          messages: [{ role: "user", content: "compute area" }],
+          completion: { output: "nested-answer-xyz", toolCalls: [] },
+        },
+      }),
+      events[3],
+    ];
+    const roots = buildForest(nested);
+    const matches = findMatches(roots, "nested-answer-xyz");
+    expect(matches.some((id) => id.startsWith("L2:llm:convo:"))).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Runner, stripSlug } from "./runner.js";
+import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext } from "./asyncContext.js";
@@ -8,6 +8,35 @@ import { makeMockCtx } from "./__tests__/testHelpers.js";
 function makeFrame(): State {
   return new State({ args: {}, locals: {}, step: 0 });
 }
+
+describe("safeStatelogValue", () => {
+  it("deep-clones small JSON values", () => {
+    expect(safeStatelogValue(42)).toBe(42);
+    expect(safeStatelogValue([0, 1, 1, 2, 3])).toEqual([0, 1, 1, 2, 3]);
+    const obj = { a: [1, 2] };
+    const out = safeStatelogValue(obj);
+    expect(out).toEqual(obj);
+    expect(out).not.toBe(obj); // cloned, not the same reference
+  });
+
+  it("returns undefined for undefined and values JSON can't represent", () => {
+    expect(safeStatelogValue(undefined)).toBeUndefined();
+    expect(safeStatelogValue(() => 1)).toBeUndefined();
+  });
+
+  it("truncates an oversized value to a marked string", () => {
+    const out = safeStatelogValue("x".repeat(5000));
+    expect(typeof out).toBe("string");
+    expect((out as string).length).toBeLessThan(5000);
+    expect(out as string).toMatch(/…\[truncated\]$/);
+  });
+
+  it("returns a placeholder for an unserializable (circular) value", () => {
+    const a: any = {};
+    a.self = a;
+    expect(safeStatelogValue(a)).toBe("[unserializable]");
+  });
+});
 
 describe("Runner", () => {
   describe("step()", () => {

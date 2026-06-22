@@ -1,0 +1,11 @@
+// getArea is a leaf tool (no nested llm()). The main() llm() call runs
+// a two-round tool loop: round 1 the model asks for getArea, round 2 it
+// answers after seeing the result. Both rounds belong to ONE llm() call,
+// so they should share ONE llmCall span. See test.js.
+def getArea(country: string): number {
+  return 100
+}
+
+node main() {
+  return llm("Get the area of France using your getArea tool.", { tools: [getArea] })
+}

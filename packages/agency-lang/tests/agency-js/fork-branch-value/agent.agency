@@ -1,0 +1,8 @@
+// A pure fork (no LLM): each branch returns a value. The forkBranchEnd
+// statelog event for each branch should now carry that return value.
+node main() {
+  const results: number[] = fork([1, 2, 3]) as i {
+    return i * 10
+  }
+  return results
+}

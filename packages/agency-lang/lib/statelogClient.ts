@@ -886,11 +886,16 @@ export class StatelogClient {
     branchIndex,
     outcome,
     timeTaken,
+    value,
   }: {
     forkId: string;
     branchIndex: number;
     outcome: "success" | "failure" | "interrupted" | "aborted";
     timeTaken: number;
+    /** The branch's return value, present only on a `success` outcome.
+     *  The caller serializes it defensively (see Runner's fork hooks) so
+     *  a large or non-JSON value can't bloat or break the telemetry post. */
+    value?: unknown;
   }): Promise<void> {
     await this.post({
       type: "forkBranchEnd",
@@ -898,6 +903,7 @@ export class StatelogClient {
       branchIndex,
       outcome,
       timeTaken,
+      value,
     });
   }
 

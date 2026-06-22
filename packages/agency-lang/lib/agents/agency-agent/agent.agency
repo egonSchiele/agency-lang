@@ -697,7 +697,7 @@ node main() {
       },
       provider: {
         type: "string",
-        description: "Force the LLM provider (use when a model name doesn't imply one)"
+        description: "Force the LLM provider. Given alone (openai/anthropic/google) it selects that provider's default models and skips env auto-detection; pair it with --model for a custom/local model name"
       },
       interactive: {
         type: "boolean",

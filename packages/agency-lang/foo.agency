@@ -1,22 +1,3 @@
-import { systemMessage } from "std::thread"
-
-node main() {
-  const prompt = "You are a coding agent. Help the user with their task."
-  systemMessage(prompt)
-  const message = input("> ")
-  handle {
-    const result = llm(message, {
-      tools: [read, write]
-    })
-  } with (data) {
-    print("Got an interrupt:")
-    print(data.message)
-    const approval = input("Approve? (y/n)")
-    if (approval.toLowerCase() === "y") {
-      return approve()
-    } else {
-      return reject()
-    }
-  }
-  print(result)
+export def greet(name: string): string {
+  return `Hello, ${name}!`;
 }

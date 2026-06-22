@@ -79,6 +79,29 @@ Set the default model for subsequent llm() calls.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L39))
 
+### envVarFor
+
+```ts
+envVarFor(provider: string): string
+```
+
+Return the environment variable that holds the API key for a recognized
+  provider, or "" for an unrecognized name. Recognized: "anthropic"
+  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
+  (OPENAI_API_KEY).
+
+  @param provider - The provider name to map
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| provider | `string` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L48))
+
 ### pickProvider
 
 ```ts
@@ -100,4 +123,4 @@ Return the first provider in `order` whose API-key environment variable
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L69))

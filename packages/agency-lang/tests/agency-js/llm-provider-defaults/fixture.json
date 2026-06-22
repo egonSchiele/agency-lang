@@ -1,0 +1,25 @@
+{
+  "providerOpenai": "openai",
+  "providerGoogleNoKey": "FAIL:No API key for provider 'google'. Set GEMINI_API_KEY.",
+  "autoDetect": "anthropic",
+  "customNoModel": "FAIL:--provider ollama has no built-in defaults; also pass --model (or --fastmodel/--slowmodel). Providers with defaults: openai, anthropic, google.",
+  "customWithModel": "ollama",
+  "planOpenai": {
+    "fastModel": "gpt-4o-mini",
+    "fastProvider": "openai",
+    "slowModel": "gpt-5.5",
+    "slowProvider": "openai-responses"
+  },
+  "planAnthropic": {
+    "fastModel": "claude-sonnet-4-6",
+    "fastProvider": "",
+    "slowModel": "claude-opus-4-8",
+    "slowProvider": "anthropic"
+  },
+  "planCustom": {
+    "fastModel": "my-model",
+    "fastProvider": "ollama",
+    "slowModel": "my-model",
+    "slowProvider": "ollama"
+  }
+}

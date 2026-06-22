@@ -3,9 +3,14 @@ import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
- *  which guard tripped (diagnostics + future cross-checks; structural
- *  call-stack nesting is what actually routes a trip to its owning
- *  `try`, exactly as it does for cost guards today). */
+ *  which guard tripped. NOTE: in Increment 1 no boundary actually
+ *  MATCHES on this id — `__tryCall` converts any guardTrip cause it
+ *  catches, relying on structural call-stack nesting to route a trip to
+ *  its owning `try` (exactly as cost guards do today). Real id-matching
+ *  (which would fix outer-tighter-than-inner mis-attribution; see
+ *  tests/agency/guards/guard-time-nested-outer-tighter) needs threading
+ *  the id into `__tryCall` — a codegen change deferred to Increment 2.
+ *  The id is emitted now so the cause shape is stable for that work. */
 let __guardIdCounter = 0;
 export function nextGuardId(): string {
   __guardIdCounter += 1;

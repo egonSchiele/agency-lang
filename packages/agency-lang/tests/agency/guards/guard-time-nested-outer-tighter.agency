@@ -1,0 +1,33 @@
+import { guard } from "std::thread"
+
+// Outer time budget (20ms) is TIGHTER than the inner (5s). The OUTER's
+// timer fires while the inner block's `sleep` is in flight, so the
+// in-flight sleep is aborted carrying the OUTER's guardTrip cause.
+//
+// KNOWN INCREMENT-1 LIMITATION (documented in
+// docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md §4.1.1):
+// the inner guard's `try` (__tryCall) converts ANY guardTrip cause it
+// catches — it does NOT match on guardId — so the OUTER's trip is
+// mis-attributed to the INNER guard's Failure (carrying the outer's
+// 20ms limit), and the OUTER block sees a normal return instead of
+// tripping. This is NOT a crash (the pre-fix code crashed the process
+// with an unhandled rejection); the guarded work still aborts and
+// surfaces a timeoutFailure. Increment 2's guardId matching will
+// re-route the trip to the OUTER guard, at which point this fixture's
+// expected output changes to "outer:timeoutFailure".
+node main() {
+  const outer = guard(time: 20ms) as {
+    const inner = guard(time: 5s) as {
+      sleep(150ms)
+      return "inner did not trip"
+    }
+    if (isFailure(inner)) {
+      return "inner:${inner.error.type}:${inner.error.maxTime}"
+    }
+    return "no trip"
+  }
+  if (isFailure(outer)) {
+    return "outer:${outer.error.type}"
+  }
+  return outer.value
+}

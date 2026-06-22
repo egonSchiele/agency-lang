@@ -98,6 +98,15 @@ function isAbortCause(value: unknown): value is AbortCause {
  * thrown `AgencyCancelledError` (its `agencyCause`), or a bare cause value.
  * Returns `undefined` when no structured cause is present — callers keep
  * their existing heuristics as a fallback for that case.
+ *
+ * Note: this uses `instanceof AgencyCancelledError`, NOT the name-based
+ * fallback that `isAbortError` adds for errors that cross module instances
+ * (the resolver shim — see below). In Increment 1 every guard-trip
+ * producer and consumer lives in one runtime module instance, so
+ * `instanceof` holds. If a cause ever needs reading across that boundary,
+ * `readCause` returns `undefined` where `isAbortError` would still
+ * recognize the error — the in-process sibling of the subprocess
+ * cause-payload risk noted in the abort-taxonomy spec.
  */
 export function readCause(source: unknown): AbortCause | undefined {
   if (source == null) return undefined;

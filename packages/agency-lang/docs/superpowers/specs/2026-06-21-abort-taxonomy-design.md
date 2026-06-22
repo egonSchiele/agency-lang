@@ -134,6 +134,11 @@ The carrier design assumes that when a composed signal (`AbortSignal.any([...])`
 
 **Goal:** Turn CI green by fixing the three time-guard fixtures, and lay the `AbortCause` carrier so Increment 2 is purely a type-unification refactor. **No codegen template change. No fixture regeneration.** `AgencyCancelledError` and `GuardExceededError` remain as distinct types.
 
+> **What actually shipped vs. what §4 below describes.** §4 describes the full Increment-1 *design*. The delivered PR is **narrower by design** — it does exactly what's needed to turn CI green plus the safe, additive carrier — and the plan (`docs/superpowers/plans/2026-06-22-abort-taxonomy-increment1.md`) "Deferred" section is authoritative on scope. Specifically, these §4 items are **deferred**, not shipped:
+> - **Full `shouldSkip` cause-switch (step 5).** The shipped `shouldSkip` only adds the `delivered`-guardTrip early-return (§4.1.1). `userInterrupt`/`userKill` causes still fall through to the existing silent `halt(undefined)` — Esc propagates via the leaf/catch-ladder path, not via `shouldSkip`, so the runner's user-cancel behavior is intentionally unchanged.
+> - **`guardId` matching at the boundary.** A `guardId` is emitted on the cause, but no boundary matches on it — `__tryCall` converts *any* `guardTrip` cause it catches, relying on structural call-stack nesting (exactly as cost guards do today). Real id-matching needs threading the id into `__tryCall`, a **codegen change** Increment 1 avoids; it is deferred to Increment 2. Consequence (pinned by `tests/agency/guards/guard-time-nested-outer-tighter`): when an **outer** guard is tighter than an inner one, the inner's `try` mis-attributes the outer's trip to the inner guard's Failure. Not a crash (pre-fix it crashed); just mis-attributed until Increment 2.
+> - **`prompt.ts` thread-repair gating + normalization (steps 5–6)** and **`raceLoser` tagging (step 2)** — deferred and safe (untagged → `readCause` undefined → existing behavior).
+
 ### 4.1 What changes
 
 1. **Define `AbortCause`** (in `lib/runtime/errors.ts` or a new `lib/runtime/abortCause.ts`) plus helpers:

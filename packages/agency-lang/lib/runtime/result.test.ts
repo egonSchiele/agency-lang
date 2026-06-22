@@ -1,5 +1,78 @@
 import { describe, it, expect } from "vitest";
-import { success, failure, isSuccess, isFailure, __pipeBind } from "./result.js";
+import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall } from "./result.js";
+import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+
+describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
+  it("converts a guardTrip-cause-carrying abort to a timeoutFailure (NOT a throw)", async () => {
+    // This is the exact shape an aborted in-flight `sleep` rejects with
+    // when a time guard trips. It MUST convert to a Failure here — even
+    // though it is also an abort error — because the guardTrip check runs
+    // BEFORE the blanket `isAbortError -> throw`.
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 20,
+      spent: 21,
+      guardId: "g1",
+    });
+    const result = await __tryCall(() => {
+      throw new AgencyCancelledError("sleep cancelled", cause);
+    });
+    expect(isFailure(result)).toBe(true);
+    expect((result as { error: { type: string; maxTime: number } }).error).toMatchObject({
+      type: "timeoutFailure",
+      maxTime: 20,
+    });
+  });
+
+  it("converts a cost guardTrip cause to a guardFailure", async () => {
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "cost",
+      limit: 2,
+      spent: 3,
+      guardId: "g2",
+    });
+    const result = await __tryCall(() => {
+      throw new AgencyCancelledError("cancelled", cause);
+    });
+    expect((result as { error: { type: string; maxCost: number } }).error).toMatchObject({
+      type: "guardFailure",
+      maxCost: 2,
+    });
+  });
+
+  it("marks the cause `delivered` so the runner path won't re-deliver the same trip", async () => {
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 20,
+      spent: 21,
+      guardId: "g1",
+    });
+    await __tryCall(() => {
+      throw new AgencyCancelledError("sleep cancelled", cause);
+    });
+    expect((cause as { delivered?: boolean }).delivered).toBe(true);
+  });
+
+  it("still RE-THROWS a non-guard abort (userInterrupt) — cancellation must propagate", async () => {
+    const cause = makeAbortCause({ kind: "userInterrupt" });
+    await expect(
+      __tryCall(() => {
+        throw new AgencyCancelledError("cancelled by user", cause);
+      }),
+    ).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+
+  it("still re-throws a bare abort with no cause", async () => {
+    await expect(
+      __tryCall(() => {
+        throw new AgencyCancelledError("cancelled");
+      }),
+    ).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+});
 
 describe("success", () => {
   it("creates a success result", () => {

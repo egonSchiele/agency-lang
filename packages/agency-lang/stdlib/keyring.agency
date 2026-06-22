@@ -42,7 +42,7 @@ export def setSecret(key: string, value: string, service: string = "agency-lang"
   return try _setSecret(key, value, service)
 }
 
-export def getSecret(key: string, service: string = "agency-lang"): Result {
+export safe def getSecret(key: string, service: string = "agency-lang"): Result {
   """
   Retrieve a secret from the system keyring by key. Returns the secret value as a string, or null if not found. Uses the "agency-lang" service by default.
 

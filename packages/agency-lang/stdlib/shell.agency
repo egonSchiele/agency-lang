@@ -125,7 +125,7 @@ type LsEntry = {
   size: number
 }
 
-export def ls(
+export safe def ls(
   dir: string = ".",
   recursive: boolean = false,
   maxResults: number = 1000,
@@ -161,7 +161,7 @@ type GrepMatch = {
   text: string
 }
 
-export def grep(
+export safe def grep(
   pattern: string,
   dir: string = ".",
   flags: string = "",
@@ -196,7 +196,7 @@ export def grep(
   return try _grep(pattern, dir, flags, maxResults, allowedPaths)
 }
 
-export def glob(
+export safe def glob(
   pattern: string,
   dir: string = ".",
   maxResults: number = 500,

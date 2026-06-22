@@ -83,7 +83,7 @@ export def evalOutput(value: any) {
   _evalOutput(value)
 }
 
-export def evalRecord(statelogPath: string, allowedPaths: string[] = []): StatelogEvalRecord {
+export safe def evalRecord(statelogPath: string, allowedPaths: string[] = []): StatelogEvalRecord {
   """
   Parse a statelog JSONL file and return the same structured EvalRecord
   produced by `agency eval extract`. Use this when an agent needs to inspect
@@ -96,7 +96,7 @@ export def evalRecord(statelogPath: string, allowedPaths: string[] = []): Statel
   return _evalRecord(statelogPath, allowedPaths)
 }
 
-export def evalValues(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
+export safe def evalValues(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
   """
   Parse a statelog JSONL file and return the values recorded as eval values.
   This mirrors `new StatelogParser(path).evalValues()` in TypeScript.
@@ -107,7 +107,7 @@ export def evalValues(statelogPath: string, allowedPaths: string[] = []): Statel
   return _evalValues(statelogPath, allowedPaths)
 }
 
-export def evalOutputs(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
+export safe def evalOutputs(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
   """
   Parse a statelog JSONL file and return the values recorded as eval outputs.
   This mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
@@ -118,7 +118,7 @@ export def evalOutputs(statelogPath: string, allowedPaths: string[] = []): State
   return _evalOutputs(statelogPath, allowedPaths)
 }
 
-export def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue | null {
+export safe def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue | null {
   """
   Parse a statelog JSONL file and return the final eval output, or null when
   the trace has no output. This is the canonical judge-ready final-output

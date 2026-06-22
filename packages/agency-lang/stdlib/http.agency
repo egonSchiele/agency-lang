@@ -9,7 +9,7 @@ import {
   _fetchMarkdown,
 } from "agency-lang/stdlib-lib/http.js"
 
-export def fetch(
+export safe def fetch(
   baseUrl: string,
   path: string = "",
   headers: Record<string, any> = {},
@@ -32,7 +32,7 @@ export def fetch(
   return try _fetch(baseUrl, path, headers, allowedDomains)
 }
 
-export def fetchJSON(
+export safe def fetchJSON(
   baseUrl: string,
   path: string = "",
   headers: Record<string, any> = {},
@@ -55,7 +55,7 @@ export def fetchJSON(
   return try _fetchJSON(baseUrl, path, headers, allowedDomains)
 }
 
-export def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
+export safe def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
   """
   Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Useful for extracting page content for an LLM. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
 

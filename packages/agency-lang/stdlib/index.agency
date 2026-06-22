@@ -210,7 +210,7 @@ export def write(
   return try _write(dir, filename, content, mode)
 }
 
-export def readImage(
+export safe def readImage(
   filename: string,
   dir: string = ".",
   useAgentCwd: boolean = false,

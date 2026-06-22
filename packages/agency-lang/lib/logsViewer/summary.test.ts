@@ -44,6 +44,46 @@ describe("summarize (leaf events)", () => {
     expect(s).toContain("tool blew up");
   });
 
+  it("forkBranchEnd shows the returned value on success", () => {
+    const s = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: null,
+      parent_span_id: null,
+      data: {
+        type: "forkBranchEnd",
+        timestamp: "",
+        branchIndex: 0,
+        outcome: "success",
+        timeTaken: 653,
+        value: 3,
+      },
+    });
+    expect(s).toContain("forkBranchEnd #0");
+    expect(s).toContain("success");
+    expect(s).toContain("→ 3");
+  });
+
+  it("forkBranchEnd omits the value arrow when there is none (non-success)", () => {
+    const s = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: null,
+      parent_span_id: null,
+      data: {
+        type: "forkBranchEnd",
+        timestamp: "",
+        branchIndex: 1,
+        outcome: "aborted",
+        timeTaken: 10,
+      },
+    });
+    expect(s).toContain("forkBranchEnd #1");
+    expect(s).not.toContain("→");
+  });
+
   it("toolCall shows the tool name", () => {
     const s = summarize({
       format_version: 1,

@@ -41,6 +41,34 @@ export function stripSlug(slug: string): string {
   return /^t\d+$/.test(slug) ? slug.slice(1) : slug;
 }
 
+/** Cap on the serialized size of a fork-branch value attached to a
+ *  `forkBranchEnd` statelog event. Branch results are usually tiny (a
+ *  number, a short object) but could be large; bound it so telemetry
+ *  can't balloon. */
+const FORK_VALUE_CHAR_CAP = 4000;
+
+/** Serialize a fork branch's return value for the `forkBranchEnd` event
+ *  WITHOUT ever throwing — telemetry must not break execution. Returns:
+ *  - `undefined` when there is no value (non-success outcome, or a value
+ *    JSON can't represent, e.g. a function);
+ *  - a deep JSON clone for normal small values (so it renders cleanly);
+ *  - a truncated string for oversized values;
+ *  - `"[unserializable]"` when stringification throws (e.g. a cycle). */
+function safeStatelogValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+  if (json === undefined) return undefined;
+  if (json.length > FORK_VALUE_CHAR_CAP) {
+    return json.slice(0, FORK_VALUE_CHAR_CAP) + "…[truncated]";
+  }
+  return JSON.parse(json);
+}
+
 /**
  * Runner centralizes step execution logic for generated Agency code.
  *
@@ -1057,12 +1085,13 @@ export class Runner {
           this.seedBranchCost(childStack, parentStack),
         propagateBranchCost: (branches, parentStack) =>
           this.propagateBranchCost(branches, parentStack),
-        onBranchEnd: (_key, branchIndex, outcome, timeTaken) => {
+        onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
           this.ctx.statelogClient.forkBranchEnd({
             forkId,
             branchIndex,
             outcome,
             timeTaken,
+            value: safeStatelogValue(value),
           });
         },
         onCheckpoint: (cpId) => {
@@ -1140,12 +1169,13 @@ export class Runner {
           this.propagateBranchCost(losers, parentStack),
         propagateWinnerCost: (winner, parentStack) =>
           this.propagateBranchCost([winner], parentStack),
-        onBranchEnd: (_key, branchIndex, outcome, timeTaken) => {
+        onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
           this.ctx.statelogClient.forkBranchEnd({
             forkId,
             branchIndex,
             outcome,
             timeTaken,
+            value: safeStatelogValue(value),
           });
         },
         onCheckpoint: (cpId) => {

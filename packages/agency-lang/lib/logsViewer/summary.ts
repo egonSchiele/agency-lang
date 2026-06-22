@@ -36,8 +36,14 @@ export function summarize(evt: EventEnvelope): string {
       return `checkpointRestored #${shortId(d.checkpointId)} (attempt ${d.restoreCount ?? "?"})`;
     case "forkStart":
       return `forkStart ${d.mode} (${d.branchCount} branches)`;
-    case "forkBranchEnd":
-      return `forkBranchEnd #${d.branchIndex} (${d.outcome}, ${fmtDuration(d.timeTaken)})`;
+    case "forkBranchEnd": {
+      const head = `forkBranchEnd #${d.branchIndex} (${d.outcome}, ${fmtDuration(d.timeTaken)})`;
+      // Show the branch's return value (success only) so you can see what
+      // each branch produced without opening raw data.
+      return d.value !== undefined
+        ? `${head} → ${truncate(stringifyValue(d.value), 40)}`
+        : head;
+    }
     case "forkEnd":
       return `forkEnd ${d.mode} (${fmtDuration(d.timeTaken)})`;
     case "threadCreated": {

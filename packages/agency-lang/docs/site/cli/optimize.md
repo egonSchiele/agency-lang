@@ -32,7 +32,7 @@ The only change needed is the `optimize` modifier on the `prompt` variable decla
 
 ```
 agency optimize foo.agency --goal 'Return the capital of India'
-``
+```
 
 If you run this command, you'll see output similar to this:
 
@@ -60,129 +60,182 @@ Complete: champion iteration 1, accepted 1, rejected 0, invalid 0 (10.0s)
 Optimize demo-run completed: 1 accepted, 0 rejected
 ```
 
-## Marking what to optimize
+You can put `optimize` on any string `const` `let` to tell the the optimizer to rewrite it.
 
-Put `optimize` on any string `const`/`let` the optimizer may rewrite. Discovery starts at the agent file and follows local relative `.agency` imports.
+## Inputs, graders, optimizers
 
-```agency
-optimize const systemPrompt = "Answer accurately."
+The `--goal` flag makes it really easy to get started with the optimizer, but gives you limited control. Now let's look at a more real-world example. But first I need to explain how the optimizer works.
 
-node main(question: string): string {
-  optimize const prompt = "Answer accurately: ${question}"
-  const answer: string = llm(prompt)
-  return answer
+The optimizer has three core things: inputs, graders, and the optimizer itself.
+
+### Inputs
+Inputs are examples you give to the optimizer. They are example input-output pairs.
+
+For example, let's say we're optimizing this code:
+
+```ts
+node main(country) {
+  // note prompt incorrectly says "area" instead of "capital"
+  optimize const prompt = `What is the area of ${country}?`
+  const response = llm(prompt)
+  return response
 }
 ```
 
-## Inputs and the goal
+It is very similar to the code we just saw, but now there's a `country` parameter for the node. We might give these inputs to the optimizer:
 
-    What the goal flag is doing for you behind the scenes is creating a single task. Now let's look at a slightly more real-world example, where we define a series of tasks for the agent. A task is simply a way to define how to run an agent: what node to run, and what arguments to pass to that node. When we used the goal flag, the goal simply created a single task. By default, if tasks don't have a node or arguments defined, they just run the `main` node with no arguments. That's what our simple optimize command did. But now we want to run a few tasks, passing in a parameter to the main node. Here's our new code:
+```
+{
+  "inputs": [
+    { "args": { "country": "India" },  "expected": "New Delhi" },
+    { "args": { "country": "Japan" },  "expected": "Tokyo" },
+    { "args": { "country": "Brazil" }, "expected": "Brasília" }
+  ]
+}
+```
+  
+Save this as inputs.json and run the optimizer again:
 
-    ```agency
-    node main(country) {
-     optimize const prompt = `What is the area of ${country}?`
-     const response = llm(prompt)
-     return response
-    }
-    ```
+```
+agency optimize foo.agency --goal 'Return the capital of India' --inputs inputs.json
 
-    Notice that the prompt is asking for the *area* of the country, but we want it to return the *capital* instead. Here are our task definitions:
-
-    ```
-    { "tasks": [
-        { "task_id": "in", "args": { "country": "India" },        "goal": "Return New Delhi" },
-        { "task_id": "jp", "args": { "country": "Japan" },         "goal": "Return Tokyo" },
-        { "task_id": "br", "args": { "country": "Brazil" },        "goal": "Return Brasília" }
-      ]}
-    ```
-
-    (`task_id` is optional too).
-
-You describe what to optimize against with inputs and/or a goal. An input is one invocation of the agent: `args` for the node, plus optional `goal`, `expected`, `node`, `working_dir`, and freeform `metadata`.
-
-```json
-{ "inputs": [
-  { "id": "india",  "args": { "country": "India" },  "expected": "New Delhi" },
-  { "id": "japan",  "args": { "country": "Japan" },  "expected": "Tokyo" }
-] }
 ```
 
-- `--inputs <file|dir>` — the input suite.
-- `--goal <text>` — an overall goal. **Combinable with `--inputs`**: it fills in as the goal for any input that doesn't set its own. Used alone, it creates one inline no-argument input (and fails upfront if the node requires arguments).
-- At least one of `--inputs` / `--goal` is required.
+This will run the optimizer the same as earlier, except now it also has three example inputs to look at. The optimizer will run foo.agency once for each input. That means it will run your agent, setting country to `"India"` for the first iteration, `"Japan"` for the second iteration etc, and look at the return value of the node.
 
-`expected` is the gold output for an input (any JSON). It's read by the built-in match graders and surfaced to the optimizer's reflection — see below.
-
-## Options
-
-| Flag | Meaning |
-| --- | --- |
-| `<file>[:<node>]` | Required agent target. A directory resolves to `main.agency`; the node defaults to `main`. |
-| `--inputs <file\|dir>` | Input suite file or directory. |
-| `--goal <text>` | Overall goal (combinable with `--inputs`; or a single inline input on its own). |
-| `--graders <file>` | A TypeScript grading module that replaces the default goal judge. See [Custom graders](#custom-graders). |
-| `--validation-inputs <file\|dir>` | Held-out validation suite. See [Validation sets](#validation-sets). |
-| `--validation-split <ratio>` | Hold out this fraction of `--inputs` (seeded by `--seed`) when `--validation-inputs` is absent. |
-| `--optimizer <name>` | `greedy` (default), `gepa`, or `example`. |
-| `--iterations <n>` | Max candidate iterations after the baseline. Default `5`. |
-| `--minibatch <n>` | GEPA minibatch size (gepa only). Default `8`. |
-| `--seed <n>` | RNG seed for reproducible search / validation split. |
-| `--mutator-model <model>` | Model override for proposing mutations. |
-| `--no-writeback` | Don't write the champion back to the source files. |
-| `--silent` | Print nothing; artifacts are still written. |
-| `--run-id <id>` | Output run id (must not already exist). |
-| `--runs-dir <path>` | Output root. Defaults to `eval.optimizeRunsDir`, then `eval.runsDir/optimize`, then `runs/optimize`. |
-
-The baseline runs the unmutated program first; if a baseline input fails (or fails a `mustPass` gate), the run aborts and reports the failing inputs — a failure before any mutation means the program or suite is broken, not the optimization.
-
-## Custom graders
-
-By default a run is graded by one built-in LLM judge that scores each output against the input's `goal` (or the overall `--goal`). To grade differently — match a known answer, run a deterministic check, combine several graders — pass `--graders ./grading.ts` (or set `eval.optimize.graders` in `agency.json`). The module **replaces** the default judge.
-
-A grading module **default-exports one grader or an array of graders**. A "grader" is any of:
+You can optionally also provide other values:
 
 ```ts
-import { grader, scalar, ExactMatch, Contains, LlmJudge, type Grader } from "agency-lang/optimize";
-
-// (a) a metric function: ctx = { output, input, judge }
-//     `input` is the typed Input; the gold answer is `input.expected`
-//     (extra per-input data can also live under `input.metadata`).
-const exact: Grader = ({ output, input }) =>
-  output === input.expected ? 1 : 0;   // return a number (0..1), a boolean, or a Grade
-
-// returning feedback too? use the scalar()/binary() constructors instead of a raw Grade literal:
-const judged: Grader = async ({ output, input, judge }) => {
-  const v = await judge({ goal: `Return ${input.expected}.`, output });
-  return scalar(v.score, v.reasoning);   // ← vs { score: { kind: "scalar", value: v.score }, feedback: v.reasoning }
+export type Input = {
+  /** Unique id. Generated for you if not given.*/
+  id?: string;
+  /** What the agent should accomplish — read by the goal judge and the
+   *  pairwise judge suite. This is a per-input goal.*/
+  goal?: string;
+  /** Entry node to run. Defaults to `main`. */
+  node?: string;
+  /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
+  metadata?: Record<string, any>;
 };
-
-// (b) a wrapped function carrying policy (mustPass gate, weight, threshold, samples, inputScope)
-const gate = grader(exact, { mustPass: true, name: "capital-exact" });
-
-// (c) a configured built-in — matchOn defaults to ["expected"]
-const has = new Contains({});                                    // output contains input.expected
-const judge = new LlmJudge({ goal: "Return the capital.", samples: 3 });
-
-export default [gate, judged];   // or `export default exact` for the simple case
 ```
 
-A metric function returns a **number** (0..1 scalar), a **boolean** (1.0/0.0), or a full **Grade**. For a Grade with feedback, the `scalar(value, feedback?)` and `binary(pass, feedback?)` constructors are the ergonomic way to build one.
+Notice that you can pass in a per-input goal, or an overall goal, as we have been doing with the `--goal` flag. You can pass in either one or both, but at least one goal is required. The `--goal` flag only fills in goals for inputs that don't have their own; they don't get combined. So if an input already has a goal, the `--goal` flag's value won't be used.
 
-**How grades become the objective.** Every grade counts: a number contributes its value (0..1), and a boolean / `ExactMatch` / `Contains` result contributes `1.0` (pass) or `0.0` (fail) — so a binary-only grader gives you plain accuracy. The objective for an input is the weighted mean of its grades, and the run objective is the mean across inputs. `mustPass` is an orthogonal **gate**: a failed `mustPass` grader zeroes that input regardless of its other grades.
+### Graders
+So, we pass in an input, an expected output, and a goal to the optimizer. How does the optimizer measure the expected output? In our example with capitals, the expected output for India was `"New Delhi"`. What if the agent instead returned `"the capital of India is New Delhi"`? It's the job of the *grader* to decide how well the agent did. Let's look at some examples of graders.
 
-> **Pick a grader that has a gradient.** Exact `===` against free-form LLM output almost never matches (`"The capital is New Delhi."` ≠ `"New Delhi"`), so it scores 0 for every candidate and the search can't climb. Use `Contains`, `Similarity`, or an `LlmJudge` (or constrain the prompt to emit only the value) so a better candidate actually scores higher.
+#### ExactMatchGrader
+Returns a binary pass-fail. Not the most useful grader, because it would give both of these the same score, which makes it hard for the optimizer to see if its changes to the agent are making any progress:
 
-`ctx.judge({ goal, output })` runs the bundled LLM goal judge from inside a metric function, so you can mix deterministic and LLM grading. When a grading module is configured, a per-input `goal` is optional.
+```
+// these responses would get the same score:
+response1 = "asdadasdasd"
+response2 = "the capital of India is New Delhi"
+```
 
-### Steering the search without a goal
+#### ContainsGrader
+Also returns a binary pass/fail like exact match, but this one checks to see if the expected output is anywhere in the response. Slightly better.
 
-The optimizer's reflection is fed each input's `expected` answer **and** each grader's `feedback`, so a self-explaining grader (one that returns `{ score, feedback }`) or labeled `expected` outputs can drive the rewrites *without* a `--goal` — `--goal` is then an optional extra steer. A grader that returns only a bare score and inputs with no `expected` leave the mutator nothing to learn from, so it can only guess from the current prompt; provide one or the other.
+#### SimilarityGrader
+Calculates the levenshtein distance and returns a score between 0 and 1 (0 = no match, 1 = perfect match).
 
-The mutator is instructed **not** to hard-code the expected answers into the prompt. A [validation set](#validation-sets) is the backstop that fails any prompt which memorizes them anyway.
+#### LLM Judge
+Asks an LLM to return a score between 0 and 1 (0 = no match, 1 = perfect match) for how well the response matches the expected output.
+
+This is the default grader.
+
+### Custom graders
+
+So far, we have just been using the LLM Judge, which is the default grader. But we can also specify a custom grader using the `--graders` flag.
+
+First write a grader file:
+
+```ts
+// graders.ts
+import { type Grader } from "agency-lang/optimize";
+
+// `input` is the typed Input; the gold answer is at `input.expected`
+// `output` is the actual response from your agent.
+const exact: Grader = ({ output, input }) => {
+   // return a number (0..1), a boolean, or a Grade
+  return output === input.expected ? 1 : 0;
+}
+
+export default exact;
+```
+
+Use the grader:
+
+```
+agency optimize foo.agency --goal 'Return the capital of India' --graders graders.ts
+```
+
+That's a really simple example where we're writing a custom function to use as the grader. It's an exact match function which, as we know, isn't very good. We can easily change this though. Let's see some options.
+
+We could call an LLM judge, passing it a custom judge prompt:
+
+```ts
+import { scalar, type Grader } from "agency-lang/optimize";
+const judged: Grader = async ({ output, input, judge }) => {
+  const v = await judge({ goal:
+    `Hi this is my custom LLM judge prompt. The output should match this expected value: ${input.expected}.`,
+    output
+  });
+
+  // Agency func to return a scalar score + reasoning for the score.
+  // Generates something like:
+  // 
+  // ```
+  // { score: { kind: "scalar", value: v.score }, feedback: v.reasoning }
+  // ```
+  return scalar(v.score, v.reasoning);   
+};
+```
+
+We could use a built-in grader:
+
+```ts
+import { Contains } from "agency-lang/optimize";
+export default (new Contains({}));
+```
+
+Instead of a single grader, we can also return an array of graders:
+
+```ts
+import { Contains, Grader, scalar } from "agency-lang/optimize";
+
+const judged: Grader = async ({ output, input, judge }) => {
+    const v = await judge({
+        goal:
+            `Hi this is my custom LLM judge prompt. The output should match this expected value: ${input.expected}.`,
+        output
+    });
+
+    return scalar(v.score, v.reasoning);
+};
+
+export default [new Contains({}), judged];
+```
+
+Finally, you can use the `grader` function to wrap a custom function and supply some metadata:
+
+```ts
+// use the `exact` function as the grader.
+// mustPass = if this grader fails, consider this entire iteration failed.
+// name = shown in debug output.
+const gate = grader(exact, { mustPass: true, name: "capital-exact" });
+```
+
+To recap:
+- A grading module **default-exports one grader or an array of graders**. 
+- A metric function returns a **number** (0..1 scalar), a **boolean** (1.0/0.0), or a full **Grade**. For a Grade with feedback, the `scalar(value, feedback?)` and `binary(pass, feedback?)` constructors are the ergonomic way to build one.
+
+#### How grades become the objective
+Every grade counts: a number contributes its value (0..1), and a boolean / `ExactMatch` / `Contains` result contributes `1.0` (pass) or `0.0` (fail) — so a binary-only grader gives you plain accuracy. The objective for an input is the weighted mean of its grades, and the run objective is the mean across inputs. `mustPass` is an orthogonal **gate**: a failed `mustPass` grader zeroes that input regardless of its other grades.
 
 ## Validation sets
 
-Pass `--validation-inputs <file|dir>` to grade the champion against held-out inputs, or `--validation-split <ratio>` to hold out a seeded fraction of `--inputs`. Search and candidate acceptance run on the **training** inputs; with the default `greedy` optimizer the champion written back is the one with the best **validation** objective, and `report.md` shows train-vs-validation side by side so an overfit prompt (high train, flat validation) is visible. `gepa` and `example` report a validation objective but select on training; the report says so.
+Pass `--validation-inputs <file|dir>` to grade the champion against held-out inputs, or `--validation-split <ratio>` to hold out a seeded fraction of `--inputs`. Search and candidate acceptance run on the **training** inputs; with the default `greedy` optimizer the champion written back is the one with the best **validation** objective, and `report.md` shows train-vs-validation side by side so an overfit prompt (high train, flat validation) is visible.
 
 ## Configuration
 
@@ -218,6 +271,9 @@ runs/optimize/<run-id>/
 - **Read `summary.json`** (or `champion/`) to get the actual result — notably `championFiles`, the **optimized source** the run produced, which `report.md` does not print.
 
 By default the optimizer also prints progress to the console (the resolved grading setup, per-iteration decisions, and the start→end value of every optimized variable). `--silent` suppresses console output; artifacts are still written.
+
+## Optimizers
+Agency comes with two built-in optimizers, `greedy` and `gepa`. `greedy` is the default. You can specify the optimizer using the `--optimizer` flag. You can also write your own optimizers.
 
 ## Writing your own optimizer
 

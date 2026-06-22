@@ -89,6 +89,105 @@ export function setupFunction(): {
 }
 
 /**
+ * Run the fresh-run bootstrap on a freshly created execution context:
+ * cross-module statics/globals, then this module's globals, then top-level
+ * callback registration — each inside a bootstrap ALS frame.
+ *
+ * Shared by the two fresh-run entry points (`runNode`, `runExportedFunction`).
+ * The resume family (`respondToInterrupts`, `rewindFrom`) does NOT use this:
+ * it restores statics/globals from a checkpoint and only re-registers
+ * top-level callbacks.
+ */
+async function initFreshExecCtx(
+  execCtx: RuntimeContext<GraphState>,
+  opts: {
+    initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+    registerTopLevelCallbacks?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+    moduleDir?: string;
+  },
+): Promise<void> {
+  const { initializeGlobals, registerTopLevelCallbacks, moduleDir } = opts;
+
+  // initializeGlobals + registerTopLevelCallbacks both invoke Agency
+  // code that goes through `__call` — and `__call` reads `ctx` /
+  // `threads` / `stateStack` from the ALS frame after the
+  // drop-per-call-context-plumbing migration. Without an ALS frame
+  // installed here, calls to user-defined stdlib helpers (e.g. the
+  // `callback(...)` wrapper that the codegen emits inside
+  // `__registerTopLevelCallbacks`) would invoke `_callbackImpl(name,
+  // fn, undefined)` and crash on `__state.ctx`.
+  //
+  // Consequences worth knowing:
+  //  - `stack` in the bootstrap frame is `execCtx.stateStack` — the
+  //    bare global stack with no node/function frames pushed. Globals
+  //    must not push node frames, so this is correct.
+  //  - `threads` is a `BootstrapThreadStore` sentinel. Any agency code
+  //    in global-init scope that reaches for a thread/message builtin
+  //    (e.g. `systemMessage("…")` at module top-level) now throws with
+  //    a clear error instead of silently writing into a placeholder
+  //    that this function discards on return.
+  //  - The `insideGlobalInit` codegen branch still emits an explicit
+  //    `{ ctx }` bag on `__call`, and `__call`'s merge prefers extras
+  //    over the ALS-read fields — so `ctx` resolution inside generated
+  //    global-init code does not depend on this frame's `ctx` either.
+  //    The frame is mostly here to satisfy the "every helper must see
+  //    *some* frame" contract.
+  //
+  // Closure-wide bootstrap (`__initAllRegistered`) MUST run BEFORE the
+  // entry's own `initializeGlobals`:
+  //   • A global-init expression in the entry can call a function /
+  //     node whose body reads an imported `static const`. Those
+  //     function-body reads don't show up in the compile-time
+  //     per-variable dep graph (which only walks initializer
+  //     expressions), so the foreign module's `__initializeGlobals`
+  //     would not have been pulled in by the dep-driven prelude. If
+  //     we ran the entry's globals init first, the read could hit
+  //     `__UNINIT_STATIC` and throw — the exact failure mode this
+  //     ordering exists to prevent.
+  //   • Running `__initAllRegistered` first guarantees every JS-loaded
+  //     module's statics and globals have been initialized before any
+  //     user code (including global-init expressions) runs. The
+  //     subsequent `initializeGlobals(execCtx)` call is then a no-op
+  //     for current codegen (per-execCtx early-return guard) and
+  //     double-call protected by the registry-level
+  //     `globals.isInitialized` check baked into `__initAllRegistered`.
+  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
+  if (initializeGlobals) {
+    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
+  }
+  // Top-level callbacks are re-registered every fresh run AFTER global
+  // init so any module-level vars they reference (via `__ctx.globals`)
+  // are already set up. The registration sequence mirrors what
+  // `respondToInterrupts` does on resume — keep them in sync if you
+  // touch either site.
+  if (registerTopLevelCallbacks) {
+    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx), { moduleDir });
+  }
+}
+
+/**
+ * Tear down an execution context after a fresh run: persist any cached
+ * MemoryManager state, drain fire-and-forget statelog POSTs, then release
+ * resources. Memory writes are best-effort — a save failure is logged,
+ * never thrown — and every cached manager is iterated so a fork branch's
+ * side store isn't lost. Shared by `runNode` and `runExportedFunction`;
+ * callers run their own span/trace teardown around this.
+ */
+async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<void> {
+  for (const manager of execCtx.getAllCachedMemoryManagers()) {
+    try {
+      await manager.save();
+    } catch (err) {
+      console.warn(`[memory] save failed: ${(err as Error).message}`);
+    }
+  }
+  // Remote statelog POSTs are fire-and-forget; drain any still in flight
+  // so telemetry is delivered before the context is released.
+  await execCtx.statelogClient.flush();
+  execCtx.cleanup();
+}
+
+/**
  * Invoke an exported Agency function from *outside* any Agency execution
  * frame — the `agency serve` path, where an HTTP/MCP request maps a
  * function name + named args to a single stateless call.
@@ -138,17 +237,7 @@ export async function runExportedFunction({
   moduleDir?: string;
 }): Promise<unknown> {
   const execCtx = await ctx.createExecutionContext(nanoid());
-
-  // Same ordering as runNode: cross-module statics/globals first, then
-  // this module's globals (a no-op for current codegen but kept for
-  // parity), then top-level callbacks once globals exist.
-  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
-  if (initializeGlobals) {
-    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
-  }
-  if (registerTopLevelCallbacks) {
-    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx), { moduleDir });
-  }
+  await initFreshExecCtx(execCtx, { initializeGlobals, registerTopLevelCallbacks, moduleDir });
 
   const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
   try {
@@ -173,22 +262,7 @@ export async function runExportedFunction({
       },
     );
   } finally {
-    // Mirror runNode's teardown. Persist any MemoryManager state first:
-    // remember/forget/extraction already persist() eagerly, so this only
-    // matters for manager state that relies solely on end-of-run save, but
-    // keeping the loop makes the contract identical for both entry points.
-    // Writes are best-effort — a save failure is logged, never thrown, so a
-    // disk problem can't fail the request.
-    for (const manager of execCtx.getAllCachedMemoryManagers()) {
-      try {
-        await manager.save();
-      } catch (err) {
-        console.warn(`[memory] save failed: ${(err as Error).message}`);
-      }
-    }
-    // Drain fire-and-forget statelog POSTs, then release resources.
-    await execCtx.statelogClient.flush();
-    execCtx.cleanup();
+    await finalizeExecCtx(execCtx);
   }
 }
 
@@ -259,70 +333,11 @@ export async function runNode({
   }
 
   const execCtx = await ctx.createExecutionContext(runId);
-  // initializeGlobals + registerTopLevelCallbacks both invoke Agency
-  // code that goes through `__call` — and `__call` reads `ctx` /
-  // `threads` / `stateStack` from the ALS frame after the
-  // drop-per-call-context-plumbing migration. Without an ALS frame
-  // installed here, calls to user-defined stdlib helpers (e.g. the
-  // `callback(...)` wrapper that the codegen emits inside
-  // `__registerTopLevelCallbacks`) would invoke `_callbackImpl(name,
-  // fn, undefined)` and crash on `__state.ctx`.
-  //
-  // Consequences worth knowing:
-  //  - `stack` here is `execCtx.stateStack` — the bare global stack
-  //    with no node/function frames pushed. Globals must not push node
-  //    frames, so this is correct.
-  //  - `threads` is a `BootstrapThreadStore` sentinel. Any agency code
-  //    in global-init scope that reaches for a thread/message builtin
-  //    (e.g. `systemMessage("…")` at module top-level) now throws with
-  //    a clear error instead of silently writing into a placeholder
-  //    that this function discards on return.
-  //  - The `insideGlobalInit` codegen branch still emits an explicit
-  //    `{ ctx }` bag on `__call`, and `__call`'s merge prefers extras
-  //    over the ALS-read fields — so `ctx` resolution inside generated
-  //    global-init code does not depend on this frame's `ctx` either.
-  //    The frame is mostly here to satisfy the "every helper must see
-  //    *some* frame" contract.
-  // Closure-wide bootstrap MUST run BEFORE the entry's own
-  // `initializeGlobals`. Reasoning:
-  //
-  //   • A global-init expression in the entry can call a function /
-  //     node whose body reads an imported `static const`. Those
-  //     function-body reads don't show up in the compile-time
-  //     per-variable dep graph (which only walks initializer
-  //     expressions), so the foreign module's `__initializeGlobals`
-  //     would not have been pulled in by the dep-driven prelude. If
-  //     we ran the entry's globals init first, the read could hit
-  //     `__UNINIT_STATIC` and throw — the exact failure mode this
-  //     change exists to prevent.
-  //
-  //   • Running `__initAllRegistered` first guarantees every
-  //     JS-loaded module's statics and globals have been initialized
-  //     before any user code (including global-init expressions)
-  //     runs. The subsequent `initializeGlobals(execCtx)` call is
-  //     then a no-op for current codegen (per-execCtx early-return
-  //     guard in `__initializeGlobals`) and double-call protected
-  //     for any non-conforming compiled output by the registry-level
-  //     `globals.isInitialized` check baked into
-  //     `__initAllRegistered` itself.
-  //
-  //   • Same closure-bootstrap rationale: a
-  //     `node main() { route({ systemPrompt: foreignStatic }) }`
-  //     pattern that reads an imported static only from a function
-  //     body needs the foreign module's init to have run, and the
-  //     compile-time dep graph won't see that reference.
-  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
-  if (initializeGlobals) {
-    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
-  }
-  // Top-level callbacks are re-registered every fresh run AFTER global
-  // init so any module-level vars they reference (via `__ctx.globals`)
-  // are already set up. The registration sequence mirrors what
-  // `respondToInterrupts` does on resume — keep them in sync if you
-  // touch either site.
-  if (registerTopLevelCallbacks) {
-    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx), { moduleDir });
-  }
+  // Cross-module init, this module's globals, then top-level callbacks —
+  // see `initFreshExecCtx` for the full ordering rationale (and the
+  // `node main() { route({ systemPrompt: foreignStatic }) }` case where a
+  // foreign static is read only from a function body).
+  await initFreshExecCtx(execCtx, { initializeGlobals, registerTopLevelCallbacks, moduleDir });
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
   if (callbacks) {
@@ -497,22 +512,6 @@ export async function runNode({
     throw error;
   } finally {
     execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
-    // Persist any in-memory MemoryManager state. Writes are best-effort —
-    // we never fail the run because of a save error, but we do log it so
-    // disk problems are visible. Iterate every cached manager so a fork
-    // branch that opened a side store doesn't lose its writes.
-    for (const manager of execCtx.getAllCachedMemoryManagers()) {
-      try {
-        await manager.save();
-      } catch (err) {
-        console.warn(
-          `[memory] save failed: ${(err as Error).message}`,
-        );
-      }
-    }
-    // Remote statelog POSTs are fire-and-forget; drain any still in
-    // flight now so telemetry is delivered before the process exits.
-    await execCtx.statelogClient.flush();
-    execCtx.cleanup();
+    await finalizeExecCtx(execCtx);
   }
 }

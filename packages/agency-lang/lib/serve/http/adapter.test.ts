@@ -38,6 +38,7 @@ function makeExports(): {
       description: "Add two numbers",
       agencyFunction: addFn,
       interruptEffects: [],
+      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
     },
     {
       kind: "node",
@@ -193,6 +194,7 @@ describe("HTTP adapter", () => {
           description: "Deploy",
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }],
+          invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
         },
       ],
       port: 3545,
@@ -313,6 +315,7 @@ describe("startHttpServer auth and host validation", () => {
         description: "",
         agencyFunction: failFn,
         interruptEffects: [],
+        invoke: (namedArgs) => failFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
       },
     ];
     await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {

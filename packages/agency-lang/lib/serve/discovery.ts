@@ -11,17 +11,50 @@ export type DiscoverOptions = {
   interruptEffectsByName?: Record<string, InterruptEffect[]>;
 };
 
+/**
+ * The compiled module's generated `__invokeFunction`: runs an exported
+ * function inside a node-grade execution frame. Optional because modules
+ * compiled before it existed won't export it.
+ */
+type ModuleInvokeFunction = (
+  fn: AgencyFunction,
+  namedArgs: Record<string, unknown>,
+) => Promise<unknown>;
+
 function isExportedFromModule(fn: AgencyFunction, moduleId: string): boolean {
   return !!fn.exported && !!fn.toolDefinition && fn.module === moduleId;
 }
 
-function toExportedFunction(fn: AgencyFunction, interruptEffects: InterruptEffect[]): ExportedFunction {
+/**
+ * Build the per-request invoker for a function. Prefers the compiled
+ * module's `__invokeFunction`, which runs the body inside a node-grade
+ * execution frame (generated function bodies throw without an ambient
+ * Agency frame). Falls back to a bare `agencyFunction.invoke` when the
+ * module predates `__invokeFunction` — preserving behavior for
+ * already-compiled bundles.
+ */
+function makeInvoker(
+  fn: AgencyFunction,
+  moduleInvoke: ModuleInvokeFunction | undefined,
+): (namedArgs: Record<string, unknown>) => Promise<unknown> {
+  if (moduleInvoke) {
+    return (namedArgs) => moduleInvoke(fn, namedArgs);
+  }
+  return (namedArgs) => fn.invoke({ type: "named", positionalArgs: [], namedArgs });
+}
+
+function toExportedFunction(
+  fn: AgencyFunction,
+  interruptEffects: InterruptEffect[],
+  moduleInvoke: ModuleInvokeFunction | undefined,
+): ExportedFunction {
   return {
     kind: "function",
     name: fn.name,
     description: fn.toolDefinition!.description,
     agencyFunction: fn,
     interruptEffects,
+    invoke: makeInvoker(fn, moduleInvoke),
   };
 }
 
@@ -46,9 +79,11 @@ function toExportedNode(
 export function discoverExports(options: DiscoverOptions): ExportedItem[] {
   const { toolRegistry, moduleExports, moduleId, exportedNodeNames = [], interruptEffectsByName = {} } = options;
 
+  const moduleInvoke = moduleExports.__invokeFunction as ModuleInvokeFunction | undefined;
+
   const functions = Object.values(toolRegistry)
     .filter((fn) => isExportedFromModule(fn, moduleId))
-    .map((fn) => toExportedFunction(fn, interruptEffectsByName[fn.name] ?? []));
+    .map((fn) => toExportedFunction(fn, interruptEffectsByName[fn.name] ?? [], moduleInvoke));
 
   const nodes = exportedNodeNames
     .map((name) => toExportedNode(name, moduleExports, interruptEffectsByName[name] ?? []))

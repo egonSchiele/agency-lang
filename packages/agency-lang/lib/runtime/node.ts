@@ -5,6 +5,7 @@ import { agencyStore, getRuntimeContext, runInBootstrapFrame } from "./asyncCont
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { AgencyFunction } from "./agencyFunction.js";
 import {
   AgencyCancelledError,
   CheckpointError,
@@ -85,6 +86,86 @@ export function setupFunction(): {
   const { stack: stateStack, threads } = getRuntimeContext();
   const stack = stateStack.getNewState();
   return { stateStack, stack, step: stack.step, self: stack.locals, threads };
+}
+
+/**
+ * Invoke an exported Agency function from *outside* any Agency execution
+ * frame — the `agency serve` path, where an HTTP/MCP request maps a
+ * function name + named args to a single stateless call.
+ *
+ * Generated function bodies assume an ambient `agencyStore` frame: they
+ * read `getRuntimeContext().ctx`, the base `StateStack`/`ThreadStore` via
+ * `setupFunction()`, and globals via `__globals()`. In normal execution a
+ * function only ever runs inside a node body (or an LLM tool-call that is
+ * itself inside a node), so that frame is already installed. `runNode`
+ * installs it for nodes; this is the equivalent entry point for a bare
+ * function call. Without it the first line of every generated function
+ * throws "getRuntimeContext() called outside an Agency execution frame".
+ *
+ * Mirrors `runNode`'s bootstrap (cross-module init, this module's globals
+ * init, top-level callback registration) against a fresh execution
+ * context so the function sees fully-initialized statics/globals and any
+ * module-level `callback(...)` blocks, then runs the call inside a
+ * node-grade ALS frame with a real `ThreadStore` (so functions that use
+ * `llm()` / message threads work). No `agentStart`/`agentEnd` is emitted —
+ * a bare function call is a stateless RPC, not a full agent run.
+ */
+export async function runExportedFunction({
+  ctx,
+  fn,
+  namedArgs,
+  initializeGlobals,
+  registerTopLevelCallbacks,
+  moduleDir,
+}: {
+  ctx: RuntimeContext<GraphState>;
+  fn: AgencyFunction;
+  namedArgs: Record<string, unknown>;
+  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  registerTopLevelCallbacks?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  moduleDir?: string;
+}): Promise<unknown> {
+  const execCtx = await ctx.createExecutionContext(nanoid());
+
+  // Same ordering as runNode: cross-module statics/globals first, then
+  // this module's globals (a no-op for current codegen but kept for
+  // parity), then top-level callbacks once globals exist.
+  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
+  if (initializeGlobals) {
+    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
+  }
+  if (registerTopLevelCallbacks) {
+    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx), { moduleDir });
+  }
+
+  const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+  try {
+    return await agencyStore.run(
+      {
+        ctx: execCtx,
+        stack: execCtx.stateStack,
+        threads: threadStore,
+        globals: execCtx.globals,
+        moduleDir,
+      },
+      async () => {
+        const result = await fn.invoke({
+          type: "named",
+          positionalArgs: [],
+          namedArgs,
+        });
+        // Drain any async work the function spawned (async calls, pending
+        // promises) before returning, mirroring runNode's awaitAll.
+        await execCtx.pendingPromises.awaitAll();
+        return result;
+      },
+    );
+  } finally {
+    // Best-effort telemetry flush; never fail the call on a telemetry
+    // problem.
+    await execCtx.statelogClient.flush();
+    execCtx.cleanup();
+  }
 }
 
 // eslint-disable-next-line max-lines-per-function -- core node-execution loop; refactor tracked separately

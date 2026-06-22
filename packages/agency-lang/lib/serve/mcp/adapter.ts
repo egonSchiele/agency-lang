@@ -181,7 +181,7 @@ async function handleToolCall(
   if (fn) {
     return runToolInvocation(
       id,
-      () => fn.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args }),
+      () => fn.invoke(args as Record<string, unknown>),
       policyConfig,
     );
   }

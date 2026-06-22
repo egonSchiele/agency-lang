@@ -30,8 +30,14 @@ function isExportedFromModule(fn: AgencyFunction, moduleId: string): boolean {
  * module's `__invokeFunction`, which runs the body inside a node-grade
  * execution frame (generated function bodies throw without an ambient
  * Agency frame). Falls back to a bare `agencyFunction.invoke` when the
- * module predates `__invokeFunction` — preserving behavior for
- * already-compiled bundles.
+ * module predates `__invokeFunction`.
+ *
+ * The fallback preserves the prior (broken) behavior for such stale
+ * bundles rather than masking it: a pre-`__invokeFunction` module will
+ * keep throwing "getRuntimeContext() called outside an Agency execution
+ * frame" on function calls until it is recompiled. Recompiling is the
+ * fix; the fallback only avoids a hard crash here (and keeps the path
+ * working for the plain-JS function bodies used in adapter unit tests).
  */
 function makeInvoker(
   fn: AgencyFunction,

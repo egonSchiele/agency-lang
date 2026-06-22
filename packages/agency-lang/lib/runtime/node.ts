@@ -107,8 +107,20 @@ export function setupFunction(): {
  * context so the function sees fully-initialized statics/globals and any
  * module-level `callback(...)` blocks, then runs the call inside a
  * node-grade ALS frame with a real `ThreadStore` (so functions that use
- * `llm()` / message threads work). No `agentStart`/`agentEnd` is emitted —
- * a bare function call is a stateless RPC, not a full agent run.
+ * `llm()` / message threads work), and tears it down like `runNode` does
+ * (persist memory, flush statelog).
+ *
+ * Two deliberate divergences from `runNode`, both consequences of the
+ * stateless-RPC model:
+ *   - No `agentStart`/`agentEnd` span and no run-level token roll-up. The
+ *     generated function body still reports its own failures to statelog
+ *     and converts exceptions to a `Failure` result, so per-call errors
+ *     are traced and surface to the caller; what is absent is only the
+ *     run-level envelope. A practical consequence: `llm()` spend inside a
+ *     served function is not attributed to `getCost` / cost dashboards.
+ *   - No checkpoint/restore loop — a function call is one shot, so there
+ *     is no `RestoreSignal` handling here (a `catch` would risk swallowing
+ *     that and other control-flow signals).
  */
 export async function runExportedFunction({
   ctx,
@@ -161,8 +173,20 @@ export async function runExportedFunction({
       },
     );
   } finally {
-    // Best-effort telemetry flush; never fail the call on a telemetry
-    // problem.
+    // Mirror runNode's teardown. Persist any MemoryManager state first:
+    // remember/forget/extraction already persist() eagerly, so this only
+    // matters for manager state that relies solely on end-of-run save, but
+    // keeping the loop makes the contract identical for both entry points.
+    // Writes are best-effort — a save failure is logged, never thrown, so a
+    // disk problem can't fail the request.
+    for (const manager of execCtx.getAllCachedMemoryManagers()) {
+      try {
+        await manager.save();
+      } catch (err) {
+        console.warn(`[memory] save failed: ${(err as Error).message}`);
+      }
+    }
+    // Drain fire-and-forget statelog POSTs, then release resources.
     await execCtx.statelogClient.flush();
     execCtx.cleanup();
   }

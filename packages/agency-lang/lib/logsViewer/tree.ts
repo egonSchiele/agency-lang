@@ -177,7 +177,11 @@ function inferSpanLabel(evt: EventEnvelope): string {
       // own label so the viewer can color/filter them separately and
       // cost roll-ups don't conflate the two.
       return "embedding";
+    case "toolCallStart":
     case "toolCall":
+      // A tool execution emits `toolCallStart` first, so the span is
+      // usually introduced by it — label both as `toolExecution` so the
+      // span reads consistently regardless of which event created it.
       return "toolExecution";
     case "forkStart":
     case "forkEnd":
@@ -226,43 +230,36 @@ function aggregateMetrics(node: TreeNode): void {
     node.firstTs = Math.min(...timestamps);
   }
 
-  // Prefer the authoritative `timeTaken` field on the span's
-  // characteristic leaf events. Event timestamps record *emission*
-  // time, so a span with a single completion event (like an llmCall
-  // with one promptCompletion) would otherwise compute a duration
-  // of 0/1ms even when the LLM call took seconds.
-  const measured = measuredDuration(node, leaves);
-  if (measured !== undefined) {
-    node.duration = measured;
-  } else if (timestamps.length >= 2) {
-    node.duration = Math.max(...timestamps) - Math.min(...timestamps);
+  // Duration is the span's wall-clock ENVELOPE: earliest start to latest
+  // end across all of its events. Events record their *emission* time
+  // (`timestamp`) and, where known, their own length (`timeTaken`), so an
+  // event's start is `timestamp - timeTaken`. Taking max(end) - min(start):
+  //  - a single completion event (e.g. a one-round llmCall) yields its
+  //    real latency via timeTaken — emission timestamps alone would give
+  //    ~0ms since they cluster at the end;
+  //  - a multi-event span yields its true wall-clock;
+  //  - parallel/nested work is never SUMMED (it's an envelope, not a
+  //    sum) — previously an llmCall's duration summed every nested
+  //    promptCompletion, so a tool that forked N parallel LLM calls made
+  //    the parent look N× longer than it ran;
+  //  - parent ⊇ child holds, because a parent's leaves are a superset of
+  //    each child's.
+  let minStart = Number.POSITIVE_INFINITY;
+  let maxEnd = Number.NEGATIVE_INFINITY;
+  for (const l of leaves) {
+    const ts = Date.parse(l.event!.data.timestamp);
+    if (!Number.isFinite(ts)) continue;
+    const tt =
+      typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0;
+    if (ts - tt < minStart) minStart = ts - tt;
+    if (ts > maxEnd) maxEnd = ts;
+  }
+  if (Number.isFinite(minStart) && maxEnd > minStart) {
+    node.duration = maxEnd - minStart;
   }
 
   if (node.nodeKind === "span") {
     node.summary = summarizeSpan(node);
-  }
-}
-
-function measuredDuration(node: TreeNode, leaves: TreeNode[]): number | undefined {
-  if (node.nodeKind !== "span") return undefined;
-  const matchingLeaves = leaves.filter(
-    (l) => l.event!.data.type === durationEventType(node.label),
-  );
-  const times = matchingLeaves
-    .map((l) => l.event!.data.timeTaken)
-    .filter((t): t is number => typeof t === "number");
-  if (times.length === 0) return undefined;
-  return times.reduce((a, b) => a + b, 0);
-}
-
-function durationEventType(spanLabel: string): string | undefined {
-  switch (spanLabel) {
-    case "llmCall": return "promptCompletion";
-    case "toolExecution": return "toolCall";
-    case "agentRun": return "agentEnd";
-    case "forkAll":
-    case "race": return "forkEnd";
-    default: return undefined;
   }
 }
 

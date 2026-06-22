@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildForest } from "./tree.js";
-import { EventEnvelope } from "./types.js";
+import { EventEnvelope, TreeNode } from "./types.js";
 
 const evt = (over: Partial<EventEnvelope>): EventEnvelope => ({
   format_version: 1,
@@ -97,11 +97,10 @@ describe("buildForest", () => {
     expect(s1.cost).toBeCloseTo(0.0052, 5);
   });
 
-  it("prefers promptCompletion.timeTaken for llmCall span duration", () => {
-    // Both events fire at nearly the same moment (the timestamps
-    // are *emission* times), but the LLM call actually took 3.5s
-    // as recorded in promptCompletion.timeTaken. Without the fix the
-    // viewer would show 1ms.
+  it("uses promptCompletion.timeTaken for a single-round llmCall duration", () => {
+    // The emission timestamp is the END of the call, so the timestamp
+    // range alone would be ~0ms. The envelope (start = timestamp -
+    // timeTaken) recovers the real 3.5s latency.
     const forest = buildForest([
       evt({
         span_id: "s1",
@@ -112,32 +111,25 @@ describe("buildForest", () => {
           timeTaken: 3500,
         },
       }),
-      evt({
-        span_id: "s1",
-        parent_span_id: null,
-        data: {
-          type: "debug",
-          timestamp: "2026-05-16T00:00:03.501Z",
-          message: "ack",
-        },
-      }),
     ]);
     const s1 = forest[0].children[0];
     expect(s1.label).toBe("llmCall");
     expect(s1.duration).toBe(3500);
   });
 
-  it("sums timeTaken across multiple toolCall leaves for toolExecution spans", () => {
+  it("computes wall-clock across back-to-back toolCall leaves (not a blind sum)", () => {
+    // Two sequential toolCalls (e.g. a retry): 120ms then 80ms,
+    // back-to-back, so the wall-clock envelope is 200ms.
     const forest = buildForest([
       evt({
         span_id: "s1",
         parent_span_id: null,
-        data: { type: "toolCall", timestamp: "", timeTaken: 120 },
+        data: { type: "toolCall", timestamp: "2026-05-16T00:00:00.120Z", timeTaken: 120 },
       }),
       evt({
         span_id: "s1",
         parent_span_id: null,
-        data: { type: "toolCall", timestamp: "", timeTaken: 80 },
+        data: { type: "toolCall", timestamp: "2026-05-16T00:00:00.200Z", timeTaken: 80 },
       }),
     ]);
     const s1 = forest[0].children[0];
@@ -183,6 +175,44 @@ describe("buildForest", () => {
     ]);
     const s1 = forest[0].children[0];
     expect(s1.duration).toBeCloseTo(4200, 0);
+  });
+
+  it("uses wall-clock, NOT the sum of nested parallel llmCall durations", () => {
+    // An outer llmCall (L) runs a tool (T) whose body forks two parallel
+    // llmCalls (N1, N2), each ~3s, overlapping. The OLD logic summed
+    // every promptCompletion.timeTaken in the subtree
+    // (1 + 3 + 3 + 1 = 8s), making the parent appear longer than it ran
+    // and longer than its own node. The wall-clock envelope is 5s, and
+    // parent ⊇ child holds.
+    const B = "2026-06-21T00:00:0";
+    const forest = buildForest([
+      evt({ span_id: "A", parent_span_id: null, data: { type: "agentStart", timestamp: `${B}0.000Z` } }),
+      evt({ span_id: "L", parent_span_id: "A", data: { type: "promptCompletion", timestamp: `${B}1.000Z`, timeTaken: 1000 } }),
+      evt({ span_id: "T", parent_span_id: "L", data: { type: "toolCall", timestamp: `${B}4.000Z`, timeTaken: 3000, toolName: "fib" } }),
+      evt({ span_id: "N1", parent_span_id: "T", data: { type: "promptCompletion", timestamp: `${B}4.000Z`, timeTaken: 3000 } }),
+      evt({ span_id: "N2", parent_span_id: "T", data: { type: "promptCompletion", timestamp: `${B}4.000Z`, timeTaken: 3000 } }),
+      evt({ span_id: "L", parent_span_id: "A", data: { type: "promptCompletion", timestamp: `${B}5.000Z`, timeTaken: 1000 } }),
+      evt({ span_id: "A", parent_span_id: null, data: { type: "agentEnd", timestamp: `${B}5.500Z`, timeTaken: 5500 } }),
+    ]);
+    const find = (id: string): TreeNode => {
+      const stack = [...forest];
+      while (stack.length) {
+        const n = stack.pop()!;
+        if (n.id === id) return n;
+        stack.push(...n.children);
+      }
+      throw new Error(`span ${id} not found`);
+    };
+    const L = find("L");
+    const T = find("T");
+    const N1 = find("N1");
+    expect(L.label).toBe("llmCall");
+    expect(L.duration).toBe(5000); // wall-clock, not 8000 (the old sum)
+    expect(T.duration).toBe(3000);
+    expect(N1.duration).toBe(3000);
+    // Parent contains child: no child is longer than its parent.
+    expect(T.duration!).toBeLessThanOrEqual(L.duration!);
+    expect(N1.duration!).toBeLessThanOrEqual(T.duration!);
   });
 
   it("preserves event arrival order within a span", () => {

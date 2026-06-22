@@ -177,6 +177,50 @@ describe("runBatch — mode 'all'", () => {
     expect(result).toEqual({ kind: "values", values: [42] });
   });
 
+  it("onBranchEnd receives each branch's return value on success", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    const ends: Array<{ index: number; outcome: string; value: unknown }> = [];
+    await runBatch<unknown>({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "all",
+      children: [
+        { key: "c0", invoke: async () => 42 },
+        { key: "c1", invoke: async () => ({ a: 1 }) },
+      ],
+      hooks: {
+        onBranchEnd: (_key, index, outcome, _t, value) =>
+          ends.push({ index, outcome, value }),
+      },
+    });
+    expect(ends).toEqual([
+      { index: 0, outcome: "success", value: 42 },
+      { index: 1, outcome: "success", value: { a: 1 } },
+    ]);
+  });
+
+  it("onBranchEnd reports no value for a non-success (interrupted) outcome", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    const ends: Array<{ outcome: string; value: unknown }> = [];
+    await runBatch({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "all",
+      children: [{ key: "c0", invoke: async () => [fakeInterrupt("z", 5)] }],
+      hooks: {
+        onBranchEnd: (_key, _index, outcome, _t, value) =>
+          ends.push({ outcome, value }),
+      },
+    });
+    expect(ends).toEqual([{ outcome: "interrupted", value: undefined }]);
+  });
+
   it("parent abort signal propagates into child stack", async () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();

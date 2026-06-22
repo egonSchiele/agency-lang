@@ -115,31 +115,68 @@ describe("handleKey", () => {
     expect(next.cursorId).toBe("a");
   });
 
-  it("e expands every span and trace in the forest", () => {
-    // child 'a' has a grandchild so expanding everything reveals it.
-    const state = initial("trace-t");
-    const a = state.roots[0].children[0];
-    a.children = [
+  // Tree: trace-t → [a → [a-child], b → [b-child]], all spans, with only
+  // the trace expanded. Used for the subtree expand/collapse tests.
+  const nested = (cursorId: string, expanded: string[] = ["trace-t"]): ViewerState => ({
+    roots: [
       {
-        id: "a-child",
+        id: "trace-t",
         traceId: "t",
-        parentId: "a",
-        children: [],
-        nodeKind: "event",
-        label: "debug",
-        summary: "debug",
+        parentId: null,
+        nodeKind: "trace",
+        label: "t",
+        summary: "trace t",
+        children: [
+          { ...child("a"), parentId: "trace-t", children: [{ ...child("a-child"), parentId: "a" }] },
+          { ...child("b"), parentId: "trace-t", children: [{ ...child("b-child"), parentId: "b" }] },
+        ],
       },
-    ];
-    const next = handleKey(state, k("e"));
-    expect(next.expanded.has("trace-t")).toBe(true);
-    expect(next.expanded.has("a")).toBe(true);
-    expect(next.expanded.has("b")).toBe(true);
+    ],
+    expanded: new Set(expanded),
+    cursorId,
+    scrollTop: 0,
+    quit: false,
   });
 
-  it("E collapses everything, auto-expanding the lone trace", () => {
-    const state = initial("a");
-    state.expanded = new Set(["trace-t", "a", "b"]);
+  it("e expands the node under the cursor and all of its descendants only", () => {
+    const next = handleKey(nested("a"), k("e"));
+    expect(next.expanded.has("a")).toBe(true);
+    expect(next.expanded.has("a-child")).toBe(true);
+    // Sibling 'b' (and its child) are NOT touched — the expand is scoped.
+    expect(next.expanded.has("b")).toBe(false);
+    expect(next.expanded.has("b-child")).toBe(false);
+  });
+
+  it("e on the root expands its whole subtree", () => {
+    const next = handleKey(nested("trace-t"), k("e"));
+    for (const id of ["trace-t", "a", "a-child", "b", "b-child"]) {
+      expect(next.expanded.has(id)).toBe(true);
+    }
+  });
+
+  it("E collapses the current node and its descendants, leaving siblings", () => {
+    const state = nested("a", ["trace-t", "a", "a-child", "b", "b-child"]);
     const next = handleKey(state, k("E"));
+    expect(next.expanded.has("a")).toBe(false);
+    expect(next.expanded.has("a-child")).toBe(false);
+    // Sibling subtree stays expanded; cursor stays on the collapsed node.
+    expect(next.expanded.has("b")).toBe(true);
+    expect(next.expanded.has("b-child")).toBe(true);
+    expect(next.expanded.has("trace-t")).toBe(true);
+    expect(next.cursorId).toBe("a");
+  });
+
+  it("z expands every span and trace in the whole forest, regardless of cursor", () => {
+    // Cursor on a leaf-most node, but z still expands the entire forest.
+    const next = handleKey(nested("a"), k("z"));
+    for (const id of ["trace-t", "a", "a-child", "b", "b-child"]) {
+      expect(next.expanded.has(id)).toBe(true);
+    }
+  });
+
+  it("Z collapses the whole forest, auto-expanding the lone trace", () => {
+    const state = nested("a", ["trace-t", "a", "a-child", "b", "b-child"]);
+    const next = handleKey(state, k("Z"));
     expect(next.expanded.has("a")).toBe(false);
     expect(next.expanded.has("b")).toBe(false);
     expect(next.expanded.has("trace-t")).toBe(true); // lone trace stays expanded

@@ -4,7 +4,7 @@
   "log": {
     "projectId": "agency-lang",
     "debugMode": false,
-    "logFile": "statelog.log"
+    "logFile": "log.jsonl"
   },
   "client": {
     "logLevel": "warn",

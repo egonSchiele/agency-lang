@@ -159,6 +159,17 @@ The carrier design assumes that when a composed signal (`AbortSignal.any([...])`
 
 6. **Cause-driven thread repair:** `prompt.ts:1106` runs `markThreadCancelled` only when `readCause(error)?.kind` is `userInterrupt`/`userKill` (or cause is absent — conservative default), not for `guardTrip`/`raceLoser`. The REPL-only `resetCancel` (`cli.ts:812`) is **untouched in Increment 1** — the §3.2 table lists it as part of the `userInterrupt` boundary's cleanup, but it already runs correctly in the REPL turn boundary and needs no change here.
 
+### 4.1.1 Implementation discovery: TWO trip-delivery paths, de-duped by a `delivered` flag
+
+The §1 root-cause analysis anticipated *one* boundary fix (teach the guard `try` to convert a cause-carrying abort). Implementation surfaced a **second** delivery path the original analysis missed, and the fix needs both to cooperate:
+
+- **Path A (leaf-op):** an in-flight `sleep`/`fetch` aborts and rejects carrying the `guardTrip` cause → `__tryCall` converts to a `Failure` (§4.1 step 5).
+- **Path B (runner):** `Runner.shouldSkip` sees the aborted signal at a step boundary, calls `guard.check()` (which sets the guard's `consumed` flag), and throws a `GuardExceededError` — the path the guards-design doc already documents. This path is still needed for a guard wrapping pure compute with **no** abortable leaf op to interrupt.
+
+Both can fire for the same trip. In the no-leaf case the block's own `shouldSkip` runs first and `consumed` de-dups the later `_popGuard`-step check. But the leaf path bypasses `check()`, so `consumed` stays `false` and the guard's **own `_popGuard` step** then trips `shouldSkip` → throws an **unhandled** `GuardExceededError` (a *second* crash, revealed only after Path A was fixed).
+
+The fix: a mutable `delivered?: boolean` on the `guardTrip` cause. Path A sets it when it converts; `shouldSkip` early-returns (does not re-throw) when it sees an already-`delivered` trip, letting `_popGuard` run. This works because the cause object has **stable identity** across the composed signal and the leaf rejection (the `AbortSignal.any` reason-propagation dependency, §3.4) — the same object is visible to both paths. Net: each trip is delivered exactly once regardless of which path wins.
+
 ### 4.2 What does NOT change in Increment 1
 
 - The generated catch ladders (`functionCatchFailure.ts`, `typescriptBuilder.ts:2543`) stay as-is — they still `instanceof GuardExceededError` / `isAbortError` and re-throw. Because they only *propagate* (never inspect cause), they need no change. **→ zero fixture regeneration.**

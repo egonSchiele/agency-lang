@@ -64,8 +64,12 @@ export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
     case "Left":
       return collapseOrParent(state, rows, idx);
     case "e":
-      return expandAll(state);
+      return expandSubtree(state, rows, idx);
     case "E":
+      return collapseSubtree(state, rows, idx);
+    case "z":
+      return expandAll(state);
+    case "Z":
       return collapseAll(state);
     case "Tab":
       return cycleTrace(state, +1);
@@ -101,7 +105,46 @@ function clearSearch(state: ViewerState): ViewerState {
   return { ...state, query: undefined, matches: undefined, matchIdx: undefined };
 }
 
-// Expand every span and trace in the forest. Leaves stay leaves.
+// Expand the node under the cursor and every span/trace beneath it.
+// Leaves stay leaves; the cursor doesn't move. Scoped to the current
+// subtree rather than the whole forest.
+function expandSubtree(
+  state: ViewerState,
+  rows: VisibleRow[],
+  idx: number,
+): ViewerState {
+  if (idx < 0) return state;
+  const next = new Set(state.expanded);
+  const walk = (node: TreeNode): void => {
+    if (node.nodeKind !== "event") next.add(node.id);
+    for (const c of node.children) walk(c);
+  };
+  walk(rows[idx].node);
+  return next.size === state.expanded.size ? state : { ...state, expanded: next };
+}
+
+// Collapse the node under the cursor and everything beneath it, so
+// re-opening it shows its children collapsed. The cursor stays put — the
+// node remains visible because its ancestors are untouched.
+function collapseSubtree(
+  state: ViewerState,
+  rows: VisibleRow[],
+  idx: number,
+): ViewerState {
+  if (idx < 0) return state;
+  const node = rows[idx].node;
+  const next = new Set(state.expanded);
+  const walk = (n: TreeNode): void => {
+    next.delete(n.id);
+    for (const c of n.children) walk(c);
+  };
+  walk(node);
+  return next.size === state.expanded.size
+    ? state
+    : { ...state, expanded: next, cursorId: node.id };
+}
+
+// Expand every span and trace in the whole forest. Leaves stay leaves.
 function expandAll(state: ViewerState): ViewerState {
   const next = new Set(state.expanded);
   const walk = (node: TreeNode): void => {
@@ -112,9 +155,9 @@ function expandAll(state: ViewerState): ViewerState {
   return { ...state, expanded: next };
 }
 
-// Collapse everything. Per the v1 default-expand-only-trace rule,
+// Collapse the whole forest. Per the v1 default-expand-only-trace rule,
 // auto-expand the lone trace when there is exactly one — keeps the
-// "press E to see the top-level view" behavior intuitive.
+// "press Z to see the top-level view" behavior intuitive.
 function collapseAll(state: ViewerState): ViewerState {
   const onlyTrace = state.roots.length === 1 ? state.roots[0].id : undefined;
   const expanded = new Set<string>();

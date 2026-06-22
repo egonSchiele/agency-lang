@@ -32,10 +32,12 @@ AgencyCancelledError: sleep cancelled
 The chain:
 
 1. A `TimeGuard` timer fires and calls `this.controller?.abort()` **with no reason** (`lib/runtime/guard.ts:364`, inside `startWindow`).
-2. That abort is composed into `stack.abortSignal`, which an in-flight `sleep()` is listening on. Sleep's abort handler rejects with a **bare** `AgencyCancelledError("sleep cancelled")` (`lib/stdlib/abortable.ts:170`) — an error that carries *no information about why it aborted*.
+2. That abort is composed into `stack.abortSignal`, which an in-flight `sleep()` is listening on. Sleep's abort handler rejects with a **bare** `AgencyCancelledError("sleep cancelled")` (`lib/stdlib/abortable.ts:211`) — an error that carries *no information about why it aborted*.
 3. **Before** Esc-cancel: the generated per-function/per-node catch ladders converted `AgencyCancelledError` into a `Failure`, so the guard's `try` still observed a budget failure and the time guard surfaced a `timeoutFailure`.
-4. **After** Esc-cancel: those ladders now *re-throw* `isAbortError` so user cancellations propagate cleanly (`lib/templates/backends/typescriptGenerator/functionCatchFailure.ts:23`, `lib/backends/typescriptBuilder.ts:2554`). The bare cancel from `sleep` now escapes the guard boundary as an **unhandled async rejection** and crashes the process.
-5. The runner's `shouldSkip` guard-sniff added to mitigate this (`lib/runtime/runner.ts:241`, commit `99e92199`) only catches the *synchronous step-boundary* case. The `sleep` rejection fires from the timer's microtask and never passes through a step boundary, so the sniff misses it.
+4. **After** Esc-cancel: those ladders now *re-throw* `isAbortError` so user cancellations propagate cleanly (`lib/templates/backends/typescriptGenerator/functionCatchFailure.ts:23`, `lib/backends/typescriptBuilder.ts:2554`). The `sleep` rejection still propagates through the await chain and reaches the enclosing `guard`'s `try` — but that `try` today only recognizes `GuardExceededError`, so it re-throws the bare cancel. By then the awaiting runner step has already halted, so the re-thrown cancel lands at top level as an **unhandled async rejection** and crashes the process.
+5. The runner's `shouldSkip` guard-sniff added to mitigate this (`lib/runtime/runner.ts:269`, commit `99e92199`) only catches the *synchronous step-boundary* case — it converts an aborted signal into a `GuardExceededError` when the runner steps next. But the `sleep` rejection fires from the timer's microtask and propagates straight through the await chain to the guard `try` without the runner stepping, so the sniff never runs for it.
+
+> **Why the fix is reachable:** the bare cancel *does* reach the guard's `try` (point 4) — the boundary exists; it just doesn't recognize the error. So attaching a `guardTrip` cause to the rejection and teaching the guard `try` to convert cause-carrying aborts is sufficient. (An implementer should confirm this await-chain reachability first; if a future refactor ever halts the step before the rejection reaches the `try`, the boundary-conversion approach would need rethinking.)
 
 The deeper issue: **the leaf abort cannot tell the guard boundary "I am a guard trip — convert me to a Failure" because intent is not carried.** Every abort is the same `AgencyCancelledError`, discriminated only by re-derivation at catch time. The Esc-cancel change made the default disposition "propagate," and there's no carried signal to override it back to "convert" for guard-owned aborts.
 
@@ -65,7 +67,7 @@ Every generated function catch (`functionCatchFailure.ts`), every generated node
 
 ### 2.3 The re-derivation smells (intent reconstructed at catch time)
 
-- `runner.shouldSkip` (`runner.ts:241`) walks `stack.guards` innermost-first to decide a three-way: **guard trip** (throw `GuardExceededError`) vs **guard-already-consumed** (fall through for cleanup) vs **external/race-loser** (halt silently). This is the exact debt; it's what broke under Esc-cancel.
+- `runner.shouldSkip` (`runner.ts:269`) walks `stack.guards` innermost-first to decide a three-way: **guard trip** (throw `GuardExceededError`) vs **guard-already-consumed** (fall through for cleanup) vs **external/race-loser** (halt silently). This is the exact debt; it's what broke under Esc-cancel.
 - `prompt.ts:242` uses `ctx.isCancelled` *state* as the authority to reclassify an unrecognizable provider error as a cancel.
 - `__tryCall` (`result.ts:84`) reclassifies `GuardExceededError` into `{guardFailure}` / `{timeoutFailure}` Result shapes by sniffing `.type`.
 
@@ -122,6 +124,10 @@ This is ordinary typed-exception handling, except the discrimination data rides 
 
 Thread repair (`markThreadCancelled`) runs only for `user*` causes — not for `guardTrip` or `raceLoser`, which don't leave dangling tool calls the way a mid-LLM user cancel does. This removes the `prompt.ts:1106` "repair on any abort" coupling.
 
+### 3.4 Dependency: `AbortSignal.any` reason propagation
+
+The carrier design assumes that when a composed signal (`AbortSignal.any([...])`, used by both `TimeGuard.installAbortPlumbing` at `guard.ts:349` and `ctx.getAbortSignal` at `context.ts:512`) fires, `signal.reason` is the reason of whichever *source* signal aborted first. This is standard `AbortSignal.any` behavior — the composite adopts the first-aborting source's reason — and it is what lets a leaf op read the originating `AbortCause` off `stack.abortSignal` even though it's a composite. The design rests on this; if it ever proves unreliable across the supported Node versions, the producer would need to also stash the cause somewhere the leaf can read directly.
+
 ---
 
 ## 4. Increment 1 — Core (this plan): green CI + carrier foundation
@@ -141,14 +147,17 @@ Thread repair (`markThreadCancelled`) runs only for `user*` causes — not for `
    - Race/fork abort site: abort with `{ kind: "raceLoser" }`.
    - `ctx.cleanup()` (`context.ts:542`): `{ kind: "cleanup" }`.
 
-3. **Leaf ops propagate the cause** instead of minting a bare cancel. The crashing site `abortable.ts:170` (and its siblings, plus `http.ts:87`, `builtins.ts`, `ui.ts:864`, `oauth.ts`, `speech.ts`) read `signal.reason` and reject with an `AgencyCancelledError` **that carries `cause`** (add a `cause?: AbortCause` field to `AgencyCancelledError` for Increment 1 — small, additive, no type unification yet). If `signal.reason` is a `guardTrip`, the rejection carries it; the guard boundary converts it.
+3. **Leaf ops propagate the cause** instead of minting a bare cancel. The crashing site `abortable.ts:211` (and its siblings, plus `http.ts:87`, `builtins.ts`, `ui.ts:864`, `oauth.ts`, `speech.ts`) read `signal.reason` and reject with an `AgencyCancelledError` **that carries `cause`** (add a `cause?: AbortCause` field to `AgencyCancelledError` for Increment 1 — small, additive, no type unification yet). If `signal.reason` is a `guardTrip`, the rejection carries it; the guard boundary converts it. *(This relies on `AbortSignal.any` adopting the reason of whichever composed source aborts first — see §3.4.)*
 
-4. **Boundaries read the cause:**
-   - `runner.shouldSkip` (`runner.ts:241`): replace the innermost-first `guards` walk with `switch (readCause(stack.abortSignal)?.kind)`. `guardTrip` → return the matching guard's `check()` error (or build the `GuardExceededError` from the cause). `raceLoser`/`cleanup` → silent halt. `userInterrupt`/`userKill` → propagate (no silent halt). This is the direct regression fix.
-   - The **guard `try` boundary** (`result.ts` `__tryCall` / stdlib `guard`): when catching an abort error whose `cause.kind === "guardTrip"` and whose `guardId` matches this guard, convert to the structured `Failure`; otherwise re-throw so it keeps unwinding to its real owner. **This is the fix for the async-leaf-rejection crash**: the `sleep` rejection now carries `guardTrip`, so the enclosing guard converts it instead of letting it escape.
+4. **Introduce a stable `guardId`** on every `Guard` instance, threaded into both (a) the `guardTrip` cause it emits and (b) the converting `try` boundary so the two can be matched. This is a **new invariant**, not an existing field — call it out as an explicit work item. For nested guards, stack unwinding already makes the innermost `try` catch first, so id-matching is primarily a correctness backstop (it prevents an inner trip from being converted by the wrong outer guard if the unwinding order ever surprises us); it must still be implemented, not assumed.
+
+5. **Boundaries read the cause:**
+   - `runner.shouldSkip` (`runner.ts:269`): replace the innermost-first `guards` walk with `switch (readCause(stack.abortSignal)?.kind)`. `guardTrip` → return the matching guard's `check()` error (or build the `GuardExceededError` from the cause). `raceLoser`/`cleanup` → silent halt. `userInterrupt`/`userKill` → propagate (no silent halt). This is the direct regression fix.
+   - The **guard `try` boundary** (`result.ts` `__tryCall:62` / stdlib `guard`): when catching an abort error whose `cause.kind === "guardTrip"` and whose `guardId` matches this guard, convert to the structured `Failure`; otherwise re-throw so it keeps unwinding to its real owner. **This is the fix for the async-leaf-rejection crash**: the `sleep` rejection now carries `guardTrip`, so the enclosing guard converts it instead of letting it escape.
+     - **CRITICAL ORDERING (the actual fix):** the `guardTrip`-cause check must run **before** the blanket `if (isAbortError(error)) throw error` at `result.ts:76`. `isAbortError` returns `true` for *any* `AgencyCancelledError` — including the cause-carrying one — so if the cause check is added *after* the existing ladder, line 76 re-throws first and the conversion is dead code, leaving the crash in place. Reorder so `__tryCall` reads: *is this a `guardTrip` cause (matching `guardId`)? → convert. Else is it an abort? → throw. Else → Failure.*
    - `prompt.ts:242` normalization: prefer `readCause(...)` over the `isCancelled`-state heuristic where a cause is present; keep the existing heuristic as a fallback for provider errors that arrive with no cause.
 
-5. **Cause-driven thread repair:** `prompt.ts:1106` runs `markThreadCancelled` only when `readCause(error)?.kind` is `userInterrupt`/`userKill` (or cause is absent — conservative default), not for `guardTrip`/`raceLoser`.
+6. **Cause-driven thread repair:** `prompt.ts:1106` runs `markThreadCancelled` only when `readCause(error)?.kind` is `userInterrupt`/`userKill` (or cause is absent — conservative default), not for `guardTrip`/`raceLoser`. The REPL-only `resetCancel` (`cli.ts:812`) is **untouched in Increment 1** — the §3.2 table lists it as part of the `userInterrupt` boundary's cleanup, but it already runs correctly in the REPL turn boundary and needs no change here.
 
 ### 4.2 What does NOT change in Increment 1
 
@@ -232,3 +241,4 @@ Therefore abort handling lives in the **backend boundary/disposition layer** (§
 - **`spent` accuracy in the `guardTrip` cause.** The cause carries an approximate `spent` at abort time; `TimeGuard.check()` remains the authority for the number surfaced in `GuardFailureData`. Keep `check()` as the source of truth; the cause is for discrimination.
 - **Provider errors with no cause.** Some provider SDK abort errors arrive without our `AbortCause`. Keep `prompt.ts`'s `isCancelled`-state fallback so these are still classified as cancellations when a cause is absent.
 - **Cross-module identity.** `readCause`/`isAbortError` must keep the name-based fallback for errors that cross module instances (e.g. the subprocess resolver shim), per `errors.ts:80`.
+- **Cause payload across the subprocess boundary (out of scope for now).** The name-based fallback preserves abort *identity* across a process boundary, but the `cause` *payload* on a reconstructed error may not survive serialization through the subprocess resolver shim. The failing CI tests are all in-process, so this is not an Increment-1 blocker — but a `guardTrip` (or any cause) originating *inside* a subprocess could lose its discrimination data at the parent. Explicitly deferred; revisit when guard/abort semantics need to span subprocesses.

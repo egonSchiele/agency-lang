@@ -5,12 +5,59 @@ description: Documents `agency eval optimize` — the eval-driven loop that rewr
 
 # Optimizing agents
 
-`agency eval optimize` (also `agency optimize`) improves an agent by rewriting the declarations you mark with the `optimize` modifier. It evaluates the baseline, asks a mutator model to propose new values for those declarations, runs and grades each candidate against your inputs, and keeps the best one.
+`agency optimize` improves an agent by rewriting your prompts for you.
 
-```bash
-agency optimize agent.agency --goal "Return the capital of the given country."
-agency optimize agent.agency --inputs inputs.json --graders grading.ts --iterations 5
-agency optimize agent.agency:main --inputs inputs.json --validation-split 0.3 --no-writeback
+For example, let's say you are writing an agent to return the capital of India. Here's your code:
+
+```ts
+node main() {
+  const prompt = "What is the capital of France?"
+  const response = llm(prompt)
+  return response
+}
+```
+
+Notice that the prompt is incorrectly asking for the capital of France. We're going to have the optimizer change this prompt to India. It's really easy to get started with the optimizer for a toy example like this. First, we need to mark the targets we want the optimizer to optimize:
+
+```ts
+node main() {
+  // added `optimize` to next line
+  optimize const prompt = "What is the capital of France?"
+  const response = llm(prompt)
+  return response
+}
+```
+
+The only change needed is the `optimize` modifier on the `prompt` variable declaration. Now call the `optimize` command, giving it your agency file and a goal:
+
+```
+agency optimize foo.agency --goal 'Return the capital of India'
+``
+
+If you run this command, you'll see output similar to this:
+
+```
+  grading:
+    - goal
+    first input: input-1 — goal: Return the capital of India
+
+== optimize greedy (run demo-run): 1 target(s), 1 input(s), up to 5 iteration(s) ==
+  - bar.agency:main:prompt = "What is the capital of France?"
+  baseline   objective 0.000
+  iter 1/5  accepted objective 1.000 (6.3s)
+  ~ bar.agency:main:prompt:
+      - What is the capital of France?
+      + What is the capital of India?
+      The change focuses on directly addressing the goal of retrieving the capital of India by modifying the prompt to reflect…
+  reached the maximum objective (1.000) — stopping early
+
+== Optimized variables ==
+  ~ bar.agency:main:prompt:
+      - What is the capital of France?
+      + What is the capital of India?
+
+Complete: champion iteration 1, accepted 1, rejected 0, invalid 0 (10.0s)
+Optimize demo-run completed: 1 accepted, 0 rejected
 ```
 
 ## Marking what to optimize
@@ -27,9 +74,29 @@ node main(question: string): string {
 }
 ```
 
-A rewritten value must preserve every interpolation placeholder the original used (`${question}` here). Legacy `@optimize(...)` tags are not supported.
-
 ## Inputs and the goal
+
+    What the goal flag is doing for you behind the scenes is creating a single task. Now let's look at a slightly more real-world example, where we define a series of tasks for the agent. A task is simply a way to define how to run an agent: what node to run, and what arguments to pass to that node. When we used the goal flag, the goal simply created a single task. By default, if tasks don't have a node or arguments defined, they just run the `main` node with no arguments. That's what our simple optimize command did. But now we want to run a few tasks, passing in a parameter to the main node. Here's our new code:
+
+    ```agency
+    node main(country) {
+     optimize const prompt = `What is the area of ${country}?`
+     const response = llm(prompt)
+     return response
+    }
+    ```
+
+    Notice that the prompt is asking for the *area* of the country, but we want it to return the *capital* instead. Here are our task definitions:
+
+    ```
+    { "tasks": [
+        { "task_id": "in", "args": { "country": "India" },        "goal": "Return New Delhi" },
+        { "task_id": "jp", "args": { "country": "Japan" },         "goal": "Return Tokyo" },
+        { "task_id": "br", "args": { "country": "Brazil" },        "goal": "Return Brasília" }
+      ]}
+    ```
+
+    (`task_id` is optional too).
 
 You describe what to optimize against with inputs and/or a goal. An input is one invocation of the agent: `args` for the node, plus optional `goal`, `expected`, `node`, `working_dir`, and freeform `metadata`.
 

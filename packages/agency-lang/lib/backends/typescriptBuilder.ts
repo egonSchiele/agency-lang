@@ -223,6 +223,12 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
+  // Handler bodies emit all their statements into a single arrow-function
+  // scope (unlike node/function bodies, where each statement is wrapped in
+  // its own substep block). A fixed `__funcResult` temp name therefore
+  // collides when a handler body has multiple statement-level interrupt
+  // checks. This counter gives each one a unique name.
+  private handlerFuncResultCounter: number = 0;
   private insideGlobalInit: boolean = false;
 
   /*
@@ -1997,8 +2003,9 @@ export class TypeScriptBuilder {
       }
 
       // Sync calls: check for interrupt result
-      const tempVar = "__funcResult";
       if (this.insideHandlerBody) {
+        // Unique name per call — handler-body statements share one scope.
+        const tempVar = `__funcResult_${this.handlerFuncResultCounter++}`;
         return ts.statements([
           ts.constDecl(tempVar, callNode),
           ts.if(
@@ -2007,6 +2014,7 @@ export class TypeScriptBuilder {
           ),
         ]);
       }
+      const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       // In node context, wrap with state for the driver.
       // In function context, halt with the interrupt array directly so the

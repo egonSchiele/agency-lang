@@ -1,14 +1,22 @@
-def getArea(country: string): string {
-  const prompt = "What is the area of ${country}?"
-  const response = llm(prompt)
-  return response
-}
+import { systemMessage } from "std::thread"
 
-export node main() {
-  const country = "France"
-  const prompt = "Get the area of ${country} using your getArea tool."
-  const response = llm(prompt, {
-    tools: [getArea]
-  })
-  return response
+node main() {
+  const prompt = "You are a coding agent. Help the user with their task."
+  systemMessage(prompt)
+  const message = input("> ")
+  handle {
+    const result = llm(message, {
+      tools: [read, write]
+    })
+  } with (data) {
+    print("Got an interrupt:")
+    print(data.message)
+    const approval = input("Approve? (y/n)")
+    if (approval.toLowerCase() === "y") {
+      return approve()
+    } else {
+      return reject()
+    }
+  }
+  print(result)
 }

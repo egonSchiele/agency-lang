@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handler body with multiple statement-level calls compiles without temp-var redeclaration",
+      "input": "",
+      "expectedOutput": "\"after interrupt\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

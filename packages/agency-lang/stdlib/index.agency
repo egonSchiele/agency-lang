@@ -38,10 +38,10 @@ import {
   _input,
   _sleep,
  } from "agency-lang/stdlib-lib/builtins.js"
+import { _resolve } from "agency-lang/stdlib-lib/path.js"
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
-import { _resolve } from "agency-lang/stdlib-lib/path.js"
 
 export safe def print(...messages) {
   """
@@ -143,7 +143,13 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export def read(filename: string, dir: string = ".", offset: number = 0, limit: number = 0, useAgentCwd: boolean = false): Result {
+export safe def read(
+  filename: string,
+  dir: string = ".",
+  offset: number = 0,
+  limit: number = 0,
+  useAgentCwd: boolean = false,
+): Result {
   """
   A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
 
@@ -204,7 +210,11 @@ export def write(
   return try _write(dir, filename, content, mode)
 }
 
-export def readImage(filename: string, dir: string = ".", useAgentCwd: boolean = false): Result {
+export def readImage(
+  filename: string,
+  dir: string = ".",
+  useAgentCwd: boolean = false,
+): Result {
   """
   A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
 

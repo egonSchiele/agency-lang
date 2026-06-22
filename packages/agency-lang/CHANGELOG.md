@@ -1,3 +1,19 @@
+## Jun 22 2026 — v0.6.1
+
+### Agency Agent
+- Per-model cost attribution in the agency agent; tool-call branches now propagate their cost up to the main branch.
+- Unhandled interrupts from the command line print a clear error message instead of crashing silently.
+
+### Logs Viewer
+- Grouped + flattened LLM call view; `e`/`E` expands/collapses the current node, `z`/`Z` expands/collapses the whole tree.
+- Statelog viewer fixes: short IDs, cross-process tail decoding, and `logs` now defaults to the `view` subcommand.
+
+### Runtime
+- Structured abort causes — aborts now carry typed cause information instead of a bare string.
+
+### CLI
+- `agency serve` prints the list of exposed endpoints on startup.
+
 ## Jun 20 2026 — v0.6
 
 ### Language / Typechecker

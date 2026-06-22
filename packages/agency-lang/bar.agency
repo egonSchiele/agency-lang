@@ -1,6 +1,6 @@
-import { NumberInRange } from "std::types"
-
-node main(): string {
-  const n: NumberInRange(1, 10) = 5
-  print(`The number is ${n}`)
+node main() {
+  // added `optimize` to next line
+  optimize const prompt = "What is the capital of France?"
+  const response = llm(prompt)
+  return response
 }

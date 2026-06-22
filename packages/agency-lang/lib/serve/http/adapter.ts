@@ -63,11 +63,7 @@ async function callFunction(
   logger: Logger,
 ): Promise<RouteResult> {
   try {
-    const result = await fn.agencyFunction.invoke({
-      type: "named",
-      positionalArgs: [],
-      namedArgs: toArgs(body),
-    });
+    const result = await fn.invoke(toArgs(body));
     return ok(result);
   } catch (err) {
     logger.error(`function ${fn.name} threw: ${errorMessage(err)}`);

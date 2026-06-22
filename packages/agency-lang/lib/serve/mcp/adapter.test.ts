@@ -37,6 +37,7 @@ function makeTestExports(): ExportedItem[] {
       description: "Add two numbers",
       agencyFunction: addFn,
       interruptEffects: [],
+      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
     },
     {
       kind: "node",
@@ -175,6 +176,7 @@ describe("MCP adapter", () => {
           description: "Deploy app",
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }, { effect: "myapp::approve" }],
+          invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
         },
       ],
     });
@@ -357,7 +359,7 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", name: "greet", description: "Greet someone", agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }] },
+        { kind: "function", name: "greet", description: "Greet someone", agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }], invoke: (namedArgs) => greetFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
       ],
       policyConfig: {
         policyStore: new PolicyStore("test", tmpDir),
@@ -408,7 +410,7 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", name: "sendEmail", description: "Send an email", agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }] },
+        { kind: "function", name: "sendEmail", description: "Send an email", agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }], invoke: (namedArgs) => sendFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
       ],
       policyConfig: {
         policyStore: store,

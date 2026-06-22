@@ -1,5 +1,24 @@
 import { spawn, SpawnOptions, ChildProcess } from "child_process";
-import { AgencyCancelledError, isAbortError } from "../runtime/errors.js";
+import {
+  AgencyCancelledError,
+  isAbortError,
+  readCause,
+} from "../runtime/errors.js";
+
+/**
+ * Build the cancellation a leaf op rejects with when its abort signal
+ * fires. Reads the structured `AbortCause` off the signal (a guard trip,
+ * a user interrupt, …) and carries it on the error so the boundary that
+ * catches it — e.g. the stdlib `guard`'s `try` via `__tryCall` — can
+ * convert it instead of letting a bare cancel escape. Falls back to a
+ * plain cancel when no structured cause is present.
+ */
+function leafCancel(
+  message: string,
+  signal: AbortSignal | undefined,
+): AgencyCancelledError {
+  return new AgencyCancelledError(message, readCause(signal));
+}
 
 /**
  * Shared abortability helpers for stdlib JS implementations whose
@@ -52,7 +71,7 @@ export function abortableSpawn(
     // don't want Node's built-in handler racing with ours.
     const { signal: _sig, input: _in, timeout: _to, ...spawnOptions } = options;
     if (options.signal?.aborted) {
-      reject(new AgencyCancelledError(`${command} cancelled`));
+      reject(leafCancel(`${command} cancelled`, options.signal));
       return;
     }
     const child = spawn(command, args, {
@@ -102,7 +121,7 @@ export function abortableSpawn(
     child.on("close", (code) => {
       cleanup();
       if (aborted) {
-        reject(new AgencyCancelledError(`${command} cancelled`));
+        reject(leafCancel(`${command} cancelled`, options.signal));
       } else if (timedOut) {
         resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 1 });
       } else {
@@ -112,7 +131,7 @@ export function abortableSpawn(
     child.on("error", (err) => {
       cleanup();
       if (aborted || isAbortError(err)) {
-        reject(new AgencyCancelledError(`${command} cancelled`));
+        reject(leafCancel(`${command} cancelled`, options.signal));
         return;
       }
       reject(err);
@@ -138,7 +157,7 @@ export function abortableExec(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new AgencyCancelledError(`${command} cancelled`));
+      reject(leafCancel(`${command} cancelled`, signal));
       return;
     }
     const child: ChildProcess = spawn(command, args, {
@@ -165,7 +184,7 @@ export function abortableExec(
     child.on("close", (code, sig) => {
       cleanup();
       if (aborted) {
-        reject(new AgencyCancelledError(`${command} cancelled`));
+        reject(leafCancel(`${command} cancelled`, signal));
       } else if (code === 0) {
         resolve();
       } else if (code === null) {
@@ -179,7 +198,7 @@ export function abortableExec(
     child.on("error", (err) => {
       cleanup();
       if (aborted || isAbortError(err)) {
-        reject(new AgencyCancelledError(`${command} cancelled`));
+        reject(leafCancel(`${command} cancelled`, signal));
         return;
       }
       reject(err);
@@ -199,7 +218,7 @@ export function abortableSleep(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new AgencyCancelledError("sleep cancelled"));
+      reject(leafCancel("sleep cancelled", signal));
       return;
     }
     const timer = setTimeout(() => {
@@ -208,7 +227,7 @@ export function abortableSleep(
     }, ms);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new AgencyCancelledError("sleep cancelled"));
+      reject(leafCancel("sleep cancelled", signal));
     };
     if (signal) signal.addEventListener("abort", onAbort, { once: true });
   });

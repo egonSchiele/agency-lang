@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { CheckpointError, RestoreSignal, AgencyCancelledError, isAbortError } from "./errors.js";
+import {
+  CheckpointError,
+  RestoreSignal,
+  AgencyCancelledError,
+  isAbortError,
+  makeAbortCause,
+  readCause,
+  type AbortCause,
+} from "./errors.js";
 
 describe("CheckpointError", () => {
   it("should have correct name and message", () => {
@@ -39,6 +47,87 @@ describe("AgencyCancelledError", () => {
   it("should accept a custom reason", () => {
     const err = new AgencyCancelledError("user clicked stop");
     expect(err.message).toBe("user clicked stop");
+  });
+
+  it("should carry a structured AbortCause when given one", () => {
+    const cause = makeAbortCause({ kind: "userInterrupt" });
+    const err = new AgencyCancelledError("esc", cause);
+    expect(err.agencyCause).toBe(cause);
+  });
+});
+
+describe("AbortCause / readCause", () => {
+  const cases: AbortCause[] = [
+    { kind: "userInterrupt" },
+    { kind: "userKill", reason: "ts cancel" },
+    { kind: "guardTrip", dimension: "time", limit: 20, spent: 21, guardId: "g1" },
+    { kind: "guardTrip", dimension: "cost", limit: 2, spent: 3, guardId: "g2" },
+    { kind: "raceLoser" },
+    { kind: "cleanup" },
+  ];
+
+  it("round-trips every variant through an AbortSignal's reason", () => {
+    for (const c of cases) {
+      const controller = new AbortController();
+      controller.abort(makeAbortCause(c));
+      const read = readCause(controller.signal);
+      expect(read?.kind).toBe(c.kind);
+    }
+  });
+
+  it("round-trips every variant through AgencyCancelledError.agencyCause", () => {
+    for (const c of cases) {
+      const err = new AgencyCancelledError("x", makeAbortCause(c));
+      const read = readCause(err);
+      expect(read?.kind).toBe(c.kind);
+    }
+  });
+
+  it("preserves guardTrip payload fields", () => {
+    const controller = new AbortController();
+    controller.abort(
+      makeAbortCause({
+        kind: "guardTrip",
+        dimension: "time",
+        limit: 20,
+        spent: 21,
+        guardId: "g7",
+      }),
+    );
+    const read = readCause(controller.signal);
+    expect(read).toMatchObject({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 20,
+      guardId: "g7",
+    });
+  });
+
+  it("returns undefined when no structured cause is present", () => {
+    // Bare string reason (the legacy shape) is not a structured cause.
+    const controller = new AbortController();
+    controller.abort("just a string");
+    expect(readCause(controller.signal)).toBeUndefined();
+    expect(readCause(new AgencyCancelledError("no cause"))).toBeUndefined();
+    expect(readCause(new Error("plain"))).toBeUndefined();
+    expect(readCause(null)).toBeUndefined();
+  });
+
+  it("a structured guardTrip cause is also recognized as an abort error when on AgencyCancelledError", () => {
+    // The cause-carrying cancel must still pass isAbortError — this is
+    // exactly why __tryCall checks the guardTrip cause BEFORE isAbortError.
+    const err = new AgencyCancelledError(
+      "sleep cancelled",
+      makeAbortCause({
+        kind: "guardTrip",
+        dimension: "time",
+        limit: 20,
+        spent: 21,
+        guardId: "g1",
+      }),
+    );
+    expect(isAbortError(err)).toBe(true);
+    expect(readCause(err)?.kind).toBe("guardTrip");
   });
 });
 

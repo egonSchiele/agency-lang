@@ -13,7 +13,8 @@ import { modifiers, RESET, styles } from "@/utils/termcolors.js"
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { isFailure } from "../runtime/result.js";
-import { isAbortError } from "../runtime/errors.js";
+import { isAbortError, makeAbortCause } from "../runtime/errors.js";
+import type { AbortCause } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
@@ -448,7 +449,7 @@ function installCancelKey(
 /** Safely fetch the active RuntimeContext, or null when none is bound
  *  (e.g. tests drive `_runLineRepl` without a runtime). */
 function activeCtxOrNull(): {
-  cancel: (r?: string) => void;
+  cancel: (r?: string, cause?: AbortCause) => void;
   resetCancel: () => void;
   readonly aborted: boolean;
 } | null {
@@ -775,7 +776,13 @@ export async function _runLineRepl(
         // AgencyCancelledError propagates out and the catch below prints
         // "cancelled".
         stopActiveSpinner();
-        turnCtx?.cancel("cancelled by user");
+        // Esc is a recoverable interrupt: stop this turn's work and hand
+        // control back, but keep the REPL session alive (vs a terminal
+        // userKill from TS `cancel()`).
+        turnCtx?.cancel(
+          "cancelled by user",
+          makeAbortCause({ kind: "userInterrupt" }),
+        );
       });
 
       try {

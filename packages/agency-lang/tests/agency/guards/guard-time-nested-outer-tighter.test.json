@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inner:timeoutFailure:20\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Outer time guard (20ms) TIGHTER than inner (5s). The outer trips while the inner block's sleep is in flight. KNOWN Increment-1 limitation: __tryCall converts any guardTrip cause without matching guardId, so the outer's trip is mis-attributed to the inner guard's Failure (type timeoutFailure, maxTime=20 = the OUTER's limit) and the outer block returns normally instead of tripping. NOT a crash (pre-fix this crashed with an unhandled rejection). Increment 2's guardId matching will re-route to the outer and flip the expected output. Pins the documented behavior so that change is visible."
+    }
+  ]
+}

@@ -1,4 +1,21 @@
 import type { StateStack } from "./state/stateStack.js";
+import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+
+/** Monotonic source of stable per-guard ids. Threaded into the
+ *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
+ *  which guard tripped. NOTE: in Increment 1 no boundary actually
+ *  MATCHES on this id — `__tryCall` converts any guardTrip cause it
+ *  catches, relying on structural call-stack nesting to route a trip to
+ *  its owning `try` (exactly as cost guards do today). Real id-matching
+ *  (which would fix outer-tighter-than-inner mis-attribution; see
+ *  tests/agency/guards/guard-time-nested-outer-tighter) needs threading
+ *  the id into `__tryCall` — a codegen change deferred to Increment 2.
+ *  The id is emitted now so the cause shape is stable for that work. */
+let __guardIdCounter = 0;
+export function nextGuardId(): string {
+  __guardIdCounter += 1;
+  return `g${__guardIdCounter}`;
+}
 
 /**
  * Per-guard scope state for cost / time limits. Held on
@@ -250,6 +267,9 @@ export class TimeGuard implements Guard {
    *  steps (popGuard) on its way out. */
   private consumed: boolean = false;
 
+  /** Stable id threaded into the emitted `guardTrip` cause. */
+  readonly guardId: string = nextGuardId();
+
   constructor(public readonly timeLimit: number) {}
 
   install(stack: StateStack): void {
@@ -360,10 +380,32 @@ export class TimeGuard implements Guard {
   private startWindow(): void {
     const remaining = this.timeLimit - this.elapsedMs;
     const delay = remaining > 0 ? remaining : 0;
-    this.timerHandle = setTimeout(
-      () => this.controller?.abort(),
-      delay,
-    );
+    this.timerHandle = setTimeout(() => {
+      // Abort WITH a structured cause so any in-flight leaf op (sleep,
+      // fetch, …) listening on the composed signal rejects carrying the
+      // guard trip — not a bare cancel that the guard's `try` boundary
+      // can't recognize and would let escape as an unhandled rejection.
+      const spent = this.elapsedMs +
+        (this.windowStart !== undefined
+          ? performance.now() - this.windowStart
+          : 0);
+      // Abort with an AgencyCancelledError that CARRIES the structured
+      // cause. Keeping `signal.reason` an Error (not a bare object) means
+      // a `throw signal.reason` site — e.g. runBatch's race-loser path —
+      // still throws an Error; `readCause` digs the cause back out.
+      this.controller?.abort(
+        new AgencyCancelledError(
+          `guard exceeded: time limit ${this.timeLimit}`,
+          makeAbortCause({
+            kind: "guardTrip",
+            dimension: "time",
+            limit: this.timeLimit,
+            spent,
+            guardId: this.guardId,
+          }),
+        ),
+      );
+    }, delay);
     this.windowStart = performance.now();
     this.state = "running";
   }

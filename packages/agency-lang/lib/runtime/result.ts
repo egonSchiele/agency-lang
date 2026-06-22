@@ -1,7 +1,41 @@
 import { z } from "zod";
-import { isAbortError } from "./errors.js";
+import { isAbortError, readCause } from "./errors.js";
 import { isGuardExceededError } from "./guard.js";
 import { hasInterrupts } from "./interrupts.js";
+
+/** Structured `GuardFailureData` for a tripped guard. Shared by the
+ *  `guardTrip`-cause path (a trip that surfaced as an aborted leaf op)
+ *  and the `GuardExceededError` path (a trip thrown at a sync point).
+ *  Both must produce the identical Failure shape the stdlib `guard`
+ *  documents. */
+function guardFailureData(
+  dimension: "cost" | "time",
+  limit: number,
+  spent: number,
+): {
+  type: string;
+  maxCost: number | null;
+  actualCost: number | null;
+  maxTime: number | null;
+  actualTime: number | null;
+} {
+  if (dimension === "time") {
+    return {
+      type: "timeoutFailure",
+      maxCost: null,
+      actualCost: null,
+      maxTime: limit,
+      actualTime: spent,
+    };
+  }
+  return {
+    type: "guardFailure",
+    maxCost: limit,
+    actualCost: spent,
+    maxTime: null,
+    actualTime: null,
+  };
+}
 
 export type ResultValue = ResultSuccess | ResultFailure;
 
@@ -73,6 +107,27 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // swallow with `catch fallback`. See lib/stdlib/http.ts's
     // `runHttp` helper that translates DOMException("AbortError")
     // into AgencyCancelledError specifically so this re-throw fires.
+    // A guard trip can surface here in TWO shapes: as a thrown
+    // `GuardExceededError` (the trip caught at a sync point) OR as an
+    // aborted leaf op (e.g. an in-flight `sleep`) whose cancellation
+    // CARRIES a `guardTrip` cause. The cause-carrying shape is ALSO an
+    // abort error, so this guardTrip check MUST run BEFORE the blanket
+    // `isAbortError -> throw` below — otherwise `isAbortError` re-throws
+    // the cancel first, the conversion never runs, and the bare cancel
+    // escapes the guarded block as an unhandled rejection (the bug this
+    // fixes). See docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md.
+    const guardCause = readCause(error);
+    if (guardCause?.kind === "guardTrip") {
+      // Mark the trip delivered so the runner's `shouldSkip` (which may
+      // step the guard's own `_popGuard` next, while the signal is still
+      // aborted) does NOT re-throw a GuardExceededError for the same
+      // trip. The cause object is shared by identity with `signal.reason`.
+      guardCause.delivered = true;
+      return failure(
+        guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
+        opts,
+      );
+    }
     if (isAbortError(error)) {
       throw error;
     }
@@ -82,26 +137,8 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // this branch the user would see only the stringified error
     // message and lose the numeric limits. See lib/runtime/guard.ts.
     if (isGuardExceededError(error)) {
-      if (error.type === "time") {
-        return failure(
-          {
-            type: "timeoutFailure",
-            maxCost: null,
-            actualCost: null,
-            maxTime: error.limit,
-            actualTime: error.spent,
-          },
-          opts,
-        );
-      }
       return failure(
-        {
-          type: "guardFailure",
-          maxCost: error.limit,
-          actualCost: error.spent,
-          maxTime: null,
-          actualTime: null,
-        },
+        guardFailureData(error.type, error.limit, error.spent),
         opts,
       );
     }

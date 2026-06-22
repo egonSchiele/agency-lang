@@ -7,6 +7,7 @@ import {
   isGuardExceededError,
 } from "./guard.js";
 import { StateStack } from "./state/stateStack.js";
+import { readCause } from "./errors.js";
 
 describe("GuardExceededError", () => {
   it("is an Error subclass with name, type, limit, spent fields", () => {
@@ -161,6 +162,24 @@ describe("TimeGuard", () => {
     expect(err).toBeInstanceOf(GuardExceededError);
     expect(err.type).toBe("time");
     expect(err.limit).toBe(500);
+  });
+
+  it("aborts with a structured guardTrip cause on its signal reason", () => {
+    const stack = new StateStack();
+    const g = new TimeGuard(500);
+    g.install(stack);
+    vi.advanceTimersByTime(500);
+    const cause = readCause(stack.abortSignal);
+    expect(cause).toMatchObject({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 500,
+      guardId: g.guardId,
+    });
+    // A leaf op that reads this cause and rejects with it must surface as
+    // a guardTrip — this is what lets __tryCall convert it to a Failure
+    // instead of letting a bare cancel escape the guarded block.
+    expect((cause as { spent: number }).spent).toBeGreaterThanOrEqual(0);
   });
 
   it("pause is idempotent — multiple calls charge elapsedMs once", () => {

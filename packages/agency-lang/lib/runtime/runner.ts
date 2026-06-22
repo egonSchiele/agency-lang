@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
-import { RestoreSignal } from "./errors.js";
+import { RestoreSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
@@ -268,6 +268,17 @@ export class Runner {
    *      abort (race-loser branch cancel). Halt silently as before. */
   private shouldSkip(): boolean {
     if (this.stack?.abortSignal?.aborted && !this.halted) {
+      // If the abort carries a guard trip that was ALREADY delivered via
+      // the leaf-op path (an in-flight sleep/fetch aborted, then __tryCall
+      // converted it to a Failure), the trip is handled. Do NOT re-throw
+      // it here — this `shouldSkip` may be gating the guard's own
+      // `_popGuard` cleanup step, and throwing would surface an unhandled
+      // GuardExceededError for a trip the user already saw as a Failure.
+      // Fall through so cleanup runs. See the abort-taxonomy spec.
+      const cause = readCause(this.stack.abortSignal);
+      if (cause?.kind === "guardTrip" && cause.delivered) {
+        return this.halted || this._break || this._continue;
+      }
       // Walk innermost-first so the deepest guard reports its trip
       // first. Mirrors the order in prompt.ts's cost-check loop.
       for (let i = this.stack.guards.length - 1; i >= 0; i--) {

@@ -41,10 +41,96 @@ export class ConcurrentInterruptError extends Error {
   }
 }
 
+/**
+ * Structured reason carried by every abort — on `AbortController.abort(cause)`
+ * (so it surfaces as `signal.reason`) and on the `agencyCause` field of a
+ * thrown `AgencyCancelledError`. The `kind` discriminant lets every
+ * catch/boundary READ the intent instead of re-deriving it (which is what the
+ * runner's guard-sniff and the leaf bare-throws used to do). See
+ * docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md.
+ */
+export type AbortCause =
+  | { kind: "userInterrupt" }
+  | { kind: "userKill"; reason?: string }
+  | {
+      kind: "guardTrip";
+      dimension: "cost" | "time";
+      limit: number;
+      spent: number;
+      guardId: string;
+      /**
+       * Mutable de-dup flag. A time-guard trip can be delivered by EITHER
+       * an aborted leaf op (→ `__tryCall` converts to a Failure) OR the
+       * runner's `shouldSkip` (→ throws `GuardExceededError`). Whichever
+       * fires first sets this; the other then knows the trip is already
+       * handled and must not re-deliver. The cause object has stable
+       * identity across the composed signal (`AbortSignal.any` adopts the
+       * source's reason object), so this single flag is visible to both
+       * paths. See docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md §3.4.
+       */
+      delivered?: boolean;
+    }
+  | { kind: "raceLoser" }
+  | { kind: "cleanup" };
+
+/** Brand so a plain object on `signal.reason` is recognizable as ours. */
+const ABORT_CAUSE_BRAND = "__agencyAbortCause";
+
+export function makeAbortCause(
+  cause: AbortCause,
+): AbortCause & { [ABORT_CAUSE_BRAND]: true } {
+  return { ...cause, [ABORT_CAUSE_BRAND]: true } as AbortCause & {
+    [ABORT_CAUSE_BRAND]: true;
+  };
+}
+
+function isAbortCause(value: unknown): value is AbortCause {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    (value as Record<string, unknown>)[ABORT_CAUSE_BRAND] === true &&
+    typeof (value as Record<string, unknown>).kind === "string"
+  );
+}
+
+/**
+ * Read the structured `AbortCause` off an `AbortSignal` (its `reason`), a
+ * thrown `AgencyCancelledError` (its `agencyCause`), or a bare cause value.
+ * Returns `undefined` when no structured cause is present — callers keep
+ * their existing heuristics as a fallback for that case.
+ *
+ * Note: this uses `instanceof AgencyCancelledError`, NOT the name-based
+ * fallback that `isAbortError` adds for errors that cross module instances
+ * (the resolver shim — see below). In Increment 1 every guard-trip
+ * producer and consumer lives in one runtime module instance, so
+ * `instanceof` holds. If a cause ever needs reading across that boundary,
+ * `readCause` returns `undefined` where `isAbortError` would still
+ * recognize the error — the in-process sibling of the subprocess
+ * cause-payload risk noted in the abort-taxonomy spec.
+ */
+export function readCause(source: unknown): AbortCause | undefined {
+  if (source == null) return undefined;
+  if (typeof AbortSignal !== "undefined" && source instanceof AbortSignal) {
+    // `signal.reason` is kept as an Error (so `throw signal.reason` in
+    // runBatch stays an Error), with the structured cause carried on it —
+    // but a bare branded cause is also accepted for forward-compat.
+    return readCause(source.reason);
+  }
+  if (source instanceof AgencyCancelledError && source.agencyCause) {
+    return source.agencyCause;
+  }
+  if (isAbortCause(source)) return source;
+  return undefined;
+}
+
 export class AgencyCancelledError extends Error {
-  constructor(reason?: string) {
+  /** Structured intent for this abort, when known. */
+  readonly agencyCause?: AbortCause;
+
+  constructor(reason?: string, cause?: AbortCause) {
     super(reason ?? "Agent execution was cancelled");
     this.name = "AgencyCancelledError";
+    this.agencyCause = cause;
   }
 }
 

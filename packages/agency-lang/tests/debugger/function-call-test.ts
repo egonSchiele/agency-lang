@@ -13,11 +13,12 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
-  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   GuardExceededError,
+  isAbortError as __isAbortError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -49,6 +50,7 @@ const __globalCtx = new RuntimeContext({
   smoltalkDefaults: {
     openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
     googleApiKey: __process.env["GEMINI_API_KEY"] || "",
+    anthropicApiKey: __process.env["ANTHROPIC_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
@@ -257,6 +259,15 @@ return;
 if (__error instanceof GuardExceededError) {
   throw __error;
 }
+// A cancellation (user pressed Esc / an abort fired) must propagate
+// untouched: converting it to a Failure here would (a) let the agent
+// limp onward through more soon-to-abort calls instead of stopping
+// promptly, and (b) surface the abort as a logged ERROR + a Failure the
+// REPL can't recognize as a cancel. The runtime is built to propagate
+// AgencyCancelledError (see prompt.ts / hooks.ts / result.ts); honor that.
+if (__isAbortError(__error)) {
+  throw __error;
+}
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
 // inspect the result (the common case for void side-effect calls)
@@ -402,6 +413,9 @@ await callHook({
     if (__error instanceof GuardExceededError) {
       throw __error
     }
+    if (__isAbortError(__error)) {
+      throw __error
+    }
     {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
@@ -439,7 +453,8 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       messages: new ThreadStore(),
       data: {}
     };
-    await main(initialState)
+    const __result = await main(initialState);
+    reportUnhandledInterrupts(__result)
   } catch (__error: any) {
     console.error(`\nAgent crashed: ${__error.message}`)
     throw __error

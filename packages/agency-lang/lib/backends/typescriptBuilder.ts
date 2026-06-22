@@ -3727,7 +3727,16 @@ export class TypeScriptBuilder {
                   data: ts.obj({}),
                 }),
               ),
-              ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
+              ts.varDecl(
+                "const",
+                "__result",
+                ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
+              ),
+              // Running `main` directly from the CLI: if it returned an
+              // unhandled interrupt, tell the user instead of exiting
+              // silently. Skipped when imported from TS (guard above is
+              // false), where the caller handles interrupts itself.
+              ts.call(ts.id("reportUnhandledInterrupts"), [ts.id("__result")]),
             ]),
             ts.statements([
               ts.consoleError(

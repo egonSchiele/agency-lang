@@ -11,7 +11,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
-  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
@@ -315,7 +315,8 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       messages: new ThreadStore(),
       data: {}
     };
-    await main(initialState)
+    const __result = await main(initialState);
+    reportUnhandledInterrupts(__result)
   } catch (__error: any) {
     console.error(`\nAgent crashed: ${__error.message}`)
     throw __error

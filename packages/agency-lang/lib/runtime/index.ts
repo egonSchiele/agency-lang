@@ -77,6 +77,7 @@ export {
   interrupt,
   isInterrupt,
   hasInterrupts,
+  reportUnhandledInterrupts,
   isDebugger,
   isRejected,
   isApproved,

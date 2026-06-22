@@ -11,7 +11,7 @@ import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { Approved, GraphState, Rejected } from "./types.js";
+import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
 
@@ -110,6 +110,33 @@ export function isInterrupt(obj: any): obj is Interrupt {
 
 export function hasInterrupts(data: any): data is Interrupt[] {
   return Array.isArray(data) && data.length > 0 && data.every(isInterrupt);
+}
+
+/**
+ * Called from the generated CLI bootstrap (the `argv[1] === import.meta.url`
+ * block) AFTER a top-level node returns. When a node is run directly from the
+ * command line and produces an interrupt that no handler caught, the interrupt
+ * comes back as an `Interrupt[]` in `result.data` — and the bootstrap would
+ * otherwise just exit silently, leaving the user with no output and no clue.
+ *
+ * This prints a helpful message pointing at the handlers guide and exits
+ * non-zero. It only runs on direct CLI execution: when the compiled module is
+ * imported and the node is called from TypeScript, the bootstrap guard is false
+ * and this is never reached — there, the caller is expected to inspect
+ * `result.data` / `respondToInterrupts` itself, so a returned interrupt is fine.
+ */
+export function reportUnhandledInterrupts(result: RunNodeResult<any>): void {
+  if (!hasInterrupts(result.data)) return;
+  for (const it of result.data) {
+    console.error(
+      `\nInterrupt "${it.effect}" was not handled:\n` +
+        `  ${it.message}\n` +
+        `  ${JSON.stringify(it.data)}\n\n` +
+        `You need to handle your interrupts by wrapping them in a handler.\n` +
+        `See the guide: https://agency-lang.com/guide/handlers.html`,
+    );
+  }
+  process.exit(1);
 }
 
 export function isDebugger(obj: any): obj is Interrupt {

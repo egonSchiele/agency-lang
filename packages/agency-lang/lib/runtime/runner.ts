@@ -54,7 +54,7 @@ const FORK_VALUE_CHAR_CAP = 4000;
  *  - a deep JSON clone for normal small values (so it renders cleanly);
  *  - a truncated string for oversized values;
  *  - `"[unserializable]"` when stringification throws (e.g. a cycle). */
-function safeStatelogValue(value: unknown): unknown {
+export function safeStatelogValue(value: unknown): unknown {
   if (value === undefined) return undefined;
   let json: string | undefined;
   try {

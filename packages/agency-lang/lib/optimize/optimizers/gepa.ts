@@ -1,5 +1,6 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { CandidatePool, type PoolCandidate } from "../candidatePool.js";
+import { breakdown } from "../gradeBreakdown.js";
 import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
 import type { AgencyRunner } from "../grading/agencyRunner.js";
@@ -65,9 +66,6 @@ export class Gepa extends BaseOptimizer {
   }
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
-    if (this.validationInputs.length > 0) {
-      this.reporter.note(`validation set provided, but ${this.name} selects the champion on the training objective`);
-    }
     const paretoInputs = this.gepaConfig.paretoSet ?? inputs;
     const rng = makeRng(this.config.seed ?? 0);
 
@@ -82,21 +80,27 @@ export class Gepa extends BaseOptimizer {
 
     if (this.isMaxObjective(baseline.scorecard)) {
       this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
-      return this.finish(source, baseline, [], startedAt);
+      return this.finish(source, baseline, [baseline], [], startedAt);
     }
 
     const pool = new CandidatePool<Candidate>([toPoolCandidate(baseline)]);
     const attempts = await this.evolve(pool, inputs, paretoInputs, rng);
-    return this.finish(source, pool.best().value, attempts, startedAt);
+    const accepted = attempts.filter((a) => a.decision === "accepted" && a.candidate).map((a) => a.candidate!);
+    return this.finish(source, pool.best().value, [baseline, ...accepted], attempts, startedAt);
   }
 
-  /** Write back the champion (if enabled), build the result, and report completion. */
-  private finish(source: OptimizeTargetSet, champion: Candidate, attempts: Attempt[], startedAt: number): OptimizeResult {
+  /** Pick the writeback champion (best validation objective when a validation set
+   *  exists, else the train champion = Pareto best), write it back, build + report. */
+  private async finish(source: OptimizeTargetSet, trainChampion: Candidate, candidates: Candidate[], attempts: Attempt[], startedAt: number): Promise<OptimizeResult> {
+    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
     if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
     const result = this.buildPointwiseResult({
       championIter: champion.iter, championFiles: champion.files,
       attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
     });
+    result.trainObjective = champion.scorecard.objective();
+    if (validationObjective !== undefined) result.validationObjective = validationObjective;
+    result.championBreakdown = breakdown(champion.scorecard);
     this.reporter.runFinished({
       result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
     });

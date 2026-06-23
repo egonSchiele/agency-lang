@@ -156,4 +156,16 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     // A full eval would add the 3rd input per child (+1 each) → 12. Rejection path = 3 + 3*2 = 9.
     expect(runInput).toHaveBeenCalledTimes(9);
   });
+
+  it("emits a champion grade breakdown and reports a validation objective when a validation set is given", async () => {
+    const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]));
+    const opt = new Gepa(config({ runId: "val", iterations: 1 }), deps(runInput));
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: threeInputs,
+      validationInputs: [{ id: "v", args: {} }],
+    });
+    expect(result.championBreakdown?.length).toBeGreaterThan(0);   // #2: breakdown now emitted
+    expect(typeof result.validationObjective).toBe("number");      // #3: champion picked by validation
+  });
 });

@@ -698,9 +698,20 @@ export class TypeScriptBuilder {
       if (!hasAnyValidateTag(vpAliasedWithTags, vpAliasesFull)) {
         return ts.empty();
       }
-      const vpResolved = resolveTypeDeep(vpAliasedWithTags, vpAliasesFull);
+      // Build the descriptor from the UNRESOLVED body. Unlike the bare-alias
+      // path we must NOT `resolveTypeDeep` here: the body legitimately
+      // contains this alias's own value-param identifiers (and, for a
+      // forwarding alias, a reference to another value-param alias). Deep
+      // resolution eagerly substitutes those, which both (a) trips
+      // `applyValueArgs`'s unsubstituted-param guard when a forwarded name
+      // collides with the inner param name, and (b) inlines the inner
+      // alias's validators into THIS factory — re-introducing the
+      // cross-module leak this feature exists to remove. Leaving the body
+      // intact lets `buildValidationDescriptor` emit a nested factory CALL
+      // for any value-param reference (validators resolve in their own
+      // module); the schema strings still substitute identifiers locally.
       const vpDescriptor = buildValidationDescriptor(
-        vpResolved,
+        vpAliasedWithTags,
         this.scopes.visibleTypeAliases(),
         vpAliasesFull,
       );

@@ -71,19 +71,21 @@ export function hasAnyValidateTag(
       if (!aliasesFull) return false;
       const entry = aliasesFull[t.aliasName];
       if (!entry) return false;
-      // For value-parameterized references, the alias's raw tags may
-      // reference value-param identifiers; substitute first so the
-      // post-substitution tag set is what we check for `@validate`.
-      // See `isValueParamInstantiation` — the canonical predicate.
-      const effectiveEntry = isValueParamInstantiation(t, entry)
-        ? applyValueArgs(entry, t.valueArgs, t.aliasName)
-        : entry;
-      if (tagsHaveValidate(effectiveEntry.tags)) return true;
+      // The PRESENCE of a `@validate(...)` tag is substitution-invariant:
+      // value-arg substitution only rewrites a tag's argument expressions,
+      // never adds or removes the tag itself. So we check the raw entry
+      // directly rather than calling `applyValueArgs`. This also matters
+      // for forwarding aliases (`type AdultAge(high) = NumberInRange(18,
+      // high)`): substituting here would pass the still-symbolic `high`
+      // into the inner alias and trip `applyValueArgs`'s
+      // unsubstituted-value-param guard when the forwarded name collides
+      // with the inner param name.
+      if (tagsHaveValidate(entry.tags)) return true;
       // Guard against recursive alias self-reference.
       if (seen.has(t.aliasName)) return false;
       const nextSeen = new Set(seen);
       nextSeen.add(t.aliasName);
-      return hasAnyValidateTag(effectiveEntry.body, aliasesFull, nextSeen);
+      return hasAnyValidateTag(entry.body, aliasesFull, nextSeen);
     }
     default:
       return false;

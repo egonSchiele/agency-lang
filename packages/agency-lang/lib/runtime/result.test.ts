@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall } from "./result.js";
-import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+import {
+  AgencyAbort,
+  AgencyCancelledError,
+  makeAbortCause,
+  type AbortCause,
+} from "./errors.js";
 
 describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
   it("converts a guardTrip-cause-carrying abort to a timeoutFailure (NOT a throw)", async () => {
@@ -71,6 +76,56 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
         throw new AgencyCancelledError("cancelled");
       }),
     ).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+});
+
+describe("__tryCall — propagate-never-swallow lock-in (B4 era: no ownedGuardIds)", () => {
+  // CLAUDE.md safety invariant: an AgencyAbort must propagate untouched, never
+  // be silently converted to a Failure — EXCEPT a guardTrip, which (with no
+  // ownedGuardIds filter yet) converts to a guardFailure at the single rung.
+  // C2 re-points the guardTrip assertion to "re-throws" once ownedGuardIds
+  // filtering lands (see C2 Step 1). This is the smallest fully-deterministic
+  // test that catches a regression where a non-guard abort rung is inverted,
+  // removed, or moved below the Failure-conversion path.
+  const reThrows = async (cause: AbortCause) => {
+    await expect(
+      __tryCall(() => {
+        throw new AgencyAbort("abort", cause);
+      }),
+    ).rejects.toBeInstanceOf(AgencyAbort);
+  };
+
+  it("re-throws a userInterrupt abort", () =>
+    reThrows(makeAbortCause({ kind: "userInterrupt" })));
+  it("re-throws a userKill abort", () =>
+    reThrows(makeAbortCause({ kind: "userKill" })));
+  it("re-throws a raceLoser abort", () =>
+    reThrows(makeAbortCause({ kind: "raceLoser" })));
+  it("re-throws a cleanup abort", () =>
+    reThrows(makeAbortCause({ kind: "cleanup" })));
+
+  it("CONVERTS a guardTrip abort to a Failure (B4 era; C2 flips this to re-throw)", async () => {
+    const result = await __tryCall(() => {
+      throw new AgencyAbort(
+        "trip",
+        makeAbortCause({
+          kind: "guardTrip",
+          dimension: "time",
+          limit: 20,
+          spent: 21,
+          guardId: "g1",
+        }),
+      );
+    });
+    expect(isFailure(result)).toBe(true);
+    expect((result as { error: { type: string } }).error.type).toBe("timeoutFailure");
+  });
+
+  it("negative control: a non-AgencyAbort Error converts to a Failure", async () => {
+    const result = await __tryCall(() => {
+      throw new Error("plain boom");
+    });
+    expect(isFailure(result)).toBe(true);
   });
 });
 

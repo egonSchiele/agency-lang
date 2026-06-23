@@ -1,4 +1,8 @@
-import { AgencyCancelledError, isAbortError } from "../runtime/errors.js";
+import {
+  AgencyCancelledError,
+  isAbortError,
+  readCause,
+} from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -84,7 +88,12 @@ export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> 
     return await fn();
   } catch (e) {
     if (isAbortError(e)) {
-      throw new AgencyCancelledError(`fetch ${url} cancelled`);
+      // Carry the structured cause off the rejection (it IS the signal's
+      // reason). A guard trip that aborted this fetch surfaces as an
+      // AgencyCancelledError whose guardTrip cause must survive so the
+      // owning guard's `try` converts it instead of letting a bare cancel
+      // escape. Falls back to a plain cancel for an external/DOMException abort.
+      throw new AgencyCancelledError(`fetch ${url} cancelled`, readCause(e));
     }
     throw e;
   }

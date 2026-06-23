@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { isAbortError, readCause } from "./errors.js";
-import { isGuardExceededError } from "./guard.js";
 import { hasInterrupts } from "./interrupts.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
@@ -131,17 +130,11 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     if (isAbortError(error)) {
       throw error;
     }
-    // Preserve GuardExceededError's structured data so the stdlib
-    // `guard` function can surface { type, maxCost, actualCost,
-    // maxTime, actualTime } directly via `result.error`. Without
-    // this branch the user would see only the stringified error
-    // message and lose the numeric limits. See lib/runtime/guard.ts.
-    if (isGuardExceededError(error)) {
-      return failure(
-        guardFailureData(error.type, error.limit, error.spent),
-        opts,
-      );
-    }
+    // NOTE: a thrown GuardExceededError no longer needs its own branch here.
+    // Since unification it is an AgencyAbort carrying a `guardTrip` cause, so
+    // the `guardCause?.kind === "guardTrip"` branch above already converts it
+    // (reading the same dimension/limit/spent off the cause). That branch is
+    // the single place a guard trip becomes a Failure.
     return failure(
       error instanceof Error ? error.message : String(error),
       opts,

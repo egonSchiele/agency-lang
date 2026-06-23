@@ -1,0 +1,24 @@
+import { guard } from "std::thread"
+
+// A plain `try` around an abortable leaf, sitting INSIDE a guard, must NOT
+// swallow the guard's trip. The guard's 20ms timer fires while the inner
+// `try sleep(...)` is in flight; the sleep aborts carrying the guard's
+// guardTrip cause. The plain `try`'s __tryCall owns NO guards (ownedGuardIds
+// is absent), so it RE-THROWS the trip instead of converting it to a Failure;
+// the trip then reaches the guard's own boundary and surfaces as a
+// timeoutFailure. Before Increment-2 guardId matching, the plain `try`
+// converted ANY guardTrip and swallowed the guard's trip, so the guard never
+// tripped. This pins the corrected behavior.
+node main() {
+  const result = guard(time: 20ms) as {
+    const inner = try sleep(150ms)
+    if (isFailure(inner)) {
+      return "inner-try swallowed the trip"
+    }
+    return "block ran to completion"
+  }
+  if (isFailure(result)) {
+    return "guard:${result.error.type}"
+  }
+  return "no trip: ${result.value}"
+}

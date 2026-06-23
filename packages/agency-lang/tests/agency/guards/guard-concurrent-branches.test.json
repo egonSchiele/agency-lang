@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"A:timeoutFailure|B:B ran\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Two concurrent fork branches each wrap their own guard(time:). Branch 1's tight 20ms guard trips while branch 2's 5s guard is still mid-sleep. guardId matching keeps the trips separate: branch 1 surfaces a timeoutFailure (owns its trip), branch 2 returns normally (does not own branch 1's trip), and the parent receives both. Pins guardTrip separation across concurrent branches."
+    }
+  ]
+}

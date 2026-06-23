@@ -1,0 +1,33 @@
+import { guard } from "std::thread"
+
+// Two fork branches, each wrapping its OWN guard(time:) around a sleep.
+// Branch 1's tight guard (20ms) trips while branch 2's generous guard (5s)
+// is still running its 50ms sleep. Each branch's guard has a distinct
+// guardId, so branch 2's `try` must NOT mis-attribute branch 1's trip:
+// branch 1 surfaces a timeoutFailure (its own guard owns the trip), branch 2
+// returns its normal value, and the parent receives both. Without guardId
+// matching, branch 2's boundary could convert branch 1's trip. Exercises
+// guardTrip separation across concurrent branches in one fixture.
+node main() {
+  const results = fork([1, 2]) as n {
+    if (n == 1) {
+      const a = guard(time: 20ms) as {
+        sleep(200ms)
+        return "A did not trip"
+      }
+      if (isFailure(a)) {
+        return "A:${a.error.type}"
+      }
+      return "A:ok"
+    }
+    const b = guard(time: 5s) as {
+      sleep(50ms)
+      return "B ran"
+    }
+    if (isFailure(b)) {
+      return "B:${b.error.type}"
+    }
+    return "B:${b.value}"
+  }
+  return "${results[0]}|${results[1]}"
+}

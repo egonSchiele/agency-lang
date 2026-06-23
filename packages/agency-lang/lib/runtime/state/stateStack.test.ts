@@ -537,14 +537,17 @@ describe("StateStack guards", () => {
     g2.charge(0.4);
     const json = stack.toJSON();
     expect(json.guards).toEqual([
-      { kind: "cost", costLimit: 1.5, spent: 0.2 },
-      { kind: "cost", costLimit: 0.5, spent: 0.4 },
+      { kind: "cost", costLimit: 1.5, spent: 0.2, guardId: g1.guardId },
+      { kind: "cost", costLimit: 0.5, spent: 0.4, guardId: g2.guardId },
     ]);
     const restored = StateStack.fromJSON(json);
     expect(restored.guards).toHaveLength(2);
     expect(restored.guards[0]).toBeInstanceOf(CostGuard);
     expect((restored.guards[0] as CostGuard).costLimit).toBe(1.5);
     expect((restored.guards[1] as CostGuard).costLimit).toBe(0.5);
+    // guardId survives the round-trip (ownedGuardIds matching depends on it).
+    expect((restored.guards[0] as CostGuard).guardId).toBe(g1.guardId);
+    expect((restored.guards[1] as CostGuard).guardId).toBe(g2.guardId);
   });
 
   it("fromJSON defaults guards to [] when the field is absent (pre-guard checkpoints)", () => {
@@ -569,6 +572,7 @@ describe("StateStack guards", () => {
       kind: "cost",
       costLimit: 5,
       spent: 1.23,
+      guardId: g.guardId,
     });
   });
 });

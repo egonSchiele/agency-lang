@@ -1,5 +1,7 @@
 import * as smoltalk from "smoltalk";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { __tryCall, type ResultValue } from "../runtime/result.js";
+import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
 import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
@@ -203,4 +205,38 @@ export async function __internal_popGuard(
 export async function _popGuard(ids: string[]): Promise<void> {
   const { stack } = getRuntimeContext();
   popGuardImpl(stack, ids);
+}
+
+/**
+ * Run the guarded block under a `try` that owns exactly the guards in `ids`,
+ * so a `guardTrip` is converted to a Failure ONLY when it belongs to one of
+ * THIS guard()'s guards (an outer guard's trip re-throws past it).
+ *
+ * Replaces the stdlib `guard`'s former agency-level `try block()`. That `try`
+ * lowered (in a function scope) to `__tryCall(() => block(), { checkpoint,
+ * functionName, args })`; we MUST forward the same FailureOpts so a guard
+ * failure keeps its checkpoint / functionName / args (retry + reporting
+ * depend on them) — only `ownedGuardIds` is added. See
+ * processTryExpression in lib/backends/typescriptBuilder.ts.
+ */
+export async function _runGuarded(
+  ids: string[],
+  block: unknown,
+): Promise<ResultValue> {
+  const { ctx, stack } = getRuntimeContext();
+  // Invoke the block through __call (NOT a plain block()) so it runs through
+  // the same Agency call machinery the codegen `try block()` used — that is
+  // what lets a guard trip inside the block surface as an AgencyAbort with its
+  // guardTrip cause instead of a generic error. `stack.lastFrame()` is
+  // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
+  // matches what the codegen `try block()` captured via `__stack.args`.
+  return __tryCall(
+    () => __call(block, { type: "positional", args: [] }),
+    {
+      ownedGuardIds: ids,
+      checkpoint: ctx.getResultCheckpoint(),
+      functionName: "guard",
+      args: stack.lastFrame()?.args,
+    },
+  );
 }

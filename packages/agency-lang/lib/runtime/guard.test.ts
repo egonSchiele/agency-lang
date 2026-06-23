@@ -111,9 +111,12 @@ describe("CostGuard", () => {
     g.install(new StateStack());
     g.charge(1.5);
     const json = g.toJSON();
-    expect(json).toEqual({ kind: "cost", costLimit: 3.0, spent: 1.5 });
+    expect(json).toMatchObject({ kind: "cost", costLimit: 3.0, spent: 1.5 });
+    // guardId is serialized so ownedGuardIds matching survives resume.
+    expect((json as { guardId?: string }).guardId).toBe(g.guardId);
     const restored = guardFromJSON(json) as CostGuard;
     expect(restored).toBeInstanceOf(CostGuard);
+    expect(restored.guardId).toBe(g.guardId); // id round-trips
     restored.charge(2);
     expect(restored.check(new StateStack())!.spent).toBeCloseTo(3.5, 5);
   });

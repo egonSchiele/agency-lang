@@ -1,0 +1,21 @@
+// Edge case: a NULLABLE value-param validated alias (`NumberInRange(1,10) | null!`).
+// The descriptor wraps the value-param factory CALL in a `nullable` descriptor,
+// so null must short-circuit (validation skipped) while a non-null value still
+// runs the factory's validator chain (min 1 / max 10).
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+node main() {
+  const nothing: NumberInRange(1, 10) | null! = null  // null -> short-circuits, PASS
+  const ok: NumberInRange(1, 10) | null! = 5          // in range -> PASS
+  const lo: NumberInRange(1, 10) | null! = 0          // 0 < 1 -> FAIL
+  const hi: NumberInRange(1, 10) | null! = 11         // 11 > 10 -> FAIL
+  return {
+    nothing: isSuccess(nothing),
+    ok: isSuccess(ok),
+    lo: isSuccess(lo),
+    hi: isSuccess(hi)
+  }
+}

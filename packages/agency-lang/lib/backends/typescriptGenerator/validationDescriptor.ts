@@ -176,6 +176,34 @@ function descriptor(
     // — the canonical predicate, also used in `typeToZodSchema` and
     // `hasAnyValidateTag`.
     if (isValueParamInstantiation(variableType, entry)) {
+      // A VALIDATED value-param alias compiles to a descriptor factory in
+      // its defining module (see processTypeAlias). Reference it by CALL so
+      // its validators resolve in that module's scope — never injected into
+      // the consumer, and impossible to shadow with a same-named local.
+      if (entry && hasAliasValidate(entry, typeAliasesFull)) {
+        const argList = (variableType.valueArgs ?? [])
+          .map((a) => tagArgToTs(a))
+          .join(", ");
+        const call = ts.raw(`${variableType.aliasName}(${argList})`);
+        if (useSiteValidators.length === 0) return call;
+        // Concatenate use-site validators on top of the factory's chain:
+        // `{ ...AliasName(args), validators: [...(AliasName(args)?.validators ?? []), ...useSite] }`
+        const existingValidators = ts.binOp(
+          ts.prop(call, "validators", { optional: true }),
+          "??",
+          ts.arr([]),
+          { parenLeft: true },
+        );
+        return ts.obj([
+          ts.setSpread(call),
+          ts.set(
+            '"validators"',
+            ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
+          ),
+        ]);
+      }
+      // Non-validated value-param alias: inline the substituted schema. There
+      // are no validators to leak, so this stays as-is.
       const substituted = applyValueArgs(
         entry!,
         variableType.valueArgs,

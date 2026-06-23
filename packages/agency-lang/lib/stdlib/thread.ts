@@ -137,22 +137,27 @@ function pushGuardImpl(
   stack: StateStack,
   costLimit: number | null,
   timeLimit: number | null,
-): number {
+): string[] {
   if (costLimit == null && timeLimit == null) {
     throw new Error(
       "guard() requires at least one of: cost, time",
     );
   }
-  let count = 0;
+  // Return the pushed guards' ids (innermost-last) so the caller can scope a
+  // `try` to convert ONLY its own guards' trips (C2 ownedGuardIds). The array
+  // length also drives the LIFO pop, replacing the old count.
+  const ids: string[] = [];
   if (costLimit != null) {
-    stack.pushGuard(new CostGuard(costLimit));
-    count++;
+    const g = new CostGuard(costLimit);
+    stack.pushGuard(g);
+    ids.push(g.guardId);
   }
   if (timeLimit != null) {
-    stack.pushGuard(new TimeGuard(timeLimit));
-    count++;
+    const g = new TimeGuard(timeLimit);
+    stack.pushGuard(g);
+    ids.push(g.guardId);
   }
-  return count;
+  return ids;
 }
 
 export async function __internal_pushGuard(
@@ -161,7 +166,7 @@ export async function __internal_pushGuard(
   _threads: ThreadStore,
   costLimit: number | null,
   timeLimit: number | null,
-): Promise<number> {
+): Promise<string[]> {
   return pushGuardImpl(stack, costLimit, timeLimit);
 }
 
@@ -169,18 +174,18 @@ export async function __internal_pushGuard(
 export async function _pushGuard(
   costLimit: number | null,
   timeLimit: number | null,
-): Promise<number> {
+): Promise<string[]> {
   const { stack } = getRuntimeContext();
   return pushGuardImpl(stack, costLimit, timeLimit);
 }
 
 /**
- * Close the most-recently-opened `count` guard scopes on the caller's
- * stack. Paired with `pushGuard`'s return value so the caller pops
- * exactly the guards it pushed.
+ * Close the most-recently-opened guard scopes on the caller's stack — one
+ * per id in `ids`. Paired with `pushGuard`'s returned id array so the caller
+ * pops exactly the guards it pushed.
  */
-function popGuardImpl(stack: StateStack, count: number): void {
-  for (let i = 0; i < count; i++) {
+function popGuardImpl(stack: StateStack, ids: string[]): void {
+  for (let i = 0; i < ids.length; i++) {
     stack.popGuard();
   }
 }
@@ -189,13 +194,13 @@ export async function __internal_popGuard(
   _ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
-  count: number,
+  ids: string[],
 ): Promise<void> {
-  popGuardImpl(stack, count);
+  popGuardImpl(stack, ids);
 }
 
 /** ALS-reading replacement for `__internal_popGuard`. */
-export async function _popGuard(count: number): Promise<void> {
+export async function _popGuard(ids: string[]): Promise<void> {
   const { stack } = getRuntimeContext();
-  popGuardImpl(stack, count);
+  popGuardImpl(stack, ids);
 }

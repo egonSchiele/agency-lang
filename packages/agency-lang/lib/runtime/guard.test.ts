@@ -65,6 +65,20 @@ describe("CostGuard", () => {
     expect(err.spent).toBeCloseTo(2.1, 5);
   });
 
+  it("exposes a guardId; its check()-produced trip carries it (C1)", () => {
+    // Load-bearing for C2 ownedGuardIds matching: the trip a cost guard
+    // produces at a sync point must identify WHICH guard tripped.
+    const stack = new StateStack();
+    const g = new CostGuard(2.0);
+    g.install(stack);
+    g.charge(3);
+    const err = g.check(stack)!;
+    expect(typeof g.guardId).toBe("string");
+    expect(g.guardId.length).toBeGreaterThan(0);
+    expect(readCause(err)?.kind).toBe("guardTrip");
+    expect((readCause(err) as { guardId: string }).guardId).toBe(g.guardId);
+  });
+
   it("check is independent of stack.localCost", () => {
     // Cost guard no longer derives spent from stack.localCost — the
     // counter is its own field. This is what lets the same guard
@@ -162,6 +176,20 @@ describe("TimeGuard", () => {
     expect(err).toBeInstanceOf(GuardExceededError);
     expect(err.type).toBe("time");
     expect(err.limit).toBe(500);
+  });
+
+  it("check()-produced trip carries the TimeGuard's guardId — runner path (C1)", () => {
+    // This is the path Runner.shouldSkip throws through. It is DISTINCT from
+    // the leaf-abort path (signal.reason), which already carries the id. If
+    // this regresses, after C2 a runner-path time trip carries guardId "" ,
+    // fails ownedGuardIds.includes, and escapes its own guard. Do not remove.
+    const stack = new StateStack();
+    const g = new TimeGuard(500);
+    g.install(stack);
+    vi.advanceTimersByTime(500);
+    const err = g.check(stack)!;
+    expect(readCause(err)?.kind).toBe("guardTrip");
+    expect((readCause(err) as { guardId: string }).guardId).toBe(g.guardId);
   });
 
   it("aborts with a structured guardTrip cause on its signal reason", () => {

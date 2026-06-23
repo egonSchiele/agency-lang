@@ -172,8 +172,8 @@ export def guard(
   }
   ```
   """
-  const count = _pushGuard(cost, time)
+  const ids = _pushGuard(cost, time)
   const result = try block()
-  _popGuard(count)
+  _popGuard(ids)
   return result
 }

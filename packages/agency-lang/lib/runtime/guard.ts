@@ -141,6 +141,10 @@ export class CostGuard implements Guard {
    *  interrupt/resume cycles. */
   private spent: number = 0;
 
+  /** Stable id threaded into the emitted `guardTrip` cause so a boundary
+   *  can identify which guard tripped (C2 ownedGuardIds matching). */
+  readonly guardId: string = nextGuardId();
+
   constructor(public readonly costLimit: number) {}
 
   install(_stack: StateStack): void {
@@ -165,7 +169,7 @@ export class CostGuard implements Guard {
 
   check(_stack: StateStack): GuardExceededError | null {
     if (this.spent <= this.costLimit) return null;
-    return new GuardExceededError("cost", this.costLimit, this.spent);
+    return new GuardExceededError("cost", this.costLimit, this.spent, this.guardId);
   }
 
   /** CostGuards don't compose into `stack.abortSignal`, so they can't
@@ -331,6 +335,7 @@ export class TimeGuard implements Guard {
       "time",
       this.timeLimit,
       this.elapsedMs + inFlight,
+      this.guardId,
     );
   }
 

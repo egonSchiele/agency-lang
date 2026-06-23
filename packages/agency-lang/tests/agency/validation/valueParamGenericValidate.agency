@@ -18,13 +18,18 @@ node main() {
   // Direct use site of the combined alias:
   const okDirect: Ranked<string>(1, 10)! = 5
   const hiDirect: Ranked<string>(1, 10)! = 11
-  // Forwarded through a value-param alias:
+  // Forwarded through a value-param alias. Wrapped(10) = Ranked<string>(1, 10),
+  // so cover BOTH bounds — including the forwarded `high` upper bound (hiFwd),
+  // which is the whole point of the collision case: if `high` silently failed
+  // to forward, hiFwd would wrongly pass.
   const okFwd: Wrapped(10)! = 5
   const loFwd: Wrapped(10)! = 0
+  const hiFwd: Wrapped(10)! = 11
   return {
     okDirect: isSuccess(okDirect),
     hiDirect: isSuccess(hiDirect),
     okFwd: isSuccess(okFwd),
-    loFwd: isSuccess(loFwd)
+    loFwd: isSuccess(loFwd),
+    hiFwd: isSuccess(hiFwd)
   }
 }

@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"okDirect\":true,\"hiDirect\":false,\"okFwd\":true,\"loFwd\":false}",
+      "expectedOutput": "{\"okDirect\":true,\"hiDirect\":false,\"okFwd\":true,\"loFwd\":false,\"hiFwd\":false}",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "A validated alias combining type params and value params validates correctly both directly and when forwarded through another value-param alias (it inlines rather than routing to a non-existent runtime factory)."
     }

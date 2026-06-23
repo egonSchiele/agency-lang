@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"guard:timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A plain `try` around an abortable leaf inside a guard must not swallow the guard's trip. Newly correct as of Increment-2 guardId matching: the plain try owns no guards (no ownedGuardIds), so it re-throws the guardTrip; the guard's own boundary converts it -> 'guard:timeoutFailure'. Previously the inner try converted any guardTrip and the guard never tripped."
+    }
+  ]
+}

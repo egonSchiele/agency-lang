@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
 import { State, StateStack } from "./state/stateStack.js";
@@ -494,6 +495,40 @@ describe("runBatch — mode 'race'", () => {
       result: "fast-value",
     });
     expect(() => parentFrame.getBranch("slow")).toThrow(/has been deleted/);
+  });
+
+  it("aborts losers with a raceLoser cause on signal.reason", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    let loserReason: unknown = undefined;
+    const result = await runBatch({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "race",
+      raceWinnerLocalKey: WINNER_KEY,
+      children: [
+        { key: "fast", invoke: async () => "fast-value" },
+        {
+          key: "slow",
+          invoke: async (_s, sig) =>
+            new Promise<string>((_resolve, reject) => {
+              sig.addEventListener("abort", () => {
+                // Capture the abort reason the loser was cancelled with so
+                // we can assert it carries the structured raceLoser cause.
+                loserReason = sig.reason;
+                reject(new Error("aborted"));
+              });
+            }),
+        },
+      ],
+    });
+    expect(result).toEqual({ kind: "values", values: ["fast-value"] });
+    // signal.reason must stay an Error (runBatch does `throw signal.reason`)…
+    expect(loserReason).toBeInstanceOf(Error);
+    // …carrying the structured raceLoser cause.
+    expect(readCause(loserReason)?.kind).toBe("raceLoser");
   });
 
   it("winner halts with interrupts: loser deleted, shared checkpoint stamped, leaf cp survives on winner branch", async () => {

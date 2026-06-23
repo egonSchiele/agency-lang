@@ -1,4 +1,8 @@
-import { AgencyCancelledError, isAbortError } from "../runtime/errors.js";
+import {
+  AgencyCancelledError,
+  isAbortError,
+  readCause,
+} from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -84,7 +88,23 @@ export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> 
     return await fn();
   } catch (e) {
     if (isAbortError(e)) {
-      throw new AgencyCancelledError(`fetch ${url} cancelled`);
+      // Carry the structured cause so a guard trip that aborted this fetch
+      // surfaces as an AgencyCancelledError whose guardTrip cause survives —
+      // the owning guard's `try` then converts it instead of letting a bare
+      // cancel escape. In current Node, `fetch` rejects with `signal.reason`
+      // directly, so the cause is on `e`. But an abort delivered as a bare
+      // DOMException (no reason) wouldn't carry it, so fall back to reading
+      // the cause off the active runtime abort signal.
+      let cause = readCause(e);
+      if (cause === undefined) {
+        try {
+          const { ctx, stack } = getRuntimeContext();
+          cause = readCause(ctx.getAbortSignal(stack));
+        } catch {
+          /* not inside an execution frame — no signal cause to recover */
+        }
+      }
+      throw new AgencyCancelledError(`fetch ${url} cancelled`, cause);
     }
     throw e;
   }

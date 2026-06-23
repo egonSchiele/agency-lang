@@ -99,13 +99,12 @@ function isAbortCause(value: unknown): value is AbortCause {
  * Returns `undefined` when no structured cause is present — callers keep
  * their existing heuristics as a fallback for that case.
  *
- * Note: this uses `instanceof AgencyCancelledError`, NOT the name-based
- * fallback that `isAbortError` adds for errors that cross module instances
- * (the resolver shim — see below). In Increment 1 every guard-trip
- * producer and consumer lives in one runtime module instance, so
- * `instanceof` holds. If a cause ever needs reading across that boundary,
- * `readCause` returns `undefined` where `isAbortError` would still
- * recognize the error — the in-process sibling of the subprocess
+ * Note: this uses `instanceof AgencyAbort`, NOT the name-based fallback that
+ * `isAbortError` adds for errors that cross module instances (the resolver
+ * shim — see below). Every abort producer and consumer lives in one runtime
+ * module instance, so `instanceof` holds. If a cause ever needs reading
+ * across that boundary, `readCause` returns `undefined` where `isAbortError`
+ * would still recognize the error — the in-process sibling of the subprocess
  * cause-payload risk noted in the abort-taxonomy spec.
  */
 export function readCause(source: unknown): AbortCause | undefined {
@@ -116,21 +115,44 @@ export function readCause(source: unknown): AbortCause | undefined {
     // but a bare branded cause is also accepted for forward-compat.
     return readCause(source.reason);
   }
-  if (source instanceof AgencyCancelledError && source.agencyCause) {
+  if (source instanceof AgencyAbort && source.agencyCause) {
     return source.agencyCause;
   }
   if (isAbortCause(source)) return source;
   return undefined;
 }
 
-export class AgencyCancelledError extends Error {
-  /** Structured intent for this abort, when known. */
-  readonly agencyCause?: AbortCause;
+/**
+ * The single unified abort type. EVERY abort — a user cancellation
+ * (`AgencyCancelledError`) AND a guard trip (`GuardExceededError`) — is an
+ * `AgencyAbort` carrying a structured `AbortCause`. Generated code catches
+ * exactly one thing in its abort rung (`__error instanceof AgencyAbort`) and
+ * re-throws it untouched; the owning guard's boundary converts its own
+ * `guardTrip`, everything else unwinds. `RestoreSignal` stays separate (it is
+ * not an abort). See docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md §5.
+ */
+export class AgencyAbort extends Error {
+  /** Structured intent for this abort. */
+  readonly agencyCause: AbortCause;
 
-  constructor(reason?: string, cause?: AbortCause) {
-    super(reason ?? "Agent execution was cancelled");
-    this.name = "AgencyCancelledError";
+  constructor(message: string, cause: AbortCause) {
+    super(message);
+    this.name = "AgencyAbort";
     this.agencyCause = cause;
+  }
+}
+
+export class AgencyCancelledError extends AgencyAbort {
+  constructor(reason?: string, cause?: AbortCause) {
+    // The default cause MUST be branded via makeAbortCause — readCause only
+    // recognizes branded causes (a bare {kind:...} reads back as undefined).
+    // Matches what ctx.cancel() does today. The agencyCause field lives only
+    // on AgencyAbort (readonly); this subclass inherits it through super().
+    super(
+      reason ?? "Agent execution was cancelled",
+      cause ?? makeAbortCause({ kind: "userKill", reason }),
+    );
+    this.name = "AgencyCancelledError";
   }
 }
 
@@ -160,15 +182,27 @@ export class HandlerRecursionError extends Error {
 }
 
 export function isAbortError(error: unknown): boolean {
-  if (error instanceof AgencyCancelledError) return true;
-  if (error instanceof DOMException && error.name === "AbortError") return true;
-  if (error instanceof Error && error.name === "AbortError") return true;
-  // Name-based fallback: `instanceof` fails when the error and this check
-  // resolve `AgencyCancelledError` from two different module instances
-  // (e.g. the spawned agent process under the resolver shim). The name is
-  // identity-independent, so a cancellation is still recognized as one.
-  if (error instanceof Error && error.name === "AgencyCancelledError") {
+  if (error instanceof AgencyAbort) return true;
+  if (
+    typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError"
+  ) {
     return true;
+  }
+  // Cross-module / cross-realm fallback: the `instanceof AgencyAbort` check
+  // above misses an error reconstructed from a different module instance
+  // (the spawned agent process under the resolver shim, etc.). Match by
+  // `name` so abort identity survives even though `agencyCause` may not
+  // survive serialization (spec §9). Note the `name === X || name === Y`
+  // form — a chained `X || "Y" || "Z"` would always be truthy.
+  if (error instanceof Error) {
+    return (
+      error.name === "AgencyAbort" ||
+      error.name === "AgencyCancelledError" ||
+      error.name === "GuardExceededError" ||
+      error.name === "AbortError"
+    );
   }
   return false;
 }

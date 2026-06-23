@@ -13,6 +13,7 @@ import {
   _getModelCosts,
   _pushGuard,
   _popGuard,
+  _runGuarded,
  } from "agency-lang/stdlib-lib/thread.js"
 
 export def systemMessage(msg: string) {
@@ -172,8 +173,8 @@ export def guard(
   }
   ```
   """
-  const count = _pushGuard(cost, time)
-  const result = try block()
-  _popGuard(count)
+  const ids = _pushGuard(cost, time)
+  const result = _runGuarded(ids, block)
+  _popGuard(ids)
   return result
 }

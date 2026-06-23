@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext } from "./asyncContext.js";
-import { AgencyCancelledError, RestoreSignal } from "./errors.js";
+import { AgencyAbort, RestoreSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { TraceEvent } from "./trace/types.js";
@@ -198,8 +198,11 @@ async function fireWithGuard(
     );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
+    // AgencyAbort covers BOTH a cancellation and a guard trip — a guard trip
+    // raised inside a callback must propagate to its owning guard, not be
+    // logged + dropped as a stray JS error (it is not an AgencyCancelledError).
     if (error instanceof RestoreSignal) throw error;
-    if (error instanceof AgencyCancelledError) throw error;
+    if (error instanceof AgencyAbort) throw error;
     // Real JS errors (e.g. a callback body crashed) are logged and dropped.
     // Callback bodies cannot raise interrupts (typechecker-enforced), so
     // there is no interrupt path to surface here.

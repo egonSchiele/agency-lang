@@ -3,7 +3,11 @@ import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
-import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { AgencyCancelledError, isAbortError, readCause } from "./errors.js";
+import {
+  markThreadCancelled,
+  needsThreadRepair,
+} from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
@@ -239,8 +243,15 @@ async function _runPrompt({
     // runtime (function/node catches re-throw it, the REPL prints
     // "cancelled") handles it as one — and skip the llmError log below,
     // since a user cancel isn't a request failure worth recording.
-    if (ctx.isCancelled(stateStack) || isAbortError(err)) {
-      throw new AgencyCancelledError();
+    // Prefer the structured cause when present so the normalized error keeps
+    // its intent (guardTrip / userInterrupt / …); fall back to the
+    // isCancelled heuristic for provider errors that arrive with no cause.
+    // The cause object preserves identity (readCause off the error or the
+    // composed signal returns the SAME branded object the producer set), so
+    // the `delivered` de-dup flag stays shared across the two trip paths.
+    const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
+    if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
+      throw new AgencyCancelledError(undefined, cause);
     }
     // The success-path `promptCompletion` event below is the only place the
     // request payload (messages + tools) is logged, and it never runs when
@@ -365,30 +376,6 @@ async function _runPrompt({
   });
 
   return { messages, toolCalls };
-}
-
-/**
- * Leave a thread in a role-valid state after a hard cancellation
- * (AgencyCancelledError / abort). A cancel can land mid-tool-round, so the
- * thread may end on an assistant turn with unanswered `tool_calls` — which
- * some providers reject on the next call. Truncate back to this turn's user
- * message (within one runPrompt only assistant/tool messages follow it) and
- * append a neutral marker so the next call sees the interruption and the
- * thread alternates cleanly. `messages` is the live, persisted MessageThread
- * (see agencyLlm.llm), so this repair sticks for the next turn.
- */
-function markThreadCancelled(messages: MessageThread): void {
-  const all = messages.getMessages();
-  let lastUser = -1;
-  for (let i = all.length - 1; i >= 0; i--) {
-    if (all[i].role === "user") {
-      lastUser = i;
-      break;
-    }
-  }
-  const kept = lastUser >= 0 ? all.slice(0, lastUser + 1) : all.slice();
-  kept.push(smoltalk.assistantMessage("[Response cancelled.]"));
-  messages.setMessages(kept);
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
@@ -1101,8 +1088,10 @@ export async function runPrompt(args: {
     if (isAbortError(error)) {
       // Hard cancel (e.g. user pressed Esc): repair the live thread so the
       // next turn starts from a clean, role-valid state, then re-throw so
-      // the cancellation still propagates to the caller / REPL.
-      markThreadCancelled(messages);
+      // the cancellation still propagates to the caller / REPL. Only a
+      // user-initiated cancel warrants repair — a guard trip or race-loser
+      // abort wants the in-flight turn left intact for its Failure path.
+      if (needsThreadRepair(readCause(error))) markThreadCancelled(messages);
       throw error;
     }
     throw error;

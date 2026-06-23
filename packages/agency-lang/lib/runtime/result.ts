@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { isAbortError, readCause } from "./errors.js";
-import { isGuardExceededError } from "./guard.js";
 import { hasInterrupts } from "./interrupts.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
@@ -55,6 +54,12 @@ export type FailureOpts = {
   retryable?: boolean;
   functionName?: string;
   args?: Record<string, any>;
+  /** The guard ids this `try` boundary OWNS. A `guardTrip` cause is
+   *  converted to a Failure ONLY when its `guardId` is in this list;
+   *  any other guard's trip (an outer guard, or a plain `try` that owns
+   *  no guards) re-throws so it reaches its owning boundary. Set by the
+   *  stdlib `guard`'s `_runGuarded`. Absent for a plain `try`. */
+  ownedGuardIds?: string[];
 };
 
 export type ResultFailure = {
@@ -118,30 +123,32 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // fixes). See docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md.
     const guardCause = readCause(error);
     if (guardCause?.kind === "guardTrip") {
-      // Mark the trip delivered so the runner's `shouldSkip` (which may
-      // step the guard's own `_popGuard` next, while the signal is still
-      // aborted) does NOT re-throw a GuardExceededError for the same
-      // trip. The cause object is shared by identity with `signal.reason`.
-      guardCause.delivered = true;
-      return failure(
-        guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
-        opts,
-      );
+      // Convert to a Failure ONLY if THIS boundary owns the tripped guard.
+      // An inner guard's `try` must re-throw an OUTER guard's trip (and a
+      // plain `try`, which owns no guards, must re-throw any trip) so it
+      // reaches the guard that actually set the limit — fixing the nested
+      // outer-tighter-than-inner mis-attribution. See spec §4.1.1.
+      if (opts?.ownedGuardIds?.includes(guardCause.guardId)) {
+        // Mark the trip delivered so the runner's `shouldSkip` (which may
+        // step the guard's own `_popGuard` next, while the signal is still
+        // aborted) does NOT re-throw a GuardExceededError for the same trip.
+        // The cause object is shared by identity with `signal.reason`.
+        guardCause.delivered = true;
+        return failure(
+          guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
+          opts,
+        );
+      }
+      throw error; // belongs to an outer guard (or a plain try) — propagate
     }
     if (isAbortError(error)) {
       throw error;
     }
-    // Preserve GuardExceededError's structured data so the stdlib
-    // `guard` function can surface { type, maxCost, actualCost,
-    // maxTime, actualTime } directly via `result.error`. Without
-    // this branch the user would see only the stringified error
-    // message and lose the numeric limits. See lib/runtime/guard.ts.
-    if (isGuardExceededError(error)) {
-      return failure(
-        guardFailureData(error.type, error.limit, error.spent),
-        opts,
-      );
-    }
+    // NOTE: a thrown GuardExceededError no longer needs its own branch here.
+    // Since unification it is an AgencyAbort carrying a `guardTrip` cause, so
+    // the `guardCause?.kind === "guardTrip"` branch above already converts it
+    // (reading the same dimension/limit/spent off the cause). That branch is
+    // the single place a guard trip becomes a Failure.
     return failure(
       error instanceof Error ? error.message : String(error),
       opts,

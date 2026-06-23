@@ -1,5 +1,5 @@
 import type { StateStack } from "./state/stateStack.js";
-import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
@@ -89,10 +89,14 @@ export type Guard = {
   toJSON(): GuardJSON;
 };
 
-/** Discriminated-union JSON shape. `guardFromJSON` dispatches on `kind`. */
+/** Discriminated-union JSON shape. `guardFromJSON` dispatches on `kind`.
+ *  `guardId` is serialized so it survives interrupt/resume: a guard's
+ *  `try` boundary matches on it (ownedGuardIds), and the boundary's id list
+ *  is checkpointed too — if the guard got a fresh id on resume they would no
+ *  longer match and the trip would escape its guard. */
 export type GuardJSON =
-  | { kind: "cost"; costLimit: number; spent: number }
-  | { kind: "time"; timeLimit: number; elapsedMs: number };
+  | { kind: "cost"; costLimit: number; spent: number; guardId?: string }
+  | { kind: "time"; timeLimit: number; elapsedMs: number; guardId?: string };
 
 /**
  * Cost guard. Trips when its own `spent` counter exceeds `costLimit`.
@@ -141,6 +145,12 @@ export class CostGuard implements Guard {
    *  interrupt/resume cycles. */
   private spent: number = 0;
 
+  /** Stable id threaded into the emitted `guardTrip` cause so a boundary
+   *  can identify which guard tripped (C2 ownedGuardIds matching). Not
+   *  `readonly` so `fromJSON` can restore the serialized id (the id must
+   *  survive interrupt/resume — see GuardJSON). */
+  guardId: string = nextGuardId();
+
   constructor(public readonly costLimit: number) {}
 
   install(_stack: StateStack): void {
@@ -165,7 +175,7 @@ export class CostGuard implements Guard {
 
   check(_stack: StateStack): GuardExceededError | null {
     if (this.spent <= this.costLimit) return null;
-    return new GuardExceededError("cost", this.costLimit, this.spent);
+    return new GuardExceededError("cost", this.costLimit, this.spent, this.guardId);
   }
 
   /** CostGuards don't compose into `stack.abortSignal`, so they can't
@@ -188,10 +198,11 @@ export class CostGuard implements Guard {
       kind: "cost",
       costLimit: this.costLimit,
       spent: this.spent,
+      guardId: this.guardId,
     };
   }
 
-  static fromJSON(j: { costLimit: number; spent: number }): CostGuard {
+  static fromJSON(j: { costLimit: number; spent: number; guardId?: string }): CostGuard {
     // Clean break with the prior `{costAtPush}` JSON shape: refuse to
     // restore a guard whose `spent` is missing rather than silently
     // initializing it to NaN/undefined and producing nonsense trips.
@@ -207,6 +218,10 @@ export class CostGuard implements Guard {
     }
     const g = new CostGuard(j.costLimit);
     g.spent = j.spent;
+    // Restore the serialized id so ownedGuardIds matching survives resume.
+    // (Absent only in pre-Increment-2 checkpoints; keep the freshly-minted
+    // id in that case.)
+    if (j.guardId !== undefined) g.guardId = j.guardId;
     return g;
   }
 }
@@ -267,8 +282,11 @@ export class TimeGuard implements Guard {
    *  steps (popGuard) on its way out. */
   private consumed: boolean = false;
 
-  /** Stable id threaded into the emitted `guardTrip` cause. */
-  readonly guardId: string = nextGuardId();
+  /** Stable id threaded into the emitted `guardTrip` cause. Not `readonly`
+   *  so `fromJSON` can restore the serialized id across interrupt/resume
+   *  (see GuardJSON — the id must outlive a checkpoint or ownedGuardIds
+   *  matching breaks). */
+  guardId: string = nextGuardId();
 
   constructor(public readonly timeLimit: number) {}
 
@@ -331,6 +349,7 @@ export class TimeGuard implements Guard {
       "time",
       this.timeLimit,
       this.elapsedMs + inFlight,
+      this.guardId,
     );
   }
 
@@ -356,12 +375,15 @@ export class TimeGuard implements Guard {
       kind: "time",
       timeLimit: this.timeLimit,
       elapsedMs: this.elapsedMs + inFlight,
+      guardId: this.guardId,
     };
   }
 
-  static fromJSON(j: { timeLimit: number; elapsedMs: number }): TimeGuard {
+  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string }): TimeGuard {
     const g = new TimeGuard(j.timeLimit);
     g.elapsedMs = j.elapsedMs;
+    // Restore the serialized id so ownedGuardIds matching survives resume.
+    if (j.guardId !== undefined) g.guardId = j.guardId;
     // state stays "paused"; resume() at first runner step re-arms.
     return g;
   }
@@ -449,13 +471,21 @@ export function guardFromJSON(json: GuardJSON): Guard {
  * `docs/superpowers/specs/2026-05-20-cost-and-guard-tracking-design.md`
  * sections "Mechanism" and "Layer 2: stdlib function".
  */
-export class GuardExceededError extends Error {
+export class GuardExceededError extends AgencyAbort {
   constructor(
     public readonly type: "cost" | "time",
     public readonly limit: number,
     public readonly spent: number,
+    // A real guardId is load-bearing for Increment-2 ownedGuardIds matching:
+    // a GuardExceededError built WITHOUT one carries guardId === "" and, once
+    // __tryCall filters on ownedGuardIds, would fail the membership check and
+    // escape its own guard. CostGuard.check / TimeGuard.check pass their id.
+    guardId: string = "",
   ) {
-    super(`guard exceeded: ${type} limit ${limit}, spent ${spent}`);
+    super(
+      `guard exceeded: ${type} limit ${limit}, spent ${spent}`,
+      makeAbortCause({ kind: "guardTrip", dimension: type, limit, spent, guardId }),
+    );
     this.name = "GuardExceededError";
   }
 }

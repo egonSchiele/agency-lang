@@ -1,5 +1,7 @@
 import * as smoltalk from "smoltalk";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { __tryCall, type ResultValue } from "../runtime/result.js";
+import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
 import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
@@ -137,22 +139,27 @@ function pushGuardImpl(
   stack: StateStack,
   costLimit: number | null,
   timeLimit: number | null,
-): number {
+): string[] {
   if (costLimit == null && timeLimit == null) {
     throw new Error(
       "guard() requires at least one of: cost, time",
     );
   }
-  let count = 0;
+  // Return the pushed guards' ids (innermost-last) so the caller can scope a
+  // `try` to convert ONLY its own guards' trips (C2 ownedGuardIds). The array
+  // length also drives the LIFO pop, replacing the old count.
+  const ids: string[] = [];
   if (costLimit != null) {
-    stack.pushGuard(new CostGuard(costLimit));
-    count++;
+    const g = new CostGuard(costLimit);
+    stack.pushGuard(g);
+    ids.push(g.guardId);
   }
   if (timeLimit != null) {
-    stack.pushGuard(new TimeGuard(timeLimit));
-    count++;
+    const g = new TimeGuard(timeLimit);
+    stack.pushGuard(g);
+    ids.push(g.guardId);
   }
-  return count;
+  return ids;
 }
 
 export async function __internal_pushGuard(
@@ -161,7 +168,7 @@ export async function __internal_pushGuard(
   _threads: ThreadStore,
   costLimit: number | null,
   timeLimit: number | null,
-): Promise<number> {
+): Promise<string[]> {
   return pushGuardImpl(stack, costLimit, timeLimit);
 }
 
@@ -169,18 +176,18 @@ export async function __internal_pushGuard(
 export async function _pushGuard(
   costLimit: number | null,
   timeLimit: number | null,
-): Promise<number> {
+): Promise<string[]> {
   const { stack } = getRuntimeContext();
   return pushGuardImpl(stack, costLimit, timeLimit);
 }
 
 /**
- * Close the most-recently-opened `count` guard scopes on the caller's
- * stack. Paired with `pushGuard`'s return value so the caller pops
- * exactly the guards it pushed.
+ * Close the most-recently-opened guard scopes on the caller's stack — one
+ * per id in `ids`. Paired with `pushGuard`'s returned id array so the caller
+ * pops exactly the guards it pushed.
  */
-function popGuardImpl(stack: StateStack, count: number): void {
-  for (let i = 0; i < count; i++) {
+function popGuardImpl(stack: StateStack, ids: string[]): void {
+  for (let i = 0; i < ids.length; i++) {
     stack.popGuard();
   }
 }
@@ -189,13 +196,58 @@ export async function __internal_popGuard(
   _ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
-  count: number,
+  ids: string[],
 ): Promise<void> {
-  popGuardImpl(stack, count);
+  popGuardImpl(stack, ids);
 }
 
 /** ALS-reading replacement for `__internal_popGuard`. */
-export async function _popGuard(count: number): Promise<void> {
+export async function _popGuard(ids: string[]): Promise<void> {
   const { stack } = getRuntimeContext();
-  popGuardImpl(stack, count);
+  popGuardImpl(stack, ids);
+}
+
+/**
+ * Run the guarded block under a `try` that owns exactly the guards in `ids`,
+ * so a `guardTrip` is converted to a Failure ONLY when it belongs to one of
+ * THIS guard()'s guards (an outer guard's trip re-throws past it).
+ *
+ * WHY THIS IS TS AND NOT AGENCY: the routing is `__tryCall(..., {
+ * ownedGuardIds })`, and the agency `try block()` expression has no syntax to
+ * pass `ownedGuardIds` into its `__tryCall` (it lowers to a fixed
+ * `{ checkpoint, functionName, args }` — see processTryExpression in
+ * lib/backends/typescriptBuilder.ts). Stashing the owned ids on the stack
+ * frame for `__tryCall` to read globally is NOT an option either: a plain
+ * `try` nested inside the guarded block must own NOTHING (so it re-throws the
+ * guard's trip rather than swallowing it — see the fixture
+ * guard-trip-not-swallowed-by-inner-try), so the owned set has to be scoped to
+ * THIS specific `try` boundary, not read from the frame. Hence this small TS
+ * seam. (The alternative is to extend the `try` codegen to carry
+ * owned-guard-ids — a larger codegen change.)
+ *
+ * Because this replaces the stdlib `guard`'s former agency-level `try block()`,
+ * it MUST forward the same FailureOpts that `try` injected ({ checkpoint,
+ * functionName, args }) so a guard failure keeps its checkpoint / functionName
+ * / args (retry + reporting depend on them) — only `ownedGuardIds` is added.
+ */
+export async function _runGuarded(
+  ids: string[],
+  block: unknown,
+): Promise<ResultValue> {
+  const { ctx, stack } = getRuntimeContext();
+  // Invoke the block through __call (NOT a plain block()) so it runs through
+  // the same Agency call machinery the codegen `try block()` used — that is
+  // what lets a guard trip inside the block surface as an AgencyAbort with its
+  // guardTrip cause instead of a generic error. `stack.lastFrame()` is
+  // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
+  // matches what the codegen `try block()` captured via `__stack.args`.
+  return __tryCall(
+    () => __call(block, { type: "positional", args: [] }),
+    {
+      ownedGuardIds: ids,
+      checkpoint: ctx.getResultCheckpoint(),
+      functionName: "guard",
+      args: stack.lastFrame()?.args,
+    },
+  );
 }

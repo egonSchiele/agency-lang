@@ -136,8 +136,8 @@ The carrier design assumes that when a composed signal (`AbortSignal.any([...])`
 
 > **What actually shipped vs. what §4 below describes.** §4 describes the full Increment-1 *design*. The delivered PR is **narrower by design** — it does exactly what's needed to turn CI green plus the safe, additive carrier — and the plan (`docs/superpowers/plans/2026-06-22-abort-taxonomy-increment1.md`) "Deferred" section is authoritative on scope. Specifically, these §4 items are **deferred**, not shipped:
 > - **Full `shouldSkip` cause-switch (step 5).** The shipped `shouldSkip` only adds the `delivered`-guardTrip early-return (§4.1.1). `userInterrupt`/`userKill` causes still fall through to the existing silent `halt(undefined)` — Esc propagates via the leaf/catch-ladder path, not via `shouldSkip`, so the runner's user-cancel behavior is intentionally unchanged.
-> - **`guardId` matching at the boundary.** A `guardId` is emitted on the cause, but no boundary matches on it — `__tryCall` converts *any* `guardTrip` cause it catches, relying on structural call-stack nesting (exactly as cost guards do today). Real id-matching needs threading the id into `__tryCall`, a **codegen change** Increment 1 avoids; it is deferred to Increment 2. Consequence (pinned by `tests/agency/guards/guard-time-nested-outer-tighter`): when an **outer** guard is tighter than an inner one, the inner's `try` mis-attributes the outer's trip to the inner guard's Failure. Not a crash (pre-fix it crashed); just mis-attributed until Increment 2.
-> - **`prompt.ts` thread-repair gating + normalization (steps 5–6)** and **`raceLoser` tagging (step 2)** — deferred and safe (untagged → `readCause` undefined → existing behavior).
+> - **`guardId` matching at the boundary.** ~~Deferred to Increment 2.~~ **SHIPPED in Increment 2** (`2026-06-22-abort-unification-and-deferred.md`): the stdlib `guard` runs its block through `_runGuarded(ids, block)`, which passes `ownedGuardIds` into `__tryCall`; a `guardTrip` converts only when its `guardId` is owned, else it re-throws to its real owner. `guard-time-nested-outer-tighter` is flipped to `"outer:timeoutFailure"`, and the same routing now covers cost nesting (`guard-cost-nested-outer-tighter`). `guardId` is serialized in `GuardJSON` so the match survives interrupt/resume.
+> - **`prompt.ts` thread-repair gating + normalization (steps 5–6)** and **`raceLoser` tagging (step 2)** — ~~deferred~~ **SHIPPED in Increment 2**: `needsThreadRepair(cause)` gates `markThreadCancelled` (now non-destructive — stubs only the unanswered tool calls), dispatch normalization prefers the structured cause, and both `runBatch` abort sites tag losers with a `raceLoser` cause.
 
 ### 4.1 What changes
 
@@ -192,9 +192,9 @@ The fix: a mutable `delivered?: boolean` on the `guardTrip` cause. Path A sets i
 
 ---
 
-## 5. Increment 2 — Full unification (SEPARATE implementation plan)
+## 5. Increment 2 — Full unification (SHIPPED)
 
-> This section documents the target end-state in detail. **It is not part of the Increment 1 plan.** It should become its own spec→plan→implementation cycle once Increment 1 has landed and CI is green.
+> **STATUS: SHIPPED.** Increment 2 (full unification + `guardId` matching) and the deferred Increment-1 carrier pieces (`raceLoser` tagging, cause-driven thread-repair gating + dispatch normalization) landed via `docs/superpowers/plans/2026-06-22-abort-unification-and-deferred.md`. `AgencyAbort` is the single abort carrier; the codegen catch ladder is one `instanceof AgencyAbort` rung; `__tryCall` matches `guardTrip` on `ownedGuardIds` so a guard converts only its own trip (fixing the nested outer-tighter mis-attribution for both time AND cost). `guardId` is serialized so the match survives interrupt/resume. Remaining future work: the `connectionLost` / `callTimeout` cause variants + their recover/retry UX (§6).
 
 ### 5.1 Goal
 

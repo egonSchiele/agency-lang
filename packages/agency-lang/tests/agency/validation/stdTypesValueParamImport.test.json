@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"okNum\":true,\"lowNum\":false,\"okStr\":true,\"longStr\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Importing value-parameterized validated aliases from std::types validates correctly via the defining module's descriptor factory."
+    }
+  ]
+}

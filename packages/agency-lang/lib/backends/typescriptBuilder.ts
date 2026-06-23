@@ -1301,15 +1301,20 @@ export class TypeScriptBuilder {
   private processImportStatement(node: ImportStatement): TsNode {
     const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
-    // Value-only-parameterized aliases (e.g. `type NumberInRange(low, high) = number`)
-    // emit nothing at their declaration site (see processTypeAlias) because
-    // every use-site inlines a fresh schema. Importing such a name from the
-    // compiled target module would fail with "does not provide an export"
-    // and registering it as a tool would reference an undefined local.
+    // Non-validated value-only-parameterized aliases (e.g. `type
+    // OneOf(choices) = string` with only `@jsonSchema`) emit nothing at their
+    // declaration site (see processTypeAlias) because every use-site inlines a
+    // fresh schema. Importing such a name from the compiled target module
+    // would fail with "does not provide an export" and registering it as a
+    // tool would reference an undefined local — so filter them out.
+    //
+    // A VALIDATED value-param alias now compiles to (and exports) a descriptor
+    // factory, so it IS importable; only the non-validated ones are filtered.
     const isInlinedAlias = (name: string): boolean => {
       const entry = aliasesFull[name];
       if (!entry?.valueParams || entry.valueParams.length === 0) return false;
-      return !entry.typeParams || entry.typeParams.length === 0;
+      if (entry.typeParams && entry.typeParams.length > 0) return false;
+      return !hasAliasValidate(entry, aliasesFull);
     };
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
@@ -1348,6 +1353,12 @@ export class TypeScriptBuilder {
           case "namedImport":
             for (const name of nameType.importedNames) {
               if (isInlinedAlias(name)) continue;
+              const vpEntry = aliasesFull[name];
+              // A value-param alias imports as a descriptor factory, not an
+              // AgencyFunction — never register it as an LLM tool.
+              if (vpEntry?.valueParams && vpEntry.valueParams.length > 0) {
+                continue;
+              }
               const localName = nameType.aliases[name] ?? name;
               this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
             }

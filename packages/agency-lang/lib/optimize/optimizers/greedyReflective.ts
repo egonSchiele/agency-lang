@@ -74,7 +74,7 @@ export class GreedyReflective extends BaseOptimizer {
     attempts: Attempt[],
     startedAt: number,
   ): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickChampion(source, trainChampion, candidates);
+    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
@@ -89,25 +89,6 @@ export class GreedyReflective extends BaseOptimizer {
       result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
     });
     return result;
-  }
-
-  /** Pick the writeback champion. With no validation set, that is the train
-   *  champion. With one, score every candidate on validation (the "how") and
-   *  take the max (the "what") — no order-dependent mutable accumulation. */
-  private async pickChampion(
-    source: OptimizeTargetSet,
-    trainChampion: Candidate,
-    candidates: Candidate[],
-  ): Promise<{ champion: Candidate; validationObjective?: number }> {
-    if (this.validationInputs.length === 0) return { champion: trainChampion };
-    const scored = await Promise.all(
-      candidates.map(async (candidate) => {
-        const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
-        return { candidate, objective: sc.gatesPassed() ? sc.objective() : 0 };
-      }),
-    );
-    const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
-    return { champion: winner.candidate, validationObjective: winner.objective };
   }
 
   /** The one place the champion is threaded across iterations. */

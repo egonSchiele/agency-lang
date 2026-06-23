@@ -147,6 +147,27 @@ export abstract class BaseOptimizer {
     return this.evaluate(ws, source.entryFile, inputs);
   }
 
+  /** Choose the writeback champion among candidates: the one with the best
+   *  validation objective when a validation set exists, else the given train
+   *  champion. Scoring (the "how") is separated from the max selection (the
+   *  "what"); shared by the pointwise optimizers so validation selection lives
+   *  in one place. */
+  protected async pickValidationChampion<C extends { files: Record<string, string>; scorecard: Scorecard }>(
+    source: OptimizeTargetSet,
+    candidates: C[],
+    trainChampion: C,
+  ): Promise<{ champion: C; validationObjective?: number }> {
+    if (this.validationInputs.length === 0) return { champion: trainChampion };
+    const scored = await Promise.all(
+      candidates.map(async (candidate) => {
+        const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
+        return { candidate, objective: sc.gatesPassed() ? sc.objective() : 0 };
+      }),
+    );
+    const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
+    return { champion: winner.candidate, validationObjective: winner.objective };
+  }
+
   /** Run the agent once per input (cached by (workspace,input)), grade each, return a Scorecard. */
   protected async evaluate(ws: Workspace, entryFile: string, inputs: Input[]): Promise<Scorecard> {
     const perInput = await Promise.all(

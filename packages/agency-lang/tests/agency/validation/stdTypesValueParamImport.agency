@@ -1,0 +1,19 @@
+// Regression: importing a value-parameterized validated alias from another
+// module must validate correctly. The factory that builds the validator
+// chain lives in std::types, so min/max/minLength/maxLength resolve there —
+// nothing is injected into this module. Uses two aliases to exercise
+// multiple factories.
+import { NumberInRange, StringWithLength } from "std::types"
+
+node main() {
+  const okNum: NumberInRange(1, 10)! = 5
+  const lowNum: NumberInRange(1, 10)! = 0
+  const okStr: StringWithLength(2, 5)! = "abc"
+  const longStr: StringWithLength(2, 5)! = "abcdef"
+  return {
+    okNum: isSuccess(okNum),
+    lowNum: isSuccess(lowNum),
+    okStr: isSuccess(okStr),
+    longStr: isSuccess(longStr)
+  }
+}

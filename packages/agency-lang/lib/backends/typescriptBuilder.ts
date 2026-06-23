@@ -91,7 +91,9 @@ import {
 import {
   buildValidationDescriptor,
   hasAnyValidateTag,
+  hasAliasValidate,
 } from "./typescriptGenerator/validationDescriptor.js";
+import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep } from "../typeChecker/assignability.js";
 import { isFunctionTyped } from "../typeChecker/utils.js";
 
@@ -677,12 +679,59 @@ export class TypeScriptBuilder {
       if (!node.exported) return ts.empty();
       return ts.raw(`export const ${node.aliasName} = undefined;`);
     }
-    // Value-parameterized aliases (e.g. `type NumberInRange(low, high) = ...`)
-    // have no single schema — every use-site inlines a fresh substituted
-    // schema. Emit nothing at the declaration site; importers should never
-    // reference the bare name (use-sites are resolved before codegen).
+    // Value-parameterized aliases have no single schema — every use-site
+    // depends on the value args. For a VALIDATED one we emit a descriptor
+    // FACTORY here, in the alias's own module, so the validators it
+    // references stay in scope (exactly like a bare alias's
+    // `__agency_descriptor`). Use sites call `AliasName(args)` (see
+    // validationDescriptor.ts). A NON-validated value-param alias has no
+    // validators to leak, so it keeps emitting nothing and its schema is
+    // inlined at the use site.
     if (node.valueParams && node.valueParams.length > 0) {
-      return ts.empty();
+      const vpAliasesFull = this.scopes.visibleTypeAliasesFull();
+      const vpAliasedWithTags: VariableType = node.tags
+        ? {
+            ...node.aliasedType,
+            tags: [...(node.aliasedType.tags ?? []), ...node.tags],
+          }
+        : node.aliasedType;
+      if (!hasAnyValidateTag(vpAliasedWithTags, vpAliasesFull)) {
+        return ts.empty();
+      }
+      // Build the descriptor from the UNRESOLVED body. Unlike the bare-alias
+      // path we must NOT `resolveTypeDeep` here: the body legitimately
+      // contains this alias's own value-param identifiers (and, for a
+      // forwarding alias, a reference to another value-param alias). Deep
+      // resolution eagerly substitutes those, which both (a) trips
+      // `applyValueArgs`'s unsubstituted-param guard when a forwarded name
+      // collides with the inner param name, and (b) inlines the inner
+      // alias's validators into THIS factory — re-introducing the
+      // cross-module leak this feature exists to remove. Leaving the body
+      // intact lets `buildValidationDescriptor` emit a nested factory CALL
+      // for any value-param reference (validators resolve in their own
+      // module); the schema strings still substitute identifiers locally.
+      const vpDescriptor = buildValidationDescriptor(
+        vpAliasedWithTags,
+        this.scopes.visibleTypeAliases(),
+        vpAliasesFull,
+      );
+      // Bake value-param DEFAULTS into the factory signature so an omitted
+      // use-site arg (e.g. `Age()!` or bare `Age!`) resolves the same default
+      // the old inline path got via `applyValueArgs` (which fills
+      // `bindings[p.name] = p.default`). Without this, `function Age(low)`
+      // called as `Age()` leaves `low` undefined and
+      // `min.partial({ n: undefined })` silently mis-validates.
+      const vpFnParams: TsParam[] = node.valueParams.map((p) =>
+        p.default !== undefined
+          ? { name: p.name, defaultValue: ts.raw(tagArgToTs(p.default)) }
+          : { name: p.name },
+      );
+      return ts.functionDecl(
+        node.aliasName,
+        vpFnParams,
+        ts.statements([ts.return(vpDescriptor)]),
+        { export: node.exported },
+      );
     }
     const exportPrefix = node.exported ? "export " : "";
     // Thread alias-level @validate / @jsonSchema tags onto the body type so
@@ -1252,15 +1301,20 @@ export class TypeScriptBuilder {
   private processImportStatement(node: ImportStatement): TsNode {
     const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
-    // Value-only-parameterized aliases (e.g. `type NumberInRange(low, high) = number`)
-    // emit nothing at their declaration site (see processTypeAlias) because
-    // every use-site inlines a fresh schema. Importing such a name from the
-    // compiled target module would fail with "does not provide an export"
-    // and registering it as a tool would reference an undefined local.
+    // Non-validated value-only-parameterized aliases (e.g. `type
+    // OneOf(choices) = string` with only `@jsonSchema`) emit nothing at their
+    // declaration site (see processTypeAlias) because every use-site inlines a
+    // fresh schema. Importing such a name from the compiled target module
+    // would fail with "does not provide an export" and registering it as a
+    // tool would reference an undefined local — so filter them out.
+    //
+    // A VALIDATED value-param alias now compiles to (and exports) a descriptor
+    // factory, so it IS importable; only the non-validated ones are filtered.
     const isInlinedAlias = (name: string): boolean => {
       const entry = aliasesFull[name];
       if (!entry?.valueParams || entry.valueParams.length === 0) return false;
-      return !entry.typeParams || entry.typeParams.length === 0;
+      if (entry.typeParams && entry.typeParams.length > 0) return false;
+      return !hasAliasValidate(entry, aliasesFull);
     };
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
@@ -1299,6 +1353,12 @@ export class TypeScriptBuilder {
           case "namedImport":
             for (const name of nameType.importedNames) {
               if (isInlinedAlias(name)) continue;
+              const vpEntry = aliasesFull[name];
+              // A value-param alias imports as a descriptor factory, not an
+              // AgencyFunction — never register it as an LLM tool.
+              if (vpEntry?.valueParams && vpEntry.valueParams.length > 0) {
+                continue;
+              }
               const localName = nameType.aliases[name] ?? name;
               this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
             }

@@ -1,0 +1,14 @@
+// A locally-defined value-param validated alias must validate end-to-end
+// via its emitted factory. min/max are imported in THIS module, so the
+// factory (also in this module) sees them in scope.
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+node main() {
+  const ok: NumberInRange(1, 10)! = 5
+  const lo: NumberInRange(1, 10)! = 0
+  const hi: NumberInRange(1, 10)! = 11
+  return { ok: isSuccess(ok), lo: isSuccess(lo), hi: isSuccess(hi) }
+}

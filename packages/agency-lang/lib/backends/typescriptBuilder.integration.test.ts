@@ -313,3 +313,87 @@ describe("mapTypeToValidationSchema", () => {
     expect(schema).toBe("z.number()");
   });
 });
+
+describe("value-parameterized validator factory", () => {
+  it("emits a descriptor factory for a validated value-param alias", () => {
+    const out = generateWithBuilder(`
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+
+node main() {
+  return 1
+}
+`);
+    // Factory function, parameterized by the alias's value params, lives here:
+    expect(out).toContain("function NumberInRange(low, high)");
+    // Validators reference low/high as the factory's parameters (not literals):
+    expect(out).toContain("min.partial({ n: low })");
+    expect(out).toContain("max.partial({ n: high })");
+    // Schema-path identifiers survive too: the `@jsonSchema(...)` tag goes
+    // through `appendMeta` (typeToZodSchema.ts:32) and must reference the
+    // factory params, NOT substituted literals. This mirrors how every
+    // stdlib value-param alias (NumberInRange/StringWithLength) is defined.
+    expect(out).toContain("minimum: low");
+    expect(out).toContain("maximum: high");
+  });
+
+  it("bakes value-param defaults into the factory signature", () => {
+    const out = generateWithBuilder(`
+import { min } from "std::validators"
+
+@validate(min.partial(n: low))
+type Age(low: number = 0) = number
+
+node main() {
+  return 1
+}
+`);
+    // An omitted use-site arg (Age() / bare Age) must fall back to the default,
+    // so the default has to live in the factory signature itself.
+    expect(out).toContain("function Age(low = 0)");
+  });
+
+  it("references the factory by call at a validated use site", () => {
+    const out = generateWithBuilder(`
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+node main() {
+  const n: NumberInRange(1, 10)! = 5
+  return n
+}
+`);
+    // The \`!\` site validates against a CALL to the factory, not an inlined chain:
+    expect(out).toContain("NumberInRange(1, 10)");
+  });
+
+  it("evaluates the factory call once when use-site validators are stacked", () => {
+    const out = generateWithBuilder(`
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+type Holder = {
+  @validate(min.partial(n: 3)) val: NumberInRange(1, 10)
+}
+
+node main() {
+  const h: Holder! = { val: 5 }
+  return h
+}
+`);
+    // Use-site validators must be concatenated via an IIFE that binds the
+    // factory call to a local, so the factory (and its min.partial(...)
+    // allocations) is evaluated exactly once, not twice.
+    expect(out).toContain("(__d) =>");
+    // The factory call appears once (as the IIFE argument), not spread + read.
+    const calls = out.match(/NumberInRange\(1, 10\)/g) ?? [];
+    expect(calls.length).toBe(1);
+  });
+});

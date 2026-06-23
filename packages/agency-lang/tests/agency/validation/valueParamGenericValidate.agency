@@ -1,0 +1,35 @@
+// Regression: a validated alias that combines TYPE params and VALUE params
+// (`@validate(...) type R<T>(low, high) = ...`). Such an alias cannot become a
+// runtime descriptor factory (its schema depends on the type argument, known
+// only at codegen), so it must inline its validators at every use site —
+// including when forwarded through another value-param alias. Pre-fix, the
+// forwarding case routed to a non-existent/unresolved factory and crashed.
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type Ranked<T>(low: number, high: number) = number
+
+// Forwarding alias whose body references the generic value-param alias and
+// FORWARDS its own value param (`high`) into it — note the name collision
+// with Ranked's own `high` param, which must not trip substitution guards.
+type Wrapped(high: number) = Ranked<string>(1, high)
+
+node main() {
+  // Direct use site of the combined alias:
+  const okDirect: Ranked<string>(1, 10)! = 5
+  const hiDirect: Ranked<string>(1, 10)! = 11
+  // Forwarded through a value-param alias. Wrapped(10) = Ranked<string>(1, 10),
+  // so cover BOTH bounds — including the forwarded `high` upper bound (hiFwd),
+  // which is the whole point of the collision case: if `high` silently failed
+  // to forward, hiFwd would wrongly pass.
+  const okFwd: Wrapped(10)! = 5
+  const loFwd: Wrapped(10)! = 0
+  const hiFwd: Wrapped(10)! = 11
+  return {
+    okDirect: isSuccess(okDirect),
+    hiDirect: isSuccess(hiDirect),
+    okFwd: isSuccess(okFwd),
+    loFwd: isSuccess(loFwd),
+    hiFwd: isSuccess(hiFwd)
+  }
+}

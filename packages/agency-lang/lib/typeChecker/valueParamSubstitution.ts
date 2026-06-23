@@ -501,9 +501,25 @@ export function applyValueArgs(
   // names. If any do, substitution missed a spot — surface it loudly
   // here rather than letting an out-of-scope identifier leak into the
   // generated TypeScript.
-  const paramNames = new Set(params.map((p) => p.name));
-  if (paramNames.size > 0) {
-    assertNoUnsubstitutedValueParams(newTags, newBody, paramNames, aliasName);
+  //
+  // Exception: a value param can be bound to a *forwarded* identifier from
+  // an enclosing alias — `type AdultAge(high) = NumberInRange(18, high)`
+  // binds NumberInRange's `high` to the identifier `high`. That identifier
+  // is a legitimate in-scope reference at the call site even when it
+  // collides in name with one of THIS alias's own params, so exclude any
+  // such forwarded names from the check (otherwise the collision is a false
+  // positive). Names bound to literals are still checked normally.
+  const forwarded = new Set<string>();
+  for (const v of Object.values(bindings)) {
+    if (v && (v as Expression).type === "variableName") {
+      forwarded.add((v as Expression & { value: string }).value);
+    }
+  }
+  const checkNames = new Set(
+    params.map((p) => p.name).filter((n) => !forwarded.has(n)),
+  );
+  if (checkNames.size > 0) {
+    assertNoUnsubstitutedValueParams(newTags, newBody, checkNames, aliasName);
   }
 
   return {

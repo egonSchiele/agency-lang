@@ -23,13 +23,17 @@ describe("AgencyAbort (unified abort base)", () => {
 
   it("AgencyCancelledError and GuardExceededError are AgencyAbort subclasses", () => {
     expect(new AgencyCancelledError()).toBeInstanceOf(AgencyAbort);
-    const g = new GuardExceededError("time", 20, 21);
+    // Pass an explicit guardId — in the owned-guard-id routing a real trip
+    // always carries the tripped guard's id, so keep that contract visible.
+    const g = new GuardExceededError("time", 20, 21, "g-test");
     expect(g).toBeInstanceOf(AgencyAbort);
     expect(isGuardExceededError(g)).toBe(true);
     expect(g.type).toBe("time");
     expect(g.limit).toBe(20);
     expect(g.spent).toBe(21);
-    expect(readCause(g)?.kind).toBe("guardTrip");
+    const cause = readCause(g);
+    expect(cause?.kind).toBe("guardTrip");
+    expect((cause as { guardId: string }).guardId).toBe("g-test");
   });
 
   it("default AgencyCancelledError cause is branded so readCause round-trips", () => {
@@ -49,6 +53,17 @@ describe("AgencyAbort (unified abort base)", () => {
     });
     expect(isAbortError(crossRealm)).toBe(true);
     expect(readCause(crossRealm)).toBeUndefined();
+  });
+
+  it("name-fallback also recognizes a cross-realm GuardExceededError", () => {
+    // A guard trip crossing the subprocess shim loses its prototype chain;
+    // its name is still "GuardExceededError", so isAbortError must classify
+    // it as an abort (else it would be converted to a normal Failure instead
+    // of propagating as control flow).
+    const crossRealm = Object.assign(new Error("simulated cross-realm trip"), {
+      name: "GuardExceededError",
+    });
+    expect(isAbortError(crossRealm)).toBe(true);
   });
 });
 

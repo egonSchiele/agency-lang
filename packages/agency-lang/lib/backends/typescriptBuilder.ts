@@ -91,7 +91,9 @@ import {
 import {
   buildValidationDescriptor,
   hasAnyValidateTag,
+  hasAliasValidate,
 } from "./typescriptGenerator/validationDescriptor.js";
+import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep } from "../typeChecker/assignability.js";
 import { isFunctionTyped } from "../typeChecker/utils.js";
 
@@ -677,12 +679,48 @@ export class TypeScriptBuilder {
       if (!node.exported) return ts.empty();
       return ts.raw(`export const ${node.aliasName} = undefined;`);
     }
-    // Value-parameterized aliases (e.g. `type NumberInRange(low, high) = ...`)
-    // have no single schema — every use-site inlines a fresh substituted
-    // schema. Emit nothing at the declaration site; importers should never
-    // reference the bare name (use-sites are resolved before codegen).
+    // Value-parameterized aliases have no single schema — every use-site
+    // depends on the value args. For a VALIDATED one we emit a descriptor
+    // FACTORY here, in the alias's own module, so the validators it
+    // references stay in scope (exactly like a bare alias's
+    // `__agency_descriptor`). Use sites call `AliasName(args)` (see
+    // validationDescriptor.ts). A NON-validated value-param alias has no
+    // validators to leak, so it keeps emitting nothing and its schema is
+    // inlined at the use site.
     if (node.valueParams && node.valueParams.length > 0) {
-      return ts.empty();
+      const vpAliasesFull = this.scopes.visibleTypeAliasesFull();
+      const vpAliasedWithTags: VariableType = node.tags
+        ? {
+            ...node.aliasedType,
+            tags: [...(node.aliasedType.tags ?? []), ...node.tags],
+          }
+        : node.aliasedType;
+      if (!hasAnyValidateTag(vpAliasedWithTags, vpAliasesFull)) {
+        return ts.empty();
+      }
+      const vpResolved = resolveTypeDeep(vpAliasedWithTags, vpAliasesFull);
+      const vpDescriptor = buildValidationDescriptor(
+        vpResolved,
+        this.scopes.visibleTypeAliases(),
+        vpAliasesFull,
+      );
+      // Bake value-param DEFAULTS into the factory signature so an omitted
+      // use-site arg (e.g. `Age()!` or bare `Age!`) resolves the same default
+      // the old inline path got via `applyValueArgs` (which fills
+      // `bindings[p.name] = p.default`). Without this, `function Age(low)`
+      // called as `Age()` leaves `low` undefined and
+      // `min.partial({ n: undefined })` silently mis-validates.
+      const vpParams = node.valueParams
+        .map((p) =>
+          p.default !== undefined
+            ? `${p.name} = ${tagArgToTs(p.default)}`
+            : p.name,
+        )
+        .join(", ");
+      const vpExportPrefix = node.exported ? "export " : "";
+      return ts.raw(
+        `${vpExportPrefix}function ${node.aliasName}(${vpParams}) { return ${printTs(vpDescriptor)}; }`,
+      );
     }
     const exportPrefix = node.exported ? "export " : "";
     // Thread alias-level @validate / @jsonSchema tags onto the body type so

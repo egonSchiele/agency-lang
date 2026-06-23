@@ -99,7 +99,7 @@ function tagsHaveValidate(tags: Tag[] | undefined): boolean {
  * Used to decide whether a `typeAliasVariable` reference should emit a
  * `(Alias as any).__agency_descriptor` reference vs. a flat leaf schema.
  */
-function hasAliasValidate(
+export function hasAliasValidate(
   entry: TypeAliasEntry,
   typeAliasesFull: Record<string, TypeAliasEntry>,
 ): boolean {

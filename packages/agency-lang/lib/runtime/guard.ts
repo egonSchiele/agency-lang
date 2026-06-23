@@ -1,5 +1,5 @@
 import type { StateStack } from "./state/stateStack.js";
-import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
@@ -449,13 +449,21 @@ export function guardFromJSON(json: GuardJSON): Guard {
  * `docs/superpowers/specs/2026-05-20-cost-and-guard-tracking-design.md`
  * sections "Mechanism" and "Layer 2: stdlib function".
  */
-export class GuardExceededError extends Error {
+export class GuardExceededError extends AgencyAbort {
   constructor(
     public readonly type: "cost" | "time",
     public readonly limit: number,
     public readonly spent: number,
+    // A real guardId is load-bearing for Increment-2 ownedGuardIds matching:
+    // a GuardExceededError built WITHOUT one carries guardId === "" and, once
+    // __tryCall filters on ownedGuardIds, would fail the membership check and
+    // escape its own guard. CostGuard.check / TimeGuard.check pass their id.
+    guardId: string = "",
   ) {
-    super(`guard exceeded: ${type} limit ${limit}, spent ${spent}`);
+    super(
+      `guard exceeded: ${type} limit ${limit}, spent ${spent}`,
+      makeAbortCause({ kind: "guardTrip", dimension: type, limit, spent, guardId }),
+    );
     this.name = "GuardExceededError";
   }
 }

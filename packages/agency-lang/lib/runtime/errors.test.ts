@@ -2,12 +2,55 @@ import { describe, it, expect } from "vitest";
 import {
   CheckpointError,
   RestoreSignal,
+  AgencyAbort,
   AgencyCancelledError,
   isAbortError,
   makeAbortCause,
   readCause,
   type AbortCause,
 } from "./errors.js";
+import { GuardExceededError, isGuardExceededError } from "./guard.js";
+
+describe("AgencyAbort (unified abort base)", () => {
+  it("carries a cause; isAbortError true; readCause returns it", () => {
+    const cause = makeAbortCause({ kind: "userKill" });
+    const e = new AgencyAbort("m", cause);
+    expect(e).toBeInstanceOf(Error);
+    expect(e.name).toBe("AgencyAbort");
+    expect(isAbortError(e)).toBe(true);
+    expect(readCause(e)).toBe(cause);
+  });
+
+  it("AgencyCancelledError and GuardExceededError are AgencyAbort subclasses", () => {
+    expect(new AgencyCancelledError()).toBeInstanceOf(AgencyAbort);
+    const g = new GuardExceededError("time", 20, 21);
+    expect(g).toBeInstanceOf(AgencyAbort);
+    expect(isGuardExceededError(g)).toBe(true);
+    expect(g.type).toBe("time");
+    expect(g.limit).toBe(20);
+    expect(g.spent).toBe(21);
+    expect(readCause(g)?.kind).toBe("guardTrip");
+  });
+
+  it("default AgencyCancelledError cause is branded so readCause round-trips", () => {
+    const a = new AgencyCancelledError();
+    expect(readCause(a)).not.toBeUndefined();
+    expect(readCause(a)?.kind).toBe("userKill");
+    const b = new AgencyCancelledError("custom reason");
+    expect(readCause(b)?.kind).toBe("userKill");
+  });
+
+  it("name-based fallback classifies a cross-realm abort but does NOT recover its cause", () => {
+    // Simulate an error reconstructed across a module boundary (subprocess
+    // resolver shim): right name, no prototype chain to AgencyAbort, no
+    // branded cause payload. Identity survives; the cause does not.
+    const crossRealm = Object.assign(new Error("simulated cross-realm abort"), {
+      name: "AgencyAbort",
+    });
+    expect(isAbortError(crossRealm)).toBe(true);
+    expect(readCause(crossRealm)).toBeUndefined();
+  });
+});
 
 describe("CheckpointError", () => {
   it("should have correct name and message", () => {
@@ -108,7 +151,9 @@ describe("AbortCause / readCause", () => {
     const controller = new AbortController();
     controller.abort("just a string");
     expect(readCause(controller.signal)).toBeUndefined();
-    expect(readCause(new AgencyCancelledError("no cause"))).toBeUndefined();
+    // NOTE: `new AgencyCancelledError()` now carries a branded userKill cause
+    // by default (see the "default … cause is branded" test above), so it is
+    // intentionally NOT asserted here.
     expect(readCause(new Error("plain"))).toBeUndefined();
     expect(readCause(null)).toBeUndefined();
   });

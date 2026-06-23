@@ -103,6 +103,7 @@ export {
   ConcurrentInterruptError,
   CheckpointError,
   RestoreSignal,
+  AgencyAbort,
   AgencyCancelledError,
   isAbortError,
 } from "./errors.js";

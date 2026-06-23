@@ -61,6 +61,7 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { agencyStore } from "./asyncContext.js";
+import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -591,7 +592,9 @@ async function runRaceFirstTime<T>(
     // results we'll throw away.
     for (let i = 0; i < tasks.length; i++) {
       if (i === failedIndex) continue;
-      tasks[i].branch.abortController?.abort();
+      tasks[i].branch.abortController?.abort(
+        new AgencyCancelledError("race loser", makeAbortCause({ kind: "raceLoser" })),
+      );
     }
     throw err;
   }
@@ -604,7 +607,9 @@ async function runRaceFirstTime<T>(
   for (let i = 0; i < tasks.length; i++) {
     if (i === winnerIndex) continue;
     const t = tasks[i];
-    t.branch.abortController?.abort();
+    t.branch.abortController?.abort(
+      new AgencyCancelledError("race loser", makeAbortCause({ kind: "raceLoser" })),
+    );
     if (!t.cached) {
       hooks?.onBranchEnd?.(
         t.child.key,

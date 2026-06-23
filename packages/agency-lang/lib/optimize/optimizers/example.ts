@@ -1,10 +1,20 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
+import { breakdown } from "../gradeBreakdown.js";
+import type { Scorecard } from "../grading/scorecard.js";
 import type { Input } from "../grading/types.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { defaultPreview, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
 import { fileMap, type OptimizeTargetSet } from "../targets.js";
 import type { MutationProposal, OptimizeResult } from "../types.js";
+
+/** A scored point in the search: its file set + the Scorecard it earned. */
+type Candidate = { iter: number | "baseline"; files: Record<string, string>; scorecard: Scorecard };
+
+/** Gate-aware objective: a failed must-pass gate scores 0. */
+function objectiveOf(scorecard: Scorecard): number {
+  return scorecard.gatesPassed() ? scorecard.objective() : 0;
+}
 
 /**
  * Optional injection points, so the optimizer can be unit-tested without an LLM
@@ -24,17 +34,18 @@ export type ExampleDeps = BaseOptimizerDeps & {
  * search for better target values and return the best candidate.
  *
  * This one runs a single round: score the agent as-is, ask the built-in mutator
- * for one new set of values, score those, and keep whichever scored higher. The
- * real optimizers (greedy, gepa) loop and search more cleverly, but they all
- * follow the same shape — fork → apply → evaluate → compare → report → return.
+ * for one new set of values, score those, and keep the candidate if it beats the
+ * baseline. The real optimizers (greedy, gepa) loop and search more cleverly, but
+ * they all follow the same shape — fork → apply → evaluate → compare → report → return.
  *
  * Protected helpers available from BaseOptimizer:
- *   - `this.fork(dir)` — copy the agent into an isolated workspace
- *   - `this.workspace.applyFiles(ws, files)` — write candidate files into it
- *   - `this.evaluate(ws, entryFile, inputs)` — run + grade, returns a Scorecard
+ *   - `this.scoreFiles(source, files, inputs)` — fork + apply + grade, returns a Scorecard
+ *   - `this.pickValidationChampion(source, candidates, trainChampion)` — choose the
+ *     writeback champion by validation objective when a validation set exists
  *   - `this.reporter` — progress output (silent unless the CLI sets verbosity)
  *   - `this.buildPointwiseResult(...)` — package the OptimizeResult
  *   - `this.config` — graders, runId, writeback, mutatorModel, …
+ * (and `breakdown(scorecard)` builds the per-input grade breakdown for the report.)
  *
  * Register it (see registry.ts):
  *   registerOptimizer("example", (config) => new ExampleOptimizer(config));
@@ -48,17 +59,14 @@ export class ExampleOptimizer extends BaseOptimizer {
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
     const startedAt = Date.now();
-    if (this.validationInputs.length > 0) {
-      this.reporter.note(`validation set provided, but ${this.name} selects the champion on the training objective`);
-    }
     this.reporter.runStarted({
       optimizer: this.name, runId: this.config.runId,
       targets: source.targets, inputCount: inputs.length, iterations: 1,
     });
 
     // 1. Score the unchanged agent.
-    const baseline = await this.score(source, fileMap(source), inputs);
-    this.reporter.baselineScored({ objective: baseline });
+    const baseline = await this.candidate("baseline", fileMap(source), source, inputs);
+    this.reporter.baselineScored({ objective: objectiveOf(baseline.scorecard) });
 
     // 2. Ask the built-in mutator for one new set of target values. proposeValidMutation
     //    (from BaseOptimizer) retries on validation errors and never throws on a bad response.
@@ -74,36 +82,37 @@ export class ExampleOptimizer extends BaseOptimizer {
       (operations) => (this.exampleDeps.preview ?? defaultPreview)(source, operations),
     );
 
-    // 3. If we got a valid proposal, score it and keep it only if it beats the baseline.
+    // 3. Keep the candidate only if it beats the baseline on the training objective.
+    const candidates: Candidate[] = [baseline];
+    let decision: "accepted" | "rejected" = "rejected";
     if (outcome.ok) {
-      const candidate = await this.score(source, outcome.preview.files, inputs);
-      if (candidate > baseline) {
-        if (this.config.writeback) this.workspace.writeBack(source, outcome.preview.files);
-        this.reporter.iterationDecided({ iter: 1, total: 1, decision: "accepted", objective: candidate, changes: outcome.preview.changes, rationale: outcome.rationale });
-        return this.result(source, 1, outcome.preview.files, "accepted", startedAt);
+      const candidate = await this.candidate(1, outcome.preview.files, source, inputs);
+      if (objectiveOf(candidate.scorecard) > objectiveOf(baseline.scorecard)) {
+        candidates.push(candidate);
+        decision = "accepted";
+        this.reporter.iterationDecided({ iter: 1, total: 1, decision: "accepted", objective: objectiveOf(candidate.scorecard), changes: outcome.preview.changes, rationale: outcome.rationale });
       }
     }
+    if (decision === "rejected") {
+      this.reporter.iterationDecided({ iter: 1, total: 1, decision: "rejected", objective: objectiveOf(baseline.scorecard) });
+    }
 
-    // 4. Otherwise keep the original.
-    this.reporter.iterationDecided({ iter: 1, total: 1, decision: "rejected", objective: baseline });
-    return this.result(source, "baseline", fileMap(source), "rejected", startedAt);
-  }
-
-  /** Apply a candidate file set into a fresh workspace, run + grade it; return its objective (0 if a gate fails). */
-  private async score(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<number> {
-    const scorecard = await this.scoreFiles(source, files, inputs);
-    return scorecard.gatesPassed() ? scorecard.objective() : 0;
-  }
-
-  private result(
-    source: OptimizeTargetSet,
-    championIter: number | "baseline",
-    championFiles: Record<string, string>,
-    decision: "accepted" | "rejected",
-    startedAt: number,
-  ): OptimizeResult {
-    const result = this.buildPointwiseResult({ championIter, championFiles, attempts: [{ iter: 1, decision }] });
+    // 4. Pick the writeback champion by validation objective when a validation set
+    //    exists (else the train winner), then package the result.
+    const trainChampion = candidates[candidates.length - 1];
+    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
+    if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
+    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts: [{ iter: 1, decision }] });
+    result.trainObjective = objectiveOf(champion.scorecard);
+    if (validationObjective !== undefined) result.validationObjective = validationObjective;
+    result.championBreakdown = breakdown(champion.scorecard);
     this.reporter.runFinished({ result, initialTargets: source.targets, finalTargets: source.targets, durationMs: Date.now() - startedAt });
     return result;
+  }
+
+  /** Apply a candidate file set into a fresh workspace, run + grade it. */
+  private async candidate(iter: number | "baseline", files: Record<string, string>, source: OptimizeTargetSet, inputs: Input[]): Promise<Candidate> {
+    const scorecard = await this.scoreFiles(source, files, inputs);
+    return { iter, files, scorecard };
   }
 }

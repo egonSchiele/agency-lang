@@ -140,13 +140,19 @@ This renders, per input, the args, the **output**, the **`expected`** answer (wh
 
 ## Validation
 
-`this.validationInputs` is the held-out set (empty if none). Search on `inputs`; if you support validation-based selection, score candidates on the validation set with `scoreFiles(source, files, this.validationInputs)` and pick the champion by that objective. Greedy does this; `gepa`/`example` select on training and emit a `reporter.note` when a validation set was provided but unused — do the same if your optimizer doesn't use it, so behavior isn't silently dropped.
+`this.validationInputs` is the held-out set (empty if none). Search on `inputs`, then pick the writeback champion by validation with the shared helper:
+
+```ts
+const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
+```
+
+`pickValidationChampion` (on `BaseOptimizer`) takes your candidate list (e.g. `[baseline, ...accepted]`) and the train champion; with a validation set it scores each candidate via `scoreFiles(source, files, this.validationInputs)` and returns the best, else returns the train champion. All three built-ins (`greedy`, `gepa`, `example`) use it. If your optimizer deliberately ignores validation it just won't set `result.validationObjective`, and the report notes that a validation set was provided but unused — so the behavior isn't silently dropped.
 
 Record both numbers on the result for the report:
 
 ```ts
 result.trainObjective = champion.scorecard.objective();
-result.validationObjective = /* best validation objective, if used */;
+if (validationObjective !== undefined) result.validationObjective = validationObjective;
 ```
 
 ## Reporting and the result

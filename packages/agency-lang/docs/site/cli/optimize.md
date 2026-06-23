@@ -140,7 +140,7 @@ Also returns a binary pass/fail like exact match, but this one checks to see if 
 Calculates the levenshtein distance and returns a score between 0 and 1 (0 = no match, 1 = perfect match).
 
 #### LLM Judge
-Asks an LLM to return a score between 0 and 1 (0 = no match, 1 = perfect match) for how well the response matches the expected output.
+Asks an LLM to return a score between 0 and 1 (0 = no match, 1 = perfect match) for how well the response matches the goal — and, when an input sets `expected`, grades against that gold answer too (so `expected` tightens the default judge even without a custom grader).
 
 This is the default grader.
 
@@ -235,7 +235,7 @@ Every grade counts: a number contributes its value (0..1), and a boolean / `Exac
 
 ## Validation sets
 
-Pass `--validation-inputs <file|dir>` to grade the champion against held-out inputs, or `--validation-split <ratio>` to hold out a seeded fraction of `--inputs`. Search and candidate acceptance run on the **training** inputs; with the default `greedy` optimizer the champion written back is the one with the best **validation** objective, and `report.md` shows train-vs-validation side by side so an overfit prompt (high train, flat validation) is visible.
+Pass `--validation-inputs <file|dir>` to grade the champion against held-out inputs, or `--validation-split <ratio>` to hold out a seeded fraction of `--inputs`. Search and candidate acceptance run on the **training** inputs; the champion written back is the one with the best **validation** objective, and `report.md` shows train-vs-validation side by side so an overfit prompt (high train, flat validation) is visible. All built-in optimizers (`greedy`, `gepa`, `example`) select by validation; a custom optimizer that doesn't will say so in the report.
 
 ## Configuration
 

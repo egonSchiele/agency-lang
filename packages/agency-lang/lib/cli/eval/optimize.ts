@@ -61,13 +61,16 @@ export async function evalOptimize(
   if (result.runDir) {
     fs.mkdirSync(result.runDir, { recursive: true });
     fs.writeFileSync(path.join(result.runDir, "summary.json"), JSON.stringify(result, null, 2));
-    const ignoresValidation = optimizer.name !== "greedy";   // only greedy selects by validation
+    // A validation set was provided but the optimizer didn't select on it (it
+    // produced no validation objective) — true for a custom optimizer that ignores it.
+    const validationConfiguredButUnused =
+      (target.validationInputs?.length ?? 0) > 0 && result.validationObjective === undefined;
     writeReport(result.runDir, result, {
       optimizer: optimizer.name,
       graders: config.graders.map((g) => g.name()),
       trainObjective: result.trainObjective,
       validationObjective: result.validationObjective,
-      validationConfiguredButUnused: ignoresValidation && (target.validationInputs?.length ?? 0) > 0,
+      validationConfiguredButUnused,
     });
   }
   return result;

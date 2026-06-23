@@ -212,12 +212,23 @@ export async function _popGuard(ids: string[]): Promise<void> {
  * so a `guardTrip` is converted to a Failure ONLY when it belongs to one of
  * THIS guard()'s guards (an outer guard's trip re-throws past it).
  *
- * Replaces the stdlib `guard`'s former agency-level `try block()`. That `try`
- * lowered (in a function scope) to `__tryCall(() => block(), { checkpoint,
- * functionName, args })`; we MUST forward the same FailureOpts so a guard
- * failure keeps its checkpoint / functionName / args (retry + reporting
- * depend on them) — only `ownedGuardIds` is added. See
- * processTryExpression in lib/backends/typescriptBuilder.ts.
+ * WHY THIS IS TS AND NOT AGENCY: the routing is `__tryCall(..., {
+ * ownedGuardIds })`, and the agency `try block()` expression has no syntax to
+ * pass `ownedGuardIds` into its `__tryCall` (it lowers to a fixed
+ * `{ checkpoint, functionName, args }` — see processTryExpression in
+ * lib/backends/typescriptBuilder.ts). Stashing the owned ids on the stack
+ * frame for `__tryCall` to read globally is NOT an option either: a plain
+ * `try` nested inside the guarded block must own NOTHING (so it re-throws the
+ * guard's trip rather than swallowing it — see the fixture
+ * guard-trip-not-swallowed-by-inner-try), so the owned set has to be scoped to
+ * THIS specific `try` boundary, not read from the frame. Hence this small TS
+ * seam. (The alternative is to extend the `try` codegen to carry
+ * owned-guard-ids — a larger codegen change.)
+ *
+ * Because this replaces the stdlib `guard`'s former agency-level `try block()`,
+ * it MUST forward the same FailureOpts that `try` injected ({ checkpoint,
+ * functionName, args }) so a guard failure keeps its checkpoint / functionName
+ * / args (retry + reporting depend on them) — only `ownedGuardIds` is added.
  */
 export async function _runGuarded(
   ids: string[],

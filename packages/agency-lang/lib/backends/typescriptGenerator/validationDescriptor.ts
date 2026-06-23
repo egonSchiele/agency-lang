@@ -155,6 +155,69 @@ function schemaNode(
   return ts.raw(mapTypeToValidationSchema(t, typeAliases, typeAliasesFull));
 }
 
+/**
+ * Concatenate use-site `@validate(...)` validators on top of a base
+ * descriptor expression: `{ ...base, validators: [...(base?.validators ??
+ * []), ...useSite] }`. Returns `base` unchanged when there are none.
+ * Shared by the `__agency_descriptor` and value-param factory-call paths.
+ */
+function withUseSiteValidators(
+  base: TsNode,
+  useSiteValidators: TsNode[],
+): TsNode {
+  if (useSiteValidators.length === 0) return base;
+  const existingValidators = ts.binOp(
+    ts.prop(base, "validators", { optional: true }),
+    "??",
+    ts.arr([]),
+    { parenLeft: true },
+  );
+  return ts.obj([
+    ts.setSpread(base),
+    ts.set(
+      '"validators"',
+      ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
+    ),
+  ]);
+}
+
+/**
+ * Build the descriptor for a value-parameterized alias instantiation.
+ * A VALIDATED value-param alias compiles to a descriptor factory in its
+ * defining module (see `processTypeAlias`), so we reference it by CALL —
+ * its validators resolve in that module's scope, never injected into the
+ * consumer and impossible to shadow with a same-named local. A
+ * NON-validated one has no validators to leak, so we inline its
+ * substituted schema as before.
+ */
+function valueParamDescriptor(
+  variableType: Extract<VariableType, { type: "typeAliasVariable" }>,
+  entry: TypeAliasEntry | undefined,
+  useSiteValidators: TsNode[],
+  typeAliases: Record<string, VariableType>,
+  typeAliasesFull: Record<string, TypeAliasEntry>,
+  seen: Set<string>,
+): TsNode {
+  if (entry && hasAliasValidate(entry, typeAliasesFull)) {
+    const argList = (variableType.valueArgs ?? [])
+      .map((a) => tagArgToTs(a))
+      .join(", ");
+    const call = ts.raw(`${variableType.aliasName}(${argList})`);
+    return withUseSiteValidators(call, useSiteValidators);
+  }
+  const substituted = applyValueArgs(
+    entry!,
+    variableType.valueArgs,
+    variableType.aliasName,
+  );
+  const merged = mergeTagSets(substituted.tags, variableType.tags);
+  const bodyWithTags: VariableType = {
+    ...substituted.body,
+    tags: mergeTagSets(substituted.body.tags, merged),
+  };
+  return descriptor(bodyWithTags, typeAliases, typeAliasesFull, seen);
+}
+
 function descriptor(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
@@ -171,52 +234,18 @@ function descriptor(
   if (variableType.type === "typeAliasVariable") {
     const entry = typeAliasesFull[variableType.aliasName];
     const useSiteValidators = validatorNodes(variableType.tags);
-    // Value-parameterized alias instantiation: there is NO
-    // `__agency_descriptor` side-channel (those only exist for bare
-    // aliases). Inline the descriptor for the substituted body with
-    // substituted tags threaded through. See `isValueParamInstantiation`
+    // Value-parameterized alias instantiation. See `isValueParamInstantiation`
     // — the canonical predicate, also used in `typeToZodSchema` and
     // `hasAnyValidateTag`.
     if (isValueParamInstantiation(variableType, entry)) {
-      // A VALIDATED value-param alias compiles to a descriptor factory in
-      // its defining module (see processTypeAlias). Reference it by CALL so
-      // its validators resolve in that module's scope — never injected into
-      // the consumer, and impossible to shadow with a same-named local.
-      if (entry && hasAliasValidate(entry, typeAliasesFull)) {
-        const argList = (variableType.valueArgs ?? [])
-          .map((a) => tagArgToTs(a))
-          .join(", ");
-        const call = ts.raw(`${variableType.aliasName}(${argList})`);
-        if (useSiteValidators.length === 0) return call;
-        // Concatenate use-site validators on top of the factory's chain:
-        // `{ ...AliasName(args), validators: [...(AliasName(args)?.validators ?? []), ...useSite] }`
-        const existingValidators = ts.binOp(
-          ts.prop(call, "validators", { optional: true }),
-          "??",
-          ts.arr([]),
-          { parenLeft: true },
-        );
-        return ts.obj([
-          ts.setSpread(call),
-          ts.set(
-            '"validators"',
-            ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
-          ),
-        ]);
-      }
-      // Non-validated value-param alias: inline the substituted schema. There
-      // are no validators to leak, so this stays as-is.
-      const substituted = applyValueArgs(
-        entry!,
-        variableType.valueArgs,
-        variableType.aliasName,
+      return valueParamDescriptor(
+        variableType,
+        entry,
+        useSiteValidators,
+        typeAliases,
+        typeAliasesFull,
+        seen,
       );
-      const merged = mergeTagSets(substituted.tags, variableType.tags);
-      const bodyWithTags: VariableType = {
-        ...substituted.body,
-        tags: mergeTagSets(substituted.body.tags, merged),
-      };
-      return descriptor(bodyWithTags, typeAliases, typeAliasesFull, seen);
     }
     if (entry && hasAliasValidate(entry, typeAliasesFull)) {
       // `(Alias as any).__agency_descriptor`
@@ -224,21 +253,7 @@ function descriptor(
         ts.raw(`(${variableType.aliasName} as any)`),
         "__agency_descriptor",
       );
-      if (useSiteValidators.length === 0) return aliasRef;
-      // `{ ...aliasRef, validators: [...(aliasRef?.validators ?? []), ...] }`
-      const existingValidators = ts.binOp(
-        ts.prop(aliasRef, "validators", { optional: true }),
-        "??",
-        ts.arr([]),
-        { parenLeft: true },
-      );
-      return ts.obj([
-        ts.setSpread(aliasRef),
-        ts.set(
-          '"validators"',
-          ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
-        ),
-      ]);
+      return withUseSiteValidators(aliasRef, useSiteValidators);
     }
     // No alias-level validators — emit a leaf using only the alias schema and
     // any use-site validators.

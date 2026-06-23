@@ -16,8 +16,7 @@ import {
   rewindFrom as _rewindFrom,
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
-  GuardExceededError,
-  isAbortError as __isAbortError,
+  AgencyAbort,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -253,21 +252,14 @@ return;
     if (__error instanceof RestoreSignal) {
   throw __error;
 }
-// GuardExceededError must propagate up to the stdlib `guard`
-// function's try/catch (in lib/runtime/result.ts via `try block()`).
-// If we converted it to a Failure here, the guard would never see
-// the trip and every guarded block would appear to succeed even
-// over budget. See lib/runtime/guard.ts.
-if (__error instanceof GuardExceededError) {
-  throw __error;
-}
-// A cancellation (user pressed Esc / an abort fired) must propagate
-// untouched: converting it to a Failure here would (a) let the agent
-// limp onward through more soon-to-abort calls instead of stopping
-// promptly, and (b) surface the abort as a logged ERROR + a Failure the
-// REPL can't recognize as a cancel. The runtime is built to propagate
-// AgencyCancelledError (see prompt.ts / hooks.ts / result.ts); honor that.
-if (__isAbortError(__error)) {
+// All aborts — cancellations (Esc / abort) AND guard trips — are now a single
+// AgencyAbort carrying an AbortCause, and must propagate untouched. The owning
+// guard's `try` converts its own guardTrip; every other abort unwinds. One
+// rung replaces the old GuardExceededError + isAbortError ladder. Converting
+// any abort to a Failure here would (a) hide a guard trip so the block appears
+// to succeed over budget, and (b) let a cancel limp onward / surface as a
+// logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+if (__error instanceof AgencyAbort) {
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -435,10 +427,7 @@ await callHook({
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof GuardExceededError) {
-      throw __error
-    }
-    if (__isAbortError(__error)) {
+    if (__error instanceof AgencyAbort) {
       throw __error
     }
     {

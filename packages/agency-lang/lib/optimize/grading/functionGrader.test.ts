@@ -52,7 +52,7 @@ describe("FunctionGrader", () => {
     };
     const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital" })).score);
     await g.run(input);
-    expect(runStructured.mock.calls[0][2]).toEqual(["capital", "New Delhi", "New Delhi"]);
+    expect((runStructured.mock.calls[0] as unknown[])[2]).toEqual(["capital", "New Delhi", "New Delhi"]);
   });
 
   it("ctx.judge lets the caller override expected explicitly", async () => {
@@ -64,7 +64,7 @@ describe("FunctionGrader", () => {
     };
     const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital", expected: "Delhi" })).score);
     await g.run(input);
-    expect(runStructured.mock.calls[0][2]).toEqual(["capital", "Mumbai", "Delhi"]);
+    expect((runStructured.mock.calls[0] as unknown[])[2]).toEqual(["capital", "Mumbai", "Delhi"]);
   });
 
   it("grader() attaches policy options (mustPass/name) to the wrapped function", () => {

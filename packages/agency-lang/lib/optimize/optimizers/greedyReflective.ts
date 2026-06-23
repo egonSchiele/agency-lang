@@ -1,5 +1,4 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
-import { breakdown } from "../gradeBreakdown.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import type { Scorecard } from "../grading/scorecard.js";
@@ -56,58 +55,16 @@ export class GreedyReflective extends BaseOptimizer {
 
     if (this.isMaxObjective(baseline.scorecard)) {
       this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
-      return this.finish(source, baseline, [baseline], [], startedAt);
+      return this.finishPointwise(source, [baseline], baseline, [], startedAt);
     }
 
     const attempts = await this.hillClimb(baseline, inputs);
     const accepted = attempts.filter((a) => a.decision === "accepted" && a.candidate).map((a) => a.candidate!);
     const trainChampion = accepted.length ? accepted[accepted.length - 1] : baseline;
-    return this.finish(source, trainChampion, [baseline, ...accepted], attempts, startedAt);
-  }
-
-  /** Choose the writeback champion (validation objective when a validation set
-   *  exists, else the train champion), write it back, build + report the result. */
-  private async finish(
-    source: OptimizeTargetSet,
-    trainChampion: Candidate,
-    candidates: Candidate[],
-    attempts: Attempt[],
-    startedAt: number,
-  ): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickChampion(source, trainChampion, candidates);
-    if (this.config.writeback && champion.iter !== "baseline") {
-      this.workspace.writeBack(source, champion.files);
-    }
-    const result = this.buildPointwiseResult({
-      championIter: champion.iter, championFiles: champion.files,
-      attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
-    });
-    result.trainObjective = champion.scorecard.objective();
-    if (validationObjective !== undefined) result.validationObjective = validationObjective;
-    result.championBreakdown = breakdown(champion.scorecard);   // the headline DX artifact
-    this.reporter.runFinished({
-      result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
-    });
-    return result;
-  }
-
-  /** Pick the writeback champion. With no validation set, that is the train
-   *  champion. With one, score every candidate on validation (the "how") and
-   *  take the max (the "what") — no order-dependent mutable accumulation. */
-  private async pickChampion(
-    source: OptimizeTargetSet,
-    trainChampion: Candidate,
-    candidates: Candidate[],
-  ): Promise<{ champion: Candidate; validationObjective?: number }> {
-    if (this.validationInputs.length === 0) return { champion: trainChampion };
-    const scored = await Promise.all(
-      candidates.map(async (candidate) => {
-        const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
-        return { candidate, objective: sc.gatesPassed() ? sc.objective() : 0 };
-      }),
+    return this.finishPointwise(
+      source, [baseline, ...accepted], trainChampion,
+      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })), startedAt,
     );
-    const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
-    return { champion: winner.candidate, validationObjective: winner.objective };
   }
 
   /** The one place the champion is threaded across iterations. */

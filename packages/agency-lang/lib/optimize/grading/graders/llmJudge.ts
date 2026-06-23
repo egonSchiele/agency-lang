@@ -6,11 +6,12 @@ import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
 
 type LlmJudgeOptions = GraderOptions & {
-  agencyFile?: string;  // judge .agency file (default: the bundled goal judge)
-  goal?: string;        // fixed goal for every input (overrides goalPath)
-  goalPath?: JSONPath;  // where to read the goal from the input (default ["goal"])
-  binary?: boolean;     // expect a pass/fail verdict instead of a 0..1 score
-  node?: string;        // judge node (default "main")
+  agencyFile?: string;     // judge .agency file (default: the bundled goal judge)
+  goal?: string;           // fixed goal for every input (overrides goalPath)
+  goalPath?: JSONPath;     // where to read the goal from the input (default ["goal"])
+  expectedPath?: JSONPath; // where to read the gold answer (default ["expected"]); passed to the judge
+  binary?: boolean;        // expect a pass/fail verdict instead of a 0..1 score
+  node?: string;           // judge node (default "main")
 };
 
 const BinaryVerdict = z.object({ pass: z.boolean(), reasoning: z.string() });
@@ -35,7 +36,11 @@ export class LlmJudge extends BaseGrader {
     // Judges take a string output; stringify structured outputs so they read as JSON
     // rather than "[object Object]".
     const output = asJudgeText(run.output);
-    const args = [String(goal), output];
+    // The gold answer, when the input carries one — the bundled judge grades against
+    // it. Empty string when absent; a custom judge node that ignores it is unaffected.
+    const expectedRaw = getPath(input, this.options.expectedPath ?? ["expected"]);
+    const expected = expectedRaw === undefined || expectedRaw === null ? "" : asJudgeText(expectedRaw);
+    const args = [String(goal), output, expected];
     const node = this.options.node ?? "main";
     if (this.options.binary) {
       const v = await runAgency.runStructured(agencyFile, node, args, BinaryVerdict);

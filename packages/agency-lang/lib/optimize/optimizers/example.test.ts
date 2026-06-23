@@ -64,6 +64,18 @@ describe("ExampleOptimizer", () => {
     const result = await run(opt);
     expect(result.championIter).toBe(1);
     expect(result.acceptedCount).toBe(1);
+    expect(result.championBreakdown?.length).toBeGreaterThan(0);   // breakdown now emitted
+  });
+
+  it("reports a validation objective and breakdown when a validation set is given", async () => {
+    const opt = new ExampleOptimizer(config([new QueueGrader([0.2, 0.9, 0.5, 0.6])], "val"), deps());
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", args: {} }],
+      validationInputs: [{ id: "v", args: {} }],
+    });
+    expect(typeof result.validationObjective).toBe("number");
+    expect(result.championBreakdown?.length).toBeGreaterThan(0);
   });
 
   it("keeps the baseline when the candidate does not beat it", async () => {

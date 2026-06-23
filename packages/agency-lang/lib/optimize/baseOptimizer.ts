@@ -4,6 +4,7 @@ import * as path from "path";
 import { evalRunLoadedInputs, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
 
 import { EvalCache } from "./evalCache.js";
+import { breakdown } from "./gradeBreakdown.js";
 import { AgencyRunner } from "./grading/agencyRunner.js";
 import type { BaseGrader } from "./grading/baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scorecard.js";
@@ -147,6 +148,71 @@ export abstract class BaseOptimizer {
     return this.evaluate(ws, source.entryFile, inputs);
   }
 
+  /** Choose the writeback champion among candidates: the one with the best
+   *  validation objective when a validation set exists, else the given train
+   *  champion. Scoring (the "how") is separated from the max selection (the
+   *  "what"); shared by the pointwise optimizers so validation selection lives
+   *  in one place. */
+  protected async pickValidationChampion<C extends { files: Record<string, string>; scorecard: Scorecard }>(
+    source: OptimizeTargetSet,
+    candidates: C[],
+    trainChampion: C,
+  ): Promise<{ champion: C; validationObjective?: number }> {
+    if (this.validationInputs.length === 0) return { champion: trainChampion };
+    // Always consider the train champion, even if a caller forgot to include it.
+    const pool = candidates.includes(trainChampion) ? candidates : [trainChampion, ...candidates];
+    const scored = await Promise.all(
+      pool.map(async (candidate) => {
+        const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
+        return { candidate, objective: sc.gatesPassed() ? sc.objective() : 0 };
+      }),
+    );
+    // pool always has the train champion, so reduce has at least one element.
+    const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
+    return { champion: winner.candidate, validationObjective: winner.objective };
+  }
+
+  /** The shared tail every pointwise optimizer runs: pick the writeback champion
+   *  (by validation when configured), write it back, build the result with its
+   *  train/validation objectives + grade breakdown, and report completion. An
+   *  optimizer's job is just to produce the candidates and per-iteration attempts;
+   *  this turns them into the final OptimizeResult. */
+  protected async finishPointwise<C extends { iter: number | "baseline"; files: Record<string, string>; scorecard: Scorecard; targetSet: OptimizeTargetSet }>(
+    source: OptimizeTargetSet,
+    candidates: C[],
+    trainChampion: C,
+    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[],
+    startedAt: number,
+  ): Promise<OptimizeResult> {
+    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
+    if (this.config.writeback && champion.iter !== "baseline") {
+      this.workspace.writeBack(source, champion.files);
+    }
+
+    const result = this.buildPointwiseResult({
+      championIter: champion.iter,
+      championFiles: champion.files,
+      attempts
+    });
+
+    result.trainObjective = champion.scorecard.objective();
+
+    if (validationObjective !== undefined) {
+      result.validationObjective = validationObjective;
+    }
+
+    result.championBreakdown = breakdown(champion.scorecard);
+
+    this.reporter.runFinished({
+      result,
+      initialTargets: source.targets,
+      finalTargets: champion.targetSet.targets,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return result;
+  }
+
   /** Run the agent once per input (cached by (workspace,input)), grade each, return a Scorecard. */
   protected async evaluate(ws: Workspace, entryFile: string, inputs: Input[]): Promise<Scorecard> {
     const perInput = await Promise.all(
@@ -161,15 +227,24 @@ export abstract class BaseOptimizer {
     const advisory = this.config.graders.filter((g) => !g.mustPass() && g.gradesInput(input));
 
     const gateGrades: GraderGrade[] = [];
-    for (const grader of gates) {                                  // sequential: short-circuit
+    for (const grader of gates) {
       const grade = await grader.run({ input, run, runAgency: this.agencyRunner });
+
       gateGrades.push({ grader, grade });
-      if (!grader.passes(grade)) return { input, run, grades: gateGrades, gatesPassed: false };
+      if (!grader.passes(grade)) {
+        return { input, run, grades: gateGrades, gatesPassed: false };
+      }
     }
     const advisoryGrades = await Promise.all(
       advisory.map(async (grader) => ({ grader, grade: await grader.run({ input, run, runAgency: this.agencyRunner }) })),
     );
-    return { input, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
+
+    return {
+      input,
+      run,
+      grades: [...gateGrades, ...advisoryGrades],
+      gatesPassed: true
+    };
   }
 
   /** Default runInput: run the agent for one input via the eval-run subprocess path (named args). */

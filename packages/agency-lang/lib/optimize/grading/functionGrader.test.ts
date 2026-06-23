@@ -43,6 +43,30 @@ describe("FunctionGrader", () => {
     expect(runStructured).toHaveBeenCalledTimes(1);
   });
 
+  it("ctx.judge forwards input.expected as the third judge arg by default", async () => {
+    const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
+    const input: GraderInput = {
+      input: { id: "a", args: {}, expected: "New Delhi" },
+      run: { output: "New Delhi", recordPath: "" },
+      runAgency: { runStructured } as unknown as AgencyRunner,
+    };
+    const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital" })).score);
+    await g.run(input);
+    expect(runStructured.mock.calls[0][2]).toEqual(["capital", "New Delhi", "New Delhi"]);
+  });
+
+  it("ctx.judge lets the caller override expected explicitly", async () => {
+    const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
+    const input: GraderInput = {
+      input: { id: "a", args: {}, expected: "New Delhi" },
+      run: { output: "Mumbai", recordPath: "" },
+      runAgency: { runStructured } as unknown as AgencyRunner,
+    };
+    const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital", expected: "Delhi" })).score);
+    await g.run(input);
+    expect(runStructured.mock.calls[0][2]).toEqual(["capital", "Mumbai", "Delhi"]);
+  });
+
   it("grader() attaches policy options (mustPass/name) to the wrapped function", () => {
     const g = grader(() => 1, { mustPass: true, name: "exact" });
     expect(g.mustPass()).toBe(true);

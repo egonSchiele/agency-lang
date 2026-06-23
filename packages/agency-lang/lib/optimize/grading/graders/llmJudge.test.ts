@@ -42,7 +42,7 @@ describe("LlmJudge", () => {
     const grade = await judge.run({ input: { id: "a", args: {} }, run: { output: "Paris", recordPath: "" }, runAgency });
     expect(grade.score).toEqual({ kind: "scalar", value: 0.8 });
     expect(captured?.agencyFile.endsWith("eval/goalJudge.agency")).toBe(true);   // default file
-    expect(captured?.argsString).toBe('"Return the capital.", "Paris"');         // inline goal, not from input
+    expect(captured?.argsString).toBe('"Return the capital.", "Paris", ""');     // inline goal; no expected → ""
   });
 
   it("reads the goal from the input via goalPath when no inline goal is given", async () => {
@@ -53,6 +53,17 @@ describe("LlmJudge", () => {
     });
     const judge = new LlmJudge({});   // default goalPath ["goal"]
     await judge.run({ input: { id: "a", args: {}, goal: "from input" }, run: { output: "x", recordPath: "" }, runAgency });
-    expect(captured).toBe('"from input", "x"');
+    expect(captured).toBe('"from input", "x", ""');
+  });
+
+  it("passes the input's expected answer to the judge as the third arg", async () => {
+    let captured: string | undefined;
+    const runAgency = new AgencyRunner({}, async (a) => {
+      captured = a.argsString;
+      return { data: { score: 1, reasoning: "" } };
+    });
+    const judge = new LlmJudge({ goal: "Return the capital." });   // default expectedPath ["expected"]
+    await judge.run({ input: { id: "a", args: {}, expected: "New Delhi" }, run: { output: "New Delhi", recordPath: "" }, runAgency });
+    expect(captured).toBe('"Return the capital.", "New Delhi", "New Delhi"');
   });
 });

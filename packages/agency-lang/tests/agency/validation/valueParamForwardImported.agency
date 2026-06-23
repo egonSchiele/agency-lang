@@ -1,0 +1,17 @@
+// A forwarding alias wrapping an imported value-param validated alias.
+// AdultAge has no @validate of its own; it inherits NumberInRange's via its
+// body. AdultAge's factory should call NumberInRange's factory.
+import { NumberInRange } from "std::types"
+
+type AdultAge(high: number) = NumberInRange(18, high)
+
+node main() {
+  const ok: AdultAge(65)! = 30
+  const tooYoung: AdultAge(65)! = 17
+  const tooOld: AdultAge(65)! = 70
+  return {
+    ok: isSuccess(ok),
+    tooYoung: isSuccess(tooYoung),
+    tooOld: isSuccess(tooOld)
+  }
+}

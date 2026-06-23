@@ -80,31 +80,16 @@ export class Gepa extends BaseOptimizer {
 
     if (this.isMaxObjective(baseline.scorecard)) {
       this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
-      return this.finish(source, baseline, [baseline], [], startedAt);
+      return this.finishPointwise(source, [baseline], baseline, [], startedAt);
     }
 
     const pool = new CandidatePool<Candidate>([toPoolCandidate(baseline)]);
     const attempts = await this.evolve(pool, inputs, paretoInputs, rng);
     const accepted = attempts.filter((a) => a.decision === "accepted" && a.candidate).map((a) => a.candidate!);
-    return this.finish(source, pool.best().value, [baseline, ...accepted], attempts, startedAt);
-  }
-
-  /** Pick the writeback champion (best validation objective when a validation set
-   *  exists, else the train champion = Pareto best), write it back, build + report. */
-  private async finish(source: OptimizeTargetSet, trainChampion: Candidate, candidates: Candidate[], attempts: Attempt[], startedAt: number): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
-    if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
-    const result = this.buildPointwiseResult({
-      championIter: champion.iter, championFiles: champion.files,
-      attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
-    });
-    result.trainObjective = champion.scorecard.objective();
-    if (validationObjective !== undefined) result.validationObjective = validationObjective;
-    result.championBreakdown = breakdown(champion.scorecard);
-    this.reporter.runFinished({
-      result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
-    });
-    return result;
+    return this.finishPointwise(
+      source, [baseline, ...accepted], pool.best().value,
+      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })), startedAt,
+    );
   }
 
   /** Run the optimization loop, threading the pool. */

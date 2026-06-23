@@ -4,6 +4,7 @@ import * as path from "path";
 import { evalRunLoadedInputs, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
 
 import { EvalCache } from "./evalCache.js";
+import { breakdown } from "./gradeBreakdown.js";
 import { AgencyRunner } from "./grading/agencyRunner.js";
 import type { BaseGrader } from "./grading/baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scorecard.js";
@@ -158,14 +159,41 @@ export abstract class BaseOptimizer {
     trainChampion: C,
   ): Promise<{ champion: C; validationObjective?: number }> {
     if (this.validationInputs.length === 0) return { champion: trainChampion };
+    // Always consider the train champion, even if a caller forgot to include it.
+    const pool = candidates.includes(trainChampion) ? candidates : [trainChampion, ...candidates];
     const scored = await Promise.all(
-      candidates.map(async (candidate) => {
+      pool.map(async (candidate) => {
         const sc = await this.scoreFiles(source, candidate.files, this.validationInputs);
         return { candidate, objective: sc.gatesPassed() ? sc.objective() : 0 };
       }),
     );
+    // pool always has the train champion, so reduce has at least one element.
     const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
     return { champion: winner.candidate, validationObjective: winner.objective };
+  }
+
+  /** The shared tail every pointwise optimizer runs: pick the writeback champion
+   *  (by validation when configured), write it back, build the result with its
+   *  train/validation objectives + grade breakdown, and report completion. An
+   *  optimizer's job is just to produce the candidates and per-iteration attempts;
+   *  this turns them into the final OptimizeResult. */
+  protected async finishPointwise<C extends { iter: number | "baseline"; files: Record<string, string>; scorecard: Scorecard; targetSet: OptimizeTargetSet }>(
+    source: OptimizeTargetSet,
+    candidates: C[],
+    trainChampion: C,
+    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[],
+    startedAt: number,
+  ): Promise<OptimizeResult> {
+    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
+    if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
+    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts });
+    result.trainObjective = champion.scorecard.objective();
+    if (validationObjective !== undefined) result.validationObjective = validationObjective;
+    result.championBreakdown = breakdown(champion.scorecard);
+    this.reporter.runFinished({
+      result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   /** Run the agent once per input (cached by (workspace,input)), grade each, return a Scorecard. */

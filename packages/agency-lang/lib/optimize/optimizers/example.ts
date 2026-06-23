@@ -1,5 +1,4 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
-import { breakdown } from "../gradeBreakdown.js";
 import type { Scorecard } from "../grading/scorecard.js";
 import type { Input } from "../grading/types.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
@@ -9,11 +8,16 @@ import { fileMap, type OptimizeTargetSet } from "../targets.js";
 import type { MutationProposal, OptimizeResult } from "../types.js";
 
 /** A scored point in the search: its file set + the Scorecard it earned. */
-type Candidate = { iter: number | "baseline"; files: Record<string, string>; scorecard: Scorecard };
+type Candidate = {
+  iter: number | "baseline";
+  files: Record<string, string>;
+  scorecard: Scorecard;
+  targetSet: OptimizeTargetSet;
+};
 
-/** Gate-aware objective: a failed must-pass gate scores 0. */
-function objectiveOf(scorecard: Scorecard): number {
-  return scorecard.gatesPassed() ? scorecard.objective() : 0;
+/** Gate-aware objective used to compare candidates on the training set. */
+function trainScore(c: Candidate): number {
+  return c.scorecard.gatesPassed() ? c.scorecard.objective() : 0;
 }
 
 /**
@@ -40,12 +44,11 @@ export type ExampleDeps = BaseOptimizerDeps & {
  *
  * Protected helpers available from BaseOptimizer:
  *   - `this.scoreFiles(source, files, inputs)` — fork + apply + grade, returns a Scorecard
- *   - `this.pickValidationChampion(source, candidates, trainChampion)` — choose the
- *     writeback champion by validation objective when a validation set exists
+ *   - `this.finishPointwise(source, candidates, trainChampion, attempts, startedAt)` —
+ *     pick the writeback champion (by validation when configured), write it back,
+ *     and build the OptimizeResult with train/validation objectives + breakdown
  *   - `this.reporter` — progress output (silent unless the CLI sets verbosity)
- *   - `this.buildPointwiseResult(...)` — package the OptimizeResult
  *   - `this.config` — graders, runId, writeback, mutatorModel, …
- * (and `breakdown(scorecard)` builds the per-input grade breakdown for the report.)
  *
  * Register it (see registry.ts):
  *   registerOptimizer("example", (config) => new ExampleOptimizer(config));
@@ -65,8 +68,8 @@ export class ExampleOptimizer extends BaseOptimizer {
     });
 
     // 1. Score the unchanged agent.
-    const baseline = await this.candidate("baseline", fileMap(source), source, inputs);
-    this.reporter.baselineScored({ objective: objectiveOf(baseline.scorecard) });
+    const baseline = await this.makeCandidate("baseline", fileMap(source), source, inputs);
+    this.reporter.baselineScored({ objective: trainScore(baseline) });
 
     // 2. Ask the built-in mutator for one new set of target values. proposeValidMutation
     //    (from BaseOptimizer) retries on validation errors and never throws on a bad response.
@@ -82,37 +85,30 @@ export class ExampleOptimizer extends BaseOptimizer {
       (operations) => (this.exampleDeps.preview ?? defaultPreview)(source, operations),
     );
 
-    // 3. Keep the candidate only if it beats the baseline on the training objective.
-    const candidates: Candidate[] = [baseline];
-    let decision: "accepted" | "rejected" = "rejected";
-    if (outcome.ok) {
-      const candidate = await this.candidate(1, outcome.preview.files, source, inputs);
-      if (objectiveOf(candidate.scorecard) > objectiveOf(baseline.scorecard)) {
-        candidates.push(candidate);
-        decision = "accepted";
-        this.reporter.iterationDecided({ iter: 1, total: 1, decision: "accepted", objective: objectiveOf(candidate.scorecard), changes: outcome.preview.changes, rationale: outcome.rationale });
-      }
-    }
-    if (decision === "rejected") {
-      this.reporter.iterationDecided({ iter: 1, total: 1, decision: "rejected", objective: objectiveOf(baseline.scorecard) });
-    }
+    // 3. Score the proposal (if any) and decide acceptance on the training objective.
+    const candidate = outcome.ok
+      ? await this.makeCandidate(1, outcome.preview.files, source, inputs)
+      : undefined;
+    const beatsBaseline = candidate !== undefined && trainScore(candidate) > trainScore(baseline);
+    const trainChampion = beatsBaseline ? candidate : baseline;
+    const decision = beatsBaseline ? "accepted" : "rejected";
 
-    // 4. Pick the writeback champion by validation objective when a validation set
-    //    exists (else the train winner), then package the result.
-    const trainChampion = candidates[candidates.length - 1];
-    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
-    if (this.config.writeback && champion.iter !== "baseline") this.workspace.writeBack(source, champion.files);
-    const result = this.buildPointwiseResult({ championIter: champion.iter, championFiles: champion.files, attempts: [{ iter: 1, decision }] });
-    result.trainObjective = objectiveOf(champion.scorecard);
-    if (validationObjective !== undefined) result.validationObjective = validationObjective;
-    result.championBreakdown = breakdown(champion.scorecard);
-    this.reporter.runFinished({ result, initialTargets: source.targets, finalTargets: source.targets, durationMs: Date.now() - startedAt });
-    return result;
+    this.reporter.iterationDecided({
+      iter: 1, total: 1, decision, objective: trainScore(trainChampion),
+      ...(beatsBaseline && outcome.ok
+        ? { changes: outcome.preview.changes, rationale: outcome.rationale }
+        : {}),
+    });
+
+    // 4. Pick the writeback champion (by validation when configured), write it back,
+    //    build the result with train/validation objectives + breakdown, and report.
+    const candidates = beatsBaseline ? [baseline, candidate] : [baseline];
+    return this.finishPointwise(source, candidates, trainChampion, [{ iter: 1, decision }], startedAt);
   }
 
   /** Apply a candidate file set into a fresh workspace, run + grade it. */
-  private async candidate(iter: number | "baseline", files: Record<string, string>, source: OptimizeTargetSet, inputs: Input[]): Promise<Candidate> {
+  private async makeCandidate(iter: number | "baseline", files: Record<string, string>, source: OptimizeTargetSet, inputs: Input[]): Promise<Candidate> {
     const scorecard = await this.scoreFiles(source, files, inputs);
-    return { iter, files, scorecard };
+    return { iter, files, scorecard, targetSet: source };
   }
 }

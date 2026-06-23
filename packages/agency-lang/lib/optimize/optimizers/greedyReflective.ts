@@ -1,5 +1,4 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
-import { breakdown } from "../gradeBreakdown.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import type { Scorecard } from "../grading/scorecard.js";
@@ -56,39 +55,16 @@ export class GreedyReflective extends BaseOptimizer {
 
     if (this.isMaxObjective(baseline.scorecard)) {
       this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
-      return this.finish(source, baseline, [baseline], [], startedAt);
+      return this.finishPointwise(source, [baseline], baseline, [], startedAt);
     }
 
     const attempts = await this.hillClimb(baseline, inputs);
     const accepted = attempts.filter((a) => a.decision === "accepted" && a.candidate).map((a) => a.candidate!);
     const trainChampion = accepted.length ? accepted[accepted.length - 1] : baseline;
-    return this.finish(source, trainChampion, [baseline, ...accepted], attempts, startedAt);
-  }
-
-  /** Choose the writeback champion (validation objective when a validation set
-   *  exists, else the train champion), write it back, build + report the result. */
-  private async finish(
-    source: OptimizeTargetSet,
-    trainChampion: Candidate,
-    candidates: Candidate[],
-    attempts: Attempt[],
-    startedAt: number,
-  ): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
-    if (this.config.writeback && champion.iter !== "baseline") {
-      this.workspace.writeBack(source, champion.files);
-    }
-    const result = this.buildPointwiseResult({
-      championIter: champion.iter, championFiles: champion.files,
-      attempts: attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
-    });
-    result.trainObjective = champion.scorecard.objective();
-    if (validationObjective !== undefined) result.validationObjective = validationObjective;
-    result.championBreakdown = breakdown(champion.scorecard);   // the headline DX artifact
-    this.reporter.runFinished({
-      result, initialTargets: source.targets, finalTargets: champion.targetSet.targets, durationMs: Date.now() - startedAt,
-    });
-    return result;
+    return this.finishPointwise(
+      source, [baseline, ...accepted], trainChampion,
+      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })), startedAt,
+    );
   }
 
   /** The one place the champion is threaded across iterations. */

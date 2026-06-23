@@ -9,8 +9,11 @@ import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js"
 export type GraderContext = {
   output: JSON;
   input: Input;
-  /** Run the bundled LLM goal judge and get back its 0..1 score + reasoning. */
-  judge: (args: { goal: string; output?: JSON }) => Promise<{ score: number; reasoning: string }>;
+  /** Run the bundled LLM goal judge and get back its 0..1 score + reasoning.
+   *  Defaults: `output` falls back to `run.output`, `expected` falls back to
+   *  `input.expected` (so the bundled judge grades against the gold answer when
+   *  one is present, matching `LlmJudge`). */
+  judge: (args: { goal: string; output?: JSON; expected?: JSON }) => Promise<{ score: number; reasoning: string }>;
 };
 
 /** A metric: return a 0..1 number, a pass/fail boolean, or a full Grade. */
@@ -28,8 +31,17 @@ export class FunctionGrader extends BaseGrader {
   }
 
   protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
-    const judge = ({ goal, output }: { goal: string; output?: JSON }) =>
-      runAgency.runStructured(goalJudgeFile(), "main", [goal, asJudgeText(output ?? run.output)], ScalarVerdict);
+    // The bundled judge takes (goal, output, expected); default expected to the
+    // input's gold answer so a metric that calls ctx.judge({ goal }) grades the
+    // same way LlmJudge does when input.expected is present.
+    const inputExpected = (input as { expected?: JSON }).expected;
+    const judge = ({ goal, output, expected }: { goal: string; output?: JSON; expected?: JSON }) => {
+      const exp = expected ?? inputExpected;
+      const expectedText = exp === undefined || exp === null ? "" : asJudgeText(exp);
+      return runAgency.runStructured(
+        goalJudgeFile(), "main", [goal, asJudgeText(output ?? run.output), expectedText], ScalarVerdict,
+      );
+    };
     const result = await this.fn({ output: run.output, input, judge });
     return coerce(result);
   }

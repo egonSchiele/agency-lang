@@ -27,7 +27,7 @@ Independent of Phases B/C. No fixture regeneration. Small and low-risk.
 ## Task A1: Tag race-loser / fork branch aborts with `raceLoser`
 
 **Files:**
-- Modify: `lib/runtime/runBatch.ts` (the two `branch.abortController?.abort()` sites at ~`594`, ~`607`)
+- Modify: `lib/runtime/runBatch.ts` — the two `branch.abortController?.abort()` sites (locate with `grep -n "abortController?.abort" lib/runtime/runBatch.ts`; line numbers drift between sessions)
 - Test: `lib/runtime/runBatch.test.ts`
 
 **Interfaces:**
@@ -51,39 +51,86 @@ Independent of Phases B/C. No fixture regeneration. Small and low-risk.
 
 - [ ] **Step 6: Commit.**
 
-## Task A2: Cause-driven thread repair + dispatch normalization in `prompt.ts`
+## Task A2: Cause-driven, non-destructive thread repair + dispatch normalization in `prompt.ts`
 
 **Files:**
-- Modify: `lib/runtime/prompt.ts` (the outer catch ~`1097-1108` calling `markThreadCancelled`, and the dispatch catch ~`242`)
-- Test: `tests/agency/` — covered by existing guard/race fixtures + a new agency-js test if feasible (see Step 5)
+- Modify: `lib/runtime/prompt.ts` — `markThreadCancelled` itself (`grep -n "function markThreadCancelled" lib/runtime/prompt.ts`), the outer catch that calls it (`grep -n "markThreadCancelled(messages)" lib/runtime/prompt.ts` — one call site), and the dispatch catch (`grep -n "isCancelled(stateStack) || isAbortError" lib/runtime/prompt.ts`).
+- Test: `lib/runtime/prompt.test.ts` for the new repair shape; existing guard/race fixtures + a new agency-js test (see Step 6) for the gating.
 
 **Interfaces:**
 - Consumes: `readCause` from `./errors.js` (already imported alongside `isAbortError`? add if not).
+- Produces:
+  - A `needsThreadRepair(cause: AbortCause | undefined): boolean` helper colocated with `markThreadCancelled` — the single source of truth for which causes warrant thread repair. New cause variants (`connectionLost`/`callTimeout`) only need to be added here when they land.
+  - A rewritten `markThreadCancelled` that **stubs missing tool responses** instead of truncating to the last user message — preserves earlier complete rounds and the dangling assistant's text body; only synthesizes the specific `tool` messages that providers require to make the thread structurally valid.
 
-- [ ] **Step 1: Gate `markThreadCancelled` by cause.** At `prompt.ts:1105`, change:
+- [ ] **Step 0: Rewrite `markThreadCancelled` to be non-destructive.** Today's implementation walks back to the last `user` message and drops everything after it, throwing away earlier complete tool round-trips, the dangling assistant's text body, and any tool responses that *did* return in a partial batch. The provider's actual requirement is narrower: the last assistant message's `tool_calls` must each have a matching `tool` response. Replace the implementation with:
   ```ts
-  if (isAbortError(error)) {
-    markThreadCancelled(messages);
-    throw error;
-  }
-  ```
-  to:
-  ```ts
-  if (isAbortError(error)) {
-    // Thread repair (dropping a dangling assistant tool-call turn) is only
-    // needed for a user-initiated cancel mid-LLM-turn. A guard trip or a
-    // race-loser abort doesn't leave the thread mid-tool-call in a way the
-    // next user turn would choke on, and repairing then would discard a
-    // turn the guard's Failure path still wants intact.
-    const kind = readCause(error)?.kind;
-    if (kind === undefined || kind === "userInterrupt" || kind === "userKill") {
-      markThreadCancelled(messages);
+  function markThreadCancelled(messages: MessageThread): void {
+    const all = messages.getMessages();
+    // The ONLY structurally invalid state a mid-turn cancel can leave is
+    // "trailing assistant with unanswered tool_calls". Earlier assistants
+    // already have their tool responses (otherwise the runPrompt loop
+    // would not have advanced past them), so we only repair the gap.
+    let lastAssistant = -1;
+    for (let i = all.length - 1; i >= 0; i--) {
+      if (all[i].role === "assistant") { lastAssistant = i; break; }
     }
+    if (lastAssistant === -1) return;   // no assistant turn — thread is already valid
+
+    const calls = all[lastAssistant].tool_calls ?? [];
+    const answered = new Set(
+      all.slice(lastAssistant + 1)
+        .filter((m) => m.role === "tool")
+        .map((m) => m.tool_call_id),
+    );
+
+    const repaired = [...all];
+    for (const call of calls) {
+      if (!answered.has(call.id)) {
+        // Synthetic response — preserves provenance (the model sees WHICH
+        // tool was cancelled, not a mysterious gap) AND makes the thread
+        // structurally valid for the next provider call.
+        repaired.push(smoltalk.toolMessage(call.id, "[Tool call cancelled before completion.]"));
+      }
+    }
+    // Breadcrumb so the model knows the turn was interrupted.
+    repaired.push(smoltalk.assistantMessage("[Response cancelled.]"));
+    messages.setMessages(repaired);
+  }
+  ```
+  Confirm `smoltalk.toolMessage(toolCallId, content)` exists; if not, build the message object inline using the same shape `runPrompt` already constructs for tool responses elsewhere in this file.
+
+- [ ] **Step 0a: Unit tests for the new repair shape** (`lib/runtime/prompt.test.ts` — create if it does not yet expose `markThreadCancelled`; export it for test or wrap a test seam). Cover four shapes; the *first three* must fail with the OLD truncating implementation:
+  1. **Complete trailing turn (no tool_calls):** `[user, assistant{text:"hi"}]` → repair appends `[Response cancelled.]` and **preserves the assistant text turn** (old code would truncate it).
+  2. **Partial tool batch:** `[user, assistant{tool_calls:[a,b,c]}, tool{a}]` → repair appends synthetic `tool{b}`, `tool{c}`, then the cancelled marker; preserves `tool{a}` and the original assistant.
+  3. **Earlier complete round + new dangling assistant:** `[user, assistant{tool_calls:[x]}, tool{x}, assistant{text:"thinking", tool_calls:[y]}]` → repair preserves the entire first round AND the dangling assistant's text body, and adds the `tool{y}` stub.
+  4. **No assistant yet:** `[user]` → repair is a no-op (return without mutating).
+  Run; verify the first three fail against the current implementation, then implement Step 0, then verify all pass.
+
+- [ ] **Step 1: Extract the repair predicate.** Add next to `markThreadCancelled`:
+  ```ts
+  /** Thread repair (dropping a dangling assistant tool-call turn) is only
+   *  needed for a user-initiated cancel mid-LLM-turn. A guard trip or a
+   *  race-loser abort doesn't leave the thread mid-tool-call in a way the
+   *  next user turn would choke on, and repairing then would discard a
+   *  turn the guard's Failure path still wants intact. Unknown / absent
+   *  causes default to repair (conservative: matches pre-cause behavior).
+   *  Future cause variants (connectionLost, callTimeout) decide their
+   *  repair policy here, not at the catch site. */
+  function needsThreadRepair(cause: AbortCause | undefined): boolean {
+    if (cause === undefined) return true;
+    return cause.kind === "userInterrupt" || cause.kind === "userKill";
+  }
+  ```
+  Then gate the existing call site:
+  ```ts
+  if (isAbortError(error)) {
+    if (needsThreadRepair(readCause(error))) markThreadCancelled(messages);
     throw error;
   }
   ```
 
-- [ ] **Step 2: Prefer the cause in dispatch normalization.** At `prompt.ts:242`:
+- [ ] **Step 2: Prefer the cause in dispatch normalization.** At the `isCancelled(stateStack) || isAbortError(err)` site:
   ```ts
   if (ctx.isCancelled(stateStack) || isAbortError(err)) {
     throw new AgencyCancelledError();
@@ -100,19 +147,36 @@ Independent of Phases B/C. No fixture regeneration. Small and low-risk.
   }
   ```
 
-- [ ] **Step 3: Build** — `make` clean.
+- [ ] **Step 3: Unit-test the predicate.** In `lib/runtime/prompt.test.ts` (export `needsThreadRepair` for test, or inline a test seam), assert all branches deterministically — trivial but locks the policy so future cause variants don't silently inherit the wrong default:
+  - `needsThreadRepair(undefined) === true` (conservative default for absent/unknown causes)
+  - `needsThreadRepair({kind:"userInterrupt"}) === true`
+  - `needsThreadRepair({kind:"userKill"}) === true`
+  - `needsThreadRepair({kind:"guardTrip", ...}) === false`
+  - `needsThreadRepair({kind:"raceLoser"}) === false`
+  - `needsThreadRepair({kind:"cleanup"}) === false`
+  Use makeAbortCause-built fixtures so the test exercises the production cause shape.
 
-- [ ] **Step 4: Run guard + race fixtures** — `pnpm run a test tests/agency/guards` (21) and each `tests/agency/fork/race/*.agency`; all green (a guard trip during an LLM call now skips thread repair; a user cancel still repairs).
+- [ ] **Step 4: Build** — `make` clean.
 
-- [ ] **Step 5: Add coverage** — add an `agency-js` test under `tests/agency-js/` that runs a node which trips a `guard(time:)` around an `llm()` (deterministic mock) and asserts the returned `timeoutFailure` Result plus that the thread still contains the pre-guard turns (not repaired). If the deterministic-mock harness can't time-trip reliably, assert the simpler invariant (guard returns a `timeoutFailure`) and note the thread-state assertion as fixture-covered. Save output to a file.
+- [ ] **Step 5: Run guard + race fixtures** — `pnpm run a test tests/agency/guards` (21) and each `tests/agency/fork/race/*.agency`; all green. (Note: these fixtures inspect *return values*, not thread state, so they do not actually verify the gating — the next step does. Their value here is ensuring no behavioral regression on the non-gating dimensions.)
 
-- [ ] **Step 6: Commit.**
+- [ ] **Step 6: Add an agency-js test that verifies the gating via CONTRAST.** Under `tests/agency-js/`, add a test with two scenarios that share a deterministic-mock `llm()` setup but differ only in *which* abort fires; without the contrast you cannot distinguish "gating works" from "gating is a no-op." Both scenarios assert post-run thread state directly by reading the `MessageThread` the test harness already exposes (`lib/runtime/threads.ts` / `ThreadStore`):
+  
+  **Scenario A — guard trip (repair should NOT fire):** run a node with `guard(time: …)` around an LLM call that resolves after the guard window. Assert (a) the node returns a `timeoutFailure`, and (b) the post-run thread has the pre-guard turns AND the in-flight assistant turn intact — **no synthetic `[Response cancelled.]` marker**, **no stubbed tool responses**. If gating regressed to "always repair", this assertion fails.
+  
+  **Scenario B — user cancel (repair SHOULD fire):** run a node that issues an LLM call producing a `tool_calls` assistant message, then fire a `userInterrupt`-cause abort via `ctx.cancel({ kind: "userInterrupt" })` (or `installCancelKey` simulating Esc) before any tool response is appended. Assert (a) the abort propagates, and (b) the post-run thread shows the repair fingerprint — synthetic `tool` stubs for every unanswered `tool_call`, then the `[Response cancelled.]` assistant marker. If gating regressed to "never repair", this assertion fails.
+  
+  The contrast is what makes the test discriminative. If the deterministic-mock harness genuinely cannot drive *both* scenarios, **do not ship the test** (say so in the commit message and rely on `needsThreadRepair`'s unit test from Step 3 + the new repair-shape unit tests from Step 0a) rather than a half-test that passes regardless of the gating change. Save the test output to a file.
+
+- [ ] **Step 7: Commit.**
 
 ---
 
 # Phase B — Unification: one `AgencyAbort`, one catch rung
 
 The big mechanical change. Land each task as its own commit; B3 (fixture regen) lands in isolation so the churn is reviewable.
+
+> **Push B2 and B3 together.** Between B2 (templates import `AgencyAbort`) and B3 (fixtures regenerate to match), the ~126 generated `tests/**/*.js` files still import `GuardExceededError`/`__isAbortError` while the runtime no longer exports those for codegen — the agency-fixture suite (`pnpm run a test ...`) will fail tree-wide. Keep B2 and B3 as separate commits for reviewability, but **do not push or run the agency suite between them**. Unit tests (`pnpm test:run`) still pass at B2 because they don't go through generated fixtures.
 
 ## Task B1: Introduce `AgencyAbort`; make the two error types subclasses
 
@@ -124,7 +188,11 @@ The big mechanical change. Land each task as its own commit; B3 (fixture regen) 
 **Interfaces:**
 - Produces: `class AgencyAbort extends Error { readonly agencyCause: AbortCause }`. `AgencyCancelledError extends AgencyAbort`. `GuardExceededError extends AgencyAbort` (keeps `.type`/`.limit`/`.spent` getters that read from `agencyCause`). `isAbortError(e)` = `e instanceof AgencyAbort` (+ DOMException/name fallback). `isGuardExceededError(e)` = `e instanceof AgencyAbort && e.agencyCause.kind === "guardTrip"`.
 
-- [ ] **Step 1: Write failing tests** in `errors.test.ts`: `new AgencyAbort("m", makeAbortCause({kind:"userKill"}))` → `isAbortError` true, `readCause` returns the cause; an `AgencyCancelledError` is `instanceof AgencyAbort`; a `GuardExceededError("time",20,21)` is `instanceof AgencyAbort`, `isGuardExceededError` true, `.type==="time"`, `.limit===20`, `.spent===21`, and `readCause(it)?.kind==="guardTrip"`.
+- [ ] **Step 1: Write failing tests** in `errors.test.ts` covering both the new types and two regression-prone invariants:
+  - **Basic AgencyAbort identity:** `new AgencyAbort("m", makeAbortCause({kind:"userKill"}))` → `isAbortError` returns true and `readCause` returns the supplied cause.
+  - **Subclass inheritance:** an `AgencyCancelledError` is `instanceof AgencyAbort`; a `GuardExceededError("time",20,21)` is `instanceof AgencyAbort`, `isGuardExceededError` true, `.type==="time"`, `.limit===20`, `.spent===21`, and `readCause(it)?.kind==="guardTrip"`.
+  - **Branded default-cause round-trip** (locks the `cause ?? makeAbortCause(...)` invariant; a future "simplify" could drop the brand and silently break `readCause`): `readCause(new AgencyCancelledError()) !== undefined` and its `.kind === "userKill"`; same for `new AgencyCancelledError("custom reason")`.
+  - **Cross-module / subprocess name-fallback** (locks the §9 caveat as a test): construct a raw `Error` with `Object.assign(new Error("simulated cross-realm abort"), { name: "AgencyAbort" })` — no prototype chain to `AgencyAbort` — and assert `isAbortError(it) === true` AND `readCause(it) === undefined`. This documents that abort *identity* survives the subprocess shim but the cause *payload* does not; if someone later adds cross-boundary cause preservation, this test fails informatively (flip the second assertion).
 
 - [ ] **Step 2: Run, verify fail.**
 
@@ -151,7 +219,27 @@ The big mechanical change. Land each task as its own commit; B3 (fixture regen) 
   }
   ```
   Note: `AgencyAbort`'s constructor takes whatever cause it's handed — callers that pass an already-branded cause (every Increment-1 producer) are unaffected; only this default path needs the brand.
-  Update `readCause` to read `agencyCause` off any `AgencyAbort` (replace the `instanceof AgencyCancelledError` branch with `instanceof AgencyAbort`). Update `isAbortError` to `error instanceof AgencyAbort || (DOMException name==="AbortError") || (error.name==="AgencyAbort"||"AgencyCancelledError"||"AbortError")`.
+  
+  **Remove the existing `agencyCause` field from `AgencyCancelledError`** — it now lives only on `AgencyAbort` (`readonly`), and the subclass inherits it through `super(...)`. Leaving the old field declaration on the subclass would shadow the parent's readonly field and silently land `undefined`.
+  
+  Update `readCause` to read `agencyCause` off any `AgencyAbort` (replace the `instanceof AgencyCancelledError` branch with `instanceof AgencyAbort`). Update `isAbortError` to recognize the new class **and** the new name in the cross-module name-fallback (the fallback is what keeps subprocess-shim errors classifying as aborts after their prototype chain is lost — see spec §9 for the documented payload-loss caveat):
+  ```ts
+  export function isAbortError(error: unknown): boolean {
+    if (error instanceof AgencyAbort) return true;
+    if (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") return true;
+    // Cross-module / cross-realm fallback: the prototype check above misses
+    // an error reconstructed from a different module instance (subprocess
+    // resolver shim, etc.). Match by `name` so identity is preserved even
+    // though `agencyCause` may not survive serialization (spec §9).
+    if (error instanceof Error) {
+      return error.name === "AgencyAbort"
+          || error.name === "AgencyCancelledError"
+          || error.name === "AbortError";
+    }
+    return false;
+  }
+  ```
+  (Note the `error.name === X || error.name === Y` form — a chained `X || "Y" || "Z"` would always be truthy.)
 
 - [ ] **Step 4: Implement in `guard.ts`:** make `GuardExceededError extends AgencyAbort`:
   ```ts
@@ -179,7 +267,7 @@ The big mechanical change. Land each task as its own commit; B3 (fixture regen) 
 **Files:**
 - Modify: `lib/templates/backends/typescriptGenerator/functionCatchFailure.ts` → edit the `.mustache` source (`functionCatchFailure.mustache`), then `pnpm run templates`
 - Modify: `lib/templates/backends/typescriptGenerator/imports.ts` → edit `imports.mustache`, then `pnpm run templates`
-- Modify: `lib/backends/typescriptBuilder.ts` (node catch ~`2544-2556`)
+- Modify: `lib/backends/typescriptBuilder.ts` — the node catch ladder (locate with `grep -n "instanceof GuardExceededError\|__isAbortError" lib/backends/typescriptBuilder.ts`; line numbers drift between sessions)
 
 **Interfaces:**
 - Generated code imports `AgencyAbort` (replacing `GuardExceededError` + `isAbortError as __isAbortError` in the catch path; keep `RestoreSignal`).
@@ -199,7 +287,7 @@ The big mechanical change. Land each task as its own commit; B3 (fixture regen) 
 
 - [ ] **Step 2: Edit `imports.mustache`** — replace `GuardExceededError,` and `isAbortError as __isAbortError,` with `AgencyAbort,` (keep `RestoreSignal,`). Grep the templates for any other generated use of `__isAbortError`/`GuardExceededError`; if none remain in generated bodies, the imports are safe to drop.
 
-- [ ] **Step 3: Edit `typescriptBuilder.ts`** node catch — replace the two `ts.if(... GuardExceededError ...)` and `ts.if(... __isAbortError ...)` blocks (lines ~2548, ~2554) with a single `ts.if(ts.raw("__error instanceof AgencyAbort"), ts.statements([ts.throw("__error")]))`. Keep the `RestoreSignal` block above it.
+- [ ] **Step 3: Edit `typescriptBuilder.ts`** node catch — replace the two `ts.if(... GuardExceededError ...)` and `ts.if(... __isAbortError ...)` blocks with a single `ts.if(ts.raw("__error instanceof AgencyAbort"), ts.statements([ts.throw("__error")]))`. Keep the `RestoreSignal` block above it. (Locate the blocks with the grep in Files; line numbers above the imports change between sessions.)
 
 - [ ] **Step 4: Recompile templates** — `pnpm run templates`; then `make` (build). Expect TS to compile clean.
 
@@ -220,7 +308,28 @@ The big mechanical change. Land each task as its own commit; B3 (fixture regen) 
 
 - [ ] **Step 4: Run the regenerated fixtures** — `pnpm run a test tests/agency/guards` (21) + each `tests/agency/fork/race/*.agency` + a handful of handler/substep fixtures. All green.
 
-- [ ] **Step 5: Commit** the fixture churn as ONE commit with a message stating it's a mechanical regen from B2.
+- [ ] **Step 4a: New fixture — guard trip propagates across a function-call boundary.** Add `tests/agency/guards/guard-trip-crosses-function-boundary.agency`:
+  ```
+  import { guard } from "std::thread"
+  
+  def inner(): string {
+    sleep(150ms)
+    return "inner returned"
+  }
+  
+  node main() {
+    const result = guard(time: 20ms) as {
+      return inner()
+    }
+    if (isFailure(result)) {
+      return "outer:${result.error.type}"
+    }
+    return result.value
+  }
+  ```
+  Expected: `"outer:timeoutFailure"`. This exercises the new `instanceof AgencyAbort` rung in the *function-level* catch ladder (`inner`'s generated function-body try/catch) — the outer guard's trip aborts the sleep, the rejection unwinds through `inner`'s catch (which must re-throw, not convert), and lands at the outer guard's `try`. The existing nested-guard fixtures all live in one function and only exercise the *node-level* ladder; this one is the first cross-function regression backstop for B2's collapsed rung.
+
+- [ ] **Step 5: Commit** the fixture churn (Steps 1–4) + the new cross-function fixture (Step 4a) as ONE commit with a message stating it's a mechanical regen from B2 plus one new fixture.
 
 ## Task B4: Migrate stdlib leaf throws + unify predicates across the runtime
 
@@ -239,9 +348,18 @@ The big mechanical change. Land each task as its own commit; B3 (fixture regen) 
 
 - [ ] **Step 4: predicate audit** — `grep -rn "instanceof GuardExceededError\|instanceof AgencyCancelledError" lib/ --include=*.ts | grep -v .test.ts`. Each such site still works (subclasses), but where the intent is "any abort", prefer `isAbortError`/`instanceof AgencyAbort`. Change only where it improves clarity; do not churn working checks gratuitously.
 
-- [ ] **Step 5: Build + full unit suite** — `make`; `pnpm test:run` → all green.
+- [ ] **Step 5: Propagate-never-swallow lock-in test** (`lib/runtime/result.test.ts`). The CLAUDE.md safety invariant — "an `AgencyAbort` must propagate untouched, never be converted to `Failure`" — is now concentrated in the single `instanceof AgencyAbort` rung. Add a unit test that throws each `AbortCause` variant wrapped in an `AgencyAbort` through `__tryCall` (with no `ownedGuardIds` — that's a C2 concern) and asserts the error **re-throws** rather than returning a `Failure`:
+  - `userInterrupt` cause → re-thrown
+  - `userKill` cause → re-thrown
+  - `raceLoser` cause → re-thrown
+  - `cleanup` cause → re-thrown
+  - `guardTrip` cause → re-thrown (with no `ownedGuardIds` it belongs to an outer guard or a plain try)
+  - A non-`AgencyAbort` `Error` → converted to `Failure` (negative control, ensures the test is actually exercising the abort path)
+  This is the smallest fully-deterministic test that would catch a regression where the single rung is accidentally inverted, removed, or moved below the `Failure`-conversion path.
 
-- [ ] **Step 6: Full fixture regression** — `pnpm run a test tests/agency/guards` + `tests/agency/fork/race/*` + a sweep of handler/substep/interrupt fixtures. Save output to a file. Commit.
+- [ ] **Step 6: Build + full unit suite** — `make`; `pnpm test:run` → all green.
+
+- [ ] **Step 7: Full fixture regression** — `pnpm run a test tests/agency/guards` + `tests/agency/fork/race/*` + a sweep of handler/substep/interrupt fixtures. Save output to a file. Commit.
 
 ---
 
@@ -257,6 +375,12 @@ Depends on Phase B (cost guards carry guardId; `AgencyAbort` carries the cause).
 
 **Interfaces:**
 - Produces: `CostGuard.guardId: string` (via `nextGuardId()`); `pushGuardImpl(...)` and `_pushGuard(...)` return `string[]` (the pushed guards' ids, innermost-last) instead of a `number` count; `_popGuard(idsOrCount)` accepts the array length.
+
+- [ ] **Step 0: Caller audit** — before changing the return shape, list every caller:
+  ```sh
+  grep -rn "_pushGuard\|__internal_pushGuard" lib/ stdlib/ tests/ --include="*.ts" --include="*.agency" --include="*.js"
+  ```
+  Expected hits: `lib/stdlib/thread.ts` (definitions + the `pushGuardImpl` call), `stdlib/thread.agency`'s `guard()` (the one consumer documented below). Any other hit is a hidden caller that will break when `number` becomes `string[]` — migrate it in this task or surface it as a blocker before continuing. Save the grep output to a file so the audit is reviewable.
 
 - [ ] **Step 1: Write failing test** (`guard.test.ts`): a `CostGuard` exposes a `guardId`, and its `check()`-produced `GuardExceededError`'s `agencyCause.guardId` equals it.
 
@@ -315,6 +439,8 @@ Depends on Phase B (cost guards carry guardId; `AgencyAbort` carries the cause).
 - [ ] **Step 5: Flip the pinned fixture** — observe the new output (expected: the outer guard now trips → `"outer:timeoutFailure"`), update `guard-time-nested-outer-tighter.test.json`'s `expectedOutput` and rewrite its description to state the limitation is now FIXED (guardId matching). Re-run → green.
 
 - [ ] **Step 6: Guard against the plain-`try`-in-guard regression** — add a fixture `tests/agency/guards/guard-trip-not-swallowed-by-inner-try` where a plain `try someAbortableLeaf()` sits inside a `guard(time:)`; assert the guard trips (its `Failure` surfaces) rather than the inner `try` swallowing it. (This behavior is newly-correct as of Step 3.)
+
+- [ ] **Step 6a: Concurrent guards in parallel branches** — add a fixture `tests/agency/guards/guard-concurrent-branches.agency` that runs two `runBatch` branches in parallel, each wrapping its own `guard(time: …)` around a `sleep` long enough that branch A's guard trips while branch B is still running. Assert: branch A returns a `timeoutFailure` (its own guard converts), branch B returns its normal result (its guard does NOT convert branch A's trip — different `guardId`), and the parent receives both results. Without `guardId` matching, branch B's `try` might mis-attribute branch A's trip; with it, the test pins the correct separation. Exercises `guardTrip` × `raceLoser`-style branch separation in one fixture — the existing fork/race fixtures don't combine the two.
 
 - [ ] **Step 7: Full regression** — `make`; `pnpm test:run` (full unit suite); `pnpm run a test tests/agency/guards`; race fixtures; `pnpm run lint:structure`. Save output. Commit.
 

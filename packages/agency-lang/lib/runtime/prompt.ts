@@ -3,7 +3,8 @@ import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
-import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { AgencyCancelledError, isAbortError, readCause } from "./errors.js";
+import type { AbortCause } from "./errors.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
@@ -152,6 +153,7 @@ export const _internal = {
   capToolResultForLlm,
   assertUniqueToolNames,
   markThreadCancelled,
+  needsThreadRepair,
 };
 
 async function _runPrompt({
@@ -240,8 +242,15 @@ async function _runPrompt({
     // runtime (function/node catches re-throw it, the REPL prints
     // "cancelled") handles it as one — and skip the llmError log below,
     // since a user cancel isn't a request failure worth recording.
-    if (ctx.isCancelled(stateStack) || isAbortError(err)) {
-      throw new AgencyCancelledError();
+    // Prefer the structured cause when present so the normalized error keeps
+    // its intent (guardTrip / userInterrupt / …); fall back to the
+    // isCancelled heuristic for provider errors that arrive with no cause.
+    // The cause object preserves identity (readCause off the error or the
+    // composed signal returns the SAME branded object the producer set), so
+    // the `delivered` de-dup flag stays shared across the two trip paths.
+    const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
+    if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
+      throw new AgencyCancelledError(undefined, cause);
     }
     // The success-path `promptCompletion` event below is the only place the
     // request payload (messages + tools) is logged, and it never runs when
@@ -386,6 +395,20 @@ async function _runPrompt({
  * the interruption. `messages` is the live, persisted MessageThread (see
  * agencyLlm.llm), so this repair sticks for the next turn.
  */
+/** Thread repair (stubbing a dangling assistant tool-call turn) is only
+ *  needed for a user-initiated cancel mid-LLM-turn. A guard trip or a
+ *  race-loser abort doesn't leave the thread mid-tool-call in a way the
+ *  next user turn would choke on, and repairing then would discard a turn
+ *  the guard's Failure path still wants intact. Unknown / absent causes
+ *  default to repair (conservative: matches pre-cause behavior). This is
+ *  the single source of truth for the repair policy — future cause variants
+ *  (connectionLost, callTimeout) decide their policy HERE, not at the catch
+ *  site. */
+function needsThreadRepair(cause: AbortCause | undefined): boolean {
+  if (cause === undefined) return true;
+  return cause.kind === "userInterrupt" || cause.kind === "userKill";
+}
+
 function markThreadCancelled(messages: MessageThread): void {
   const all = messages.getMessages();
   let lastAssistant = -1;
@@ -1133,8 +1156,10 @@ export async function runPrompt(args: {
     if (isAbortError(error)) {
       // Hard cancel (e.g. user pressed Esc): repair the live thread so the
       // next turn starts from a clean, role-valid state, then re-throw so
-      // the cancellation still propagates to the caller / REPL.
-      markThreadCancelled(messages);
+      // the cancellation still propagates to the caller / REPL. Only a
+      // user-initiated cancel warrants repair — a guard trip or race-loser
+      // abort wants the in-flight turn left intact for its Failure path.
+      if (needsThreadRepair(readCause(error))) markThreadCancelled(messages);
       throw error;
     }
     throw error;

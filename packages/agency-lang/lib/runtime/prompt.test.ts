@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as smoltalk from "smoltalk";
 import { _internal } from "./prompt.js";
+import { makeAbortCause } from "./errors.js";
 import { MessageThread } from "./state/messageThread.js";
 
 const {
@@ -9,6 +10,7 @@ const {
   capToolResultForLlm,
   assertUniqueToolNames,
   markThreadCancelled,
+  needsThreadRepair,
 } = _internal;
 
 /** Convenience builders for the markThreadCancelled repair-shape tests. */
@@ -82,6 +84,31 @@ describe("markThreadCancelled — non-destructive repair", () => {
     const t = new MessageThread([smoltalk.userMessage("hi")]);
     markThreadCancelled(t);
     expect(roles(t)).toEqual(["user"]);
+  });
+});
+
+describe("needsThreadRepair — repair policy", () => {
+  it("repairs only user-initiated cancels; never guard/race/cleanup; conservative default", () => {
+    // Conservative default for absent/unknown causes (matches pre-cause behavior).
+    expect(needsThreadRepair(undefined)).toBe(true);
+    // User-initiated cancels DO warrant repair.
+    expect(needsThreadRepair(makeAbortCause({ kind: "userInterrupt" }))).toBe(true);
+    expect(needsThreadRepair(makeAbortCause({ kind: "userKill" }))).toBe(true);
+    // Guard trip / race loser / cleanup do NOT (their Failure path wants the
+    // in-flight turn intact).
+    expect(
+      needsThreadRepair(
+        makeAbortCause({
+          kind: "guardTrip",
+          dimension: "time",
+          limit: 1,
+          spent: 2,
+          guardId: "g1",
+        }),
+      ),
+    ).toBe(false);
+    expect(needsThreadRepair(makeAbortCause({ kind: "raceLoser" }))).toBe(false);
+    expect(needsThreadRepair(makeAbortCause({ kind: "cleanup" }))).toBe(false);
   });
 });
 

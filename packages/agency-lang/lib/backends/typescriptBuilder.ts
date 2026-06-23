@@ -721,16 +721,16 @@ export class TypeScriptBuilder {
       // `bindings[p.name] = p.default`). Without this, `function Age(low)`
       // called as `Age()` leaves `low` undefined and
       // `min.partial({ n: undefined })` silently mis-validates.
-      const vpParams = node.valueParams
-        .map((p) =>
-          p.default !== undefined
-            ? `${p.name} = ${tagArgToTs(p.default)}`
-            : p.name,
-        )
-        .join(", ");
-      const vpExportPrefix = node.exported ? "export " : "";
-      return ts.raw(
-        `${vpExportPrefix}function ${node.aliasName}(${vpParams}) { return ${printTs(vpDescriptor)}; }`,
+      const vpFnParams: TsParam[] = node.valueParams.map((p) =>
+        p.default !== undefined
+          ? { name: p.name, defaultValue: ts.raw(tagArgToTs(p.default)) }
+          : { name: p.name },
+      );
+      return ts.functionDecl(
+        node.aliasName,
+        vpFnParams,
+        ts.statements([ts.return(vpDescriptor)]),
+        { export: node.exported },
       );
     }
     const exportPrefix = node.exported ? "export " : "";

@@ -8,6 +8,12 @@ import {
   applyValueArgs,
   isValueParamInstantiation,
 } from "@/typeChecker/valueParamSubstitution.js";
+import { resolveTypeDeep } from "@/typeChecker/assignability.js";
+
+/** A user-defined generic alias has type params we can't represent at runtime. */
+function isGenericAlias(entry: TypeAliasEntry | undefined): boolean {
+  return !!entry?.typeParams && entry.typeParams.length > 0;
+}
 
 /**
  * Build a TS IR node that evaluates to a runtime `TypeValidationDescriptor`.
@@ -63,10 +69,27 @@ export function hasAnyValidateTag(
       return t.types.some((m) => hasAnyValidateTag(m, aliasesFull, seen));
     case "resultType":
       return hasAnyValidateTag(t.successType, aliasesFull, seen);
-    case "genericType":
-      return (t.typeArgs ?? []).some((a) =>
-        hasAnyValidateTag(a, aliasesFull, seen),
-      );
+    case "genericType": {
+      // Type arguments may themselves carry @validate (e.g. `Array<Email>`).
+      if (
+        (t.typeArgs ?? []).some((a) => hasAnyValidateTag(a, aliasesFull, seen))
+      ) {
+        return true;
+      }
+      // A user-defined generic alias reference (`Ranked<string>(...)`) carries
+      // its own alias-level tags / body, exactly like a typeAliasVariable. The
+      // old code only inspected typeArgs, so a `@validate` on the generic alias
+      // itself was missed — making a forwarded reference fall to the plain
+      // schema path and crash on the unresolved generic.
+      if (!aliasesFull) return false;
+      const gEntry = aliasesFull[t.name];
+      if (!gEntry) return false;
+      if (tagsHaveValidate(gEntry.tags)) return true;
+      if (seen.has(t.name)) return false;
+      const gNextSeen = new Set(seen);
+      gNextSeen.add(t.name);
+      return hasAnyValidateTag(gEntry.body, aliasesFull, gNextSeen);
+    }
     case "typeAliasVariable": {
       if (!aliasesFull) return false;
       const entry = aliasesFull[t.aliasName];
@@ -157,28 +180,38 @@ function schemaNode(
 
 /**
  * Concatenate use-site `@validate(...)` validators on top of a base
- * descriptor expression: `{ ...base, validators: [...(base?.validators ??
- * []), ...useSite] }`. Returns `base` unchanged when there are none.
+ * descriptor expression. Returns `base` unchanged when there are none.
  * Shared by the `__agency_descriptor` and value-param factory-call paths.
+ *
+ * `base` is bound to a local via an IIFE so it is evaluated exactly once:
+ * `((__d) => ({ ...__d, validators: [...(__d?.validators ?? []), ...useSite] }))(base)`.
+ * For the factory-call path `base` is a function call (`NumberInRange(1, 10)`),
+ * so spreading it AND reading `.validators` off it directly would rebuild the
+ * whole descriptor — including the `min.partial(...)` allocations — twice.
  */
 function withUseSiteValidators(
   base: TsNode,
   useSiteValidators: TsNode[],
 ): TsNode {
   if (useSiteValidators.length === 0) return base;
+  const d = ts.id("__d");
   const existingValidators = ts.binOp(
-    ts.prop(base, "validators", { optional: true }),
+    ts.prop(d, "validators", { optional: true }),
     "??",
     ts.arr([]),
     { parenLeft: true },
   );
-  return ts.obj([
-    ts.setSpread(base),
+  const merged = ts.obj([
+    ts.setSpread(d),
     ts.set(
       '"validators"',
       ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
     ),
   ]);
+  return ts.call(
+    ts.arrowFn([{ name: "__d" }], ts.statements([ts.return(merged)])),
+    [base],
+  );
 }
 
 /**
@@ -189,6 +222,11 @@ function withUseSiteValidators(
  * consumer and impossible to shadow with a same-named local. A
  * NON-validated one has no validators to leak, so we inline its
  * substituted schema as before.
+ *
+ * A COMBINED type-param + value-param alias (`type Foo<T>(n) = ...`) cannot
+ * be a runtime factory — its schema depends on the type argument, which only
+ * exists at codegen. We resolve it in place (substituting both type and value
+ * args) and inline, exactly as a direct `!` use site does via resolveTypeDeep.
  */
 function valueParamDescriptor(
   variableType: Extract<VariableType, { type: "typeAliasVariable" }>,
@@ -198,6 +236,14 @@ function valueParamDescriptor(
   typeAliasesFull: Record<string, TypeAliasEntry>,
   seen: Set<string>,
 ): TsNode {
+  if (isGenericAlias(entry)) {
+    return descriptor(
+      resolveTypeDeep(variableType, typeAliasesFull),
+      typeAliases,
+      typeAliasesFull,
+      seen,
+    );
+  }
   if (entry && hasAliasValidate(entry, typeAliasesFull)) {
     const argList = (variableType.valueArgs ?? [])
       .map((a) => tagArgToTs(a))
@@ -262,6 +308,24 @@ function descriptor(
       ["schema", schemaNode(variableType, typeAliases, typeAliasesFull)],
       ["validators", ts.arr(useSiteValidators)],
     ]);
+  }
+
+  // A user-defined generic alias reference (e.g. `Ranked<string>(1, high)`) is
+  // a `genericType` node, not a `typeAliasVariable`. It reaches here only when
+  // nested inside another value-param alias's factory body (use sites are
+  // resolved earlier). It can't be a runtime factory, so resolve it in place —
+  // substituting type AND value args — and inline, rather than letting the
+  // schema mapper choke on an unresolved generic.
+  if (
+    variableType.type === "genericType" &&
+    isGenericAlias(typeAliasesFull[variableType.name])
+  ) {
+    return descriptor(
+      resolveTypeDeep(variableType, typeAliasesFull),
+      typeAliases,
+      typeAliasesFull,
+      seen,
+    );
   }
 
   const schema = schemaNode(variableType, typeAliases, typeAliasesFull);

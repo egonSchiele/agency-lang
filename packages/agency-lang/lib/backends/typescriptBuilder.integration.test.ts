@@ -371,4 +371,29 @@ node main() {
     // The \`!\` site validates against a CALL to the factory, not an inlined chain:
     expect(out).toContain("NumberInRange(1, 10)");
   });
+
+  it("evaluates the factory call once when use-site validators are stacked", () => {
+    const out = generateWithBuilder(`
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+type Holder = {
+  @validate(min.partial(n: 3)) val: NumberInRange(1, 10)
+}
+
+node main() {
+  const h: Holder! = { val: 5 }
+  return h
+}
+`);
+    // Use-site validators must be concatenated via an IIFE that binds the
+    // factory call to a local, so the factory (and its min.partial(...)
+    // allocations) is evaluated exactly once, not twice.
+    expect(out).toContain("(__d) =>");
+    // The factory call appears once (as the IIFE argument), not spread + read.
+    const calls = out.match(/NumberInRange\(1, 10\)/g) ?? [];
+    expect(calls.length).toBe(1);
+  });
 });

@@ -2612,15 +2612,13 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
+          // All aborts — cancellations (Esc / abort) AND guard trips — are a
+          // single AgencyAbort carrying an AbortCause and must propagate
+          // untouched rather than be logged + converted to a Failure here.
+          // One rung replaces the old GuardExceededError + isAbortError
+          // ladder. Mirrors the function catch template.
           ts.if(
-            ts.raw("__error instanceof GuardExceededError"),
-            ts.statements([ts.throw("__error")]),
-          ),
-          // A cancellation (Esc / abort) must propagate untouched rather
-          // than be logged + converted to a Failure here. Mirrors the
-          // function catch template.
-          ts.if(
-            ts.raw("__isAbortError(__error)"),
+            ts.raw("__error instanceof AgencyAbort"),
             ts.statements([ts.throw("__error")]),
           ),
           // Surface the underlying exception via logger + statelog

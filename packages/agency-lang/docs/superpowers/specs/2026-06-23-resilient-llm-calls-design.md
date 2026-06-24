@@ -82,19 +82,24 @@ When the provider returns a `retry-after` / `retry-after-ms` (rate limits), it *
 
 Performed in the backend boundary (`prompt.ts`), reading the provider error.
 
-**Retry:**
-- Connection/transport errors: `ECONNRESET`, `ETIMEDOUT`, `fetch failed`, `socket hang up`, "connection lost", premature stream end, terminated.
-- Server errors: `5xx`, `503`, `529`.
-- Rate limit: `429` (honor `retry-after`).
-- Our own `callTimeout` (a deadline we imposed).
+**Retry — by `err.status` (HTTP errors):**
+- `429` → `rateLimit` (read `retry-after` / `retry-after-ms` from `err.headers`).
+- `529` → `overloaded`.
+- `5xx` (500/502/503/504) → `serverError`.
+
+**Retry — by message (transport errors, no status):**
+- `ECONNRESET`, `ETIMEDOUT`, `fetch failed`, `socket hang up`, "connection lost" → `connectionLost`.
+- premature stream end / "terminated" / HTTP-2 closed → `streamInterrupted`.
+
+Plus our own `callTimeout` (a deadline we imposed).
 
 **Never retry (terminal):**
-- `400` invalid request, `401`/`403` auth, content-policy / context-window errors (smoltalk already has typed `SmolContentPolicyError` / `SmolContextWindowExceededError`).
+- Other `4xx` (400 invalid request, 401/403 auth) by status; content-policy / context-window by type (`SmolContentPolicyError` / `SmolContextWindowExceededError`) and `SmolStructuredOutputError`.
 
 **Never retry, always propagate (not failures):**
 - User/abort causes — `userInterrupt`, `userKill`, `guardTrip`, `raceLoser`, `cleanup`. A retry loop MUST re-throw these immediately; it must never swallow a cancel or a guard trip (the propagate-never-swallow contract from the abort-taxonomy work).
 
-> **Implementation dependency (for the plan):** classification needs provider status/headers and a `retry-after`. smoltalk exposes a typed error hierarchy (`SmolError`, `SmolTimeoutError`, `SmolContentPolicyError`, `SmolContextWindowExceededError`) but it is unverified whether `SmolError` carries HTTP status + response headers. The plan must confirm and, if not, either extend smoltalk or fall back to message-pattern matching (Pi's approach) for the connection/transport set.
+> **Classification is status-first, message-fallback.** As of smoltalk PR #15 ("Expose HTTP status and headers on SmolError"), `SmolError` (and subclasses) carry `status`, `headers`, and `cause`. So classification reads `err.status` (429→`rateLimit` with `retry-after` from `err.headers`, 529→`overloaded`, 5xx→`serverError`, other 4xx→terminal) and the typed subclasses (`SmolContentPolicyError`/`SmolContextWindowExceededError`→terminal). Transport drops (ECONNRESET, fetch failed) arrive with **no** status (they fail below the HTTP response), so they remain **message-matched** for `connectionLost`/`streamInterrupted`. The plan assumes #15 has landed and bumps the smoltalk dependency as its first step.
 
 ## 6. Classification, causes & reasons (one shared vocabulary)
 
@@ -201,11 +206,11 @@ Deterministic, no live LLM (per CLAUDE.md — do not run the full agency suite l
 
 ## 11. Open questions / risks
 
-1. **smoltalk error surface** (§5 dependency): does `SmolError` expose HTTP status + headers (for `429`/`5xx` + `retry-after`)? If not, the plan extends smoltalk or falls back to message matching for the transport set. Highest-risk unknown.
+1. **smoltalk error surface** — RESOLVED by smoltalk PR #15 (`status`/`headers`/`cause` on `SmolError`). The plan assumes #15 has landed and bumps the smoltalk dependency first; classification is status-first (§5) with message-matching only for status-less transport drops. Agency catches no raw provider `APIError`s, so #15's "wrap unclassified APIError as SmolError" behavior change is safe for agency.
 2. **Streaming:** a drop mid-stream means partial tokens were already yielded. V1 restarts the whole call on retry (no partial reassembly); the plan should confirm the streaming path can be cleanly aborted + restarted and that no partial output leaks to the thread.
 3. **Default `timeout: 10min`** changes behavior for any call that legitimately runs longer than 10 min — believed rare, but a knob to set `timeout: 0` (no deadline) must exist and be documented.
 4. **Cost double-charge** on success-after-retry (§7.3) — confirm the post-call accounting runs once.
-5. **`agency.json` schema:** the `llm.{retries,backoff,timeout}` config block needs a home in the AgencyConfig type (exact location TBD by the plan).
+5. **Config plumbing:** resolved — `retries`/`timeout`/`backoff` extend the existing `LlmDefaults` (`lib/stdlib/llm.ts`, read from the branch-scoped, serialized `stack.other.llmDefaults` by `runPrompt`), NOT a new `RuntimeContext` field. This reuses the same path as `model`/`temperature` (branch isolation + fork inheritance + interrupt/resume for free).
 
 ## 12. Relationship to Spec B
 

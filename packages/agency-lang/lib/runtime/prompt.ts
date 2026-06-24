@@ -270,6 +270,59 @@ async function runWithRetry<T>(
   }
 }
 
+/**
+ * One LLM dispatch wrapped in the retry loop: builds the provider-neutral
+ * error normalizer (from the active client) and the notification hooks, then
+ * runs `dispatchLLMRequest` under `runWithRetry`. Kept out of `_runPrompt` so
+ * that function stays focused.
+ */
+async function dispatchWithRetry(args: {
+  ctx: RuntimeContext<GraphState>;
+  promptConfig: PromptConfig;
+  prompt: string;
+  stream: boolean;
+  retryPolicy: RetryPolicy;
+  parentSignal: AbortSignal | undefined;
+}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
+  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal } = args;
+
+  const normalizeError = (err: unknown): NormalizedLLMError => {
+    if (ctx.llmClient.normalizeError) {
+      return ctx.llmClient.normalizeError(err);
+    }
+    if (err instanceof Error) {
+      return { message: err.message };
+    }
+    return { message: String(err) };
+  };
+
+  const retryHooks = {
+    onRetry: (data: {
+      attempt: number;
+      maxRetries: number;
+      delayMs: number;
+      reason: LLMRetryReason;
+      detail: string;
+    }) => callHook({ ctx, name: "onLLMRetry", data }),
+    onTimeout: (data: { limitMs: number; attempt: number }) =>
+      callHook({ ctx, name: "onLLMTimeout", data }),
+  };
+
+  return runWithRetry(
+    (signal) =>
+      dispatchLLMRequest({
+        ctx,
+        promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
+        prompt,
+        stream,
+      }),
+    retryPolicy,
+    parentSignal,
+    retryHooks,
+    normalizeError,
+  );
+}
+
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
 export const _internal = {
@@ -349,44 +402,17 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  const parentSignal = ctx.getAbortSignal(stateStack);
-  const normalizeError = (err: unknown): NormalizedLLMError => {
-    if (ctx.llmClient.normalizeError) {
-      return ctx.llmClient.normalizeError(err);
-    }
-    if (err instanceof Error) {
-      return { message: err.message };
-    }
-    return { message: String(err) };
-  };
-  const retryHooks = {
-    onRetry: (data: {
-      attempt: number;
-      maxRetries: number;
-      delayMs: number;
-      reason: LLMRetryReason;
-      detail: string;
-    }) => callHook({ ctx, name: "onLLMRetry", data }),
-    onTimeout: (data: { limitMs: number; attempt: number }) =>
-      callHook({ ctx, name: "onLLMTimeout", data }),
-  };
-
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
   try {
-    ({ completion, toolCalls } = await runWithRetry(
-      (signal) =>
-        dispatchLLMRequest({
-          ctx,
-          promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
-          prompt,
-          stream,
-        }),
+    ({ completion, toolCalls } = await dispatchWithRetry({
+      ctx,
+      promptConfig,
+      prompt,
+      stream,
       retryPolicy,
-      parentSignal,
-      retryHooks,
-      normalizeError,
-    ));
+      parentSignal: ctx.getAbortSignal(stateStack),
+    }));
   } catch (err) {
     // Cancellation normalization. When WE aborted the request (user pressed
     // Esc → ctx.cancel(), a race loser, a timeout), the provider SDK

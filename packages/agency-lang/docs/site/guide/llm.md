@@ -178,3 +178,23 @@ def myTool() {
 It does **not** work at module top level, inside a `callback(...)` registration block, or inside the `onAgentStart` lifecycle hook — those scopes run before any agent has started and have no conversation to append to. If you call `llm` from one of them you'll get a runtime error like *"Message threads are not available in this scope."* Move the call inside a `node` or `def` body to fix it.
 
 See [Message history and threads](./message-history-and-threads.md) for the full picture.
+## Resilience: retries and timeouts
+
+Transient LLM failures — a dropped connection, a `429` rate limit, a `5xx`, or a call that simply hangs — are common and usually self-heal. `llm()` retries them automatically with exponential backoff and an optional per-call deadline, so your happy path stays clean and you don't have to check every call.
+
+```ts
+llm("Summarize this", {
+  retries: 2,                                  // max retry attempts (default 2; 0 disables)
+  timeout: 30s,                                // per-attempt deadline (default 10min; 0 disables)
+  backoff: { initial: 500ms, factor: 2, max: 10s },   // exponential, capped (these are the defaults)
+})
+```
+
+- **What's retried:** connection drops (ECONNRESET, fetch failed, …), `5xx`, `429` (honoring the server's `retry-after`), and `529` overloaded. A `429`'s `retry-after` overrides the computed backoff.
+- **What's not:** `400`/auth/content-policy/context-window errors (terminal — no point retrying), and user cancels / guard trips (those propagate immediately and are never swallowed by the retry loop). A guard's time budget keeps ticking through backoff, so a `guard(time:)` still wins.
+- **After retries exhaust** (or with `retries: 0`), the call surfaces a normal `Failure` you can handle with `try` / `isFailure` — it does not abort the run.
+- **Cancellation:** pressing Esc during a backoff wait cancels the whole loop.
+
+Set defaults for a whole branch with `setLlmOptions({ retries, timeout, backoff })` (per-call options still win). Classification is provider-neutral — it reads HTTP status from the LLM client adapter, so a custom (non-smoltalk) client works too, falling back to message matching.
+
+To be notified of retries/timeouts (for a status line, logging, etc.), use the [`onLLMRetry` and `onLLMTimeout` callbacks](../appendix/callbacks.md).

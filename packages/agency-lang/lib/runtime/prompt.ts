@@ -3,7 +3,7 @@ import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
-import { AgencyCancelledError, isAbortError, readCause } from "./errors.js";
+import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import {
   markThreadCancelled,
   needsThreadRepair,
@@ -148,6 +148,44 @@ function assertUniqueToolNames(tools: { name: string }[]): void {
   }
 }
 
+/**
+ * Bound one LLM-call attempt by a per-call deadline. Returns a signal that
+ * aborts (carrying a `callTimeout` cause) after `limitMs`, composed with the
+ * parent (guard / Esc) signal so either source cancels the call. `limitMs <= 0`
+ * means "no deadline" — the parent signal passes through unchanged. Structurally
+ * a `TimeGuard`, scoped to a single call rather than a block.
+ */
+function armCallTimeout(
+  parentSignal: AbortSignal | undefined,
+  limitMs: number,
+): { signal: AbortSignal | undefined; dispose: () => void } {
+  if (limitMs <= 0) {
+    return { signal: parentSignal, dispose: () => {} };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(
+      new AgencyCancelledError(
+        `llm call exceeded ${limitMs}ms`,
+        makeAbortCause({ kind: "callTimeout", limitMs }),
+      ),
+    );
+  }, limitMs);
+
+  let signal: AbortSignal;
+  if (parentSignal) {
+    signal = AbortSignal.any([parentSignal, controller.signal]);
+  } else {
+    signal = controller.signal;
+  }
+
+  return {
+    signal,
+    dispose: () => clearTimeout(timer),
+  };
+}
+
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
 export const _internal = {
@@ -155,6 +193,7 @@ export const _internal = {
   stringifyToolResult,
   capToolResultForLlm,
   assertUniqueToolNames,
+  armCallTimeout,
 };
 
 async function _runPrompt({

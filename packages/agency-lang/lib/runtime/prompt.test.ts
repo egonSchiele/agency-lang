@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { SmolError } from "smoltalk";
 import { _internal } from "./prompt.js";
+import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 
 const {
   DEFAULT_TOOL_RESULT_CHARS,
@@ -102,5 +104,30 @@ describe("capToolResultForLlm", () => {
       "q".repeat(DEFAULT_TOOL_RESULT_CHARS),
     );
     expect(out).toContain("truncated");
+  });
+});
+
+describe("armCallTimeout", () => {
+  it("aborts with a callTimeout cause after limitMs", () => {
+    vi.useFakeTimers();
+    const { signal, dispose } = _internal.armCallTimeout(undefined, 1000);
+    expect(signal!.aborted).toBe(false);
+    vi.advanceTimersByTime(1000);
+    expect(signal!.aborted).toBe(true);
+    expect(readCause(signal!)?.kind).toBe("callTimeout");
+    expect((readCause(signal!) as { limitMs: number }).limitMs).toBe(1000);
+    dispose();
+    vi.useRealTimers();
+  });
+
+  it("limitMs <= 0 with no parent returns undefined (no cast lie)", () => {
+    const { signal } = _internal.armCallTimeout(undefined, 0);
+    expect(signal).toBeUndefined();
+  });
+
+  it("limitMs <= 0 with a parent passes it through", () => {
+    const parent = new AbortController().signal;
+    const { signal } = _internal.armCallTimeout(parent, 0);
+    expect(signal).toBe(parent);
   });
 });

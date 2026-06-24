@@ -59,6 +59,23 @@ export type PromptConfig = {
 export type EmbedConfig = smoltalk.EmbedConfig;
 export type EmbedResult = smoltalk.EmbedResult;
 
+/**
+ * Provider-neutral view of an error thrown by an LLMClient. Lets agency's retry
+ * classifier decide policy without importing any provider SDK. The client
+ * adapter (which knows its provider's error shapes) populates this.
+ */
+export type NormalizedLLMError = {
+  /** HTTP status, when the error came from an HTTP response. */
+  status?: number;
+  /** Server-requested retry delay (ms), parsed from response headers if present. */
+  retryAfterMs?: number;
+  /** Terminal-ish provider classifications the client recognizes. Undefined for
+   *  generic / transport errors (agency falls back to status + message). */
+  kind?: "contentPolicy" | "contextWindow" | "structuredOutput" | "requestTimeout";
+  /** Human-readable message (always present). */
+  message: string;
+};
+
 export type LLMClient = {
   text(config: PromptConfig): Promise<Result<PromptResult>>;
   textStream(config: PromptConfig): AsyncGenerator<StreamChunk>;
@@ -69,6 +86,9 @@ export type LLMClient = {
     input: string | string[],
     config?: Partial<EmbedConfig>,
   ): Promise<Result<EmbedResult>>;
+  /** Translate an error this client threw into provider-neutral fields for
+   *  agency's retry classifier. Optional — agency falls back to `{ message }`. */
+  normalizeError?(err: unknown): NormalizedLLMError;
 };
 
 export class SmoltalkClient implements LLMClient {
@@ -92,6 +112,37 @@ export class SmoltalkClient implements LLMClient {
     });
   }
 
+  normalizeError(err: unknown): NormalizedLLMError {
+    if (!(err instanceof smoltalk.SmolError)) {
+      let message: string;
+      if (err instanceof Error) {
+        message = err.message;
+      } else {
+        message = String(err);
+      }
+      return { message };
+    }
+
+    const normalized: NormalizedLLMError = { message: err.message };
+    if (err.status !== undefined) {
+      normalized.status = err.status;
+    }
+    const retryAfterMs = parseRetryAfter(err.headers);
+    if (retryAfterMs !== undefined) {
+      normalized.retryAfterMs = retryAfterMs;
+    }
+    if (err instanceof smoltalk.SmolContentPolicyError) {
+      normalized.kind = "contentPolicy";
+    } else if (err instanceof smoltalk.SmolContextWindowExceededError) {
+      normalized.kind = "contextWindow";
+    } else if (err instanceof smoltalk.SmolStructuredOutputError) {
+      normalized.kind = "structuredOutput";
+    } else if (err instanceof smoltalk.SmolTimeoutError) {
+      normalized.kind = "requestTimeout";
+    }
+    return normalized;
+  }
+
   private toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
     const {
       messages, tools, responseFormat, abortSignal,
@@ -106,4 +157,21 @@ export class SmoltalkClient implements LLMClient {
       openAiApiKey: apiKey,
     } as Omit<SmolConfig, "stream">;
   }
+}
+
+function parseRetryAfter(
+  headers: Record<string, string> | undefined,
+): number | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  const ms = headers["retry-after-ms"];
+  if (ms !== undefined && !Number.isNaN(Number(ms))) {
+    return Number(ms);
+  }
+  const seconds = headers["retry-after"];
+  if (seconds !== undefined && !Number.isNaN(Number(seconds))) {
+    return Number(seconds) * 1000;
+  }
+  return undefined;
 }

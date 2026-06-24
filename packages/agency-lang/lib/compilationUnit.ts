@@ -370,7 +370,6 @@ function pullTransitiveAliases(
       found.typeParams,
       found.tags,
       found.valueParams,
-      found.isEffectSet,
     );
     // Nested aliases referenced by this type should resolve in the file
     // the type was actually found in (not the original preferFile) — the
@@ -392,7 +391,7 @@ function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType; typeParams?: TypeParam[]; valueParams?: ValueParam[]; tags?: Tag[]; isEffectSet?: boolean; file: string } | undefined {
+): { aliasedType: VariableType; typeParams?: TypeParam[]; valueParams?: ValueParam[]; tags?: Tag[]; file: string } | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
     if (fileSym?.kind === "type") {
@@ -401,7 +400,6 @@ function resolveTypeFromFile(
         typeParams: fileSym.typeParams,
         valueParams: fileSym.valueParams,
         tags: fileSym.tags,
-        isEffectSet: fileSym.isEffectSet,
         file: preferFile,
       };
     }
@@ -414,7 +412,6 @@ function resolveTypeFromFile(
         typeParams: sym.typeParams,
         valueParams: sym.valueParams,
         tags: sym.tags,
-        isEffectSet: sym.isEffectSet,
         file,
       };
     }

@@ -5,8 +5,8 @@ import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { abortableSleep } from "../stdlib/abortable.js";
-import { decideRetry, DEFAULT_RETRY_POLICY } from "./llmRetry.js";
-import type { RetryPolicy, LLMRetryReason } from "./llmRetry.js";
+import { decideRetry, resolveRetryPolicy } from "./llmRetry.js";
+import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 import {
   markThreadCancelled,
@@ -542,16 +542,12 @@ export async function runPrompt(args: {
   maxToolCallRounds?: number;
   removedTools?: string[];
   checkpointInfo?: SourceLocationOpts;
-  /** Resilience policy for this call. Defaults to DEFAULT_RETRY_POLICY when
-   *  omitted; the llm() builtin resolves it from opts + branch defaults. */
-  retryPolicy?: RetryPolicy;
 }): Promise<any> {
   const {
     prompt,
     responseFormat,
     maxToolCallRounds = 10,
     checkpointInfo,
-    retryPolicy = DEFAULT_RETRY_POLICY,
   } = args;
 
   // ctx + stack come from the active ALS frame — the codegen used to
@@ -564,6 +560,16 @@ export async function runPrompt(args: {
   // Push a frame onto the state stack — runPrompt participates like any other function
   const { stateStack, stack } = setupFunction();
   const self = stack.locals;
+
+  // Resolve the resilience policy: per-call options (passed through on
+  // clientConfig by the llm() codegen / agency.llm) → branch defaults
+  // (stack.other.llmDefaults, set by setLlmOptions) → built-in defaults.
+  const perCallRetry = args.clientConfig as RetryConfig;
+  const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
+  const retryPolicy = resolveRetryPolicy(
+    { retries: perCallRetry.retries, timeout: perCallRetry.timeout, backoff: perCallRetry.backoff },
+    branchRetryDefaults,
+  );
 
   // Frame-backed locals (survive checkpoint/restore)
   if (self.__initialized === undefined) {

@@ -34,7 +34,6 @@
 import type { z } from "zod";
 import { agencyStore } from "./asyncContext.js";
 import { runPrompt } from "./prompt.js";
-import { resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";
 import { getRuntimeContext } from "./asyncContext.js";
@@ -77,24 +76,20 @@ export async function llm(prompt: string, opts: LlmOpts = {}): Promise<any> {
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge
   // with smoltalkDefaults pick up the default, but being explicit keeps
   // the contract obvious: omit means "don't touch the model".
-  const clientConfig: { model?: string } = {};
+  // Build clientConfig with `model` only when explicitly overridden, plus the
+  // resilience options — runPrompt reads retries/timeout/backoff off clientConfig
+  // (the same path the llm() codegen uses) and resolves the effective policy.
+  const clientConfig: RetryConfig & { model?: string } = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
-
-  // Resolve the resilience policy: per-call opts → branch defaults
-  // (stack.other.llmDefaults, seeded from agency.json + setLlmOptions) → built-in.
-  const { stack } = getRuntimeContext();
-  const branchDefaults = (stack.other.llmDefaults as RetryConfig | undefined) ?? {};
-  const retryPolicy = resolveRetryPolicy(
-    { retries: opts.retries, timeout: opts.timeout, backoff: opts.backoff },
-    branchDefaults,
-  );
+  if (opts.retries !== undefined) clientConfig.retries = opts.retries;
+  if (opts.timeout !== undefined) clientConfig.timeout = opts.timeout;
+  if (opts.backoff !== undefined) clientConfig.backoff = opts.backoff;
 
   return runPrompt({
     prompt,
     messages: thread,
     responseFormat: opts.schema,
     clientConfig,
-    retryPolicy,
     checkpointInfo: agencyStore.getStore()?.callsite,
   });
 }

@@ -131,3 +131,127 @@ describe("armCallTimeout", () => {
     expect(signal).toBe(parent);
   });
 });
+
+describe("runWithRetry", () => {
+  const policy = { retries: 2, timeout: 0, backoff: { initial: 1, factor: 2, max: 10 } };
+  const noHooks = { onRetry: async () => {}, onTimeout: async () => {} };
+  // Test normalizer: read status off a SmolError, else just the message.
+  const normalize = (err: unknown) => {
+    if (err instanceof SmolError && err.status !== undefined) {
+      return { status: err.status, message: err.message };
+    }
+    if (err instanceof Error) {
+      return { message: err.message };
+    }
+    return { message: String(err) };
+  };
+
+  it("retries a transient error then succeeds; onLLMRetry fires per retry", async () => {
+    let calls = 0;
+    const fired: Array<{ attempt: number; maxRetries: number; reason: string; delayMs: number }> = [];
+    const dispatch = async () => {
+      if (calls < 2) {
+        calls += 1;
+        throw new Error("ECONNRESET");
+      }
+      return "ok";
+    };
+    const hooks = {
+      onRetry: (d: { attempt: number; maxRetries: number; reason: string; delayMs: number }) => {
+        fired.push(d);
+      },
+      onTimeout: async () => {},
+    };
+
+    const result = await _internal.runWithRetry(dispatch, policy, undefined, hooks, normalize);
+
+    expect(result).toBe("ok");
+    expect(fired.map((f) => f.reason)).toEqual(["connectionLost", "connectionLost"]);
+    expect(fired[0]).toMatchObject({ attempt: 1, maxRetries: 2 });
+    expect(fired[1].delayMs).toBeGreaterThanOrEqual(fired[0].delayMs);
+  });
+
+  it("surfaces an llmFailure after exhausting retries", async () => {
+    const dispatch = async () => {
+      throw new SmolError("503", { status: 503 });
+    };
+
+    await expect(
+      _internal.runWithRetry(dispatch, policy, undefined, noHooks, normalize),
+    ).rejects.toMatchObject({ agencyCause: { kind: "llmFailure", reason: "serverError" } });
+  });
+
+  it("#9 never swallows a user cancel during the backoff sleep", async () => {
+    const ac = new AbortController();
+    const dispatch = async () => {
+      throw new Error("ECONNRESET");
+    };
+    const hooks = {
+      onRetry: () => {
+        ac.abort(new AgencyCancelledError(undefined, makeAbortCause({ kind: "userInterrupt" })));
+      },
+      onTimeout: async () => {},
+    };
+
+    const promise = _internal.runWithRetry(dispatch, policy, ac.signal, hooks, normalize);
+
+    await expect(promise).rejects.toSatisfy((e: unknown) => readCause(e)?.kind === "userInterrupt");
+  });
+
+  it("#8 timeout with retries:0 fires onLLMTimeout once, no retry, surfaces", async () => {
+    vi.useFakeTimers();
+    const timeoutPolicy = { retries: 0, timeout: 20, backoff: policy.backoff };
+    let timeouts = 0;
+    const dispatch = (signal: AbortSignal | undefined) => {
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal.reason));
+      });
+    };
+    const hooks = {
+      onRetry: async () => {},
+      onTimeout: () => {
+        timeouts += 1;
+      },
+    };
+
+    const promise = _internal.runWithRetry(dispatch, timeoutPolicy, undefined, hooks, normalize);
+    // Attach the rejection handler BEFORE advancing timers so the rejection
+    // (which fires during advanceTimersByTimeAsync) is never momentarily unhandled.
+    const settled = expect(promise).rejects.toSatisfy((e: unknown) => readCause(e)?.kind === "callTimeout");
+    await vi.advanceTimersByTimeAsync(20);
+    await settled;
+    expect(timeouts).toBe(1);
+    vi.useRealTimers();
+  });
+
+  it("#10 a retried timeout fires onLLMTimeout BEFORE onLLMRetry", async () => {
+    vi.useFakeTimers();
+    const order: string[] = [];
+    let calls = 0;
+    const dispatch = (signal: AbortSignal | undefined) => {
+      if (calls === 0) {
+        calls += 1;
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason));
+        });
+      }
+      return Promise.resolve("ok");
+    };
+    const hooks = {
+      onRetry: () => {
+        order.push("retry");
+      },
+      onTimeout: () => {
+        order.push("timeout");
+      },
+    };
+    const timeoutPolicy = { retries: 1, timeout: 20, backoff: { initial: 1, factor: 2, max: 5 } };
+
+    const promise = _internal.runWithRetry(dispatch, timeoutPolicy, undefined, hooks, normalize);
+    await vi.advanceTimersByTimeAsync(30);
+    await promise;
+
+    expect(order).toEqual(["timeout", "retry"]);
+    vi.useRealTimers();
+  });
+});

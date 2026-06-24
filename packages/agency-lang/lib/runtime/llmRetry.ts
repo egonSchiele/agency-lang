@@ -99,3 +99,66 @@ function classifyByMessage(message: string): Classification {
   }
   return { kind: "terminal", detail: message };
 }
+
+export type RetryPolicy = {
+  retries: number;
+  timeout: number;
+  backoff: { initial: number; factor: number; max: number };
+};
+
+/** Built-in policy: 2 retries, a 10-minute per-call deadline, exponential
+ *  backoff (500ms × 2, capped at 10s). Per-call llm() options and
+ *  setLlmOptions / agency.json defaults override these (see resolveRetryPolicy). */
+export const DEFAULT_RETRY_POLICY: RetryPolicy = {
+  retries: 2,
+  timeout: 600000,
+  backoff: { initial: 500, factor: 2, max: 10000 },
+};
+
+export type RetryDecision =
+  | { kind: "propagate" } // abort/cancel — re-throw err untouched
+  | { kind: "terminal" } // terminal error or exhausted timeout — re-throw err (preserves its cause)
+  | { kind: "surfaceFailure"; reason: Exclude<LLMRetryReason, "timeout">; detail: string; retryAfterMs?: number }
+  | { kind: "retry"; delayMs: number; reason: LLMRetryReason; detail: string };
+
+/**
+ * Decide what to do with a caught LLM-call error on the given attempt. Pure —
+ * no I/O, no hooks, no timers — so the whole policy table is testable in
+ * isolation and the loop stays a thin driver.
+ */
+export function decideRetry(
+  err: unknown,
+  normalized: NormalizedLLMError,
+  attempt: number,
+  policy: RetryPolicy,
+): RetryDecision {
+  const c = classifyLlmError(err, normalized);
+  if (c.kind === "abort") {
+    return { kind: "propagate" };
+  }
+  if (c.kind === "terminal") {
+    return { kind: "terminal" };
+  }
+
+  // c.kind === "retryable"
+  if (attempt >= policy.retries) {
+    // Exhausted. A timeout keeps its callTimeout cause (re-throw the original);
+    // a provider error surfaces as a classified llmFailure.
+    if (c.reason === "timeout") {
+      return { kind: "terminal" };
+    }
+    return { kind: "surfaceFailure", reason: c.reason, detail: c.detail, retryAfterMs: c.retryAfterMs };
+  }
+
+  return { kind: "retry", delayMs: backoffMs(c.retryAfterMs, attempt, policy), reason: c.reason, detail: c.detail };
+}
+
+function backoffMs(retryAfterMs: number | undefined, attempt: number, policy: RetryPolicy): number {
+  let base: number;
+  if (retryAfterMs !== undefined) {
+    base = retryAfterMs;
+  } else {
+    base = policy.backoff.initial * Math.pow(policy.backoff.factor, attempt);
+  }
+  return Math.min(base, policy.backoff.max);
+}

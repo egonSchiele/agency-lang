@@ -4,6 +4,10 @@ import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
+import { abortableSleep } from "../stdlib/abortable.js";
+import { decideRetry, DEFAULT_RETRY_POLICY } from "./llmRetry.js";
+import type { RetryPolicy, LLMRetryReason } from "./llmRetry.js";
+import type { NormalizedLLMError } from "./llmClient.js";
 import {
   markThreadCancelled,
   needsThreadRepair,
@@ -186,6 +190,86 @@ function armCallTimeout(
   };
 }
 
+type RetryHooks = {
+  onRetry: (d: {
+    attempt: number;
+    maxRetries: number;
+    delayMs: number;
+    reason: LLMRetryReason;
+    detail: string;
+  }) => void | Promise<void>;
+  onTimeout: (d: { limitMs: number; attempt: number }) => void | Promise<void>;
+};
+
+/**
+ * Run `dispatch(signal)` under the retry policy. Each attempt is bounded by a
+ * per-call timeout (armCallTimeout). On a classified-transient failure with
+ * attempts remaining, fire onLLMRetry and wait a cancellable backoff, then
+ * re-issue. A user/abort cause is always re-thrown untouched (never retried);
+ * an exhausted provider error surfaces as an `llmFailure`. The policy decision
+ * lives in the pure `decideRetry`; this loop is the thin driver.
+ */
+async function runWithRetry<T>(
+  dispatch: (signal: AbortSignal | undefined) => Promise<T>,
+  policy: RetryPolicy,
+  parentSignal: AbortSignal | undefined,
+  hooks: RetryHooks,
+  normalizeError: (err: unknown) => NormalizedLLMError,
+): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    const { signal, dispose } = armCallTimeout(parentSignal, policy.timeout);
+    try {
+      const result = await dispatch(signal);
+      dispose();
+      return result;
+    } catch (err) {
+      dispose();
+
+      // The user (parent) abort ALWAYS wins a race with our own call timer.
+      if (parentSignal?.aborted) {
+        const parentCause = readCause(parentSignal);
+        if (parentCause && parentCause.kind !== "callTimeout") {
+          throw err;
+        }
+      }
+
+      const cause = readCause(err);
+      if (cause?.kind === "callTimeout") {
+        await hooks.onTimeout({ limitMs: cause.limitMs, attempt });
+      }
+
+      const normalized = normalizeError(err);
+      const decision = decideRetry(err, normalized, attempt, policy);
+
+      if (decision.kind === "propagate" || decision.kind === "terminal") {
+        throw err;
+      }
+      if (decision.kind === "surfaceFailure") {
+        throw new AgencyCancelledError(
+          decision.detail,
+          makeAbortCause({
+            kind: "llmFailure",
+            reason: decision.reason,
+            detail: decision.detail,
+            retryAfterMs: decision.retryAfterMs,
+          }),
+        );
+      }
+
+      // decision.kind === "retry"
+      await hooks.onRetry({
+        attempt: attempt + 1,
+        maxRetries: policy.retries,
+        delayMs: decision.delayMs,
+        reason: decision.reason,
+        detail: decision.detail,
+      });
+      // Esc during the wait throws → aborts the loop with the user cancel.
+      await abortableSleep(decision.delayMs, parentSignal);
+    }
+  }
+}
+
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
 export const _internal = {
@@ -194,6 +278,7 @@ export const _internal = {
   capToolResultForLlm,
   assertUniqueToolNames,
   armCallTimeout,
+  runWithRetry,
 };
 
 async function _runPrompt({
@@ -204,6 +289,7 @@ async function _runPrompt({
   responseFormat,
   clientConfig,
   stateStack,
+  retryPolicy,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -215,6 +301,7 @@ async function _runPrompt({
    * fork/race branch. Used for branch-aware cancellation checks and for
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
+  retryPolicy: RetryPolicy;
 }): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
@@ -262,15 +349,44 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
+  const parentSignal = ctx.getAbortSignal(stateStack);
+  const normalizeError = (err: unknown): NormalizedLLMError => {
+    if (ctx.llmClient.normalizeError) {
+      return ctx.llmClient.normalizeError(err);
+    }
+    if (err instanceof Error) {
+      return { message: err.message };
+    }
+    return { message: String(err) };
+  };
+  const retryHooks = {
+    onRetry: (data: {
+      attempt: number;
+      maxRetries: number;
+      delayMs: number;
+      reason: LLMRetryReason;
+      detail: string;
+    }) => callHook({ ctx, name: "onLLMRetry", data }),
+    onTimeout: (data: { limitMs: number; attempt: number }) =>
+      callHook({ ctx, name: "onLLMTimeout", data }),
+  };
+
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
   try {
-    ({ completion, toolCalls } = await dispatchLLMRequest({
-      ctx,
-      promptConfig,
-      prompt,
-      stream,
-    }));
+    ({ completion, toolCalls } = await runWithRetry(
+      (signal) =>
+        dispatchLLMRequest({
+          ctx,
+          promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
+          prompt,
+          stream,
+        }),
+      retryPolicy,
+      parentSignal,
+      retryHooks,
+      normalizeError,
+    ));
   } catch (err) {
     // Cancellation normalization. When WE aborted the request (user pressed
     // Esc → ctx.cancel(), a race loser, a timeout), the provider SDK
@@ -426,12 +542,16 @@ export async function runPrompt(args: {
   maxToolCallRounds?: number;
   removedTools?: string[];
   checkpointInfo?: SourceLocationOpts;
+  /** Resilience policy for this call. Defaults to DEFAULT_RETRY_POLICY when
+   *  omitted; the llm() builtin resolves it from opts + branch defaults. */
+  retryPolicy?: RetryPolicy;
 }): Promise<any> {
   const {
     prompt,
     responseFormat,
     maxToolCallRounds = 10,
     checkpointInfo,
+    retryPolicy = DEFAULT_RETRY_POLICY,
   } = args;
 
   // ctx + stack come from the active ALS frame — the codegen used to
@@ -635,6 +755,7 @@ export async function runPrompt(args: {
         responseFormat,
         clientConfig,
         stateStack,
+        retryPolicy,
       });
       messages = result.messages;
       toolCalls = result.toolCalls;
@@ -1109,6 +1230,7 @@ export async function runPrompt(args: {
           responseFormat,
           clientConfig,
           stateStack,
+          retryPolicy,
         });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;

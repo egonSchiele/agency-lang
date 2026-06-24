@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyLlmError } from "./llmRetry.js";
+import { classifyLlmError, decideRetry } from "./llmRetry.js";
 import { AgencyAbort, makeAbortCause } from "./errors.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 
@@ -57,5 +57,39 @@ describe("classifyLlmError", () => {
       kind: "retryable",
       reason: "streamInterrupted",
     });
+  });
+});
+
+const policy = { retries: 2, timeout: 0, backoff: { initial: 100, factor: 2, max: 1000 } };
+
+describe("decideRetry", () => {
+  it("propagates user aborts", () => {
+    const err = new AgencyAbort("c", makeAbortCause({ kind: "userInterrupt" }));
+    expect(decideRetry(err, { message: "c" }, 0, policy).kind).toBe("propagate");
+  });
+
+  it("retries a transient error with exponential backoff", () => {
+    const err = new Error("503");
+    const normalized: NormalizedLLMError = { status: 503, message: "503" };
+    expect(decideRetry(err, normalized, 0, policy)).toMatchObject({ kind: "retry", reason: "serverError", delayMs: 100 });
+    expect(decideRetry(err, normalized, 1, policy)).toMatchObject({ kind: "retry", delayMs: 200 });
+  });
+
+  it("honors retry-after over computed backoff (capped at max)", () => {
+    const err = new Error("429");
+    const normalized: NormalizedLLMError = { status: 429, retryAfterMs: 5000, message: "429" };
+    expect(decideRetry(err, normalized, 0, policy)).toMatchObject({ kind: "retry", reason: "rateLimit", delayMs: 1000 });
+  });
+
+  it("surfaces an llmFailure once attempts are exhausted", () => {
+    const err = new Error("503");
+    expect(decideRetry(err, { status: 503, message: "503" }, 2, policy)).toMatchObject({
+      kind: "surfaceFailure",
+      reason: "serverError",
+    });
+  });
+
+  it("terminal errors surface as-is", () => {
+    expect(decideRetry(new Error("400"), { status: 400, message: "400" }, 0, policy).kind).toBe("terminal");
   });
 });

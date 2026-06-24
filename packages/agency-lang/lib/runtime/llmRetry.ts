@@ -116,9 +116,9 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
 };
 
 export type RetryDecision =
-  | { kind: "propagate" } // abort/cancel — re-throw err untouched
-  | { kind: "terminal" } // terminal error or exhausted timeout — re-throw err (preserves its cause)
-  | { kind: "surfaceFailure"; reason: Exclude<LLMRetryReason, "timeout">; detail: string; retryAfterMs?: number }
+  | { kind: "propagate" } // user/abort cause — re-throw err untouched (propagates as a cancel)
+  | { kind: "terminal" } // terminal provider error — re-throw err (catch ladder converts to a Failure)
+  | { kind: "surfaceFailure"; reason: LLMRetryReason; detail: string; retryAfterMs?: number } // exhausted — surface a Failure
   | { kind: "retry"; delayMs: number; reason: LLMRetryReason; detail: string };
 
 /**
@@ -140,13 +140,9 @@ export function decideRetry(
     return { kind: "terminal" };
   }
 
-  // c.kind === "retryable"
+  // c.kind === "retryable". Out of attempts → surface the residual as a Failure
+  // (a plain throw the catch ladder converts — NOT an abort that aborts the run).
   if (attempt >= policy.retries) {
-    // Exhausted. A timeout keeps its callTimeout cause (re-throw the original);
-    // a provider error surfaces as a classified llmFailure.
-    if (c.reason === "timeout") {
-      return { kind: "terminal" };
-    }
     return { kind: "surfaceFailure", reason: c.reason, detail: c.detail, retryAfterMs: c.retryAfterMs };
   }
 

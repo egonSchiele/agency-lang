@@ -242,17 +242,17 @@ async function runWithRetry<T>(
       const decision = decideRetry(err, normalized, attempt, policy);
 
       if (decision.kind === "propagate" || decision.kind === "terminal") {
+        // propagate: a user/abort cause re-throws untouched (cancel).
+        // terminal: a terminal provider error (e.g. content policy / 4xx) is a
+        // plain Error → the function/node catch ladder converts it to a Failure.
         throw err;
       }
       if (decision.kind === "surfaceFailure") {
-        throw new AgencyCancelledError(
-          decision.detail,
-          makeAbortCause({
-            kind: "llmFailure",
-            reason: decision.reason,
-            detail: decision.detail,
-            retryAfterMs: decision.retryAfterMs,
-          }),
+        // Retries exhausted. Surface a plain Error (NOT an AgencyAbort) so the
+        // catch ladder converts it to a handleable Failure rather than aborting
+        // the run — this is what `try llm(...)` catches.
+        throw new Error(
+          `LLM call failed after ${policy.retries} ${policy.retries === 1 ? "retry" : "retries"} (${decision.reason}): ${decision.detail}`,
         );
       }
 

@@ -171,14 +171,16 @@ describe("runWithRetry", () => {
     expect(fired[1].delayMs).toBeGreaterThanOrEqual(fired[0].delayMs);
   });
 
-  it("surfaces an llmFailure after exhausting retries", async () => {
+  it("surfaces a plain Error (→ Failure) classified by reason after exhausting retries", async () => {
     const dispatch = async () => {
       throw new SmolError("503", { status: 503 });
     };
 
-    await expect(
-      _internal.runWithRetry(dispatch, policy, undefined, noHooks, normalize),
-    ).rejects.toMatchObject({ agencyCause: { kind: "llmFailure", reason: "serverError" } });
+    // A plain Error (NOT an AgencyAbort), so the catch ladder converts it to a
+    // Failure instead of aborting the run. Reason is in the message.
+    const promise = _internal.runWithRetry(dispatch, policy, undefined, noHooks, normalize);
+    await expect(promise).rejects.toThrow(/serverError/);
+    await expect(promise).rejects.not.toHaveProperty("agencyCause");
   });
 
   it("#9 never swallows a user cancel during the backoff sleep", async () => {
@@ -217,7 +219,8 @@ describe("runWithRetry", () => {
     const promise = _internal.runWithRetry(dispatch, timeoutPolicy, undefined, hooks, normalize);
     // Attach the rejection handler BEFORE advancing timers so the rejection
     // (which fires during advanceTimersByTimeAsync) is never momentarily unhandled.
-    const settled = expect(promise).rejects.toSatisfy((e: unknown) => readCause(e)?.kind === "callTimeout");
+    // The exhausted timeout surfaces as a plain Error (→ Failure), not an abort.
+    const settled = expect(promise).rejects.toThrow(/timeout|exceeded/);
     await vi.advanceTimersByTimeAsync(20);
     await settled;
     expect(timeouts).toBe(1);

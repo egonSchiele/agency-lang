@@ -38,6 +38,8 @@ export const VALID_CALLBACK_NAMES = [
   "onEmit",
   "onThreadStart",
   "onThreadEnd",
+  "onLLMRetry",
+  "onLLMTimeout",
 ] as const;
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];

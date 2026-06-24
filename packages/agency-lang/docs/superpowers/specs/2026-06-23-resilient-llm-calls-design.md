@@ -1,6 +1,6 @@
 ---
 name: Resilient LLM calls — design
-description: Backend retry + per-call timeout for llm(), classified transient-error causes (connectionLost / callTimeout), and notification hooks (onLLMRetry / onLLMTimeout). Spec A of two; Spec B (unhandled-failure propagation) follows.
+description: Backend retry + per-call timeout for llm(), a classified llmFailure/callTimeout cause with a shared 6-value reason vocabulary, and notification hooks (onLLMRetry / onLLMTimeout). Spec A of two; Spec B (unhandled-failure propagation) follows.
 ---
 
 # Resilient LLM calls
@@ -24,7 +24,7 @@ In scope:
 - Per-`llm()` configuration: `retries`, `backoff`, `timeout`.
 - Backend retry loop with exponential backoff, honoring server `retry-after`.
 - A per-call timeout (a mini, call-scoped `TimeGuard`).
-- Two new `AbortCause` variants: `connectionLost`, `callTimeout`.
+- A shared 6-value `reason` vocabulary, two `AbortCause` variants (`callTimeout` + a unified `llmFailure`), and a `detail` string for specifics.
 - Two notification hooks: `onLLMRetry`, `onLLMTimeout`.
 
 Non-goals (explicitly deferred):
@@ -96,17 +96,36 @@ Performed in the backend boundary (`prompt.ts`), reading the provider error.
 
 > **Implementation dependency (for the plan):** classification needs provider status/headers and a `retry-after`. smoltalk exposes a typed error hierarchy (`SmolError`, `SmolTimeoutError`, `SmolContentPolicyError`, `SmolContextWindowExceededError`) but it is unverified whether `SmolError` carries HTTP status + response headers. The plan must confirm and, if not, either extend smoltalk or fall back to message-pattern matching (Pi's approach) for the connection/transport set.
 
-## 6. Cause variants
+## 6. Classification, causes & reasons (one shared vocabulary)
+
+A single `reason` vocabulary is used by **both** the `onLLMRetry` hook and the residual failure cause, so what the user is *told* during a retry and what they can *match on* after exhaustion line up exactly:
+
+```ts
+type LLMRetryReason =
+  | "timeout"            // our per-call deadline fired (→ callTimeout cause)
+  | "connectionLost"     // transport never delivered / dropped before the stream
+  | "streamInterrupted"  // connection established + producing tokens, then died mid-stream
+  | "rateLimit"          // 429 (honors retry-after)
+  | "serverError"        // generic 5xx / 503
+  | "overloaded"         // provider at capacity (e.g. Anthropic 529 / overloaded_error)
+```
 
 Add to the `AbortCause` union (`lib/runtime/errors.ts`):
 
 ```ts
-| { kind: "connectionLost"; detail: string }   // transport dropped/errored
-| { kind: "callTimeout"; limitMs: number }     // our per-call deadline fired
+| { kind: "callTimeout"; limitMs: number }      // an abort WE initiate at the deadline
+| {
+    kind: "llmFailure";
+    reason: Exclude<LLMRetryReason, "timeout">;  // the 5 provider/transport reasons
+    detail: string;                              // raw provider message, for display/logging
+    retryAfterMs?: number;                       // present for rateLimit when the server sent it
+  }
 ```
 
-- These are *classification* causes carried on the abort/failure, consistent with the existing taxonomy (`guardTrip`, `userInterrupt`, …). They let the residual failure be identified (`is connectionFailure` / `is timeoutFailure` once Spec B / result surfacing lands) rather than being a bare string.
-- `readCause` / `isAbortError` already handle any branded cause; no carrier change needed beyond the two variants.
+- **Why two causes, not one.** `callTimeout` is structurally an abort *we* initiate (a known `limitMs`, like `guardTrip`) — it is the cause on the per-call `AbortController` (§7.1). `llmFailure` classifies a provider/transport failure we *observed*. They share the `reason` vocabulary (`callTimeout` ≙ `reason: "timeout"`) so the hook enum and the residual failure stay aligned without forcing the timeout's `limitMs` into a grab-bag.
+- **`detail` is the granularity win** (the opencode lesson): a tight `reason` *category* plus an unbounded `detail` string (`"ECONNRESET"`, `"anthropic 529 overloaded_error"`, `"stream ended after 412 tokens"`) — granularity for display/logging without an enum explosion.
+- **Prune to what we can detect.** The 6 reasons are the *target*. The runtime only emits a reason it can reliably distinguish from the provider error; if classification can't tell a `529` from a `500` (the §11 smoltalk dependency), `overloaded` collapses into `serverError`, and a pre-stream vs mid-stream drop may both read as `connectionLost`. Spec writes the full set; the plan prunes to detectable.
+- `readCause` / `isAbortError` already handle any branded cause; no carrier change beyond these two variants.
 
 ## 7. Mechanism (backend, per-execution)
 
@@ -134,9 +153,9 @@ loop:
     if err is a user/abort cause (§5): re-throw   // never swallow
     if err is callTimeout: fire onLLMTimeout
     if not retryable OR attempt >= retries:
-        throw classified failure (connectionLost / callTimeout / original)
+        throw classified failure (callTimeout, or llmFailure{ reason, detail, retryAfterMs? })
     delay = retry-after ?? min(backoff.initial * backoff.factor^attempt, backoff.max)
-    fire onLLMRetry({ attempt+1, maxAttempts: retries, delayMs: delay, reason })
+    fire onLLMRetry({ attempt+1, maxAttempts: retries, delayMs: delay, reason, detail })
     await cancellable sleep(delay)                // Esc → userInterrupt aborts the loop
     attempt++
 ```
@@ -155,7 +174,7 @@ Two new side-effect-only hooks in the callback system (`hooks.ts` + the typed ho
 
 | Hook | Payload | Fires |
 | --- | --- | --- |
-| `onLLMRetry` | `{ attempt, maxAttempts, delayMs, reason }` where `reason ∈ { "timeout", "connectionLost", "rateLimit", "serverError" }` | Immediately before each backoff wait. |
+| `onLLMRetry` | `{ attempt, maxAttempts, delayMs, reason: LLMRetryReason, detail: string }` — `reason` is the §6 vocabulary; `detail` is the raw provider message | Immediately before each backoff wait. |
 | `onLLMTimeout` | `{ limitMs, attempt }` | Whenever a call hits its per-call deadline, **regardless of whether a retry follows**. |
 
 - A timeout that then retries fires **both** (`onLLMTimeout`, then `onLLMRetry`). A `retries: 0` + `timeout` case fires only `onLLMTimeout`, then surfaces the failure.
@@ -163,20 +182,21 @@ Two new side-effect-only hooks in the callback system (`hooks.ts` + the typed ho
 
 ## 9. Disposition after exhaustion
 
-When all attempts are exhausted (or `retries: 0`), the loop throws a `connectionLost` / `callTimeout`-caused failure. From there it behaves **exactly as failures do today**: it propagates to the enclosing function's auto-catch and becomes that function's `Failure`. Spec B changes how that residual unhandled failure travels; Spec A intentionally does not.
+When all attempts are exhausted (or `retries: 0`), the loop throws a `callTimeout`- or `llmFailure{reason, detail}`-caused failure. From there it behaves **exactly as failures do today**: it propagates to the enclosing function's auto-catch and becomes that function's `Failure`. Spec B changes how that residual unhandled failure travels; Spec A intentionally does not.
 
 ## 10. Testing strategy
 
 Deterministic, no live LLM (per CLAUDE.md — do not run the full agency suite locally; run targeted tests while iterating, save output to a file):
 
 - **Retry-then-succeed:** a mock client that throws a transient error N<retries times then succeeds → assert the call returns the success, the loop retried N times, and `onLLMRetry` fired N times with increasing `delayMs`.
-- **Exhaustion:** transient error every time → assert it surfaces a `connectionLost` failure after exactly `retries` attempts.
+- **Exhaustion:** transient error every time → assert it surfaces an `llmFailure` failure carrying the right `reason`/`detail` after exactly `retries` attempts.
+- **Reason classification:** a `529`/overloaded, a mid-stream drop, a `429` (with `retry-after`), and a `503` each map to `overloaded` / `streamInterrupted` / `rateLimit` (with `retryAfterMs`) / `serverError` respectively — pruned to whatever the smoltalk error surface actually distinguishes (§11).
 - **Timeout + retry:** a mock client that delays past `timeout` → assert the call aborts with `callTimeout`, `onLLMTimeout` fires, then `onLLMRetry`, then a subsequent attempt.
 - **Timeout, no retry (`retries: 0`):** assert `onLLMTimeout` fires once and the failure surfaces without a retry.
 - **Terminal error not retried:** a `400`/auth/content-policy error → assert no retry, surfaces immediately.
 - **Never swallow:** an Esc (`userInterrupt`) during a backoff wait → assert the loop aborts and the cancel propagates (not converted to a Failure); a `guard(time:)` that trips during backoff → assert the `guardTrip` surfaces as the guard's `timeoutFailure`, not retried.
 - **Classification matrix:** each retryable vs terminal error string/status maps to the right decision.
-- **Cause round-trip:** `readCause` over `connectionLost` / `callTimeout` via both `signal.reason` and a thrown `AgencyAbort`.
+- **Cause round-trip:** `readCause` over `callTimeout{limitMs}` and `llmFailure{reason, detail, retryAfterMs?}` via both `signal.reason` and a thrown `AgencyAbort`.
 - **Isolation:** the retry loop holds no TS module state (assert via the existing per-execution patterns; two concurrent runs retrying independently don't interfere).
 
 ## 11. Open questions / risks

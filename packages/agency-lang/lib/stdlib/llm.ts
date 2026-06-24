@@ -14,6 +14,11 @@ export type LlmDefaults = {
   reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
   maxToolResultChars?: number;
+  // Resilience policy (see lib/runtime/llmRetry.ts). Per-call llm() options
+  // override these; these override the built-in defaults.
+  retries?: number;
+  timeout?: number;
+  backoff?: { initial?: number; factor?: number; max?: number };
 };
 
 /**

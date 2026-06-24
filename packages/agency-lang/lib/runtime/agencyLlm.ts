@@ -34,6 +34,8 @@
 import type { z } from "zod";
 import { agencyStore } from "./asyncContext.js";
 import { runPrompt } from "./prompt.js";
+import { resolveRetryPolicy } from "./llmRetry.js";
+import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";
 import { getRuntimeContext } from "./asyncContext.js";
 
@@ -50,6 +52,12 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = {
   /** Override the thread the prompt + response are appended to.
    *  Default: the active thread on the current `ThreadStore`. */
   thread?: MessageThread;
+  /** Max retry attempts on a transient failure. Default 2; 0 disables. */
+  retries?: number;
+  /** Per-call deadline in ms. Default 600000 (10 min); 0 disables. */
+  timeout?: number;
+  /** Exponential backoff (ms). Defaults: initial 500, factor 2, max 10000. */
+  backoff?: { initial?: number; factor?: number; max?: number };
 };
 
 /** Module-private. Re-exposed only via `agency.llm`.
@@ -72,11 +80,21 @@ export async function llm(prompt: string, opts: LlmOpts = {}): Promise<any> {
   const clientConfig: { model?: string } = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
 
+  // Resolve the resilience policy: per-call opts → branch defaults
+  // (stack.other.llmDefaults, seeded from agency.json + setLlmOptions) → built-in.
+  const { stack } = getRuntimeContext();
+  const branchDefaults = (stack.other.llmDefaults as RetryConfig | undefined) ?? {};
+  const retryPolicy = resolveRetryPolicy(
+    { retries: opts.retries, timeout: opts.timeout, backoff: opts.backoff },
+    branchDefaults,
+  );
+
   return runPrompt({
     prompt,
     messages: thread,
     responseFormat: opts.schema,
     clientConfig,
+    retryPolicy,
     checkpointInfo: agencyStore.getStore()?.callsite,
   });
 }

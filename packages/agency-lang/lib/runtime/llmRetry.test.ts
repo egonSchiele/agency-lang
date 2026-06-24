@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyLlmError, decideRetry } from "./llmRetry.js";
+import { classifyLlmError, decideRetry, resolveRetryPolicy } from "./llmRetry.js";
 import { AgencyAbort, makeAbortCause } from "./errors.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 
@@ -91,5 +91,26 @@ describe("decideRetry", () => {
 
   it("terminal errors surface as-is", () => {
     expect(decideRetry(new Error("400"), { status: 400, message: "400" }, 0, policy).kind).toBe("terminal");
+  });
+});
+
+describe("resolveRetryPolicy", () => {
+  it("built-in defaults when nothing is set", () => {
+    expect(resolveRetryPolicy({}, {})).toEqual({
+      retries: 2,
+      timeout: 600000,
+      backoff: { initial: 500, factor: 2, max: 10000 },
+    });
+  });
+
+  it("per-call overrides branch defaults overrides built-in", () => {
+    const resolved = resolveRetryPolicy({ retries: 1 }, { retries: 5, timeout: 1000 });
+    expect(resolved).toMatchObject({ retries: 1, timeout: 1000 });
+  });
+
+  it("retries:0 and timeout:0 disable", () => {
+    const resolved = resolveRetryPolicy({ retries: 0, timeout: 0 }, {});
+    expect(resolved.retries).toBe(0);
+    expect(resolved.timeout).toBe(0);
   });
 });

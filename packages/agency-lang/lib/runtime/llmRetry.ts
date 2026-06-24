@@ -162,3 +162,46 @@ function backoffMs(retryAfterMs: number | undefined, attempt: number, policy: Re
   }
   return Math.min(base, policy.backoff.max);
 }
+
+export type RetryConfig = {
+  retries?: number;
+  timeout?: number;
+  backoff?: { initial?: number; factor?: number; max?: number };
+};
+
+function firstDefined<T>(...values: Array<T | undefined>): T {
+  for (const value of values) {
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  // The last argument is always a defined default, so this is unreachable.
+  return values[values.length - 1] as T;
+}
+
+/**
+ * Resolve the effective policy for one call. Precedence: per-call `opts`
+ * (from `llm(prompt, {...})`) → `branchDefaults` (`stack.other.llmDefaults`,
+ * set per-branch by `setLlmOptions`) → DEFAULT_RETRY_POLICY. (An agency.json
+ * `llm` defaults block is a future follow-up — it needs the generated
+ * RuntimeContext construction to seed the bag.)
+ */
+export function resolveRetryPolicy(opts: RetryConfig, branchDefaults: RetryConfig): RetryPolicy {
+  return {
+    retries: firstDefined(opts.retries, branchDefaults.retries, DEFAULT_RETRY_POLICY.retries),
+    timeout: firstDefined(opts.timeout, branchDefaults.timeout, DEFAULT_RETRY_POLICY.timeout),
+    backoff: {
+      initial: firstDefined(
+        opts.backoff?.initial,
+        branchDefaults.backoff?.initial,
+        DEFAULT_RETRY_POLICY.backoff.initial,
+      ),
+      factor: firstDefined(
+        opts.backoff?.factor,
+        branchDefaults.backoff?.factor,
+        DEFAULT_RETRY_POLICY.backoff.factor,
+      ),
+      max: firstDefined(opts.backoff?.max, branchDefaults.backoff?.max, DEFAULT_RETRY_POLICY.backoff.max),
+    },
+  };
+}

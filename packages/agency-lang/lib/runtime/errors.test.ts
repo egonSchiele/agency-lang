@@ -217,3 +217,26 @@ describe("isAbortError", () => {
     expect(isAbortError(42)).toBe(false);
   });
 });
+
+describe("LLM resilience causes", () => {
+  it("round-trips callTimeout and llmFailure through readCause on an AgencyAbort", () => {
+    const t = new AgencyAbort("t", makeAbortCause({ kind: "callTimeout", limitMs: 600000 }));
+    expect(readCause(t)?.kind).toBe("callTimeout");
+    expect((readCause(t) as { limitMs: number }).limitMs).toBe(600000);
+    expect(isAbortError(t)).toBe(true);
+
+    const f = new AgencyAbort(
+      "f",
+      makeAbortCause({
+        kind: "llmFailure",
+        reason: "rateLimit",
+        detail: "429 too many requests",
+        retryAfterMs: 12000,
+      }),
+    );
+    const rc = readCause(f) as { reason: string; detail: string; retryAfterMs?: number };
+    expect(rc.reason).toBe("rateLimit");
+    expect(rc.detail).toBe("429 too many requests");
+    expect(rc.retryAfterMs).toBe(12000);
+  });
+});

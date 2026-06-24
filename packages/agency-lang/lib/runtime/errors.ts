@@ -71,7 +71,18 @@ export type AbortCause =
       delivered?: boolean;
     }
   | { kind: "raceLoser" }
-  | { kind: "cleanup" };
+  | { kind: "cleanup" }
+  // An abort WE initiate when a single llm() call exceeds its per-call deadline.
+  | { kind: "callTimeout"; limitMs: number }
+  // A provider/transport failure we observed (surfaced after exhausting retries).
+  // `detail` is the raw provider message; `retryAfterMs` is present when a server
+  // retry-after was available. Never includes "timeout" (that is callTimeout).
+  | {
+      kind: "llmFailure";
+      reason: "connectionLost" | "streamInterrupted" | "rateLimit" | "serverError" | "overloaded";
+      detail: string;
+      retryAfterMs?: number;
+    };
 
 /** Brand so a plain object on `signal.reason` is recognizable as ours. */
 const ABORT_CAUSE_BRAND = "__agencyAbortCause";

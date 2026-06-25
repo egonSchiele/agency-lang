@@ -3,7 +3,14 @@ import { RuntimeContext } from "./context.js";
 
 function baseArgs() {
   return {
-    statelogConfig: { host: "", projectId: "", apiKey: "", traceId: "t" },
+    statelogConfig: {
+      host: "",
+      projectId: "",
+      apiKey: "",
+      debugMode: false,
+      observability: false,
+      traceId: "t",
+    },
     smoltalkDefaults: {},
   };
 }

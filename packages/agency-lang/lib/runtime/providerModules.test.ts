@@ -12,6 +12,10 @@ import {
 const here = import.meta.dirname;
 const tmpFiles: string[] = [];
 
+// Counter incremented by the "count" fixture's register() so the dedupe test
+// can assert register ran exactly once across two loadProviderModules calls.
+const g = globalThis as unknown as { __providerRegisterCount?: number };
+
 function writeModule(name: string, body: string): string {
   const p = path.join(here, `__tmp_provider_${name}.mjs`);
   fs.writeFileSync(p, body);
@@ -22,7 +26,7 @@ function writeModule(name: string, body: string): string {
 beforeEach(() => {
   __resetLoadedProviderModules();
   delete process.env.AGENCY_PROVIDER_MODULES;
-  globalThis.__providerRegisterCount = 0;
+  g.__providerRegisterCount = 0;
 });
 
 afterEach(() => {
@@ -72,7 +76,7 @@ describe("loadProviderModules", () => {
     );
     await loadProviderModules({ providerModules: [mod] });
     await loadProviderModules({ providerModules: [mod] });
-    expect(globalThis.__providerRegisterCount).toBe(1);
+    expect(g.__providerRegisterCount).toBe(1);
   });
 
   it("throws a clear error when the module path does not resolve", async () => {

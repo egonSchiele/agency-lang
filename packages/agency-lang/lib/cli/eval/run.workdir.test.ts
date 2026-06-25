@@ -86,6 +86,34 @@ describe("evalRunLoadedInputs compiles + runs inside each input workdir", () => 
     expect(result.inputs[0].errorMessage).toMatch(/working_dir is not a directory/);
   });
 
+  it("overlayFiles overwrite the seed copy inside each input's workdir", async () => {
+    fs.writeFileSync(path.join(proj, "config.txt"), "original\n");
+    const observedCwd: string[] = [];
+    const runner = vi.fn(async (args: { cwd: string }) => {
+      observedCwd.push(fs.readFileSync(path.join(args.cwd, "config.txt"), "utf8"));
+      return { ok: true as const };
+    });
+
+    await evalRunLoadedInputs(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [{ id: "input-1", goal: "g", args: {} }],
+        inputsSource: "test",
+        runsDir: path.join(proj, "runs"),
+        runId: "r-overlay",
+        config: {},
+        pipeAgentOutput: false,
+        seed: { dir: proj, agentRelPath: "agent.agency" },
+        overlayFiles: { "config.txt": "patched\n" },
+      },
+      { runner },
+    );
+
+    // The overlay wins inside the workdir; the source tree is untouched.
+    expect(observedCwd).toEqual(["patched\n"]);
+    expect(fs.readFileSync(path.join(proj, "config.txt"), "utf8")).toBe("original\n");
+  });
+
   it("rejects combining a caller-supplied seed with input.working_dir", async () => {
     const runner = vi.fn(async () => ({ ok: true as const }));
     const result = await evalRunLoadedInputs(

@@ -3567,6 +3567,11 @@ export class TypeScriptBuilder {
         String(cfg.client.maxToolResultChars),
       );
     }
+    if (cfg.client?.providerModules && cfg.client.providerModules.length > 0) {
+      runtimeCtxArgs.providerModules = ts.arr(
+        cfg.client.providerModules.map((p) => ts.str(p)),
+      );
+    }
 
     const traceConfigFields: Record<string, TsNode> = {
       program: ts.str(this.moduleId),

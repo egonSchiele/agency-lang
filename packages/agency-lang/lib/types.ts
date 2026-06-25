@@ -23,6 +23,7 @@ import { ReturnStatement } from "./types/returnStatement.js";
 import { GotoStatement } from "./types/gotoStatement.js";
 import { Skill } from "./types/skill.js";
 import { TypeAlias, VariableType } from "./types/typeHints.js";
+import { EffectDeclaration } from "./types/effectDeclaration.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
 import { AwaitPending } from "./types/awaitPending.js";
@@ -218,6 +219,7 @@ export type NewLine = BaseNode & {
 
 export type AgencyNode =
   | TypeAlias
+  | EffectDeclaration
   | GraphNodeDefinition
   | FunctionDefinition
   | Assignment

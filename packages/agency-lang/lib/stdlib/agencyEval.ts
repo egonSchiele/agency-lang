@@ -80,7 +80,13 @@ export function _prepareInput(
   input: Input,
 ): AgencyPrepareResult {
   try {
-    return { ok: true, prepared: prepareInput(state, input) };
+    const prepared = prepareInput(state, input);
+    // The stdlib evalRun runs an already-compiled agent, so it bypasses the
+    // CLI's prepareRunDir (seed + overlay + compile) that would otherwise
+    // materialize the workdir. There is nothing to seed here — the workdir is
+    // just an isolated cwd for the subprocess — so create it explicitly.
+    fs.mkdirSync(prepared.workdirPath, { recursive: true });
+    return { ok: true, prepared };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[evalRun] prepare failed for input ${input.id ?? ""}: ${message}`);

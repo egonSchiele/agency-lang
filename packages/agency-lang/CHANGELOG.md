@@ -1,3 +1,8 @@
+## Jun 25 2026
+
+### Eval / Optimize
+- Fixed `std::agency/eval` `evalRun`: the workdir is now created for the stdlib path, which runs an already-compiled agent and so bypasses the CLI's `prepareRunDir` that otherwise materializes it. Previously the subprocess spawned with a non-existent cwd and failed with `ENOENT`.
+
 ## Jun 24 2026 — v0.6.4
 
 ### Language / Typechecker

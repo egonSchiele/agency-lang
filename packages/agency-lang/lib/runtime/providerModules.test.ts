@@ -33,7 +33,7 @@ afterEach(() => {
   for (const p of tmpFiles.splice(0)) {
     try { fs.unlinkSync(p); } catch { }
   }
-  for (const name of ["echo-a", "count-a"]) {
+  for (const name of ["echo-a", "count-a", "retry-a"]) {
     smoltalk.unregisterProvider(name);
   }
   delete process.env.AGENCY_PROVIDER_MODULES;
@@ -90,6 +90,27 @@ describe("loadProviderModules", () => {
     await expect(
       loadProviderModules({ providerModules: [mod] }),
     ).rejects.toThrow(/does not export a "register" function/);
+  });
+
+  it("un-reserves a failed module so a later call can retry it", async () => {
+    // register() throws on its first invocation and succeeds on the second.
+    // Because a failed load un-reserves the path, the second call re-attempts.
+    const mod = writeModule(
+      "retry",
+      `import { BaseClient } from "smoltalk";
+       class RetryA extends BaseClient { async textSync() { return { success: true, value: { output: "x", toolCalls: [] } }; } }
+       export function register({ registerProvider }) {
+         globalThis.__providerRegisterCount = (globalThis.__providerRegisterCount ?? 0) + 1;
+         if (globalThis.__providerRegisterCount === 1) throw new Error("first-fails");
+         registerProvider("retry-a", RetryA);
+       }`,
+    );
+    await expect(
+      loadProviderModules({ providerModules: [mod] }),
+    ).rejects.toThrow(/first-fails/);
+    // Retry: the path was un-reserved, so this re-imports + re-registers.
+    await loadProviderModules({ providerModules: [mod] });
+    expect(smoltalk.getClient({ model: "m", provider: "retry-a" }).constructor.name).toBe("RetryA");
   });
 
   it("throws when register() itself throws", async () => {

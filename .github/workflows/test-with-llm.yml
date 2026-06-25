@@ -63,3 +63,9 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: pnpm run test:agents
+
+    - name: Optimizer efficacy tests (real LLM)
+      working-directory: packages/agency-lang
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: pnpm run test:optimize-efficacy

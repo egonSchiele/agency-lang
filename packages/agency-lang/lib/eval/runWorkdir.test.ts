@@ -34,6 +34,26 @@ describe("prepareRunDir", () => {
     expect(prepared.workdirPath).toBe(workdir);
   });
 
+  it("refuses overlay keys that escape the workdir (traversal / absolute)", () => {
+    const workdir = path.join(root, "wd-escape");
+    const outside = path.join(root, "outside.txt");
+    expect(() =>
+      prepareRunDir(
+        { seedDir: seed, agentRelPath: "agent.agency", overlayFiles: { "../outside.txt": "x" } },
+        workdir,
+        {},
+      ),
+    ).toThrow(/escapes the workdir/);
+    expect(() =>
+      prepareRunDir(
+        { seedDir: seed, agentRelPath: "agent.agency", overlayFiles: { [outside]: "x" } },
+        path.join(root, "wd-escape-abs"),
+        {},
+      ),
+    ).toThrow(/escapes the workdir/);
+    expect(fs.existsSync(outside)).toBe(false);
+  });
+
   it("works without an overlay", () => {
     const workdir = path.join(root, "wd2");
     const prepared = prepareRunDir(

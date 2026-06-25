@@ -26,10 +26,23 @@ export type PreparedRunDir = {
   compiledEntryPath: string;
 };
 
+/** Resolve `rel` against `workdirPath` and refuse paths that escape it (`..`,
+ *  absolute). Overlay keys come from optimizer candidates today but may flow in
+ *  from less-trusted callers later; this is the same guard the prior
+ *  `WorkspaceManager.resolveWithin` provided. */
+function resolveWithin(workdirPath: string, rel: string): string {
+  const root = path.resolve(workdirPath);
+  const abs = path.resolve(root, rel);
+  if (abs !== root && !abs.startsWith(root + path.sep)) {
+    throw new Error(`Path ${JSON.stringify(rel)} escapes the workdir ${root}`);
+  }
+  return abs;
+}
+
 /** Write each overlay file (path relative to the workdir root) over the seeded copy. */
 function applyOverlay(workdirPath: string, overlayFiles: Record<string, string>): void {
   for (const [rel, source] of Object.entries(overlayFiles)) {
-    const abs = path.join(workdirPath, rel);
+    const abs = resolveWithin(workdirPath, rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, source);
   }
@@ -51,7 +64,7 @@ export function prepareRunDir(
     applyOverlay(workdirPath, spec.overlayFiles);
   }
 
-  const entryAgency = path.join(workdirPath, spec.agentRelPath);
+  const entryAgency = resolveWithin(workdirPath, spec.agentRelPath);
   const compiledEntryPath = compile(config, entryAgency, undefined, {
     importStrategy: new RunStrategy(),
     quiet: true,

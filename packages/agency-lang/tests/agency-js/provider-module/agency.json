@@ -1,0 +1,5 @@
+{
+  "client": {
+    "providerModules": ["./echo-setup.mjs"]
+  }
+}

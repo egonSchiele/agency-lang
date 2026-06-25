@@ -34,10 +34,17 @@
 import type { z } from "zod";
 import { agencyStore } from "./asyncContext.js";
 import { runPrompt } from "./prompt.js";
+import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";
 import { getRuntimeContext } from "./asyncContext.js";
 
-export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = {
+/**
+ * Options for `agency.llm`. Extends `RetryConfig` (single source of truth for
+ * `retries` / `timeout` / `backoff`, shared with `LlmDefaults` and the type-
+ * checker's `llmOptions` shape) so adding a resilience field in one place
+ * doesn't require updating three.
+ */
+export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
   /** Override the model for this call only. Does NOT mutate the
    *  active LLM client config; the override applies to this single
    *  prompt. Subsequent `agency.llm` calls without `opts.model` use
@@ -72,11 +79,22 @@ export async function llm(prompt: string, opts: LlmOpts = {}): Promise<any> {
   const clientConfig: { model?: string } = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
 
+  // Resilience options ride a dedicated `retryConfig` parameter (cleanly
+  // separated from provider-shaped `clientConfig`). Pass even when all three
+  // are undefined — `resolveRetryPolicy` uses `firstDefined` and just falls
+  // through to branch defaults / built-ins.
+  const retryConfig: RetryConfig = {
+    retries: opts.retries,
+    timeout: opts.timeout,
+    backoff: opts.backoff,
+  };
+
   return runPrompt({
     prompt,
     messages: thread,
     responseFormat: opts.schema,
     clientConfig,
+    retryConfig,
     checkpointInfo: agencyStore.getStore()?.callsite,
   });
 }

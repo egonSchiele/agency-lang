@@ -8,6 +8,7 @@ import type {
   ToolCallJSON,
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
+import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext } from "./asyncContext.js";
 import { AgencyAbort, RestoreSignal } from "./errors.js";
@@ -49,6 +50,14 @@ export type CallbackMap = {
   onFunctionEnd: { functionName: string; timeTaken: number };
   onToolCallStart: { toolName: string; args: Record<string, unknown> };
   onToolCallEnd: { toolName: string; result: any; timeTaken: number };
+  onLLMRetry: {
+    attempt: number; // 1-based retry number
+    maxRetries: number; // the configured retry count
+    delayMs: number;
+    reason: LLMRetryReason;
+    detail: string;
+  };
+  onLLMTimeout: { limitMs: number; attempt: number };
   onStream:
   | { type: "text"; text: string }
   | { type: "tool_call"; toolCall: ToolCallJSON }

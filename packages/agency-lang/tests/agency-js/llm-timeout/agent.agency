@@ -1,0 +1,11 @@
+// The deterministic client hangs (never resolves) until its abort signal
+// fires. With timeout: 50ms and retries: 0 the per-call deadline aborts the
+// hung call and, with no retries left, the failure surfaces as a Failure that
+// `try` catches — proving the timeout path is handleable (not a run abort).
+node main() {
+  const result = try llm("ping", { timeout: 50ms, retries: 0 })
+  if (isFailure(result)) {
+    return "timed-out"
+  }
+  return "no-timeout"
+}

@@ -2,22 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 
 import type { JudgeAggregationPolicy, SuiteVerdict } from "@/eval/judge/types.js";
+import { copyProjectTree } from "@/utils/projectTree.js";
 
 import type { OptimizeMutationDiagnostic, OptimizeMutationPreview } from "./sourceMutator.js";
 import { sha256Text, type OptimizeTargetSet } from "./targets.js";
 import type { OptimizeResult } from "./types.js";
 
 export { sha256Text };
-
-const WORKSPACE_COPY_EXCLUDED_DIRS = [
-  ".git",
-  ".worktrees",
-  "node_modules",
-  "runs",
-  ".agency-tmp",
-  ".js-tmp",
-  ".agency-memory",
-];
 
 export type IterationAgentArtifact = {
   iter: number;
@@ -94,7 +85,7 @@ export function createOptimizeArtifacts(args: {
     },
     writeIterationWorkspace(iter, files) {
       const workspaceDir = path.join(iterationDir(runDir, iter), "workspace");
-      prepareWorkspace(args.workingDir, workspaceDir, runDir);
+      prepareWorkspace(args.workingDir, workspaceDir);
       for (const [file, source] of Object.entries(files)) {
         writeFile(path.join(workspaceDir, file), source);
       }
@@ -148,32 +139,14 @@ function iterationDir(runDir: string, iter: number): string {
   return path.join(runDir, `iter-${iter}`);
 }
 
-function prepareWorkspace(workingDir: string, workspaceDir: string, runDir: string): void {
+function prepareWorkspace(workingDir: string, workspaceDir: string): void {
   fs.rmSync(workspaceDir, { recursive: true, force: true });
-  fs.mkdirSync(workspaceDir, { recursive: true });
-  if (fs.existsSync(workingDir) && fs.statSync(workingDir).isDirectory()) {
-    copyDirectory(workingDir, workspaceDir, path.resolve(runDir));
+  if (!fs.existsSync(workingDir) || !fs.statSync(workingDir).isDirectory()) {
+    fs.mkdirSync(workspaceDir, { recursive: true });
+    return;
   }
-}
-
-function copyDirectory(sourceDir: string, destDir: string, excludedDir: string): void {
-  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
-    const sourcePath = path.join(sourceDir, entry.name);
-    if (isInsideOrSame(sourcePath, excludedDir)) continue;
-    if (entry.isDirectory() && WORKSPACE_COPY_EXCLUDED_DIRS.includes(entry.name)) continue;
-    const destPath = path.join(destDir, entry.name);
-    if (entry.isDirectory()) {
-      fs.mkdirSync(destPath, { recursive: true });
-      copyDirectory(sourcePath, destPath, excludedDir);
-    } else if (entry.isFile()) {
-      fs.copyFileSync(sourcePath, destPath);
-    }
-  }
-}
-
-function isInsideOrSame(candidate: string, parent: string): boolean {
-  const relative = path.relative(parent, path.resolve(candidate));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  // copyProjectTree handles excludes + self-skip when workspaceDir lives under workingDir.
+  copyProjectTree(workingDir, workspaceDir);
 }
 
 function mutationPreviewMarkdown(preview: OptimizeMutationPreview, rationale?: string): string {

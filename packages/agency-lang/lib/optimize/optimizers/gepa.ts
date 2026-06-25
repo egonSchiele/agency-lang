@@ -136,6 +136,9 @@ export class Gepa extends BaseOptimizer {
     const childWs = this.fork();
     const childMini = await this.evaluate(childWs, preview.targetSet, preview.files, minibatch);
     const parentMini = await this.evaluate(parent.ws, parent.targetSet, parent.files, minibatch);   // cache hits
+    // TODO(gated-objective): use `childMini.gatedObjective() > parentMini.gatedObjective()` once the parent
+    // is also routed through the canonical Scorecard helper; parents are always accepted candidates that
+    // passed gates, so the rewrite is behavior-preserving.
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
       return { iter, decision: "rejected", rationale: outcome.rationale, objective: childMini.objective(), changes: preview.changes };
     }

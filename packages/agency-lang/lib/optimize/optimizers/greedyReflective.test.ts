@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BaseGrader } from "../grading/baseGrader.js";
+import { Scorecard } from "../grading/scorecard.js";
 import type { Grade, GraderInput, GraderOptions } from "../grading/types.js";
 import { GreedyReflective, type GreedyDeps } from "./greedyReflective.js";
 import type { OptimizeMutationPreview } from "../sourceMutator.js";
@@ -166,5 +167,39 @@ describe("GreedyReflective (pointwise)", () => {
     });
     expect(result.championIter).toBe(1);                  // val winner, though iter 2 had the higher train objective
     expect(result.validationObjective).toBeCloseTo(0.9, 5);
+  });
+
+  it("records the gate-aware baseline objective on the result", async () => {
+    const grader = new ValueGrader(() => 0.5); // every grade 0.5 → baseline obj 0.5, no gates
+    const opt = new GreedyReflective(
+      { graders: [grader], iterations: 2, config: {}, runsDir: root, runId: "baseobj", writeback: false },
+      deps(),
+    );
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
+    expect(result.championIter).toBe("baseline"); // constant grade → nothing beats baseline
+    expect(result.baselineObjective).toBeCloseTo(0.5, 10);
+    expect(result.trainObjective).toBeCloseTo(0.5, 10);
+  });
+
+  // The baselineObjective-via-gate-fail scenario is unreachable end-to-end
+  // because requireBaselineGatesPass throws before finishPointwise runs, so we
+  // pin the gate-aware rule at the Scorecard layer where the field's value is
+  // actually computed.
+  it("Scorecard.gatedObjective() zeroes out a gate-failed score even when the raw objective is high", () => {
+    const passed = new Scorecard([{
+      input: { id: "a", args: {} },
+      run: { output: "out", recordPath: "" },
+      grades: [{ grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } }],
+      gatesPassed: true,
+    }]);
+    expect(passed.gatedObjective()).toBeCloseTo(0.9, 10);
+
+    const failed = new Scorecard([{
+      input: { id: "a", args: {} },
+      run: { output: "out", recordPath: "" },
+      grades: [{ grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } }],
+      gatesPassed: false,
+    }]);
+    expect(failed.gatedObjective()).toBe(0);
   });
 });

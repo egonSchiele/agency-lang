@@ -15,11 +15,6 @@ type Candidate = {
   targetSet: OptimizeTargetSet;
 };
 
-/** Gate-aware objective used to compare candidates on the training set. */
-function trainScore(c: Candidate): number {
-  return c.scorecard.gatesPassed() ? c.scorecard.objective() : 0;
-}
-
 /**
  * Optional injection points, so the optimizer can be unit-tested without an LLM
  * or real file edits. The registry constructs it with none — `new ExampleOptimizer(config)`.
@@ -69,7 +64,7 @@ export class ExampleOptimizer extends BaseOptimizer {
 
     // 1. Score the unchanged agent.
     const baseline = await this.makeCandidate("baseline", fileMap(source), source, inputs);
-    this.reporter.baselineScored({ objective: trainScore(baseline) });
+    this.reporter.baselineScored({ objective: baseline.scorecard.gatedObjective() });
 
     // 2. Ask the built-in mutator for one new set of target values. proposeValidMutation
     //    (from BaseOptimizer) retries on validation errors and never throws on a bad response.
@@ -89,12 +84,12 @@ export class ExampleOptimizer extends BaseOptimizer {
     const candidate = outcome.ok
       ? await this.makeCandidate(1, outcome.preview.files, source, inputs)
       : undefined;
-    const beatsBaseline = candidate !== undefined && trainScore(candidate) > trainScore(baseline);
+    const beatsBaseline = candidate !== undefined && candidate.scorecard.gatedObjective() > baseline.scorecard.gatedObjective();
     const trainChampion = beatsBaseline ? candidate : baseline;
     const decision = beatsBaseline ? "accepted" : "rejected";
 
     this.reporter.iterationDecided({
-      iter: 1, total: 1, decision, objective: trainScore(trainChampion),
+      iter: 1, total: 1, decision, objective: trainChampion.scorecard.gatedObjective(),
       ...(beatsBaseline && outcome.ok
         ? { changes: outcome.preview.changes, rationale: outcome.rationale }
         : {}),

@@ -39,4 +39,13 @@ export class Scorecard {
     if (scores.length === 0) return 0;
     return scores.reduce((sum, s) => sum + s, 0) / scores.length;
   }
+
+  /** The canonical gate-aware comparison score: the raw objective when every
+   *  `mustPass` gate is satisfied, otherwise 0. This is what every optimizer
+   *  uses to compare candidates, and what `OptimizeResult.trainObjective` and
+   *  `baselineObjective` report. Prefer this over inlining
+   *  `s.gatesPassed() ? s.objective() : 0`. */
+  gatedObjective(): number {
+    return this.gatesPassed() ? this.objective() : 0;
+  }
 }

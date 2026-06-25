@@ -126,6 +126,8 @@ export class GreedyReflective extends BaseOptimizer {
 
   /** Greedy's acceptance policy: pass every gate AND beat the champion's objective. */
   private beats(candidate: Candidate, champion: Candidate): boolean {
+    // TODO(gated-objective): collapse to `candidate.scorecard.gatedObjective() > champion.scorecard.gatedObjective()`
+    // (equivalent here since the champion always passes gates), to use the canonical Scorecard helper end-to-end.
     return candidate.scorecard.gatesPassed() && candidate.scorecard.objective() > champion.scorecard.objective();
   }
 

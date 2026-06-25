@@ -58,11 +58,11 @@ The merged-path resolution rule (used everywhere): a path is resolved against `p
 Create `lib/config.providerModules.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
-import { configSchema } from "./config.js";
+import { AgencyConfigSchema } from "./config.js";
 
 describe("config client.providerModules", () => {
   it("accepts an array of module paths", () => {
-    const parsed = configSchema.parse({
+    const parsed = AgencyConfigSchema.parse({
       client: { providerModules: ["./llama-setup.mjs", "/abs/other.mjs"] },
     });
     expect(parsed.client?.providerModules).toEqual([
@@ -73,18 +73,16 @@ describe("config client.providerModules", () => {
 
   it("rejects a non-array providerModules", () => {
     expect(() =>
-      configSchema.parse({ client: { providerModules: "nope" } }),
+      AgencyConfigSchema.parse({ client: { providerModules: "nope" } }),
     ).toThrow();
   });
 });
 ```
 
-> Note: confirm the exported schema name. `lib/config.ts` exports the zod schema used by `loadConfig`. If it is not named `configSchema`, open `lib/config.ts`, find the top-level `z.object({...}).partial()` export (the one containing the `client:` block at line ~348), and use that exported name in the import above.
-
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm test:run lib/config.providerModules.test.ts 2>&1 | tee /tmp/t1.txt`
-Expected: FAIL — `providerModules` is stripped/unknown so the first assertion's `toEqual` fails (or the schema name import fails, which you fix per the note above).
+Expected: FAIL — `providerModules` is stripped/unknown so the first assertion's `toEqual` fails.
 
 - [ ] **Step 3: Add the type field**
 
@@ -222,7 +220,7 @@ git commit -m "feat(runtime): carry providerModules on RuntimeContext"
 ### Task 3: Bake `providerModules` into generated code
 
 **Files:**
-- Modify: `lib/backends/typescriptBuilder.ts` (the `runtimeCtxArgs` block; `maxToolResultChars` is baked at lines ~3453-3457 — add immediately after it)
+- Modify: `lib/backends/typescriptBuilder.ts` (the `runtimeCtxArgs` block; `maxToolResultChars` is baked at lines ~3565-3567 — add immediately after it)
 - Test: `lib/backends/providerModules.codegen.test.ts` (Create)
 
 - [ ] **Step 1: Write the failing test**
@@ -273,7 +271,7 @@ Expected: FAIL — the generated output has no `providerModules`.
 
 - [ ] **Step 3: Implement the bake**
 
-In `lib/backends/typescriptBuilder.ts`, immediately after the `maxToolResultChars` block (ends ~line 3457):
+In `lib/backends/typescriptBuilder.ts`, immediately after the `maxToolResultChars` block (ends ~line 3567):
 ```ts
     if (cfg.client?.providerModules && cfg.client.providerModules.length > 0) {
       runtimeCtxArgs.providerModules = ts.arr(
@@ -622,8 +620,7 @@ export function register({ registerProvider }) {
 ```
 // Running this node triggers the run bootstrap, which loads the provider
 // module declared in agency.json. The body itself does no LLM work.
-node main(): string {
-  return "ran"
+node main() {
 }
 ```
 
@@ -705,9 +702,11 @@ Append inside the `describe("agency pack", ...)` block in `lib/cli/pack.test.ts`
     });
     expect(fs.existsSync(out)).toBe(true);
     const text = fs.readFileSync(out, "utf-8");
-    // The runtime-computed dynamic import must survive bundling (esbuild
+    // The baked providerModules path must survive bundling, and the
+    // runtime-computed dynamic import must survive bundling too (esbuild
     // cannot statically resolve it, so it leaves it as a real import()).
-    expect(text).toMatch(/import\(/);
+    expect(text).toContain("./llama-setup.mjs");
+    expect(text).toMatch(/pathToFileURL\s*\(/);
   }, 60000);
 ```
 
@@ -731,7 +730,7 @@ git commit -m "test(pack): smoke test packing with providerModules configured"
 
 **Files:**
 - Create: `docs/site/guide/custom-providers.md`
-- Modify: the guide navigation/sidebar (find where other `docs/site/guide/*.md` pages are listed — typically a VitePress config under `docs/site/.vitepress/` or a sidebar data file — and add a "Custom & local model providers" entry)
+- Modify: `docs/site/.vitepress/config.mts` (the `sidebar["/guide/"]` array, starting ~line 16, lists each guide page as `{ text, link: "/guide/<slug>" }`; add an entry for `custom-providers` next to the other guide links, mirroring the existing entry format exactly)
 
 - [ ] **Step 1: Write the guide page**
 
@@ -826,11 +825,10 @@ never bundled into a packed artifact.
 
 - [ ] **Step 2: Add it to the guide navigation**
 
-Find the sidebar/nav config that lists the other guide pages (grep for an existing page slug, e.g. `error-handling`, under `docs/site/`):
-```bash
-grep -rn "error-handling" docs/site/.vitepress 2>/dev/null || grep -rln "guide/error-handling" docs/site
+Open `docs/site/.vitepress/config.mts`. Inside `sidebar["/guide/"]` (the array begins ~line 16, with entries like `{ text: "LLMs", link: "/guide/llm" }`), add an entry in a sensible position (e.g. after the `LLMs` entry):
+```ts
+            { text: "Custom & local model providers", link: "/guide/custom-providers" },
 ```
-Add a `custom-providers` entry next to the other guide links, mirroring the existing entry format exactly.
 
 - [ ] **Step 3: Commit**
 

@@ -23,10 +23,15 @@ class FixedGrader extends BaseGrader {
 class Probe extends BaseOptimizer {
   readonly name = "probe";
   protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
-  evaluateAt(ws: ReturnType<Probe["fork"]>, entry: string, inputs: Input[]): Promise<Scorecard> {
-    return this.evaluate(ws, entry, inputs);
+  evaluateAt(
+    ws: ReturnType<Probe["fork"]>,
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    inputs: Input[],
+  ): Promise<Scorecard> {
+    return this.evaluate(ws, source, files, inputs);
   }
-  forkAt(dir: string) { return this.fork(dir); }
+  forkAt() { return this.fork(); }
   requireBaselineGatesPassAt(sc: Scorecard): void { this.requireBaselineGatesPass(sc); }
   proposeValidMutationAt(
     propose: (d: OptimizeMutationDiagnostic[]) => Promise<MutationProposal>,
@@ -53,31 +58,40 @@ describe("BaseOptimizer.evaluate", () => {
   function probe(graders: BaseGrader[], runInput: RunInput): Probe {
     return new Probe(
       { graders, iterations: 1, config: {}, runsDir: root, runId: "r" },
-      { workspaceRoot: path.join(root, "ws"), runInput },
+      { runInput },
     );
   }
 
   const inputs: Input[] = [{ id: "a", args: {} }, { id: "b", args: {} }];
   const fixedRun: RunInput = async () => ({ output: "out", recordPath: "" });
 
+  const source: OptimizeTargetSet = {
+    baseDir: "",
+    entryFile: "agent.agency",
+    files: {},
+    targets: [],
+  };
+  const sourceFor = (dir: string): OptimizeTargetSet => ({ ...source, baseDir: dir });
+  const noFiles: Record<string, string> = {};
+
   it("runs the agent once per input (cached) and builds a gate-aware Scorecard", async () => {
     const runInput = vi.fn(fixedRun);
     const p = probe([new FixedGrader({ score: { kind: "scalar", value: 0.5 } })], runInput);
-    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", inputs);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, inputs);
     expect(runInput).toHaveBeenCalledTimes(2);
     expect(sc.objective()).toBeCloseTo(0.5, 10);
     expect(sc.gatesPassed()).toBe(true);
   });
 
-  it("scoreFiles forks, applies files, and grades the given inputs", async () => {
+  it("scoreFiles forks and grades the given inputs against the candidate file map", async () => {
     const p = probe([new FixedGrader({ score: { kind: "scalar", value: 0.4 } })], fixedRun);
-    const source: OptimizeTargetSet = {
+    const scoreSource: OptimizeTargetSet = {
       baseDir: src,
       entryFile: "agent.agency",
       files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "node main() {}\n", sha256: "x" } },
       targets: [],
     };
-    const sc = await p.scoreFilesAt(source, { "agent.agency": "node main() {}\n" }, [{ id: "a", args: {} }]);
+    const sc = await p.scoreFilesAt(scoreSource, { "agent.agency": "node main() {}\n" }, [{ id: "a", args: {} }]);
     expect(sc.objective()).toBeCloseTo(0.4, 10);
   });
 
@@ -96,7 +110,6 @@ describe("BaseOptimizer.evaluate", () => {
     })(
       { graders: [new NeedsExpected()], iterations: 1, config: {}, runsDir: root, runId: "ff" },
       {
-        workspaceRoot: path.join(root, "ws"),
         runInput,
         discover: () => ({
           baseDir: src,
@@ -116,7 +129,7 @@ describe("BaseOptimizer.evaluate", () => {
     const advisory = new FixedGrader({ score: { kind: "scalar", value: 1 } });
     const advisorySpy = vi.spyOn(advisory as unknown as { _run: () => Promise<Grade> }, "_run");
     const p = probe([gate, advisory], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", args: {} }]);
     expect(sc.gatesPassed()).toBe(false);
     expect(advisorySpy).not.toHaveBeenCalled();
   });
@@ -124,7 +137,7 @@ describe("BaseOptimizer.evaluate", () => {
   it("only runs graders whose inputScope matches the input", async () => {
     const scoped = new FixedGrader({ score: { kind: "scalar", value: 1 } }, { inputScope: { ids: ["a"] } });
     const p = probe([scoped], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", inputs);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, inputs);
     // input "a" scores 1; input "b" has no contributing grader → 0; mean = 0.5
     expect(sc.objective()).toBeCloseTo(0.5, 10);
   });
@@ -132,21 +145,21 @@ describe("BaseOptimizer.evaluate", () => {
   it("gives id-less inputs distinct cache keys so they do not collide", async () => {
     const runInput = vi.fn(fixedRun);
     const p = probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], runInput);
-    await p.evaluateAt(p.forkAt(src), "agent.agency", [{ args: {} }, { args: {} }]); // both omit id
+    await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ args: {} }, { args: {} }]); // both omit id
     expect(runInput).toHaveBeenCalledTimes(2);
   });
 
   it("requireBaselineGatesPass throws naming the failing must-pass grader", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true, name: "must-be-json" });
     const p = probe([gate], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", args: {} }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).toThrow(/must-be-json/);
   });
 
   it("requireBaselineGatesPass does not throw when gates pass", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: true } }, { mustPass: true });
     const p = probe([gate], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(src), "agent.agency", [{ id: "a", args: {} }]);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", args: {} }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).not.toThrow();
   });
 

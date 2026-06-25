@@ -9,6 +9,7 @@ import {
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
+import { loadProviderModules } from "./providerModules.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
@@ -448,6 +449,10 @@ export async function respondToInterrupts(args: {
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  // A cross-process resume starts with an empty provider registry (registration
+  // is process-global, not part of serialized checkpoint state), so re-register
+  // before resuming. Idempotent in-process via loadProviderModules' guard.
+  await loadProviderModules(execCtx);
   // This is the first restore on this execCtx — record it as such.
   execCtx._restoreCount++;
   execCtx.statelogClient.checkpointRestored({

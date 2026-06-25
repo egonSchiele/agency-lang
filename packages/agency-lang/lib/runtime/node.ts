@@ -14,6 +14,7 @@ import {
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered } from "./crossModuleInitRegistry.js";
+import { loadProviderModules } from "./providerModules.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
@@ -151,6 +152,10 @@ async function initFreshExecCtx(
   //     for current codegen (per-execCtx early-return guard) and
   //     double-call protected by the registry-level
   //     `globals.isInitialized` check baked into `__initAllRegistered`.
+  // Register custom/local LLM providers before any user code or llm() call.
+  // Process-global + idempotent (see loadProviderModules), so it is safe and
+  // cheap to call on every fresh run.
+  await loadProviderModules(execCtx);
   await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });

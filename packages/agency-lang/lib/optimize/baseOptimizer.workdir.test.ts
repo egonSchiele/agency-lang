@@ -8,10 +8,12 @@ import { BaseGrader } from "./grading/baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "./grading/types.js";
 import type { Scorecard } from "./grading/scorecard.js";
 import { BaseOptimizer } from "./baseOptimizer.js";
+import type { OptimizeTargetSet } from "./targets.js";
 import type { OptimizeResult } from "./types.js";
 
-// Capture the spec the default eval-run path hands to the eval runner so we can
-// assert it carries a working_dir (without spawning a real agent subprocess).
+// Capture the call the optimizer makes into evalRunLoadedInputs so we can
+// assert the new spec: seed + overlayFiles travel out-of-band, no
+// working_dir on the per-input spec, agent path points at source.baseDir.
 const { mockEval } = vi.hoisted(() => ({ mockEval: vi.fn() }));
 vi.mock("@/cli/eval/run.js", () => ({
   evalRunLoadedInputs: mockEval,
@@ -25,17 +27,22 @@ class FixedGrader extends BaseGrader {
   protected _run(_input: GraderInput): Promise<Grade> { return Promise.resolve(this.grade); }
 }
 
-/** Concrete subclass exposing `evaluate` so we can drive the default runInput path. */
+/** Concrete subclass exposing `evaluate`/`fork` so we can drive the default runInput path. */
 class Probe extends BaseOptimizer {
   readonly name = "probe";
   protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
-  evaluateAt(ws: ReturnType<Probe["fork"]>, entry: string, inputs: Input[]): Promise<Scorecard> {
-    return this.evaluate(ws, entry, inputs);
+  evaluateAt(
+    ws: ReturnType<Probe["fork"]>,
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    inputs: Input[],
+  ): Promise<Scorecard> {
+    return this.evaluate(ws, source, files, inputs);
   }
-  forkAt(dir: string) { return this.fork(dir); }
+  forkAt() { return this.fork(); }
 }
 
-describe("BaseOptimizer.runInputViaEval working_dir", () => {
+describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
   let root: string;
   let src: string;
   beforeEach(() => {
@@ -43,7 +50,6 @@ describe("BaseOptimizer.runInputViaEval working_dir", () => {
     src = path.join(root, "src");
     fs.mkdirSync(src);
     fs.writeFileSync(path.join(src, "agent.agency"), "node main() {}\n");
-    // A sibling file the agent would reference relative to its cwd (the workdir).
     fs.writeFileSync(path.join(src, "data.txt"), "hello\n");
 
     mockEval.mockImplementation(async (args: { runsDir: string; runId: string; inputs: Input[] }) => {
@@ -61,31 +67,36 @@ describe("BaseOptimizer.runInputViaEval working_dir", () => {
   function probe(): Probe {
     return new Probe(
       { graders: [new FixedGrader({ score: { kind: "scalar", value: 1 } })], iterations: 1, config: {}, runsDir: root, runId: "r" },
-      { workspaceRoot: path.join(root, "ws") },
     );
   }
 
-  it("points the per-input working_dir at the forked workspace so its files land in the workdir", async () => {
+  function source(): OptimizeTargetSet {
+    return { baseDir: src, entryFile: "agent.agency", files: {}, targets: [] };
+  }
+
+  it("passes seed + overlayFiles to evalRunLoadedInputs; no working_dir on input", async () => {
     const p = probe();
-    const ws = p.forkAt(src);
-    await p.evaluateAt(ws, "agent.agency", [{ id: "a", args: {} }]);
+    const ws = p.forkAt();
+    const files = { "agent.agency": "node main() { return 1 }\n" };
+    await p.evaluateAt(ws, source(), files, [{ id: "a", args: {} }]);
 
     expect(mockEval).toHaveBeenCalledTimes(1);
-    const spec = mockEval.mock.calls[0][0].inputs[0] as Input;
-    // The workspace is a full copy of the source tree; the per-input workdir must
-    // be seeded from it, or relative file references resolve against an empty dir.
-    expect(spec.working_dir).toBe(ws.dir);
-    expect(fs.existsSync(path.join(ws.dir, "data.txt"))).toBe(true);
+    const call = mockEval.mock.calls[0][0];
+    expect(call.seed).toEqual({ dir: src, agentRelPath: "agent.agency" });
+    expect(call.overlayFiles).toEqual(files);
+    expect(call.agent).toBe(path.join(src, "agent.agency"));
+    expect((call.inputs[0] as Input).working_dir).toBeUndefined();
   });
 
-  it("preserves an input-provided working_dir instead of overriding it", async () => {
+  it("partitions agent-runs by ws.key so caching is per-candidate", async () => {
     const p = probe();
-    const ws = p.forkAt(src);
-    const custom = path.join(root, "custom");
-    fs.mkdirSync(custom);
-    await p.evaluateAt(ws, "agent.agency", [{ id: "a", args: {}, working_dir: custom }]);
+    const ws1 = p.forkAt();
+    const ws2 = p.forkAt();
+    await p.evaluateAt(ws1, source(), {}, [{ id: "a", args: {} }]);
+    await p.evaluateAt(ws2, source(), {}, [{ id: "a", args: {} }]);
 
-    const spec = mockEval.mock.calls[0][0].inputs[0] as Input;
-    expect(spec.working_dir).toBe(custom);
+    expect(ws1.key).not.toBe(ws2.key);
+    expect(mockEval.mock.calls[0][0].runsDir).toContain(ws1.key);
+    expect(mockEval.mock.calls[1][0].runsDir).toContain(ws2.key);
   });
 });

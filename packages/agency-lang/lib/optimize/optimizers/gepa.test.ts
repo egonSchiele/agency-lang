@@ -49,14 +49,13 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   function scoredRunner(scores: number[]): RunInput {
     const seen = new Map<string, number>();
     return async (ws) => {
-      if (!seen.has(ws.dir)) seen.set(ws.dir, scores[seen.size] ?? 0);
-      return { output: String(seen.get(ws.dir)), recordPath: recordFile };
+      if (!seen.has(ws.key)) seen.set(ws.key, scores[seen.size] ?? 0);
+      return { output: String(seen.get(ws.key)), recordPath: recordFile };
     };
   }
 
   function deps(runInput: RunInput, propose?: GepaDeps["propose"]): GepaDeps {
     return {
-      workspaceRoot: path.join(root, "ws"),
       runInput,
       discover: () => fakeSource(),
       propose: propose ?? (async () => ({ rationale: "r", operations: [{ target: "t-alpha", kind: "variable", op: "replaceInitializer", value: '"x"', rationale: "c" }] })),

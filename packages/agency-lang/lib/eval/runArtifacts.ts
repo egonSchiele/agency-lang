@@ -77,16 +77,10 @@ export function prepareInput(
   const inputDir = path.join(state.inputsDir, id);
   const workdirPath = path.join(inputDir, "workdir");
   fs.mkdirSync(inputDir, { recursive: true });
-
-  if (input.working_dir) {
-    const workingDirStat = fs.statSync(input.working_dir);
-    if (!workingDirStat.isDirectory()) {
-      throw new Error("Eval input working_dir must be a directory");
-    }
-    fs.cpSync(input.working_dir, workdirPath, { recursive: true });
-  } else {
-    fs.mkdirSync(workdirPath, { recursive: true });
-  }
+  // workdir is materialized by prepareRunDir (seed + overlay + compile); we
+  // only allocate the path here. working_dir validation moves to
+  // evalRunLoadedInputs, where both working_dir and the agent file are in
+  // scope (it must enforce "working_dir contains the agent file").
 
   const prepared: PreparedInput = {
     input,

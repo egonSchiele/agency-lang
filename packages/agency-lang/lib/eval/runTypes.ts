@@ -47,8 +47,3 @@ export type EvalRunConfig = {
   continueOnError: boolean;
   verbose?: boolean;
 };
-
-export type EvalRunCompiledAgent = {
-  moduleId: string;
-  path?: string;
-};

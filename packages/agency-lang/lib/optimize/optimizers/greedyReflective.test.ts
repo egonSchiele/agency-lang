@@ -35,7 +35,6 @@ describe("GreedyReflective (pointwise)", () => {
   });
 
   const deps = (): GreedyDeps => ({
-    workspaceRoot: path.join(root, "ws"),
     runInput: async () => ({ output: "out", recordPath: "" }),
     discover: () => fakeSource(),
     propose: async () => ({ rationale: "tighten", operations: [] }),

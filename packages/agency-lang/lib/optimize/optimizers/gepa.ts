@@ -74,7 +74,7 @@ export class Gepa extends BaseOptimizer {
       optimizer: this.name, runId: this.config.runId,
       targets: source.targets, inputCount: inputs.length, iterations: this.config.iterations,
     });
-    const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, paretoInputs, fileMap(source));
+    const baseline = await this.makeCandidate("baseline", this.fork(), source, paretoInputs, fileMap(source));
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
@@ -133,15 +133,13 @@ export class Gepa extends BaseOptimizer {
     if (!outcome.ok) return { iter, decision: "validation-failed", rationale: outcome.rationale, diagnostics: outcome.diagnostics };
     const preview = outcome.preview;
 
-    const childWs = this.fork(parent.ws.dir);
-    this.workspace.applyFiles(childWs, preview.files);
-    const entry = preview.targetSet.entryFile;
-    const childMini = await this.evaluate(childWs, entry, minibatch);
-    const parentMini = await this.evaluate(parent.ws, parent.targetSet.entryFile, minibatch);   // cache hits
+    const childWs = this.fork();
+    const childMini = await this.evaluate(childWs, preview.targetSet, preview.files, minibatch);
+    const parentMini = await this.evaluate(parent.ws, parent.targetSet, parent.files, minibatch);   // cache hits
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
       return { iter, decision: "rejected", rationale: outcome.rationale, objective: childMini.objective(), changes: preview.changes };
     }
-    const full = await this.evaluate(childWs, entry, paretoInputs);
+    const full = await this.evaluate(childWs, preview.targetSet, preview.files, paretoInputs);
     const candidate: Candidate = { iter, ws: childWs, scorecard: full, targetSet: preview.targetSet, files: preview.files };
     return { iter, decision: "accepted", rationale: outcome.rationale, objective: full.objective(), changes: preview.changes, candidate };
   }
@@ -162,12 +160,11 @@ export class Gepa extends BaseOptimizer {
       .slice(0, this.gepaConfig.minibatch);
   }
 
-  /** Apply files into a workspace and grade on `inputs`. */
+  /** Grade a candidate `files` map (the overlay) on `inputs`. */
   private async makeCandidate(
     iter: number | "baseline", ws: Workspace, targetSet: OptimizeTargetSet, inputs: Input[], files: Record<string, string>,
   ): Promise<Candidate> {
-    this.workspace.applyFiles(ws, files);
-    const scorecard = await this.evaluate(ws, targetSet.entryFile, inputs);
+    const scorecard = await this.evaluate(ws, targetSet, files, inputs);
     return { iter, ws, scorecard, targetSet, files };
   }
 }

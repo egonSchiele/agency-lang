@@ -1,6 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import type { AgencyConfig } from "@/config.js";
+
+import { prepareRunDir, type RunWorkdirSpec } from "./runWorkdir.js";
 import {
   prepareInput,
   recordInputPrepareFailure,
@@ -11,7 +14,6 @@ import {
   type PreparedInput,
 } from "./runArtifacts.js";
 import type {
-  EvalRunCompiledAgent,
   Input,
   EvalRunInputResult,
 } from "./runTypes.js";
@@ -27,7 +29,7 @@ import type {
  * to the runner.
  */
 export type EvalInputRunner = (args: {
-  compiled: EvalRunCompiledAgent;
+  compiledEntryPath: string;
   node: string;
   args: Record<string, any>;
   cwd: string;
@@ -60,7 +62,11 @@ export type EvalRecordExtractor = (args: {
 export async function runEvalInput(args: {
   state: EvalRunState;
   input: Input;
-  compiled: EvalRunCompiledAgent;
+  /** The workdir spec for this input: seed dir + agent path within it. */
+  seed: { dir: string; agentRelPath: string };
+  /** Optional candidate-file overlay applied on top of the seed before compile. */
+  overlayFiles?: Record<string, string>;
+  config: AgencyConfig;
   defaultNode: string;
   runner: EvalInputRunner;
   extractor: EvalRecordExtractor;
@@ -75,8 +81,22 @@ export async function runEvalInput(args: {
     return recordInputPrepareFailure(inputId, message);
   }
 
+  let dir: ReturnType<typeof prepareRunDir>;
+  try {
+    const spec: RunWorkdirSpec = {
+      seedDir: args.seed.dir,
+      agentRelPath: args.seed.agentRelPath,
+      overlayFiles: args.overlayFiles,
+    };
+    dir = prepareRunDir(spec, prepared.workdirPath, args.config);
+  } catch (err) {
+    const message = errMessage(err);
+    console.error(`[evalRun] prepareRunDir failed for input ${inputId}: ${message}`);
+    return recordInputRunFailure(prepared, message);
+  }
+
   const runResult = await args.runner({
-    compiled: args.compiled,
+    compiledEntryPath: dir.compiledEntryPath,
     node: args.input.node ?? args.defaultNode,
     args: args.input.args,
     cwd: prepared.workdirPath,

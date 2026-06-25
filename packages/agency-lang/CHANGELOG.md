@@ -12,6 +12,12 @@
 - Default judge now grades against `input.expected` even with no custom grader.
 - `gepa` and `example` optimizers now populate the champion grade breakdown and select the champion by validation, matching `greedy`.
 - Optimizer per-input working dir is seeded from the forked workspace, so agents that reference project files (e.g. `exec` on a repo path) find them instead of running in an empty dir.
+- Unified eval + optimize on a single per-input working directory: each input's workdir is seeded from the agent's project tree, candidate files (from the optimizer) are overlaid, and the entry agent is compiled in place — so module-dir, cwd, and workdir are the same directory for every run.
+
+#### Breaking
+- `agency eval run`: `working_dir`, when set, must now contain the agent file (was: any directory was copied as a separate fixture).
+- The agent is now compiled once per input (was: once up front). Workdirs are now isolated per input.
+- The optimizer no longer copies the project tree per candidate; per-candidate state lives as an overlay file map. `BaseOptimizerDeps.workspaceRoot` was removed and `Workspace` shrank to `{ key }` (cache-partition token only).
 
 ### Agency Agent
 - Can set the LLM provider used by the agency agent.

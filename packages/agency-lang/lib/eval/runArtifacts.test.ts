@@ -66,13 +66,15 @@ Choose a different --run-id or delete the existing directory.`,
     expect(fs.existsSync(path.join(tmpDir, "existing", "config.json"))).toBe(false);
   });
 
-  it("prepares per-input artifact paths and an empty workdir", () => {
+  it("prepares per-input artifact paths but leaves workdir to prepareRunDir", () => {
     const state = initializeState();
 
     const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {} });
 
     expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8"))).toMatchObject({ id: "t1", goal: "goal" });
-    expect(fs.existsSync(prepared.workdirPath)).toBe(true);
+    // prepareInput allocates the path but no longer creates the workdir — that's
+    // prepareRunDir's job (seed + overlay + compile inside the workdir).
+    expect(fs.existsSync(prepared.workdirPath)).toBe(false);
     expect(prepared.statelogPath).toBe(path.join(state.runDir, "inputs", "t1", "statelog.jsonl"));
     expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "inputs", "t1", "eval-record.json"));
   });
@@ -95,30 +97,12 @@ Choose a different --run-id or delete the existing directory.`,
     expect(() => prepareInput(state, { id: "../escape", goal: "goal", args: {} })).toThrow("Invalid id");
   });
 
-  it("copies a fixture working_dir into the input workdir", () => {
-    const state = initializeState();
-    const fixture = path.join(tmpDir, "fixture");
-    fs.mkdirSync(fixture);
-    fs.writeFileSync(path.join(fixture, "input.txt"), "fixture-data");
-
-    const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {}, working_dir: fixture });
-
-    expect(fs.readFileSync(path.join(prepared.workdirPath, "input.txt"), "utf-8")).toBe("fixture-data");
-    expect(fs.readFileSync(path.join(fixture, "input.txt"), "utf-8")).toBe("fixture-data");
-  });
-
-  it("rejects working_dir values that point to files", () => {
-    const state = initializeState();
-    const fixtureFile = path.join(tmpDir, "fixture.txt");
-    fs.writeFileSync(fixtureFile, "fixture-data");
-
-    expect(() => prepareInput(state, {
-      id: "t1",
-      goal: "goal",
-      args: {},
-      working_dir: fixtureFile,
-    })).toThrow("working_dir must be a directory");
-  });
+  // Notes on `working_dir` handling: prepareInput is no longer responsible
+  // for materializing the workdir from a `working_dir` fixture or for
+  // validating that the value points to a directory. Both responsibilities
+  // moved to `evalRunLoadedInputs.resolveInputSeed`/`prepareRunDir`, where
+  // the agent file is in scope (enabling the "working_dir must contain the
+  // agent file" check). See `lib/cli/eval/run.workdir.test.ts`.
 
   it("records prepare failures without touching artifact paths", () => {
     const result = recordInputPrepareFailure("t1", "invalid id");

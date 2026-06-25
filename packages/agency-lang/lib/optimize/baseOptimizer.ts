@@ -23,11 +23,18 @@ export type MutationOutcome =
 
 const MAX_PROPOSE_ATTEMPTS = 3;
 
-/** A function that runs the agent for one input in a workspace and returns its run. */
-export type RunInput = (ws: Workspace, entryFile: string, input: Input, id: string) => Promise<AgentRun>;
+/** A function that runs the agent for one input in a workspace and returns its run.
+ *  Receives the candidate's `source` (`baseDir`/`entryFile` live here) and `files`
+ *  (the candidate's complete file map, used as the workdir overlay). */
+export type RunInput = (
+  ws: Workspace,
+  source: OptimizeTargetSet,
+  files: Record<string, string>,
+  input: Input,
+  id: string,
+) => Promise<AgentRun>;
 
 export type BaseOptimizerDeps = {
-  workspaceRoot?: string;
   agencyRunner?: AgencyRunner;
   cache?: EvalCache;
   /** Override how the agent under test runs (tests inject a fake; default uses the eval-run path). */
@@ -50,11 +57,11 @@ export abstract class BaseOptimizer {
   protected validationInputs: Input[] = [];
 
   constructor(protected readonly config: BaseOptimizerConfig, deps: BaseOptimizerDeps = {}) {
-    this.workspace = new WorkspaceManager(deps.workspaceRoot ?? path.join(config.runsDir, config.runId, "ws"));
+    this.workspace = new WorkspaceManager();
     this.agencyRunner = deps.agencyRunner ?? new AgencyRunner(config.config);
     this.cache = deps.cache ?? new EvalCache();
     this.reporter = deps.reporter ?? createPointwiseReporter(config.verbosity ?? "silent");
-    this.runInput = deps.runInput ?? ((ws, entryFile, input, id) => this.runInputViaEval(ws, entryFile, input, id));
+    this.runInput = deps.runInput ?? ((ws, source, files, input, id) => this.runInputViaEval(ws, source, files, input, id));
     this.discover = deps.discover ?? discoverOptimizeTargets;
   }
 
@@ -136,16 +143,15 @@ export abstract class BaseOptimizer {
     return { ok: false, rationale, diagnostics };
   }
 
-  protected fork(sourceDir: string): Workspace {
-    return this.workspace.fork(sourceDir);
+  protected fork(): Workspace {
+    return this.workspace.fork();
   }
 
-  /** Fork the agent from source, apply a candidate's files, and grade it on the
-   *  given inputs. The canonical fresh-scoring primitive (used for validation). */
+  /** Allocate a fresh cache-partition workspace and grade `files` on `inputs`.
+   *  The canonical fresh-scoring primitive (used for validation). */
   protected async scoreFiles(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
-    const ws = this.fork(source.baseDir);
-    this.workspace.applyFiles(ws, files);
-    return this.evaluate(ws, source.entryFile, inputs);
+    const ws = this.fork();
+    return this.evaluate(ws, source, files, inputs);
   }
 
   /** Choose the writeback champion among candidates: the one with the best
@@ -213,16 +219,28 @@ export abstract class BaseOptimizer {
     return result;
   }
 
-  /** Run the agent once per input (cached by (workspace,input)), grade each, return a Scorecard. */
-  protected async evaluate(ws: Workspace, entryFile: string, inputs: Input[]): Promise<Scorecard> {
+  /** Run the agent once per input (cached by (workspace, input)), grade each, return a Scorecard.
+   *  The candidate's `files` map is the overlay applied inside each per-input workdir. */
+  protected async evaluate(
+    ws: Workspace,
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    inputs: Input[],
+  ): Promise<Scorecard> {
     const perInput = await Promise.all(
-      inputs.map((input, index) => this.gradeInput(ws, entryFile, input, inputId(input, index))),
+      inputs.map((input, index) => this.gradeInput(ws, source, files, input, inputId(input, index))),
     );
     return new Scorecard(perInput);
   }
 
-  private async gradeInput(ws: Workspace, entryFile: string, input: Input, id: string): Promise<InputGrades> {
-    const run = await this.cache.get(ws.key, id, () => this.runInput(ws, entryFile, input, id));
+  private async gradeInput(
+    ws: Workspace,
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    input: Input,
+    id: string,
+  ): Promise<InputGrades> {
+    const run = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
     const gates = this.config.graders.filter((g) => g.mustPass() && g.gradesInput(input));
     const advisory = this.config.graders.filter((g) => !g.mustPass() && g.gradesInput(input));
 
@@ -247,20 +265,22 @@ export abstract class BaseOptimizer {
     };
   }
 
-  /** Default runInput: run the agent for one input via the eval-run subprocess path (named args). */
-  private async runInputViaEval(ws: Workspace, entryFile: string, input: Input, id: string): Promise<AgentRun> {
-    // Now that eval and optimize share the Input type, the input flows straight
-    // through — we pin the id so artifacts land in a predictable directory, and
-    // default working_dir to the forked workspace. The workspace is a full copy
-    // of the source tree, so seeding each per-input workdir from it gives the
-    // agent an isolated copy of the project as its cwd; without this the workdir
-    // is created empty and relative file references (e.g. exec on a repo path)
-    // resolve against nothing. An input that names its own working_dir wins.
-    const spec: Input = { ...input, id, working_dir: input.working_dir ?? ws.dir };
+  /** Default runInput: run the agent for one input via the eval-run subprocess path.
+   *  Passes `seed` (used verbatim — no closure recomputation, no silent divergence
+   *  from `source.baseDir`) and `overlayFiles` (the candidate's complete file map)
+   *  to `evalRunLoadedInputs`. The per-input `working_dir` field is forbidden
+   *  here (the caller-supplied seed would conflict with it). */
+  private async runInputViaEval(
+    ws: Workspace,
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    input: Input,
+    id: string,
+  ): Promise<AgentRun> {
     this.runCounter += 1;
     const result = await evalRunLoadedInputs({
-      agent: path.join(ws.dir, entryFile),
-      inputs: [spec],
+      agent: path.join(source.baseDir, source.entryFile),  // used for label/node parsing only
+      inputs: [{ ...input, id, working_dir: undefined }],  // working_dir conflicts with seed
       inputsSource: "optimize",
       runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
       runId: `run-${this.runCounter}`,
@@ -268,6 +288,8 @@ export abstract class BaseOptimizer {
       continueOnError: true,
       quietCompile: true,
       pipeAgentOutput: false,
+      seed: { dir: source.baseDir, agentRelPath: source.entryFile },
+      overlayFiles: files,
     }, {
       // Grade the node's return value (not its last LLM reply) and skip the
       // evalValue/evalOutput "did you forget to call…" warnings — neither

@@ -49,7 +49,7 @@ export class GreedyReflective extends BaseOptimizer {
       optimizer: this.name, runId: this.config.runId,
       targets: source.targets, inputCount: inputs.length, iterations: this.config.iterations,
     });
-    const baseline = await this.makeCandidate("baseline", this.fork(source.baseDir), source, inputs);
+    const baseline = await this.makeCandidate("baseline", this.fork(), source, inputs, fileMap(source));
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
@@ -107,22 +107,21 @@ export class GreedyReflective extends BaseOptimizer {
       return { iter, decision: "validation-failed", rationale: outcome.rationale, diagnostics: outcome.diagnostics };
     }
     const preview = outcome.preview;
-    const candidate = await this.makeCandidate(iter, this.fork(champion.ws.dir), preview.targetSet, inputs, preview.files);
+    const candidate = await this.makeCandidate(iter, this.fork(), preview.targetSet, inputs, preview.files);
     const decision: Decision = this.beats(candidate, champion) ? "accepted" : "rejected";
     return { iter, decision, rationale: outcome.rationale, objective: candidate.scorecard.objective(), changes: preview.changes, candidate };
   }
 
-  /** Apply the candidate's file set (if any) into its forked workspace and grade it. */
+  /** Grade a candidate `files` map (the overlay) on `inputs`. */
   private async makeCandidate(
     iter: number | "baseline",
     ws: Workspace,
     targetSet: OptimizeTargetSet,
     inputs: Input[],
-    files?: Record<string, string>,
+    files: Record<string, string>,
   ): Promise<Candidate> {
-    if (files) this.workspace.applyFiles(ws, files);
-    const scorecard = await this.evaluate(ws, targetSet.entryFile, inputs);
-    return { iter, ws, scorecard, targetSet, files: files ?? fileMap(targetSet) };
+    const scorecard = await this.evaluate(ws, targetSet, files, inputs);
+    return { iter, ws, scorecard, targetSet, files };
   }
 
   /** Greedy's acceptance policy: pass every gate AND beat the champion's objective. */

@@ -44,7 +44,6 @@ describe("ExampleOptimizer", () => {
 
   function deps(over: Partial<ExampleDeps> = {}): ExampleDeps {
     return {
-      workspaceRoot: path.join(root, "ws"),
       runInput,
       discover: () => fakeSource(),
       propose: async () => ({ rationale: "tighten", operations: [] }),

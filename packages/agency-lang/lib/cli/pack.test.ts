@@ -151,4 +151,23 @@ describe("agency pack", () => {
     expect(fs.existsSync(userJs)).toBe(true);
     expect(fs.readFileSync(userJs, "utf-8")).toBe("// user wrote me");
   }, 60000);
+
+  it("packs a program configured with providerModules", async () => {
+    const src = path.join(workDir, "withprov.agency");
+    fs.writeFileSync(src, 'node main() { print("ok") }\n');
+    const out = path.join(workDir, "withprov.js");
+    await pack({
+      config: { ...loadConfig(), client: { providerModules: ["./llama-setup.mjs"] } },
+      inputFile: src,
+      outputFile: out,
+      target: "node",
+    });
+    expect(fs.existsSync(out)).toBe(true);
+    const text = fs.readFileSync(out, "utf-8");
+    // The baked providerModules path must survive bundling, and the
+    // runtime-computed dynamic import must survive bundling too (esbuild
+    // cannot statically resolve it, so it leaves it as a real import()).
+    expect(text).toContain("./llama-setup.mjs");
+    expect(text).toMatch(/pathToFileURL\s*\(/);
+  }, 60000);
 });

@@ -61,9 +61,15 @@ const llmOptions: VariableType = {
     // Per-call cap on characters of a tool result fed back to the LLM
     // (overrides agency.json `client.maxToolResultChars`). `0` disables.
     { key: "maxToolResultChars", value: optional(number) },
-    // Resilience policy (see lib/runtime/llmRetry.ts). Defaults: retries 2,
-    // timeout 10min, backoff 500ms x2 capped at 10s. `retries: 0` / `timeout: 0`
-    // disable. setLlmOptions sets the same per-branch.
+    // Resilience policy. Defaults: retries 2, timeout 10min, backoff 500ms
+    // x2 capped at 10s. `retries: 0` / `timeout: 0` disable. `setLlmOptions`
+    // sets the same per-branch.
+    //
+    // KEEP IN SYNC with `RetryConfig` in `lib/runtime/llmRetry.ts` — this is
+    // the Agency-AST mirror of that TS type. The TS side (`LlmOpts`,
+    // `LlmDefaults`) already extends `RetryConfig`; this list cannot, because
+    // it lives in the AST type universe rather than TS, so it must be
+    // updated by hand when fields are added.
     { key: "retries", value: optional(number) },
     { key: "timeout", value: optional(number) },
     {

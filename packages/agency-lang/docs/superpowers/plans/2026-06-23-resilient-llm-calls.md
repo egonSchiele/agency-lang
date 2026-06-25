@@ -2,6 +2,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Implementation note (post-merge).** Several steps below add an
+> `llmFailure` variant to the `AbortCause` union and assert on
+> `agencyCause: { kind: "llmFailure" }`. **That variant was dropped during
+> implementation**: the catch ladder re-throws any `AgencyAbort` (the
+> propagate-never-swallow contract), so packaging the exhausted-retry error
+> as an `AgencyAbort(llmFailure)` would have aborted the whole run instead
+> of becoming a handleable `Failure`. The shipped behavior surfaces a plain
+> `Error` carrying the `reason` and `detail` in its message; the
+> function/node catch ladder converts it to a normal `Failure`. The only
+> `AbortCause` variant added by this PR is `callTimeout` (the cause on the
+> per-call `AbortController` while retrying). Treat every `llmFailure`
+> reference below as historical — `lib/runtime/llmRetry.ts` and
+> `lib/runtime/prompt.ts` are the source of truth.
+
 **Goal:** Make `llm()` calls resilient — classify transient provider/transport failures, retry them with exponential backoff, impose an optional per-call timeout, and fire notification hooks — all in the backend so the happy path is unchanged.
 
 **Architecture:** A thin retry loop in `lib/runtime/prompt.ts` wraps `dispatchLLMRequest`. The *policy* (retryable / terminal / abort? how long to back off?) lives in two pure functions in a new `lib/runtime/llmRetry.ts` — `classifyLlmError` and `decideRetry`. Crucially, classification is **provider-neutral**: it reads a `NormalizedLLMError` shape that the registered `LLMClient` produces, so retry policy never imports a provider SDK and keeps working when a user swaps smoltalk for another client. Each attempt is bounded by a call-scoped `AbortController`. Config reuses the existing `LlmDefaults` / `stack.other.llmDefaults` bag. No TS module globals.

@@ -206,8 +206,10 @@ type RetryHooks = {
  * per-call timeout (armCallTimeout). On a classified-transient failure with
  * attempts remaining, fire onLLMRetry and wait a cancellable backoff, then
  * re-issue. A user/abort cause is always re-thrown untouched (never retried);
- * an exhausted provider error surfaces as an `llmFailure`. The policy decision
- * lives in the pure `decideRetry`; this loop is the thin driver.
+ * an exhausted provider error is converted by the catch ladder into a normal
+ * Failure (we throw a plain Error so `try llm(...)` can handle it, rather than
+ * a branded abort that would unwind the whole run). The policy decision lives
+ * in the pure `decideRetry`; this loop is the thin driver.
  */
 async function runWithRetry<T>(
   dispatch: (signal: AbortSignal | undefined) => Promise<T>,
@@ -216,7 +218,13 @@ async function runWithRetry<T>(
   hooks: RetryHooks,
   normalizeError: (err: unknown) => NormalizedLLMError,
 ): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
+  // Bound the loop so a buggy `decideRetry` (e.g. always returning `retry`)
+  // can never spin forever. `policy.retries + 1` is the intended attempt
+  // count (1 initial + N retries); the extra +1 belt-and-suspenders catches
+  // an off-by-one before it becomes an infinite loop.
+  const maxAttempts = policy.retries + 2;
+  let attempt = 0;
+  while (attempt < maxAttempts) {
     const { signal, dispose } = armCallTimeout(parentSignal, policy.timeout);
     try {
       const result = await dispatch(signal);
@@ -226,10 +234,14 @@ async function runWithRetry<T>(
       dispose();
 
       // The user (parent) abort ALWAYS wins a race with our own call timer.
+      // If the parent aborted for any reason OTHER than a callTimeout
+      // (userInterrupt / guardTrip / raceLoser / ...), surface the parent's
+      // cause — not whatever `err` happens to be — so a callTimeout that
+      // raced ahead never masks the real cancel reason.
       if (parentSignal?.aborted) {
         const parentCause = readCause(parentSignal);
         if (parentCause && parentCause.kind !== "callTimeout") {
-          throw err;
+          throw new AgencyCancelledError(undefined, parentCause);
         }
       }
 
@@ -250,9 +262,11 @@ async function runWithRetry<T>(
       if (decision.kind === "surfaceFailure") {
         // Retries exhausted. Surface a plain Error (NOT an AgencyAbort) so the
         // catch ladder converts it to a handleable Failure rather than aborting
-        // the run — this is what `try llm(...)` catches.
+        // the run — this is what `try llm(...)` catches. The +1 in
+        // `attempt + 1` makes "1 attempt" read correctly when retries:0.
+        const attempts = attempt + 1;
         throw new Error(
-          `LLM call failed after ${policy.retries} ${policy.retries === 1 ? "retry" : "retries"} (${decision.reason}): ${decision.detail}`,
+          `LLM call failed after ${attempts} ${attempts === 1 ? "attempt" : "attempts"} (${decision.reason}): ${decision.detail}`,
         );
       }
 
@@ -267,7 +281,12 @@ async function runWithRetry<T>(
       // Esc during the wait throws → aborts the loop with the user cancel.
       await abortableSleep(decision.delayMs, parentSignal);
     }
+    attempt += 1;
   }
+  // Defensive: the loop body always either returns or throws above. Reaching
+  // here means `decideRetry` repeatedly returned `retry` past `maxAttempts`,
+  // which would be a programming error.
+  throw new Error(`runWithRetry exceeded ${maxAttempts} attempts without resolving`);
 }
 
 /**
@@ -564,7 +583,16 @@ export async function runPrompt(args: {
   prompt: string;
   messages: MessageThread;
   responseFormat?: any;
-  clientConfig: Partial<smoltalk.SmolConfig> & { tools?: any[] };
+  /** Provider-shaped config (model/temperature/...). Retry fields may also
+   *  appear here when the Agency-source `llm()` codegen passes through a
+   *  user-written options object verbatim; they are extracted below and
+   *  stripped before the config is forwarded to the LLM client. Direct TS
+   *  callers (e.g. `agency.llm`) should use the dedicated `retryConfig`
+   *  parameter instead. */
+  clientConfig: Partial<smoltalk.SmolConfig> & RetryConfig & { tools?: any[] };
+  /** Per-call resilience policy. Takes precedence over any retry fields
+   *  piggybacked on `clientConfig`. */
+  retryConfig?: RetryConfig;
   maxToolCallRounds?: number;
   removedTools?: string[];
   checkpointInfo?: SourceLocationOpts;
@@ -586,16 +614,6 @@ export async function runPrompt(args: {
   // Push a frame onto the state stack — runPrompt participates like any other function
   const { stateStack, stack } = setupFunction();
   const self = stack.locals;
-
-  // Resolve the resilience policy: per-call options (passed through on
-  // clientConfig by the llm() codegen / agency.llm) → branch defaults
-  // (stack.other.llmDefaults, set by setLlmOptions) → built-in defaults.
-  const perCallRetry = args.clientConfig as RetryConfig;
-  const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
-  const retryPolicy = resolveRetryPolicy(
-    { retries: perCallRetry.retries, timeout: perCallRetry.timeout, backoff: perCallRetry.backoff },
-    branchRetryDefaults,
-  );
 
   // Frame-backed locals (survive checkpoint/restore)
   if (self.__initialized === undefined) {
@@ -643,19 +661,37 @@ export async function runPrompt(args: {
   assertUniqueToolNames(tools);
   let toolFunctions = exposedFunctions;
 
-  // Remove tools key from clientConfig before passing to smoltalk.
-  // Also strip `memory` — it's a runtime-only directive that smoltalk
-  // doesn't understand.
+  // Remove agency-only / runtime-only keys from clientConfig before passing
+  // to smoltalk. `tools` is consumed above. `memory` is a runtime directive
+  // smoltalk doesn't understand. `retries` / `timeout` / `backoff` are the
+  // resilience policy (resolved below); if the codegen forwarded them on
+  // `clientConfig` they'd otherwise hit the LLM client as foreign options.
   const {
     tools: _extractedTools,
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
+    retries: ccRetries,
+    timeout: ccTimeout,
+    backoff: ccBackoff,
     ...restClientConfig
-  } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> & {
-    tools?: any[];
-    memory?: boolean | { model?: string };
-    maxToolResultChars?: number;
-  };
+  } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> &
+    RetryConfig & {
+      tools?: any[];
+      memory?: boolean | { model?: string };
+      maxToolResultChars?: number;
+    };
+
+  // Resolve the resilience policy. Precedence:
+  //   1. `args.retryConfig` (preferred — what `agency.llm` passes directly)
+  //   2. retry fields piggybacked on `args.clientConfig` (the codegen path —
+  //      the Agency `llm()` compiler forwards the user options object
+  //      verbatim as `clientConfig`, which may include retry/timeout/backoff)
+  //   3. branch defaults (`stack.other.llmDefaults`, set by `setLlmOptions`)
+  //   4. built-in defaults
+  const perCallRetry: RetryConfig =
+    args.retryConfig ?? { retries: ccRetries, timeout: ccTimeout, backoff: ccBackoff };
+  const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
+  const retryPolicy = resolveRetryPolicy(perCallRetry, branchRetryDefaults);
 
   // Run-wide LLM defaults set at runtime via `std::llm`
   // (setLlmOptions/setModel) live on the ACTIVE branch stack's

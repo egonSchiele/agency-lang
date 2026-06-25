@@ -1,9 +1,24 @@
 ---
 name: Resilient LLM calls — design
-description: Backend retry + per-call timeout for llm(), a classified llmFailure/callTimeout cause with a shared 6-value reason vocabulary, and notification hooks (onLLMRetry / onLLMTimeout). Spec A of two; Spec B (unhandled-failure propagation) follows.
+description: Backend retry + per-call timeout for llm(), a `callTimeout` abort cause and a shared 6-value retry-reason vocabulary, and notification hooks (onLLMRetry / onLLMTimeout). Spec A of two; Spec B (unhandled-failure propagation) follows.
 ---
 
 # Resilient LLM calls
+
+> **Implementation note (post-merge).** This spec describes a unified
+> `llmFailure` `AbortCause` variant for the residual error after exhausting
+> retries. **That variant was removed during implementation** because the
+> catch ladder re-throws any `AgencyAbort` (the propagate-never-swallow
+> contract from the abort-taxonomy work), so a transient network blip that
+> survived retries would have aborted the whole run instead of becoming a
+> handleable `Failure`. The shipped behavior: after exhaustion the loop
+> throws a **plain `Error`** (whose message embeds the `reason` and
+> `detail`), which the function/node catch ladder converts to a normal
+> `Failure` — exactly as a transient LLM error is today. `callTimeout`
+> remains as an `AbortCause` because it is the cause on the per-call
+> `AbortController` while retrying. Everywhere below that talks about an
+> `llmFailure` abort cause should be read as "a plain `Error` carrying the
+> reason/detail in its message, surfaced as a `Failure`".
 
 ## 1. Problem
 

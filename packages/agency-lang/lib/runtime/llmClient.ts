@@ -60,22 +60,53 @@ export type EmbedConfig = smoltalk.EmbedConfig;
 export type EmbedResult = smoltalk.EmbedResult;
 
 /**
- * Provider-neutral view of an error thrown by an LLMClient. Lets agency's retry
- * classifier decide policy without importing any provider SDK. The client
- * adapter (which knows its provider's error shapes) populates this.
+ * Provider-neutral view of an error thrown by an `LLMClient`. Lets agency's
+ * retry classifier decide policy without importing any provider SDK. The
+ * client adapter (which knows its provider's error shapes) populates this.
+ *
+ * All fields except `message` are optional, so a custom client can supply as
+ * little as it knows. Classification (`lib/runtime/llmRetry.ts`) prefers
+ * `kind` when set, then `status`, then falls back to message-matching on
+ * `message`.
  */
 export type NormalizedLLMError = {
   /** HTTP status, when the error came from an HTTP response. */
   status?: number;
-  /** Server-requested retry delay (ms), parsed from response headers if present. */
+  /** Server-requested retry delay (ms), already parsed (e.g. from
+   *  `retry-after` / `retry-after-ms` headers) by the client. */
   retryAfterMs?: number;
-  /** Terminal-ish provider classifications the client recognizes. Undefined for
-   *  generic / transport errors (agency falls back to status + message). */
-  kind?: "contentPolicy" | "contextWindow" | "structuredOutput" | "requestTimeout";
+  /** Provider classifications the client recognizes. All are provider-neutral;
+   *  a custom client can populate any subset. Retryable: `rateLimit`,
+   *  `overloaded`, `requestTimeout`. Terminal: `contentPolicy`,
+   *  `contextWindow`, `structuredOutput`, `auth`. Undefined for unclassified
+   *  errors — agency falls back to `status`, then `message`. */
+  kind?:
+    | "contentPolicy"
+    | "contextWindow"
+    | "structuredOutput"
+    | "requestTimeout"
+    | "rateLimit"
+    | "overloaded"
+    | "auth";
   /** Human-readable message (always present). */
   message: string;
 };
 
+/**
+ * The pluggable LLM transport. Agency ships `SmoltalkClient` as the default,
+ * but anything implementing this shape can be swapped in via
+ * `ctx.llmClient`. The only smoltalk-specific surface is the message / chunk
+ * shapes (`Message`, `PromptResult`, `StreamChunk`, `EmbedConfig`,
+ * `EmbedResult`) which we re-export from smoltalk for convenience.
+ *
+ * `normalizeError` is optional. When absent, agency's retry layer falls back
+ * to `{ message: String(err) }` — meaning it can only classify errors by
+ * matching keywords in the message (`ECONNRESET`, `terminated`, etc.). A
+ * client that wants status-based or typed classification should implement
+ * `normalizeError` and populate the `NormalizedLLMError` fields it knows
+ * about. No retry semantics are baked in here — the policy lives entirely
+ * in `lib/runtime/llmRetry.ts`.
+ */
 export type LLMClient = {
   text(config: PromptConfig): Promise<Result<PromptResult>>;
   textStream(config: PromptConfig): AsyncGenerator<StreamChunk>;
@@ -87,7 +118,9 @@ export type LLMClient = {
     config?: Partial<EmbedConfig>,
   ): Promise<Result<EmbedResult>>;
   /** Translate an error this client threw into provider-neutral fields for
-   *  agency's retry classifier. Optional — agency falls back to `{ message }`. */
+   *  agency's retry classifier. Optional — agency falls back to `{ message }`
+   *  when omitted, which still works (message-pattern matching) but loses
+   *  status- and `kind`-based classification. */
   normalizeError?(err: unknown): NormalizedLLMError;
 };
 
@@ -123,13 +156,15 @@ export class SmoltalkClient implements LLMClient {
       return { message };
     }
 
+    // smoltalk 0.4.2 already exposes `status`, `retryAfterMs`, and typed
+    // subclasses for the standard provider failures — read them through
+    // rather than re-parsing headers or sniffing status codes ourselves.
     const normalized: NormalizedLLMError = { message: err.message };
     if (err.status !== undefined) {
       normalized.status = err.status;
     }
-    const retryAfterMs = parseRetryAfter(err.headers);
-    if (retryAfterMs !== undefined) {
-      normalized.retryAfterMs = retryAfterMs;
+    if (err.retryAfterMs !== undefined) {
+      normalized.retryAfterMs = err.retryAfterMs;
     }
     if (err instanceof smoltalk.SmolContentPolicyError) {
       normalized.kind = "contentPolicy";
@@ -139,6 +174,12 @@ export class SmoltalkClient implements LLMClient {
       normalized.kind = "structuredOutput";
     } else if (err instanceof smoltalk.SmolTimeoutError) {
       normalized.kind = "requestTimeout";
+    } else if (err instanceof smoltalk.SmolRateLimitError) {
+      normalized.kind = "rateLimit";
+    } else if (err instanceof smoltalk.SmolOverloadedError) {
+      normalized.kind = "overloaded";
+    } else if (err instanceof smoltalk.SmolAuthError) {
+      normalized.kind = "auth";
     }
     return normalized;
   }
@@ -157,21 +198,4 @@ export class SmoltalkClient implements LLMClient {
       openAiApiKey: apiKey,
     } as Omit<SmolConfig, "stream">;
   }
-}
-
-function parseRetryAfter(
-  headers: Record<string, string> | undefined,
-): number | undefined {
-  if (!headers) {
-    return undefined;
-  }
-  const ms = headers["retry-after-ms"];
-  if (ms !== undefined && !Number.isNaN(Number(ms))) {
-    return Number(ms);
-  }
-  const seconds = headers["retry-after"];
-  if (seconds !== undefined && !Number.isNaN(Number(seconds))) {
-    return Number(seconds) * 1000;
-  }
-  return undefined;
 }

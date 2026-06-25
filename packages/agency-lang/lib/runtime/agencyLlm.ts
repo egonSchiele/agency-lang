@@ -38,7 +38,13 @@ import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";
 import { getRuntimeContext } from "./asyncContext.js";
 
-export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = {
+/**
+ * Options for `agency.llm`. Extends `RetryConfig` (single source of truth for
+ * `retries` / `timeout` / `backoff`, shared with `LlmDefaults` and the type-
+ * checker's `llmOptions` shape) so adding a resilience field in one place
+ * doesn't require updating three.
+ */
+export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
   /** Override the model for this call only. Does NOT mutate the
    *  active LLM client config; the override applies to this single
    *  prompt. Subsequent `agency.llm` calls without `opts.model` use
@@ -51,12 +57,6 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = {
   /** Override the thread the prompt + response are appended to.
    *  Default: the active thread on the current `ThreadStore`. */
   thread?: MessageThread;
-  /** Max retry attempts on a transient failure. Default 2; 0 disables. */
-  retries?: number;
-  /** Per-call deadline in ms. Default 600000 (10 min); 0 disables. */
-  timeout?: number;
-  /** Exponential backoff (ms). Defaults: initial 500, factor 2, max 10000. */
-  backoff?: { initial?: number; factor?: number; max?: number };
 };
 
 /** Module-private. Re-exposed only via `agency.llm`.
@@ -76,20 +76,25 @@ export async function llm(prompt: string, opts: LlmOpts = {}): Promise<any> {
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge
   // with smoltalkDefaults pick up the default, but being explicit keeps
   // the contract obvious: omit means "don't touch the model".
-  // Build clientConfig with `model` only when explicitly overridden, plus the
-  // resilience options — runPrompt reads retries/timeout/backoff off clientConfig
-  // (the same path the llm() codegen uses) and resolves the effective policy.
-  const clientConfig: RetryConfig & { model?: string } = {};
+  const clientConfig: { model?: string } = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
-  if (opts.retries !== undefined) clientConfig.retries = opts.retries;
-  if (opts.timeout !== undefined) clientConfig.timeout = opts.timeout;
-  if (opts.backoff !== undefined) clientConfig.backoff = opts.backoff;
+
+  // Resilience options ride a dedicated `retryConfig` parameter (cleanly
+  // separated from provider-shaped `clientConfig`). Pass even when all three
+  // are undefined — `resolveRetryPolicy` uses `firstDefined` and just falls
+  // through to branch defaults / built-ins.
+  const retryConfig: RetryConfig = {
+    retries: opts.retries,
+    timeout: opts.timeout,
+    backoff: opts.backoff,
+  };
 
   return runPrompt({
     prompt,
     messages: thread,
     responseFormat: opts.schema,
     clientConfig,
+    retryConfig,
     checkpointInfo: agencyStore.getStore()?.callsite,
   });
 }

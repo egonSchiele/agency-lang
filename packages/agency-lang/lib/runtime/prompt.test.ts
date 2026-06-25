@@ -257,4 +257,45 @@ describe("runWithRetry", () => {
     expect(order).toEqual(["timeout", "retry"]);
     vi.useRealTimers();
   });
+
+  it("the exhaustion message reads 'attempt(s)', not 'retries' (so retries:0 reads correctly)", async () => {
+    const zeroRetryPolicy = { retries: 0, timeout: 0, backoff: policy.backoff };
+    const dispatch = async () => {
+      throw new SmolError("503", { status: 503 });
+    };
+    await expect(
+      _internal.runWithRetry(dispatch, zeroRetryPolicy, undefined, noHooks, normalize),
+    ).rejects.toThrow(/after 1 attempt/);
+
+    // retries:2 + always-failing → 3 attempts (1 initial + 2 retries).
+    await expect(
+      _internal.runWithRetry(dispatch, policy, undefined, noHooks, normalize),
+    ).rejects.toThrow(/after 3 attempts/);
+  });
+
+  it("parent abort with a non-callTimeout cause wins a race with callTimeout", async () => {
+    // Regression: previously, if AbortSignal.any saw `callTimeout` before the
+    // parent's `userInterrupt`, the loop rethrew the `callTimeout` error and
+    // the real cancel cause was masked. The fix surfaces the parent's cause.
+    const parent = new AbortController();
+    // Pre-abort the parent with a userInterrupt — the dispatch will see a
+    // signal that's already aborted with TWO causes racing (parent +
+    // callTimeout). We want the parent's cause to win.
+    parent.abort(new AgencyCancelledError(undefined, makeAbortCause({ kind: "userInterrupt" })));
+
+    const dispatch = (signal: AbortSignal | undefined) => {
+      // Reject with whatever cause the composed signal carries. With the
+      // parent already aborted, signal.reason may be either cause depending
+      // on AbortSignal.any's ordering — the loop must still propagate the
+      // parent's cause.
+      return new Promise((_resolve, reject) => {
+        if (signal?.aborted) reject(signal.reason);
+        else signal?.addEventListener("abort", () => reject(signal.reason));
+      });
+    };
+
+    await expect(
+      _internal.runWithRetry(dispatch, policy, parent.signal, noHooks, normalize),
+    ).rejects.toSatisfy((e: unknown) => readCause(e)?.kind === "userInterrupt");
+  });
 });

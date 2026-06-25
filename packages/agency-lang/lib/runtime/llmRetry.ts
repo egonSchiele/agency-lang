@@ -44,26 +44,40 @@ export function classifyLlmError(err: unknown, normalized: NormalizedLLMError): 
     return { kind: "abort" };
   }
 
-  // 3. Terminal provider classifications the client recognized.
-  if (
-    normalized.kind === "contentPolicy" ||
-    normalized.kind === "contextWindow" ||
-    normalized.kind === "structuredOutput"
-  ) {
-    return { kind: "terminal", detail: normalized.message };
+  // 3. Typed provider classifications the client recognized — preferred over
+  // status sniffing so a custom client can signal these directly. Order
+  // matters: terminal kinds short-circuit; retryable kinds reuse retryAfterMs
+  // when present (e.g. for rateLimit).
+  if (normalized.kind !== undefined) {
+    switch (normalized.kind) {
+      case "contentPolicy":
+      case "contextWindow":
+      case "structuredOutput":
+      case "auth":
+        return { kind: "terminal", detail: normalized.message };
+      case "requestTimeout":
+        // The provider SDK's own request timeout — the request didn't
+        // complete; treat like a transport drop.
+        return { kind: "retryable", reason: "connectionLost", detail: normalized.message };
+      case "rateLimit":
+        return {
+          kind: "retryable",
+          reason: "rateLimit",
+          detail: normalized.message,
+          ...(normalized.retryAfterMs !== undefined && { retryAfterMs: normalized.retryAfterMs }),
+        };
+      case "overloaded":
+        return { kind: "retryable", reason: "overloaded", detail: normalized.message };
+    }
   }
 
-  // 4. The provider SDK's own request timeout — the request didn't complete; retry.
-  if (normalized.kind === "requestTimeout") {
-    return { kind: "retryable", reason: "connectionLost", detail: normalized.message };
-  }
-
-  // 5. HTTP errors — classify by status.
+  // 4. HTTP errors — classify by status (covers clients that supply `status`
+  // but not `kind`).
   if (normalized.status !== undefined) {
     return classifyByStatus(normalized);
   }
 
-  // 6. No status: a transport drop. Message-match.
+  // 5. No status: a transport drop. Message-match.
   return classifyByMessage(normalized.message);
 }
 

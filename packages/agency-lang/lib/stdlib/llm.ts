@@ -1,4 +1,5 @@
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import type { RetryConfig } from "../runtime/llmRetry.js";
 
 /**
  * Fields that may be set as LLM defaults via `setLlmOptions`. A
@@ -6,19 +7,18 @@ import { getRuntimeContext } from "../runtime/asyncContext.js";
  * the same `stack.other.llmDefaults` bag; `runPrompt` routes
  * model/temperature/reasoningEffort/maxTokens into the smoltalk config
  * and `maxToolResultChars` into the tool-result cap.
+ *
+ * Extends `RetryConfig` (single source for `retries` / `timeout` / `backoff`,
+ * shared with `LlmOpts` and the type-checker's `llmOptions` shape). Per-call
+ * `llm()` options override these; these override the built-in defaults.
  */
-export type LlmDefaults = {
+export type LlmDefaults = RetryConfig & {
   model?: string;
   provider?: string;
   temperature?: number;
   reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
   maxToolResultChars?: number;
-  // Resilience policy (see lib/runtime/llmRetry.ts). Per-call llm() options
-  // override these; these override the built-in defaults.
-  retries?: number;
-  timeout?: number;
-  backoff?: { initial?: number; factor?: number; max?: number };
 };
 
 /**

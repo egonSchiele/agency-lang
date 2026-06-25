@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   initializeEvalRun,
-  prepareEvalTask,
-  recordEvalTaskPrepareFailure,
-  recordEvalTaskRunFailure,
+  prepareInput,
+  recordInputPrepareFailure,
+  recordInputRunFailure,
   shouldExtractStatelog,
   writeEvalRunSummary,
 } from "./runArtifacts.js";
@@ -29,17 +29,17 @@ describe("eval run artifacts", () => {
       runId: "r1",
       runsDir: tmpDir,
       agent: "agent.agency:main",
-      tasksSource: "tasks.json",
-      tasks: [],
+      inputsSource: "tasks.json",
+      inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
     });
 
-    expect(fs.existsSync(path.join(tmpDir, "r1", "tasks"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "r1", "inputs"))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "r1", "config.json"), "utf-8"))).toMatchObject({
       runId: "r1",
       agent: "agent.agency:main",
-      tasksSource: "tasks.json",
+      inputsSource: "tasks.json",
       continueOnError: true,
       startedAt: "2026-06-09T14:30:00.000Z",
     });
@@ -53,8 +53,8 @@ describe("eval run artifacts", () => {
       runId: "existing",
       runsDir: tmpDir,
       agent: "agent.agency:main",
-      tasksSource: "tasks.json",
-      tasks: [],
+      inputsSource: "tasks.json",
+      inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
     })).toThrow(
@@ -62,19 +62,21 @@ describe("eval run artifacts", () => {
 Choose a different --run-id or delete the existing directory.`,
     );
 
-    expect(fs.existsSync(path.join(tmpDir, "existing", "tasks"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "existing", "inputs"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, "existing", "config.json"))).toBe(false);
   });
 
-  it("prepares per-task artifact paths and an empty workdir", () => {
+  it("prepares per-input artifact paths but leaves workdir to prepareRunDir", () => {
     const state = initializeState();
 
-    const prepared = prepareEvalTask(state, { task_id: "t1", goal: "goal", args: {} });
+    const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {} });
 
-    expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "tasks", "t1", "task.json"), "utf-8"))).toMatchObject({ task_id: "t1", goal: "goal" });
-    expect(fs.existsSync(prepared.workdirPath)).toBe(true);
-    expect(prepared.statelogPath).toBe(path.join(state.runDir, "tasks", "t1", "statelog.jsonl"));
-    expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "tasks", "t1", "eval-record.json"));
+    expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8"))).toMatchObject({ id: "t1", goal: "goal" });
+    // prepareInput allocates the path but no longer creates the workdir — that's
+    // prepareRunDir's job (seed + overlay + compile inside the workdir).
+    expect(fs.existsSync(prepared.workdirPath)).toBe(false);
+    expect(prepared.statelogPath).toBe(path.join(state.runDir, "inputs", "t1", "statelog.jsonl"));
+    expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "inputs", "t1", "eval-record.json"));
   });
 
   it("rejects run ids that escape the runs directory", () => {
@@ -82,65 +84,47 @@ Choose a different --run-id or delete the existing directory.`,
       runId: "../escape",
       runsDir: tmpDir,
       agent: "agent.agency:main",
-      tasksSource: "tasks.json",
-      tasks: [],
+      inputsSource: "tasks.json",
+      inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
     })).toThrow("Invalid runId");
   });
 
-  it("rejects task ids that escape the task directory", () => {
+  it("rejects input ids that escape the input directory", () => {
     const state = initializeState();
 
-    expect(() => prepareEvalTask(state, { task_id: "../escape", goal: "goal", args: {} })).toThrow("Invalid task_id");
+    expect(() => prepareInput(state, { id: "../escape", goal: "goal", args: {} })).toThrow("Invalid id");
   });
 
-  it("copies a fixture working_dir into the task workdir", () => {
-    const state = initializeState();
-    const fixture = path.join(tmpDir, "fixture");
-    fs.mkdirSync(fixture);
-    fs.writeFileSync(path.join(fixture, "input.txt"), "fixture-data");
-
-    const prepared = prepareEvalTask(state, { task_id: "t1", goal: "goal", args: {}, working_dir: fixture });
-
-    expect(fs.readFileSync(path.join(prepared.workdirPath, "input.txt"), "utf-8")).toBe("fixture-data");
-    expect(fs.readFileSync(path.join(fixture, "input.txt"), "utf-8")).toBe("fixture-data");
-  });
-
-  it("rejects working_dir values that point to files", () => {
-    const state = initializeState();
-    const fixtureFile = path.join(tmpDir, "fixture.txt");
-    fs.writeFileSync(fixtureFile, "fixture-data");
-
-    expect(() => prepareEvalTask(state, {
-      task_id: "t1",
-      goal: "goal",
-      args: {},
-      working_dir: fixtureFile,
-    })).toThrow("working_dir must be a directory");
-  });
+  // Notes on `working_dir` handling: prepareInput is no longer responsible
+  // for materializing the workdir from a `working_dir` fixture or for
+  // validating that the value points to a directory. Both responsibilities
+  // moved to `evalRunLoadedInputs.resolveInputSeed`/`prepareRunDir`, where
+  // the agent file is in scope (enabling the "working_dir must contain the
+  // agent file" check). See `lib/cli/eval/run.workdir.test.ts`.
 
   it("records prepare failures without touching artifact paths", () => {
-    const result = recordEvalTaskPrepareFailure("t1", "invalid task_id");
+    const result = recordInputPrepareFailure("t1", "invalid id");
 
     expect(result).toEqual({
-      taskId: "t1",
+      inputId: "t1",
       status: "error",
       evalRecordPath: "",
       statelogPath: "",
       workdirPath: "",
-      errorMessage: "invalid task_id",
+      errorMessage: "invalid id",
     });
   });
 
   it("records run failures and writes error.txt + summary", () => {
     const state = initializeState();
-    const prepared = prepareEvalTask(state, { task_id: "t1", goal: "goal", args: {} });
+    const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {} });
 
-    const result = recordEvalTaskRunFailure(prepared, "boom");
+    const result = recordInputRunFailure(prepared, "boom");
     const summary = writeEvalRunSummary(state, [result]);
 
-    expect(fs.readFileSync(path.join(state.runDir, "tasks", "t1", "error.txt"), "utf-8")).toBe("boom");
+    expect(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "error.txt"), "utf-8")).toBe("boom");
     expect(summary.errorCount).toBe(1);
     expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "summary.json"), "utf-8"))).toMatchObject({ errorCount: 1 });
   });
@@ -160,8 +144,8 @@ Choose a different --run-id or delete the existing directory.`,
       runId: "r1",
       runsDir: tmpDir,
       agent: "agent.agency:main",
-      tasksSource: "tasks.json",
-      tasks: [],
+      inputsSource: "tasks.json",
+      inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
     });

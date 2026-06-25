@@ -13,6 +13,9 @@ import { modifiers, RESET, styles } from "@/utils/termcolors.js"
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { isFailure } from "../runtime/result.js";
+import { isAbortError, makeAbortCause } from "../runtime/errors.js";
+import type { AbortCause } from "../runtime/errors.js";
+import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -407,6 +410,58 @@ function installSlashTrigger(
 }
 
 /**
+ * While a turn is in flight, intercept a bare Esc keypress and invoke
+ * `onEscape` (which cancels the current request). Other keys pass through
+ * to readline as usual, so type-ahead still works. Returns a teardown that
+ * restores the original `_ttyWrite`; the caller MUST call it once the turn
+ * settles so idle-prompt Esc behaves normally again. No-op on non-TTY.
+ *
+ * Only a bare Esc fires: readline parses Esc to `key.name === "escape"`,
+ * while arrow keys and other escape sequences parse to their own names
+ * (`up`, `down`, ...), so they don't trip the cancel.
+ */
+function installCancelKey(
+  rl: readline.Interface,
+  useTTY: boolean,
+  onEscape: () => void,
+): () => void {
+  if (!useTTY) return () => { };
+  const rlAny = rl as unknown as {
+    _ttyWrite: (s: unknown, key: { name?: string; sequence?: string }) => void;
+  };
+  const originalTtyWrite = rlAny._ttyWrite;
+  rlAny._ttyWrite = function (
+    this: typeof rlAny,
+    s: unknown,
+    key: { name?: string; sequence?: string },
+  ): void {
+    if (key && key.name === "escape") {
+      onEscape();
+      return;
+    }
+    originalTtyWrite.call(this, s, key);
+  };
+  return (): void => {
+    rlAny._ttyWrite = originalTtyWrite;
+  };
+}
+
+/** Safely fetch the active RuntimeContext, or null when none is bound
+ *  (e.g. tests drive `_runLineRepl` without a runtime). */
+function activeCtxOrNull(): {
+  cancel: (r?: string, cause?: AbortCause) => void;
+  resetCancel: () => void;
+  readonly aborted: boolean;
+} | null {
+  try {
+    const { ctx } = getRuntimeContext();
+    return (ctx as any) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Snapshot of the per-turn stats `_runLineRepl` collects before
  * calling `onSubmit` and after it returns. `printFooter` projects the
  * delta into the footer so the user can see at a glance how many
@@ -427,31 +482,70 @@ type TurnStats = {
   elapsedMs: number;
   inputTokens: number;
   outputTokens: number;
+  // Distinct models that did work during the turn, ordered by spend
+  // descending (most expensive first). Empty when no model is known.
+  models: string[];
 };
 
-/** Read the cumulative input/output token counts from the active
- *  RuntimeContext's GlobalStore. Returns zeros when no context is
- *  active or the token-stats slot is missing (defensive — `_runLineRepl`
- *  always runs inside a context, but tests sometimes don't). */
-function readTokenSnapshot(): { inputTokens: number; outputTokens: number } {
+/** Cumulative per-model token+cost totals, keyed by model name. */
+type ModelTotals = Record<string, { tokens: number; cost: number }>;
+
+type TokenSnapshot = {
+  inputTokens: number;
+  outputTokens: number;
+  models: ModelTotals;
+};
+
+/** Read the cumulative input/output token counts (and per-model
+ *  breakdown) from the active RuntimeContext's GlobalStore. Returns
+ *  zeros when no context is active or the token-stats slot is missing
+ *  (defensive — `_runLineRepl` always runs inside a context, but tests
+ *  sometimes don't). */
+function readTokenSnapshot(): TokenSnapshot {
+  const empty: TokenSnapshot = { inputTokens: 0, outputTokens: 0, models: {} };
   try {
     const { ctx } = getRuntimeContext();
     const stats = ctx?.globals?.getTokenStats?.();
-    if (!stats || typeof stats !== "object") {
-      return { inputTokens: 0, outputTokens: 0 };
+    if (!stats || typeof stats !== "object") return empty;
+    // Per-model breakdown (updateTokenStats). Snapshotted so the footer
+    // can diff before/after and list the models used *this turn*. Shares
+    // the defensive field-narrowing in `normalizeModelUsage`.
+    const models: ModelTotals = {};
+    for (const m of normalizeModelUsage((stats as { models?: unknown }).models)) {
+      models[m.model] = { tokens: m.inputTokens + m.outputTokens, cost: m.cost };
     }
     const usage = (stats as { usage?: Record<string, unknown> }).usage;
     if (!usage || typeof usage !== "object") {
-      return { inputTokens: 0, outputTokens: 0 };
+      return { inputTokens: 0, outputTokens: 0, models };
     }
     return {
       inputTokens: typeof usage.inputTokens === "number" ? usage.inputTokens : 0,
       outputTokens:
         typeof usage.outputTokens === "number" ? usage.outputTokens : 0,
+      models,
     };
   } catch {
-    return { inputTokens: 0, outputTokens: 0 };
+    return empty;
   }
+}
+
+/** Distinct models whose token count grew between two snapshots, ordered
+ *  by cost spent during the turn (descending), name as tiebreak. This is
+ *  what the footer lists after the per-turn token/time stats. */
+function modelsUsedThisTurn(before: TokenSnapshot, after: TokenSnapshot): string[] {
+  const used: { name: string; cost: number }[] = [];
+  for (const [name, a] of Object.entries(after.models)) {
+    const b = before.models[name];
+    const tokenDelta = a.tokens - (b?.tokens ?? 0);
+    const costDelta = a.cost - (b?.cost ?? 0);
+    // A model "did work this turn" if its tokens OR cost grew. With
+    // current providers every call adds tokens, so the cost check is a
+    // belt-and-suspenders guard against a (hypothetical) zero-token but
+    // non-zero-cost call being silently dropped from the footer.
+    if (tokenDelta > 0 || costDelta > 0) used.push({ name, cost: costDelta });
+  }
+  used.sort((x, y) => y.cost - x.cost || (x.name < y.name ? -1 : 1));
+  return used.map((u) => u.name);
 }
 
 /** Format a token count as a short, human-readable string. Below 1000
@@ -473,6 +567,18 @@ function fmtElapsed(ms: number): string {
   return `${mins}m ${secs}s`;
 }
 
+/** Render the per-turn model list for the footer. The list is already
+ *  ordered by spend descending; we show at most `FOOTER_MODEL_CAP` and
+ *  collapse the rest to `+N more` so a turn that touched many models
+ *  can't blow out the single-line footer. (Use `/cost` for the full
+ *  per-model breakdown.) */
+const FOOTER_MODEL_CAP = 3;
+function fmtModels(models: string[]): string {
+  if (models.length <= FOOTER_MODEL_CAP) return models.join(", ");
+  const shown = models.slice(0, FOOTER_MODEL_CAP).join(", ");
+  return `${shown} +${models.length - FOOTER_MODEL_CAP} more`;
+}
+
 async function printFooter(
   status: unknown,
   useTTY: boolean,
@@ -492,13 +598,14 @@ async function printFooter(
     if (typeof v === "string" && v.length > 0) parts.push(v);
   }
   // Prepend the per-turn stats so they read left-to-right: tokens
-  // up, tokens down, then elapsed. `↑` / `↓` are universal arrow
-  // glyphs (no terminal font tantrums). Skipped when `turn` is
-  // omitted (e.g. older callers / tests).
+  // up, tokens down, elapsed, then the model that produced the turn.
+  // `↑` / `↓` are universal arrow glyphs (no terminal font tantrums).
+  // Skipped when `turn` is omitted (e.g. older callers / tests); the
+  // model is appended only when known.
   if (turn) {
-    parts.unshift(
-      `↑${fmtTokens(turn.inputTokens)} ↓${fmtTokens(turn.outputTokens)} ${fmtElapsed(turn.elapsedMs)}`,
-    );
+    let stats = `↑${fmtTokens(turn.inputTokens)} ↓${fmtTokens(turn.outputTokens)} ${fmtElapsed(turn.elapsedMs)}`;
+    if (turn.models.length > 0) stats += ` · ${fmtModels(turn.models)}`;
+    parts.unshift(stats);
   }
   if (parts.length === 0) return;
   const text = parts.join(" · ");
@@ -522,6 +629,13 @@ export async function _runLineRepl(
     history: initialHistory,
     historySize: historyMax,
     removeHistoryDuplicates: true,
+    // A lone Esc is ambiguous (it's also the lead byte of escape sequences
+    // like arrow keys), so readline waits `escapeCodeTimeout` ms before
+    // delivering it as the `escape` key. The 500ms default made Esc-to-
+    // cancel feel laggy (~1s). 50ms keeps cancellation snappy while still
+    // leaving ample time for a real escape sequence's bytes — which arrive
+    // in one burst on a local TTY — to be parsed as a sequence.
+    escapeCodeTimeout: 50,
     // Tab completion fallback for the slash-command palette.
     // Submitting a bare `/` opens the `prompts.autocomplete` picker
     // (see `openSlashPalette`); the completer is the "Tab to fill"
@@ -589,7 +703,6 @@ export async function _runLineRepl(
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal.
   const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
-  const userMessageHistory: string[] = [];
   try {
     while (true) {
       let line: string;
@@ -637,9 +750,6 @@ export async function _runLineRepl(
         trimmed = buffer;
       }
 
-      // History is one-entry-per-line on disk; a multi-line buffer would
-      // reload as several bogus entries, so keep it out of history.
-      if (!line.includes("\n")) userMessageHistory.push(line);
       const banner = line.includes("\n")
         ? ` User: ${line.split("\n")[0]} … (${line.split("\n").length} lines) \n`
         : ` User: ${line} \n`;
@@ -655,22 +765,58 @@ export async function _runLineRepl(
       const tokensBefore = readTokenSnapshot();
       activeStopSpinner = startSpinner(useTTY);
 
+      // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
+      // which aborts the active LLM fetch; an AgencyCancelledError then
+      // propagates out of `onSubmit` and is caught below. Torn down in the
+      // `finally` so idle-prompt Esc is unaffected.
+      const turnCtx = activeCtxOrNull();
+      const teardownCancelKey = installCancelKey(rl, useTTY, () => {
+        // Stop the spinner the instant Esc is pressed so the user gets
+        // immediate feedback, then abort the in-flight request. The
+        // AgencyCancelledError propagates out and the catch below prints
+        // "cancelled".
+        stopActiveSpinner();
+        // Esc is a recoverable interrupt: stop this turn's work and hand
+        // control back, but keep the REPL session alive (vs a terminal
+        // userKill from TS `cancel()`).
+        turnCtx?.cancel(
+          "cancelled by user",
+          makeAbortCause({ kind: "userInterrupt" }),
+        );
+      });
+
       try {
         reply = await callBridgeFn(onSubmit, line);
       } catch (err: any) {
         stopActiveSpinner();
-        const msg = err?.message ?? String(err);
-        process.stdout.write(`Error: ${msg}\n`);
-        // Still print the footer on error so the user sees how long
-        // the failed turn ran and whether tokens flowed. Useful when
-        // the turn died after a partial LLM response.
         const tokensAfter = readTokenSnapshot();
+        if (isAbortError(err)) {
+          // User pressed Esc: the turn was cancelled, not a real failure.
+          // The thread was already repaired in runPrompt; the abort
+          // controller is reset in the `finally` below. Just print a
+          // notice and reprompt.
+          process.stdout.write(`${DIM}cancelled${COLOR_RESET}\n`);
+        } else {
+          const msg = err?.message ?? String(err);
+          process.stdout.write(`Error: ${msg}\n`);
+        }
+        // Still print the footer so the user sees how long the turn ran
+        // and whether tokens flowed (useful on both cancel and error).
         await printFooter(status, useColor, {
           elapsedMs: Date.now() - turnStartMs,
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
           outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
+          models: modelsUsedThisTurn(tokensBefore, tokensAfter),
         });
         continue;
+      } finally {
+        teardownCancelKey();
+        // Reset the abort controller whenever this turn left it aborted —
+        // covers both the cancelled-with-error path above AND the race
+        // where Esc fired but the turn finished before hitting a
+        // cancellation checkpoint. Without this, the next turn's first LLM
+        // call would see an already-aborted signal and fail immediately.
+        if (turnCtx?.aborted) turnCtx.resetCancel();
       }
       stopActiveSpinner();
       if (reply === false) break;
@@ -688,16 +834,26 @@ export async function _runLineRepl(
         elapsedMs: Date.now() - turnStartMs,
         inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
         outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
+        models: modelsUsedThisTurn(tokensBefore, tokensAfter),
       });
     }
   } finally {
     teardownSlashTrigger();
     (globalThis as any)[overrideKey] = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
-    // Persist whatever entries readline accumulated. The `history`
-    // property is undocumented-ish but stable across Node versions
-    // we support and is the only way to read it back.
-    saveHistory(historyFile, userMessageHistory, historyMax);
+    // Persist whatever entries readline accumulated. `rl.history` is
+    // newest-first and already contains the history we loaded at startup
+    // PLUS everything added this session — so saving it preserves prior
+    // sessions instead of overwriting the file with just this run's input.
+    // The `history` property is undocumented-ish but stable across the Node
+    // versions we support, and is the only way to read it back. Drop
+    // multi-line entries (a `/paste` buffer) — the on-disk format is one
+    // entry per line, so a multi-line entry would reload as several bogus
+    // ones.
+    const accumulated = (
+      (rl as unknown as { history?: string[] }).history ?? []
+    ).filter((entry) => !entry.includes("\n"));
+    saveHistory(historyFile, accumulated, historyMax);
     rl.close();
   }
 }
@@ -707,6 +863,16 @@ export async function _runLineRepl(
  *  the question pending forever. */
 function askLine(rl: readline.Interface, prompt: string): Promise<string> {
   return new Promise<string>((resolve, reject) => {
+    // Start from an empty buffer. While a turn was running, a nested
+    // prompt/menu (the policy approval autocomplete) runs its own readline
+    // on the shared stdin, but the outer `rl` stays attached too — so
+    // keystrokes that drove the menu (e.g. arrow keys → history recall)
+    // can leave `rl.line` holding the previous prompt. Clearing it here
+    // guarantees each REPL prompt opens blank. (`rl.question` renders the
+    // current `rl.line`; it does not reset it.)
+    const rlAny = rl as unknown as { line: string; cursor: number };
+    rlAny.line = "";
+    rlAny.cursor = 0;
     const onClose = () => reject(new Error("closed"));
     rl.once("close", onClose);
     rl.question(prompt, (answer) => {
@@ -896,6 +1062,8 @@ export const _internal = {
   pasteJoin,
   classifyPasteKey,
   readMultiline,
+  modelsUsedThisTurn,
+  fmtModels,
 };
 
 export function _clearScreen(): void {

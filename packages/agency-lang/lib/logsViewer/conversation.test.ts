@@ -63,6 +63,26 @@ describe("formatConversation", () => {
     expect(lines).toEqual([`${color.green("[user]")} "first second"`]);
   });
 
+  it("renders a non-content-part array (e.g. a tool result) as JSON", () => {
+    // A tool message's content can be the raw return value — here a
+    // number array. It must not be mistaken for a multimodal
+    // content-parts array (which would extract zero text and render
+    // nothing).
+    const lines = formatConversation([
+      { role: "tool", name: "fibonacciNumbers", content: [0, 1, 1, 2, 3], tool_call_id: "x" },
+    ]);
+    expect(lines).toEqual([
+      `${color.green("[tool: fibonacciNumbers]")} [0,1,1,2,3]`,
+    ]);
+  });
+
+  it("renders an object tool result as JSON", () => {
+    const lines = formatConversation([
+      { role: "tool", name: "t", content: { response: [1, 2] }, tool_call_id: "x" },
+    ]);
+    expect(lines).toEqual([`${color.green("[tool: t]")} {"response":[1,2]}`]);
+  });
+
   it("emits a placeholder row for empty turns", () => {
     const lines = formatConversation([{ role: "assistant", content: null }]);
     expect(lines).toEqual([color.green("[assistant]")]);

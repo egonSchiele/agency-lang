@@ -1,0 +1,21 @@
+def run(b: () -> void) {
+  b()
+}
+
+node main(): number {
+  let total = 0
+  run() as {
+    let a = 1
+    run() as {
+      let b = 10
+      run() as {
+        // writes the outermost block's a (depth 2)
+        a = a + 100
+        // writes the middle block's b (depth 1)
+        b = b + 20
+      }
+      total = a + b
+    }
+  }
+  return total
+}

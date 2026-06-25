@@ -1,0 +1,34 @@
+import { resolveDetected, planModels } from "../../../lib/agents/agency-agent/lib/models.agency"
+
+// Stringify a Result so the JS side can assert both the success and the
+// failure messages. Mirrors the llm-pick-provider test's `describe`.
+def describe(r: Result<string, string>): string {
+  if (isFailure(r)) {
+    return "FAIL:${r.error}"
+  }
+  return r.value
+}
+
+// Env is controlled by the JS harness: ANTHROPIC + OPENAI keys set,
+// GEMINI unset. Each field below exercises one path:
+//   providerOpenai      — recognized provider whose key is set: selected,
+//                         env auto-detection skipped (anthropic ignored).
+//   providerGoogleNoKey — recognized provider with a missing key: fail.
+//   autoDetect          — no provider flag: detection still prefers anthropic.
+//   customNoModel       — custom provider with no model to back it: error.
+//   customWithModel     — custom provider alongside an explicit model: ok.
+//   planOpenai          — forced-provider defaults; slow uses the Responses API.
+//   planAnthropic       — auto-detected defaults; empty fastProvider.
+//   planCustom          — a custom model forced onto a custom provider.
+node main(): any {
+  return {
+    providerOpenai: describe(resolveDetected("", "", "", "openai")),
+    providerGoogleNoKey: describe(resolveDetected("", "", "", "google")),
+    autoDetect: describe(resolveDetected("", "", "", "")),
+    customNoModel: describe(resolveDetected("", "", "", "ollama")),
+    customWithModel: describe(resolveDetected("my-model", "", "", "ollama")),
+    planOpenai: planModels("", "", "", "openai", "openai"),
+    planAnthropic: planModels("", "", "", "", "anthropic"),
+    planCustom: planModels("my-model", "", "", "ollama", "ollama")
+  }
+}

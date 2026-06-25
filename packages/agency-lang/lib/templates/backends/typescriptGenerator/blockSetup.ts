@@ -6,6 +6,7 @@ import { apply } from "typestache";
 export const template = `const __bsetup = setupFunction();
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
+const {{{frameVar}}} = __bstack;
 {{#params}}
 __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 {{/params}}
@@ -27,6 +28,7 @@ __bsetup.stateStack.pop();
 }`;
 
 export type TemplateType = {
+  frameVar: string | boolean | number;
   params: {
     paramNameQuoted: string | boolean | number;
     paramName: string | boolean | number;

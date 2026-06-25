@@ -1,0 +1,60 @@
+/*
+ * Smoke tests for the Agency Agent's subagent wiring.
+ *
+ * These exercise the exact path that broke when `skillsDir` returned
+ * several tools all named `read`: each subagent's exported tool list is
+ * handed to a real `llm(...)` call. The runtime rejects duplicate tool
+ * names before the request is sent, so a regression to colliding names
+ * makes the corresponding `llm()` call fail and the node return "FAIL: …"
+ * instead of "ok".
+ *
+ * On PR CI this runs deterministically under AGENCY_USE_TEST_LLM_PROVIDER
+ * (no API key / network). On the post-merge real-LLM workflow the same
+ * tests run against a real provider — the assertions only depend on the
+ * call succeeding, not on the response content, so both modes pass.
+ */
+import { codeTools } from "../subagents/code.agency"
+import { researchTools } from "../subagents/research.agency"
+import { oracleTools } from "../subagents/oracle.agency"
+import { explorerTools } from "../subagents/explorer.agency"
+
+def pingWith(tools: any[]): string {
+  // Reject any interrupt a tool might raise. Under the deterministic
+  // provider no tools are called, so this never fires. Under a real LLM the
+  // model could decide to invoke a tool in response to the prompt; with no
+  // handler that interrupt would propagate out of the node and the tool's
+  // side effect could run. Rejecting keeps every tool side-effect-free
+  // (the tool returns a failure to the model, which then answers in text)
+  // while letting the llm() call complete. The assertion only cares that
+  // the request — built from this tool list — is accepted by the provider
+  // and the call returns, not what the model does with it.
+  let r: Result = failure("unset")
+  handle {
+    r = try llm(
+      "Reply with the single word: ok. Do not call any tools.",
+      { tools: tools },
+    )
+  } with (data) {
+    return reject()
+  }
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return "ok"
+}
+
+node codeToolsHaveUniqueNames() {
+  return pingWith(codeTools)
+}
+
+node researchToolsHaveUniqueNames() {
+  return pingWith(researchTools)
+}
+
+node oracleToolsHaveUniqueNames() {
+  return pingWith(oracleTools)
+}
+
+node explorerToolsHaveUniqueNames() {
+  return pingWith(explorerTools)
+}

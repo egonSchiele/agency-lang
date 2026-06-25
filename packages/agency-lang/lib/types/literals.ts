@@ -63,6 +63,9 @@ export type VariableNameLiteral = BaseNode & {
   type: "variableName";
   value: string;
   scope?: ScopeType;
+  /** For block/blockArgs scope only: how many block scopes up the lexical
+   *  chain the owning block is. 0 (or absent) = the current/innermost block. */
+  blockDepth?: number;
   async?: boolean;
 };
 

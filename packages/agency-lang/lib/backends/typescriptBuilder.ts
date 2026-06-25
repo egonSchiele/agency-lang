@@ -91,7 +91,9 @@ import {
 import {
   buildValidationDescriptor,
   hasAnyValidateTag,
+  hasAliasValidate,
 } from "./typescriptGenerator/validationDescriptor.js";
+import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep } from "../typeChecker/assignability.js";
 import { isFunctionTyped } from "../typeChecker/utils.js";
 
@@ -223,6 +225,12 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
+  // Handler bodies emit all their statements into a single arrow-function
+  // scope (unlike node/function bodies, where each statement is wrapped in
+  // its own substep block). A fixed `__funcResult` temp name therefore
+  // collides when a handler body has multiple statement-level interrupt
+  // checks. This counter gives each one a unique name.
+  private handlerFuncResultCounter: number = 0;
   private insideGlobalInit: boolean = false;
 
   /*
@@ -308,6 +316,8 @@ export class TypeScriptBuilder {
       processNode: (n) => this.processNode(n),
       buildCallDescriptor: (call) => this.buildCallDescriptor(call),
       buildStateConfig: () => this.buildStateConfig(),
+      resolveBlockFrameVar: (blockDepth: number) =>
+        this.scopes.blockFrameVar(blockDepth),
     });
     this.moduleId = moduleId;
     this.outputFile = outputFile;
@@ -669,12 +679,59 @@ export class TypeScriptBuilder {
       if (!node.exported) return ts.empty();
       return ts.raw(`export const ${node.aliasName} = undefined;`);
     }
-    // Value-parameterized aliases (e.g. `type NumberInRange(low, high) = ...`)
-    // have no single schema — every use-site inlines a fresh substituted
-    // schema. Emit nothing at the declaration site; importers should never
-    // reference the bare name (use-sites are resolved before codegen).
+    // Value-parameterized aliases have no single schema — every use-site
+    // depends on the value args. For a VALIDATED one we emit a descriptor
+    // FACTORY here, in the alias's own module, so the validators it
+    // references stay in scope (exactly like a bare alias's
+    // `__agency_descriptor`). Use sites call `AliasName(args)` (see
+    // validationDescriptor.ts). A NON-validated value-param alias has no
+    // validators to leak, so it keeps emitting nothing and its schema is
+    // inlined at the use site.
     if (node.valueParams && node.valueParams.length > 0) {
-      return ts.empty();
+      const vpAliasesFull = this.scopes.visibleTypeAliasesFull();
+      const vpAliasedWithTags: VariableType = node.tags
+        ? {
+            ...node.aliasedType,
+            tags: [...(node.aliasedType.tags ?? []), ...node.tags],
+          }
+        : node.aliasedType;
+      if (!hasAnyValidateTag(vpAliasedWithTags, vpAliasesFull)) {
+        return ts.empty();
+      }
+      // Build the descriptor from the UNRESOLVED body. Unlike the bare-alias
+      // path we must NOT `resolveTypeDeep` here: the body legitimately
+      // contains this alias's own value-param identifiers (and, for a
+      // forwarding alias, a reference to another value-param alias). Deep
+      // resolution eagerly substitutes those, which both (a) trips
+      // `applyValueArgs`'s unsubstituted-param guard when a forwarded name
+      // collides with the inner param name, and (b) inlines the inner
+      // alias's validators into THIS factory — re-introducing the
+      // cross-module leak this feature exists to remove. Leaving the body
+      // intact lets `buildValidationDescriptor` emit a nested factory CALL
+      // for any value-param reference (validators resolve in their own
+      // module); the schema strings still substitute identifiers locally.
+      const vpDescriptor = buildValidationDescriptor(
+        vpAliasedWithTags,
+        this.scopes.visibleTypeAliases(),
+        vpAliasesFull,
+      );
+      // Bake value-param DEFAULTS into the factory signature so an omitted
+      // use-site arg (e.g. `Age()!` or bare `Age!`) resolves the same default
+      // the old inline path got via `applyValueArgs` (which fills
+      // `bindings[p.name] = p.default`). Without this, `function Age(low)`
+      // called as `Age()` leaves `low` undefined and
+      // `min.partial({ n: undefined })` silently mis-validates.
+      const vpFnParams: TsParam[] = node.valueParams.map((p) =>
+        p.default !== undefined
+          ? { name: p.name, defaultValue: ts.raw(tagArgToTs(p.default)) }
+          : { name: p.name },
+      );
+      return ts.functionDecl(
+        node.aliasName,
+        vpFnParams,
+        ts.statements([ts.return(vpDescriptor)]),
+        { export: node.exported },
+      );
     }
     const exportPrefix = node.exported ? "export " : "";
     // Thread alias-level @validate / @jsonSchema tags onto the body type so
@@ -839,7 +896,16 @@ export class TypeScriptBuilder {
           }
           return ts.id(literal.value);
         }
-        return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
+        const blockFrameVar =
+          literal.scope === "block" || literal.scope === "blockArgs"
+            ? this.scopes.blockFrameVar(literal.blockDepth ?? 0)
+            : undefined;
+        return ts.scopedVar(
+          literal.value,
+          literal.scope!,
+          this.moduleId,
+          blockFrameVar,
+        );
       }
       case "boolean":
         return ts.bool(literal.value);
@@ -1235,15 +1301,20 @@ export class TypeScriptBuilder {
   private processImportStatement(node: ImportStatement): TsNode {
     const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
-    // Value-only-parameterized aliases (e.g. `type NumberInRange(low, high) = number`)
-    // emit nothing at their declaration site (see processTypeAlias) because
-    // every use-site inlines a fresh schema. Importing such a name from the
-    // compiled target module would fail with "does not provide an export"
-    // and registering it as a tool would reference an undefined local.
+    // Non-validated value-only-parameterized aliases (e.g. `type
+    // OneOf(choices) = string` with only `@jsonSchema`) emit nothing at their
+    // declaration site (see processTypeAlias) because every use-site inlines a
+    // fresh schema. Importing such a name from the compiled target module
+    // would fail with "does not provide an export" and registering it as a
+    // tool would reference an undefined local — so filter them out.
+    //
+    // A VALIDATED value-param alias now compiles to (and exports) a descriptor
+    // factory, so it IS importable; only the non-validated ones are filtered.
     const isInlinedAlias = (name: string): boolean => {
       const entry = aliasesFull[name];
       if (!entry?.valueParams || entry.valueParams.length === 0) return false;
-      return !entry.typeParams || entry.typeParams.length === 0;
+      if (entry.typeParams && entry.typeParams.length > 0) return false;
+      return !hasAliasValidate(entry, aliasesFull);
     };
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
@@ -1282,6 +1353,12 @@ export class TypeScriptBuilder {
           case "namedImport":
             for (const name of nameType.importedNames) {
               if (isInlinedAlias(name)) continue;
+              const vpEntry = aliasesFull[name];
+              // A value-param alias imports as a descriptor factory, not an
+              // AgencyFunction — never register it as an LLM tool.
+              if (vpEntry?.valueParams && vpEntry.valueParams.length > 0) {
+                continue;
+              }
               const localName = nameType.aliases[name] ?? name;
               this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
             }
@@ -1344,6 +1421,7 @@ export class TypeScriptBuilder {
       })),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
+      frameVar: `__bframe_${blockName}`,
       body: bodyStr,
     });
 
@@ -1388,6 +1466,7 @@ export class TypeScriptBuilder {
       })),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
+      frameVar: `__bframe_${blockName}`,
       body: bodyStr,
     });
 
@@ -1984,8 +2063,9 @@ export class TypeScriptBuilder {
       }
 
       // Sync calls: check for interrupt result
-      const tempVar = "__funcResult";
       if (this.insideHandlerBody) {
+        // Unique name per call — handler-body statements share one scope.
+        const tempVar = `__funcResult_${this.handlerFuncResultCounter++}`;
         return ts.statements([
           ts.constDecl(tempVar, callNode),
           ts.if(
@@ -1994,6 +2074,7 @@ export class TypeScriptBuilder {
           ),
         ]);
       }
+      const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       // In node context, wrap with state for the driver.
       // In function context, halt with the interrupt array directly so the
@@ -2147,8 +2228,12 @@ export class TypeScriptBuilder {
   ): TsNode {
     const descriptor = this.buildCallDescriptor(node);
 
+    const calleeBlockFrameVar =
+      node.scope === "block" || node.scope === "blockArgs"
+        ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
+        : undefined;
     const callee = node.scope
-      ? ts.scopedVar(functionName, node.scope, this.moduleId)
+      ? ts.scopedVar(functionName, node.scope, this.moduleId, calleeBlockFrameVar)
       : ts.id(functionName);
 
     const callExpr = ts.call(ts.id("__call"), [callee, descriptor]);
@@ -2318,6 +2403,7 @@ export class TypeScriptBuilder {
       paramNameQuoted: JSON.stringify(paramName),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
+      frameVar: `__bframe_${blockName}`,
       body: bodyStr,
       isNested: isNestedInForkBlock,
     });
@@ -2526,8 +2612,13 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
+          // All aborts — cancellations (Esc / abort) AND guard trips — are a
+          // single AgencyAbort carrying an AbortCause and must propagate
+          // untouched rather than be logged + converted to a Failure here.
+          // One rung replaces the old GuardExceededError + isAbortError
+          // ladder. Mirrors the function catch template.
           ts.if(
-            ts.raw("__error instanceof GuardExceededError"),
+            ts.raw("__error instanceof AgencyAbort"),
             ts.statements([ts.throw("__error")]),
           ),
           // Surface the underlying exception via logger + statelog
@@ -2702,7 +2793,16 @@ export class TypeScriptBuilder {
     // If the type annotation has !, wrap the assigned value in __validateType
     // (or __validateChainRecursive if the type carries @validate tags).
     if (node.validated && node.typeHint) {
-      const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
+      const blockFrameVar =
+        node.scope === "block" || node.scope === "blockArgs"
+          ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
+          : undefined;
+      const varRef = ts.scopedVar(
+        node.variableName,
+        node.scope!,
+        this.moduleId,
+        blockFrameVar,
+      );
       const validateStmt = ts.assign(
         varRef,
         this.validateExpr(node.typeHint, varRef),
@@ -2730,6 +2830,7 @@ export class TypeScriptBuilder {
             variableName,
             ts.raw(val),
             node.accessChain,
+            node.blockDepth ?? 0,
           ),
         );
       const opts = this.checkpointOpts();
@@ -2749,6 +2850,7 @@ export class TypeScriptBuilder {
         node.scope!,
         variableName,
         node.accessChain,
+        node.blockDepth ?? 0,
       );
       const stmts: TsNode[] = [
         this.assigns.scopedAssign(
@@ -2756,6 +2858,7 @@ export class TypeScriptBuilder {
           variableName,
           this.processNode(value),
           node.accessChain,
+          node.blockDepth ?? 0,
         ),
       ];
 
@@ -2772,6 +2875,7 @@ export class TypeScriptBuilder {
               stateStack: ts.id("__forked"),
             }),
             node.accessChain,
+            node.blockDepth ?? 0,
           );
         }
 
@@ -2827,6 +2931,7 @@ export class TypeScriptBuilder {
         variableName,
         this.processNode(value),
         node.accessChain,
+        node.blockDepth ?? 0,
       );
     }
   }
@@ -2995,6 +3100,7 @@ export class TypeScriptBuilder {
           assignTo.variableName,
           ts.methodCall(ts.threads.active(), "cloneMessages"),
           assignTo.accessChain,
+          assignTo.blockDepth ?? 0,
         ),
       );
     }
@@ -3183,6 +3289,7 @@ export class TypeScriptBuilder {
   private buildHandlerArrow(
     handlerName: string,
     handlerScope?: ScopeType,
+    handlerBlockDepth?: number,
   ): TsNode {
     if (this.names.isDirectCallFunction(handlerName)) {
       // Built-in handler (approve/reject/propagate): call with no args
@@ -3204,8 +3311,12 @@ export class TypeScriptBuilder {
       args: ts.arr(args),
     });
     const configObj = this.buildStateConfig();
+    const handlerBlockFrameVar =
+      handlerScope === "block" || handlerScope === "blockArgs"
+        ? this.scopes.blockFrameVar(handlerBlockDepth ?? 0)
+        : undefined;
     const callee = handlerScope
-      ? ts.scopedVar(handlerName, handlerScope, this.moduleId)
+      ? ts.scopedVar(handlerName, handlerScope, this.moduleId, handlerBlockFrameVar)
       : ts.id(handlerName);
     const callArgs: TsNode[] = [callee, descriptor];
     if (configObj) callArgs.push(configObj);
@@ -3243,6 +3354,7 @@ export class TypeScriptBuilder {
       handler = this.buildHandlerArrow(
         node.handler.functionName,
         node.handler.scope,
+        node.handler.blockDepth,
       );
     }
 
@@ -3681,7 +3793,16 @@ export class TypeScriptBuilder {
                   data: ts.obj({}),
                 }),
               ),
-              ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
+              ts.varDecl(
+                "const",
+                "__result",
+                ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
+              ),
+              // Running `main` directly from the CLI: if it returned an
+              // unhandled interrupt, tell the user instead of exiting
+              // silently. Skipped when imported from TS (guard above is
+              // false), where the caller handles interrupts itself.
+              ts.call(ts.id("reportUnhandledInterrupts"), [ts.id("__result")]),
             ]),
             ts.statements([
               ts.consoleError(

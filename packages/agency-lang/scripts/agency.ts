@@ -37,6 +37,7 @@ import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
+import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
 import { interruptsCmd } from "@/cli/interrupts.js";
@@ -243,7 +244,19 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   const logsCmd = program
     .command("logs")
-    .description("Inspect StateLog output");
+    .description("Inspect StateLog output")
+    // `view` is the default: `agency logs <file>` behaves like
+    // `agency logs view <file>`. The argument is optional so bare
+    // `agency logs` (no subcommand, no file) falls through to help.
+    .argument("[file]", "Path to a .statelog.jsonl file, or '-' for stdin")
+    .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
+    .action(async (file: string | undefined, options: { follow?: boolean }) => {
+      if (!file) {
+        logsCmd.help();
+        return;
+      }
+      await logsView(file, { follow: options.follow });
+    });
 
   logsCmd
     .command("view")
@@ -262,16 +275,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("run")
     .description("Run an Agency agent against an eval task suite")
     .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
-    .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
-    .option("--goal <text>", "Run one inline task with this goal")
+    .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+    .option("--goal <text>", "Run one inline input with this goal")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
-    .option("--no-continue-on-error", "Stop after first task failure")
-    .option("-v, --verbose", "Log per-task progress to stderr")
+    .option("--no-continue-on-error", "Stop after first input failure")
+    .option("-v, --verbose", "Log per-input progress to stderr")
     .action(async (opts: {
       agent: string;
-      tasks?: string;
+      inputs?: string;
       goal?: string;
       runId?: string;
       runsDir?: string;
@@ -279,7 +292,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       verbose?: boolean;
     }) => {
       const result = await evalRun({ ...opts, config: getConfig() });
-      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.tasks.length} tasks ok`);
+      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`);
       console.log(path.join(result.runDir, "summary.json"));
       if (result.errorCount > 0 && opts.continueOnError === false) {
         process.exit(2);
@@ -327,8 +340,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
     .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
     .option("--goal <text>", "Goal used to judge responses")
-    .option("--tasks <fileOrDir>", "Eval task suite for run-directory comparison")
-    .option("--samples <n>", "Judge samples per task", parseInt)
+    .option("--inputs <fileOrDir>", "Eval input suite for run-directory comparison")
+    .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
     .option("--position-bias <mode>", "Position bias control: swap or none", "swap")
@@ -339,7 +352,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         inputB: string,
         opts: {
           goal?: string;
-          tasks?: string;
+          inputs?: string;
           out?: string;
           samples?: number;
           confidenceThreshold?: number;
@@ -351,29 +364,43 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  evalCmd
+  // Registered under both `agency eval optimize` and the top-level `agency optimize`.
+  const addOptimizeCommand = (parent: Command): void => {
+    parent
     .command("optimize")
-    .description("Optimize marked Agency declarations against an eval goal or task suite")
+    .description("Optimize marked Agency declarations against an eval goal or input suite")
     .argument("<agent>", "Agency file target: file.agency[:node]")
     .option("--goal <text>", "Goal to optimize for")
-    .option("--tasks <fileOrDir>", "Task suite JSON file or directory")
-    .option("--iterations <n>", "Maximum candidate iterations", parseInt)
+    .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
+    .option("--validation-split <ratio>", "Hold out this fraction of inputs for validation", (v) => parseFloat(v))
+    .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Optimizer runs output directory")
     .option("--no-writeback", "Do not write the champion back to source files")
     .option("--mutator-model <model>", "Model to use for proposing mutations")
-    .option("--samples <n>", "Judge samples per task", parseInt)
+    .option("--optimizer <nameOrPath>", "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)")
+    .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
+    .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
+    .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
     .option("--silent", "Print nothing; artifacts are still written")
     .action(async (agent: string, opts: {
       goal?: string;
-      tasks?: string;
+      inputs?: string;
+      graders?: string;
+      validationInputs?: string;
+      validationSplit?: number;
       iterations?: number;
       runId?: string;
       runsDir?: string;
       writeback: boolean;
       mutatorModel?: string;
+      optimizer?: string;
+      minibatch?: number;
+      seed?: number;
       samples?: number;
       confidenceThreshold?: number;
       marginThreshold?: number;
@@ -385,6 +412,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(path.join(result.runDir, "summary.json"));
       }
     });
+  };
+  addOptimizeCommand(evalCmd);
+  addOptimizeCommand(program);
 
   program
     .command("format")
@@ -729,7 +759,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("debug")
+    .command("debug", { hidden: true })
     .description("Debug an Agency file interactively")
     .argument("<file>", "Agency file to debug")
     .option("--node <name>", "Node to execute")
@@ -841,7 +871,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("review")
+    .command("doctor")
+    .description("Diagnose problems with an Agency file using the agency agent")
+    .argument("<file>", "Path to the .agency file to diagnose")
+    .option("--symptom <text>", "Optional description of the problem you are seeing")
+    .action((file: string, opts: { symptom?: string }) => {
+      const config = getConfig();
+      doctor(config, file, opts);
+    });
+
+  program
+    .command("review", { hidden: true })
     .description("Review an Agency file for type errors and code quality")
     .argument("<file>", "The .agency file to review")
     .action((file: string) => {
@@ -1199,7 +1239,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   const policyCmd = program
-    .command("policy")
+    .command("policy", { hidden: true })
     .description("Policy management tools");
 
   policyCmd
@@ -1214,7 +1254,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("interrupts")
+    .command("interrupts", { hidden: true })
     .description("Print every interrupt site and the handle blocks that could enclose it")
     .argument("<file>", "The .agency file to analyze")
     .action((file: string) => {

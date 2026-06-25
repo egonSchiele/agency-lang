@@ -1,0 +1,29 @@
+import { guard } from "std::thread"
+
+// Outer time budget (20ms) is TIGHTER than the inner (5s). The OUTER's
+// timer fires while the inner block's `sleep` is in flight, so the
+// in-flight sleep is aborted carrying the OUTER's guardTrip cause.
+//
+// FIXED by Increment-2 guardId matching (spec §4.1.1): the inner guard's
+// `try` (_runGuarded with ownedGuardIds = [inner guard id]) does NOT own
+// the OUTER's guardId, so it RE-THROWS the trip past the inner; the OUTER
+// guard's `try` owns it and converts to a timeoutFailure. Result:
+// "outer:timeoutFailure". Previously (Increment 1, before guardId
+// matching) the inner mis-attributed the outer's trip to itself,
+// returning "inner:timeoutFailure:20".
+node main() {
+  const outer = guard(time: 20ms) as {
+    const inner = guard(time: 5s) as {
+      sleep(150ms)
+      return "inner did not trip"
+    }
+    if (isFailure(inner)) {
+      return "inner:${inner.error.type}:${inner.error.maxTime}"
+    }
+    return "no trip"
+  }
+  if (isFailure(outer)) {
+    return "outer:${outer.error.type}"
+  }
+  return outer.value
+}

@@ -87,7 +87,7 @@ export type ColorScheme = {
 /** The names of all built-in color schemes (valid string values for `theme`). */
 export static const colorSchemes: string[] = _builtinThemeNames
 
-export def highlight(
+export safe def highlight(
   code: string,
   language: string = "plaintext",
   mode: HighlightMode = "shell",

@@ -1,0 +1,21 @@
+// The factory model must be immune to a consumer defining its own `min`.
+// NumberInRange's validator chain is built in std::types, so its `min`
+// resolves there; a local `min` here cannot hijack validation.
+import { NumberInRange } from "std::types"
+
+// A local `min` that ALWAYS passes. If validation bound to THIS, an
+// out-of-range value would wrongly pass.
+def min(n: number, value: number): Result {
+  return success(value)
+}
+
+node main() {
+  const tooLow: NumberInRange(5, 10)! = 1   // 1 < 5 -> must FAIL
+  const ok: NumberInRange(5, 10)! = 7       // in range -> must PASS
+  const localMin = min(99, 0)               // user's own min still callable
+  return {
+    tooLow: isSuccess(tooLow),
+    ok: isSuccess(ok),
+    localMin: isSuccess(localMin)
+  }
+}

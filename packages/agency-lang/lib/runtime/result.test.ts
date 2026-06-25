@@ -1,5 +1,171 @@
 import { describe, it, expect } from "vitest";
-import { success, failure, isSuccess, isFailure, __pipeBind } from "./result.js";
+import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall } from "./result.js";
+import {
+  AgencyAbort,
+  AgencyCancelledError,
+  makeAbortCause,
+  type AbortCause,
+} from "./errors.js";
+
+describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
+  it("converts a guardTrip-cause-carrying abort to a timeoutFailure (NOT a throw)", async () => {
+    // This is the exact shape an aborted in-flight `sleep` rejects with
+    // when a time guard trips. It MUST convert to a Failure here — even
+    // though it is also an abort error — because the guardTrip check runs
+    // BEFORE the blanket `isAbortError -> throw`.
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 20,
+      spent: 21,
+      guardId: "g1",
+    });
+    // The boundary OWNS guard g1, so it converts its own trip.
+    const result = await __tryCall(
+      () => {
+        throw new AgencyCancelledError("sleep cancelled", cause);
+      },
+      { ownedGuardIds: ["g1"] },
+    );
+    expect(isFailure(result)).toBe(true);
+    expect((result as { error: { type: string; maxTime: number } }).error).toMatchObject({
+      type: "timeoutFailure",
+      maxTime: 20,
+    });
+  });
+
+  it("converts a cost guardTrip cause to a guardFailure", async () => {
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "cost",
+      limit: 2,
+      spent: 3,
+      guardId: "g2",
+    });
+    const result = await __tryCall(
+      () => {
+        throw new AgencyCancelledError("cancelled", cause);
+      },
+      { ownedGuardIds: ["g2"] },
+    );
+    expect((result as { error: { type: string; maxCost: number } }).error).toMatchObject({
+      type: "guardFailure",
+      maxCost: 2,
+    });
+  });
+
+  it("marks the cause `delivered` so the runner path won't re-deliver the same trip", async () => {
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 20,
+      spent: 21,
+      guardId: "g1",
+    });
+    await __tryCall(
+      () => {
+        throw new AgencyCancelledError("sleep cancelled", cause);
+      },
+      { ownedGuardIds: ["g1"] },
+    );
+    expect((cause as { delivered?: boolean }).delivered).toBe(true);
+  });
+
+  it("still RE-THROWS a non-guard abort (userInterrupt) — cancellation must propagate", async () => {
+    const cause = makeAbortCause({ kind: "userInterrupt" });
+    await expect(
+      __tryCall(() => {
+        throw new AgencyCancelledError("cancelled by user", cause);
+      }),
+    ).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+
+  it("still re-throws a bare abort with no cause", async () => {
+    await expect(
+      __tryCall(() => {
+        throw new AgencyCancelledError("cancelled");
+      }),
+    ).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+});
+
+describe("__tryCall — propagate-never-swallow lock-in (C2: ownedGuardIds)", () => {
+  // CLAUDE.md safety invariant: an AgencyAbort must propagate untouched, never
+  // be silently converted to a Failure — EXCEPT a guardTrip that THIS boundary
+  // owns. With no ownedGuardIds (a plain `try`, or a boundary that owns a
+  // DIFFERENT guard), EVERY abort — including a guardTrip — re-throws. This is
+  // the smallest fully-deterministic test that catches a regression where the
+  // single rung is inverted, removed, or moved below the conversion path.
+  const reThrows = async (cause: AbortCause) => {
+    await expect(
+      __tryCall(() => {
+        throw new AgencyAbort("abort", cause);
+      }),
+    ).rejects.toBeInstanceOf(AgencyAbort);
+  };
+
+  it("re-throws a userInterrupt abort", () =>
+    reThrows(makeAbortCause({ kind: "userInterrupt" })));
+  it("re-throws a userKill abort", () =>
+    reThrows(makeAbortCause({ kind: "userKill" })));
+  it("re-throws a raceLoser abort", () =>
+    reThrows(makeAbortCause({ kind: "raceLoser" })));
+  it("re-throws a cleanup abort", () =>
+    reThrows(makeAbortCause({ kind: "cleanup" })));
+
+  it("re-throws a guardTrip when no ownedGuardIds (a plain try must not swallow it)", () =>
+    reThrows(
+      makeAbortCause({
+        kind: "guardTrip",
+        dimension: "time",
+        limit: 20,
+        spent: 21,
+        guardId: "g1",
+      }),
+    ));
+
+  it("negative control: a non-AgencyAbort Error converts to a Failure", async () => {
+    const result = await __tryCall(() => {
+      throw new Error("plain boom");
+    });
+    expect(isFailure(result)).toBe(true);
+  });
+});
+
+describe("__tryCall — ownedGuardIds routing (C2)", () => {
+  const guardTrip = (guardId: string) =>
+    makeAbortCause({ kind: "guardTrip", dimension: "time", limit: 20, spent: 21, guardId });
+
+  it("converts a trip it OWNS (guardId in ownedGuardIds)", async () => {
+    const result = await __tryCall(
+      () => {
+        throw new AgencyAbort("trip", guardTrip("g1"));
+      },
+      { ownedGuardIds: ["g1"] },
+    );
+    expect(isFailure(result)).toBe(true);
+    expect((result as { error: { type: string } }).error.type).toBe("timeoutFailure");
+  });
+
+  it("re-throws an OUTER guard's trip (guardId not owned by this inner boundary)", async () => {
+    await expect(
+      __tryCall(
+        () => {
+          throw new AgencyAbort("trip", guardTrip("gOUTER"));
+        },
+        { ownedGuardIds: ["gINNER"] },
+      ),
+    ).rejects.toBeInstanceOf(AgencyAbort);
+  });
+
+  it("re-throws when ownedGuardIds is absent (plain try inside a guarded block)", async () => {
+    await expect(
+      __tryCall(() => {
+        throw new AgencyAbort("trip", guardTrip("g1"));
+      }),
+    ).rejects.toBeInstanceOf(AgencyAbort);
+  });
+});
 
 describe("success", () => {
   it("creates a success result", () => {

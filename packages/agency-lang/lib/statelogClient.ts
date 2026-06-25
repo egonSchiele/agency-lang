@@ -650,7 +650,7 @@ export class StatelogClient {
     });
   }
 
-  async evalInputRecorded({
+  async evalValueRecorded({
     value,
     threadId,
   }: {
@@ -658,7 +658,7 @@ export class StatelogClient {
     threadId: string | null;
   }): Promise<void> {
     await this.post({
-      type: "evalInputRecorded",
+      type: "evalValueRecorded",
       value,
       threadId: threadId ?? null,
     });
@@ -886,11 +886,16 @@ export class StatelogClient {
     branchIndex,
     outcome,
     timeTaken,
+    value,
   }: {
     forkId: string;
     branchIndex: number;
     outcome: "success" | "failure" | "interrupted" | "aborted";
     timeTaken: number;
+    /** The branch's return value, present only on a `success` outcome.
+     *  The caller serializes it defensively (see Runner's fork hooks) so
+     *  a large or non-JSON value can't bloat or break the telemetry post. */
+    value?: unknown;
   }): Promise<void> {
     await this.post({
       type: "forkBranchEnd",
@@ -898,6 +903,7 @@ export class StatelogClient {
       branchIndex,
       outcome,
       timeTaken,
+      value,
     });
   }
 
@@ -999,12 +1005,19 @@ export class StatelogClient {
     functionName,
     retryable,
     sourceLocation,
+    tools,
   }: {
     errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded";
     message: string;
     functionName?: string;
     retryable?: boolean;
     sourceLocation?: { moduleId: string; line?: number };
+    /** Tool definitions advertised on the failed request, if any. Lets an
+     *  `llmError` carry the request's tool list — otherwise lost, because
+     *  the `promptCompletion` event (which logs `tools`) only fires on
+     *  success. `toolsOf()` reads this the same way it reads
+     *  `promptCompletion.data.tools`. */
+    tools?: unknown[];
   }): Promise<void> {
     await this.post({
       type: "error",
@@ -1013,6 +1026,7 @@ export class StatelogClient {
       functionName,
       retryable,
       sourceLocation,
+      tools,
     });
   }
 

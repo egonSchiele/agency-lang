@@ -1,4 +1,4 @@
-import { typecheck } from "std::agency"
+import { typecheck, parseAST } from "std::agency"
 import { handoff } from "std::agent"
 /*
  * Code subagent — handles anything that touches code or the file
@@ -8,16 +8,17 @@ import { handoff } from "std::agent"
  * `agent.agency`. The router injects the `handoff` tool itself, so
  * we do NOT add it here. The Workspace state lives here (not in
  * `shared.agency`) because only the code subagent uses file-system
- * tools. `setCwd` re-anchors the bundle so a directory change in one
- * turn persists to the next.
+ * tools. Relative paths resolve against the agent working directory
+ * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
+ * cwd at startup.
  */
 import { todoWrite, todoList } from "std::agent"
 import { filter } from "std::array"
-import { Workspace, openDir } from "std::fs"
+import { edit } from "std::fs"
+import { exec, ls, glob, grep, bash } from "std::shell"
+import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
-import { highlight } from "std::syntax"
-import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
@@ -25,14 +26,10 @@ import { oracleAgent } from "./oracle.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
 
-// File-system tools handed to the LLM as a single bundle anchored to
-// one directory. `openDir(dir)` returns a Workspace whose `read` /
-// `write` / `edit` / `ls` / `glob` / `grep` / `bash` all resolve
-// their `filename` (or `pattern`) argument against `dir` and its
-// subtree. `setCwd` rebuilds the bundle to re-anchor. Module-level
-// `let` so the rebuilt bundle is visible to the next turn (Agency
-// stores module-level lets in the GlobalStore).
-static const workspace: Workspace = openDir(cwd())
+// The file-system tools (`read` / `write` / `edit` / `ls` / `glob` /
+// `grep` / `bash`) resolve relative paths against the agent working
+// directory, which `agent.agency` pins to the user's cwd at startup and
+// the LLM can change via `setAgentCwd`. No per-tool anchoring needed.
 
 // Bundled Superpowers skills (brainstorming, writing-plans,
 // executing-plans, TDD, systematic debugging, verification-before-
@@ -47,21 +44,22 @@ static const docSkill = skillsDir("../docs/guide", "flat") with approve
 static const cliSkill = skillsDir("../docs/cli", "flat") with approve
 static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
 
-export def setCwd(dir: string): string {
+export def agencyCli(args: string[]): any {
   """
-  Use this when the user tells you to change your current working
-  directory. After you call this, every file-system tool (read,
-  write, edit, ls, glob, grep, bash) will resolve filenames against
-  the given directory and its subtree. Pass `"cwd"` to anchor to the
-  user's current working directory.
+  Run the `agency` CLI with the given arguments. Returns an object with
+  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). Use this for
+  agency subcommands such as `parse`, `ast`, and `typecheck` — e.g.
+  agencyCli(["ast", "foo.agency"]) or agencyCli(["typecheck",
+  "foo.agency"]). Arguments are passed directly to the executable (no
+  shell interpretation), so they cannot be chained or redirected. The
+  default agent policies auto-approve the read-only agency subcommands;
+  other subcommands still prompt for approval. Prefer this over `bash`
+  for running agency.
 
-  @param dir - The directory to anchor file operations against
+  @param args - CLI arguments, e.g. ["typecheck", "foo.agency"]. The
+    first element is the subcommand.
   """
-  if (dir == "cwd") {
-    dir = cwd()
-  }
-  //workspace = openDir(dir)
-  return "Working directory set to: ${dir}"
+  return exec("agency", args, useAgentCwd: true)
 }
 
 export static const codeSysPrompt = """
@@ -108,6 +106,24 @@ straight to edits or tool calls unless the user has clearly asked
 for an action ("do X", "fix Y", "build Z"). If they're exploring
 or thinking out loud, think with them before reaching for `write`
 or `edit`.
+
+## Be proactive
+
+Your job is to help the user, not to hand work back to them. If you can
+find something out yourself, do it — don't ask the user to do it for you.
+
+- If the user asks you to look at, debug, or change a file or some code,
+  **read it yourself** with your `read` tool. Never ask the user to paste
+  or "share the contents" of a file you can read.
+- You don't need absolute paths. Your file and shell tools resolve
+  relative paths against the user's working directory automatically, so a
+  bare name like `foo.agency` just works — pass it straight through. Don't
+  ask the user for the full or absolute path.
+- If a relative path doesn't resolve, use `glob` / `ls` to locate the file
+  before giving up. Asking the user where it is is a last resort, not a
+  first move.
+- Only ask the user for something when you genuinely cannot get it with
+  the tools you have. Show initiative.
 
 ## Hard rules
 
@@ -187,9 +203,11 @@ live in `.agency` files you can `read` directly.
 
 ## Workflow
 
-1. Call `setCwd` with the user's project directory first. After
-   that, every file-system tool resolves filenames against that
-   directory and its subtree.
+1. You already start in the user's working directory, so relative
+   paths just work. Only if the user asks you to work in a different
+   directory, call `setAgentCwd` with that directory; every
+   file-system and shell tool then resolves relative paths against it.
+   Use `getAgentCwd` to check the current working directory.
 2. Read `AGENTS.md` and `CLAUDE.md` at the project root if either
    exists and you haven't yet this session. They contain project
    conventions you MUST follow.
@@ -238,14 +256,6 @@ live in `.agency` files you can `read` directly.
    Skip the skill for trivial one-line edits, single-file
    tweaks, or quick questions — the skills are for tasks where
    structure pays for itself.
-10. Whenever you want to show the user a multi-line code snippet,
-   call `print(highlight(code))` instead of including the raw
-   source in your reply. `highlight` returns a terminal-colored
-   string and `print` writes it directly to the user's console, so
-   the snippet appears with proper syntax highlighting. Skip this
-   for inline identifiers or one-token excerpts; use it for any
-   multi-line block. Your reply can then refer to the printed
-   snippet without repeating the source.
 
 ## Output style
 
@@ -292,18 +302,24 @@ they show **relationships** or **flow**. Keep them small; if your
 diagram needs scrolling, prose is probably better.
 """
 
+// The file-system / shell tools are partially applied with
+// `useAgentCwd: true` so that, as agent tools, they resolve relative
+// paths against the agent working directory (pinned to the user's cwd at
+// startup, changeable via setAgentCwd). The base functions default this
+// to false, so non-agent callers are unaffected.
 export static const codeTools: any[] = [
-  setCwd,
-  workspace.read,
-  workspace.write,
-  workspace.edit,
-  workspace.ls,
-  workspace.glob,
-  workspace.grep,
-  workspace.bash,
+  setAgentCwd,
+  getAgentCwd,
+  read.partial(useAgentCwd: true),
+  write.partial(useAgentCwd: true),
+  edit.partial(useAgentCwd: true),
+  ls.partial(useAgentCwd: true),
+  glob.partial(useAgentCwd: true),
+  grep.partial(useAgentCwd: true),
+  bash.partial(useAgentCwd: true),
+  agencyCli,
   typecheck,
-  highlight.partial(language: "ts"),
-  print,
+  parseAST,
   remember,
   recall,
   superpowersSkill,
@@ -337,9 +353,20 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
 
   let hasErrors = false
   let iterations = 0
+  // Declared per-call (was an implicit module global) so a value never
+  // leaks between codeAgent invocations.
+  let reply = ""
+  // Per-call primer so the loop always runs at least once. Do NOT reuse
+  // the module-level `_first` for this: `_first` persists across calls (it
+  // gates the one-time system message on the resumed "code" thread), so
+  // using it as the loop primer meant every call after the first skipped
+  // the tool-enabled llm() entirely — the agent appeared to "lose" its
+  // tools on the second turn.
+  let firstIteration = true
   thread(label: "code", summarize: true, session: "code") {
     setMemoryId("code")
-    while ((hasErrors || _first) && iterations < 5) {
+    while ((hasErrors || firstIteration) && iterations < 5) {
+      firstIteration = false
       iterations += 1
       if (_first) {
         systemMessage(codeSysPrompt)

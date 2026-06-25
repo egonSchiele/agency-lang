@@ -3,7 +3,15 @@ import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
-import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
+import { abortableSleep } from "../stdlib/abortable.js";
+import { decideRetry, resolveRetryPolicy } from "./llmRetry.js";
+import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
+import type { NormalizedLLMError } from "./llmClient.js";
+import {
+  markThreadCancelled,
+  needsThreadRepair,
+} from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
@@ -118,12 +126,231 @@ function capToolResultForLlm(result: any, cap: number): any {
   );
 }
 
+/** Provider APIs (Anthropic, OpenAI) reject an LLM request whose tool list
+ *  contains duplicate names, and tool-call dispatch here matches handlers by
+ *  name — so duplicate names are always a bug. They're easy to introduce
+ *  by accident because `.partial()` / `.describe()` preserve the base
+ *  function's name (e.g. `skillsDir` returns `read.partial(dir)`, so four
+ *  skill tools are all named `read`). Catch it before the request hits the
+ *  wire with a message that names the collision and points at `.rename()`,
+ *  instead of an opaque transport-layer 400 that never reaches the statelog. */
+function assertUniqueToolNames(tools: { name: string }[]): void {
+  const counts: Record<string, number> = {};
+  for (const t of tools) {
+    counts[t.name] = (counts[t.name] || 0) + 1;
+  }
+  const dups = Object.keys(counts).filter((n) => counts[n] > 1);
+  if (dups.length > 0) {
+    const detail = dups.map((n) => `"${n}" (×${counts[n]})`).join(", ");
+    throw new Error(
+      `Duplicate tool name(s) passed to an LLM call: ${detail}. Tool names ` +
+        `must be unique. This usually happens when several tools are derived ` +
+        `from the same function via .partial() or .describe(), which preserve ` +
+        `the base name. Give each derived tool a distinct name with ` +
+        `.rename("...").`,
+    );
+  }
+}
+
+/**
+ * Bound one LLM-call attempt by a per-call deadline. Returns a signal that
+ * aborts (carrying a `callTimeout` cause) after `limitMs`, composed with the
+ * parent (guard / Esc) signal so either source cancels the call. `limitMs <= 0`
+ * means "no deadline" — the parent signal passes through unchanged. Structurally
+ * a `TimeGuard`, scoped to a single call rather than a block.
+ */
+function armCallTimeout(
+  parentSignal: AbortSignal | undefined,
+  limitMs: number,
+): { signal: AbortSignal | undefined; dispose: () => void } {
+  if (limitMs <= 0) {
+    return { signal: parentSignal, dispose: () => {} };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(
+      new AgencyCancelledError(
+        `llm call exceeded ${limitMs}ms`,
+        makeAbortCause({ kind: "callTimeout", limitMs }),
+      ),
+    );
+  }, limitMs);
+
+  let signal: AbortSignal;
+  if (parentSignal) {
+    signal = AbortSignal.any([parentSignal, controller.signal]);
+  } else {
+    signal = controller.signal;
+  }
+
+  return {
+    signal,
+    dispose: () => clearTimeout(timer),
+  };
+}
+
+type RetryHooks = {
+  onRetry: (d: {
+    attempt: number;
+    maxRetries: number;
+    delayMs: number;
+    reason: LLMRetryReason;
+    detail: string;
+  }) => void | Promise<void>;
+  onTimeout: (d: { limitMs: number; attempt: number }) => void | Promise<void>;
+};
+
+/**
+ * Run `dispatch(signal)` under the retry policy. Each attempt is bounded by a
+ * per-call timeout (armCallTimeout). On a classified-transient failure with
+ * attempts remaining, fire onLLMRetry and wait a cancellable backoff, then
+ * re-issue. A user/abort cause is always re-thrown untouched (never retried);
+ * an exhausted provider error is converted by the catch ladder into a normal
+ * Failure (we throw a plain Error so `try llm(...)` can handle it, rather than
+ * a branded abort that would unwind the whole run). The policy decision lives
+ * in the pure `decideRetry`; this loop is the thin driver.
+ */
+async function runWithRetry<T>(
+  dispatch: (signal: AbortSignal | undefined) => Promise<T>,
+  policy: RetryPolicy,
+  parentSignal: AbortSignal | undefined,
+  hooks: RetryHooks,
+  normalizeError: (err: unknown) => NormalizedLLMError,
+): Promise<T> {
+  // Bound the loop so a buggy `decideRetry` (e.g. always returning `retry`)
+  // can never spin forever. `policy.retries + 1` is the intended attempt
+  // count (1 initial + N retries); the extra +1 belt-and-suspenders catches
+  // an off-by-one before it becomes an infinite loop.
+  const maxAttempts = policy.retries + 2;
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    const { signal, dispose } = armCallTimeout(parentSignal, policy.timeout);
+    try {
+      const result = await dispatch(signal);
+      dispose();
+      return result;
+    } catch (err) {
+      dispose();
+
+      // The user (parent) abort ALWAYS wins a race with our own call timer.
+      // If the parent aborted for any reason OTHER than a callTimeout
+      // (userInterrupt / guardTrip / raceLoser / ...), surface the parent's
+      // cause — not whatever `err` happens to be — so a callTimeout that
+      // raced ahead never masks the real cancel reason.
+      if (parentSignal?.aborted) {
+        const parentCause = readCause(parentSignal);
+        if (parentCause && parentCause.kind !== "callTimeout") {
+          throw new AgencyCancelledError(undefined, parentCause);
+        }
+      }
+
+      const cause = readCause(err);
+      if (cause?.kind === "callTimeout") {
+        await hooks.onTimeout({ limitMs: cause.limitMs, attempt });
+      }
+
+      const normalized = normalizeError(err);
+      const decision = decideRetry(err, normalized, attempt, policy);
+
+      if (decision.kind === "propagate" || decision.kind === "terminal") {
+        // propagate: a user/abort cause re-throws untouched (cancel).
+        // terminal: a terminal provider error (e.g. content policy / 4xx) is a
+        // plain Error → the function/node catch ladder converts it to a Failure.
+        throw err;
+      }
+      if (decision.kind === "surfaceFailure") {
+        // Retries exhausted. Surface a plain Error (NOT an AgencyAbort) so the
+        // catch ladder converts it to a handleable Failure rather than aborting
+        // the run — this is what `try llm(...)` catches. The +1 in
+        // `attempt + 1` makes "1 attempt" read correctly when retries:0.
+        const attempts = attempt + 1;
+        throw new Error(
+          `LLM call failed after ${attempts} ${attempts === 1 ? "attempt" : "attempts"} (${decision.reason}): ${decision.detail}`,
+        );
+      }
+
+      // decision.kind === "retry"
+      await hooks.onRetry({
+        attempt: attempt + 1,
+        maxRetries: policy.retries,
+        delayMs: decision.delayMs,
+        reason: decision.reason,
+        detail: decision.detail,
+      });
+      // Esc during the wait throws → aborts the loop with the user cancel.
+      await abortableSleep(decision.delayMs, parentSignal);
+    }
+    attempt += 1;
+  }
+  // Defensive: the loop body always either returns or throws above. Reaching
+  // here means `decideRetry` repeatedly returned `retry` past `maxAttempts`,
+  // which would be a programming error.
+  throw new Error(`runWithRetry exceeded ${maxAttempts} attempts without resolving`);
+}
+
+/**
+ * One LLM dispatch wrapped in the retry loop: builds the provider-neutral
+ * error normalizer (from the active client) and the notification hooks, then
+ * runs `dispatchLLMRequest` under `runWithRetry`. Kept out of `_runPrompt` so
+ * that function stays focused.
+ */
+async function dispatchWithRetry(args: {
+  ctx: RuntimeContext<GraphState>;
+  promptConfig: PromptConfig;
+  prompt: string;
+  stream: boolean;
+  retryPolicy: RetryPolicy;
+  parentSignal: AbortSignal | undefined;
+}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
+  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal } = args;
+
+  const normalizeError = (err: unknown): NormalizedLLMError => {
+    if (ctx.llmClient.normalizeError) {
+      return ctx.llmClient.normalizeError(err);
+    }
+    if (err instanceof Error) {
+      return { message: err.message };
+    }
+    return { message: String(err) };
+  };
+
+  const retryHooks = {
+    onRetry: (data: {
+      attempt: number;
+      maxRetries: number;
+      delayMs: number;
+      reason: LLMRetryReason;
+      detail: string;
+    }) => callHook({ ctx, name: "onLLMRetry", data }),
+    onTimeout: (data: { limitMs: number; attempt: number }) =>
+      callHook({ ctx, name: "onLLMTimeout", data }),
+  };
+
+  return runWithRetry(
+    (signal) =>
+      dispatchLLMRequest({
+        ctx,
+        promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
+        prompt,
+        stream,
+      }),
+    retryPolicy,
+    parentSignal,
+    retryHooks,
+    normalizeError,
+  );
+}
+
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
 export const _internal = {
   DEFAULT_TOOL_RESULT_CHARS,
   stringifyToolResult,
   capToolResultForLlm,
+  assertUniqueToolNames,
+  armCallTimeout,
+  runWithRetry,
 };
 
 async function _runPrompt({
@@ -134,6 +361,7 @@ async function _runPrompt({
   responseFormat,
   clientConfig,
   stateStack,
+  retryPolicy,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -145,6 +373,7 @@ async function _runPrompt({
    * fork/race branch. Used for branch-aware cancellation checks and for
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
+  retryPolicy: RetryPolicy;
 }): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
@@ -192,12 +421,57 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  const { completion, toolCalls } = await dispatchLLMRequest({
-    ctx,
-    promptConfig,
-    prompt,
-    stream,
-  });
+  let completion: PromptResult;
+  let toolCalls: ToolCallJSON[];
+  try {
+    ({ completion, toolCalls } = await dispatchWithRetry({
+      ctx,
+      promptConfig,
+      prompt,
+      stream,
+      retryPolicy,
+      parentSignal: ctx.getAbortSignal(stateStack),
+    }));
+  } catch (err) {
+    // Cancellation normalization. When WE aborted the request (user pressed
+    // Esc → ctx.cancel(), a race loser, a timeout), the provider SDK
+    // surfaces its OWN abort error — e.g. Anthropic throws a plain
+    // `Error("Request was aborted.")` whose name isn't "AbortError", so
+    // `isAbortError` can't recognize it by identity. Our cancellation state
+    // is authoritative: if the call threw while we're cancelled, it's a
+    // cancellation. Normalize to AgencyCancelledError so the rest of the
+    // runtime (function/node catches re-throw it, the REPL prints
+    // "cancelled") handles it as one — and skip the llmError log below,
+    // since a user cancel isn't a request failure worth recording.
+    // Prefer the structured cause when present so the normalized error keeps
+    // its intent (guardTrip / userInterrupt / …); fall back to the
+    // isCancelled heuristic for provider errors that arrive with no cause.
+    // The cause object preserves identity (readCause off the error or the
+    // composed signal returns the SAME branded object the producer set), so
+    // the `delivered` de-dup flag stays shared across the two trip paths.
+    const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
+    if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
+      throw new AgencyCancelledError(undefined, cause);
+    }
+    // The success-path `promptCompletion` event below is the only place the
+    // request payload (messages + tools) is logged, and it never runs when
+    // the dispatch throws — so a provider rejection (e.g. a 400 over the
+    // tool list) otherwise leaves no record of what was sent. Emit an
+    // `llmError` carrying the tool list so the failed request is
+    // diagnosable, then rethrow the ORIGINAL error unchanged. The emit is
+    // best-effort: a statelog failure (e.g. a JSON.stringify error inside
+    // post()) must not mask the real LLM/transport error, so swallow it.
+    try {
+      await ctx.statelogClient.error({
+        errorType: "llmError",
+        message: err instanceof Error ? err.message : String(err),
+        tools,
+      });
+    } catch {
+      // ignore — never let logging shadow the original failure
+    }
+    throw err;
+  }
 
   // Capture endTime AFTER the response has been fully received. The
   // request Promise is created above but only awaited inside the
@@ -235,6 +509,7 @@ async function _runPrompt({
     globals: ctx.globals,
     usage: completion.usage,
     cost: completion.cost,
+    model: modelName,
   });
 
   // Per-branch accumulator: adds to the active stack so std::thread's
@@ -308,7 +583,16 @@ export async function runPrompt(args: {
   prompt: string;
   messages: MessageThread;
   responseFormat?: any;
-  clientConfig: Partial<smoltalk.SmolConfig> & { tools?: any[] };
+  /** Provider-shaped config (model/temperature/...). Retry fields may also
+   *  appear here when the Agency-source `llm()` codegen passes through a
+   *  user-written options object verbatim; they are extracted below and
+   *  stripped before the config is forwarded to the LLM client. Direct TS
+   *  callers (e.g. `agency.llm`) should use the dedicated `retryConfig`
+   *  parameter instead. */
+  clientConfig: Partial<smoltalk.SmolConfig> & RetryConfig & { tools?: any[] };
+  /** Per-call resilience policy. Takes precedence over any retry fields
+   *  piggybacked on `clientConfig`. */
+  retryConfig?: RetryConfig;
   maxToolCallRounds?: number;
   removedTools?: string[];
   checkpointInfo?: SourceLocationOpts;
@@ -371,21 +655,43 @@ export async function runPrompt(args: {
   let tools = exposedFunctions
     .filter((fn) => fn.toolDefinition)
     .map((fn) => fn.toolDefinition!);
+  // Pre-flight: reject duplicate tool names before they reach the provider,
+  // where they surface as an opaque 400 with no request payload in the
+  // statelog. See assertUniqueToolNames.
+  assertUniqueToolNames(tools);
   let toolFunctions = exposedFunctions;
 
-  // Remove tools key from clientConfig before passing to smoltalk.
-  // Also strip `memory` — it's a runtime-only directive that smoltalk
-  // doesn't understand.
+  // Remove agency-only / runtime-only keys from clientConfig before passing
+  // to smoltalk. `tools` is consumed above. `memory` is a runtime directive
+  // smoltalk doesn't understand. `retries` / `timeout` / `backoff` are the
+  // resilience policy (resolved below); if the codegen forwarded them on
+  // `clientConfig` they'd otherwise hit the LLM client as foreign options.
   const {
     tools: _extractedTools,
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
+    retries: ccRetries,
+    timeout: ccTimeout,
+    backoff: ccBackoff,
     ...restClientConfig
-  } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> & {
-    tools?: any[];
-    memory?: boolean | { model?: string };
-    maxToolResultChars?: number;
-  };
+  } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> &
+    RetryConfig & {
+      tools?: any[];
+      memory?: boolean | { model?: string };
+      maxToolResultChars?: number;
+    };
+
+  // Resolve the resilience policy. Precedence:
+  //   1. `args.retryConfig` (preferred — what `agency.llm` passes directly)
+  //   2. retry fields piggybacked on `args.clientConfig` (the codegen path —
+  //      the Agency `llm()` compiler forwards the user options object
+  //      verbatim as `clientConfig`, which may include retry/timeout/backoff)
+  //   3. branch defaults (`stack.other.llmDefaults`, set by `setLlmOptions`)
+  //   4. built-in defaults
+  const perCallRetry: RetryConfig =
+    args.retryConfig ?? { retries: ccRetries, timeout: ccTimeout, backoff: ccBackoff };
+  const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
+  const retryPolicy = resolveRetryPolicy(perCallRetry, branchRetryDefaults);
 
   // Run-wide LLM defaults set at runtime via `std::llm`
   // (setLlmOptions/setModel) live on the ACTIVE branch stack's
@@ -458,11 +764,14 @@ export async function runPrompt(args: {
     snapshotMessages: () => messages.toJSON().messages,
   });
 
-  // Manage llmCall spans across the prompt round-trip loop. Each
-  // llmCall span covers one `_runPrompt` call PLUS the tool executions
-  // triggered by its returned tool_calls, so toolExecution spans nest
-  // under their parent llmCall — matching the
-  // agentRun > nodeExecution > llmCall > toolExecution hierarchy.
+  // One llmCall span covers the WHOLE `llm()` call — every tool-loop
+  // round plus the tool executions they trigger. So all rounds'
+  // promptCompletion events and all toolExecution spans nest under a
+  // single llmCall span, matching the
+  // agentRun > nodeExecution > llmCall > toolExecution hierarchy and
+  // the "one llmCall span == one llm() call" model the viewer renders.
+  // Opened once below (outside `pr.step` so resume re-opens it on
+  // re-entry) and closed once in `finally`.
   let currentLlmSpanId: string | undefined;
   const closeLlmSpan = () => {
     if (currentLlmSpanId) {
@@ -476,6 +785,11 @@ export async function runPrompt(args: {
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
   let shouldPop = true;
+  // Open the single llmCall span before the round-trip loop. Done here
+  // (not inside the idempotent `initialLlmCall` step) so a resumed run —
+  // which skips completed steps — still re-opens the span that the tool
+  // loop expects to be active.
+  currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
   try {
     // Initial LLM call wrapped in pr.step so it's idempotent on resume
     // (re-entries after a later tool-batch bailout skip this step).
@@ -499,22 +813,18 @@ export async function runPrompt(args: {
         }
       }
       messages.push(smoltalk.userMessage(prompt));
-      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-      let result: RunPromptResult;
-      try {
-        result = await _runPrompt({
-          ctx,
-          messages,
-          tools: tools || [],
-          prompt,
-          responseFormat,
-          clientConfig,
-          stateStack,
-        });
-      } catch (e) {
-        closeLlmSpan();
-        throw e;
-      }
+      // The llmCall span is already open (before the loop). On error,
+      // the outer `finally` closes it.
+      const result = await _runPrompt({
+        ctx,
+        messages,
+        tools: tools || [],
+        prompt,
+        responseFormat,
+        clientConfig,
+        stateStack,
+        retryPolicy,
+      });
       messages = result.messages;
       toolCalls = result.toolCalls;
       if (injectedFactsContent !== null) {
@@ -532,13 +842,6 @@ export async function runPrompt(args: {
       self.messagesJSON = messages.toJSON().messages;
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
-
-    // After resume (initialLlmCall skipped), make sure there's an open
-    // llmCall span if we have pending tool calls — the tool loop expects
-    // one to be open so toolExecution spans nest correctly.
-    if (toolCalls.length > 0 && currentLlmSpanId === undefined) {
-      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-    }
 
     // Inner helper for the per-branch tool invocation. Extracted from
     // the pr.parallel branchFn so that arrow stays within the
@@ -583,7 +886,15 @@ export async function runPrompt(args: {
         // the same outcome via its `state.threads || new ThreadStore()`
         // fallback whenever a function was reached via tool dispatch.
         const parentFrame = agencyStore.getStore();
-        const freshThreads = ThreadStore.withDefaultActive(ctx.statelogClient);
+        // Lazy, NOT `withDefaultActive`: the latter eagerly creates and
+        // logs a default thread on every tool call, so a leaf tool that
+        // never calls llm() (the common case) emits a confusing phantom
+        // `threadCreated thread #0` in the trace. With a bare store the
+        // default thread is created + logged lazily by `getOrCreateActive`
+        // only if the tool body actually issues an llm()/userMessage()
+        // call — at which point the thread is real and worth logging.
+        const freshThreads = new ThreadStore();
+        freshThreads.setStatelogClient(ctx.statelogClient);
         const invokeAsTool = () =>
           handler.invoke({
             type: "named",
@@ -597,6 +908,16 @@ export async function runPrompt(args: {
           )
           : await invokeAsTool();
       } catch (error: unknown) {
+        // A cancellation (user pressed Esc, race-loser, timeout) is not a
+        // tool crash. Let it propagate so the turn unwinds cleanly —
+        // logging it as an error and feeding a bogus failure message back
+        // to the model (as the crash path below does) would both spam
+        // "Tool call X crashed" for every tool on the stack and corrupt
+        // the thread. Mirrors the function/node catch re-throws.
+        if (isAbortError(error)) {
+          stack.deleteBranch(branchKey);
+          throw error;
+        }
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         console.error(
@@ -964,25 +1285,21 @@ export async function runPrompt(args: {
       );
 
       // Next LLM call wrapped in pr.step for resume idempotency. Once
-      // marked done, resume re-entries skip the LLM call.
+      // marked done, resume re-entries skip the LLM call. The llmCall
+      // span stays open across rounds (one span per llm() call), so we
+      // do NOT close/reopen it here — this round's promptCompletion
+      // nests under the same span as the first round's.
       await pr.step(`round.${round}.nextLlmCall`, async () => {
-        closeLlmSpan();
-        currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-        let nextResult: RunPromptResult;
-        try {
-          nextResult = await _runPrompt({
-            ctx,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-          });
-        } catch (e) {
-          closeLlmSpan();
-          throw e;
-        }
+        const nextResult = await _runPrompt({
+          ctx,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+          retryPolicy,
+        });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
         // Increment the round counter only after a successful LLM round,
@@ -997,7 +1314,15 @@ export async function runPrompt(args: {
       shouldPop = false;
       return error.interrupts;
     }
-    if (isAbortError(error)) throw error;
+    if (isAbortError(error)) {
+      // Hard cancel (e.g. user pressed Esc): repair the live thread so the
+      // next turn starts from a clean, role-valid state, then re-throw so
+      // the cancellation still propagates to the caller / REPL. Only a
+      // user-initiated cancel warrants repair — a guard trip or race-loser
+      // abort wants the in-flight turn left intact for its Failure path.
+      if (needsThreadRepair(readCause(error))) markThreadCancelled(messages);
+      throw error;
+    }
     throw error;
   } finally {
     // Close any open llmCall span. This covers normal completion,

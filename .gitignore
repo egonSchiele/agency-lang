@@ -34,5 +34,6 @@ tests/debugger/*.ts
 !**/docs-new/.vitepress
 **/docs-new/.vitepress/dist
 **/docs-new/.vitepress/cache
+**/runs/
 .agency-tmp/
 tests/integration/statelog/.tmp/

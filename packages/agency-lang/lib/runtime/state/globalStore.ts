@@ -46,6 +46,12 @@ export class GlobalStore {
   static withTokenStats(): GlobalStore {
     const gs = new GlobalStore();
     gs.set(GlobalStore.INTERNAL_MODULE, "__tokenStats", {
+      // Per-model usage breakdown, keyed by model name. Accumulated by
+      // updateTokenStats on every LLM call (across all branches, which
+      // pointer-share this object), so subagent spend lands here too.
+      // Read by the REPL footer (distinct models used this turn) and
+      // `/cost` (cumulative per-model breakdown).
+      models: {},
       usage: {
         inputTokens: 0,
         outputTokens: 0,

@@ -1,4 +1,4 @@
-import { mutatePrompt } from "../../lib/agents/mutatePrompt.agency"
+import { mutatePrompt } from "../../lib/agents/optimize/mutatePrompt.agency"
 
 // Scoped-mock routing test. Each queue holds exactly one mock, so this
 // only passes when BOTH llm() calls draw from their own module's queue:

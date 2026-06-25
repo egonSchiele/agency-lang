@@ -1,0 +1,26 @@
+import { guard } from "std::thread"
+
+// Cost analogue of guard-time-nested-outer-tighter. The OUTER cost guard has
+// a tighter budget ($0.000001) than the INNER ($1.0). One LLM call charges
+// SYNTHETIC_COST ($0.000002) against BOTH guards on the stack; only the OUTER
+// exceeds its budget, so the post-call check throws carrying the OUTER's
+// guardId. The INNER guard's `try` does NOT own that id, so it re-throws past
+// the inner; the OUTER guard's `try` owns it and converts to a guardFailure.
+// This is the cost half of the Increment-2 guardId-routing fix (the spec
+// originally only called out the time case).
+node main() {
+  const outer = guard(cost: 0.000001) as {
+    const inner = guard(cost: 1.0) as {
+      const r = llm("ping")
+      return r
+    }
+    if (isFailure(inner)) {
+      return "inner:${inner.error.type}"
+    }
+    return "no inner trip"
+  }
+  if (isFailure(outer)) {
+    return "outer:${outer.error.type}"
+  }
+  return "no outer trip"
+}

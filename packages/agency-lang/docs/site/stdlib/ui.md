@@ -597,7 +597,7 @@ Line-mode arrow-key picker, backed by the `prompts` package. Returns
 ### autocomplete
 
 ```ts
-autocomplete(message: string, items: ChoiceItem[], allowFreeText: boolean, hint: string): Result<string>
+autocomplete(message: string, items: ChoiceItem[], allowFreeText: boolean, hint: string, cancelOnEscape: boolean): Result<string>
 ```
 
 Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
@@ -615,6 +615,10 @@ Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
   @param items - The {key, label} rows
   @param allowFreeText - Allow returning the typed input verbatim when no item matches
   @param hint - Dim hint shown after the message
+  @param cancelOnEscape - When true, pressing Escape raises a cancellation
+    (AgencyCancelledError) that unwinds the current run instead of
+    returning `failure("cancelled")`. Use for prompts where Escape should
+    abort the whole request rather than be re-asked.
 
 **Parameters:**
 
@@ -624,6 +628,7 @@ Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
 | items | `ChoiceItem[]` |  |
 | allowFreeText | `boolean` | false |
 | hint | `string` | "" |
+| cancelOnEscape | `boolean` | false |
 
 **Returns:** `Result<string>`
 
@@ -667,7 +672,7 @@ Line-mode free-form text prompt, backed by `prompts.text`. Returns
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1068))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1073))
 
 ### confirm
 
@@ -693,12 +698,12 @@ Line-mode yes/no toggle, backed by `prompts.toggle`. Returns
 
 **Returns:** `Result<boolean>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1099))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1104))
 
 ### chooseOption
 
 ```ts
-chooseOption(title: string, body: string, items: ChoiceItem[], allowFreeText: boolean): string
+chooseOption(title: string, body: string, items: ChoiceItem[], allowFreeText: boolean, allowCancel: boolean): string
 ```
 
 Show a modal choice prompt over the active repl() and block until
@@ -725,6 +730,10 @@ Show a modal choice prompt over the active repl() and block until
   @param body - Multi-line context shown above the choices (or "")
   @param items - The set of {key, label} choices to pick from
   @param allowFreeText - Accept free-form text in addition to item keys
+  @param allowCancel - When true, Escape cancels the whole request
+    (raises a cancellation that unwinds the run) instead of re-prompting,
+    and the menu shows an "Esc to cancel" hint. Default false preserves
+    the "must answer" contract for callers where skipping isn't safe.
 
 **Parameters:**
 
@@ -734,10 +743,11 @@ Show a modal choice prompt over the active repl() and block until
 | body | `string` |  |
 | items | `ChoiceItem[]` |  |
 | allowFreeText | `boolean` | false |
+| allowCancel | `boolean` | false |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1140))
 
 ### repl
 
@@ -779,4 +789,4 @@ Drop-in REPL widget for interactive CLI agents. Bundles a
 | paletteCommands | `any` | null |
 | tickMs | `number` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1890))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui.agency#L1909))

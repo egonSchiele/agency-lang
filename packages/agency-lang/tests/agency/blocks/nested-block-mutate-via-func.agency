@@ -1,0 +1,21 @@
+def run(b: () -> void) {
+  b()
+}
+
+def addItem(arr: number[]) {
+  arr.push(99)
+}
+
+node main(): number {
+  let count = 0
+  run() as {
+    let data = [1, 2]
+    run() as {
+      // pass the OUTER block's `data` into a mutating function from a
+      // nested block; the mutation must be visible to the outer block
+      addItem(data)
+    }
+    count = data.length
+  }
+  return count
+}

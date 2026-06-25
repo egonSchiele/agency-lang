@@ -11,11 +11,12 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
-  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
+  runExportedFunction as _runExportedFunction,
   RestoreSignal,
-  GuardExceededError,
+  AgencyAbort,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -74,6 +75,11 @@ function propagate() { return { type: "propagate" as const }; }
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
+
+// Invoke an exported function in a node-grade execution frame. Used by
+// `agency serve` to call a function from an HTTP/MCP request — outside any
+// Agency execution frame, which generated function bodies otherwise require.
+export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level
@@ -235,7 +241,7 @@ await callHook({
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof GuardExceededError) {
+    if (__error instanceof AgencyAbort) {
       throw __error
     }
     {
@@ -275,7 +281,8 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       messages: new ThreadStore(),
       data: {}
     };
-    await main(initialState)
+    const __result = await main(initialState);
+    reportUnhandledInterrupts(__result)
   } catch (__error: any) {
     console.error(`\nAgent crashed: ${__error.message}`)
     throw __error

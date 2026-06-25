@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer:timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A guard trip must propagate across a function-call boundary. The outer guard(time: 20ms) wraps a call to inner(), whose sleep(150ms) overruns the budget. The abort unwinds through inner's generated function-body catch (which must re-throw the AgencyAbort, not convert it) and lands at the outer guard's try, which converts it to a timeoutFailure. Exercises the collapsed single instanceof AgencyAbort rung in the function-level catch ladder (B2)."
+    }
+  ]
+}

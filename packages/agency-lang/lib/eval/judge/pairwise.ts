@@ -1,7 +1,7 @@
 import * as fs from "fs";
 
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
-import type { JudgeSample, JudgeWinner, PairwiseJudgeResult, PairwiseVerdict, TaskVerdict } from "./types.js";
+import type { JudgeSample, JudgeWinner, PairwiseJudgeResult, PairwiseVerdict, InputVerdict } from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
 import { z } from "zod";
 
@@ -12,15 +12,15 @@ const PairwiseJudgeResultSchema = z.object({
 });
 
 export type JudgePairArgs = {
-  taskId: string;
+  inputId: string;
   goal: string;
   recordPathA: string;
   recordPathB: string;
   order?: "AB" | "BA";
 };
 
-export async function judgePair(args: JudgePairArgs): Promise<TaskVerdict> {
-  if (!args.taskId) throw new Error("judgePair requires taskId");
+export async function judgePair(args: JudgePairArgs): Promise<InputVerdict> {
+  if (!args.inputId) throw new Error("judgePair requires inputId");
   const order = args.order ?? "AB";
   const recordA = readJson(args.recordPathA);
   const recordB = readJson(args.recordPathB);
@@ -44,11 +44,11 @@ export async function judgePair(args: JudgePairArgs): Promise<TaskVerdict> {
   const winner = mapWinnerToOriginal(judged.winner, order);
 
   return {
-    taskId: args.taskId,
+    inputId: args.inputId,
     goal: args.goal,
     inputs: [
-      taskInputOf(args.recordPathA, respA),
-      taskInputOf(args.recordPathB, respB),
+      verdictSideOf(args.recordPathA, respA),
+      verdictSideOf(args.recordPathB, respB),
     ],
     winner,
     confidence: sample.confidence,
@@ -63,7 +63,7 @@ export async function judgePairwise(
   recordPathA: string,
   recordPathB: string,
 ): Promise<PairwiseVerdict> {
-  const verdict = await judgePair({ taskId: "pairwise", goal, recordPathA, recordPathB });
+  const verdict = await judgePair({ inputId: "pairwise", goal, recordPathA, recordPathB });
 
   return {
     verdictVersion: 1,
@@ -85,7 +85,7 @@ async function runPairwiseJudge(
   responseB: string,
 ): Promise<PairwiseJudgeResult> {
   const result = await runAgencyAgent({
-    agent: "judgePairwise.agency",
+    agent: "eval/judgePairwise.agency",
     node: "judgePairwise",
     args: { goal, responseA, responseB },
     config: {},
@@ -129,7 +129,7 @@ function inputOf(
   };
 }
 
-function pairwiseInputOf(input: TaskVerdict["inputs"][number]): PairwiseVerdict["inputs"][number] {
+function pairwiseInputOf(input: InputVerdict["inputs"][number]): PairwiseVerdict["inputs"][number] {
   return {
     path: input.path ?? "",
     response: input.response ?? null,
@@ -137,10 +137,10 @@ function pairwiseInputOf(input: TaskVerdict["inputs"][number]): PairwiseVerdict[
   };
 }
 
-function taskInputOf(
+function verdictSideOf(
   filePath: string,
   response: { text: string; missing: boolean; truncated?: true },
-): TaskVerdict["inputs"][number] {
+): InputVerdict["inputs"][number] {
   return {
     ...inputOf(filePath, response),
     status: "ok",

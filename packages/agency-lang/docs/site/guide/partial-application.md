@@ -110,6 +110,32 @@ Use `.describe()` to override the tool description that the LLM sees:
 const add5 = add.partial(a: 5).describe("Adds 5 to any number")
 ```
 
+## Renaming tools with `.rename()`
+
+`.partial()` and `.describe()` keep the original function's **name**. That
+matters when you pass several derived copies of one function to the same
+`llm(...)` call: an LLM tool list must have unique names, so two copies of
+`add` would be rejected by the model provider.
+
+Use `.rename()` to give a derived tool a distinct name:
+
+```ts
+const addOne = add.partial(a: 1).rename("addOne")
+const addTwo = add.partial(a: 2).rename("addTwo")
+
+// Both can now be passed to one call — distinct names, no collision.
+const result = llm("add some numbers", { tools: [addOne, addTwo] })
+```
+
+The new name is what the LLM sees as the tool name *and* what Agency uses to
+route the tool call back to your function, so it's updated in both places.
+`.rename()` chains with `.partial()`, `.describe()`, and `.preapprove()` in
+any order.
+
+> If you do pass duplicate-named tools to an LLM call, Agency catches it
+> before the request is sent and raises an error naming the collision —
+> rather than letting it surface as an opaque provider error.
+
 ## In pipes
 
 Partial application works naturally with the [pipe operator](./error-handling):

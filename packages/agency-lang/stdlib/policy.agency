@@ -1,8 +1,9 @@
-import { render, text } from "std::layout"
-import { table } from "std::table"
 import { withLock } from "std::concurrency"
+import { render, text } from "std::layout"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
+import { highlight, diff } from "std::syntax"
+import { table } from "std::table"
 import { chooseOption, ChoiceItem } from "std::ui"
 
 import {
@@ -595,16 +596,55 @@ type AskUserResult = {
   reason: string | null
 }
 
-def prettyPrintInterruptData(data: any): string {
+// Render a `std::edit` interrupt's payload as a colored diff. `payload` is
+// the interrupt's `data` ({filename, before, after, ...}). The filename is
+// shown as a header; the change itself is rendered as a unified diff.
+def renderEditDiff(payload: any): string {
+  let lines = []
+  lines.push(color.yellow("⏺ Edit: ${payload.filename}"))
+  lines.push(
+    diff(
+    payload.before || "",
+    payload.after || "",
+    language: "auto",
+    color: true,
+    lineNumbers: true,
+    context: 3,
+    ignoreWhitespace: true,
+  ),
+  )
+  return lines.join("\n")
+}
+
+// Render the data of one interrupt for the approval prompt. `data` is the
+// interrupt's payload (`intr.data`); `effect` is `intr.effect`, used to
+// special-case effects that have a nicer representation than a key/value
+// table — currently `std::edit`, which renders as a diff.
+def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // `null` is reported as `typeof == "object"` by JS, so guard
   // explicitly — otherwise `for (key in data)` would throw and crash
   // the interrupt prompt.
   if (data == null) {
     return ""
   }
+
   if (typeof data == "string") {
     return data
   }
+
+  // An edit reads best as a diff. Show any non-content metadata (e.g.
+  // `dir`) as a table, then the change as a colored diff. `before`/`after`
+  // (huge, shown in the diff), `edits` (the raw op list, redundant with the
+  // diff), and `filename` (already in the diff header) are excluded.
+  if (effect == "std::edit") {
+    const meta = renderObjAsTable(data, excludeKeys: ["before", "after", "filename", "edits"])
+    const editDiff = renderEditDiff(data)
+    if (meta == "") {
+      return editDiff
+    }
+    return "${meta}\n\n${editDiff}"
+  }
+
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields
   // the ELEMENTS, not indices — so the object branch below would pass a
   // non-string element straight into `text()` and crash `render` with
@@ -612,23 +652,39 @@ def prettyPrintInterruptData(data: any): string {
   // by index, recursing into each element.
   if (Array.isArray(data)) {
     let i = 0
-    const inventory = table() as t {
+    const paramTable = table() as t {
       for (item in data) {
         t.row(text("${i}", bold: true), text(prettyPrintInterruptData(item)))
         i = i + 1
       }
     }
-    return render(inventory)
+    return render(paramTable)
   }
   if (typeof data == "object") {
-    const inventory = table() as t {
-      for (key in data) {
-        t.row(text(key, bold: true), text(prettyPrintInterruptData(data[key])))
-      }
-    }
-    return render(inventory)
+    return renderObjAsTable(data)
   }
   return JSON.stringify(data)
+}
+
+// Render an object's key/value pairs as a two-column table. Keys in
+// `excludeKeys` are skipped. Returns "" when no rows remain so callers can
+// omit an empty table.
+def renderObjAsTable(obj: Record<string, any>, excludeKeys: string[] = null): string {
+  const skip = excludeKeys || []
+  let rows = 0
+  const paramTable = table() as t {
+    for (key in obj) {
+      if (skip.includes(key)) {
+        continue
+      }
+      t.row(text(key, bold: true), text(prettyPrintInterruptData(obj[key])))
+      rows = rows + 1
+    }
+  }
+  if (rows == 0) {
+    return ""
+  }
+  return render(paramTable)
 }
 
 // Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
@@ -650,7 +706,7 @@ def askUser(intr: any): AskUserResult {
   const scopedAvailable = effectFields.length > 0
 
   const title = intr.message
-  const body = prettyPrintInterruptData(intr.data)
+  const body = prettyPrintInterruptData(intr.data, intr.effect)
 
   let items: ChoiceItem[] = [
     {
@@ -679,8 +735,12 @@ def askUser(intr: any): AskUserResult {
     label: "reject always"
   })
 
+  // `allowCancel: true` makes Escape cancel the whole request (raises a
+  // cancellation that unwinds the turn back to the REPL prompt) instead of
+  // re-prompting. Rejecting a single action (and optionally telling the
+  // agent what to do instead) is still available via the "r" option.
   const answer = withLock("std::tty") as {
-    return chooseOption(title, body, items, allowFreeText: true)
+    return chooseOption(title, body, items, allowFreeText: true, allowCancel: true)
   }
   match(answer) {
     "a" => return {
@@ -739,6 +799,12 @@ export def _handler(intr: any): any {
 
   const decision = checkPolicy(_policy, intr)
   if (decision.type == "approve") {
+    // Auto-approved: the user never sees the approval prompt (which would
+    // render an edit as a diff), so surface an edit's diff here. Other
+    // effects auto-approve silently as before.
+    if (intr.effect == "std::edit") {
+      print(renderEditDiff(intr.data))
+    }
     return approve()
   }
   if (decision.type == "reject") {
@@ -772,9 +838,10 @@ export def _handler(intr: any): any {
     return reject(answer.reason)
   }
 
-  // Interactive reject (user picked "r"): ask for an optional reason
-  // so the LLM sees concrete feedback as the tool's return value.
-  const reason = input("Why are you rejecting? (press enter to skip) ")
+  // Interactive reject (user picked "r"): ask for optional guidance so
+  // the LLM sees concrete feedback as the tool's return value and the
+  // agent can course-correct without ending the turn.
+  const reason = input("What should the agent do instead? (press enter to skip) ")
   if (reason == "") {
     return reject()
   }

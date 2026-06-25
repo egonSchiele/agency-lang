@@ -38,7 +38,7 @@ type TypeCheckReport = {
   warnings: TypeCheckDiagnostic[]
 }
 
-export def compile(source: string): Result {
+export safe def compile(source: string): Result {
   """
   Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Only standard library (std::) imports are allowed in the compiled code.
   @param source - Agency source code as a string
@@ -141,7 +141,7 @@ export def runFile(
   )
 }
 
-export def typecheck(source: string): Result<TypeCheckReport> {
+export safe def typecheck(source: string): Result<TypeCheckReport> {
   """
   Type-check Agency source code without compiling or running it. Returns a TypeCheckReport with separate `errors` and `warnings` arrays — a successful Result with a non-empty `errors` array means the type-checker ran and found problems. A failure Result means the type-checker could not run at all (parse error or unresolved import).
 
@@ -157,7 +157,7 @@ type FilterImportsResult = {
   filtered: boolean
 }
 
-export def parseAST(source: string): Result {
+export safe def parseAST(source: string): Result {
   """
   Parse Agency source code into an abstract syntax tree. Returns the raw AST as a JSON-serializable object on success, or a failure with the parse error message.
 
@@ -194,7 +194,7 @@ export def writeAST(
   return try _writeAST(ast, dir, filename, overwrite)
 }
 
-export def format(source: string): Result {
+export safe def format(source: string): Result {
   """
   Format Agency source code using the standard Agency formatter (the same one used by `pnpm run fmt`). Returns the formatted source on success, or a failure with a parse error.
 
@@ -241,7 +241,7 @@ export def walkAST(ast: any, visitor: (any, any) -> any): any {
   return result.clone
 }
 
-export def getNodesOfType(source: string, types: string[]): Result {
+export safe def getNodesOfType(source: string, types: string[]): Result {
   """
   Parse Agency source code and return all AST nodes whose `type` field matches any of the provided types. Walks the entire tree (not just top-level), so e.g. getNodesOfType(src, ["functionCall"]) returns every function call anywhere in the program.
 
@@ -253,7 +253,7 @@ export def getNodesOfType(source: string, types: string[]): Result {
   return try _getNodesOfType(source, types)
 }
 
-export def getImports(source: string): Result {
+export safe def getImports(source: string): Result {
   """
   Return all import statements in the source (i.e. `import { x } from "..."`).
 
@@ -262,7 +262,7 @@ export def getImports(source: string): Result {
   return getNodesOfType(source, ["importStatement"])
 }
 
-export def getFunctions(source: string): Result {
+export safe def getFunctions(source: string): Result {
   """
   Return all function definitions (`def foo(...) { ... }`) in the source.
 
@@ -271,7 +271,7 @@ export def getFunctions(source: string): Result {
   return getNodesOfType(source, ["function"])
 }
 
-export def getGraphNodes(source: string): Result {
+export safe def getGraphNodes(source: string): Result {
   """
   Return all graph node definitions (`node main() { ... }`) in the source. Note: "graph nodes" here means Agency's `node` declarations, not generic AST nodes — see getNodesOfType for the latter.
 
@@ -280,7 +280,7 @@ export def getGraphNodes(source: string): Result {
   return getNodesOfType(source, ["graphNode"])
 }
 
-export def filterImports(
+export safe def filterImports(
   source: string,
   allowedPackages: string[] = [],
   excludedPackages: string[] = [],
@@ -340,7 +340,7 @@ export def typecheckFile(dir: string, filename: string): Result {
   return try _typecheckFile(dir, filename)
 }
 
-export def getVersion(): string {
+export safe def getVersion(): string {
   """
   Get the current version of the Agency standard library.
   """

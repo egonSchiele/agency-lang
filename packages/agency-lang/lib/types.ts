@@ -177,6 +177,9 @@ export type Assignment = BaseNode & {
   typeHint?: VariableType;
   validated?: boolean;
   scope?: ScopeType;
+  /** For block/blockArgs scope only: how many block scopes up the lexical
+   *  chain the owning block is. 0 (or absent) = the current/innermost block. */
+  blockDepth?: number;
   static?: boolean;
   optimize?: boolean;
   declKind?: "let" | "const";

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
-import { createMcpHandler } from "./adapter.js";
+import { createMcpHandler, mcpToolSummaryLines } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ExportedItem } from "../types.js";
 import { PolicyStore } from "../policyStore.js";
@@ -37,6 +37,7 @@ function makeTestExports(): ExportedItem[] {
       description: "Add two numbers",
       agencyFunction: addFn,
       interruptEffects: [],
+      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
     },
     {
       kind: "node",
@@ -175,6 +176,7 @@ describe("MCP adapter", () => {
           description: "Deploy app",
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }, { effect: "myapp::approve" }],
+          invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
         },
       ],
     });
@@ -357,7 +359,7 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", name: "greet", description: "Greet someone", agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }] },
+        { kind: "function", name: "greet", description: "Greet someone", agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }], invoke: (namedArgs) => greetFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
       ],
       policyConfig: {
         policyStore: new PolicyStore("test", tmpDir),
@@ -408,7 +410,7 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", name: "sendEmail", description: "Send an email", agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }] },
+        { kind: "function", name: "sendEmail", description: "Send an email", agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }], invoke: (namedArgs) => sendFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
       ],
       policyConfig: {
         policyStore: store,
@@ -430,5 +432,42 @@ describe("MCP adapter — policy tools", () => {
     });
 
     expect(JSON.parse(response!.result.content[0].text)).toBe("sent");
+  });
+});
+
+describe("mcpToolSummaryLines", () => {
+  it("lists each exposed tool with its params", () => {
+    const lines = mcpToolSummaryLines({
+      serverName: "test-server",
+      serverVersion: "1.0.0",
+      exports: makeTestExports(),
+    });
+
+    expect(lines[0]).toBe("Tools exposed:");
+    expect(lines).toContain("  add (a, b)");
+    expect(lines).toContain("  main (city, country)");
+  });
+
+  it("includes the policy tools when a policy store is configured", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "policy-summary-"));
+    try {
+      const lines = mcpToolSummaryLines({
+        serverName: "test-server",
+        serverVersion: "1.0.0",
+        exports: makeTestExports(),
+        policyConfig: {
+          policyStore: new PolicyStore("test-server", dir),
+          interruptHandlers: {
+            hasInterrupts: () => false,
+            respondToInterrupts: async () => ({}),
+          },
+        },
+      });
+      const joined = lines.join("\n");
+      expect(joined).toContain("agencyGetPolicy");
+      expect(joined).toContain("agencyAddRule (effect, action, match?)");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

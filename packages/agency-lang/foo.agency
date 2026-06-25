@@ -1,12 +1,3 @@
-import { colorSchemes, highlight } from "std::syntax"
-const data = read("foo.agency") with approve
-
-node main(): string {
-
-  for (theme in colorSchemes) {
-    print(theme)
-    print("------------------")
-    print(highlight(data, theme: theme, language: "ts"))
-    print("\n\n")
-  }
+export def greet(name: string): number {
+  return `Hello, ${name}!`;
 }

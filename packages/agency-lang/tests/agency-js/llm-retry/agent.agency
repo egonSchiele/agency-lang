@@ -1,0 +1,6 @@
+// The deterministic client throws ECONNRESET on its first two calls, then
+// returns "pong". With retries: 3 the backend retries past the two transient
+// failures and the call succeeds — proving end-to-end retry.
+node main() {
+  return llm("ping", { retries: 3, backoff: { initial: 1ms, factor: 2, max: 5ms } })
+}

@@ -45,7 +45,7 @@ export type MemoryConfig = {
   embeddings?: { model: string | undefined }
 }
 
-export def isMemoryActive(): boolean {
+export safe def isMemoryActive(): boolean {
   """
   Return `true` iff there is an active memory frame on the current
   branch's stateStack — i.e. memory is on and `remember`/`recall` will
@@ -83,7 +83,7 @@ export def setMemoryId(id: string) {
   _setMemoryId(id)
 }
 
-export def getMemoryId(): string {
+export safe def getMemoryId(): string {
   """
   Return the current memory scope id (the value last passed to
   `setMemoryId`, or "default" if it was never set or memory is not

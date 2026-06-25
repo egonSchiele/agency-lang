@@ -114,11 +114,11 @@ describe("DeterministicClient", () => {
 describe("DeterministicClient scoped mocks", () => {
   it("selects the queue matching the executing module id exactly", async () => {
     const client = new DeterministicClient({
-      "lib/agents/mutatePrompt.agency": [{ return: "from mutator queue" }],
+      "lib/agents/optimize/mutatePrompt.agency": [{ return: "from mutator queue" }],
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("lib/agents/mutatePrompt.agency", () => client.text(baseConfig));
+    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
 
     expect(result.success && result.value.output).toBe("from mutator queue");
   });
@@ -129,7 +129,7 @@ describe("DeterministicClient scoped mocks", () => {
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("lib/agents/mutatePrompt.agency", () => client.text(baseConfig));
+    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
 
     expect(result.success && result.value.output).toBe("from mutator queue");
   });
@@ -159,10 +159,10 @@ describe("DeterministicClient scoped mocks", () => {
       judgePairwise: [{ return: "j1" }, { return: "j2" }],
     });
 
-    const m1 = await inModule("lib/agents/mutatePrompt.agency", () => client.text(baseConfig));
-    const j1 = await inModule("lib/agents/judgePairwise.agency", () => client.text(baseConfig));
-    const m2 = await inModule("lib/agents/mutatePrompt.agency", () => client.text(baseConfig));
-    const j2 = await inModule("lib/agents/judgePairwise.agency", () => client.text(baseConfig));
+    const m1 = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
+    const j1 = await inModule("lib/agents/eval/judgePairwise.agency", () => client.text(baseConfig));
+    const m2 = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
+    const j2 = await inModule("lib/agents/eval/judgePairwise.agency", () => client.text(baseConfig));
 
     expect(m1.success && m1.value.output).toBe("m1");
     expect(j1.success && j1.value.output).toBe("j1");
@@ -173,10 +173,10 @@ describe("DeterministicClient scoped mocks", () => {
   it("names the scope when its queue is exhausted", async () => {
     const client = new DeterministicClient({ mutatePrompt: [{ return: "only" }] });
 
-    await inModule("lib/agents/mutatePrompt.agency", () => client.text(baseConfig));
+    await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
 
     await expect(
-      inModule("lib/agents/mutatePrompt.agency", () => client.text(baseConfig)),
+      inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig)),
     ).rejects.toThrow(/call #2.*"mutatePrompt"/);
   });
 

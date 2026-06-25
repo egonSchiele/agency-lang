@@ -1,0 +1,154 @@
+/*
+ * Model selection policy for the Agency Agent.
+ *
+ * Pure, side-effect-free helpers (no memory/LLM init on import) so they
+ * can be unit-tested in isolation. `shared.agency` consumes these and
+ * owns the actual side effects (setLlmOptions, slow-model state, exit).
+ *
+ * Two jobs:
+ *   - `resolveDetected` — decide which provider's defaults to use,
+ *     honoring an explicit `--provider` flag over env auto-detection.
+ *   - `planModels` — given that provider, turn the four CLI flag values
+ *     into the concrete fast/slow model + provider to apply.
+ */
+import { pickProvider, envVarFor } from "std::llm"
+import { env } from "std::system"
+
+// Default models per provider. `slowProvider` pins the provider for the
+// deep-reasoning call: OpenAI needs the Responses API for reasoning /
+// extended thinking; native providers use their own. Used as fallbacks
+// when the user doesn't pass --model / --fastmodel / --slowmodel.
+type ProviderModels = {
+  fast: string;
+  slow: string;
+  slowProvider: string
+}
+
+export static const MODELS: Record<string, ProviderModels> = {
+  openai: {
+    fast: "gpt-4o-mini",
+    slow: "gpt-5.5",
+    slowProvider: "openai-responses"
+  },
+  anthropic: {
+    fast: "claude-sonnet-4-6",
+    slow: "claude-opus-4-8",
+    slowProvider: "anthropic"
+  },
+  google: {
+    fast: "gemini-3.5-flash",
+    slow: "gemini-3.1-pro-preview",
+    slowProvider: "google"
+  }
+}
+
+// The concrete models + providers to apply, produced by `planModels`.
+// `fastProvider` is what `setLlmOptions` receives ("" lets smoltalk
+// resolve the provider from the model name).
+export type ModelPlan = {
+  fastModel: string;
+  fastProvider: string;
+  slowModel: string;
+  slowProvider: string
+}
+
+/** Decide which provider's default models to use, given the four
+ *  (already-normalized-to-"") CLI flag values.
+ *
+ *  - An explicit `--provider` for a *recognized* provider (a key in
+ *    MODELS) wins outright: we use its defaults and SKIP env
+ *    auto-detection entirely. This is what lets `--provider openai`
+ *    work even when a stale/invalid ANTHROPIC_API_KEY is set. We also
+ *    verify that provider's API key is present so we fail loudly up
+ *    front instead of mid-run.
+ *  - An explicit `--provider` for an *unrecognized* provider (a custom
+ *    or local one) has no built-in defaults, so it's only valid
+ *    alongside an explicit model; otherwise it's an error.
+ *  - With no `--provider`, fall back to env auto-detection
+ *    (`pickProvider`) whenever defaults are actually needed.
+ *
+ *  Returns the provider name whose MODELS bucket should supply defaults,
+ *  or a failure whose message is ready to print. */
+export def resolveDetected(
+  model: string,
+  fast: string,
+  slow: string,
+  provider: string,
+): Result<string> {
+  const needFast = fast == "" && model == ""
+  const needSlow = slow == "" && model == ""
+
+  if (provider != "") {
+    if (MODELS[provider] == undefined) {
+      // Custom/local provider — no defaults to fall back on.
+      if (needFast || needSlow) {
+        const known = Object.keys(MODELS)
+        return failure(
+          "--provider ${provider} has no built-in defaults; also pass --model (or --fastmodel/--slowmodel). Providers with defaults: ${known.join(", ")}.",
+        )
+      }
+      // Models fully specified; the defaults bucket is never read.
+      return success(provider)
+    }
+    // Recognized provider forced. Fail loudly now if its key is missing
+    // rather than emitting a confusing auth error on the first llm() call.
+    const varName = envVarFor(provider)
+    if (varName != "" && (env(varName) == null || env(varName) == "")) {
+      return failure("No API key for provider '${provider}'. Set ${varName}.")
+    }
+    return success(provider)
+  }
+
+  if (needFast || needSlow) {
+    return pickProvider()
+  }
+  // Everything came from --model; the defaults bucket is never read.
+  return success("openai")
+}
+
+/** Turn the four CLI flag values plus the resolved `detected` provider
+ *  into the concrete models/providers to apply. Pure. Precedence:
+ *  --fastmodel/--slowmodel win over --model, which wins over the
+ *  `detected` provider's defaults.
+ *
+ *  The `detected` bucket (MODELS[detected]) is only read when a default
+ *  is actually needed — i.e. when the corresponding model flag is
+ *  absent. For a custom/local provider (no bucket) `resolveDetected`
+ *  guarantees an explicit model was supplied, so the defaults are never
+ *  dereferenced. */
+export def planModels(
+  model: string,
+  fast: string,
+  slow: string,
+  provider: string,
+  detected: string,
+): ModelPlan {
+  let fastModel = fast
+  if (fastModel == "") {
+    if (model != "") {
+      fastModel = model
+    } else {
+      fastModel = MODELS[detected].fast
+    }
+  }
+
+  let slowModel = ""
+  let slowProvider = ""
+  if (slow != "") {
+    slowModel = slow
+    slowProvider = provider
+  } else if (model != "") {
+    slowModel = model
+    slowProvider = provider
+  } else {
+    slowModel = MODELS[detected].slow
+    slowProvider = MODELS[detected].slowProvider
+  }
+
+  return {
+    fastModel: fastModel,
+    fastProvider: provider,
+    slowModel: slowModel,
+    slowProvider: slowProvider
+  }
+}

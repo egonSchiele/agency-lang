@@ -28,7 +28,7 @@ export type StatelogEvalRecord = {
   formatVersion: number;
   durationMs: number;
   source: string;
-  evalInputs: StatelogEvalValue[];
+  evalValues: StatelogEvalValue[];
   evalOutputs: StatelogEvalValue[];
   threads: Record<string, any>[];
   events: Record<string, any>[];
@@ -44,20 +44,20 @@ export type StatelogEvalRecord = {
 
 ## Functions
 
-### evalInput
+### evalValue
 
 ```ts
-evalInput(value: any)
+evalValue(value: any)
 ```
 
-Record an eval input — a value that should be considered part of
+Record an eval value — a value that should be considered part of
   the user-facing input to this agent. Captured in the statelog as
-  an `evalInputRecorded` event and surfaced by `agency eval extract`
-  on the `evalInputs[]` field of the produced record.
+  an `evalValueRecorded` event and surfaced by `agency eval extract`
+  on the `evalValues[]` field of the produced record.
 
-  Call this once per discrete user input. May be called multiple
+  Call this once per discrete recorded value. May be called multiple
   times in a single trace; all firings are collected in order. The
-  consuming eval / judge / task definition decides what to do with
+  consuming eval / judge / input definition decides what to do with
   multiple firings.
 
   When no eval annotation exists in a trace, `eval extract` falls
@@ -104,7 +104,7 @@ Record an eval output — a value that should be considered the
   applies before showing a response to the user.
 
   @param value - The value to record. Any JSON-serializable type is
-    accepted; same serialization rules as `evalInput`.
+    accepted; same serialization rules as `evalValue`.
 
 **Parameters:**
 
@@ -139,14 +139,14 @@ Parse a statelog JSONL file and return the same structured EvalRecord
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L86))
 
-### evalInputs
+### evalValues
 
 ```ts
-evalInputs(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
+evalValues(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
 ```
 
-Parse a statelog JSONL file and return the values recorded as eval inputs.
-  This mirrors `new StatelogParser(path).evalInputs()` in TypeScript.
+Parse a statelog JSONL file and return the values recorded as eval values.
+  This mirrors `new StatelogParser(path).evalValues()` in TypeScript.
 
   @param statelogPath - Path to the statelog JSONL file to parse
   @param allowedPaths - Optional allow-list of path prefixes

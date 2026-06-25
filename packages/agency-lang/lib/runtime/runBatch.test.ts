@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
 import { State, StateStack } from "./state/stateStack.js";
@@ -175,6 +176,50 @@ describe("runBatch — mode 'all'", () => {
     expect(starts).toBe(0);
     expect(ends).toBe(0);
     expect(result).toEqual({ kind: "values", values: [42] });
+  });
+
+  it("onBranchEnd receives each branch's return value on success", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    const ends: Array<{ index: number; outcome: string; value: unknown }> = [];
+    await runBatch<unknown>({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "all",
+      children: [
+        { key: "c0", invoke: async () => 42 },
+        { key: "c1", invoke: async () => ({ a: 1 }) },
+      ],
+      hooks: {
+        onBranchEnd: (_key, index, outcome, _t, value) =>
+          ends.push({ index, outcome, value }),
+      },
+    });
+    expect(ends).toEqual([
+      { index: 0, outcome: "success", value: 42 },
+      { index: 1, outcome: "success", value: { a: 1 } },
+    ]);
+  });
+
+  it("onBranchEnd reports no value for a non-success (interrupted) outcome", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    const ends: Array<{ outcome: string; value: unknown }> = [];
+    await runBatch({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "all",
+      children: [{ key: "c0", invoke: async () => [fakeInterrupt("z", 5)] }],
+      hooks: {
+        onBranchEnd: (_key, _index, outcome, _t, value) =>
+          ends.push({ outcome, value }),
+      },
+    });
+    expect(ends).toEqual([{ outcome: "interrupted", value: undefined }]);
   });
 
   it("parent abort signal propagates into child stack", async () => {
@@ -450,6 +495,40 @@ describe("runBatch — mode 'race'", () => {
       result: "fast-value",
     });
     expect(() => parentFrame.getBranch("slow")).toThrow(/has been deleted/);
+  });
+
+  it("aborts losers with a raceLoser cause on signal.reason", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    let loserReason: unknown = undefined;
+    const result = await runBatch({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "race",
+      raceWinnerLocalKey: WINNER_KEY,
+      children: [
+        { key: "fast", invoke: async () => "fast-value" },
+        {
+          key: "slow",
+          invoke: async (_s, sig) =>
+            new Promise<string>((_resolve, reject) => {
+              sig.addEventListener("abort", () => {
+                // Capture the abort reason the loser was cancelled with so
+                // we can assert it carries the structured raceLoser cause.
+                loserReason = sig.reason;
+                reject(new Error("aborted"));
+              });
+            }),
+        },
+      ],
+    });
+    expect(result).toEqual({ kind: "values", values: ["fast-value"] });
+    // signal.reason must stay an Error (runBatch does `throw signal.reason`)…
+    expect(loserReason).toBeInstanceOf(Error);
+    // …carrying the structured raceLoser cause.
+    expect(readCause(loserReason)?.kind).toBe("raceLoser");
   });
 
   it("winner halts with interrupts: loser deleted, shared checkpoint stamped, leaf cp survives on winner branch", async () => {

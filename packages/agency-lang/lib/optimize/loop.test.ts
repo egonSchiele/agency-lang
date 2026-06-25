@@ -45,8 +45,8 @@ function makeConfig(dir: string, targetSet: OptimizeTargetSet, overrides: {
   return {
     runtime: {
       config: {},
-      tasks: [{ task_id: "task-1", goal: "Return Paris", args: {} }],
-      tasksSource: "inline:--goal",
+      inputs: [{ id: "task-1", goal: "Return Paris", args: {} }],
+      inputsSource: "inline:--goal",
     },
     target: {
       entryFile: targetSet.entryFile,
@@ -73,8 +73,8 @@ function fakeEvalResult(runDir: string): EvalRunResult {
     runId: "eval-run",
     runDir,
     agent: "agent",
-    tasks: [{
-      taskId: "task-1",
+    inputs: [{
+      inputId: "task-1",
       status: "success",
       evalRecordPath: path.join(runDir, "task-1.eval.json"),
       statelogPath: "",
@@ -94,7 +94,7 @@ function verdict(winner: SuiteVerdict["winner"]): SuiteVerdict {
     winsB: winner === "B" ? 1 : 0,
     ties: winner === "tie" ? 1 : 0,
     winner,
-    perTask: [],
+    perInput: [],
   };
 }
 
@@ -173,7 +173,7 @@ describe("optimizeLoop", () => {
 
     expect(calls.mutate).toHaveLength(1);
     expect(calls.mutate[0].targets).toEqual(targetSet.targets);
-    expect(calls.mutate[0].tasks).toBe(config.runtime.tasks);
+    expect(calls.mutate[0].inputs).toBe(config.runtime.inputs);
     expect(calls.mutate[0].history).toBe("");
     expect(calls.mutate[0].diagnostics).toBeUndefined();
   });
@@ -274,7 +274,7 @@ describe("optimizeLoop", () => {
     const judgeCall = calls.judgeSuite[0];
     expect((judgeCall.runA as EvalRunResult).runDir).toContain("iter-0");
     expect((judgeCall.runB as EvalRunResult).runDir).toContain("iter-1");
-    expect(judgeCall.tasks).toBe(config.runtime.tasks);
+    expect(judgeCall.inputs).toBe(config.runtime.inputs);
     expect(judgeCall.policy).toBe(config.judgePolicy);
   });
 
@@ -310,9 +310,9 @@ describe("optimizeLoop", () => {
         const result = await deps.evalRun!(runArgs);
         return {
           ...result,
-          tasks: [
-            ...result.tasks,
-            { taskId: "task-2", status: "error", errorMessage: "parse error in agent", evalRecordPath: "", statelogPath: "", workdirPath: "" },
+          inputs: [
+            ...result.inputs,
+            { inputId: "task-2", status: "error", errorMessage: "parse error in agent", evalRecordPath: "", statelogPath: "", workdirPath: "" },
           ],
           errorCount: 1,
         };
@@ -336,7 +336,7 @@ describe("optimizeLoop", () => {
         phase: (args) => events.push(`phase:${args.message}`),
         validationFailed: () => events.push("validationFailed"),
         iterationRejected: () => events.push("iterationRejected"),
-        iterationDecided: (args) => events.push(`decided:${args.decision}:${args.records.map((record) => record.taskId).join(",")}`),
+        iterationDecided: (args) => events.push(`decided:${args.decision}:${args.records.map((record) => record.inputId).join(",")}`),
         runFinished: (args) => events.push(`finished:${args.writebackApplied}:${args.finalTargets.map((target) => target.value).join(",")}`),
       },
     };

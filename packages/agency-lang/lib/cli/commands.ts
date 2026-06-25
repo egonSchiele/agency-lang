@@ -275,8 +275,39 @@ export function compile(
   const stats = fs.statSync(inputFile);
   const verbose = config.verbose ?? false;
   if (stats.isDirectory()) {
-    for (const { path } of findRecursively(inputFile)) {
-      compile(config, path, undefined, options);
+    const files = [...findRecursively(inputFile)].map((f) => f.path);
+    // A directory is many entry points — every .agency file under it. To
+    // avoid recompiling shared dependencies once per entry, build ONE
+    // import closure covering all of them up front and reuse it for every
+    // file. Without this, each sibling entry the previous closure didn't
+    // cover would clear the per-session cache (see ensureCompiledClosure)
+    // and recompile shared deps once per entry. Skipped for:
+    //   - recursive child calls (a symbolTable was threaded in) — those
+    //     aren't real top-level directory compiles; and
+    //   - stdlib dirs, which intentionally compile without a closure (the
+    //     same carve-out ensureCompiledClosure makes for stdlib entries).
+    const absDir = path.resolve(inputFile);
+    const isStdlibDir =
+      absDir === getStdlibDir() || absDir.startsWith(getStdlibDir() + path.sep);
+    if (!options?.symbolTable && !isStdlibDir && files.length > 0) {
+      try {
+        currentClosure = buildCompiledClosure(
+          files.map((f) => path.resolve(f)),
+          config,
+        );
+        // The fresh union closure supersedes anything cached for a prior
+        // entry; drop the per-file set so codegen reruns under it.
+        compiledFiles.clear();
+      } catch (e) {
+        if (e instanceof CompileClosureError) {
+          console.error(e.message);
+          process.exit(1);
+        }
+        throw e;
+      }
+    }
+    for (const file of files) {
+      compile(config, file, undefined, options);
     }
     return null;
   }

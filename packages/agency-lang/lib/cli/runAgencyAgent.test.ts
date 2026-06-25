@@ -28,10 +28,14 @@ describe("runAgencyAgent", () => {
     expect(resolveAgencyAgentPath("agent.agency", tmpDir)).toBe(agentPath);
   });
 
-  it("resolves bundled agent names", () => {
-    expect(resolveAgencyAgentPath("judgePairwise.agency")).toMatch(
-      /lib\/agents\/judgePairwise\.agency$/,
+  it("resolves bundled agent subpaths", () => {
+    expect(resolveAgencyAgentPath("eval/judgePairwise.agency")).toMatch(
+      /lib\/agents\/eval\/judgePairwise\.agency$/,
     );
+  });
+
+  it("refuses bundled lookups that traverse out of the agents dir", () => {
+    expect(() => resolveAgencyAgentPath("../secrets.agency")).toThrow(/not found/);
   });
 
   it("passes args, statelog config, limits, mocks, and argv to the execution boundary", async () => {
@@ -92,7 +96,7 @@ describe("runAgencyAgent", () => {
     );
 
     await runAgencyAgent({
-      agent: "judgePairwise.agency",
+      agent: "eval/judgePairwise.agency",
       node: "judgePairwise",
       args: { goal: "g", responseA: "a", responseB: "b" },
       config: {},

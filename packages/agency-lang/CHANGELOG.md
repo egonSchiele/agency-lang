@@ -1,3 +1,87 @@
+## Jun 24 2026 — v0.6.4
+
+### Language / Typechecker
+- Fixed value-parameterized validation types (e.g. `NumberInRange(1, 10)!` from `std::types`); `@validate` factories now resolve instead of erroring on a missing function.
+- New `std::capabilities` — standard capability effect sets.
+
+### Runtime
+- Unified abort taxonomy: aborts carry a typed cause (guard trip, user cancel, race loser) with `guardId` matching, so an outer guard no longer mis-attributes an inner trip. Thread cancellation is now non-destructive (preserves earlier rounds).
+- `agency serve` now works for functions, not just nodes.
+
+### Eval / Optimize
+- Default judge now grades against `input.expected` even with no custom grader.
+- `gepa` and `example` optimizers now populate the champion grade breakdown and select the champion by validation, matching `greedy`.
+- Optimizer per-input working dir is seeded from the forked workspace, so agents that reference project files (e.g. `exec` on a repo path) find them instead of running in an empty dir.
+- Unified eval + optimize on a single per-input working directory: each input's workdir is seeded from the agent's project tree, candidate files (from the optimizer) are overlaid, and the entry agent is compiled in place — so module-dir, cwd, and workdir are the same directory for every run.
+
+#### Breaking
+- `agency eval run`: `working_dir`, when set, must now contain the agent file (was: any directory was copied as a separate fixture).
+- The agent is now compiled once per input (was: once up front). Workdirs are now isolated per input.
+- The optimizer no longer copies the project tree per candidate; per-candidate state lives as an overlay file map. `BaseOptimizerDeps.workspaceRoot` was removed and `Workspace` shrank to `{ key }` (cache-partition token only).
+
+### Agency Agent
+- Can set the LLM provider used by the agency agent.
+
+### Stdlib
+- Marked more stdlib functions read-safe (pre-approved).
+
+## Jun 22 2026 — v0.6.1
+
+### Agency Agent
+- Per-model cost attribution in the agency agent; tool-call branches now propagate their cost up to the main branch.
+- Unhandled interrupts from the command line print a clear error message instead of crashing silently.
+
+### Logs Viewer
+- Grouped + flattened LLM call view; `e`/`E` expands/collapses the current node, `z`/`Z` expands/collapses the whole tree.
+- Statelog viewer fixes: short IDs, cross-process tail decoding, and `logs` now defaults to the `view` subcommand.
+
+### Runtime
+- Structured abort causes — aborts now carry typed cause information instead of a bare string.
+
+### CLI
+- `agency serve` prints the list of exposed endpoints on startup.
+
+## Jun 20 2026 — v0.6
+
+### Language / Typechecker
+- New effect sets and `raises` declarations; interrupt "kind" renamed to "effect".
+- Builds are cached correctly when compiling a whole dir, where files may be imported multiple times. Previously the files would get recompiled multiple times.
+- Fire-and-forget statelog events.
+
+### Execution model
+- Memory functions are now branch-scoped, and the memory id is set correctly inside forks.
+
+### Eval
+- New pluggable optimizer framework: bring your own optimizer (`--optimizer ./module.ts`), custom graders, validation sets, and a HumanGrader.
+- Added the GEPA optimizer.
+- `withCriteria` helper for declarative eval criteria (judge anchoring).
+- Renamed "tasks" to "inputs" everywhere across evals and optimizers.
+
+### Stdlib
+- `std::chart` — new charting module.
+- `std::table` — new table module.
+- `std::syntax` — diff and patch functions, auto language detection, and themes (plus custom themes) for highlighting; removed `std::fs::printDiff`.
+- Syntax-highlight code inside diffs.
+- `std::llm` — user-selectable models via `setModel` / `setLlmOptions` / `pickProvider`, plus agent CLI flags.
+- `std::edit` interrupts now render as a diff (prompt + auto-approve).
+- `ls` caps its result count, and tool-call responses are size-capped.
+- Fixed center alignment in `std::layout`.
+
+### Agency Agent
+- Esc cancels the in-flight request.
+- Oneshot mode works.
+- `/paste` adds multi-line input to the line-mode REPL.
+- New `doctor` command
+- Updated default models, and the agent prints which model was used.
+- Fix for cwd - `getAgentCwd` / `setAgentCwd`.
+- Policies pre-approve read-only agency commands. Fixed an extra prompt echo after interrupts and the coding agent losing all its tools after the first round.
+- Stopped telling the agent to print highlighted code (removed the highlight/print tools).
+- Fix bug where history file kept getting reset (was only saving the most recent session's history, now appends to it instead).
+
+### Runtime / codegen / CLI
+- Upgraded smoltalk to v0.4.1.
+- Fixed duplicate tool names.
+
 ## Jun 12 2026 — v0.5
 
 ### Language / Typechecker

@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.5.0",
+  "version": "0.6.5",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "test:run": "vitest run",
     "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
     "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
+    "test:agents": "time node ./dist/scripts/agency.js test lib/agents -p 12",
     "build": "make build",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
@@ -68,6 +69,11 @@
       "import": "./dist/lib/compiler/compile.js",
       "require": "./dist/lib/compiler/compile.js"
     },
+    "./optimize": {
+      "types": "./dist/lib/optimize/public.d.ts",
+      "import": "./dist/lib/optimize/public.js",
+      "require": "./dist/lib/optimize/public.js"
+    },
     "./stdlib-lib/*": "./dist/lib/stdlib/*",
     "./stdlib/*": "./stdlib/*"
   },
@@ -90,7 +96,7 @@
     "nanoid": "^5.1.6",
     "picomatch": "^4.0.4",
     "prompts": "^2.4.2",
-    "smoltalk": "^0.4.0",
+    "smoltalk": "^0.4.2",
     "tarsec": "0.4.7",
     "typestache": "^0.5.0",
     "vscode-languageserver": "^9.0.1",

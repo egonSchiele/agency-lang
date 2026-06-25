@@ -73,7 +73,10 @@ function stringifyContent(content: unknown): string | undefined {
     const parts = content
       .map((p) => contentPartText(p))
       .filter((s): s is string => s !== undefined);
-    if (parts.length === 0) return undefined;
+    // A multimodal content-parts array yields text parts. A plain data
+    // array (e.g. a tool result like [0,1,1,2,3]) yields none — render
+    // the whole value as JSON rather than showing nothing.
+    if (parts.length === 0) return JSON.stringify(content);
     return JSON.stringify(parts.join(" "));
   }
   return JSON.stringify(content);

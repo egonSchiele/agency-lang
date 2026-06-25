@@ -25,7 +25,7 @@ describe("createOptimizeArtifacts", () => {
       workingDir: tmpDir,
       entryFile: "agent.agency",
       node: "main",
-      tasksSource: "inline:--goal",
+      inputsSource: "inline:--goal",
       iterations: 3,
       judgePolicy: { samples: 3, confidenceThreshold: 50, marginThreshold: 0, positionBias: "swap" },
       mutatorModel: "test-model",
@@ -39,7 +39,7 @@ describe("createOptimizeArtifacts", () => {
       runId: "run-1",
       entryFile: "agent.agency",
       node: "main",
-      tasksSource: "inline:--goal",
+      inputsSource: "inline:--goal",
       iterations: 3,
       judgePolicy: { samples: 3 },
       mutatorModel: "test-model",
@@ -90,21 +90,25 @@ describe("createOptimizeArtifacts", () => {
     expect(fs.existsSync(path.join(workspace.workspaceDir, "runs", "run-1", "should-not-copy", "x.txt"))).toBe(false);
   });
 
-  it("excludes heavy directories while preserving runtime build output in workspaces", () => {
+  it("excludes heavy/irrelevant entries from iteration workspaces", () => {
     fs.writeFileSync(path.join(tmpDir, "helper.agency"), "def helper() {}\n");
-    for (const dir of [".git", ".worktrees", "node_modules", "runs", ".agency-tmp"]) {
+    for (const dir of [".git", ".worktrees", "node_modules", "runs", ".agency-tmp", ".js-tmp", ".agency-memory"]) {
       fs.mkdirSync(path.join(tmpDir, dir), { recursive: true });
       fs.writeFileSync(path.join(tmpDir, dir, "large.txt"), "x");
     }
     fs.mkdirSync(path.join(tmpDir, "dist", "lib"), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, "dist", "lib", "index.js"), "export {}\n");
+    // package.json must be excluded so the agent's bare `agency-lang` self-import
+    // climbs to the real package root instead of binding to the workspace's absent dist/.
+    fs.writeFileSync(path.join(tmpDir, "package.json"), '{"name":"agency-lang"}');
     const artifacts = makeArtifacts({ runsDir: path.join(tmpDir, "optimize-runs") });
 
     const workspace = artifacts.writeIterationWorkspace(0, {});
 
     expect(fs.existsSync(path.join(workspace.workspaceDir, "helper.agency"))).toBe(true);
-    expect(fs.existsSync(path.join(workspace.workspaceDir, "dist", "lib", "index.js"))).toBe(true);
-    for (const dir of [".git", ".worktrees", "node_modules", "runs", ".agency-tmp"]) {
+    expect(fs.existsSync(path.join(workspace.workspaceDir, "dist"))).toBe(false);
+    expect(fs.existsSync(path.join(workspace.workspaceDir, "package.json"))).toBe(false);
+    for (const dir of [".git", ".worktrees", "node_modules", "runs", ".agency-tmp", ".js-tmp", ".agency-memory"]) {
       expect(fs.existsSync(path.join(workspace.workspaceDir, dir, "large.txt"))).toBe(false);
     }
   });
@@ -176,7 +180,7 @@ describe("createOptimizeArtifacts", () => {
       winsB: 1,
       ties: 0,
       winner: "B",
-      perTask: [],
+      perInput: [],
     });
     const championDir = artifacts.writeFinalChampion({ "agent.agency": "champion source\n" }, 1);
     const summaryPath = artifacts.writeSummary({

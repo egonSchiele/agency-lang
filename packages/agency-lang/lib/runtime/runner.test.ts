@@ -1,13 +1,93 @@
-import { describe, it, expect } from "vitest";
-import { Runner, stripSlug } from "./runner.js";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
+import { GuardExceededError, TimeGuard } from "./guard.js";
+import { readCause } from "./errors.js";
 
 function makeFrame(): State {
   return new State({ args: {}, locals: {}, step: 0 });
 }
+
+describe("Runner.shouldSkip — guard-trip delivery de-dup", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A tripped time guard whose abort signal is still aborted at the next
+  // step boundary. Mirrors the state when the guard's OWN _popGuard step
+  // runs after the block already unwound.
+  function trippedGuardStack(): StateStack {
+    const stack = new StateStack();
+    const g = new TimeGuard(20);
+    stack.pushGuard(g); // install: composes abortSignal + arms timer
+    vi.advanceTimersByTime(20); // fire: signal aborted, cause on reason, g.tripped
+    return stack;
+  }
+
+  it("throws GuardExceededError for an UNdelivered trip (the no-leaf runner path)", async () => {
+    const stack = trippedGuardStack();
+    const runner = new Runner(makeMockCtx(), makeFrame(), { stack });
+    await expect(
+      runner.step(0, async () => {}),
+    ).rejects.toBeInstanceOf(GuardExceededError);
+  });
+
+  it("does NOT re-throw a trip already DELIVERED via the leaf path — lets cleanup run", async () => {
+    const stack = trippedGuardStack();
+    // Simulate __tryCall having already converted the leaf-op rejection
+    // to a Failure and flagged the shared cause object as delivered.
+    const cause = readCause(stack.abortSignal);
+    expect(cause?.kind).toBe("guardTrip");
+    (cause as { delivered?: boolean }).delivered = true;
+
+    const runner = new Runner(makeMockCtx(), makeFrame(), { stack });
+    let ran = false;
+    // This stands in for the guard's own `_popGuard` step: it must run
+    // rather than throw an unhandled GuardExceededError for an
+    // already-handled trip (the second crash this PR fixes).
+    await expect(
+      runner.step(0, async () => {
+        ran = true;
+      }),
+    ).resolves.toBeUndefined();
+    expect(ran).toBe(true);
+  });
+});
+
+describe("safeStatelogValue", () => {
+  it("deep-clones small JSON values", () => {
+    expect(safeStatelogValue(42)).toBe(42);
+    expect(safeStatelogValue([0, 1, 1, 2, 3])).toEqual([0, 1, 1, 2, 3]);
+    const obj = { a: [1, 2] };
+    const out = safeStatelogValue(obj);
+    expect(out).toEqual(obj);
+    expect(out).not.toBe(obj); // cloned, not the same reference
+  });
+
+  it("returns undefined for undefined and values JSON can't represent", () => {
+    expect(safeStatelogValue(undefined)).toBeUndefined();
+    expect(safeStatelogValue(() => 1)).toBeUndefined();
+  });
+
+  it("truncates an oversized value to a marked string", () => {
+    const out = safeStatelogValue("x".repeat(5000));
+    expect(typeof out).toBe("string");
+    expect((out as string).length).toBeLessThan(5000);
+    expect(out as string).toMatch(/…\[truncated\]$/);
+  });
+
+  it("returns a placeholder for an unserializable (circular) value", () => {
+    const a: any = {};
+    a.self = a;
+    expect(safeStatelogValue(a)).toBe("[unserializable]");
+  });
+});
 
 describe("Runner", () => {
   describe("step()", () => {

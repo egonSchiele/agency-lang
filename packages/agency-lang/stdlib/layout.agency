@@ -407,7 +407,7 @@ def _makeBuilder(kids: any[]): LayoutBuilder {
  * @param children - Pre-built children (LLM / JSON construction)
  * @param block - Trailing builder block; appended after `children`
  */
-export def row(
+export safe def row(
   gap: number = 0,
   align: Alignment = "start",
   width: Width = null,
@@ -448,7 +448,7 @@ export def row(
  * @param children - Pre-built children
  * @param block - Trailing builder block
  */
-export def column(
+export safe def column(
   gap: number = 0,
   align: Alignment = "start",
   width: Width = null,
@@ -496,7 +496,7 @@ export def column(
  * @param children - Pre-built children
  * @param block - Trailing builder block
  */
-export def box(
+export safe def box(
   title: string = "",
   titleColor: string = "",
   borderStyle: BorderStyle = "rounded",

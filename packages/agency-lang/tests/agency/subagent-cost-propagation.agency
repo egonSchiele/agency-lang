@@ -1,0 +1,81 @@
+import { getCost, getTokens } from "std::thread"
+
+// Tools/subagents are dispatched by an LLM tool call, which runs each tool
+// in its own branch stack. Their LLM spend must roll up into the parent so
+// getCost()/getTokens() are cumulative. The deterministic test provider
+// bills 2 tokens + $0.000002 per LLM call, so the expected totals below are
+// just (number of LLM calls) × that. Before the fix, tool-branch spend was
+// dropped, so every total collapsed to just the outer (coordinator) calls.
+
+def innerTool(): string {
+  """Calls the LLM from inside a tool."""
+  return llm("inner")
+}
+
+def toolA(): string {
+  """Tool A — calls the LLM."""
+  return llm("a")
+}
+
+def toolB(): string {
+  """Tool B — calls the LLM."""
+  return llm("b")
+}
+
+def nestedInner(): string {
+  """Deepest tool — calls the LLM."""
+  return llm("deep")
+}
+
+def nestedOuter(): string {
+  """Mid tool — calls the LLM with its OWN nested tool."""
+  return llm("mid", { tools: [nestedInner] })
+}
+
+def interruptingTool(): string {
+  """Calls the LLM, pauses for approval, then calls the LLM again."""
+  const before = llm("before")
+  interrupt("approve to continue")
+  const after = llm("after")
+  return "done"
+}
+
+// One tool, one round → 3 LLM calls → 6 tokens. (Was 4 before the fix.)
+node toolTokensRollUp(): number {
+  llm("outer", { tools: [innerTool] })
+  return getTokens()
+}
+
+// Same flow, asserting COST (the user-facing figure) rolled up too: 3
+// calls' cost ($0.000006) exceeds the 2 outer calls' worth ($0.000004).
+// Before the fix getCost() was exactly $0.000004, so `>` is false.
+node toolCostRollsUp(): boolean {
+  llm("outer", { tools: [innerTool] })
+  return getCost() > 0.000004
+}
+
+// Two tools dispatched in ONE round (parallel branches). BOTH branch
+// deltas must sum into the parent: outer + a + b + outer-continues = 4
+// calls → 8 tokens. Exercises propagateBranchCost's sum over all branches.
+node parallelToolTokensRollUp(): number {
+  llm("outer", { tools: [toolA, toolB] })
+  return getTokens()
+}
+
+// Nested tools (two levels): top → nestedOuter → nestedInner. Spend must
+// chain up through every level: top + mid + deep + mid-continues +
+// top-continues = 5 calls → 10 tokens.
+node nestedToolTokensRollUp(): number {
+  llm("top", { tools: [nestedOuter] })
+  return getTokens()
+}
+
+// A tool that pauses for an approval interrupt and resumes. Its spend must
+// be counted EXACTLY ONCE across the interrupt/resume cycle — the seed is
+// idempotent on resume (the branch isn't re-seeded) and its seed baseline
+// survives the checkpoint, so the delta math doesn't double-count or drop.
+// Calls: outer + before + after + outer-continues = 4 → 8 tokens.
+node interruptResumeTokensRollUp(): number {
+  llm("outer", { tools: [interruptingTool] })
+  return getTokens()
+}

@@ -1,0 +1,25 @@
+import { guard } from "std::thread"
+
+// A guard's trip must propagate across a FUNCTION-call boundary, not just
+// within a single node body. The outer guard (20ms) wraps a call to `inner`,
+// whose sleep overruns the budget. The timer fires while `inner`'s sleep is
+// in flight; the rejection unwinds through `inner`'s generated function-body
+// catch — which must RE-THROW the abort (the single `instanceof AgencyAbort`
+// rung), not convert it to a Failure — and lands at the outer guard's `try`,
+// which converts it to a timeoutFailure. The existing nested-guard fixtures
+// all live in one function and only exercise the node-level catch ladder;
+// this is the first cross-function backstop for B2's collapsed rung.
+def inner(): string {
+  sleep(150ms)
+  return "inner returned"
+}
+
+node main() {
+  const result = guard(time: 20ms) as {
+    return inner()
+  }
+  if (isFailure(result)) {
+    return "outer:${result.error.type}"
+  }
+  return result.value
+}

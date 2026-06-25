@@ -1,0 +1,15 @@
+def run(block: () -> void) {
+  block()
+}
+
+node main(): number {
+  let result = 0
+  run() as {
+    let y = 1
+    run() as {
+      y = 2
+    }
+    result = y
+  }
+  return result
+}

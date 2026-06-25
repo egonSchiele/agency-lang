@@ -84,7 +84,11 @@ export function resolveAgencyAgentPath(agent: string, cwd = process.cwd()): stri
   const candidate = path.resolve(cwd, agent);
   if (fs.existsSync(candidate)) return candidate;
 
-  if (!agent.includes("/") && !agent.includes(path.sep)) {
+  // Bundled lookup: a bare name ("foo.agency") or a relative subpath
+  // ("eval/goalJudge.agency") under the bundled agents dir. Absolute paths and
+  // `..` traversal are excluded so a bundled name can never escape that dir.
+  const segments = agent.split(/[\\/]/);
+  if (!path.isAbsolute(agent) && !segments.includes("..")) {
     const bundled = path.join(bundledAgentsDir, agent);
     if (fs.existsSync(bundled)) return bundled;
   }

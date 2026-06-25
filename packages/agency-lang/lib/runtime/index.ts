@@ -77,6 +77,7 @@ export {
   interrupt,
   isInterrupt,
   hasInterrupts,
+  reportUnhandledInterrupts,
   isDebugger,
   isRejected,
   isApproved,
@@ -102,6 +103,7 @@ export {
   ConcurrentInterruptError,
   CheckpointError,
   RestoreSignal,
+  AgencyAbort,
   AgencyCancelledError,
   isAbortError,
 } from "./errors.js";
@@ -119,7 +121,7 @@ export {
 } from "./state/checkpointStore.js";
 export type { Checkpoint } from "./state/checkpointStore.js";
 
-export { setupNode, setupFunction, runNode } from "./node.js";
+export { setupNode, setupFunction, runNode, runExportedFunction } from "./node.js";
 export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";

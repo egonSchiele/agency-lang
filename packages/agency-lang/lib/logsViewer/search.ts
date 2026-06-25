@@ -1,5 +1,9 @@
 import { TreeNode, ViewerState } from "./types.js";
-import { eventExpansionChildren, rawDataChildren } from "./render.js";
+import {
+  eventExpansionChildren,
+  rawDataChildren,
+  llmCallSpanChildren,
+} from "./render.js";
 
 // Walk every node in the forest (regardless of current expansion
 // state) AND every synthetic expansion row (conversation lines, JSON
@@ -30,6 +34,24 @@ export function findMatches(
   };
   const walk = (node: TreeNode, depth: number): void => {
     pushIfMatches(node);
+    // An `llmCall` span shows a flattened conversation (convoLines +
+    // spliced toolExecution spans + a raw-data toggle) instead of its
+    // raw children — walk exactly those rows so search matches what the
+    // renderer shows. Synthetic rows (convoLine / rawDataToggle) are
+    // leaves here; real nodes (the spliced toolExecution spans) recurse.
+    if (node.nodeKind === "span" && node.label === "llmCall") {
+      for (const child of llmCallSpanChildren(node, depth + 1, cols)) {
+        if (child.nodeKind === "convoLine") {
+          pushIfMatches(child);
+        } else if (child.nodeKind === "rawDataToggle") {
+          pushIfMatches(child);
+          for (const json of rawDataChildren(child)) pushIfMatches(json);
+        } else {
+          walk(child, depth + 1);
+        }
+      }
+      return;
+    }
     if (node.nodeKind === "event" && node.event) {
       for (const synth of eventExpansionChildren(node, depth + 1, cols)) {
         pushIfMatches(synth);
@@ -75,25 +97,32 @@ export function expandAncestorsOf(
   return next.size === state.expanded.size ? state : { ...state, expanded: next };
 }
 
-// Walk a synthetic id back to its real-forest leaf id, expanding each
-// synthetic parent so the match is visible. Synthetic id forms:
-//   <leaf>:convo:<n>          — conversation line under a leaf event
+// Walk a synthetic id back to its real-forest node id, expanding each
+// synthetic parent so the match is visible. The real node id is always
+// the first colon-delimited segment (nanoid span ids, `evt-N`,
+// `trace-…` contain no colons). Synthetic id forms:
+//   <leaf>:convo:<n>:<j>      — conversation line under a leaf event
 //   <leaf>:json:<n>           — raw JSON line under a non-pc leaf
 //   <leaf>:raw                — "raw data" toggle under a leaf
 //   <leaf>:raw:json:<n>       — JSON line under an opened raw toggle
-// Leaves themselves are returned unchanged.
+//   <span>:llm:convo:<n>:<j>  — conversation line under an llmCall span
+//   <span>:llm:raw            — "raw data" toggle under an llmCall span
+//   <span>:llm:raw:json:<n>   — JSON line under that opened raw toggle
+// Real node ids themselves are returned unchanged.
 function expandSyntheticAncestors(id: string, expanded: Set<string>): string {
   const colon = id.indexOf(":");
   if (colon < 0) return id;
-  const leafId = id.slice(0, colon);
+  const realId = id.slice(0, colon);
   const rest = id.slice(colon + 1);
-  // Always expand the leaf so its synthetic children become visible.
-  expanded.add(leafId);
-  // If the match lives under the "raw data" toggle, also expand it.
-  if (rest.startsWith("raw:") || rest === "raw") {
-    expanded.add(`${leafId}:raw`);
+  // Always expand the real node so its synthetic children become visible.
+  expanded.add(realId);
+  // If the match lives under a "raw data" toggle, also expand that toggle.
+  if (rest === "raw" || rest.startsWith("raw:")) {
+    expanded.add(`${realId}:raw`);
+  } else if (rest === "llm:raw" || rest.startsWith("llm:raw:")) {
+    expanded.add(`${realId}:llm:raw`);
   }
-  return leafId;
+  return realId;
 }
 
 function indexById(roots: TreeNode[]): Record<string, TreeNode> {

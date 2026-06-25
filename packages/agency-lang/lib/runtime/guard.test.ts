@@ -7,6 +7,7 @@ import {
   isGuardExceededError,
 } from "./guard.js";
 import { StateStack } from "./state/stateStack.js";
+import { readCause } from "./errors.js";
 
 describe("GuardExceededError", () => {
   it("is an Error subclass with name, type, limit, spent fields", () => {
@@ -64,6 +65,20 @@ describe("CostGuard", () => {
     expect(err.spent).toBeCloseTo(2.1, 5);
   });
 
+  it("exposes a guardId; its check()-produced trip carries it (C1)", () => {
+    // Load-bearing for C2 ownedGuardIds matching: the trip a cost guard
+    // produces at a sync point must identify WHICH guard tripped.
+    const stack = new StateStack();
+    const g = new CostGuard(2.0);
+    g.install(stack);
+    g.charge(3);
+    const err = g.check(stack)!;
+    expect(typeof g.guardId).toBe("string");
+    expect(g.guardId.length).toBeGreaterThan(0);
+    expect(readCause(err)?.kind).toBe("guardTrip");
+    expect((readCause(err) as { guardId: string }).guardId).toBe(g.guardId);
+  });
+
   it("check is independent of stack.localCost", () => {
     // Cost guard no longer derives spent from stack.localCost — the
     // counter is its own field. This is what lets the same guard
@@ -96,9 +111,12 @@ describe("CostGuard", () => {
     g.install(new StateStack());
     g.charge(1.5);
     const json = g.toJSON();
-    expect(json).toEqual({ kind: "cost", costLimit: 3.0, spent: 1.5 });
+    expect(json).toMatchObject({ kind: "cost", costLimit: 3.0, spent: 1.5 });
+    // guardId is serialized so ownedGuardIds matching survives resume.
+    expect((json as { guardId?: string }).guardId).toBe(g.guardId);
     const restored = guardFromJSON(json) as CostGuard;
     expect(restored).toBeInstanceOf(CostGuard);
+    expect(restored.guardId).toBe(g.guardId); // id round-trips
     restored.charge(2);
     expect(restored.check(new StateStack())!.spent).toBeCloseTo(3.5, 5);
   });
@@ -161,6 +179,38 @@ describe("TimeGuard", () => {
     expect(err).toBeInstanceOf(GuardExceededError);
     expect(err.type).toBe("time");
     expect(err.limit).toBe(500);
+  });
+
+  it("check()-produced trip carries the TimeGuard's guardId — runner path (C1)", () => {
+    // This is the path Runner.shouldSkip throws through. It is DISTINCT from
+    // the leaf-abort path (signal.reason), which already carries the id. If
+    // this regresses, after C2 a runner-path time trip carries guardId "" ,
+    // fails ownedGuardIds.includes, and escapes its own guard. Do not remove.
+    const stack = new StateStack();
+    const g = new TimeGuard(500);
+    g.install(stack);
+    vi.advanceTimersByTime(500);
+    const err = g.check(stack)!;
+    expect(readCause(err)?.kind).toBe("guardTrip");
+    expect((readCause(err) as { guardId: string }).guardId).toBe(g.guardId);
+  });
+
+  it("aborts with a structured guardTrip cause on its signal reason", () => {
+    const stack = new StateStack();
+    const g = new TimeGuard(500);
+    g.install(stack);
+    vi.advanceTimersByTime(500);
+    const cause = readCause(stack.abortSignal);
+    expect(cause).toMatchObject({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 500,
+      guardId: g.guardId,
+    });
+    // A leaf op that reads this cause and rejects with it must surface as
+    // a guardTrip — this is what lets __tryCall convert it to a Failure
+    // instead of letting a bare cancel escape the guarded block.
+    expect((cause as { spent: number }).spent).toBeGreaterThanOrEqual(0);
   });
 
   it("pause is idempotent — multiple calls charge elapsedMs once", () => {

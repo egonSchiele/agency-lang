@@ -61,6 +61,28 @@ const llmOptions: VariableType = {
     // Per-call cap on characters of a tool result fed back to the LLM
     // (overrides agency.json `client.maxToolResultChars`). `0` disables.
     { key: "maxToolResultChars", value: optional(number) },
+    // Resilience policy. Defaults: retries 2, timeout 10min, backoff 500ms
+    // x2 capped at 10s. `retries: 0` / `timeout: 0` disable. `setLlmOptions`
+    // sets the same per-branch.
+    //
+    // KEEP IN SYNC with `RetryConfig` in `lib/runtime/llmRetry.ts` — this is
+    // the Agency-AST mirror of that TS type. The TS side (`LlmOpts`,
+    // `LlmDefaults`) already extends `RetryConfig`; this list cannot, because
+    // it lives in the AST type universe rather than TS, so it must be
+    // updated by hand when fields are added.
+    { key: "retries", value: optional(number) },
+    { key: "timeout", value: optional(number) },
+    {
+      key: "backoff",
+      value: optional({
+        type: "objectType",
+        properties: [
+          { key: "initial", value: optional(number) },
+          { key: "factor", value: optional(number) },
+          { key: "max", value: optional(number) },
+        ],
+      }),
+    },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
   ],
@@ -79,6 +101,43 @@ const llmOptions: VariableType = {
  * `llm` stays here — the runtime implements it as a primitive, not a
  * stdlib wrapper, and its argument is structurally typed.
  */
+/**
+ * Methods callable on any Agency function / tool value
+ * (`fn.describe("…")`, `fn.preapprove()`, `fn.rename("…")`). Declared here
+ * as plain {@link BuiltinSignature}s so adding a new one is a one-line type
+ * entry — the typechecker validates arity + arg types generically via
+ * `validatePrimitiveMethodCall` (see synthesizer.ts) rather than needing
+ * bespoke checker code.
+ *
+ * `partial` is intentionally NOT here: it takes named arguments validated
+ * against the *base* function's parameter list, which the generic
+ * signature path can't express, so it keeps its own logic in the checker.
+ *
+ * Return type is `any` for all three: each returns a new function/tool, and
+ * the chain (`fn.partial(...).describe(...).rename(...)`) is resolved as
+ * `any` so further method calls type-check.
+ */
+export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
+  describe: {
+    params: [string],
+    returnType: "any",
+    description:
+      "Override the tool description an LLM sees for this function. Returns a new tool.",
+  },
+  preapprove: {
+    params: [],
+    returnType: "any",
+    description:
+      "Auto-approve every interrupt this function raises. Returns a new tool.",
+  },
+  rename: {
+    params: [string],
+    returnType: "any",
+    description:
+      "Give this tool a distinct name (the name the LLM sees and that tool-call dispatch matches). Use when deriving several tools from one function — `.partial()`/`.describe()`/import aliases keep the base name, which collides in a single `llm({tools})` call. Returns a new tool.",
+  },
+};
+
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- LLM primitive ---
   llm: {

@@ -6,12 +6,14 @@ import { apply } from "typestache";
 export const template = `if (__error instanceof RestoreSignal) {
   throw __error;
 }
-// GuardExceededError must propagate up to the stdlib \`guard\`
-// function's try/catch (in lib/runtime/result.ts via \`try block()\`).
-// If we converted it to a Failure here, the guard would never see
-// the trip and every guarded block would appear to succeed even
-// over budget. See lib/runtime/guard.ts.
-if (__error instanceof GuardExceededError) {
+// All aborts — cancellations (Esc / abort) AND guard trips — are now a single
+// AgencyAbort carrying an AbortCause, and must propagate untouched. The owning
+// guard's \`try\` converts its own guardTrip; every other abort unwinds. One
+// rung replaces the old GuardExceededError + isAbortError ladder. Converting
+// any abort to a Failure here would (a) hide a guard trip so the block appears
+// to succeed over budget, and (b) let a cancel limp onward / surface as a
+// logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+if (__error instanceof AgencyAbort) {
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before

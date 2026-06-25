@@ -3,7 +3,12 @@ import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import { runBatch, type RunBatchResult } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
-import type { State, StateStack } from "./state/stateStack.js";
+import {
+  seedBranchCost,
+  propagateBranchCost,
+  type State,
+  type StateStack,
+} from "./state/stateStack.js";
 
 /**
  * Thrown by {@link PromptRunner.step} when a step body returns interrupts.
@@ -205,6 +210,18 @@ export class PromptRunner {
         },
       })),
       hooks: {
+        // Roll each tool branch's LLM cost/tokens up to the parent stack,
+        // just like fork/parallel/race do (see Runner). Subagents run as
+        // tools in their own branch stacks; without these hooks their
+        // spend (e.g. an oracle on a pricier model) never propagated back,
+        // so `getCost()`/`getTokens()` under-reported the turn. seed is
+        // idempotent across interrupt/resume; propagate fires only on the
+        // no-interrupt completion path (runBatch.ts), and the delta math
+        // is correct across resume because the seed baseline is per-branch.
+        seedBranchCost: (childStack, parentStack) =>
+          seedBranchCost(childStack, parentStack),
+        propagateBranchCost: (branches, parentStack) =>
+          propagateBranchCost(branches, parentStack),
         // Snapshot the message thread INTO `self.messagesJSON` BEFORE
         // runBatch calls `ctx.checkpoints.create`. The checkpoint deep-
         // clones `self.locals` synchronously, so mutating messagesJSON

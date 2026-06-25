@@ -33,7 +33,7 @@ import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max
   details on `@validate(...)` and how it integrates with `!` validation.
 */
 
-export def isEmail(value: string): Result {
+export safe def isEmail(value: string): Result {
   """
   Returns success if value is a syntactically valid email address,
   failure otherwise.
@@ -43,7 +43,7 @@ export def isEmail(value: string): Result {
   return _isEmail(value)
 }
 
-export def isUrl(value: string): Result {
+export safe def isUrl(value: string): Result {
   """
   Returns success if value is an http:// or https:// URL,
   failure otherwise.
@@ -53,7 +53,7 @@ export def isUrl(value: string): Result {
   return _isUrl(value)
 }
 
-export def isUuid(value: string): Result {
+export safe def isUuid(value: string): Result {
   """
   Returns success if value is a canonical UUID string
   (8-4-4-4-12 hex), failure otherwise.
@@ -63,7 +63,7 @@ export def isUuid(value: string): Result {
   return _isUuid(value)
 }
 
-export def isInt(value: number): Result {
+export safe def isInt(value: number): Result {
   """
   Returns success if value is an integer (no fractional component),
   failure otherwise.
@@ -73,7 +73,7 @@ export def isInt(value: number): Result {
   return _isInt(value)
 }
 
-export def isPositive(value: number): Result {
+export safe def isPositive(value: number): Result {
   """
   Returns success if value > 0, failure otherwise.
 
@@ -82,7 +82,7 @@ export def isPositive(value: number): Result {
   return _isPositive(value)
 }
 
-export def isNegative(value: number): Result {
+export safe def isNegative(value: number): Result {
   """
   Returns success if value < 0, failure otherwise.
 
@@ -91,7 +91,7 @@ export def isNegative(value: number): Result {
   return _isNegative(value)
 }
 
-export def min(n: number, value: number): Result {
+export safe def min(n: number, value: number): Result {
   """
   Returns success if `value >= n`, failure otherwise. Bind `n` via PFA
   before passing to `@validate(...)`, e.g. `@validate(min.partial(n: 0))`.
@@ -102,7 +102,7 @@ export def min(n: number, value: number): Result {
   return _min(n, value)
 }
 
-export def max(n: number, value: number): Result {
+export safe def max(n: number, value: number): Result {
   """
   Returns success if `value <= n`, failure otherwise. Bind `n` via PFA
   before passing to `@validate(...)`, e.g. `@validate(max.partial(n: 150))`.
@@ -113,7 +113,7 @@ export def max(n: number, value: number): Result {
   return _max(n, value)
 }
 
-export def minLength(n: number, value: string): Result {
+export safe def minLength(n: number, value: string): Result {
   """
   Returns success if `value.length >= n`, failure otherwise. Bind `n`
   via PFA before passing to `@validate(...)`, e.g.
@@ -125,7 +125,7 @@ export def minLength(n: number, value: string): Result {
   return _minLength(n, value)
 }
 
-export def maxLength(n: number, value: string): Result {
+export safe def maxLength(n: number, value: string): Result {
   """
   Returns success if `value.length <= n`, failure otherwise. Bind `n`
   via PFA before passing to `@validate(...)`, e.g.
@@ -137,7 +137,7 @@ export def maxLength(n: number, value: string): Result {
   return _maxLength(n, value)
 }
 
-export def matches(pattern: string, value: string): Result {
+export safe def matches(pattern: string, value: string): Result {
   """
   Returns success if `value` matches the regular expression `pattern`,
   failure otherwise. Bind `pattern` via PFA before passing to

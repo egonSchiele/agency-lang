@@ -8,7 +8,8 @@ import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck, formatErrors } from "../typeChecker/index.js";
 import { discoverExports } from "../serve/discovery.js";
-import { createMcpHandler, startStdioServer } from "../serve/mcp/adapter.js";
+import { createMcpHandler, startStdioServer, mcpToolSummaryLines } from "../serve/mcp/adapter.js";
+import type { McpConfig } from "../serve/mcp/adapter.js";
 import {
   startMcpHttpServer,
   DEFAULT_MCP_PATH,
@@ -34,12 +35,12 @@ type CompileResult = {
   interruptEffectsByName: Record<string, InterruptEffect[]>;
 };
 
-function compileForServe(file: string): CompileResult {
+function compileForServe(file: string, options: { quiet?: boolean } = {}): CompileResult {
   const config = loadConfig();
   const absoluteFile = path.resolve(file);
   const symbolTable = SymbolTable.build(absoluteFile, config);
 
-  const outputPath = compile(config, file, undefined, { symbolTable });
+  const outputPath = compile(config, file, undefined, { symbolTable, quiet: options.quiet });
   if (!outputPath) {
     throw new Error(`Compilation failed for ${file}`);
   }
@@ -114,7 +115,13 @@ export async function serveMcp(
     rejectHttpOnlyOptions(options);
   }
 
-  const compileResult = compileForServe(file);
+  // For the stdio transport, stdout is the JSON-RPC protocol channel, so the
+  // compiler's `input → output` progress line must be suppressed to avoid
+  // corrupting the stream. (Standalone bundles are pre-compiled, so this only
+  // matters for the in-process runtime server.)
+  const compileResult = compileForServe(file, {
+    quiet: transport === "stdio" && !options.standalone,
+  });
   const serverName = options.name ?? path.basename(file, ".agency");
 
   if (options.standalone) {
@@ -153,12 +160,14 @@ export async function serveMcp(
     },
   };
 
-  const handler = createMcpHandler({
+  const mcpConfig: McpConfig = {
     serverName,
     serverVersion: VERSION,
     exports,
     policyConfig: { policyStore, interruptHandlers },
-  });
+  };
+  const handler = createMcpHandler(mcpConfig);
+  const toolSummary = mcpToolSummaryLines(mcpConfig);
 
   if (transport === "http") {
     const { port, host, mcpPath, apiKey } = resolveMcpHttpOptions(options, {
@@ -171,11 +180,12 @@ export async function serveMcp(
       path: mcpPath,
       apiKey,
       logger: createLogger("info"),
+      toolSummary,
     });
     return;
   }
 
-  startStdioServer(handler);
+  startStdioServer(handler, toolSummary);
 }
 
 function parseTransport(value: string | undefined): McpTransport {

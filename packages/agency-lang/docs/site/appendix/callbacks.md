@@ -98,6 +98,21 @@ Called after an LLM call completes. You can return a `MessageJSON[]` array to ov
 - `timeTaken`: how long the call took in milliseconds
 - `messages`: the messages that were sent
 
+### onLLMRetry
+Called just before the backend waits to retry an LLM call after a transient failure (see [retries and timeouts](../guide/llm.md#resilience-retries-and-timeouts)). Side-effect only — it cannot change whether the retry happens.
+
+- `attempt`: the 1-based retry number (retry 1, 2, …)
+- `maxRetries`: the configured retry count
+- `delayMs`: how long the backend will wait before this retry
+- `reason`: why we're retrying — `"timeout"`, `"connectionLost"`, `"streamInterrupted"`, `"rateLimit"`, `"serverError"`, or `"overloaded"`
+- `detail`: the raw provider message
+
+### onLLMTimeout
+Called whenever an LLM call exceeds its per-call deadline (`timeout`), whether or not a retry follows.
+
+- `limitMs`: the deadline that was exceeded
+- `attempt`: the 0-based attempt that timed out
+
 ### onFunctionStart
 Called when a function (tool) begins executing.
 

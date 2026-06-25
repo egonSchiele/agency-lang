@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"ok\":true,\"lo\":false,\"hi\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Locally-defined value-param validated alias validates end-to-end through its emitted descriptor factory."
+    }
+  ]
+}

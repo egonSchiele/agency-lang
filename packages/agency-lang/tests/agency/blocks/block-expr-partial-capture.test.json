@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "a lambda passed as a .partial named-arg value reads an enclosing block's local",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

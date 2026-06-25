@@ -143,25 +143,31 @@ node main(): string {
   }
   console.log("Test 6 passed");
 
-  // --- Test 7: eval optimize baseline-only run (no LLM calls) ---
-  // --iterations 0 runs target discovery, the baseline eval, artifacts, and
-  // the reporter without ever calling the mutator or judge models.
+  // --- Test 7: eval optimize baseline-only run ---
+  // --iterations 0 skips the mutator, but the greedy optimizer still grades the
+  // baseline with the goal judge — an llm() call. Mock it so the smoke test runs
+  // offline (no API key in CI); without a mock the judge's structured output is
+  // empty and fails schema validation. The flat-array form routes every llm()
+  // call through one queue; eval-agent itself makes none.
+  const judgeMockEnv = {
+    AGENCY_LLM_MOCKS: JSON.stringify([
+      { return: { score: 1, reasoning: "mock judge verdict" } },
+      { return: { score: 1, reasoning: "mock judge verdict" } },
+    ]),
+  };
   console.log("--- Test 7: eval optimize baseline-only ---");
   const optimizeOutput = run(
     dir,
     "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id smoke --no-writeback 2>&1",
+    { env: judgeMockEnv },
   );
-  assertIncludes(optimizeOutput, "1 optimize target(s) discovered");
+  assertIncludes(optimizeOutput, "1 target(s)");
   assertIncludes(optimizeOutput, "eval-agent.agency:global:greeting");
   assertIncludes(optimizeOutput, "champion iteration baseline");
   assertIncludes(optimizeOutput, "Optimized variables");
   const optimizeSummary = JSON.parse(readFileSync(join(dir, "optimize-runs", "smoke", "summary.json"), "utf-8"));
   if (optimizeSummary.championIter !== "baseline") {
     throw new Error(`optimize summary unexpected: ${JSON.stringify(optimizeSummary)}`);
-  }
-  const targetsJson = JSON.parse(readFileSync(join(dir, "optimize-runs", "smoke", "targets.json"), "utf-8"));
-  if (targetsJson.targets.length !== 1 || targetsJson.targets[0].id !== "eval-agent.agency:global:greeting") {
-    throw new Error(`targets.json unexpected: ${JSON.stringify(targetsJson)}`);
   }
   // The legacy flag surface must stay dead.
   const legacyOutput = run(dir, "npx agency eval optimize --agent eval-agent.agency --goal x 2>&1", { expectFail: true });
@@ -170,6 +176,7 @@ node main(): string {
   const silentOutput = run(
     dir,
     "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id silent-smoke --no-writeback --silent 2>&1",
+    { env: judgeMockEnv },
   );
   if (silentOutput.trim() !== "") {
     throw new Error(`--silent printed output: ${JSON.stringify(silentOutput)}`);

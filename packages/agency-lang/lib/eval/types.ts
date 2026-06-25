@@ -18,7 +18,7 @@
  * | promptCompletion.threadId            | ✗                     | ✓                         |
  * | toolCall.threadId                    | ✗                     | ✓                         |
  * | toolCallStart.threadId               | ✗                     | ✓                         |
- * | evalInputRecorded                    | ✗                     | only if agent annotates   |
+ * | evalValueRecorded                    | ✗                     | only if agent annotates   |
  * | evalOutputRecorded                   | ✗                     | only if agent annotates   |
  *
  * Legacy traces parse without errors; extraction degrades by leaving
@@ -41,13 +41,13 @@ export type EvalRecord = {
    *  input is not supported. */
   source: string;
 
-  /** Values used as eval inputs. Explicit values recorded via
-   *  std::statelog.evalInput() are preferred; if absent, the
+  /** Values recorded as eval values. Explicit values recorded via
+   *  std::statelog.evalValue() are preferred; if absent, the
    *  extractor may synthesize one fallback entry from the last
    *  user-role message of the first promptCompletion on the top-level
    *  thread (warning emitted in `warnings`). Empty only when neither
    *  explicit events nor a heuristic source exists. */
-  evalInputs: EvalValue[];
+  evalValues: EvalValue[];
 
   /** Values used as eval outputs. Explicit values recorded via
    *  std::statelog.evalOutput() are preferred; if absent, the
@@ -197,7 +197,7 @@ export type Metrics = {
   toolCounts: Record<string, number>;
 };
 
-/** One firing of `evalInput(...)` or `evalOutput(...)` from agent
+/** One firing of `evalValue(...)` or `evalOutput(...)` from agent
  *  code, plus enough provenance for consumers to filter by thread
  *  (e.g. drop subagent firings) or correlate with the event timeline.
  *  `tMs` is derived from the envelope timestamp at extract time, not

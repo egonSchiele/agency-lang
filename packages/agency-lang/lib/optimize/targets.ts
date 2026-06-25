@@ -65,6 +65,25 @@ export function discoverOptimizeTargets(
   const baseDir = options.baseDir
     ? fs.realpathSync(path.resolve(options.baseDir))
     : defaultBaseDir(parsedFiles.map((parsed) => parsed.absoluteFile));
+  return buildTargetSet(absoluteEntryFile, baseDir, parsedFiles);
+}
+
+/** Absolute base directory of `entryFile`'s local import closure — the seed
+ *  directory for a run. Shared by the optimizer (as `source.baseDir`) and by
+ *  plain eval, so both compute the same default seed when no explicit one is
+ *  given. */
+export function agentClosureBaseDir(entryFile: string): string {
+  const absoluteEntryFile = fs.realpathSync(path.resolve(entryFile));
+  const parsedFiles: ParsedSourceFile[] = [];
+  visitFile(absoluteEntryFile, {}, parsedFiles);
+  return defaultBaseDir(parsedFiles.map((parsed) => parsed.absoluteFile));
+}
+
+function buildTargetSet(
+  absoluteEntryFile: string,
+  baseDir: string,
+  parsedFiles: ParsedSourceFile[],
+): OptimizeTargetSet {
 
   const files: Record<string, OptimizeSourceFile> = {};
   const targets: OptimizeTarget[] = [];
@@ -245,4 +264,9 @@ export function promptSegmentsToString(segments: PromptSegment[]): string {
 
 function relativeFile(baseDir: string, absoluteFile: string): string {
   return path.relative(baseDir, absoluteFile).split(path.sep).join("/");
+}
+
+/** A relpath→source map for a target set (e.g. the unchanged baseline file set). */
+export function fileMap(source: OptimizeTargetSet): Record<string, string> {
+  return Object.fromEntries(Object.entries(source.files).map(([rel, sf]) => [rel, sf.source]));
 }

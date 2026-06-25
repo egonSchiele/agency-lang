@@ -15,6 +15,7 @@ import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
+import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
 import { color } from "@/utils/termcolors.js";
 
@@ -733,6 +734,15 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
   // REPL — we leave it paused so the process can still exit cleanly.)
   const wasPaused = process.stdin.isPaused();
 
+  // `prompts` leaves `process.stdin` in cooked (canonical) mode when it
+  // closes its readline. The line-mode REPL runs in raw mode and renders
+  // input itself, so a cooked stdin makes the terminal ALSO echo every
+  // line — the user sees their next prompt printed twice, and it persists
+  // because nothing re-asserts raw afterward. Snapshot the raw state on
+  // entry and restore it on exit (mirrors `wasPaused` above) so the modal
+  // leaves the terminal exactly as it found it.
+  const wasRaw = !!(process.stdin.isTTY && process.stdin.isRaw);
+
   // Wrap any caller-supplied `onState` so we always get a shot at
   // detecting Escape, without clobbering custom state hooks.
   const userOnState = (question as any).onState;
@@ -780,6 +790,14 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
     if (!wasPaused && process.stdin.isPaused()) {
       process.stdin.resume();
     }
+    // Restore the raw-mode state `prompts` clobbered (see `wasRaw` above).
+    if (
+      process.stdin.isTTY &&
+      typeof process.stdin.setRawMode === "function" &&
+      process.stdin.isRaw !== wasRaw
+    ) {
+      process.stdin.setRawMode(wasRaw);
+    }
   }
 }
 
@@ -824,6 +842,7 @@ export async function _promptsAutocomplete(
   items: PromptsChoiceItem[],
   allowFreeText: boolean,
   hint: string = "",
+  cancelOnEscape: boolean = false,
 ): Promise<any> {
   _assertLineModeAvailable("autocomplete");
   const result = await _runPrompt({
@@ -834,7 +853,18 @@ export async function _promptsAutocomplete(
     choices: items.map((it) => ({ title: `${color.cyan(it.key)} - ${it.label}`, value: it.key })),
     suggest: _buildSuggest(items, allowFreeText),
   });
-  if (isFailure(result)) return result;
+  if (isFailure(result)) {
+    // When the caller opts in (e.g. a policy approval menu), Escape means
+    // "cancel the whole request" rather than "re-prompt". Escalate the
+    // cancellation to AgencyCancelledError: __tryCall and the generated
+    // function catches both re-throw it, so it unwinds to the REPL exactly
+    // like an Esc during the thinking phase. (Ctrl+C still exits the
+    // process inside _runPrompt before we get here.)
+    if (cancelOnEscape) {
+      throw new AgencyCancelledError("cancelled by user");
+    }
+    return result;
+  }
 
   const raw = String(result.value);
   if (raw.startsWith(AUTOCOMPLETE_FREE_TEXT_PREFIX)) {

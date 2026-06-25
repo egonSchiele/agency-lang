@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer:guardFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "pong" }
+      ],
+      "description": "Cost analogue of the time outer-tighter case. Outer cost guard ($0.000001) is tighter than inner ($1.0). One LLM call charges SYNTHETIC_COST ($0.000002) against both; only the outer exceeds, so the trip carries the OUTER's guardId. Increment-2 guardId matching re-throws it past the inner (which does not own it) and converts at the outer -> 'outer:guardFailure'. Pins the cost half of the nested-routing fix."
+    }
+  ]
+}

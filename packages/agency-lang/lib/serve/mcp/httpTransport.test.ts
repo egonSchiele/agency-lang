@@ -31,6 +31,7 @@ function makeHandler() {
       description: "Add two numbers",
       agencyFunction: addFn,
       interruptEffects: [],
+      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
     },
   ];
   return createMcpHandler({

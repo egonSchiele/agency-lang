@@ -178,7 +178,7 @@ export safe def currentThreadId(): string {
   return _currentThreadId()
 }
 
-export def getThread(id: string, offset: number = 0, limit: number = 50): Result {
+export safe def getThread(id: string, offset: number = 0, limit: number = 50): Result {
   """
   Read a slice of a thread's messages. Returns success holding `[]`
   for an unknown id; returns failure when called outside an Agency

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"nothing\":true,\"ok\":true,\"lo\":false,\"hi\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A nullable value-param validated alias short-circuits on null but still runs the factory's validator chain (both bounds) on a non-null value."
+    }
+  ]
+}

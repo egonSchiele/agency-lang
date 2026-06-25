@@ -222,9 +222,42 @@ type ExecuteNodeArgs = {
   // Suppress compile progress lines. Internal agent invocations (judge,
   // mutator) set this so their ephemeral compiles don't clutter user logs.
   quietCompile?: boolean;
+  // Reuse a precompiled `.js` sibling when present instead of recompiling.
+  // See RunAgencyNodeArgs.preferCompiled.
+  preferCompiled?: boolean;
 };
 
-export async function executeNodeAsync({
+export type RunAgencyNodeArgs = {
+  config: AgencyConfig;
+  agencyFile: string;
+  nodeName: string;
+  hasArgs: boolean;
+  argsString: string;
+  interruptHandlers?: InterruptHandler[];
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  argv?: string[];
+  scratchDir?: string;
+  maxBufferBytes?: number;
+  quietCompile?: boolean;
+  /** Extra env merged over process.env for the spawned subprocess. */
+  env?: Record<string, string>;
+  /**
+   * Reuse a precompiled `.js` sitting next to the `.agency` source instead of
+   * recompiling, when one exists. Bundled agents (judges, proposers) ship such
+   * a sibling in `dist`, so repeated invocations (e.g. per optimize iteration)
+   * skip the redundant compile. No-op when running from uncompiled source.
+   */
+  preferCompiled?: boolean;
+};
+
+/**
+ * General-purpose runner: compile/resolve the agent, render the evaluate
+ * script, spawn `node`, and parse the results. No test-LLM coupling — callers
+ * pass any extra `env` (e.g. the deterministic-LLM mocks computed by
+ * `executeNodeAsync`).
+ */
+export async function runAgencyNode({
   config,
   agencyFile,
   nodeName,
@@ -233,21 +266,26 @@ export async function executeNodeAsync({
   interruptHandlers,
   timeoutMs,
   signal,
-  llmMocks,
-  useTestLLMProvider,
   argv,
   scratchDir,
   maxBufferBytes,
   quietCompile,
-}: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
+  env,
+  preferCompiled,
+}: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
   try {
     const distDir = config.distDir;
+    const siblingJs = agencyFile.replace(/\.agency$/, ".js");
     let compiledPath: string;
 
     if (distDir) {
       compiledPath = resolveCompiledFile(distDir, agencyFile);
+    } else if (preferCompiled && agencyFile.endsWith(".agency") && fs.existsSync(siblingJs)) {
+      // A precompiled sibling exists (bundled agents in dist) — reuse it
+      // instead of recompiling the same unchanging source every call.
+      compiledPath = siblingJs;
     } else {
       compiledPath = compile(config, agencyFile, undefined, {
         importStrategy: new RunStrategy(),
@@ -289,24 +327,6 @@ export async function executeNodeAsync({
     // covers both the per-call `timeout` option and the AbortSignal
     // (suite-ceiling/SIGINT) path, which otherwise default to SIGTERM.
     const wantsKill = timeoutMs !== undefined || signal !== undefined;
-    // Pass mocks to the subprocess as a JSON string in an env var. The
-    // compiled module's imports template auto-activates DeterministicClient
-    // when AGENCY_LLM_MOCKS is set. No temp file, no cleanup needed.
-    //
-    // Activate the deterministic client whenever EITHER:
-    //   - the suite-wide AGENCY_USE_TEST_LLM_PROVIDER env var is set
-    //     (typical for PR CI), OR
-    //   - the per-test `useTestLLMProvider` flag is true (lets a single
-    //     test pin itself to the deterministic provider even on
-    //     push-to-main CI where the env var is unset).
-    // Setting the env var to "[]" when no mocks are provided still
-    // activates the deterministic client so any llm() call fails cleanly
-    // instead of falling through to the real OpenAI client.
-    const useDeterministic =
-      !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
-    const mocksEnv = useDeterministic
-      ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
-      : {};
     // Forward `argv` so the spawned subprocess sees them as
     // `process.argv.slice(2)`. Used by std::args smoke tests and any
     // other code that reads command-line flags.
@@ -316,7 +336,7 @@ export async function executeNodeAsync({
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
       ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
-      env: { ...process.env, ...mocksEnv },
+      env: { ...process.env, ...(env ?? {}) },
     });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };
@@ -324,6 +344,28 @@ export async function executeNodeAsync({
     safeUnlink(evaluateFile);
     safeUnlink(resultsFile);
   }
+}
+
+/**
+ * Test/eval wrapper over {@link runAgencyNode}: activates the deterministic LLM
+ * client by setting AGENCY_LLM_MOCKS whenever the suite-wide
+ * AGENCY_USE_TEST_LLM_PROVIDER env var is set OR the per-call
+ * `useTestLLMProvider` flag is true, then delegates. Existing callers keep
+ * their behavior. Setting the env var to "[]" when no mocks are provided still
+ * activates the deterministic client so any llm() call fails cleanly instead of
+ * falling through to the real OpenAI client.
+ */
+export async function executeNodeAsync({
+  llmMocks,
+  useTestLLMProvider,
+  ...rest
+}: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
+  const useDeterministic =
+    !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
+  const env: Record<string, string> = useDeterministic
+    ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
+    : {};
+  return runAgencyNode({ ...rest, env });
 }
 
 export function safeUnlink(filePath: string) {
@@ -463,7 +505,7 @@ export async function executeJudgeAsync(
   stderr: string;
 }> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
-  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+  const judgeAgencyFile = path.resolve(currentDir, "../agents/eval/judge.agency");
   const { raw, stdout, stderr } = await runAgencyJudge<
     {
       actualOutput: string;

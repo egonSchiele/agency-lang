@@ -69,6 +69,14 @@ export function getStdlibDir(): string {
 }
 
 /**
+ * Returns the absolute path to the bundled agents directory, resolved relative
+ * to this compiled module (`lib/agents` in dev, `dist/lib/agents` at runtime).
+ */
+export function getAgentsDir(): string {
+  return path.join(__dirname, "agents");
+}
+
+/**
  * Returns all .agency files in the stdlib directory as absolute paths.
  */
 export function getStdlibFiles(): string[] {

@@ -1,3 +1,34 @@
+import { map } from "std::array"
+
+// Basic agency functionality: auto-approve the read-only `agency`
+// subcommands the code agent runs via the exec-based `agencyCli` tool.
+// Matched on command + subcommand (no shell, so no chaining); other
+// subcommands (run, compile, ...) still prompt.
+static const AGENCY_SAFE_SUBCOMMANDS = [
+  "parse",
+  "ast",
+  "typecheck",
+  "tc",
+  "help",
+  "preprocess",
+  "definition",
+  "diagnostics",
+  "doc",
+  "literate",
+]
+
+def agencyExecApproveRules(): any[] {
+  return map(AGENCY_SAFE_SUBCOMMANDS) as sub {
+    return {
+      match: {
+        command: "agency",
+        subcommand: sub
+      },
+      action: "approve"
+    }
+  }
+}
+
 export static const minimalAutoApprovePolicy = {
   "std::memory::remember": [{
     action: "approve"
@@ -13,7 +44,8 @@ export static const minimalAutoApprovePolicy = {
   }],
   "std::memory::disableMemory": [{
     action: "approve"
-  }]
+  }],
+  "std::exec": agencyExecApproveRules()
 }
 
 export static const recommendedAutoApprovePolicy = {

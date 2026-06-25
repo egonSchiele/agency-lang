@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "a block-local variable used as a handler resolves to the block frame when it fires",
+      "input": "",
+      "expectedOutput": "[\"start\",\"end\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

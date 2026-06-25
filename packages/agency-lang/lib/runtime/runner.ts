@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
-import { RestoreSignal } from "./errors.js";
+import { RestoreSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
@@ -10,7 +10,11 @@ import { runBatch } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { BranchState, State } from "./state/stateStack.js";
-import { StateStack } from "./state/stateStack.js";
+import {
+  StateStack,
+  seedBranchCost as seedBranchCostImpl,
+  propagateBranchCost as propagateBranchCostImpl,
+} from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
 
@@ -35,6 +39,34 @@ export type ThreadStepOpts = {
  *  silently mangled. */
 export function stripSlug(slug: string): string {
   return /^t\d+$/.test(slug) ? slug.slice(1) : slug;
+}
+
+/** Cap on the serialized size of a fork-branch value attached to a
+ *  `forkBranchEnd` statelog event. Branch results are usually tiny (a
+ *  number, a short object) but could be large; bound it so telemetry
+ *  can't balloon. */
+const FORK_VALUE_CHAR_CAP = 4000;
+
+/** Serialize a fork branch's return value for the `forkBranchEnd` event
+ *  WITHOUT ever throwing — telemetry must not break execution. Returns:
+ *  - `undefined` when there is no value (non-success outcome, or a value
+ *    JSON can't represent, e.g. a function);
+ *  - a deep JSON clone for normal small values (so it renders cleanly);
+ *  - a truncated string for oversized values;
+ *  - `"[unserializable]"` when stringification throws (e.g. a cycle). */
+export function safeStatelogValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+  if (json === undefined) return undefined;
+  if (json.length > FORK_VALUE_CHAR_CAP) {
+    return json.slice(0, FORK_VALUE_CHAR_CAP) + "…[truncated]";
+  }
+  return JSON.parse(json);
 }
 
 /**
@@ -236,6 +268,17 @@ export class Runner {
    *      abort (race-loser branch cancel). Halt silently as before. */
   private shouldSkip(): boolean {
     if (this.stack?.abortSignal?.aborted && !this.halted) {
+      // If the abort carries a guard trip that was ALREADY delivered via
+      // the leaf-op path (an in-flight sleep/fetch aborted, then __tryCall
+      // converted it to a Failure), the trip is handled. Do NOT re-throw
+      // it here — this `shouldSkip` may be gating the guard's own
+      // `_popGuard` cleanup step, and throwing would surface an unhandled
+      // GuardExceededError for a trip the user already saw as a Failure.
+      // Fall through so cleanup runs. See the abort-taxonomy spec.
+      const cause = readCause(this.stack.abortSignal);
+      if (cause?.kind === "guardTrip" && cause.delivered) {
+        return this.halted || this._break || this._continue;
+      }
       // Walk innermost-first so the deepest guard reports its trip
       // first. Mirrors the order in prompt.ts's cost-check loop.
       for (let i = this.stack.guards.length - 1; i >= 0; i--) {
@@ -344,21 +387,8 @@ export class Runner {
    *  before the winner resumes. See docs/superpowers/specs/2026-05-20-
    *  thread-builtins-and-stdlib-design.md. */
   private seedBranchCost(branchStack: StateStack, parentStack: StateStack): void {
-    // Fresh-branch detection: seedBranchCost can be called more than
-    // once for the same branch (e.g. a branch interrupts mid-flight
-    // and the parent resumes runBatch on the next response cycle).
-    // We must not clobber state the branch has already accumulated.
-    // A branch is "fresh" iff it has no cost AND no tokens. Guards are
-    // handled separately by `rehydrateInheritedGuards` in runBatch.ts —
-    // they have their own idempotency tracking via BranchState.
-    const isFresh =
-      branchStack.localCost === 0 && branchStack.localTokens === 0;
-    if (!isFresh) return;
-
-    branchStack.localCost = parentStack.localCost;
-    branchStack.localTokens = parentStack.localTokens;
-    branchStack.seedCost = parentStack.localCost;
-    branchStack.seedTokens = parentStack.localTokens;
+    // Shared with PromptRunner's tool-dispatch batches (see stateStack.ts).
+    seedBranchCostImpl(branchStack, parentStack);
   }
 
   /** Propagate cost/token deltas from a set of branches back to the
@@ -373,14 +403,8 @@ export class Runner {
     branches: BranchState[],
     parentStack: StateStack,
   ): void {
-    let costDelta = 0;
-    let tokensDelta = 0;
-    for (const branch of branches) {
-      costDelta += branch.stack.localCost - branch.stack.seedCost;
-      tokensDelta += branch.stack.localTokens - branch.stack.seedTokens;
-    }
-    parentStack.localCost += costDelta;
-    parentStack.localTokens += tokensDelta;
+    // Shared with PromptRunner's tool-dispatch batches (see stateStack.ts).
+    propagateBranchCostImpl(branches, parentStack);
   }
 
   // ── Core step method ──
@@ -1072,12 +1096,13 @@ export class Runner {
           this.seedBranchCost(childStack, parentStack),
         propagateBranchCost: (branches, parentStack) =>
           this.propagateBranchCost(branches, parentStack),
-        onBranchEnd: (_key, branchIndex, outcome, timeTaken) => {
+        onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
           this.ctx.statelogClient.forkBranchEnd({
             forkId,
             branchIndex,
             outcome,
             timeTaken,
+            value: safeStatelogValue(value),
           });
         },
         onCheckpoint: (cpId) => {
@@ -1155,12 +1180,13 @@ export class Runner {
           this.propagateBranchCost(losers, parentStack),
         propagateWinnerCost: (winner, parentStack) =>
           this.propagateBranchCost([winner], parentStack),
-        onBranchEnd: (_key, branchIndex, outcome, timeTaken) => {
+        onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
           this.ctx.statelogClient.forkBranchEnd({
             forkId,
             branchIndex,
             outcome,
             timeTaken,
+            value: safeStatelogValue(value),
           });
         },
         onCheckpoint: (cpId) => {

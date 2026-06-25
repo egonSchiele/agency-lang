@@ -68,6 +68,7 @@ jobs:
         node tests/integration/bundlers/test-esbuild.mjs ./agency-lang-*.tgz
         node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
         node tests/integration/cli/test.mjs ./agency-lang-*.tgz
+        node tests/integration/serve/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     - name: Main-only CLI command integration tests
       if: matrix.node-version == '22.x' && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -112,6 +113,14 @@ jobs:
         else
           pnpm run test:agency-js
         fi
+    - name: Built-in agent tests
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+      # Smoke tests for the agents bundled under lib/agents/ (deterministic
+      # LLM provider, no API key). Catches wiring regressions like duplicate
+      # tool names that only surface when an agent actually issues an LLM call.
+      run: pnpm run test:agents
     - name: Generate stdlib coverage report
       if: matrix.node-version == '22.x' && always() && !cancelled()
       working-directory: packages/agency-lang

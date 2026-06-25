@@ -9,9 +9,11 @@
  * Routing + handoff used to live here; those moved to `std::agent`'s
  * `route()` / `handoff()` and the agent now consumes them directly.
  */
+import { setLlmOptions } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
-import { setLlmOptions, pickProvider } from "std::llm"
+
+import { resolveDetected, planModels } from "./lib/models.agency"
 
 // Per-user state directory for the agent (persistent memory + saved
 // policy). We expand `~` ourselves via `env("HOME")` because
@@ -46,24 +48,14 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // which silently disables Tier 2 (embedding-similarity) recall.
 // `text-embedding-3-small` is the canonical default cited in the
 // memory guide; cheap and ubiquitous.
-static const _memoryReady = enableMemory({
+static const _memoryReady = enableMemory(
+  {
   dir: "${AGENCY_AGENT_DIR}/memory",
   embeddings: {
     model: "text-embedding-3-small"
   }
-}) with approve
-
-// Default models per provider. `slowProvider` pins the provider for the
-// deep-reasoning call: OpenAI needs the Responses API for reasoning /
-// extended thinking; native providers use their own. Used as fallbacks
-// when the user doesn't pass --model / --fastmodel / --slowmodel.
-type ProviderModels = { fast: string; slow: string; slowProvider: string }
-
-export static const MODELS: Record<string, ProviderModels> = {
-  openai: { fast: "gpt-4o-mini", slow: "gpt-5.5", slowProvider: "openai-responses" },
-  anthropic: { fast: "claude-haiku-4-5-20251001", slow: "claude-opus-4-8", slowProvider: "anthropic" },
-  google: { fast: "gemini-2.5-flash", slow: "gemini-2.5-pro", slowProvider: "google" }
-}
+},
+) with approve
 
 // The slow ("deep reasoning") model + its provider, set once by
 // `configureModels()`. The deep subagents (oracle, explorer) read these.
@@ -83,44 +75,30 @@ export def getSlowProvider(): string {
 /** Resolve and apply the agent's models from CLI flag values (each
  *  already normalized to "" when absent). The fast model becomes the
  *  run-wide default; the slow model is stored for the deep subagents.
- *  Explicit flags win; otherwise a provider is detected from API-key env
- *  vars and its defaults are used (exits the process if none is found).
- *  `provider` forces the provider when a model name doesn't imply one
- *  (e.g. a custom or local model). */
-export def configureModels(model: string, fast: string, slow: string, provider: string) {
-  let detected = "openai"
-  const needFast = fast == "" && model == ""
-  const needSlow = slow == "" && model == ""
-  if (needFast || needSlow) {
-    const picked = pickProvider()
-    if (isSuccess(picked)) {
-      detected = picked.value
-    } else {
-      print(picked.error)
-      process.exit(1)
-    }
+ *  Explicit model flags win; an explicit `--provider` for a recognized
+ *  provider selects that provider's default models and skips env
+ *  auto-detection; otherwise a provider is detected from API-key env
+ *  vars. Exits the process with a printed message on any unresolvable
+ *  combination (no key, missing key for a forced provider, or a custom
+ *  `--provider` with no model). Resolution logic lives in
+ *  `lib/models.agency`; this shell just applies the result. */
+export def configureModels(
+  model: string,
+  fast: string,
+  slow: string,
+  provider: string,
+) {
+  const detected = resolveDetected(model, fast, slow, provider)
+  if (isFailure(detected)) {
+    print(detected.error)
+    process.exit(1)
   }
 
-  let fastModel = MODELS[detected].fast
-  if (fast != "") {
-    fastModel = fast
-  } else if (model != "") {
-    fastModel = model
-  }
-  setLlmOptions({ model: fastModel, provider: provider })
-
-  if (slow != "") {
-    slowModel = slow
-    slowProvider = provider
-  } else if (model != "") {
-    slowModel = model
-    slowProvider = provider
-  } else {
-    slowModel = MODELS[detected].slow
-    if (provider != "") {
-      slowProvider = provider
-    } else {
-      slowProvider = MODELS[detected].slowProvider
-    }
-  }
+  const plan = planModels(model, fast, slow, provider, detected.value)
+  setLlmOptions({
+    model: plan.fastModel,
+    provider: plan.fastProvider
+  })
+  slowModel = plan.slowModel
+  slowProvider = plan.slowProvider
 }

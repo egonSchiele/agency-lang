@@ -61,6 +61,7 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { agencyStore } from "./asyncContext.js";
+import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -104,12 +105,15 @@ export type BatchHooks = {
   ) => void;
   /** Called once per branch start (statelog). */
   onBranchStart?: (key: string, index: number) => void;
-  /** Called once per branch end with its outcome and elapsed time in ms. */
+  /** Called once per branch end with its outcome and elapsed time in ms.
+   *  On a `success` outcome `value` is the branch's return value; for
+   *  every other outcome it is `undefined` (there is no value to report). */
   onBranchEnd?: (
     key: string,
     index: number,
     outcome: "success" | "interrupted" | "failure" | "aborted",
     timeMs: number,
+    value?: unknown,
   ) => void;
   /** Called once immediately before `ctx.checkpoints.create` deep-clones
    * the parent frame. Use this to flush state that was mutated by
@@ -524,7 +528,7 @@ export async function runBatch<T>(
         );
       }
     } else {
-      if (!cached) hooks?.onBranchEnd?.(child.key, i, "success", timeMs);
+      if (!cached) hooks?.onBranchEnd?.(child.key, i, "success", timeMs, value);
       if (recordOutcomes) {
         parentFrame.setResultOnBranch(child.key, value as any);
       }
@@ -588,7 +592,9 @@ async function runRaceFirstTime<T>(
     // results we'll throw away.
     for (let i = 0; i < tasks.length; i++) {
       if (i === failedIndex) continue;
-      tasks[i].branch.abortController?.abort();
+      tasks[i].branch.abortController?.abort(
+        new AgencyCancelledError("race loser", makeAbortCause({ kind: "raceLoser" })),
+      );
     }
     throw err;
   }
@@ -601,7 +607,9 @@ async function runRaceFirstTime<T>(
   for (let i = 0; i < tasks.length; i++) {
     if (i === winnerIndex) continue;
     const t = tasks[i];
-    t.branch.abortController?.abort();
+    t.branch.abortController?.abort(
+      new AgencyCancelledError("race loser", makeAbortCause({ kind: "raceLoser" })),
+    );
     if (!t.cached) {
       hooks?.onBranchEnd?.(
         t.child.key,
@@ -617,6 +625,7 @@ async function runRaceFirstTime<T>(
       winnerIndex,
       hasInterrupts(winnerValue) ? "interrupted" : "success",
       winnerTime,
+      hasInterrupts(winnerValue) ? undefined : winnerValue,
     );
   }
 
@@ -762,6 +771,7 @@ async function runRaceResume<T>(
     winnerIndex,
     "success",
     performance.now() - startedAt,
+    value,
   );
   parentFrame.setResultOnBranch(child.key, value as any);
   hooks?.propagateWinnerCost?.(branch, parentStack);

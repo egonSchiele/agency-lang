@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer:timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Outer time guard (20ms) TIGHTER than inner (5s). The outer's timer fires while the inner block's sleep is in flight, so the in-flight sleep is aborted carrying the OUTER's guardTrip cause. FIXED by Increment-2 guardId matching: the inner guard's `try` (_runGuarded with ownedGuardIds = [inner id]) does NOT own the outer's guardId, so it re-throws past the inner; the OUTER guard's `try` owns it and converts -> 'outer:timeoutFailure'. Previously (Increment 1) the inner mis-attributed the outer's trip to itself ('inner:timeoutFailure:20'). This pins the corrected nested-guard routing."
+    }
+  ]
+}

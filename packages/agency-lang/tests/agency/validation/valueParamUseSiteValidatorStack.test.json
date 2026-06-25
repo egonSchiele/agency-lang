@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"ok\":true,\"failFactoryMax\":false,\"failUseSiteMin\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A use-site @validate stacked on a value-param alias reference runs alongside the factory's own validator chain; both the factory bound and the use-site bound are enforced."
+    }
+  ]
+}

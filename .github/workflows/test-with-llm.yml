@@ -53,3 +53,13 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: pnpm run test:agency-js
+
+    - name: Built-in agent tests (real LLM)
+      working-directory: packages/agency-lang
+      # No AGENCY_USE_TEST_LLM_PROVIDER here: the same agent tests that run
+      # deterministically on PRs (test.yml) hit a real provider on merge to
+      # main, which is the stronger check — it validates that the real API
+      # accepts each agent's tool schemas (unique names, valid shapes).
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: pnpm run test:agents

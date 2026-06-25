@@ -6,7 +6,8 @@ import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
-import { AgencyCancelledError } from "../errors.js";
+import { AgencyCancelledError, makeAbortCause } from "../errors.js";
+import type { AbortCause } from "../errors.js";
 import { agencyStore } from "../asyncContext.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
@@ -514,10 +515,34 @@ export class RuntimeContext<T> {
     return AbortSignal.any([this.abortController.signal, stack.abortSignal]);
   }
 
-  cancel(reason?: string): void {
+  /**
+   * Cancel the whole execution. `cause` records WHY: a terminal
+   * `userKill` (TS `cancel()` / an external abort — the default) vs a
+   * recoverable `userInterrupt` (the REPL's Esc, which hands control back
+   * but keeps the session). The cause rides on the AgencyCancelledError
+   * so downstream boundaries can read it via `readCause`. Leaving the
+   * error itself as the abort reason keeps `signal.reason` an Error.
+   */
+  cancel(reason?: string, cause?: AbortCause): void {
     if (!this.abortController.signal.aborted) {
-      this.abortController.abort(new AgencyCancelledError(reason));
+      const resolvedCause =
+        cause ?? makeAbortCause({ kind: "userKill", reason });
+      this.abortController.abort(
+        new AgencyCancelledError(reason, resolvedCause),
+      );
     }
+  }
+
+  /**
+   * Swap in a fresh AbortController after a user-initiated cancel so the
+   * NEXT unit of work isn't immediately aborted. The REPL calls this once
+   * it has caught the AgencyCancelledError from a cancelled turn and is
+   * about to accept the next prompt. Safe only when nothing is in flight
+   * (the cancelled turn has fully unwound) — otherwise an in-flight call
+   * would keep a reference to the old, now-orphaned signal.
+   */
+  resetCancel(): void {
+    this.abortController = new AbortController();
   }
 
   forkStack(): StateStack {
@@ -527,7 +552,12 @@ export class RuntimeContext<T> {
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
     if (!this.abortController.signal.aborted) {
-      this.abortController.abort(new AgencyCancelledError("cleanup"));
+      this.abortController.abort(
+        new AgencyCancelledError(
+          "cleanup",
+          makeAbortCause({ kind: "cleanup" }),
+        ),
+      );
     }
     this.pendingPromises.clear();
     this.stateStack = null as any;

@@ -181,7 +181,7 @@ async function handleToolCall(
   if (fn) {
     return runToolInvocation(
       id,
-      () => fn.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args }),
+      () => fn.invoke(args as Record<string, unknown>),
       policyConfig,
     );
   }
@@ -200,22 +200,32 @@ async function handleToolCall(
   return rpcError(id, -32602, `Unknown tool '${name}'`);
 }
 
-export function createMcpHandler(config: McpConfig): McpHandler {
-  const { serverName, serverVersion, exports } = config;
+type ToolEntry = {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+  annotations?: { readOnlyHint?: boolean };
+};
 
+/**
+ * Build the `tools/list` payload from a config: one entry per exported
+ * function and node, plus the policy-management tools when a policy store
+ * is configured. Shared by createMcpHandler (to answer tools/list) and
+ * mcpToolSummaryLines (to print the listing at startup).
+ */
+function buildToolsListPayload(config: McpConfig): ToolEntry[] {
+  const { exports, policyConfig } = config;
   const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
   const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
-  const functionsByName = Object.fromEntries(functions.map((f) => [f.name, f]));
-  const nodesByName = Object.fromEntries(nodes.map((n) => [n.name, n]));
 
-  const functionToolEntries = functions.map((f) => ({
+  const functionToolEntries: ToolEntry[] = functions.map((f) => ({
     name: f.name,
     description: formatToolDescription(f.description, f.interruptEffects),
     inputSchema: schemaToJsonSchema(f.agencyFunction.toolDefinition?.schema),
     ...(f.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));
 
-  const nodeToolEntries = nodes.map((n) => ({
+  const nodeToolEntries: ToolEntry[] = nodes.map((n) => ({
     name: n.name,
     description: formatToolDescription(`Run the '${n.name}' node`, n.interruptEffects),
     inputSchema: {
@@ -226,11 +236,53 @@ export function createMcpHandler(config: McpConfig): McpHandler {
   }));
 
   const toolsListPayload = [...functionToolEntries, ...nodeToolEntries];
-
-  const { policyConfig } = config;
   if (policyConfig) {
     toolsListPayload.push(...POLICY_TOOL_DEFINITIONS);
   }
+  return toolsListPayload;
+}
+
+/**
+ * Render a tool's parameters for display from its JSON Schema, e.g.
+ * `(name, count?)`. Optional params (not in `required`) get a `?` suffix.
+ * Returns "" when the tool takes no params.
+ */
+function describeToolSchema(inputSchema: unknown): string {
+  const s = inputSchema as
+    | { properties?: Record<string, unknown>; required?: string[] }
+    | null
+    | undefined;
+  const names = Object.keys(s?.properties ?? {});
+  if (names.length === 0) return "";
+  const required = s?.required ?? [];
+  const parts = names.map((n) => (required.includes(n) ? n : `${n}?`));
+  return ` (${parts.join(", ")})`;
+}
+
+/**
+ * Build the lines printed at MCP server startup listing the exposed tools,
+ * e.g. ["Tools exposed:", "  add (a, b)", "  main (message)"]. Callers
+ * decide where to write them (stderr for stdio, logger for HTTP).
+ */
+export function mcpToolSummaryLines(config: McpConfig): string[] {
+  const entries = buildToolsListPayload(config);
+  return [
+    "Tools exposed:",
+    ...entries.map((e) => `  ${e.name}${describeToolSchema(e.inputSchema)}`),
+  ];
+}
+
+export function createMcpHandler(config: McpConfig): McpHandler {
+  const { serverName, serverVersion, exports } = config;
+
+  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functionsByName = Object.fromEntries(functions.map((f) => [f.name, f]));
+  const nodesByName = Object.fromEntries(nodes.map((n) => [n.name, n]));
+
+  const toolsListPayload = buildToolsListPayload(config);
+
+  const { policyConfig } = config;
 
   return async (message: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
     if (message.jsonrpc !== "2.0") {
@@ -297,7 +349,17 @@ function processLine(line: string, handler: McpHandler): void {
  */
 const MAX_STDIO_LINE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-export function startStdioServer(handler: McpHandler): void {
+export function startStdioServer(
+  handler: McpHandler,
+  toolSummary?: string[],
+): void {
+  // stdout is the JSON-RPC channel for the stdio transport, so the tool
+  // listing must go to stderr (the MCP-conventional log channel) to avoid
+  // corrupting the protocol stream.
+  if (toolSummary) {
+    for (const line of toolSummary) process.stderr.write(`${line}\n`);
+  }
+
   process.stdin.setEncoding("utf-8");
 
   let buffer = "";

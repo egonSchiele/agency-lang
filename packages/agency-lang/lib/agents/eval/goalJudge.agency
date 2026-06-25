@@ -1,0 +1,27 @@
+type GoalVerdict = {
+  score: number # a score from 0.0 to 1.0 where 1.0 means the output fully satisfies the goal;
+  reasoning: string # brief explanation for the score
+}
+
+node main(goal: string, output: string, expected: string = ""): GoalVerdict {
+  result: GoalVerdict = llm("You are a strict evaluation judge. Score how well the agent output satisfies the goal.
+
+Goal: ${goal}
+
+Expected answer (authoritative when non-empty; ignore this line if blank): ${expected}
+
+Agent output: ${output}
+
+Score from 0.0 to 1.0, where 1.0 means the output fully and directly satisfies the goal, and 0.0 means it does not satisfy it at all.
+
+Judge ONLY whether the output is a correct, direct answer to what the goal asks for. Apply these rules strictly:
+- If an expected answer is given above, the output must state that answer to score above 0.5; an output that omits it, contradicts it, or gives a different value scores near 0.0.
+- Grade what the output actually claims, on its own terms. If the output answers a different question than the goal asks (e.g. the goal asks for a capital but the output gives an area, population, or some other property), score it near 0.0 — even if the correct answer happens to appear somewhere in the text.
+- Do NOT give credit merely because the target word or phrase is present. A correct token buried in an otherwise wrong, off-topic, or contradictory answer does not satisfy the goal.
+- Penalize outputs that dump extra unrequested information, list multiple candidate answers, or hedge instead of committing to the single answer the goal asks for. The output must stand alone as the answer a user actually wanted.
+- An output that states something false (e.g. gives a wrong value, or mislabels the answer) does not satisfy the goal, regardless of what else it contains.
+
+Reserve scores above 0.5 for outputs that a careful human would accept as a correct, on-topic, direct answer to the goal. Provide brief reasoning that names the specific reason for the score.")
+
+  return result
+}

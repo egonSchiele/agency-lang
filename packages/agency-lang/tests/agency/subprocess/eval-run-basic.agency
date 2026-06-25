@@ -11,7 +11,7 @@ node main() {
   handle {
     const result = evalRun(
       compiled: compileResult.value,
-      tasks: [{ task_id: "t1", rubric: "returns 42", args: {} }],
+      inputs: [{ id: "t1", goal: "returns 42", args: {} }],
       runsDir: "/tmp/agency-eval-run-basic",
       runId: "r1",
     )

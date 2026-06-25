@@ -8,9 +8,10 @@ import type {
   ToolCallJSON,
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
+import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext } from "./asyncContext.js";
-import { AgencyCancelledError, RestoreSignal } from "./errors.js";
+import { AgencyAbort, RestoreSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { TraceEvent } from "./trace/types.js";
@@ -49,6 +50,14 @@ export type CallbackMap = {
   onFunctionEnd: { functionName: string; timeTaken: number };
   onToolCallStart: { toolName: string; args: Record<string, unknown> };
   onToolCallEnd: { toolName: string; result: any; timeTaken: number };
+  onLLMRetry: {
+    attempt: number; // 1-based retry number
+    maxRetries: number; // the configured retry count
+    delayMs: number;
+    reason: LLMRetryReason;
+    detail: string;
+  };
+  onLLMTimeout: { limitMs: number; attempt: number };
   onStream:
   | { type: "text"; text: string }
   | { type: "tool_call"; toolCall: ToolCallJSON }
@@ -198,8 +207,11 @@ async function fireWithGuard(
     );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
+    // AgencyAbort covers BOTH a cancellation and a guard trip — a guard trip
+    // raised inside a callback must propagate to its owning guard, not be
+    // logged + dropped as a stray JS error (it is not an AgencyCancelledError).
     if (error instanceof RestoreSignal) throw error;
-    if (error instanceof AgencyCancelledError) throw error;
+    if (error instanceof AgencyAbort) throw error;
     // Real JS errors (e.g. a callback body crashed) are logged and dropped.
     // Callback bodies cannot raise interrupts (typechecker-enforced), so
     // there is no interrupt path to surface here.

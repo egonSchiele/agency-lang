@@ -1,0 +1,26 @@
+def foo() {
+  return interrupt("check")
+  return "after interrupt"
+}
+
+def label(x: string): string {
+  return x
+}
+
+node main() {
+  handle {
+    const result = foo()
+  } with (data) {
+    // Multiple statement-level calls + assignments in one handler scope.
+    // Each bare call used to emit `const __funcResult`, colliding when
+    // there was more than one. They now get unique names.
+    print("first")
+    print("second")
+    const a = label("x")
+    const b = label("y")
+    print(a)
+    print(b)
+    return approve()
+  }
+  return result
+}

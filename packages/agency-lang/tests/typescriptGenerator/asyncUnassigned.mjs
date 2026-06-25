@@ -11,11 +11,12 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
-  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
+  runExportedFunction as _runExportedFunction,
   RestoreSignal,
-  GuardExceededError,
+  AgencyAbort,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -74,6 +75,11 @@ function propagate() { return { type: "propagate" as const }; }
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
+
+// Invoke an exported function in a node-grade execution frame. Used by
+// `agency serve` to call a function from an HTTP/MCP request — outside any
+// Agency execution frame, which generated function bodies otherwise require.
+export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level
@@ -230,12 +236,14 @@ if (hasInterrupts(__funcResult)) {
     if (__error instanceof RestoreSignal) {
   throw __error;
 }
-// GuardExceededError must propagate up to the stdlib `guard`
-// function's try/catch (in lib/runtime/result.ts via `try block()`).
-// If we converted it to a Failure here, the guard would never see
-// the trip and every guarded block would appear to succeed even
-// over budget. See lib/runtime/guard.ts.
-if (__error instanceof GuardExceededError) {
+// All aborts — cancellations (Esc / abort) AND guard trips — are now a single
+// AgencyAbort carrying an AbortCause, and must propagate untouched. The owning
+// guard's `try` converts its own guardTrip; every other abort unwinds. One
+// rung replaces the old GuardExceededError + isAbortError ladder. Converting
+// any abort to a Failure here would (a) hide a guard trip so the block appears
+// to succeed over budget, and (b) let a cancel limp onward / surface as a
+// logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+if (__error instanceof AgencyAbort) {
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -395,7 +403,7 @@ await callHook({
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof GuardExceededError) {
+    if (__error instanceof AgencyAbort) {
       throw __error
     }
     {
@@ -435,7 +443,8 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       messages: new ThreadStore(),
       data: {}
     };
-    await main(initialState)
+    const __result = await main(initialState);
+    reportUnhandledInterrupts(__result)
   } catch (__error: any) {
     console.error(`\nAgent crashed: ${__error.message}`)
     throw __error

@@ -212,3 +212,97 @@ try {
   throw e;
 }
 ```
+
+### One-line if statements
+
+**Why:** One-line if statements can be hard to read and maintain, especially when they contain complex logic. It's better to use block statements for clarity.
+
+**Bad:**
+```ts
+if (condition) doSomething();
+```
+
+**Good:**
+```ts
+if (condition) {
+  doSomething();
+}
+```
+
+### Putting too much stuff onto a single line
+
+**Why:** Putting too much logic on a single line can make the code hard to read and understand. It's better to break it down into multiple lines for clarity.
+
+**Bad:**
+```ts
+const result = someArray.filter(x => x.isActive).map(x => x.value).reduce((acc, val) => acc + val, 0);
+```
+
+**Good:**
+```ts
+const activeValues = someArray.filter(x => x.isActive).map(x => x.value);
+const result = activeValues.reduce((acc, val) => acc + val, 0);
+```
+
+### Nested objects in type definitions
+
+**Why:** Deeply nested objects in type definitions can make the code harder to read and maintain. It's better to break them down into separate types for clarity.
+
+**Bad:**
+```ts
+type Foo = { llm?: { retries?: number; timeout?: number; backoff?: { initial?: number; factor?: number; max?: number } } };
+```
+
+**Good:**
+```ts
+type BackoffConfig = {
+  initial?: number;
+  factor?: number;
+  max?: number;
+};
+
+type LLMConfig = {
+  retries?: number;
+  timeout?: number;
+  backoff?: BackoffConfig;
+};
+
+type Foo = {
+  llm?: LLMConfig;
+};
+```
+
+### Dynamic requires
+
+**Why:** Dynamic requires can lead to code that is difficult to analyze and optimize. It's better to use static imports whenever possible.
+
+**Bad:**
+```ts
+const dispatch = async () => { throw new (require("smoltalk").SmolError); };
+```
+
+**Good:**
+```ts
+import { SmolError } from "smoltalk";
+const dispatch = async () => { throw new SmolError(); };
+```
+
+### Magic numbers
+
+**Why:** Magic numbers are hard to understand and maintain. It's better to use named constants to give context to the values.
+
+**Bad:**
+```ts
+// why use 5000? what does it mean?
+for (let i = 0; i < 5000; i++) {
+  
+}
+```
+
+**Good:**
+```ts
+const MAX_ITERATIONS = 5000;
+for (let i = 0; i < MAX_ITERATIONS; i++) {
+
+}
+```

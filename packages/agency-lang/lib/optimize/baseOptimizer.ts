@@ -250,8 +250,13 @@ export abstract class BaseOptimizer {
   /** Default runInput: run the agent for one input via the eval-run subprocess path (named args). */
   private async runInputViaEval(ws: Workspace, entryFile: string, input: Input, id: string): Promise<AgentRun> {
     // Now that eval and optimize share the Input type, the input flows straight
-    // through — we only pin the id so artifacts land in a predictable directory.
-    const spec: Input = { ...input, id };
+    // through — we pin the id so artifacts land in a predictable directory, and
+    // default working_dir to the forked workspace. The workspace is a full copy
+    // of the source tree, so seeding each per-input workdir from it gives the
+    // agent an isolated copy of the project as its cwd; without this the workdir
+    // is created empty and relative file references (e.g. exec on a repo path)
+    // resolve against nothing. An input that names its own working_dir wins.
+    const spec: Input = { ...input, id, working_dir: input.working_dir ?? ws.dir };
     this.runCounter += 1;
     const result = await evalRunLoadedInputs({
       agent: path.join(ws.dir, entryFile),

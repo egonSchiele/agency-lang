@@ -133,6 +133,15 @@ export interface AgencyConfig {
      * per call with `llm(..., { maxToolResultChars })`.
      */
     maxToolResultChars: number;
+    /**
+     * Paths to user-authored "provider module" ES files loaded at
+     * startup. Each must export `register({ registerProvider })` and call
+     * `registerProvider(name, ClientClass)` to register a custom smoltalk
+     * provider (e.g. a local model via `smoltalk-llama-cpp`). Relative
+     * paths resolve against the current working directory. Merged with
+     * the `AGENCY_PROVIDER_MODULES` env var at runtime.
+     */
+    providerModules: string[];
     statelog?: Partial<{
       host: string;
       projectId: string;
@@ -353,6 +362,7 @@ export const AgencyConfigSchema = z
         googleApiKey: z.string(),
         anthropicApiKey: z.string(),
         maxToolResultChars: z.number(),
+        providerModules: z.array(z.string()),
         statelog: z
           .object({
             host: z.string(),

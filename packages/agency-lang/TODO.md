@@ -216,3 +216,7 @@ if (a is success(aVal) && b is success(bVal)) {
   print(aVal, bVal)
 }
 ```
+
+---
+
+optimizer: should `workdir` be a symlink? Right now, I can't exec a command against a local file while using the optimizer, as the workdir doesn't contain anything, so while running the optimizer, that file isn't found.

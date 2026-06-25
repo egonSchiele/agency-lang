@@ -1,3 +1,24 @@
+## Jun 24 2026 — v0.6.4
+
+### Language / Typechecker
+- Fixed value-parameterized validation types (e.g. `NumberInRange(1, 10)!` from `std::types`); `@validate` factories now resolve instead of erroring on a missing function.
+- New `std::capabilities` — standard capability effect sets.
+
+### Runtime
+- Unified abort taxonomy: aborts carry a typed cause (guard trip, user cancel, race loser) with `guardId` matching, so an outer guard no longer mis-attributes an inner trip. Thread cancellation is now non-destructive (preserves earlier rounds).
+- `agency serve` now works for functions, not just nodes.
+
+### Eval / Optimize
+- Default judge now grades against `input.expected` even with no custom grader.
+- `gepa` and `example` optimizers now populate the champion grade breakdown and select the champion by validation, matching `greedy`.
+- Optimizer per-input working dir is seeded from the forked workspace, so agents that reference project files (e.g. `exec` on a repo path) find them instead of running in an empty dir.
+
+### Agency Agent
+- Can set the LLM provider used by the agency agent.
+
+### Stdlib
+- Marked more stdlib functions read-safe (pre-approved).
+
 ## Jun 22 2026 — v0.6.1
 
 ### Agency Agent

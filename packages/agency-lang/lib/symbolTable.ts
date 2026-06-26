@@ -186,11 +186,16 @@ export class SymbolTable {
       files[filePath] = symbols;
     }
 
+    // Effect declarations can appear at the top level OR nested inside
+    // function/node/block bodies (the parser permits both). Deep-walk so
+    // body-scoped declarations are also registered in the ambient
+    // registry — matches how `classifySymbols` collects type aliases.
     const effectDecls: Record<string, EffectDeclaration[]> = {};
     for (const [filePath, { program }] of Object.entries(parsed)) {
-      const decls = program.nodes.filter(
-        (n): n is EffectDeclaration => n.type === "effectDeclaration",
-      );
+      const decls: EffectDeclaration[] = [];
+      for (const { node } of walkNodes(program.nodes)) {
+        if (node.type === "effectDeclaration") decls.push(node);
+      }
       if (decls.length > 0) effectDecls[filePath] = decls;
     }
 

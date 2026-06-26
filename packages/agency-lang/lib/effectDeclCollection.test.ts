@@ -5,6 +5,31 @@ import path from "path";
 import { SymbolTable } from "./symbolTable.js";
 
 describe("SymbolTable.allEffectDeclarations", () => {
+  it("collects body-scoped effect declarations (not just top-level)", () => {
+    // The parser accepts `effect ...` inside function bodies via
+    // `_bodyNodeParser`. Without a deep walk, those declarations would
+    // silently never reach the ambient registry — and raise sites for
+    // the effect would go unchecked.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eff-body-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        "def f() {\n" +
+          "  effect std::nested { dir: string }\n" +
+          "  return 1\n" +
+          "}\n" +
+          'node main() { print("hi") }\n',
+      );
+      const st = SymbolTable.build(path.join(dir, "main.agency"));
+      const effects = st
+        .allEffectDeclarations()
+        .map((d) => d.decl.effect);
+      expect(effects).toContain("std::nested");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("collects effect declarations across the import closure", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eff-"));
     try {

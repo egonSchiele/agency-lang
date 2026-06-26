@@ -52,12 +52,17 @@ function buildRegistry(ctx: TypeCheckerContext): Record<string, ObjectType> {
 }
 
 /** Prefer the import closure (ambient); fall back to the current program's
- *  own declarations when there's no symbol table (raw-program callers). */
+ *  own declarations when there's no symbol table (raw-program callers).
+ *  Deep-walks so body-scoped declarations are picked up too — mirrors
+ *  `SymbolTable.build`'s collection. */
 function collectDeclarations(ctx: TypeCheckerContext): DeclEntry[] {
   if (ctx.symbolTable) return ctx.symbolTable.allEffectDeclarations();
-  return ctx.programNodes
-    .filter((n): n is EffectDeclaration => n.type === "effectDeclaration")
-    .map((decl) => ({ decl, file: ctx.currentFile ?? "<program>" }));
+  const file = ctx.currentFile ?? "<program>";
+  const out: DeclEntry[] = [];
+  for (const { node } of walkNodes(ctx.programNodes)) {
+    if (node.type === "effectDeclaration") out.push({ decl: node, file });
+  }
+  return out;
 }
 
 function groupBy<T, K extends string>(

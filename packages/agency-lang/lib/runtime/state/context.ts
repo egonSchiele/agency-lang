@@ -122,6 +122,11 @@ export class RuntimeContext<T> {
    *  back to the runtime default in `runPrompt`. Baked in from
    *  `agency.json` `client.maxToolResultChars` at compile time. */
   maxToolResultChars?: number;
+  /** Paths to provider modules to load at startup, baked in from
+   *  `agency.json` `client.providerModules` at compile time and merged
+   *  with `AGENCY_PROVIDER_MODULES` at runtime by `loadProviderModules`.
+   *  Defaults to `[]`. */
+  providerModules: string[];
   private _llmClient: LLMClient;
   private _interruptResponses: Record<string, { response: InterruptResponse }> = {};
 
@@ -189,6 +194,7 @@ export class RuntimeContext<T> {
     statelogConfig: StatelogConfig;
     smoltalkDefaults: Partial<SmolConfig>;
     maxToolResultChars?: number;
+    providerModules?: string[];
     dirname: string;
     maxRestores?: number;
     traceConfig?: TraceConfig;
@@ -245,6 +251,7 @@ export class RuntimeContext<T> {
 
     this.smoltalkDefaults = args.smoltalkDefaults;
     this.maxToolResultChars = args.maxToolResultChars;
+    this.providerModules = args.providerModules ?? [];
     this._llmClient = new SmoltalkClient();
     this.abortController = new AbortController();
 
@@ -275,6 +282,7 @@ export class RuntimeContext<T> {
     execCtx.graph = this.graph;
     execCtx.smoltalkDefaults = this.smoltalkDefaults;
     execCtx.maxToolResultChars = this.maxToolResultChars;
+    execCtx.providerModules = this.providerModules;
     execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
     execCtx.statelogConfig = this.statelogConfig;

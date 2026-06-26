@@ -10,6 +10,7 @@ export type RuntimeContextConstructorArgs = {
   statelogConfig: StatelogConfig;
   smoltalkDefaults: Partial<SmolConfig>;
   maxToolResultChars?: number;
+  providerModules?: string[];
   dirname: string;
   maxRestores?: number;
   traceConfig?: TraceConfig;
@@ -38,6 +39,12 @@ export function getRuntimeConfigOverrides(): Partial<AgencyConfig> | undefined {
  * `AgencyConfig` fields are ignored because the runtime has its own
  * pathways for them. If a new statelog-relevant override field is added,
  * it will be picked up automatically by the shallow merge below.
+ *
+ * `client.providerModules` is also honored: `_run` forwards the parent's
+ * (absolutized) provider-module paths here so a subprocess loads the same
+ * custom/local providers the parent has, regardless of how the child was
+ * compiled. They are merged with any baked-in `providerModules` on `args`;
+ * `loadProviderModules` de-duplicates by resolved path at load time.
  */
 export function applyRuntimeConfigOverridesToContextArgs(
   args: RuntimeContextConstructorArgs,
@@ -52,8 +59,18 @@ export function applyRuntimeConfigOverridesToContextArgs(
     statelogOverrides.observability = overrides.observability;
   }
 
-  return {
+  const merged: RuntimeContextConstructorArgs = {
     ...args,
     statelogConfig: { ...args.statelogConfig, ...statelogOverrides },
   };
+
+  const overrideModules = overrides.client?.providerModules;
+  if (overrideModules && overrideModules.length > 0) {
+    merged.providerModules = [
+      ...(args.providerModules ?? []),
+      ...overrideModules,
+    ];
+  }
+
+  return merged;
 }

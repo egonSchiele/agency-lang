@@ -1,0 +1,4 @@
+// Running this node triggers the run bootstrap, which loads the provider
+// module declared in agency.json. The body itself does no LLM work.
+node main() {
+}

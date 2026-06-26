@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as path from "path";
 
 import {
   buildRunInstruction,
@@ -8,6 +9,7 @@ import {
   sendLockAcquireToParent,
   sendInterruptToParent,
   setSubprocessIpcPayloadLimit,
+  withParentProviderModules,
   type RunLimits,
 } from "./ipc.js";
 import { RuntimeContext } from "./state/context.js";
@@ -42,6 +44,30 @@ describe("subprocess IPC config overrides", () => {
       cwd: "/tmp/workdir",
       env: expect.objectContaining({ AGENCY_IPC: "1" }),
     });
+  });
+
+  it("forwards the parent's provider modules as absolute paths", () => {
+    const result = withParentProviderModules(
+      { observability: true },
+      ["./llama-setup.mjs", "/abs/other.mjs"],
+    );
+    // Existing overrides are preserved; provider paths are absolutized
+    // against the parent's cwd so they resolve in a child with a different cwd.
+    expect(result).toEqual({
+      observability: true,
+      client: {
+        providerModules: [
+          path.resolve(process.cwd(), "./llama-setup.mjs"),
+          "/abs/other.mjs",
+        ],
+      },
+    });
+  });
+
+  it("returns overrides unchanged when the parent has no provider modules", () => {
+    const overrides = { observability: true };
+    expect(withParentProviderModules(overrides, [])).toBe(overrides);
+    expect(withParentProviderModules(undefined, [])).toBeUndefined();
   });
 });
 

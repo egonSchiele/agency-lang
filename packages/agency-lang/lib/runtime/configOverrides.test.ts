@@ -29,4 +29,47 @@ describe("runtime config overrides", () => {
     });
     expect(result.smoltalkDefaults).toEqual({ model: "gpt-4o-mini" });
   });
+
+  it("merges client.providerModules into the context args (subprocess forwarding)", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(
+      {
+        statelogConfig: {
+          host: "",
+          apiKey: "",
+          projectId: "",
+          debugMode: false,
+          observability: false,
+        },
+        smoltalkDefaults: {},
+        providerModules: ["/baked/a.mjs"],
+        dirname: "/project",
+      },
+      { client: { providerModules: ["/abs/parent.mjs"] } },
+    );
+
+    expect(result.providerModules).toEqual([
+      "/baked/a.mjs",
+      "/abs/parent.mjs",
+    ]);
+  });
+
+  it("leaves providerModules untouched when overrides carry none", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(
+      {
+        statelogConfig: {
+          host: "",
+          apiKey: "",
+          projectId: "",
+          debugMode: false,
+          observability: false,
+        },
+        smoltalkDefaults: {},
+        providerModules: ["/baked/a.mjs"],
+        dirname: "/project",
+      },
+      { observability: true },
+    );
+
+    expect(result.providerModules).toEqual(["/baked/a.mjs"]);
+  });
 });

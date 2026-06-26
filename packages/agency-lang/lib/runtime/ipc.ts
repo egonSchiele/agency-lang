@@ -707,6 +707,19 @@ export async function _run(
   const { ctx, stack: stateStack } = getRuntimeContext();
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
+  // Forward the parent's configured provider modules to the subprocess. The
+  // child runs a separately-compiled program whose baked `providerModules`
+  // come from *its* compile config, not the parent's `agency.json`, so without
+  // this a parent that configured providers via config would have none in the
+  // child. (The `AGENCY_PROVIDER_MODULES` env var is inherited separately via
+  // buildForkOptions, so env-configured providers already reach the child.)
+  // Paths are resolved to absolute against the parent's cwd here so they still
+  // resolve in the child even when `run(cwd:)` gives it a different cwd.
+  const mergedConfigOverrides = withParentProviderModules(
+    configOverrides,
+    ctx.providerModules,
+  );
+
   // stdio fds 1/2 piped (was inherit) so we can byte-count and truncate
   // when stdout limit is exceeded; we still forward bytes through to the
   // parent's own stdout/stderr until the limit hits.
@@ -727,8 +740,28 @@ export async function _run(
       wallClockTimer: null,
       stdoutBytes: 0,
       stoppedForwarding: false,
-      configOverrides,
+      configOverrides: mergedConfigOverrides,
     };
     attachSessionHandlers(session, node, args);
   });
+}
+
+/**
+ * Merge the parent's provider-module paths into the config overrides sent to a
+ * subprocess, resolving relative paths to absolute against the parent's cwd so
+ * they still resolve in a child launched with a different `cwd`. Returns the
+ * overrides unchanged when the parent has no configured provider modules.
+ */
+export function withParentProviderModules(
+  overrides: Partial<AgencyConfig> | undefined,
+  parentModules: string[],
+): Partial<AgencyConfig> | undefined {
+  if (!parentModules || parentModules.length === 0) return overrides;
+  const absolute = parentModules.map((p) =>
+    path.isAbsolute(p) ? p : path.resolve(process.cwd(), p),
+  );
+  return {
+    ...overrides,
+    client: { ...overrides?.client, providerModules: absolute },
+  };
 }

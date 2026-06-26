@@ -43,8 +43,7 @@ Agency from):
 }
 ```
 
-…or via an environment variable (comma-separated, good for machine-specific
-absolute paths):
+…or via an environment variable (comma-separated):
 
 ```bash
 export AGENCY_PROVIDER_MODULES="/abs/path/to/llama-setup.mjs"
@@ -53,6 +52,12 @@ export AGENCY_PROVIDER_MODULES="/abs/path/to/llama-setup.mjs"
 Both sources are merged. A module that fails to load, lacks a `register`
 export, or throws during `register` is a fatal startup error — Agency will not
 silently fall back.
+
+::: tip Prefer absolute paths
+Relative paths resolve against the **current working directory**. For the env
+var — which is inherited by subprocesses that may run with a different cwd (see
+below) — prefer **absolute** paths so they resolve everywhere.
+:::
 
 ## 4. Use the provider
 
@@ -76,10 +81,24 @@ registered:
 agency agent --provider llama-cpp --model my-model.gguf
 ```
 
+## Subprocesses (`run` / `runFile`)
+
+Agency code that spawns a subprocess via `std::agency`'s `run` / `runFile`
+runs a *separately-compiled* program in a fresh process with its own provider
+registry, so providers must be re-registered there. Both happen automatically:
+
+- The `AGENCY_PROVIDER_MODULES` env var is **inherited** by the subprocess.
+- The parent's **config-declared** `providerModules` are **forwarded** to the
+  subprocess (resolved to absolute paths against the parent's cwd first), so a
+  child loads the same providers the parent has — even though it was compiled
+  separately and may run with a different `cwd`.
+
+You don't need to duplicate provider config for subprocess code.
+
 ## How it works
 
 Agency loads provider modules once per process, before any `llm()` call, in
 the same bootstrap that initializes globals — so a registered provider is
-available everywhere, including forks, `agency serve`, and `agency pack`
-artifacts. The provider package is loaded at runtime from your install; it is
-never bundled into a packed artifact.
+available everywhere, including forks, `agency serve`, subprocesses, and
+`agency pack` artifacts. The provider package is loaded at runtime from your
+install; it is never bundled into a packed artifact.

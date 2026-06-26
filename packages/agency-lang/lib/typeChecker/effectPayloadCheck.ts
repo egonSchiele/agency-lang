@@ -165,7 +165,9 @@ function checkRaiseSite(
     return; // empty declaration + no data is fine
   }
 
-  const argType = synthType(dataArg, info.scope, ctx);
+  // After the named/splat filters above, `dataArg` is a positional Expression
+  // which is a subset of AgencyNode (the union just isn't narrow enough for TS).
+  const argType = synthType(dataArg as Parameters<typeof synthType>[0], info.scope, ctx);
   if (argType === "any") return; // can't say anything useful
 
   // Per-field checks against the resolved data object for precise messages.

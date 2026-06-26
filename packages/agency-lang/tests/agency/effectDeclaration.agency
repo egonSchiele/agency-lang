@@ -1,0 +1,11 @@
+effect mytest::confirm { value: string }
+
+def doThing() {
+  return interrupt mytest::confirm("confirm?", { value: "x" })
+  return "done"
+}
+
+node main() {
+  const result = doThing() with approve
+  return result
+}

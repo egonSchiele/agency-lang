@@ -90,21 +90,27 @@ function runWithRetries(run) {
 
 let failed = false;
 const skipped = [];
-try {
-  for (const run of RUNS) {
-    if (run.skip) {
-      console.log(`[${run.name}] SKIPPED: ${run.skip}`);
-      skipped.push(run.name);
-      continue;
-    }
-    try {
-      runWithRetries(run);
-    } catch (err) {
-      failed = true;
-      console.error(`[${run.name}] FAILED after ${RETRIES + 1} attempts: ${err.message}`);
-    }
+for (const run of RUNS) {
+  if (run.skip) {
+    console.log(`[${run.name}] SKIPPED: ${run.skip}`);
+    skipped.push(run.name);
+    continue;
   }
-} finally {
+  try {
+    runWithRetries(run);
+  } catch (err) {
+    failed = true;
+    console.error(`[${run.name}] FAILED after ${RETRIES + 1} attempts: ${err.message}`);
+  }
+}
+
+// Keep the runs dir on failure (and when OPTIMIZE_EFFICACY_KEEP_RUNS is set)
+// so real-LLM failures are debuggable without re-spending tokens; on a clean
+// pass, clean up to avoid littering the package.
+const keepRuns = failed || process.env.OPTIMIZE_EFFICACY_KEEP_RUNS === "1";
+if (keepRuns) {
+  console.log(`[runs] kept at ${runsDir}`);
+} else {
   rmSync(runsDir, { recursive: true, force: true });
 }
 

@@ -136,9 +136,10 @@ export class Gepa extends BaseOptimizer {
     const childWs = this.fork();
     const childMini = await this.evaluate(childWs, preview.targetSet, preview.files, minibatch);
     const parentMini = await this.evaluate(parent.ws, parent.targetSet, parent.files, minibatch);   // cache hits
-    // TODO(gated-objective): use `childMini.gatedObjective() > parentMini.gatedObjective()` once the parent
-    // is also routed through the canonical Scorecard helper; parents are always accepted candidates that
-    // passed gates, so the rewrite is behavior-preserving.
+    // TODO(gated-objective): collapse to `childMini.gatedObjective() > parentMini.gatedObjective()`
+    // in the follow-up greedy/gepa sweep that the gate-aware Scorecard PR deferred. Parents are
+    // always accepted candidates that passed gates here, so the rewrite is behavior-preserving;
+    // both call sites (this one and greedyReflective.beats) will move together in one PR.
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
       return { iter, decision: "rejected", rationale: outcome.rationale, objective: childMini.objective(), changes: preview.changes };
     }

@@ -82,7 +82,7 @@ export class ExampleOptimizer extends BaseOptimizer {
 
     // 3. Score the proposal (if any) and decide acceptance on the training objective.
     const candidate = outcome.ok
-      ? await this.makeCandidate(1, outcome.preview.files, source, inputs)
+      ? await this.makeCandidate(1, outcome.preview.files, outcome.preview.targetSet, inputs)
       : undefined;
     const beatsBaseline = candidate !== undefined && candidate.scorecard.gatedObjective() > baseline.scorecard.gatedObjective();
     const trainChampion = beatsBaseline ? candidate : baseline;
@@ -101,9 +101,12 @@ export class ExampleOptimizer extends BaseOptimizer {
     return this.finishPointwise(source, candidates, trainChampion, [{ iter: 1, decision }], startedAt);
   }
 
-  /** Apply a candidate file set into a fresh workspace, run + grade it. */
-  private async makeCandidate(iter: number | "baseline", files: Record<string, string>, source: OptimizeTargetSet, inputs: Input[]): Promise<Candidate> {
-    const scorecard = await this.scoreFiles(source, files, inputs);
-    return { iter, files, scorecard, targetSet: source };
+  /** Apply a candidate file set into a fresh workspace, run + grade it. The
+   *  `targetSet` reflects this candidate's targets (the baseline's for the
+   *  baseline candidate, `outcome.preview.targetSet` for an accepted mutation),
+   *  so `finalTargets` in the reporter accurately describes the champion. */
+  private async makeCandidate(iter: number | "baseline", files: Record<string, string>, targetSet: OptimizeTargetSet, inputs: Input[]): Promise<Candidate> {
+    const scorecard = await this.scoreFiles(targetSet, files, inputs);
+    return { iter, files, scorecard, targetSet };
   }
 }

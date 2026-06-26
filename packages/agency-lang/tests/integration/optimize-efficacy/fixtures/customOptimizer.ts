@@ -28,14 +28,18 @@ type Candidate = {
 class CustomEfficacyOptimizer extends BaseOptimizer {
   readonly name = "custom-efficacy";
 
-  /** Fork the workspace, apply `files`, grade — the unit every round produces. */
+  /** Fork the workspace, apply `files`, grade — the unit every round produces.
+   *  `targetSet` must reflect this candidate's actual targets (baseline's for
+   *  the baseline candidate, `outcome.preview.targetSet` for an accepted
+   *  mutation), so subsequent iterations mutate relative to the champion and
+   *  `finalTargets` in the reporter accurately describes the champion. */
   private async makeCandidate(
     iter: number | "baseline",
     files: Record<string, string>,
-    source: OptimizeTargetSet,
+    targetSet: OptimizeTargetSet,
     inputs: Input[],
   ): Promise<Candidate> {
-    return { iter, files, targetSet: source, scorecard: await this.scoreFiles(source, files, inputs) };
+    return { iter, files, targetSet, scorecard: await this.scoreFiles(targetSet, files, inputs) };
   }
 
   protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
@@ -61,7 +65,9 @@ class CustomEfficacyOptimizer extends BaseOptimizer {
         (diagnostics) =>
           proposeMutation({
             config: this.config.config,
-            targets: source.targets,
+            // Feed the *champion's* current targets to the mutator so each
+            // iteration refines the running champion, not the baseline.
+            targets: champion.targetSet.targets,
             inputs,
             history: "",
             model: this.config.mutatorModel,
@@ -71,7 +77,7 @@ class CustomEfficacyOptimizer extends BaseOptimizer {
       );
 
       const candidate = outcome.ok
-        ? await this.makeCandidate(iter, outcome.preview.files, source, inputs)
+        ? await this.makeCandidate(iter, outcome.preview.files, outcome.preview.targetSet, inputs)
         : undefined;
       const beats = candidate !== undefined && candidate.scorecard.gatedObjective() > champion.scorecard.gatedObjective();
       const next = beats ? candidate! : champion;

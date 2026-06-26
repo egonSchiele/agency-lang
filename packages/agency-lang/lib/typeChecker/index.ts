@@ -40,6 +40,7 @@ import {
   checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
+import { checkEffectPayloads } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
@@ -316,6 +317,9 @@ export class TypeChecker {
     // 6c. Verify each function/node's declared `raises` clause is not
     // exceeded by its transitively-inferred effect set.
     checkRaisesDeclarations(interruptEffectsByFunction, ctx);
+
+    // 6d. Check interrupt payloads against `effect` declarations.
+    checkEffectPayloads(scopes, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

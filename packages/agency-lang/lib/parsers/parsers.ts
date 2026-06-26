@@ -103,6 +103,7 @@ import {
   Tag,
   ValueParam,
 } from "../types.js";
+import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
@@ -1676,6 +1677,32 @@ export const effectSetDeclParser: Parser<TypeAlias> = label(
     if (isExported) result.exported = true;
     return { ...baseResult, result };
   },
+);
+
+// `effect std::read { dir: string }` — declares an interrupt effect's payload
+// type. The `{...}` is an object type. `effectIdentifier` accepts bare or
+// namespaced labels. NOTE: `str("effect")` followed by `spaces` cannot match
+// `effectSet` (no space after the `effect` prefix), so the two are mutually
+// exclusive regardless of dispatch order.
+const baseEffectDeclParser: Parser<EffectDeclaration> = withLoc(
+  (input: string): ParserResult<EffectDeclaration> => {
+    const parser = seqC(
+      set("type", "effectDeclaration"),
+      str("effect"),
+      spaces,
+      capture(effectIdentifier, "effect"),
+      optionalSpaces,
+      capture(objectTypeParser, "payloadType"),
+      optionalSemicolon,
+      optionalSpacesOrNewline,
+    );
+    return parser(input) as ParserResult<EffectDeclaration>;
+  },
+);
+
+export const effectDeclParser: Parser<EffectDeclaration> = label(
+  "an effect declaration",
+  baseEffectDeclParser,
 );
 
 // =============================================================================
@@ -3549,6 +3576,7 @@ export const docStringParser = multiLineStringParser;
 const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   keywordParser,
   effectSetDeclParser,
+  effectDeclParser,
   debug(typeAliasParser, "error in typeAliasParser"),
   tagParser,
   bodyReservedModifierParser,

@@ -18,6 +18,7 @@ import {
   WhileLoop,
 } from "@/types.js";
 import { BlockArgument } from "@/types/blockArgument.js";
+import { EffectDeclaration } from "@/types/effectDeclaration.js";
 import { BlockType } from "@/types/typeHints.js";
 import { FunctionParameter } from "@/types/function.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -187,7 +188,7 @@ export class TypescriptPreprocessor {
 
   attachDocComments(): void {
     const nodes = this.program.nodes;
-    const DECLARATION_TYPES = ["function", "graphNode", "typeAlias"];
+    const DECLARATION_TYPES = ["function", "graphNode", "typeAlias", "effectDeclaration"];
     const SKIP_TYPES = ["newLine", "tag"];
     const PREAMBLE_TYPES = ["comment", "newLine", "importStatement"];
 
@@ -243,7 +244,11 @@ export class TypescriptPreprocessor {
       }
 
       if (pendingDocComment && DECLARATION_TYPES.includes(node.type)) {
-        const decl = node as FunctionDefinition | GraphNodeDefinition | TypeAlias;
+        const decl = node as
+          | FunctionDefinition
+          | GraphNodeDefinition
+          | TypeAlias
+          | EffectDeclaration;
         decl.docComment = pendingDocComment;
         pendingDocComment = null;
       } else if (pendingDocComment) {

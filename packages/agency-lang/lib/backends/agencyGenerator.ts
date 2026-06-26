@@ -42,6 +42,7 @@ import {
   ImportStatement,
 } from "../types/importStatement.js";
 import { ExportFromStatement } from "../types/exportFromStatement.js";
+import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
@@ -416,6 +417,8 @@ export class AgencyGenerator {
     switch (node.type) {
       case "typeAlias":
         return this.processTypeAlias(node);
+      case "effectDeclaration":
+        return this.processEffectDeclaration(node);
       case "assignment":
         return this.processAssignment(node);
       case "function":
@@ -673,6 +676,19 @@ export class AgencyGenerator {
       return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
     }
     return variableTypeToString(aliasedType, this.typeAliases, true);
+  }
+
+  protected processEffectDeclaration(node: EffectDeclaration): string {
+    // Empty `{}` renders inline; non-empty payloads go through the shared
+    // object-type renderer (which already decides inline vs. multi-line).
+    const body =
+      node.payloadType.properties.length === 0
+        ? "{}"
+        : this.aliasedTypeToString(node.payloadType);
+    return (
+      this.formatDocComment(node) +
+      this.indentStr(`effect ${node.effect} ${body}`)
+    );
   }
 
   protected processTypeAlias(node: TypeAlias): string {

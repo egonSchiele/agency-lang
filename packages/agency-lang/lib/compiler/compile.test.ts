@@ -30,6 +30,37 @@ node main() { return foo(42) }
     expect(result.success).toBe(false);
   });
 
+  it("rejects compilation when a raise payload violates an effect declaration", () => {
+    // End-to-end: the typed-effect-declarations feature is only useful if a
+    // bad payload actually *blocks* compilation, not just produces a
+    // typechecker diagnostic that gets ignored. This covers the wiring
+    // from \`checkEffectPayloads\` → \`ctx.errors\` → compile failure.
+    const source = `
+effect std::read { dir: string }
+node main() { raise std::read("m", { dir: 5 }) }
+`;
+    const result = compileSource(source, { typechecker: { enabled: true } });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.errors.some((e) =>
+          /Effect 'std::read' data field 'dir' has the wrong type/.test(e),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("compiles cleanly when a raise payload matches its effect declaration", () => {
+    // Companion to the previous test — proves the typecheck wiring isn't
+    // simply broken-on (rejecting everything).
+    const source = `
+effect std::read { dir: string }
+node main() { raise std::read("m", { dir: "/tmp" }) }
+`;
+    const result = compileSource(source, { typechecker: { enabled: true } });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects local relative imports when imports policy is stdlib-only", () => {
     const source = `
 import { foo } from "./bar.agency"

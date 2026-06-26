@@ -595,6 +595,32 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(alias.docComment.content).toBe(" Type docs ");
     });
 
+    it("should attach doc comment to an effect declaration", () => {
+      // `agency doc` renders the attached docComment for each effect; without
+      // this attachment the doc-section's docComment branch is dead code.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " Effect docs ", isDoc: true, isModuleDoc: false },
+          {
+            type: "effectDeclaration",
+            effect: "std::read",
+            payloadType: { type: "objectType", properties: [], comments: [] },
+          } as any,
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      const decl = program.nodes.find((n) => n.type === "effectDeclaration") as any;
+      expect(decl.docComment).toBeDefined();
+      expect(decl.docComment.content).toBe(" Effect docs ");
+    });
+
     it("should not attach non-doc multi-line comments", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",

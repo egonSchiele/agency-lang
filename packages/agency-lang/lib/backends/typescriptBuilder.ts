@@ -508,6 +508,9 @@ export class TypeScriptBuilder {
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
+      case "effectDeclaration":
+        // Compile-time only: declarations erase like type aliases.
+        return ts.empty();
       case "assignment":
         return this.processAssignment(node);
       case "function":

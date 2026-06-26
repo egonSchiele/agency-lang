@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "effect declaration erases; the declared interrupt still runs and is approved",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

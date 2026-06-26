@@ -17,6 +17,7 @@ import type {
   ImportStatement,
 } from "./types/importStatement.js";
 import type { ExportFromStatement } from "./types/exportFromStatement.js";
+import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
 import {
   resolveAgencyImportPath,
@@ -115,9 +116,14 @@ export type ResolvedImport = {
  */
 export class SymbolTable {
   private readonly files: Record<string, FileSymbols>;
+  private readonly effectDecls: Record<string, EffectDeclaration[]>;
 
-  constructor(files: Record<string, FileSymbols> = {}) {
+  constructor(
+    files: Record<string, FileSymbols> = {},
+    effectDecls: Record<string, EffectDeclaration[]> = {},
+  ) {
     this.files = files;
+    this.effectDecls = effectDecls;
   }
 
   static build(
@@ -180,6 +186,19 @@ export class SymbolTable {
       files[filePath] = symbols;
     }
 
+    // Effect declarations can appear at the top level OR nested inside
+    // function/node/block bodies (the parser permits both). Deep-walk so
+    // body-scoped declarations are also registered in the ambient
+    // registry — matches how `classifySymbols` collects type aliases.
+    const effectDecls: Record<string, EffectDeclaration[]> = {};
+    for (const [filePath, { program }] of Object.entries(parsed)) {
+      const decls: EffectDeclaration[] = [];
+      for (const { node } of walkNodes(program.nodes)) {
+        if (node.type === "effectDeclaration") decls.push(node);
+      }
+      if (decls.length > 0) effectDecls[filePath] = decls;
+    }
+
     // Merge re-exports (exportFromStatement) in dependency order with cycle detection.
     const reExportResolved = new Set<string>();
 
@@ -215,7 +234,7 @@ export class SymbolTable {
       resolveReExports(filePath, []);
     }
 
-    return new SymbolTable(files);
+    return new SymbolTable(files, effectDecls);
   }
 
   has(absPath: string): boolean {
@@ -224,6 +243,15 @@ export class SymbolTable {
 
   getFile(absPath: string): FileSymbols | undefined {
     return this.files[absPath];
+  }
+
+  /** Every effect declaration reachable in the closure, tagged with its
+   *  source file. Includes duplicates so the typechecker can detect
+   *  same-file dups and cross-file conflicts. */
+  allEffectDeclarations(): { decl: EffectDeclaration; file: string }[] {
+    return Object.entries(this.effectDecls).flatMap(([file, decls]) =>
+      decls.map((decl) => ({ decl, file })),
+    );
   }
 
   filePaths(): string[] {

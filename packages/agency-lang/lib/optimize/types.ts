@@ -42,8 +42,15 @@ export type OptimizeResult = {
   rejectedCount: number;
   validationFailedCount: number;
   iterations: IterationResult[];
-  /** Champion's train objective (set by pointwise optimizers). */
+  /** Champion's gate-aware train objective (`scorecard.gatedObjective()`,
+   *  i.e. raw objective or 0 if any `mustPass` gate failed) — set by
+   *  pointwise optimizers. Matches the score optimizers use to compare
+   *  candidates. */
   trainObjective?: number;
+  /** Baseline candidate's gate-aware train objective, so consumers can see
+   *  the improvement without re-running. Computed identically to
+   *  `trainObjective` so the two are directly comparable. */
+  baselineObjective?: number;
   /** Champion's validation objective, when a validation set was used (Phase 3). */
   validationObjective?: number;
   /** Per-input grade breakdown for the champion — the reward-hacking lens. */

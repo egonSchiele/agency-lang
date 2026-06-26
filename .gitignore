@@ -37,3 +37,7 @@ tests/debugger/*.ts
 **/runs/
 .agency-tmp/
 tests/integration/statelog/.tmp/
+# transient output from the optimizer efficacy harness (cleaned up on a
+# clean pass; kept on failure or when OPTIMIZE_EFFICACY_KEEP_RUNS=1 for
+# debugging real-LLM runs without re-spending tokens)
+**/optimize-efficacy-runs-*/

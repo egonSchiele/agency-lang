@@ -201,7 +201,15 @@ export abstract class BaseOptimizer {
       attempts
     });
 
-    result.trainObjective = champion.scorecard.objective();
+    // Gate-aware: match the score optimizers actually use to compare
+    // candidates. Reporting raw `objective()` would let a gate-failing
+    // baseline (raw 0.5) appear "better" than a gate-passing champion
+    // (raw 0.3) and break consumer comparisons.
+    result.trainObjective = champion.scorecard.gatedObjective();
+    const baseline = candidates.find((c) => c.iter === "baseline");
+    if (baseline) {
+      result.baselineObjective = baseline.scorecard.gatedObjective();
+    }
 
     if (validationObjective !== undefined) {
       result.validationObjective = validationObjective;

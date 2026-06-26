@@ -6,6 +6,7 @@ import { variableTypeToString } from "@/backends/typescriptGenerator/typeToStrin
 import { AgencyMultiLineComment, AgencyProgram, Assignment } from "@/types.js";
 import type { Tag } from "@/types/tag.js";
 import { TypeAlias, VariableType } from "@/types/typeHints.js";
+import { EffectDeclaration } from "@/types/effectDeclaration.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -154,9 +155,12 @@ function generateDocForFile(
   }
 
   const typeAliases: TypeAlias[] = [];
+  const effectDecls: EffectDeclaration[] = [];
   for (const node of program.nodes) {
     if (node.type === "typeAlias") {
       typeAliases.push(node);
+    } else if (node.type === "effectDeclaration") {
+      effectDecls.push(node);
     }
   }
   const constants = collectExportedConstants(program);
@@ -177,6 +181,9 @@ function generateDocForFile(
 
   const typeSection = generateTypeSection(typeAliases, ctx);
   if (typeSection) sections.push(typeSection);
+
+  const effectSection = generateEffectSection(effectDecls, ctx);
+  if (effectSection) sections.push(effectSection);
 
   const constantSection = generateConstantSection(constants, ctx);
   if (constantSection) sections.push(constantSection);
@@ -307,6 +314,33 @@ function generateTypeSection(
   return section(
     heading(2, "Types"),
     ...aliases.filter(a => a.exported).map((a) => formatTypeAlias(a, ctx)),
+  );
+}
+
+function formatEffectDeclaration(
+  decl: EffectDeclaration,
+  ctx: DocContext,
+): string {
+  const code = generateAgency({
+    type: "agencyProgram",
+    nodes: [decl],
+  });
+  return section(
+    heading(3, decl.effect),
+    decl.docComment ? formatDocComment(decl.docComment) : null,
+    codeFence(code),
+    sourceLink(decl.loc, ctx),
+  );
+}
+
+function generateEffectSection(
+  decls: EffectDeclaration[],
+  ctx: DocContext,
+): string | null {
+  if (decls.length === 0) return null;
+  return section(
+    heading(2, "Effects"),
+    ...decls.map((d) => formatEffectDeclaration(d, ctx)),
   );
 }
 

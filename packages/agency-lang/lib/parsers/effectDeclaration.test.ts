@@ -108,5 +108,19 @@ describe("effect declaration at module level", () => {
       "def f() { effect std::read { dir: string }\n  return 1 }",
     );
     expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    // Walk into the function body — succeeding to parse the program isn't
+    // enough; we need the declaration to actually appear as a body node.
+    // Without an explicit body check, a regression where the parser silently
+    // discarded the declaration would still pass.
+    const fn = parsed.result.nodes.find(
+      (n: any) => n.type === "function" && n.functionName === "f",
+    ) as any;
+    expect(fn).toBeDefined();
+    const decl = fn.body?.find((n: any) => n.type === "effectDeclaration");
+    expect(decl).toMatchObject({
+      type: "effectDeclaration",
+      effect: "std::read",
+    });
   });
 });

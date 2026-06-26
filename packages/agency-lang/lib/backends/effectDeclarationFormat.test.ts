@@ -21,4 +21,20 @@ describe("formatter: effect declarations", () => {
   it("formats an empty payload", () => {
     expect(fmt("effect std::ping {}")).toBe("effect std::ping {}");
   });
+
+  it("formats a multi-field declaration across lines", () => {
+    // The realistic shape for users — multiple fields. A regression in the
+    // shared object renderer (e.g., dropping the indent step) would break
+    // this without the single-field test catching it.
+    expect(
+      fmt("effect std::write { dir: string, content: string }"),
+    ).toBe("effect std::write {\n  dir: string;\n  content: string\n}");
+  });
+
+  it("round-trips: parse → format → parse → format is stable", () => {
+    // Stronger than a one-shot snapshot: two passes must produce the same
+    // output. Catches formatter output that isn't itself parseable.
+    const once = fmt("effect std::read { dir: string }");
+    expect(fmt(once)).toBe(once);
+  });
 });

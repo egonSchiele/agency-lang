@@ -24,7 +24,9 @@ describe("SymbolTable.allEffectDeclarations", () => {
       const effects = st
         .allEffectDeclarations()
         .map((d) => d.decl.effect);
-      expect(effects).toContain("std::nested");
+      // Exact length too — guards against a deep-walk regression that
+      // double-visits the same node (`toContain` alone would let that pass).
+      expect(effects).toEqual(["std::nested"]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

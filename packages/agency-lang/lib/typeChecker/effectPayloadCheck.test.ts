@@ -8,9 +8,14 @@ import { SymbolTable } from "../symbolTable.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
 
+/** Returns only diagnostics emitted by `checkEffectPayloads`. Anchored to
+ *  the exact message prefixes the diagnostic uses, so unrelated typechecker
+ *  output mentioning an effect name can't accidentally match. */
 function dataErrors(src: string) {
   return typecheckSource(src).filter((e) =>
-    /Effect '.*'|[Cc]onflicting|Named arguments/.test(e.message),
+    /^(Effect '|Conflicting payload types for effect '|Named arguments are not allowed on)/.test(
+      e.message,
+    ),
   );
 }
 
@@ -157,6 +162,40 @@ describe("effect data checking", () => {
         'node main() { const xs = ["m", { dir: "/tmp" }]\n raise std::read(...xs) }',
     );
     expect(errs).toHaveLength(0);
+  });
+
+  it("silently skips when a splat appears at a later positional slot", () => {
+    // The implementation must scan ALL args for a splat, not just arg[1].
+    // A splat at arg[2] still shifts what arg[1] becomes at runtime, so we
+    // can't trust the static positional alignment.
+    const errs = dataErrors(
+      "effect std::read { dir: string }\n" +
+        'node main() {\n' +
+        '  const extras = [1, 2, 3]\n' +
+        '  raise std::read("m", { dir: "/tmp" }, ...extras)\n' +
+        '}',
+    );
+    expect(errs).toHaveLength(0);
+  });
+
+  it("same-file dup with different payloads fires BOTH dup and conflict", () => {
+    // Two diagnostics from two passes in `buildRegistry`: the per-file
+    // duplicate detector AND the cross-declaration conflict detector. This
+    // pins that order isn't load-bearing: collapsing one into the other
+    // would lose a useful error.
+    const errs = typecheckSource(
+      "effect std::read { dir: string }\n" +
+        "effect std::read { path: number }\n" +
+        'node main() { print("hi") }',
+    );
+    const dup = errs.find((e) =>
+      /Effect 'std::read' is declared more than once/.test(e.message),
+    );
+    const conflict = errs.find((e) =>
+      /Conflicting payload types for effect 'std::read'/.test(e.message),
+    );
+    expect(dup).toBeDefined();
+    expect(conflict).toBeDefined();
   });
 });
 

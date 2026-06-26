@@ -560,4 +560,39 @@ const internal = "not exported"
 
     expect(output).toMatch(/^---\nname: "ui"\n---\n\n# ui\n/);
   });
+
+  it("renders effect declarations under an Effects section with attached doc comments", () => {
+    // Covers the new doc-section renderer end-to-end:
+    //   * the `## Effects` heading appears,
+    //   * each declaration becomes an `### <effect>` subsection,
+    //   * the agency-formatted body is fenced,
+    //   * the preceding doc comment is attached and rendered.
+    // Without this, a regression deleting either `generateEffectSection`
+    // or the docComment branch would slip through unnoticed.
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "effects.agency"),
+      `/** Reads files from a directory. */
+effect std::read { dir: string }
+
+node main() { print("hi") }
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "effects.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "effects.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("## Effects");
+    expect(output).toContain("### std::read");
+    expect(output).toContain("Reads files from a directory.");
+    // The agency-formatted body appears inside a `ts` fence (the doc
+    // comment is re-emitted there too, matching the type-alias renderer).
+    expect(output).toMatch(/```ts[\s\S]*?effect std::read\s*\{/);
+    expect(output).toMatch(/dir: string/);
+  });
 });

@@ -55,12 +55,11 @@ export function narrowToBranch(rt: ResultType, branch: "success" | "failure"): R
  * Refinements are written with declareLocal so they vanish when the child
  * scope is dropped at branch exit and never leak to the function scope.
  *
- * Side note on propagation: a `let r2 = r` inside a narrowed branch copies
- * the narrowed ResultType (including `narrowedBranch`) and goes to the
- * function scope via the normal `declare()` path. So `r2` is permanently
- * narrowed to that branch outside the if-body too. This is sound — `r2`
- * holds the same value `r` did at the moment of copy, and the Success /
- * Failure variant of a Result never changes for a given value.
+ * A `let r2 = r` inside a narrowed branch does NOT propagate the marker
+ * outside the block: `scope.declare()` calls `widenType()`, which for
+ * `resultType` rebuilds the object without `narrowedBranch`
+ * (assignability.ts:370). `r2.value` outside the block is therefore the
+ * usual un-narrowed `any`. Locked in by a test in narrowing.test.ts.
  */
 export function applyNarrowing(
   childScope: Scope,

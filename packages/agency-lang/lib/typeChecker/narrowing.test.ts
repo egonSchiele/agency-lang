@@ -184,6 +184,24 @@ node main() { consume(tryParse("ok")) }`);
     expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
   });
 
+  it("does NOT propagate the narrowing marker through a let-binding past the block", () => {
+    // `scope.declare()` calls `widenType()` on the inferred RHS, and
+    // `widenType` for `resultType` (assignability.ts) constructs a fresh
+    // object that does NOT copy `narrowedBranch`. So `let r2 = r` inside
+    // an isSuccess guard gives `r2` a clean ResultType, and `r2.value`
+    // outside the block stays `any` (the un-narrowed default).
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  let r2: Result<number, string> = failure("init")
+  if (isSuccess(r)) {
+    r2 = r
+  }
+  let outside: string = r2.value
+}`);
+    expect(errs).not.toContain("(assignment to 'outside')");
+  });
+
   it("narrows independently in nested isSuccess guards", () => {
     // Locks that scope chaining narrows two different variables across two
     // nested guards. Catches a regression where the inner walkWithNarrowing

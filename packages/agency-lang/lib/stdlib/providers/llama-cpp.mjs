@@ -10,6 +10,7 @@
 // `smoltalk-llama-cpp` isn't resolvable from this file's location.
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { splitModelPath } from "./llamaModelConfig.js";
 
 async function loadSmoltalkLlamaCpp() {
@@ -21,23 +22,26 @@ async function loadSmoltalkLlamaCpp() {
 }
 
 async function loadNodeLlamaCpp() {
-  // Prefer the copy that ships with smoltalk-llama-cpp so we use the version
-  // it was tested against. Fall back to a bare resolve.
+  // node-llama-cpp is a dependency of smoltalk-llama-cpp, so resolve it
+  // RELATIVE TO smoltalk-llama-cpp's entry (the path localModels.ts found and
+  // exposed via AGENCY_SMOLTALK_LLAMA_CPP_PATH). This works for global installs
+  // and nested/hoisted layouts alike. We use `createRequire(...).resolve` —
+  // NOT `import.meta.resolve(spec, parent)`, whose two-arg form is experimental
+  // and silently unavailable on stable Node (the bug this replaces). The CJS
+  // resolver honors node-llama-cpp's "node" export condition; we then import
+  // the resolved ESM file URL.
   const pkgPath = process.env.AGENCY_SMOLTALK_LLAMA_CPP_PATH;
   if (pkgPath) {
     try {
-      const url = import.meta.resolve("node-llama-cpp", pathToFileURL(pkgPath).href);
-      return await import(url);
+      const resolved = createRequire(pkgPath).resolve("node-llama-cpp");
+      return await import(pathToFileURL(resolved).href);
     } catch {
-      /* fall through to a local resolve */
+      /* fall through to a bare import */
     }
   }
-  try {
-    const parent = import.meta.resolve("smoltalk-llama-cpp");
-    return await import(import.meta.resolve("node-llama-cpp", parent));
-  } catch {
-    return await import("node-llama-cpp");
-  }
+  // Last resort: a bare import, which only resolves when node-llama-cpp is
+  // reachable from this module's own location (e.g. a local project install).
+  return await import("node-llama-cpp");
 }
 
 // Cached so a second register() call doesn't re-import smoltalk-llama-cpp.

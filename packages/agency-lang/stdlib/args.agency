@@ -53,7 +53,7 @@ import { _parseArgs } from "agency-lang/stdlib-lib/args.js"
     `default` is applied when the flag is absent (mutually exclusive with
     `required`). `choices` constrains string flags to a fixed set of
     case-sensitive values. `hidden` flags still parse but are omitted
-    from `--help`. `optionalValue` (string flags only, no `choices`) lets
+    from `--help`. `optional` (string flags only, no `choices`) lets
     the value be omitted: a bare `--flag` yields "" instead of a
     missing-value error, so "present but empty" is a distinct state from
     absent — useful for "show me the choices" affordances. */
@@ -65,7 +65,7 @@ type FlagSpec = {
   description?: string;
   choices?: string[];
   hidden?: boolean;
-  optionalValue?: boolean
+  optional?: boolean
 }
 
 /** Optional flag-group constraints. `exclusive` declares sets of

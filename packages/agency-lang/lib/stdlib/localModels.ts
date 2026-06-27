@@ -500,8 +500,8 @@ function colWidth(header: string, values: string[]): number {
  *  fact row per curated model (params, category, size, context window,
  *  license), the description on a dimmed line below, a blank line between
  *  models. User aliases (which carry no metadata) follow in an ALIASES
- *  section as `name → target`. Returns the block as a string (no trailing
- *  newline beyond the inter-entry spacing) for a caller to print. */
+ *  section as `name → target`. Returns the block as a string with no trailing
+ *  newline (the caller's `console.log` adds exactly one). */
 export function formatModelCatalog(): string {
   const entries = _listModelNames();
   const curated = entries.filter((m) => m.source === "curated");
@@ -541,14 +541,17 @@ export function formatModelCatalog(): string {
 
     // LICENSE is the last column, so it needs no trailing pad.
     lines.push(ttyColor.bold(row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE")));
-    for (const r of rows) {
+    rows.forEach((r, i) => {
+      // Blank line *between* models, not after the last one, so the joined
+      // string has no trailing newline (console.log adds exactly one).
+      if (i > 0) lines.push("");
       lines.push(row(r.name, r.params, r.category, r.size, r.ctx, r.license));
       if (r.description) lines.push(ttyColor.dim(`    ${r.description}`));
-      lines.push("");
-    }
+    });
   }
 
   if (aliases.length > 0) {
+    if (lines.length > 0) lines.push(""); // separate the table from ALIASES
     lines.push(ttyColor.bold("ALIASES"));
     for (const a of aliases) {
       lines.push(`${a.name} → ${a.target}`);

@@ -41,7 +41,7 @@ export type FlagSpec = {
   // raising a missing-value error, letting the program treat "present but
   // empty" as a distinct state (e.g. "show me the choices"). Absent stays
   // absent; a given value passes through unchanged.
-  optionalValue?: boolean;
+  optional?: boolean;
 };
 
 export type FlagGroups = {
@@ -89,13 +89,13 @@ export type ParsedArgs = {
 // `hidden`) inherit their types via `Required<>`; the three with a
 // "missing" sentinel are spelled out below.
 export type NormalizedFlag = Required<
-  Omit<FlagSpec, "short" | "default" | "choices" | "optionalValue">
+  Omit<FlagSpec, "short" | "default" | "choices" | "optional">
 > & {
   name: string;
   short: string | null;
   default: string | number | boolean | null;
   choices: string[] | null;
-  optionalValue: boolean;
+  optional: boolean;
 };
 
 export type NormalizedSchema = {
@@ -212,18 +212,18 @@ const SCHEMA_RULES: SchemaRule[] = [
     },
   },
   {
-    // optionalValue only makes sense for string flags: a bare flag yields
+    // `optional` only makes sense for string flags: a bare flag yields
     // "", which a number can't coerce and a choices-constrained flag would
     // reject. Booleans are already value-less.
-    name: "optionalValue only on string flags without choices",
+    name: "optional only on string flags without choices",
     check: (s) => {
       const bad = Object.entries(s.flags).find(
         ([, spec]) =>
-          spec.optionalValue === true &&
+          spec.optional === true &&
           (spec.type !== "string" || spec.choices !== undefined),
       );
       return bad
-        ? `flag --${bad[0]} sets optionalValue but must be a string flag without choices`
+        ? `flag --${bad[0]} sets optional but must be a string flag without choices`
         : null;
     },
   },
@@ -396,7 +396,7 @@ function normalizeFlag(name: string, spec: FlagSpec): NormalizedFlag {
     description: spec.description ?? "",
     choices: spec.choices ?? null,
     hidden: spec.hidden ?? false,
-    optionalValue: spec.optionalValue ?? false,
+    optional: spec.optional ?? false,
   };
 }
 
@@ -467,19 +467,20 @@ const ARGV_RULES: ArgvRule[] = [
 ];
 
 // =============================================================================
-// expandOptionalFlags — let optionalValue flags appear without a value
+// expandOptionalFlags — let `optional` flags appear without a value
 // =============================================================================
 //
 // Node's strict parseArgs has no optional-value concept: a string option
 // at end-of-args or followed by another option throws "argument missing".
-// We rewrite a bare optionalValue flag `--name` to `--name=` (empty value)
-// BEFORE any other stage runs, so the rest of the pipeline — preScan's
-// greedy/duplicate rules, Node's tokenizer, coercion — sees a normal
-// valued token and never has to special-case optionality. A flag is "bare"
-// when it's the last token or the next token is another option (`-`/`--`
-// prefixed); a `--name=...` (incl. empty `--name=`) already carries a value
-// and is left alone. Tokens after a standalone `--` are positionals and are
-// copied verbatim.
+// We rewrite a bare `optional` flag to `--<name>=` (empty value) BEFORE any
+// other stage runs, so the rest of the pipeline — preScan's greedy/duplicate
+// rules, Node's tokenizer, coercion — sees a normal valued token and never
+// has to special-case optionality. A flag is "bare" when it's the last token
+// or the next token is another option (`-`/`--` prefixed). Token
+// classification reuses `flagNameOf`, so this handles long (`--name`) and
+// short (`-n`) forms uniformly — both rewrite to the long `--<name>=`. A token
+// that already carries a value (`--name=...`, `-nVALUE`) is left alone. Tokens
+// after a standalone `--` are positionals and are copied verbatim.
 export function expandOptionalFlags(
   argv: string[],
   schema: NormalizedSchema,
@@ -493,16 +494,27 @@ export function expandOptionalFlags(
       out.push(token);
       continue;
     }
-    const flag = token.startsWith("--") ? schema.flagsByName[token.slice(2)] : undefined;
-    if (flag?.optionalValue === true) {
+    const name = flagNameOf(token, schema);
+    const flag = name !== null ? schema.flagsByName[name] : undefined;
+    if (flag?.optional === true && !tokenHasAttachedValue(token)) {
       const next = argv[i + 1];
       const bare = next === undefined || next === "--" || next.startsWith("-");
-      out.push(bare ? `${token}=` : token);
-    } else {
-      out.push(token);
+      if (bare) {
+        out.push(`--${name}=`);
+        continue;
+      }
     }
+    out.push(token);
   }
   return out;
+}
+
+/** Whether a flag token already carries its value inline: `--name=value`
+ *  (incl. empty `--name=`) for long form, `-nVALUE` (attached) for short. A
+ *  bare `--name` / `-n` does not. */
+function tokenHasAttachedValue(token: string): boolean {
+  if (token.startsWith("--")) return token.includes("=");
+  return token.length > 2; // "-n" → bare; "-nVALUE" → attached
 }
 
 export function preScanArgv(
@@ -867,8 +879,8 @@ function toRow(f: NormalizedFlag): OptionRow {
 
 function valuePlaceholder(f: NormalizedFlag): string {
   if (f.type === "boolean") return "";
-  // optionalValue flags show the value in brackets: `--model [<string>]`.
-  if (f.optionalValue) return ` [<${f.type}>]`;
+  // optional-value flags show the value in brackets: `--model [<string>]`.
+  if (f.optional) return ` [<${f.type}>]`;
   if (f.choices !== null) return ` <${f.choices.join("|")}>`;
   return ` <${f.type}>`;
 }
@@ -983,7 +995,7 @@ export function _parseArgsWith(
   validateSchema(schema); // throws on schema bugs
   const normalized = normalizeSchema(schema);
 
-  // Stage 0: rewrite bare optionalValue flags (`--model` → `--model=`) so
+  // Stage 0: rewrite bare `optional` flags (`--model` → `--model=`) so
   // every later stage sees an ordinary valued token.
   argv = expandOptionalFlags(argv, normalized);
 

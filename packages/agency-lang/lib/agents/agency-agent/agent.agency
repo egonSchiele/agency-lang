@@ -711,7 +711,7 @@ node main() {
       },
       "local-model": {
         type: "string",
-        optionalValue: true,
+        optional: true,
         description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value to list available models. Sets fast+slow to the local model and ignores --model/--provider/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
       }
     }

@@ -131,6 +131,18 @@ export type MemoryManagerOptions = {
 
 const DEFAULT_RECALL_K = 10;
 const DEFAULT_EMBEDDING_THRESHOLD = 0.3;
+
+/** Default embedding model per LLM provider that smoltalk can embed with.
+ *  When no embedding model is explicitly configured, Tier-2 recall derives
+ *  its model from the active chat provider via this table. A provider not
+ *  listed here (anthropic, llama-cpp, custom) has no embedding endpoint, so
+ *  Tier-2 is disabled rather than firing a doomed remote call. */
+const EMBED_MODEL_BY_PROVIDER: Record<string, string> = {
+  openai: "text-embedding-3-small",
+  "openai-responses": "text-embedding-3-small",
+  google: "text-embedding-004",
+  ollama: "nomic-embed-text",
+};
 const SUMMARY_MESSAGE_PREFIX = "Previous conversation summary:\n";
 
 /**
@@ -300,7 +312,7 @@ export class MemoryManager {
    *  cost/latency for embeddings separately. */
   private async _embed(
     text: string,
-    options?: { model?: string; phase?: string },
+    options?: { model?: string; provider?: string; phase?: string },
   ): Promise<number[]> {
     const phase = options?.phase ?? "memory.embed";
     const spanId = this.statelogClient?.startSpan("embedding");
@@ -308,9 +320,13 @@ export class MemoryManager {
     try {
       const result = await this.llmClient.embed(text, {
         model: options?.model,
+        // Pass the provider explicitly so smoltalk routes to the right embed
+        // endpoint even when the model name doesn't imply it (e.g. ollama).
+        provider: options?.provider,
+        ollamaHost: (this.smoltalkDefaults as any).ollamaHost,
         openAiApiKey: (this.smoltalkDefaults as any).openAiApiKey,
         googleApiKey: (this.smoltalkDefaults as any).googleApiKey,
-      });
+      } as any);
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
         this.logger.warn(
@@ -361,6 +377,90 @@ export class MemoryManager {
       return vector;
     } finally {
       this.statelogClient?.endSpan(spanId);
+    }
+  }
+
+  /** One-shot guard so the "Tier-2 disabled" notice fires once per manager,
+   *  not on every recall. */
+  private _embeddingDisabledLogged = false;
+
+  /** The active LLM provider, used to derive the embedding model. Reads the
+   *  active branch stack's `llmDefaults` (set by setModel/setLlmOptions — e.g.
+   *  the agent's `--local-model`), falling back to the baked smoltalk defaults
+   *  and finally to deriving the provider from the model name. Returns
+   *  undefined when no provider can be determined. */
+  private activeEmbeddingProvider(): string | undefined {
+    const active = agencyStore.getStore()?.stack?.other?.llmDefaults as
+      | { model?: string; provider?: string }
+      | undefined;
+    const baked = this.smoltalkDefaults as
+      | { model?: string; provider?: string }
+      | undefined;
+    const provider = active?.provider || baked?.provider || undefined;
+    if (provider) return provider;
+    const model = active?.model || baked?.model || undefined;
+    if (model) {
+      // `getModel` is smoltalk's public model registry lookup; unknown models
+      // (e.g. a local .gguf path) return undefined → provider undefined →
+      // Tier-2 disabled, which is the intended behavior.
+      try {
+        return smoltalk.getModel(model)?.provider;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /** Resolve the embedding model + provider to use, or null when Tier-2 should
+   *  be disabled. An explicit `embeddings.model` wins; otherwise the model is
+   *  derived from the active provider via `EMBED_MODEL_BY_PROVIDER`. Providers
+   *  with no embedding endpoint (anthropic, llama-cpp, custom) yield null. */
+  resolveEmbedding(): { model: string; provider?: string } | null {
+    const explicit = this.config.embeddings?.model;
+    if (explicit) {
+      return { model: explicit, provider: this.config.embeddings?.provider };
+    }
+    const provider = this.activeEmbeddingProvider();
+    if (!provider) return null;
+    const model = EMBED_MODEL_BY_PROVIDER[provider];
+    if (!model) return null;
+    return { model, provider };
+  }
+
+  /** Embed `text`, or return null (logging once) when Tier-2 is disabled
+   *  because the active provider has no embedding endpoint. Callers treat null
+   *  as "skip semantic embedding for this item" — no remote call is made. */
+  private async embedOrSkip(text: string, phase: string): Promise<number[] | null> {
+    const target = this.resolveEmbedding();
+    if (!target) {
+      await this.noteEmbeddingDisabled();
+      return null;
+    }
+    return this._embed(text, {
+      model: target.model,
+      provider: target.provider,
+      phase,
+    });
+  }
+
+  /** Emit a single notice (logger + statelog) the first time Tier-2 is
+   *  disabled, so the user sees semantic recall is off (e.g. a local model
+   *  with no embedding endpoint) without per-recall warn spam. */
+  private async noteEmbeddingDisabled(): Promise<void> {
+    if (this._embeddingDisabledLogged) return;
+    this._embeddingDisabledLogged = true;
+    const provider = this.activeEmbeddingProvider() ?? "unknown";
+    const msg =
+      `[memory] semantic recall (Tier-2) disabled: provider "${provider}" has no ` +
+      `embedding endpoint. Structured recall still works; set embeddings.model to override.`;
+    this.logger.info(msg);
+    try {
+      await this.statelogClient?.debug(msg, { provider });
+    } catch (err) {
+      this.logger.debug(
+        `[memory] statelog notice failed: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -1089,10 +1189,10 @@ export class MemoryManager {
         continue;
       }
       try {
-        const vector = await this._embed(embedText, {
-          model: this.config.embeddings?.model,
-          phase: "new-observation",
-        });
+        const vector = await this.embedOrSkip(embedText, "new-observation");
+        // Tier-2 disabled (provider has no embedding endpoint): skip the
+        // vector for this observation; structured recall still indexes it.
+        if (vector === null) continue;
         entry.setEmbedding(id, vector);
       } catch (err) {
         // Guard trips bubble — see rethrowIfGuard comment.
@@ -1147,10 +1247,11 @@ export class MemoryManager {
   ): Promise<string[]> {
     let queryVector: number[];
     try {
-      queryVector = await this._embed(query, {
-        model: this.config.embeddings?.model,
-        phase: "recall-query",
-      });
+      const v = await this.embedOrSkip(query, "recall-query");
+      // Tier-2 disabled (provider has no embedding endpoint): no query vector,
+      // so semantic recall contributes nothing this turn.
+      if (v === null) return [];
+      queryVector = v;
     } catch (err) {
       // Guard trips bubble — see rethrowIfGuard comment.
       rethrowIfGuard(err);

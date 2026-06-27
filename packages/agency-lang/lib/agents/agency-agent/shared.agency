@@ -43,18 +43,17 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // top-level pattern (see `stdlib/memory.agency`): the `with approve`
 // modifier needs an enclosing step path, which a bare top-level call
 // doesn't have. The underscore name signals "we want the side-effect,
-// not the value". `embeddings.model` MUST be set — without it, the
-// embedder is invoked with `model: undefined` and smoltalk warns
-// `[memory] embed call failed: Model undefined is not recognized`,
-// which silently disables Tier 2 (embedding-similarity) recall.
-// `text-embedding-3-small` is the canonical default cited in the
-// memory guide; cheap and ubiquitous.
+// not the value". We deliberately do NOT pin `embeddings.model`: the memory
+// layer derives the embedding model from the ACTIVE LLM provider (openai →
+// text-embedding-3-small, google → text-embedding-004, ollama → nomic-embed-text),
+// and disables Tier-2 (embedding-similarity) recall — with a one-time notice —
+// for providers that have no embedding endpoint (anthropic, and the llama-cpp
+// `--local-model` path). That keeps a local/offline run from making a doomed
+// remote embed call while structured recall keeps working. Set
+// `embeddings.model` explicitly to override.
 static const _memoryReady = enableMemory(
   {
-  dir: "${AGENCY_AGENT_DIR}/memory",
-  embeddings: {
-    model: "text-embedding-3-small"
-  }
+  dir: "${AGENCY_AGENT_DIR}/memory"
 },
 ) with approve
 

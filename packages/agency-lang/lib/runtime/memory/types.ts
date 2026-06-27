@@ -88,7 +88,14 @@ export type MemoryConfig = {
     threshold?: number;
   };
   embeddings?: {
+    /** Explicit embedding model. When set, it (with `provider`) is used as-is
+     *  and overrides provider-derivation. When omitted, the embedding model is
+     *  derived from the active LLM provider (openai/google/ollama); providers
+     *  without an embedding endpoint (anthropic, llama-cpp, custom) disable
+     *  Tier-2 semantic recall. */
     model?: string;
+    /** Explicit embedding provider for `model`. Optional; normally derived. */
+    provider?: string;
   };
 };
 

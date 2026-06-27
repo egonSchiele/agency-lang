@@ -442,10 +442,13 @@ export function walkScopeBody(
         // The early `return` is load-bearing: without it the outer for-loop
         // would re-walk `rest` in the wrong (un-narrowed) scope, producing
         // duplicate diagnostics and ignoring the post-guard facts entirely.
+        // Gate on the cheap checks (no facts, or no tail) BEFORE slicing —
+        // postGuardFacts returns [] for any `if` whose taken branch doesn't
+        // always-return, which is the vast majority, so an unconditional
+        // slice would allocate a throwaway array on every `if` in the AST.
         const afterFacts = postGuardFacts(node, facts);
-        const rest = nodes.slice(i + 1);
-        if (afterFacts.length > 0 && rest.length > 0) {
-          walkWithNarrowing(scope, rest, afterFacts, aliases, ctx, walkScopeBody);
+        if (afterFacts.length > 0 && i + 1 < nodes.length) {
+          walkWithNarrowing(scope, nodes.slice(i + 1), afterFacts, aliases, ctx, walkScopeBody);
           return;
         }
         break;

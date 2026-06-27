@@ -546,8 +546,15 @@ function colWidth(header: string, values: string[]): number {
  *  newline (the caller's `console.log` adds exactly one). */
 export function formatModelCatalog(): string {
   const entries = _listModelNames();
-  const curated = entries.filter((m) => m.source === "curated");
-  const aliases = entries.filter((m) => m.source === "alias");
+  const hasMetadata = (m: ModelNameEntry): boolean =>
+    m.params !== undefined ||
+    m.sizeBytes !== undefined ||
+    m.category !== undefined ||
+    m.contextWindow !== undefined ||
+    m.license !== undefined ||
+    m.description !== undefined;
+  const curated = entries.filter(hasMetadata); // table rows: built-ins + rich aliases
+  const aliases = entries.filter((m) => !hasMetadata(m)); // plain name→uri only
   const lines: string[] = [];
 
   if (curated.length > 0) {

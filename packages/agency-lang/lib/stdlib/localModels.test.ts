@@ -280,3 +280,42 @@ describe("object-valued aliases", () => {
     expect(matches[0].source).toBe("alias");
   });
 });
+
+describe("formatModelCatalog with rich aliases", () => {
+  it("renders a metadata-bearing alias in the table and a plain alias under ALIASES", () => {
+    // Point alias resolution at a temp agency.json via cwd so the function
+    // (which takes no file arg) picks it up.
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      fs.writeFileSync(
+        aliasFile,
+        JSON.stringify({
+          client: {
+            modelAliases: {
+              "rich-model": {
+                uri: "hf:org/rich:Q4_K_M",
+                params: "7B",
+                sizeBytes: 4_000_000_000,
+                category: "general",
+                contextWindow: 131072,
+                license: "apache-2.0",
+                description: "A rich remote alias.",
+                source: "remote",
+              },
+              "plain-model": "hf:org/plain:Q4_K_M",
+            },
+          },
+        }),
+      );
+      const out = formatModelCatalog();
+      // Rich alias is a table row (its params show up on the same line as its name).
+      const richLine = out.split("\n").find((l) => l.includes("rich-model"));
+      expect(richLine).toContain("7B");
+      // Plain alias appears under ALIASES as name → uri, NOT as a table row.
+      expect(out).toContain("plain-model → hf:org/plain:Q4_K_M");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+});

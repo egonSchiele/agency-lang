@@ -1200,3 +1200,128 @@ describe("_parseArgsWith (end-to-end)", () => {
     ).toThrow(/v1 does not support negatable booleans/);
   });
 });
+
+describe("optional (optional-value) flags", () => {
+  // A string flag whose value may be omitted. Bare → "", given → the value,
+  // absent → not present. Mirrors `agency agent --local-model`.
+  const schema: ArgsSchema = {
+    programName: "demo",
+    flags: {
+      model: { type: "string", short: "m", optional: true },
+      verbose: { type: "boolean", short: "v" },
+    },
+  };
+
+  it("yields \"\" when the flag is the last token (bare)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+  });
+
+  it("yields \"\" when the next token is another flag (bare)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model", "--verbose"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+    expect(result!.flags.verbose).toBe(true);
+  });
+
+  it("yields \"\" for the explicit-empty --model= form", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model="], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+  });
+
+  it("yields the value when one is given", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model", "smollm2-135m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("smollm2-135m");
+  });
+
+  it("yields the value with the inline --model=value form", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model=smollm2-135m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("smollm2-135m");
+  });
+
+  it("is absent (not present) when the flag is not passed", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--verbose"], schema),
+    );
+    expect(ran).toBe(true);
+    expect("model" in result!.flags).toBe(false);
+  });
+
+  it("does not transform a look-alike positional after --", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model", "x", "--", "--model"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("x");
+    expect(result!.positionals).toEqual(["--model"]);
+  });
+
+  it("renders the value placeholder as optional in --help", () => {
+    const help = formatHelp(normalizeSchema(schema));
+    expect(help).toContain("--model [<string>]");
+  });
+
+  // Short aliases behave the same as the long form: bare → "", given → value.
+  it("yields \"\" for a bare short alias at end (-m)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["-m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+  });
+
+  it("yields \"\" for a bare short alias before another flag (-m --verbose)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["-m", "--verbose"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+    expect(result!.flags.verbose).toBe(true);
+  });
+
+  it("yields the value for a short alias with a separate value (-m x)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["-m", "smollm2-135m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("smollm2-135m");
+  });
+
+  it("yields the value for an attached short value (-mVALUE)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["-msmollm2-135m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("smollm2-135m");
+  });
+
+  it("rejects optional on a non-string flag", () => {
+    expect(() =>
+      validateSchema({
+        flags: { n: { type: "number", optional: true } },
+      } as ArgsSchema),
+    ).toThrow(/optional/);
+  });
+
+  it("rejects optional combined with choices", () => {
+    expect(() =>
+      validateSchema({
+        flags: { m: { type: "string", optional: true, choices: ["a", "b"] } },
+      } as ArgsSchema),
+    ).toThrow(/optional/);
+  });
+});

@@ -9,6 +9,7 @@ import {
   _removeModel,
   _registerLocalProvider,
   _registerLocalModel,
+  _printLocalCatalog,
 } from "agency-lang/stdlib-lib/localModels.js"
 
 /** @module
@@ -118,4 +119,10 @@ export def registerLocalModel(value: string, cacheDir: string = ""): string {
   @param cacheDir - download dir (empty string = per-user cache)
   """
   return _registerLocalModel(value, cacheDir)
+}
+
+export def printLocalCatalog() {
+  """Print the usable-model catalog (curated names + your aliases) as an
+  aligned table — the same listing as `agency local alias list`."""
+  _printLocalCatalog()
 }

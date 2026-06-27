@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { findFileUp } from "../importPaths.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
+import { ttyColor } from "../utils/termcolors.js";
 
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
  *  by `params` / `sizeBytes`). Lets the CLI group + filter without parsing the
@@ -470,4 +471,98 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
 export async function _registerLocalModel(value: string, cacheDir: string = ""): Promise<string> {
   await _registerLocalProvider();
   return await _downloadModel(value, cacheDir);
+}
+
+// =============================================================================
+// Catalog rendering — shared by `agency local alias list` and the agent's
+// bare `--local-model` discovery output, so both show an identical table.
+// =============================================================================
+
+const BYTES_PER_GB = 1e9;
+
+export function formatGB(bytes: number): string {
+  return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`;
+}
+
+/** Context window in compact units: 8192 → "8K", 131072 → "128K", 1e7 → "10M". */
+export function formatCtx(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Math.round(tokens / 1_000_000)}M`;
+  if (tokens >= 1024) return `${Math.round(tokens / 1024)}K`;
+  return `${tokens}`;
+}
+
+/** Width of a column: the longer of its header and its widest value. */
+function colWidth(header: string, values: string[]): number {
+  return Math.max(header.length, ...values.map((v) => v.length));
+}
+
+/** Render the usable-model list as an aligned table: a header row plus one
+ *  fact row per curated model (params, category, size, context window,
+ *  license), the description on a dimmed line below, a blank line between
+ *  models. User aliases (which carry no metadata) follow in an ALIASES
+ *  section as `name → target`. Returns the block as a string with no trailing
+ *  newline (the caller's `console.log` adds exactly one). */
+export function formatModelCatalog(): string {
+  const entries = _listModelNames();
+  const curated = entries.filter((m) => m.source === "curated");
+  const aliases = entries.filter((m) => m.source === "alias");
+  const lines: string[] = [];
+
+  if (curated.length > 0) {
+    const rows = curated.map((m) => ({
+      name: m.name,
+      params: m.params ?? "",
+      category: m.category ?? "",
+      size: m.sizeBytes ? formatGB(m.sizeBytes) : "?",
+      ctx: m.contextWindow ? formatCtx(m.contextWindow) : "",
+      license: m.license ?? "",
+      description: m.description ?? "",
+    }));
+    // Computed widths so columns fit the actual data (names range from ~10
+    // to ~28 chars). SIZE and CTX are numeric, so they right-align.
+    const w = {
+      name: colWidth("NAME", rows.map((r) => r.name)),
+      params: colWidth("PARAMS", rows.map((r) => r.params)),
+      category: colWidth("CATEGORY", rows.map((r) => r.category)),
+      size: colWidth("SIZE", rows.map((r) => r.size)),
+      ctx: colWidth("CTX", rows.map((r) => r.ctx)),
+    };
+    const row = (
+      name: string,
+      params: string,
+      category: string,
+      size: string,
+      ctx: string,
+      license: string,
+    ): string =>
+      `${name.padEnd(w.name)}  ${params.padEnd(w.params)}  ${category.padEnd(
+        w.category,
+      )}  ${size.padStart(w.size)}  ${ctx.padStart(w.ctx)}  ${license}`;
+
+    // LICENSE is the last column, so it needs no trailing pad.
+    lines.push(ttyColor.bold(row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE")));
+    rows.forEach((r, i) => {
+      // Blank line *between* models, not after the last one, so the joined
+      // string has no trailing newline (console.log adds exactly one).
+      if (i > 0) lines.push("");
+      lines.push(row(r.name, r.params, r.category, r.size, r.ctx, r.license));
+      if (r.description) lines.push(ttyColor.dim(`    ${r.description}`));
+    });
+  }
+
+  if (aliases.length > 0) {
+    if (lines.length > 0) lines.push(""); // separate the table from ALIASES
+    lines.push(ttyColor.bold("ALIASES"));
+    for (const a of aliases) {
+      lines.push(`${a.name} → ${a.target}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/** Print the model catalog to stdout. The agent's bare `--local-model`
+ *  path calls this through `std::agency/local`. */
+export function _printLocalCatalog(): void {
+  console.log(formatModelCatalog());
 }

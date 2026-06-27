@@ -25,6 +25,7 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
+import { printLocalCatalog } from "std::agency/local"
 import { configureModels, configureLocalModel } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -710,7 +711,8 @@ node main() {
       },
       "local-model": {
         type: "string",
-        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Sets fast+slow to the local model and ignores --model/--provider/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+        optional: true,
+        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value to list available models. Sets fast+slow to the local model and ignores --model/--provider/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
       }
     }
   },
@@ -727,11 +729,21 @@ node main() {
   // provider from API-key env vars and use that provider's defaults. The
   // fast model becomes the run-wide default via `setModel`; the slow
   // model is read by the deep-reasoning subagents (oracle, explorer).
-  // Resolve + apply the fast/slow models. Absent string flags read as
-  // `undefined`, and agency's `== null` does not match `undefined`, so
-  // normalize via `??` (which does treat `undefined` as nullish) to "".
-  const localModel = args.flags["local-model"] ?? ""
-  if (localModel != "") {
+  // `--local-model` is an optionalValue flag, giving three states:
+  //   absent  → `undefined` (compares false to both "" and null in agency)
+  //   bare    → "" (user wants to see the choices)
+  //   value   → the model name / hf: URI / .gguf path
+  // A bare flag lists the catalog and exits before any handlers/REPL start.
+  const localModel = args.flags["local-model"]
+  if (localModel == "") {
+    print("--local-model needs a model to run. Pick one of these short names:")
+    print("(or pass an hf: URI, a .gguf path, or an alias from `agency local alias add`)")
+    print("")
+    printLocalCatalog()
+    print("")
+    print("Example: agency agent --local-model smollm2-135m")
+    process.exit(0)
+  } else if (localModel) {
     configureLocalModel(localModel)
   } else {
     configureModels(

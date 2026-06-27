@@ -13,6 +13,7 @@ import {
   _localModelsSupported,
   resolveAliasConfigPath,
   resolveSmoltalkLlamaCppFromRoots,
+  formatModelCatalog,
 } from "./localModels.js";
 
 let dir: string;
@@ -229,5 +230,16 @@ describe("provider register + download (fake bundled module)", () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
     expect(await _registerLocalModel("/abs/my.gguf", "/cache")).toBe("RESOLVED:/abs/my.gguf");
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("FakeLlama");
+  });
+});
+
+describe("formatModelCatalog", () => {
+  it("renders the curated models and has no trailing newline", () => {
+    const out = formatModelCatalog();
+    expect(out).toContain("smollm2-135m");
+    expect(out.endsWith("\n")).toBe(false);
+    // Blank lines separate models but never trail the block.
+    expect(out.endsWith("")).toBe(true);
+    expect(/\n\s*\n\s*$/.test(out)).toBe(false);
   });
 });

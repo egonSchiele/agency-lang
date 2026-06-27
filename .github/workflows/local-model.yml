@@ -83,7 +83,7 @@ jobs:
           # safety; in CI we honor the real $HOME so the actions/cache step
           # above can actually hit ~/.agency-agent/models on warm runs.
           AGENCY_INTEGRATION_USE_REAL_HOME: "1"
-        run: pnpm test:run tests/integration/local-model 2>&1 | tee integration.log
+        run: pnpm test:integration 2>&1 | tee integration.log
 
       - name: Upload log on failure
         if: failure()

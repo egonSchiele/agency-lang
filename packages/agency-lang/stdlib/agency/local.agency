@@ -66,7 +66,7 @@ export def aliasModel(name: string, uri: string): string {
 
 export def unaliasModel(name: string): string {
   """Remove a short-name alias; returns the inspected agency.json path (file unchanged if the alias was missing). @param name - the alias to remove"""
-  return _unaliasModel(name)
+  return _unaliasModel(name).file
 }
 
 export def removeModel(name: string, cacheDir: string = ""): bool {

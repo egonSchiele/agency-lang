@@ -9,7 +9,12 @@ export default defineConfig({
     // runs/ holds eval/optimize run output; optimize copies the whole
     // working dir (test files included) into iter-N/workspace/, so without
     // this exclude a local optimize session pollutes the test run.
-    exclude: ['**/node_modules/**', '**/dist/**', 'tests/agency/**', 'tests/agency-js/**', 'tests/cli/**', 'tests/cli-main/**', 'tests/serve/**', 'tests/smoke/**', 'tests/statelog/**', 'tests/stdlib-sandbox/**', 'tests/stdlib-sandbox-js/**', 'tests/optimize-efficacy/**', 'tests/bundlers/**', '.worktrees/**', 'runs/**'],
+    // The whole `tests/` tree is excluded from the default unit run: those
+    // suites run via the Agency test runner or a dedicated config (e.g. the
+    // gated integration suite uses vitest.integration.config.ts), and a bare
+    // denylist of subdirs would silently sweep any newly-added tests/<dir>
+    // into this run.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests', '.worktrees/**', 'runs/**'],
     setupFiles: ['./lib/parsers/vitest.setup.ts'],
   },
   resolve: {

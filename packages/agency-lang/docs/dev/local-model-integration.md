@@ -25,8 +25,8 @@ won't write to your real `~/.agency-agent/models` or `~/agency.json`.
 # package.json, so this doesn't affect normal `pnpm install`).
 pnpm add --save=false smoltalk-llama-cpp@0.5.2
 
-# Run the suite.
-AGENCY_LLM_INTEGRATION=1 pnpm test:run tests/integration/local-model
+# Run the suite (dedicated config — the default vitest run excludes tests/).
+AGENCY_LLM_INTEGRATION=1 pnpm test:integration
 ```
 
 First run downloads ~85 MB and takes a few minutes; subsequent runs hit the

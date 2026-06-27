@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest --test-timeout=1000",
     "test:run": "vitest run",
+    "test:integration": "vitest run -c vitest.integration.config.ts",
     "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
     "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
     "test:agents": "time node ./dist/scripts/agency.js test lib/agents -p 12",

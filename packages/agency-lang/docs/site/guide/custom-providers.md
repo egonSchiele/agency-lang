@@ -8,6 +8,37 @@ you register it with a small **provider module** that Agency loads at startup.
 Agency never depends on the provider package itself: you install it, and you
 write the few lines that register it.
 
+## Local models (the easy way)
+
+Install the local-model package once, then use the `agency local` tools or the
+agent's `--local-model` flag:
+
+```bash
+npm i -g smoltalk-llama-cpp
+
+agency local download qwen3.5-2b          # curated name, hf: URI, or .gguf path
+agency local list                         # downloaded models + sizes
+agency local alias add my7b hf:Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
+agency local alias list                   # curated names + your aliases
+agency local remove qwen3.5-2b
+
+agency agent --local-model qwen3.5-2b     # download (if needed) + run locally
+```
+
+`--local-model` runs the local model as both the fast and slow model, so the
+deep subagents stay local too; it ignores `--model`/`--provider`/`--fastmodel`/
+`--slowmodel`. Downloads cache under `~/.agency-agent/models` (override with
+`AGENCY_MODELS_DIR`).
+
+Programmatically, `std::agency/local` exposes the same operations
+(`downloadModel`, `listDownloadedModels`, `aliasModel`, `registerLocalModel`,
+…), and `std::llm`'s `registerProviderModule(path)` registers any custom
+provider module at runtime.
+
+The rest of this page covers the fully manual route for any custom provider.
+
+---
+
 ## 1. Install the provider package
 
 ```bash

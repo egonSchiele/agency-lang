@@ -124,3 +124,22 @@ Return the first provider in `order` whose API-key environment variable
 **Returns:** `Result<string>`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L69))
+
+### registerProviderModule
+
+```ts
+registerProviderModule(path: string)
+```
+
+Load a provider module by path at runtime and register its custom provider
+  for llm() calls. The module must export register({ registerProvider }).
+
+  @param path - Path to the provider module (.mjs/.js)
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| path | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L99))

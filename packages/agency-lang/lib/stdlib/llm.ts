@@ -1,5 +1,6 @@
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
+import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 
 /**
  * Fields that may be set as LLM defaults via `setLlmOptions`. A
@@ -47,4 +48,12 @@ export function _setLlmOptions(opts: LlmDefaults): void {
     }
   }
   stack.other.llmDefaults = current;
+}
+
+/** Load a provider module by path at runtime and register its provider into
+ *  agency's own smoltalk — the runtime counterpart of `loadProviderModules`
+ *  (which runs at bootstrap). Lets any program register a custom provider on
+ *  demand. */
+export async function _registerProviderModule(modulePath: string): Promise<void> {
+  await loadProviderModuleByPath(modulePath);
 }

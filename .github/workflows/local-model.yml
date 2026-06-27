@@ -1,0 +1,93 @@
+# Real local-model integration tests. Triggered ONLY on pushes to `main`
+# (i.e. after a PR is merged), NOT on pull requests — mirroring
+# test-with-llm.yml's threat model. PRs get the fake-provider unit suites in
+# test.yml; integration runs post-merge so PR authors can't toggle a label,
+# poison the cache, or modify the workflow file in-band.
+#
+# Security:
+# - All third-party actions pinned to SHA (same pins as test-with-llm.yml).
+# - smoltalk-llama-cpp is installed with --save=false at a pinned version;
+#   it is NOT in package.json (so user `pnpm install` doesn't pull node-llama-cpp).
+# - Models cache key is scoped to the model name + version; no restore-keys
+#   (a partial / poisoned cache must not be used as a fallback).
+# - Test verifies the downloaded GGUF's SHA256 against a committed expected
+#   value; HF account compromise or mirror MITM fails the build loudly.
+name: local-model integration (post-merge)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "packages/agency-lang/lib/stdlib/localModels.ts"
+      - "packages/agency-lang/lib/stdlib/providers/**"
+      - "packages/agency-lang/tests/integration/local-model/**"
+      - ".github/workflows/local-model.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  local-model-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Bump this in lockstep with smoltalk-llama-cpp upstream releases.
+      # node-llama-cpp's version is pinned transitively via smoltalk-llama-cpp's lockfile.
+      SMOLTALK_LLAMA_CPP_VERSION: "0.5.2"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install workspace deps (lockfile-pinned, no smoltalk-llama-cpp yet)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: make
+
+      # Install smoltalk-llama-cpp ONLY here, at a pinned version, without
+      # mutating package.json or the lockfile. --save=false keeps both clean.
+      - name: Install smoltalk-llama-cpp (pinned, off-lockfile)
+        working-directory: packages/agency-lang
+        run: pnpm add --save=false smoltalk-llama-cpp@${{ env.SMOLTALK_LLAMA_CPP_VERSION }}
+
+      # Cache the downloaded GGUF + the node-llama-cpp prebuilt binary.
+      # Scoped to the model name; no restore-keys — a partial/poisoned cache
+      # must never be used as a fallback.
+      - name: Cache local models + node-llama-cpp prebuilt
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.agency-agent/models
+            ~/.cache/node-llama-cpp
+          key: lm-v1-${{ runner.os }}-smollm2-135m-nlc-${{ env.SMOLTALK_LLAMA_CPP_VERSION }}
+
+      - name: Run integration suite
+        working-directory: packages/agency-lang
+        env:
+          AGENCY_LLM_INTEGRATION: "1"
+          # The suite normally sandboxes HOME to a temp dir for local-dev
+          # safety; in CI we honor the real $HOME so the actions/cache step
+          # above can actually hit ~/.agency-agent/models on warm runs.
+          AGENCY_INTEGRATION_USE_REAL_HOME: "1"
+        run: pnpm test:integration 2>&1 | tee integration.log
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-log
+          path: packages/agency-lang/integration.log

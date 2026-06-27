@@ -12,6 +12,7 @@
 import { setLlmOptions } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
+import { registerLocalModel } from "std::agency/local"
 
 import { resolveDetected, planModels } from "./lib/models.agency"
 
@@ -42,18 +43,17 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // top-level pattern (see `stdlib/memory.agency`): the `with approve`
 // modifier needs an enclosing step path, which a bare top-level call
 // doesn't have. The underscore name signals "we want the side-effect,
-// not the value". `embeddings.model` MUST be set — without it, the
-// embedder is invoked with `model: undefined` and smoltalk warns
-// `[memory] embed call failed: Model undefined is not recognized`,
-// which silently disables Tier 2 (embedding-similarity) recall.
-// `text-embedding-3-small` is the canonical default cited in the
-// memory guide; cheap and ubiquitous.
+// not the value". We deliberately do NOT pin `embeddings.model`: the memory
+// layer derives the embedding model from the ACTIVE LLM provider (openai →
+// text-embedding-3-small, google → text-embedding-004, ollama → nomic-embed-text),
+// and disables Tier-2 (embedding-similarity) recall — with a one-time notice —
+// for providers that have no embedding endpoint (anthropic, and the llama-cpp
+// `--local-model` path). That keeps a local/offline run from making a doomed
+// remote embed call while structured recall keeps working. Set
+// `embeddings.model` explicitly to override.
 static const _memoryReady = enableMemory(
   {
-  dir: "${AGENCY_AGENT_DIR}/memory",
-  embeddings: {
-    model: "text-embedding-3-small"
-  }
+  dir: "${AGENCY_AGENT_DIR}/memory"
 },
 ) with approve
 
@@ -101,4 +101,28 @@ export def configureModels(
   })
   slowModel = plan.slowModel
   slowProvider = plan.slowProvider
+}
+
+/** Apply a local model (from `--local-model`) as BOTH the fast and slow
+ *  model: register the llama-cpp provider, download the model if needed into
+ *  the agent's models cache, and point every LLM call — including the deep
+ *  subagents — at it, so a fully-local run needs no hosted-provider key. */
+export def configureLocalModel(value: string) {
+  // `try` captures any failure (smoltalk-llama-cpp not installed, an unknown
+  // model name, a download error) as a Result instead of letting the runtime
+  // convert the throw to a Failure and silently continue into the REPL. A
+  // local-model setup failure is fatal: print it and exit, mirroring how
+  // `configureModels` exits on an unresolvable provider.
+  // No explicit cache dir: use the shared default (AGENCY_MODELS_DIR env,
+  // else agency.json client.modelsDir, else ~/.agency-agent/models) so a CLI
+  // `agency local download` and the agent reuse the same downloaded models.
+  const result = try registerLocalModel(value)
+  if (isFailure(result)) {
+    print(result.error)
+    process.exit(1)
+  }
+  const modelPath = result.value
+  setLlmOptions({ model: modelPath, provider: "llama-cpp" })
+  slowModel = modelPath
+  slowProvider = "llama-cpp"
 }

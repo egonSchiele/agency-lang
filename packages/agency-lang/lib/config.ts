@@ -142,6 +142,15 @@ export interface AgencyConfig {
      * the `AGENCY_PROVIDER_MODULES` env var at runtime.
      */
     providerModules: string[];
+    /** Short name → Hugging Face URI aliases for local models, used by
+     *  `std::agency/local` and the `agency local` CLI. Read and written at
+     *  runtime (not compile-time baked) so `agency local alias` edits take
+     *  effect on the next run. */
+    modelAliases: Record<string, string>;
+    /** Directory downloaded local models are cached in. Overridden by the
+     *  `AGENCY_MODELS_DIR` env var; defaults to `~/.agency-agent/models`. Read
+     *  at runtime by `std::agency/local` and the `agency local` CLI. */
+    modelsDir: string;
     statelog?: Partial<{
       host: string;
       projectId: string;
@@ -363,6 +372,8 @@ export const AgencyConfigSchema = z
         anthropicApiKey: z.string(),
         maxToolResultChars: z.number(),
         providerModules: z.array(z.string()),
+        modelAliases: z.record(z.string(), z.string()),
+        modelsDir: z.string(),
         statelog: z
           .object({
             host: z.string(),

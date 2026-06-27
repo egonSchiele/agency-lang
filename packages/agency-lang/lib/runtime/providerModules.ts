@@ -22,6 +22,50 @@ function resolvePath(p: string): string {
   return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
 }
 
+/** Load one provider module by path and register its provider into agency's
+ *  own smoltalk. Idempotent per process (the loaded-Set guard). Shared by
+ *  `loadProviderModules` (bootstrap) and `std::llm`'s runtime
+ *  `registerProviderModule`. */
+export async function loadProviderModuleByPath(raw: string): Promise<void> {
+  const resolved = resolvePath(raw);
+  if (loadedModulePaths.has(resolved)) return;
+  loadedModulePaths.add(resolved);
+  try {
+    let mod: { register?: unknown };
+    try {
+      // Dynamic import is required here: provider modules are optional,
+      // machine-specific, and resolved at runtime, so they cannot be
+      // statically imported (which would also force a dependency on the
+      // provider package). The specifier is a runtime-computed file URL,
+      // which additionally keeps `agency pack`'s esbuild from bundling it.
+      // eslint-disable-next-line no-restricted-syntax
+      mod = (await import(pathToFileURL(resolved).href)) as { register?: unknown };
+    } catch (err) {
+      throw new Error(
+        `Failed to load provider module "${raw}" (resolved to ${resolved}): ${(err as Error).message}`,
+      );
+    }
+    if (typeof mod.register !== "function") {
+      throw new Error(
+        `Provider module "${raw}" (resolved to ${resolved}) does not export a "register" function. ` +
+          `Expected: export function register({ registerProvider }) { ... }`,
+      );
+    }
+    try {
+      await (mod.register as (api: {
+        registerProvider: typeof registerProvider;
+      }) => unknown | Promise<unknown>)({ registerProvider });
+    } catch (err) {
+      throw new Error(
+        `Provider module "${raw}" (resolved to ${resolved}) threw during register(): ${(err as Error).message}`,
+      );
+    }
+  } catch (err) {
+    loadedModulePaths.delete(resolved);
+    throw err;
+  }
+}
+
 /**
  * Load every configured provider module and register its provider(s) into
  * agency's own smoltalk instance, before any user code or `llm()` call.
@@ -44,50 +88,7 @@ export async function loadProviderModules(ctx: {
 }): Promise<void> {
   const configured = [...(ctx.providerModules ?? []), ...envProviderModules()];
   for (const raw of configured) {
-    const resolved = resolvePath(raw);
-    if (loadedModulePaths.has(resolved)) continue;
-
-    // Reserve the path BEFORE the first await so concurrent calls (e.g.
-    // batched `serve` requests) can't both observe it as unloaded and
-    // double-register. On any failure below we un-reserve it so a later
-    // call can retry instead of silently skipping a never-registered module.
-    loadedModulePaths.add(resolved);
-    try {
-      let mod: { register?: unknown };
-      try {
-        // Dynamic import is required here: provider modules are optional,
-        // machine-specific, and resolved at runtime, so they cannot be
-        // statically imported (which would also force a dependency on the
-        // provider package). The specifier is a runtime-computed file URL,
-        // which additionally keeps `agency pack`'s esbuild from bundling it.
-        // eslint-disable-next-line no-restricted-syntax
-        mod = (await import(pathToFileURL(resolved).href)) as { register?: unknown };
-      } catch (err) {
-        throw new Error(
-          `Failed to load provider module "${raw}" (resolved to ${resolved}): ${(err as Error).message}`,
-        );
-      }
-
-      if (typeof mod.register !== "function") {
-        throw new Error(
-          `Provider module "${raw}" (resolved to ${resolved}) does not export a "register" function. ` +
-            `Expected: export function register({ registerProvider }) { ... }`,
-        );
-      }
-
-      try {
-        await (mod.register as (api: {
-          registerProvider: typeof registerProvider;
-        }) => unknown | Promise<unknown>)({ registerProvider });
-      } catch (err) {
-        throw new Error(
-          `Provider module "${raw}" (resolved to ${resolved}) threw during register(): ${(err as Error).message}`,
-        );
-      }
-    } catch (err) {
-      loadedModulePaths.delete(resolved);
-      throw err;
-    }
+    await loadProviderModuleByPath(raw);
   }
 }
 

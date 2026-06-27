@@ -61,7 +61,7 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
     expect(manager.getMemoryId()).toBe("default");
@@ -71,7 +71,7 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
     manager.setMemoryId("user-123");
@@ -82,7 +82,7 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
     expect(manager.isInitialized()).toBe(false);
@@ -104,7 +104,7 @@ describe("MemoryManager", () => {
     );
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     await manager.remember("Mom likes pottery");
@@ -112,7 +112,7 @@ describe("MemoryManager", () => {
 
     const manager2 = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
     await manager2.init();
@@ -146,7 +146,7 @@ describe("MemoryManager", () => {
     });
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     manager.setMemoryId("user-a");
@@ -174,14 +174,14 @@ describe("MemoryManager", () => {
     );
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     await manager.remember("Mom likes pottery");
     // Without explicit save, a fresh manager should still see the data.
     const fresh = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
     await fresh.init();
@@ -203,7 +203,7 @@ describe("MemoryManager", () => {
     );
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     await manager.remember("Mom likes pottery");
@@ -233,7 +233,7 @@ describe("MemoryManager", () => {
     );
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     await manager.remember("Mom likes pottery");
@@ -261,7 +261,7 @@ describe("MemoryManager", () => {
     );
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     await manager.remember("Maggie loves to weave");
@@ -292,7 +292,7 @@ describe("MemoryManager", () => {
     );
     const manager = new MemoryManager({
       store,
-      config: { dir: tmpDir },
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
     await manager.remember("Mom's favorite color is blue");
@@ -375,7 +375,7 @@ describe("MemoryManager", () => {
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
         statelogClient,
       });
@@ -409,7 +409,7 @@ describe("MemoryManager", () => {
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
         statelogClient,
       });
@@ -460,7 +460,7 @@ describe("MemoryManager", () => {
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
         statelogClient,
       });
@@ -498,7 +498,7 @@ describe("MemoryManager", () => {
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
         statelogClient,
       });
@@ -574,7 +574,7 @@ describe("MemoryManager", () => {
       const client = mockLlmClientWithCost(0.05, 0);
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
       const before = env.stack.localCost;
@@ -606,7 +606,7 @@ describe("MemoryManager", () => {
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
       const before = env.stack.localCost;
@@ -623,7 +623,7 @@ describe("MemoryManager", () => {
       const client = mockLlmClientWithCost(0.05, 0);
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
       await expect(manager.remember("anything")).resolves.toBeUndefined();
@@ -634,7 +634,7 @@ describe("MemoryManager", () => {
       const client = mockLlmClientWithCost(1.0, 0);
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
       await agency.withTestContext(env, async () => {
@@ -675,7 +675,7 @@ describe("MemoryManager", () => {
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
-        config: { dir: tmpDir },
+        config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
       await agency.withTestContext(env, async () => {
@@ -704,3 +704,54 @@ function wrapTextResultWithCost(output: string, totalCost: number) {
     },
   };
 }
+
+describe("MemoryManager.resolveEmbedding (provider-aware embeddings)", () => {
+  function mgr(opts: {
+    embeddings?: { model?: string; provider?: string };
+    smoltalkDefaults?: Record<string, unknown>;
+  }) {
+    return new MemoryManager({
+      store: new FileMemoryStore(os.tmpdir()),
+      config: { dir: os.tmpdir(), embeddings: opts.embeddings },
+      llmClient: mockLlmClient(),
+      smoltalkDefaults: opts.smoltalkDefaults as any,
+    });
+  }
+
+  it("explicit embeddings.model wins over derivation", () => {
+    expect(mgr({ embeddings: { model: "my-embed", provider: "x" } }).resolveEmbedding())
+      .toEqual({ model: "my-embed", provider: "x" });
+  });
+
+  it("derives text-embedding-3-small for an openai provider", () => {
+    expect(mgr({ smoltalkDefaults: { provider: "openai" } }).resolveEmbedding())
+      .toEqual({ model: "text-embedding-3-small", provider: "openai" });
+  });
+
+  it("derives the google embedding model for a google provider", () => {
+    expect(mgr({ smoltalkDefaults: { provider: "google" } }).resolveEmbedding())
+      .toEqual({ model: "text-embedding-004", provider: "google" });
+  });
+
+  it("derives the ollama embedding model for an ollama provider", () => {
+    expect(mgr({ smoltalkDefaults: { provider: "ollama" } }).resolveEmbedding())
+      .toEqual({ model: "nomic-embed-text", provider: "ollama" });
+  });
+
+  it("derives the provider from the model name when no provider is set", () => {
+    expect(mgr({ smoltalkDefaults: { model: "gpt-4o-mini" } }).resolveEmbedding())
+      .toEqual({ model: "text-embedding-3-small", provider: "openai" });
+  });
+
+  it("disables Tier-2 for a provider with no embedding endpoint (anthropic)", () => {
+    expect(mgr({ smoltalkDefaults: { provider: "anthropic" } }).resolveEmbedding()).toBeNull();
+  });
+
+  it("disables Tier-2 for the local llama-cpp provider", () => {
+    expect(mgr({ smoltalkDefaults: { provider: "llama-cpp" } }).resolveEmbedding()).toBeNull();
+  });
+
+  it("disables Tier-2 when no provider or model can be determined", () => {
+    expect(mgr({ smoltalkDefaults: {} }).resolveEmbedding()).toBeNull();
+  });
+});

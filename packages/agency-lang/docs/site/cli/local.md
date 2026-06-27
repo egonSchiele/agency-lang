@@ -34,9 +34,28 @@ agency agent --local-model qwen3.5-2b     # download (if needed) + run locally
 | `agency local download <value>` | Download a model if not already cached; prints the source it resolved to and the local path. `<value>` may be a curated short name, an alias, an `hf:` URI, or an existing `.gguf` path. |
 | `agency local remove <name>` | Delete a downloaded `.gguf` from the cache. |
 | `agency local resolve <value>` | Show what a name/alias maps to, without downloading. |
+| `agency local refresh [url]` | Fetch the remote model catalog and update the `source:"remote"` aliases in `agency.json`. Adds/updates models from the catalog, removes ones it dropped, and skips any name you've aliased yourself (printing what it would have set). |
 | `agency local alias list` | List usable short names. Curated entries show params, category, size, context window, and license (with the description on the next line); your aliases show their target. |
 | `agency local alias add <name> <uri>` | Add a short-name alias. Prints the `agency.json` path that was edited. |
 | `agency local alias remove <name>` | Remove a short-name alias. Prints the `agency.json` path that was inspected (the file is left untouched if the alias wasn't present). |
+
+### Refreshing the catalog
+
+`agency local refresh` pulls a JSON catalog of recommended models and writes them
+into `client.modelAliases` as rich, `source:"remote"`-tagged entries, so new model
+recommendations arrive without upgrading agency. Your own hand-added aliases are
+never overwritten — on a name clash the command keeps yours and prints the remote
+value it skipped.
+
+URL resolution (first wins): the `[url]` argument, `AGENCY_MODEL_CATALOG_URL`,
+`client.modelCatalogUrl` in `agency.json`, then the built-in default
+(`raw.githubusercontent.com/egonSchiele/agency-lang/main/packages/agency-lang/data/model-catalog.json`).
+
+> **Heads-up:** the first refresh writes one tagged entry per catalog model
+> into `client.modelAliases`, so a freshly-refreshed `agency.json` will be
+> noticeably larger than before. The entries are tagged with `"source": "remote"`
+> — anything *without* that tag (your own aliases) is never touched. Re-running
+> `agency local refresh` overwrites only the `source:"remote"` entries.
 
 ### Where things live
 
@@ -46,8 +65,8 @@ agency agent --local-model qwen3.5-2b     # download (if needed) + run locally
 
 ### Config
 
-Aliases and the models cache dir live under `client` and are read at runtime,
-so edits take effect on the next call:
+Aliases, the models cache dir, and the catalog URL live under `client` and are
+read at runtime, so edits take effect on the next call:
 
 ```jsonc
 {
@@ -55,7 +74,10 @@ so edits take effect on the next call:
     "modelAliases": {
       "my7b": "hf:Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
     },
-    "modelsDir": "/data/agency-models"
+    "modelsDir": "/data/agency-models",
+    // Override the URL `agency local refresh` fetches the model catalog from.
+    // Defaults to the catalog committed in the agency repo.
+    "modelCatalogUrl": "https://example.com/my-model-catalog.json"
   }
 }
 ```

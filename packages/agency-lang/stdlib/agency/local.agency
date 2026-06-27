@@ -10,6 +10,7 @@ import {
   _registerLocalProvider,
   _registerLocalModel,
   _printLocalCatalog,
+  _refreshCatalog,
 } from "agency-lang/stdlib-lib/localModels.js"
 
 /** @module
@@ -125,4 +126,44 @@ export def printLocalCatalog() {
   """Print the usable-model catalog (curated names + your aliases) as an
   aligned table — the same listing as `agency local alias list`."""
   _printLocalCatalog()
+}
+
+/** A catalog model whose name collided with one of your own aliases: refresh
+ *  kept your alias (`keptUri`) and did not write the catalog's `remoteUri`. */
+export type SkippedAlias = {
+  name: string,
+  keptUri: string,
+  remoteUri: string,
+}
+
+/** The outcome of `refreshCatalog`. The name lists partition the catalog's
+ *  managed (`source:"remote"`) entries by what changed; `skipped` are entries
+ *  yielded to your own aliases; `modelCount` is the total catalog size, so
+ *  `added + updated + unchanged + skipped == modelCount`. */
+export type RefreshResult = {
+  url: string,
+  file: string,
+  added: string[],
+  updated: string[],
+  unchanged: string[],
+  removed: string[],
+  skipped: SkippedAlias[],
+  modelCount: number,
+}
+
+export def refreshCatalog(url: string = ""): RefreshResult {
+  """
+  Fetch the remote model catalog and update the `source:"remote"` aliases in
+  the nearest `agency.json` from it. Adds/updates models from the catalog,
+  removes ones it dropped, and skips (keeping yours) any name you've aliased
+  yourself. Your hand-added aliases are never overwritten. Throws on a
+  fetch/parse/validation failure, leaving `agency.json` untouched.
+
+  This is the same operation as the `agency local refresh` CLI command.
+
+  @param url - catalog URL override; empty string uses the
+    `AGENCY_MODEL_CATALOG_URL` env var, then `client.modelCatalogUrl` in
+    `agency.json`, then the built-in default.
+  """
+  return _refreshCatalog({ url: url })
 }

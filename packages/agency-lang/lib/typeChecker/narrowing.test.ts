@@ -55,6 +55,40 @@ describe("analyzeCondition", () => {
   ])("produces no candidates for %s", (_label, src) => {
     expect(analyzeCondition(firstIfCondition(src))).toEqual(NO_FACTS);
   });
+
+  it("negation swaps then/else", () => {
+    expect(analyzeCondition(firstIfCondition("!isSuccess(r)"))).toEqual({
+      then: [{ variableName: "r", branch: "failure" }],
+      else: [{ variableName: "r", branch: "success" }],
+    });
+  });
+
+  it("conjunction unions then-facts, drops else-facts", () => {
+    expect(analyzeCondition(firstIfCondition("isSuccess(a) && isSuccess(b)"))).toEqual({
+      then: [
+        { variableName: "a", branch: "success" },
+        { variableName: "b", branch: "success" },
+      ],
+      else: [],
+    });
+  });
+
+  it("disjunction unions else-facts, drops then-facts", () => {
+    expect(analyzeCondition(firstIfCondition("isFailure(a) || isFailure(b)"))).toEqual({
+      then: [],
+      else: [
+        { variableName: "a", branch: "success" },
+        { variableName: "b", branch: "success" },
+      ],
+    });
+  });
+
+  it("double negation is identity", () => {
+    expect(analyzeCondition(firstIfCondition("!!isSuccess(r)"))).toEqual({
+      then: [{ variableName: "r", branch: "success" }],
+      else: [{ variableName: "r", branch: "failure" }],
+    });
+  });
 });
 
 describe("narrowToBranch", () => {
@@ -334,5 +368,35 @@ node main() {
   }
 }`);
     expect(errs.some((e) => /not assignable/.test(e))).toBe(true);
+  });
+});
+
+describe("Result narrowing — combinators", () => {
+  it("narrows both branches of an isSuccess else via negation", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (!isSuccess(r)) {
+    let e: number = r.error
+  } else {
+    let v: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'string' is not assignable to type 'number' (assignment to 'e').");
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'v').");
+  });
+
+  it("narrows every conjunct in an && guard", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let a = tryParse("ok")
+  let b = tryParse("ok")
+  if (isSuccess(a) && isSuccess(b)) {
+    let x: string = a.value
+    let y: string = b.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'x').");
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'y').");
   });
 });

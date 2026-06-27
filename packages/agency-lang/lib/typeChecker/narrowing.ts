@@ -19,6 +19,30 @@ const NO_FACTS: ConditionFacts = { then: [], else: [] };
  * the function name is unambiguous — no resolveCall lookup is required.
  */
 export function analyzeCondition(condition: Expression): ConditionFacts {
+  // Boolean combinators (the parser desugars `!x` into a binOpExpression of
+  // the form { operator: "!", left: <true>, right: x }, so the operand is
+  // `.right`). These are the standard sound narrowing rules:
+  //   !c        → swap then/else
+  //   a && b    → then = then(a) ∪ then(b); else unknown (both could be false)
+  //   a || b    → else = else(a) ∪ else(b); then unknown (either could be true)
+  if (condition.type === "binOpExpression") {
+    if (condition.operator === "!") {
+      const inner = analyzeCondition(condition.right);
+      return { then: inner.else, else: inner.then };
+    }
+    if (condition.operator === "&&") {
+      const l = analyzeCondition(condition.left);
+      const r = analyzeCondition(condition.right);
+      return { then: [...l.then, ...r.then], else: [] };
+    }
+    if (condition.operator === "||") {
+      const l = analyzeCondition(condition.left);
+      const r = analyzeCondition(condition.right);
+      return { then: [], else: [...l.else, ...r.else] };
+    }
+    return NO_FACTS;
+  }
+
   if (condition.type !== "functionCall") return NO_FACTS;
   const fn = condition.functionName;
   if (fn !== "isSuccess" && fn !== "isFailure") return NO_FACTS;

@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "models": {
+    "smollm2-135m": {
+      "uri": "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+      "params": "135M",
+      "sizeBytes": 105000000,
+      "category": "general",
+      "contextWindow": 8192,
+      "license": "apache-2.0",
+      "description": "Smallest practical chat model; used by our integration tests, runs anywhere."
+    },
+    "qwen3.5-0.8b": {
+      "uri": "hf:unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
+      "params": "0.8B",
+      "sizeBytes": 500000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Tiny model from Alibaba's current generation; good edge-device default."
+    },
+    "qwen3.5-2b": {
+      "uri": "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
+      "params": "2B",
+      "sizeBytes": 1280000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Most popular modern small general model; runs on CPU comfortably."
+    },
+    "qwen3.5-4b": {
+      "uri": "hf:unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
+      "params": "4B",
+      "sizeBytes": 2400000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Strong multilingual small general workhorse from Alibaba."
+    },
+    "qwen3.5-9b": {
+      "uri": "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+      "params": "9B",
+      "sizeBytes": 5500000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Modern medium general model with strong tool use; 128K context."
+    },
+    "gpt-oss-20b": {
+      "uri": "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
+      "params": "20B",
+      "sizeBytes": 12000000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "OpenAI's open-weights release; balanced general model for ~16 GB machines."
+    },
+    "mistral-small-3.1": {
+      "uri": "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
+      "params": "24B",
+      "sizeBytes": 14000000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Mistral's general 24B base model (also Devstral's foundation); broad utility."
+    },
+    "qwen3.5-27b": {
+      "uri": "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
+      "params": "27B",
+      "sizeBytes": 16000000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Modern dense general 27B; the practical ceiling for most workstations."
+    },
+    "deepseek-r1-distill-llama-8b": {
+      "uri": "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
+      "params": "8B",
+      "sizeBytes": 4920000000,
+      "category": "reasoning",
+      "contextWindow": 131072,
+      "license": "mit",
+      "description": "Chain-of-thought distill into Llama-8B; best small reasoning model."
+    },
+    "phi-4-reasoning": {
+      "uri": "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
+      "params": "14B",
+      "sizeBytes": 9050000000,
+      "category": "reasoning",
+      "contextWindow": 32768,
+      "license": "mit",
+      "description": "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic."
+    },
+    "devstral-small-2507": {
+      "uri": "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
+      "params": "24B",
+      "sizeBytes": 14300000000,
+      "category": "coding",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Mistral's official coding-agent GGUF; #1 open-source on SWE-Bench at release."
+    },
+    "qwen3-coder-30b-a3b": {
+      "uri": "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
+      "params": "30B (A3B)",
+      "sizeBytes": 19000000000,
+      "category": "coding",
+      "contextWindow": 262144,
+      "license": "apache-2.0",
+      "description": "Qwen's MoE coder (3.3B active); strong agentic coding + 256K context."
+    },
+    "nomic-embed-text": {
+      "uri": "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
+      "params": "137M",
+      "sizeBytes": 89000000,
+      "category": "embedding",
+      "contextWindow": 8192,
+      "license": "apache-2.0",
+      "description": "Returns 768-dim embeddings; pair with a chat model for RAG."
+    }
+  }
+}

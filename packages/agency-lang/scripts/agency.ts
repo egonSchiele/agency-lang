@@ -42,6 +42,7 @@ import {
   runDownload as localDownload,
   runRemove as localRemove,
   runResolve as localResolve,
+  runRefresh as localRefresh,
   runAliasList as localAliasList,
   runAliasAdd as localAliasAdd,
   runAliasRemove as localAliasRemove,
@@ -877,6 +878,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(localRemove);
   localCmd.command("resolve").description("Show what a name/alias resolves to").argument("<value>")
     .action(localResolve);
+  localCmd.command("refresh").description("Refresh the model catalog from the remote source")
+    .argument("[url]", "Override the catalog URL (else env/config/default)").action(localRefresh);
   const aliasCmd = localCmd.command("alias").description("Manage model name aliases");
   aliasCmd.command("list").description("List usable short names (curated + aliases)").action(localAliasList);
   aliasCmd.command("add").description("Add a short-name alias").argument("<name>").argument("<uri>")

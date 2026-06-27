@@ -9,7 +9,10 @@ import {
   hasLocalModelSupport,
   formatGB,
   formatModelCatalog,
+  _refreshCatalog,
+  type RefreshResult,
 } from "../stdlib/localModels.js";
+import { ttyColor } from "../utils/termcolors.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
  *  override the same way `requireSupport()` in `localModels.ts` does — a
@@ -95,4 +98,39 @@ export function runAliasAdd(name: string, uri: string): void {
 
 export function runAliasRemove(name: string): void {
   aliasRemove(name);
+}
+
+/** Format the lines `runRefresh` prints. Pure so it can be unit-tested without
+ *  a network call. `r.modelCount` is the size of the catalog blob; the
+ *  breakdown line accounts for every entry exactly once (added + updated +
+ *  unchanged + skipped = modelCount). Color is applied via `ttyColor`, which
+ *  is a no-op when stdout isn't a TTY — so piped output (and these unit tests)
+ *  stay plain. */
+export function formatRefreshOutput(r: RefreshResult): string[] {
+  const lines: string[] = [];
+  for (const s of r.skipped) {
+    lines.push(`Skipped ${ttyColor.yellow(`"${s.name}"`)}: kept your alias (${ttyColor.dim(s.keptUri)});`);
+    lines.push(`  remote would have set ${ttyColor.dim(s.remoteUri)}`);
+  }
+  lines.push(
+    `Refreshed ${ttyColor.bold(String(r.modelCount))} models from ` +
+      `${ttyColor.cyan(r.url)} → ${ttyColor.cyan(r.file)}`,
+  );
+  lines.push(
+    `  (${ttyColor.green(`${r.added.length} added`)}, ${r.updated.length} updated, ` +
+      `${r.unchanged.length} unchanged, ${ttyColor.red(`${r.removed.length} removed`)}, ` +
+      `${ttyColor.yellow(`${r.skipped.length} skipped`)})`,
+  );
+  return lines;
+}
+
+export async function runRefresh(url?: string): Promise<void> {
+  let result: RefreshResult;
+  try {
+    result = await _refreshCatalog({ url: url ?? "" });
+  } catch (err) {
+    console.error(`Refresh failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+  for (const line of formatRefreshOutput(result)) console.log(line);
 }

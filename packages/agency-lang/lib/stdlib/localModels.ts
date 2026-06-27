@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import { ttyColor } from "../utils/termcolors.js";
@@ -157,6 +158,18 @@ function isModelUri(v: string): boolean {
   return /^(hf:|https?:)/.test(v);
 }
 
+/** A model URI we'll accept from the *remote catalog*. Stricter than
+ *  `isModelUri`: any `scheme://` URL must be `https://` (so an overridden or
+ *  untrusted catalog can't point a download at a plaintext, MITM-able
+ *  endpoint — not even an `http://…/x.gguf`). Otherwise accept an `hf:` URI or
+ *  a local `.gguf` path. */
+function isCatalogUri(v: string): boolean {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(v)) {
+    return /^https:\/\//.test(v);
+  }
+  return v.startsWith("hf:") || isGgufPath(v);
+}
+
 /** The agency.json that owns aliases: nearest `agency.json` walking up from
  *  `startDir` (cwd by default); falls back to `~/agency.json` when none is
  *  found. Exported so the CLI can echo it on every write. */
@@ -204,9 +217,31 @@ function writeJson(file: string, value: unknown): void {
   fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
 }
 
-export function readModelAliases(file: string = ""): Record<string, string> {
+/** A model alias value: either the bare URI (hand-edit shorthand) or an
+ *  object carrying the URI plus optional display metadata. `source: "remote"`
+ *  marks an entry written by `agency local refresh` (see `_refreshCatalog`);
+ *  hand-added aliases have no `source`. */
+export type AliasObject = {
+  uri: string;
+  source?: "remote";
+  params?: string;
+  sizeBytes?: number;
+  category?: ModelCategory;
+  contextWindow?: number;
+  license?: string;
+  description?: string;
+};
+
+export type AliasValue = string | AliasObject;
+
+/** The URI an alias points at, regardless of string/object form. */
+export function aliasUri(value: AliasValue): string {
+  return typeof value === "string" ? value : value.uri;
+}
+
+export function readModelAliases(file: string = ""): Record<string, AliasValue> {
   const cfg = readJson(resolveAliasFile(file));
-  return (cfg.client?.modelAliases ?? {}) as Record<string, string>;
+  return (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
 }
 
 /** Entry returned by `_listModelNames`. */
@@ -227,7 +262,8 @@ export function _resolveModelName(value: string, file: string = ""): string {
     return value;
   }
   const aliases = readModelAliases(file);
-  const aliasTarget = aliases[value];
+  const aliasVal = aliases[value];
+  const aliasTarget = aliasVal === undefined ? undefined : aliasUri(aliasVal);
   const curated = CURATED_LOCAL_MODELS[value];
   const mapped = aliasTarget ?? curated?.uri;
   if (!mapped) {
@@ -240,24 +276,46 @@ export function _resolveModelName(value: string, file: string = ""): string {
   return mapped;
 }
 
+type EntryMeta = Pick<
+  ModelNameEntry,
+  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license"
+>;
+
+/** Project the optional display-metadata fields off any source shape
+ *  (`ModelInfo`, or an alias which may be a bare URI string). A string alias
+ *  carries no metadata, so it yields `{}` — which is why the call sites can
+ *  pass an `AliasValue` directly without a `typeof` guard. Returns only
+ *  defined fields so the spread doesn't introduce stray `undefined` keys. */
+function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
+  if (typeof src === "string") return {};
+  const out: EntryMeta = {};
+  if (src.params !== undefined) out.params = src.params;
+  if (src.sizeBytes !== undefined) out.sizeBytes = src.sizeBytes;
+  if (src.category !== undefined) out.category = src.category;
+  if (src.description !== undefined) out.description = src.description;
+  if (src.contextWindow !== undefined) out.contextWindow = src.contextWindow;
+  if (src.license !== undefined) out.license = src.license;
+  return out;
+}
+
 export function _listModelNames(file: string = ""): ModelNameEntry[] {
-  const curated: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
-    ([name, info]) => ({
+  const curatedEntries: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
+    ([name, info]) => ({ name, target: info.uri, source: "curated", ...metaFrom(info) }),
+  );
+  const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
+    ([name, value]) => ({
       name,
-      target: info.uri,
-      source: "curated",
-      params: info.params,
-      sizeBytes: info.sizeBytes,
-      category: info.category,
-      description: info.description,
-      contextWindow: info.contextWindow,
-      license: info.license,
+      target: aliasUri(value),
+      source: "alias",
+      ...metaFrom(value),
     }),
   );
-  const aliases: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
-    ([name, target]) => ({ name, target, source: "alias" }),
+  // Alias wins on name collision: the alias entry overwrites the curated one
+  // in the object literal because it comes later. `Object.values` then yields
+  // exactly one entry per name.
+  return Object.values(
+    Object.fromEntries([...curatedEntries, ...aliasEntries].map((e) => [e.name, e])),
   );
-  return [...curated, ...aliases];
 }
 
 export function _aliasModel(name: string, uri: string, file: string = ""): string {
@@ -309,6 +367,351 @@ export function _removeModel(name: string, cacheDir: string = ""): boolean {
   }
   fs.rmSync(p);
   return true;
+}
+
+// =============================================================================
+// Remote catalog — fetch + validate the GitHub-hosted model list.
+// =============================================================================
+
+export const DEFAULT_CATALOG_URL =
+  "https://raw.githubusercontent.com/egonSchiele/agency-lang/main/packages/agency-lang/data/model-catalog.json";
+
+const SUPPORTED_CATALOG_VERSION = 1;
+
+/** A validated entry from the remote catalog. Mirrors `AliasObject` minus the
+ *  `source` tag (which `_refreshCatalog` adds on write). */
+export type CatalogModel = {
+  uri: string;
+  params?: string;
+  sizeBytes?: number;
+  category?: ModelCategory;
+  contextWindow?: number;
+  license?: string;
+  description?: string;
+};
+
+/** Resolve the catalog URL: explicit arg → env → config → built-in default. */
+export function resolveCatalogUrl(explicit: string = "", file: string = ""): string {
+  if (explicit !== "") return explicit;
+  if (process.env.AGENCY_MODEL_CATALOG_URL) return process.env.AGENCY_MODEL_CATALOG_URL;
+  const configured = readJson(resolveAliasFile(file)).client?.modelCatalogUrl;
+  if (typeof configured === "string" && configured.length > 0) return configured;
+  return DEFAULT_CATALOG_URL;
+}
+
+const CATALOG_CATEGORIES = ["general", "coding", "reasoning", "embedding"] as const;
+
+/** Bound on how long the default fetcher will wait for the remote catalog
+ *  before aborting. Long enough to tolerate slow CI mirrors; short enough
+ *  that a hung server doesn't lock up the CLI. */
+const CATALOG_FETCH_TIMEOUT_MS = 15_000;
+
+/** Bound on catalog body size. The seed catalog is well under 10 KB; a
+ *  5 MB cap guards against a misconfigured URL serving an arbitrary file. */
+const CATALOG_MAX_BYTES = 5_000_000;
+
+// One catalog entry. zod does the structural validation + coercion; the merge
+// reassembles a canonical-order object from `.data` (see `parseCatalog`). The
+// metadata fields are `.optional().catch(undefined)` so a wrongly-typed field
+// is dropped rather than failing the whole entry (lenient metadata); a
+// missing/insecure `uri` fails the entry (it's then skipped + warned).
+const CatalogModelSchema = z.object({
+  uri: z.string().refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
+  params: z.string().optional().catch(undefined),
+  sizeBytes: z.number().optional().catch(undefined),
+  category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
+  contextWindow: z.number().optional().catch(undefined),
+  license: z.string().optional().catch(undefined),
+  description: z.string().optional().catch(undefined),
+});
+
+// Top-level catalog shape: a supported version + a name→entry object. Entries
+// are validated individually (below) so one bad entry is skipped, not fatal.
+const CatalogTopSchema = z.object({
+  version: z.literal(SUPPORTED_CATALOG_VERSION),
+  models: z.record(z.string(), z.unknown()),
+});
+
+/** Strip keys whose value is `undefined` so the resulting object is JSON-clean
+ *  (no `"params": undefined` after `JSON.stringify`) and in canonical order. */
+function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+/** Parse + validate the catalog JSON. Throws on blob-level problems (bad JSON,
+ *  unsupported version, `models` not an object) so refresh aborts without
+ *  touching agency.json. Skips an individual entry (with a warning) when its
+ *  `uri` is missing/invalid; metadata fields with the wrong type are dropped
+ *  but the entry is kept. */
+export function parseCatalog(text: string): Record<string, CatalogModel> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`catalog is not valid JSON: ${(err as Error).message}`);
+  }
+  const top = CatalogTopSchema.safeParse(raw);
+  if (!top.success) {
+    // Map zod's first issue to a precise, user-facing message.
+    const path = top.error.issues[0]?.path[0];
+    if (path === "version") {
+      throw new Error(
+        `unsupported catalog version ${JSON.stringify((raw as any)?.version)}; this ` +
+          `agency supports version ${SUPPORTED_CATALOG_VERSION}. Upgrade agency.`,
+      );
+    }
+    if (path === "models") {
+      throw new Error("catalog.models must be an object keyed by model name");
+    }
+    throw new Error("catalog must be a JSON object");
+  }
+  // Validate each entry independently; a bad entry is skipped + warned, not
+  // fatal. Rebuild a canonical-order `CatalogModel` from the validated data.
+  const entries: ([string, CatalogModel] | null)[] = Object.entries(top.data.models).map(
+    ([name, entry]) => {
+      const parsed = CatalogModelSchema.safeParse(entry);
+      if (!parsed.success) {
+        console.warn(
+          `[catalog] skipping "${name}": ${parsed.error.issues[0]?.message ?? "invalid entry"}`,
+        );
+        return null;
+      }
+      const d = parsed.data;
+      const model: CatalogModel = {
+        uri: d.uri,
+        ...compact({
+          params: d.params,
+          sizeBytes: d.sizeBytes,
+          category: d.category,
+          contextWindow: d.contextWindow,
+          license: d.license,
+          description: d.description,
+        }),
+      };
+      return [name, model];
+    },
+  );
+  return Object.fromEntries(entries.filter((e): e is [string, CatalogModel] => e !== null));
+}
+
+/** If `url` names a local file (a `file://` URL or a plain filesystem path —
+ *  i.e. not an `hf:`/`http(s)://` URL), return its path; else null. Lets refresh
+ *  read a catalog from disk (`agency local refresh ./catalog.json`), which also
+ *  makes the merge logic integration-testable without a network round-trip. */
+function catalogLocalPath(url: string): string | null {
+  if (url.startsWith("file://")) return fileURLToPath(url);
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) || url.startsWith("hf:")) return null;
+  return url;
+}
+
+/** Read a local catalog file, enforcing the byte cap up front via `stat`. */
+function readCatalogFile(path: string): string {
+  const size = fs.statSync(path).size;
+  if (size > CATALOG_MAX_BYTES) {
+    throw new Error(`catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`);
+  }
+  return fs.readFileSync(path, "utf-8");
+}
+
+/** Stream a response body, enforcing the byte cap as chunks arrive so a
+ *  large/malicious body can't be fully buffered first. Mirrors the capped
+ *  reader in `lib/stdlib/http.ts`; counts raw bytes (`byteLength`), not
+ *  UTF-16 code units. */
+async function readBodyCapped(res: Response, url: string, maxBytes: number): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  const chunks: string[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`catalog from ${url} exceeds ${maxBytes} bytes`);
+      }
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* already released */
+    }
+  }
+  chunks.push(decoder.decode());
+  return chunks.join("");
+}
+
+/** Default fetcher: a local file path / `file://` URL is read from disk;
+ *  otherwise an HTTPS-only GET with a bounded timeout and a streamed byte cap.
+ *  `http:` (and other non-https URL schemes) are rejected. */
+export async function fetchCatalog(url: string): Promise<string> {
+  const localPath = catalogLocalPath(url);
+  if (localPath !== null) {
+    return readCatalogFile(localPath);
+  }
+  if (!url.startsWith("https://")) {
+    throw new Error(`catalog URL must be https or a local file path: ${url}`);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CATALOG_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`fetch failed: HTTP ${res.status} ${res.statusText}`);
+    }
+    return await readBodyCapped(res, url, CATALOG_MAX_BYTES);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Merge a complete `modelAliases` map into a config object (spread, like
+ *  `withAlias` but replaces the whole map). */
+function withModelAliases(
+  cfg: Record<string, any>,
+  aliases: Record<string, AliasValue>,
+): Record<string, any> {
+  return { ...cfg, client: { ...(cfg.client ?? {}), modelAliases: aliases } };
+}
+
+export type SkippedAlias = { name: string; keptUri: string; remoteUri: string };
+
+export type RefreshResult = {
+  url: string;
+  file: string;
+  added: string[];
+  updated: string[];
+  unchanged: string[];
+  removed: string[];
+  skipped: SkippedAlias[];
+  modelCount: number;
+};
+
+/** One verdict per catalog entry. The merge ("what to write, what to report")
+ *  is a `map` from catalog entries to `Classification`s; everything else is a
+ *  filter/project on the resulting array. This is the entire policy of
+ *  refresh — keep it pure and testable in isolation. */
+type Classification =
+  | { kind: "skipped"; name: string; entry: SkippedAlias }
+  | { kind: "added"; name: string; value: AliasObject }
+  | { kind: "updated"; name: string; value: AliasObject }
+  | { kind: "unchanged"; name: string; value: AliasObject };
+
+/** Stable JSON for value-equality. The merge writes objects with consistent
+ *  key order via the spread below (`{ ...model, source: "remote" }`), so a
+ *  deep equality check via `JSON.stringify` is sufficient for managed-entry
+ *  diffing without pulling in `node:util.isDeepStrictEqual`. */
+function sameManagedValue(prev: AliasObject, next: AliasObject): boolean {
+  return JSON.stringify(prev) === JSON.stringify(next);
+}
+
+/** Classify one catalog entry against the previous state. Pure: no I/O, no
+ *  mutation, deterministic. Tested via `_refreshCatalog`'s end-to-end tests. */
+function classifyEntry(
+  name: string,
+  model: CatalogModel,
+  userAliases: Record<string, AliasValue>,
+  oldManaged: Record<string, AliasObject>,
+): Classification {
+  // Own-property checks (not `name in ...` / bare index access): a catalog
+  // model named like a prototype member (`toString`, `__proto__`, …) must not
+  // be treated as a collision with — or a previous value from — an inherited
+  // property the user never set.
+  const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+  if (has(userAliases, name)) {
+    return {
+      kind: "skipped",
+      name,
+      entry: { name, keptUri: aliasUri(userAliases[name]), remoteUri: model.uri },
+    };
+  }
+  const value: AliasObject = { ...model, source: "remote" };
+  const prev = has(oldManaged, name) ? oldManaged[name] : undefined;
+  if (prev === undefined) {
+    return { kind: "added", name, value };
+  }
+  if (sameManagedValue(prev, value)) {
+    return { kind: "unchanged", name, value };
+  }
+  return { kind: "updated", name, value };
+}
+
+/** Predicate factory for declarative filtering by `Classification.kind`. */
+function isKind<K extends Classification["kind"]>(k: K) {
+  return (c: Classification): c is Extract<Classification, { kind: K }> => c.kind === k;
+}
+
+/** Fetch + validate the catalog, then rewrite the `source:"remote"` aliases in
+ *  agency.json from it. User-owned aliases are preserved and win on name
+ *  collisions (the remote entry is skipped). Throws (leaving the file
+ *  untouched) on fetch/parse/validation failure. */
+export async function _refreshCatalog(
+  opts: { url?: string; fetcher?: (url: string) => Promise<string>; file?: string } = {},
+): Promise<RefreshResult> {
+  const file = resolveAliasFile(opts.file ?? "");
+  const url = resolveCatalogUrl(opts.url ?? "", file);
+  const fetcher = opts.fetcher ?? fetchCatalog;
+
+  // Fetch + validate BEFORE reading/writing agency.json, so a failure leaves
+  // the file untouched.
+  const text = await fetcher(url);
+  const models = parseCatalog(text);
+
+  // Read aliases through the canonical helper (single source of truth for
+  // "how aliases come out of agency.json"). `cfg` is needed separately to
+  // round-trip non-alias fields back into the file on write.
+  const cfg = readJson(file);
+  const existing = readModelAliases(file);
+
+  // Partition existing aliases by who manages them.
+  const userAliases: Record<string, AliasValue> = Object.fromEntries(
+    Object.entries(existing).filter(([, v]) => !(typeof v === "object" && v.source === "remote")),
+  );
+  const oldManaged: Record<string, AliasObject> = Object.fromEntries(
+    Object.entries(existing).filter(
+      (e): e is [string, AliasObject] => typeof e[1] === "object" && e[1].source === "remote",
+    ),
+  );
+
+  // The entire merge policy: classify each catalog entry once. Everything
+  // downstream is a filter/project on this array.
+  const classifications: Classification[] = Object.entries(models).map(([name, model]) =>
+    classifyEntry(name, model, userAliases, oldManaged),
+  );
+
+  const namesIn = <K extends Classification["kind"]>(k: K): string[] =>
+    classifications.filter(isKind(k)).map((c) => c.name);
+
+  const added = namesIn("added");
+  const updated = namesIn("updated");
+  const unchanged = namesIn("unchanged");
+  const skipped = classifications.filter(isKind("skipped")).map((c) => c.entry);
+
+  // What ends up in `client.modelAliases`: user aliases (untouched) plus
+  // every non-skipped classification's value.
+  const writtenManaged: Record<string, AliasValue> = Object.fromEntries(
+    classifications.filter((c) => c.kind !== "skipped").map((c) => [c.name, (c as { value: AliasObject }).value]),
+  );
+  const next: Record<string, AliasValue> = { ...userAliases, ...writtenManaged };
+
+  const surviving = [...added, ...updated, ...unchanged];
+  const removed = Object.keys(oldManaged).filter((n) => !surviving.includes(n));
+
+  writeJson(file, withModelAliases(cfg, next));
+  return {
+    url,
+    file,
+    added,
+    updated,
+    unchanged,
+    removed,
+    skipped,
+    modelCount: Object.keys(models).length,
+  };
 }
 
 // Cached so we don't shell out repeatedly per process.
@@ -504,8 +907,15 @@ function colWidth(header: string, values: string[]): number {
  *  newline (the caller's `console.log` adds exactly one). */
 export function formatModelCatalog(): string {
   const entries = _listModelNames();
-  const curated = entries.filter((m) => m.source === "curated");
-  const aliases = entries.filter((m) => m.source === "alias");
+  const hasMetadata = (m: ModelNameEntry): boolean =>
+    m.params !== undefined ||
+    m.sizeBytes !== undefined ||
+    m.category !== undefined ||
+    m.contextWindow !== undefined ||
+    m.license !== undefined ||
+    m.description !== undefined;
+  const curated = entries.filter(hasMetadata); // table rows: built-ins + rich aliases
+  const aliases = entries.filter((m) => !hasMetadata(m)); // plain name→uri only
   const lines: string[] = [];
 
   if (curated.length > 0) {

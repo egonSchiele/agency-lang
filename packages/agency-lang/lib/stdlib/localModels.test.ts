@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -14,6 +14,9 @@ import {
   resolveAliasConfigPath,
   resolveSmoltalkLlamaCppFromRoots,
   formatModelCatalog,
+  resolveCatalogUrl,
+  parseCatalog,
+  _refreshCatalog,
 } from "./localModels.js";
 
 let dir: string;
@@ -241,5 +244,287 @@ describe("formatModelCatalog", () => {
     // Blank lines separate models but never trail the block.
     expect(out.endsWith("")).toBe(true);
     expect(/\n\s*\n\s*$/.test(out)).toBe(false);
+  });
+});
+
+describe("object-valued aliases", () => {
+  it("resolves an object alias to its uri", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { foo: { uri: "hf:org/repo:Q4_K_M" } } } }),
+    );
+    expect(_resolveModelName("foo", aliasFile)).toBe("hf:org/repo:Q4_K_M");
+  });
+
+  it("resolves a string alias to its uri (back-compat shape)", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { bar: "hf:org/bar:Q4_K_M" } } }),
+    );
+    expect(_resolveModelName("bar", aliasFile)).toBe("hf:org/bar:Q4_K_M");
+  });
+
+  it("lists an object alias with its metadata and dedupes by name (alias wins)", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            "smollm2-135m": { uri: "hf:custom/smol:Q4_K_M", params: "999M", source: "remote" },
+          },
+        },
+      }),
+    );
+    const entries = _listModelNames(aliasFile);
+    const matches = entries.filter((e) => e.name === "smollm2-135m");
+    expect(matches.length).toBe(1); // deduped: alias shadows the curated built-in
+    expect(matches[0].target).toBe("hf:custom/smol:Q4_K_M");
+    expect(matches[0].params).toBe("999M");
+    expect(matches[0].source).toBe("alias");
+  });
+});
+
+describe("formatModelCatalog with rich aliases", () => {
+  it("renders a metadata-bearing alias in the table and a plain alias under ALIASES", () => {
+    // Point alias resolution at a temp agency.json via cwd so the function
+    // (which takes no file arg) picks it up.
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      fs.writeFileSync(
+        aliasFile,
+        JSON.stringify({
+          client: {
+            modelAliases: {
+              "rich-model": {
+                uri: "hf:org/rich:Q4_K_M",
+                params: "7B",
+                sizeBytes: 4_000_000_000,
+                category: "general",
+                contextWindow: 131072,
+                license: "apache-2.0",
+                description: "A rich remote alias.",
+                source: "remote",
+              },
+              "plain-model": "hf:org/plain:Q4_K_M",
+            },
+          },
+        }),
+      );
+      const out = formatModelCatalog();
+      // Rich alias is a table row (its params show up on the same line as its name).
+      const richLine = out.split("\n").find((l) => l.includes("rich-model"));
+      expect(richLine).toContain("7B");
+      // Plain alias appears under ALIASES as name → uri, NOT as a table row.
+      expect(out).toContain("plain-model → hf:org/plain:Q4_K_M");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+});
+
+describe("resolveCatalogUrl", () => {
+  afterEach(() => { delete process.env.AGENCY_MODEL_CATALOG_URL; });
+
+  it("uses the explicit arg first", () => {
+    expect(resolveCatalogUrl("https://x/y.json", aliasFile)).toBe("https://x/y.json");
+  });
+  it("falls back to the env var", () => {
+    process.env.AGENCY_MODEL_CATALOG_URL = "https://env/c.json";
+    expect(resolveCatalogUrl("", aliasFile)).toBe("https://env/c.json");
+  });
+  it("then the config, then the default", () => {
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelCatalogUrl: "https://cfg/c.json" } }));
+    expect(resolveCatalogUrl("", aliasFile)).toBe("https://cfg/c.json");
+    fs.writeFileSync(aliasFile, "{}");
+    expect(resolveCatalogUrl("", aliasFile)).toContain("raw.githubusercontent.com/egonSchiele/agency-lang");
+  });
+});
+
+describe("parseCatalog", () => {
+  const good = JSON.stringify({
+    version: 1,
+    models: { "m1": { uri: "hf:org/m1:Q4_K_M", params: "2B", sizeBytes: 1, category: "general" } },
+  });
+  it("parses a valid catalog", () => {
+    const out = parseCatalog(good);
+    expect(out["m1"].uri).toBe("hf:org/m1:Q4_K_M");
+    expect(out["m1"].params).toBe("2B");
+  });
+  it("throws on invalid JSON", () => {
+    expect(() => parseCatalog("{not json")).toThrow(/valid JSON/);
+  });
+  it("throws on an unsupported version", () => {
+    expect(() => parseCatalog(JSON.stringify({ version: 2, models: {} }))).toThrow(/version/);
+  });
+  it("throws when models is not an object", () => {
+    expect(() => parseCatalog(JSON.stringify({ version: 1, models: [] }))).toThrow(/models/);
+  });
+  it("skips an entry with a bad uri but keeps the good ones", () => {
+    const mixed = JSON.stringify({
+      version: 1,
+      models: { bad: { uri: "ftp://nope" }, good: { uri: "hf:org/g:Q4_K_M" } },
+    });
+    // Silence the expected `console.warn("[catalog] skipping …")` so the
+    // suite output stays clean; also asserts the warn fires.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const out = parseCatalog(mixed);
+      expect(out.bad).toBeUndefined();
+      expect(out.good.uri).toBe("hf:org/g:Q4_K_M");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "bad"'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("rejects an http: uri (insecure) but accepts hf:/https:/.gguf", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const out = parseCatalog(
+        JSON.stringify({
+          version: 1,
+          models: {
+            insecure: { uri: "http://example.com/m.gguf" },
+            secureHttps: { uri: "https://example.com/m.gguf" },
+            hf: { uri: "hf:org/m:Q4_K_M" },
+            gguf: { uri: "/abs/path/m.gguf" },
+          },
+        }),
+      );
+      expect(out.insecure).toBeUndefined();
+      expect(out.secureHttps.uri).toBe("https://example.com/m.gguf");
+      expect(out.hf.uri).toBe("hf:org/m:Q4_K_M");
+      expect(out.gguf.uri).toBe("/abs/path/m.gguf");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "insecure"'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("drops a wrongly-typed metadata field but keeps the entry (lenient)", () => {
+    const out = parseCatalog(
+      JSON.stringify({
+        version: 1,
+        models: { m: { uri: "hf:org/m:Q4_K_M", params: 7, sizeBytes: "big" } },
+      }),
+    );
+    expect(out.m.uri).toBe("hf:org/m:Q4_K_M");
+    expect(out.m.params).toBeUndefined(); // 7 is not a string → dropped
+    expect(out.m.sizeBytes).toBeUndefined(); // "big" is not a number → dropped
+  });
+});
+
+describe("_refreshCatalog", () => {
+  const blob = (models: Record<string, any>) => JSON.stringify({ version: 1, models });
+
+  it("writes blob models as source:remote aliases and reports them added", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({ "qwen3.5-2b": { uri: "hf:org/q:Q4_K_M", params: "2B" } }),
+    });
+    expect(r.added).toEqual(["qwen3.5-2b"]);
+    expect(r.modelCount).toBe(1); // total catalog entries
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases["qwen3.5-2b"]).toEqual({
+      uri: "hf:org/q:Q4_K_M", params: "2B", source: "remote",
+    });
+  });
+
+  it("skips a name that collides with a user alias; modelCount still counts the entry", async () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { "qwen3.5-2b": "hf:mine/custom:Q4_K_M" } } }),
+    );
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({ "qwen3.5-2b": { uri: "hf:org/remote:Q4_K_M" } }),
+    });
+    expect(r.skipped).toEqual([
+      { name: "qwen3.5-2b", keptUri: "hf:mine/custom:Q4_K_M", remoteUri: "hf:org/remote:Q4_K_M" },
+    ]);
+    expect(r.added).toEqual([]);
+    expect(r.modelCount).toBe(1); // catalog had 1 entry, even though we skipped it
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases["qwen3.5-2b"]).toBe("hf:mine/custom:Q4_K_M");
+  });
+
+  it("classifies re-runs: unchanged when value matches, updated when it differs, removed when absent", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    // First run: seed two managed entries.
+    await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({
+        a: { uri: "hf:org/a:Q4_K_M", params: "1B" },
+        b: { uri: "hf:org/b:Q4_K_M" },
+      }),
+    });
+    // Second run: `a` unchanged, `b` dropped, `c` added with same-uri but no
+    // metadata change vs first run (it's new — `added`), and `a` gets a new
+    // params value (this is the actual `updated` case).
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({
+        a: { uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
+        c: { uri: "hf:org/c:Q4_K_M" },               // new
+      }),
+    });
+    expect(r.added).toEqual(["c"]);
+    expect(r.updated).toEqual(["a"]);
+    expect(r.unchanged).toEqual([]);
+    expect(r.removed).toEqual(["b"]);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.b).toBeUndefined();
+    expect(cfg.client.modelAliases.a.params).toBe("2B");
+  });
+
+  it("reports unchanged when a re-run writes a byte-identical value", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    const fetcher = async () => blob({ a: { uri: "hf:org/a:Q4_K_M", params: "1B" } });
+    await _refreshCatalog({ file: aliasFile, fetcher });
+    const r = await _refreshCatalog({ file: aliasFile, fetcher });
+    expect(r.added).toEqual([]);
+    expect(r.updated).toEqual([]);
+    expect(r.unchanged).toEqual(["a"]);
+    expect(r.removed).toEqual([]);
+  });
+
+  it("leaves agency.json untouched when the blob is invalid", async () => {
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { keep: "hf:k:Q4_K_M" } } }));
+    await expect(
+      _refreshCatalog({ file: aliasFile, fetcher: async () => "{not json" }),
+    ).rejects.toThrow(/valid JSON/);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.keep).toBe("hf:k:Q4_K_M");
+  });
+
+  it("does not treat a prototype-named model as a user collision", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    // "toString" exists on Object.prototype, so a naive `name in userAliases`
+    // would falsely report a collision. With own-property checks it's added.
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({ toString: { uri: "hf:org/ts:Q4_K_M" } }),
+    });
+    expect(r.added).toEqual(["toString"]);
+    expect(r.skipped).toEqual([]);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.toString.uri).toBe("hf:org/ts:Q4_K_M");
+  });
+
+  it("reads the catalog from a local file path via the default fetcher (no network)", async () => {
+    // Integration-ish: exercises the real fetchCatalog file branch + parse +
+    // merge, with no fetcher injected and no HTTP.
+    fs.writeFileSync(aliasFile, "{}");
+    const catalogPath = path.join(dir, "catalog.json");
+    fs.writeFileSync(
+      catalogPath,
+      JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", params: "2B" } } }),
+    );
+    const r = await _refreshCatalog({ url: catalogPath, file: aliasFile });
+    expect(r.added).toEqual(["m"]);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.m).toEqual({ uri: "hf:org/m:Q4_K_M", params: "2B", source: "remote" });
   });
 });

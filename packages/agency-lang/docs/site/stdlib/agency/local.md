@@ -21,7 +21,7 @@ export type DownloadedModel = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L23))
 
 ### ModelName
 
@@ -44,7 +44,50 @@ export type ModelName = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L27))
+
+### SkippedAlias
+
+A catalog model whose name collided with one of your own aliases: refresh
+ *  kept your alias (`keptUri`) and did not write the catalog's `remoteUri`.
+
+```ts
+/** A catalog model whose name collided with one of your own aliases: refresh
+ *  kept your alias (`keptUri`) and did not write the catalog's `remoteUri`. */
+export type SkippedAlias = {
+  name: string;
+  keptUri: string;
+  remoteUri: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L133))
+
+### RefreshResult
+
+The outcome of `refreshCatalog`. The name lists partition the catalog's
+ *  managed (`source:"remote"`) entries by what changed; `skipped` are entries
+ *  yielded to your own aliases; `modelCount` is the total catalog size, so
+ *  `added + updated + unchanged + skipped == modelCount`.
+
+```ts
+/** The outcome of `refreshCatalog`. The name lists partition the catalog's
+ *  managed (`source:"remote"`) entries by what changed; `skipped` are entries
+ *  yielded to your own aliases; `modelCount` is the total catalog size, so
+ *  `added + updated + unchanged + skipped == modelCount`. */
+export type RefreshResult = {
+  url: string;
+  file: string;
+  added: string[];
+  updated: string[];
+  unchanged: string[];
+  removed: string[];
+  skipped: SkippedAlias[];
+  modelCount: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L143))
 
 ## Functions
 
@@ -58,7 +101,7 @@ True if smoltalk-llama-cpp is installed.
 
 **Returns:** `bool`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L39))
 
 ### resolveModelName
 
@@ -79,7 +122,7 @@ Map a curated short name or alias to its Hugging Face URI; pass URIs and
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L44))
 
 ### downloadModel
 
@@ -102,7 +145,7 @@ Download a model (curated name, alias, hf: URI) if not cached and return its
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L54))
 
 ### listDownloadedModels
 
@@ -122,7 +165,7 @@ List downloaded .gguf models.
 
 **Returns:** `DownloadedModel[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L65))
 
 ### listModelNames
 
@@ -134,7 +177,7 @@ List usable short names: curated built-ins and your aliases.
 
 **Returns:** `ModelName[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L74))
 
 ### aliasModel
 
@@ -156,7 +199,7 @@ Add a short-name alias for a model URI; returns the edited agency.json path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L79))
 
 ### unaliasModel
 
@@ -177,7 +220,7 @@ Remove a short-name alias; returns the inspected agency.json path (file
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L89))
 
 ### removeModel
 
@@ -199,7 +242,7 @@ Delete a downloaded model file; false if it was not present.
 
 **Returns:** `bool`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L99))
 
 ### registerLocalProvider
 
@@ -209,7 +252,7 @@ registerLocalProvider()
 
 Register the llama-cpp provider so local models can be used by llm().
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L109))
 
 ### registerLocalModel
 
@@ -232,7 +275,7 @@ Register the provider and ensure the model is downloaded; returns the local
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L114))
 
 ### printLocalCatalog
 
@@ -243,4 +286,32 @@ printLocalCatalog()
 Print the usable-model catalog (curated names + your aliases) as an
   aligned table — the same listing as `agency local alias list`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L125))
+
+### refreshCatalog
+
+```ts
+refreshCatalog(url: string): RefreshResult
+```
+
+Fetch the remote model catalog and update the `source:"remote"` aliases in
+  the nearest `agency.json` from it. Adds/updates models from the catalog,
+  removes ones it dropped, and skips (keeping yours) any name you've aliased
+  yourself. Your hand-added aliases are never overwritten. Throws on a
+  fetch/parse/validation failure, leaving `agency.json` untouched.
+
+  This is the same operation as the `agency local refresh` CLI command.
+
+  @param url - catalog URL override; empty string uses the
+    `AGENCY_MODEL_CATALOG_URL` env var, then `client.modelCatalogUrl` in
+    `agency.json`, then the built-in default.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| url | `string` | "" |
+
+**Returns:** [RefreshResult](#refreshresult)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L154))

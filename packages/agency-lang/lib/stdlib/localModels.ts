@@ -353,6 +353,154 @@ export function _removeModel(name: string, cacheDir: string = ""): boolean {
   return true;
 }
 
+// =============================================================================
+// Remote catalog — fetch + validate the GitHub-hosted model list.
+// =============================================================================
+
+export const DEFAULT_CATALOG_URL =
+  "https://raw.githubusercontent.com/egonSchiele/agency-lang/main/packages/agency-lang/data/model-catalog.json";
+
+const SUPPORTED_CATALOG_VERSION = 1;
+
+/** A validated entry from the remote catalog. Mirrors `AliasObject` minus the
+ *  `source` tag (which `_refreshCatalog` adds on write). */
+export type CatalogModel = {
+  uri: string;
+  params?: string;
+  sizeBytes?: number;
+  category?: ModelCategory;
+  contextWindow?: number;
+  license?: string;
+  description?: string;
+};
+
+/** Resolve the catalog URL: explicit arg → env → config → built-in default. */
+export function resolveCatalogUrl(explicit: string = "", file: string = ""): string {
+  if (explicit !== "") return explicit;
+  if (process.env.AGENCY_MODEL_CATALOG_URL) return process.env.AGENCY_MODEL_CATALOG_URL;
+  const configured = readJson(resolveAliasFile(file)).client?.modelCatalogUrl;
+  if (typeof configured === "string" && configured.length > 0) return configured;
+  return DEFAULT_CATALOG_URL;
+}
+
+const CATALOG_CATEGORIES = ["general", "coding", "reasoning", "embedding"] as const;
+
+/** Bound on how long the default fetcher will wait for the remote catalog
+ *  before aborting. Long enough to tolerate slow CI mirrors; short enough
+ *  that a hung server doesn't lock up the CLI. */
+const CATALOG_FETCH_TIMEOUT_MS = 15_000;
+
+/** Bound on catalog body size. The seed catalog is well under 10 KB; a
+ *  5 MB cap guards against a misconfigured URL serving an arbitrary file. */
+const CATALOG_MAX_BYTES = 5_000_000;
+
+// Field-shape narrowers used by `parseCatalog`. Returning `undefined` for a
+// wrongly-typed field lets the resulting object literal drop the key
+// entirely (see the `Object.fromEntries(...filter(defined))` pattern below).
+function pickString(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+function pickNumber(v: unknown): number | undefined {
+  return typeof v === "number" ? v : undefined;
+}
+function pickCategory(v: unknown): ModelCategory | undefined {
+  // `CATALOG_CATEGORIES` is a `readonly` tuple of literal types, so its
+  // `includes` rejects an arbitrary `unknown` — cast to a plain string
+  // array for the membership check, then narrow back.
+  if (typeof v !== "string") {
+    return undefined;
+  }
+  if (!(CATALOG_CATEGORIES as readonly string[]).includes(v)) {
+    return undefined;
+  }
+  return v as ModelCategory;
+}
+
+/** Strip keys whose value is `undefined` so the resulting object is JSON-clean
+ *  (no `"params": undefined` after `JSON.stringify`). */
+function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+/** Parse + validate the catalog JSON. Throws on blob-level problems (bad JSON,
+ *  unsupported version, `models` not an object) so refresh aborts without
+ *  touching agency.json. Skips an individual entry (with a warning) when its
+ *  `uri` is missing/invalid; metadata fields with the wrong type are dropped
+ *  but the entry is kept. */
+export function parseCatalog(text: string): Record<string, CatalogModel> {
+  let raw: any;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`catalog is not valid JSON: ${(err as Error).message}`);
+  }
+  if (typeof raw !== "object" || raw === null) {
+    throw new Error("catalog must be a JSON object");
+  }
+  if (raw.version !== SUPPORTED_CATALOG_VERSION) {
+    throw new Error(
+      `unsupported catalog version ${JSON.stringify(raw.version)}; this agency ` +
+        `supports version ${SUPPORTED_CATALOG_VERSION}. Upgrade agency.`,
+    );
+  }
+  if (typeof raw.models !== "object" || raw.models === null || Array.isArray(raw.models)) {
+    throw new Error("catalog.models must be an object keyed by model name");
+  }
+  // Project each blob entry into either a validated `CatalogModel` (kept) or
+  // `null` (skipped + warned). The final `Object.fromEntries` drops the
+  // `null` pairs, leaving only the valid models.
+  const entries: ([string, CatalogModel] | null)[] = Object.entries(
+    raw.models as Record<string, any>,
+  ).map(([name, entry]) => {
+    if (typeof entry !== "object" || entry === null) {
+      console.warn(`[catalog] skipping "${name}": entry is not an object`);
+      return null;
+    }
+    const uri = entry.uri;
+    if (typeof uri !== "string" || !(isModelUri(uri) || isGgufPath(uri))) {
+      console.warn(`[catalog] skipping "${name}": invalid uri ${JSON.stringify(uri)}`);
+      return null;
+    }
+    const model: CatalogModel = {
+      uri,
+      ...compact({
+        params: pickString(entry.params),
+        sizeBytes: pickNumber(entry.sizeBytes),
+        category: pickCategory(entry.category),
+        contextWindow: pickNumber(entry.contextWindow),
+        license: pickString(entry.license),
+        description: pickString(entry.description),
+      }),
+    };
+    return [name, model];
+  });
+  return Object.fromEntries(entries.filter((e): e is [string, CatalogModel] => e !== null));
+}
+
+/** Default fetcher: HTTPS-only GET with a bounded timeout and body cap. */
+export async function fetchCatalog(url: string): Promise<string> {
+  if (!url.startsWith("https://")) {
+    throw new Error(`catalog URL must be https: ${url}`);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CATALOG_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`fetch failed: HTTP ${res.status} ${res.statusText}`);
+    }
+    const text = await res.text();
+    if (text.length > CATALOG_MAX_BYTES) {
+      throw new Error(
+        `catalog too large (${text.length} bytes; cap ${CATALOG_MAX_BYTES} bytes)`,
+      );
+    }
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Cached so we don't shell out repeatedly per process.
 let cachedGlobalRoots: string[] | null = null;
 

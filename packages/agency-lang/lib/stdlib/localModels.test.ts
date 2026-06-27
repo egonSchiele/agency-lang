@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -14,6 +14,8 @@ import {
   resolveAliasConfigPath,
   resolveSmoltalkLlamaCppFromRoots,
   formatModelCatalog,
+  resolveCatalogUrl,
+  parseCatalog,
 } from "./localModels.js";
 
 let dir: string;
@@ -316,6 +318,62 @@ describe("formatModelCatalog with rich aliases", () => {
       expect(out).toContain("plain-model → hf:org/plain:Q4_K_M");
     } finally {
       process.chdir(cwd);
+    }
+  });
+});
+
+describe("resolveCatalogUrl", () => {
+  afterEach(() => { delete process.env.AGENCY_MODEL_CATALOG_URL; });
+
+  it("uses the explicit arg first", () => {
+    expect(resolveCatalogUrl("https://x/y.json", aliasFile)).toBe("https://x/y.json");
+  });
+  it("falls back to the env var", () => {
+    process.env.AGENCY_MODEL_CATALOG_URL = "https://env/c.json";
+    expect(resolveCatalogUrl("", aliasFile)).toBe("https://env/c.json");
+  });
+  it("then the config, then the default", () => {
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelCatalogUrl: "https://cfg/c.json" } }));
+    expect(resolveCatalogUrl("", aliasFile)).toBe("https://cfg/c.json");
+    fs.writeFileSync(aliasFile, "{}");
+    expect(resolveCatalogUrl("", aliasFile)).toContain("raw.githubusercontent.com/egonSchiele/agency-lang");
+  });
+});
+
+describe("parseCatalog", () => {
+  const good = JSON.stringify({
+    version: 1,
+    models: { "m1": { uri: "hf:org/m1:Q4_K_M", params: "2B", sizeBytes: 1, category: "general" } },
+  });
+  it("parses a valid catalog", () => {
+    const out = parseCatalog(good);
+    expect(out["m1"].uri).toBe("hf:org/m1:Q4_K_M");
+    expect(out["m1"].params).toBe("2B");
+  });
+  it("throws on invalid JSON", () => {
+    expect(() => parseCatalog("{not json")).toThrow(/valid JSON/);
+  });
+  it("throws on an unsupported version", () => {
+    expect(() => parseCatalog(JSON.stringify({ version: 2, models: {} }))).toThrow(/version/);
+  });
+  it("throws when models is not an object", () => {
+    expect(() => parseCatalog(JSON.stringify({ version: 1, models: [] }))).toThrow(/models/);
+  });
+  it("skips an entry with a bad uri but keeps the good ones", () => {
+    const mixed = JSON.stringify({
+      version: 1,
+      models: { bad: { uri: "ftp://nope" }, good: { uri: "hf:org/g:Q4_K_M" } },
+    });
+    // Silence the expected `console.warn("[catalog] skipping …")` so the
+    // suite output stays clean; also asserts the warn fires.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const out = parseCatalog(mixed);
+      expect(out.bad).toBeUndefined();
+      expect(out.good.uri).toBe("hf:org/g:Q4_K_M");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "bad"'));
+    } finally {
+      warn.mockRestore();
     }
   });
 });

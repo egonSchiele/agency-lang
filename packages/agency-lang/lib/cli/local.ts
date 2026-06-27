@@ -15,6 +15,13 @@ function formatGB(bytes: number): string {
   return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`;
 }
 
+/** Context window in compact units: 8192 → "8K", 131072 → "128K", 1e7 → "10M". */
+function formatCtx(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Math.round(tokens / 1_000_000)}M`;
+  if (tokens >= 1024) return `${Math.round(tokens / 1024)}K`;
+  return `${tokens}`;
+}
+
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
  *  override the same way `requireSupport()` in `localModels.ts` does — a
  *  caller who supplies their own provider module doesn't need
@@ -65,7 +72,15 @@ export function runList(): void {
 
 export async function runDownload(value: string): Promise<void> {
   gate();
-  console.log(await _downloadModel(value));
+  // Show the source it resolved to (the hf: URI for a name/alias) and the
+  // local path it landed at. For a .gguf-path input the two are the same, so
+  // the source line is skipped.
+  const source = _resolveModelName(value);
+  const modelPath = await _downloadModel(value);
+  if (source !== modelPath) {
+    console.log(`source: ${source}`);
+  }
+  console.log(`model:  ${modelPath}`);
 }
 
 export function runRemove(name: string): void {
@@ -79,14 +94,20 @@ export function runResolve(value: string): void {
 }
 
 export function runAliasList(): void {
-  // Curated entries show name, params, category, size, and description.
-  // User aliases show only what they have (name + target).
+  // Curated entries print a fact line (params, category, size, context window,
+  // license) with the description on its own line — descriptions are too long
+  // for a single aligned table row. User aliases print name → target.
   for (const m of _listModelNames()) {
     if (m.source === "curated") {
       const size = m.sizeBytes ? formatGB(m.sizeBytes) : "?";
-      console.log(`${m.name}\t${m.params}\t${m.category}\t${size}\t${m.description}`);
+      const ctx = m.contextWindow ? `${formatCtx(m.contextWindow)} ctx` : "";
+      const facts = [m.params, m.category, size, ctx, m.license]
+        .filter(Boolean)
+        .join(" · ");
+      console.log(`${m.name}  (${facts})`);
+      if (m.description) console.log(`    ${m.description}`);
     } else {
-      console.log(`${m.name}\t${m.target}\t(alias)`);
+      console.log(`${m.name} → ${m.target}  (alias)`);
     }
   }
 }

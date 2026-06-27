@@ -31,33 +31,34 @@ agency agent --local-model qwen3.5-2b     # download (if needed) + run locally
 | command | purpose |
 |---|---|
 | `agency local list` | List downloaded `.gguf` files with sizes and a total. |
-| `agency local download <value>` | Download a model if not already cached; prints the resolved local path. `<value>` may be a curated short name, an alias, an `hf:` URI, or an existing `.gguf` path. |
+| `agency local download <value>` | Download a model if not already cached; prints the source it resolved to and the local path. `<value>` may be a curated short name, an alias, an `hf:` URI, or an existing `.gguf` path. |
 | `agency local remove <name>` | Delete a downloaded `.gguf` from the cache. |
 | `agency local resolve <value>` | Show what a name/alias maps to, without downloading. |
-| `agency local alias list` | List usable short names: curated built-ins and your aliases. |
+| `agency local alias list` | List usable short names. Curated entries show params, category, size, context window, and license (with the description on the next line); your aliases show their target. |
 | `agency local alias add <name> <uri>` | Add a short-name alias. Prints the `agency.json` path that was edited. |
 | `agency local alias remove <name>` | Remove a short-name alias. Prints the `agency.json` path that was inspected (the file is left untouched if the alias wasn't present). |
 
 ### Where things live
 
-- **Cache dir**: `~/.agency-agent/models` by default; override with `AGENCY_MODELS_DIR`.
+- **Cache dir**: `AGENCY_MODELS_DIR` env var, else `client.modelsDir` in the nearest `agency.json`, else `~/.agency-agent/models`. The default is shared with `agency agent --local-model`, so a `local download` pre-populates what the agent reuses.
 - **Aliases**: written to the nearest `agency.json` walking up from the current directory; if none is found, `~/agency.json` is used. The CLI prints which file it edited on every add/remove.
+- **Curated catalog**: permissive licenses only (apache-2.0 / mit); restrictively-licensed weights (gemma, llama) are intentionally excluded.
 
 ### Config
 
-Aliases are stored under `client.modelAliases`:
+Aliases and the models cache dir live under `client` and are read at runtime,
+so edits take effect on the next call:
 
 ```jsonc
 {
   "client": {
     "modelAliases": {
       "my7b": "hf:Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
-    }
+    },
+    "modelsDir": "/data/agency-models"
   }
 }
 ```
-
-Read at runtime, so `agency local alias add/remove` edits take effect on the next call.
 
 ### See also
 

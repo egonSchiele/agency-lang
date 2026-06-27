@@ -7,17 +7,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { findFileUp } from "../importPaths.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 
-/** Categories let the CLI / future tooling group + filter without inspecting
- *  the description. Kept as a small string union so the set is self-documenting. */
+/** What a model is FOR — a single axis, orthogonal to size (size is conveyed
+ *  by `params` / `sizeBytes`). Lets the CLI group + filter without parsing the
+ *  description. */
 export type ModelCategory =
-  | "tiny"        // < 1 GB, sub-1B parameters; smoke tests, edge devices
-  | "small"       // 1–3 GB, 1–3B parameters; cheap on-CPU general use
-  | "medium"      // 4–6 GB, 7–9B parameters; the modern "sweet spot"
-  | "large"       // 8–20 GB, 12–32B parameters; needs >=16 GB RAM or a GPU
-  | "xl"          // > 20 GB, 70B+; needs a serious workstation
-  | "coding"      // SWE-tuned specialists (any size)
-  | "reasoning"   // R1-style chain-of-thought distills (any size)
-  | "embedding";  // BERT-family; returns vectors, not text
+  | "general"     // general-purpose chat / instruct
+  | "coding"      // SWE-tuned specialists
+  | "reasoning"   // chain-of-thought / R1-style distills
+  | "embedding";  // returns vectors, not text
 
 export type ModelInfo = {
   /** Hugging Face URI passed to `node-llama-cpp`'s `resolveModelFile`. */
@@ -26,117 +23,97 @@ export type ModelInfo = {
   params: string;
   /** Approximate Q4_K_M download size in bytes. */
   sizeBytes: number;
-  /** Bucket for filtering / display. */
+  /** What the model is for (orthogonal to size). */
   category: ModelCategory;
   /** One-line "what is it good for" — shown by `agency local alias list`. */
   description: string;
   /** Native context window in tokens. */
   contextWindow: number;
-  /** License identifier (SPDX-ish): "apache-2.0", "llama3.1", "gemma", "mit", etc. */
+  /** License identifier (SPDX-ish). Curated entries are permissive only
+   *  (apache-2.0 / mit); restrictively-licensed models (gemma, llama) are
+   *  intentionally excluded. */
   license: string;
 };
 
-/** Curated short-name → ModelInfo catalog. */
+/** Curated short-name → ModelInfo catalog. Permissive licenses only
+ *  (apache-2.0 / mit). Ordered roughly by size within each grouping. */
 export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
-  // ── Tiny (sub-1GB) ──────────────────────────────────────────────────────
+  // ── General ─────────────────────────────────────────────────────────────
   "smollm2-135m": {
     uri: "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
-    params: "135M", sizeBytes: 105_000_000, category: "tiny",
+    params: "135M", sizeBytes: 105_000_000, category: "general",
     contextWindow: 8192, license: "apache-2.0",
     description: "Smallest practical chat model; used by our integration tests, runs anywhere.",
   },
   "qwen3.5-0.8b": {
     uri: "hf:unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
-    params: "0.8B", sizeBytes: 500_000_000, category: "tiny",
+    params: "0.8B", sizeBytes: 500_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Tiny model from Alibaba's current generation; good edge-device default.",
   },
-
-  // ── Small (1–3GB) ───────────────────────────────────────────────────────
   "qwen3.5-2b": {
     uri: "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
-    params: "2B", sizeBytes: 1_280_000_000, category: "small",
+    params: "2B", sizeBytes: 1_280_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Most popular modern small general model; runs on CPU comfortably.",
   },
-  "gemma-3-4b": {
-    uri: "hf:unsloth/gemma-3-4b-it-GGUF:Q4_K_M",
-    params: "4B", sizeBytes: 2_500_000_000, category: "small",
-    contextWindow: 131072, license: "gemma",
-    description: "Google's small multimodal model (text + image input); 128K context.",
-  },
   "qwen3.5-4b": {
     uri: "hf:unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
-    params: "4B", sizeBytes: 2_400_000_000, category: "small",
+    params: "4B", sizeBytes: 2_400_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
   },
+  "qwen3.5-9b": {
+    uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+    params: "9B", sizeBytes: 5_500_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Modern medium general model with strong tool use; 128K context.",
+  },
+  "gpt-oss-20b": {
+    uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
+    params: "20B", sizeBytes: 12_000_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "OpenAI's open-weights release; balanced general model for ~16 GB machines.",
+  },
+  "mistral-small-3.1": {
+    uri: "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
+    params: "24B", sizeBytes: 14_000_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Mistral's general 24B base model (also Devstral's foundation); broad utility.",
+  },
+  "qwen3.5-27b": {
+    uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
+    params: "27B", sizeBytes: 16_000_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Modern dense general 27B; the practical ceiling for most workstations.",
+  },
 
-  // ── Medium (3–7GB) ──────────────────────────────────────────────────────
+  // ── Reasoning ───────────────────────────────────────────────────────────
   "deepseek-r1-distill-llama-8b": {
     uri: "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
     params: "8B", sizeBytes: 4_920_000_000, category: "reasoning",
     contextWindow: 131072, license: "mit",
     description: "Chain-of-thought distill into Llama-8B; best small reasoning model.",
   },
-  "qwen3.5-9b": {
-    uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
-    params: "9B", sizeBytes: 5_500_000_000, category: "medium",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Modern medium general model with strong tool use; 128K context.",
-  },
-
-  // ── Large (8–25GB) ──────────────────────────────────────────────────────
   "phi-4-reasoning": {
     uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
     params: "14B", sizeBytes: 9_050_000_000, category: "reasoning",
     contextWindow: 32768, license: "mit",
     description: "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic.",
   },
-  "gpt-oss-20b": {
-    uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
-    params: "20B", sizeBytes: 12_000_000_000, category: "large",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "OpenAI's open-weights release; balanced general model for ~16 GB machines.",
-  },
+
+  // ── Coding ──────────────────────────────────────────────────────────────
   "devstral-small-2507": {
     uri: "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
     params: "24B", sizeBytes: 14_300_000_000, category: "coding",
     contextWindow: 131072, license: "apache-2.0",
     description: "Mistral's official coding-agent GGUF; #1 open-source on SWE-Bench at release.",
   },
-  "mistral-small-3.1": {
-    uri: "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
-    params: "24B", sizeBytes: 14_000_000_000, category: "large",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Mistral's general 24B base model (also Devstral's foundation); broad utility.",
-  },
-  "gemma-4-26b-a4b": {
-    uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
-    params: "26B (A4B)", sizeBytes: 16_000_000_000, category: "large",
-    contextWindow: 131072, license: "gemma",
-    description: "Google's MoE Gemma 4 with only 3.8B active params; local sweet spot for 24GB+ machines.",
-  },
   "qwen3-coder-30b-a3b": {
     uri: "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
     params: "30B (A3B)", sizeBytes: 19_000_000_000, category: "coding",
     contextWindow: 262144, license: "apache-2.0",
     description: "Qwen's MoE coder (3.3B active); strong agentic coding + 256K context.",
-  },
-  "qwen3.5-27b": {
-    uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
-    params: "27B", sizeBytes: 16_000_000_000, category: "large",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Modern dense general 27B; the practical ceiling for most workstations.",
-  },
-
-  // ── XL (25GB+) ──────────────────────────────────────────────────────────
-  "llama-4-scout": {
-    uri: "hf:unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF:Q4_K_M",
-    params: "109B (A17B)", sizeBytes: 65_000_000_000, category: "xl",
-    contextWindow: 10_000_000,
-    license: "llama4",
-    description: "Meta's long-context MoE (17B active); 10M-token context for whole-repo / huge-doc work.",
   },
 
   // ── Embedding ───────────────────────────────────────────────────────────
@@ -148,8 +125,22 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   },
 };
 
+/** Where downloaded models live, in precedence order:
+ *   1. `AGENCY_MODELS_DIR` env var (per-machine override).
+ *   2. `client.modelsDir` in the nearest `agency.json` (read at runtime, like
+ *      `modelAliases`), so the CLI and the agent share one configurable dir.
+ *   3. `~/.agency-agent/models` (the default; shared with the agent so a CLI
+ *      `agency local download` pre-populates what `agency agent --local-model`
+ *      reuses). */
 export function defaultCacheDir(): string {
-  return process.env.AGENCY_MODELS_DIR ?? path.join(os.homedir(), ".agency-agent", "models");
+  if (process.env.AGENCY_MODELS_DIR) {
+    return process.env.AGENCY_MODELS_DIR;
+  }
+  const configured = readJson(resolveAliasConfigPath()).client?.modelsDir;
+  if (typeof configured === "string" && configured.length > 0) {
+    return configured;
+  }
+  return path.join(os.homedir(), ".agency-agent", "models");
 }
 
 /** Treat empty string as "caller wants the default cache dir". */

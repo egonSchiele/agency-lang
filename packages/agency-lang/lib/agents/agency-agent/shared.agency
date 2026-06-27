@@ -113,7 +113,10 @@ export def configureLocalModel(value: string) {
   // convert the throw to a Failure and silently continue into the REPL. A
   // local-model setup failure is fatal: print it and exit, mirroring how
   // `configureModels` exits on an unresolvable provider.
-  const result = try registerLocalModel(value, "${AGENCY_AGENT_DIR}/models")
+  // No explicit cache dir: use the shared default (AGENCY_MODELS_DIR env,
+  // else agency.json client.modelsDir, else ~/.agency-agent/models) so a CLI
+  // `agency local download` and the agent reuse the same downloaded models.
+  const result = try registerLocalModel(value)
   if (isFailure(result)) {
     print(result.error)
     process.exit(1)

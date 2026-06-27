@@ -49,8 +49,10 @@ describe("name resolution", () => {
 describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, and a known category", () => {
     const validCategories = new Set([
-      "tiny", "small", "medium", "large", "xl", "coding", "reasoning", "embedding",
+      "general", "coding", "reasoning", "embedding",
     ]);
+    // Curated set is permissive-licensed only.
+    const permissiveLicenses = new Set(["apache-2.0", "mit"]);
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
       expect(info.uri, `${name}.uri`).toMatch(/^hf:/);
       expect(info.params.length, `${name}.params`).toBeGreaterThan(0);
@@ -58,11 +60,12 @@ describe("curated catalog shape", () => {
       expect(info.sizeBytes, `${name}.sizeBytes`).toBeGreaterThan(0);
       expect(info.contextWindow, `${name}.contextWindow`).toBeGreaterThan(0);
       expect(validCategories.has(info.category), `${name}.category=${info.category}`).toBe(true);
+      expect(permissiveLicenses.has(info.license), `${name}.license=${info.license}`).toBe(true);
     }
   });
   it("smollm2-135m is present (integration suite depends on it)", () => {
     expect(CURATED_LOCAL_MODELS["smollm2-135m"]).toBeDefined();
-    expect(CURATED_LOCAL_MODELS["smollm2-135m"].category).toBe("tiny");
+    expect(CURATED_LOCAL_MODELS["smollm2-135m"].category).toBe("general");
   });
 });
 

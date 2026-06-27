@@ -66,7 +66,10 @@ True if smoltalk-llama-cpp is installed.
 resolveModelName(value: string): string
 ```
 
-Map a curated short name or alias to its Hugging Face URI; pass URIs and .gguf paths through. @param value - name, alias, hf: URI, or .gguf path
+Map a curated short name or alias to its Hugging Face URI; pass URIs and
+  .gguf paths through unchanged.
+
+  @param value - name, alias, hf: URI, or .gguf path
 
 **Parameters:**
 
@@ -84,7 +87,11 @@ Map a curated short name or alias to its Hugging Face URI; pass URIs and .gguf p
 downloadModel(value: string, cacheDir: string): string
 ```
 
-Download a model (curated name, alias, hf: URI) if not cached and return its local .gguf path. @param value - what to download @param cacheDir - download dir (empty string = per-user cache)
+Download a model (curated name, alias, hf: URI) if not cached and return its
+  local .gguf path.
+
+  @param value - what to download
+  @param cacheDir - download dir (empty string = per-user cache)
 
 **Parameters:**
 
@@ -95,7 +102,7 @@ Download a model (curated name, alias, hf: URI) if not cached and return its loc
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L52))
 
 ### listDownloadedModels
 
@@ -103,7 +110,9 @@ Download a model (curated name, alias, hf: URI) if not cached and return its loc
 listDownloadedModels(cacheDir: string): DownloadedModel[]
 ```
 
-List downloaded .gguf models. @param cacheDir - models dir (empty string = per-user cache)
+List downloaded .gguf models.
+
+  @param cacheDir - models dir (empty string = per-user cache)
 
 **Parameters:**
 
@@ -113,7 +122,7 @@ List downloaded .gguf models. @param cacheDir - models dir (empty string = per-u
 
 **Returns:** `DownloadedModel[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L63))
 
 ### listModelNames
 
@@ -125,7 +134,7 @@ List usable short names: curated built-ins and your aliases.
 
 **Returns:** `ModelName[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L72))
 
 ### aliasModel
 
@@ -133,7 +142,10 @@ List usable short names: curated built-ins and your aliases.
 aliasModel(name: string, uri: string): string
 ```
 
-Add a short-name alias for a model URI; returns the edited agency.json path. @param name - the alias @param uri - the hf: URI it maps to
+Add a short-name alias for a model URI; returns the edited agency.json path.
+
+  @param name - the alias
+  @param uri - the hf: URI it maps to
 
 **Parameters:**
 
@@ -144,7 +156,7 @@ Add a short-name alias for a model URI; returns the edited agency.json path. @pa
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L77))
 
 ### unaliasModel
 
@@ -152,7 +164,10 @@ Add a short-name alias for a model URI; returns the edited agency.json path. @pa
 unaliasModel(name: string): string
 ```
 
-Remove a short-name alias; returns the inspected agency.json path (file unchanged if the alias was missing). @param name - the alias to remove
+Remove a short-name alias; returns the inspected agency.json path (file
+  unchanged if the alias was missing).
+
+  @param name - the alias to remove
 
 **Parameters:**
 
@@ -162,7 +177,7 @@ Remove a short-name alias; returns the inspected agency.json path (file unchange
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L87))
 
 ### removeModel
 
@@ -170,7 +185,10 @@ Remove a short-name alias; returns the inspected agency.json path (file unchange
 removeModel(name: string, cacheDir: string): bool
 ```
 
-Delete a downloaded model file; false if it was not present. @param name - the .gguf filename @param cacheDir - models dir (empty string = per-user cache)
+Delete a downloaded model file; false if it was not present.
+
+  @param name - the .gguf filename
+  @param cacheDir - models dir (empty string = per-user cache)
 
 **Parameters:**
 
@@ -181,7 +199,7 @@ Delete a downloaded model file; false if it was not present. @param name - the .
 
 **Returns:** `bool`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L97))
 
 ### registerLocalProvider
 
@@ -191,7 +209,7 @@ registerLocalProvider()
 
 Register the llama-cpp provider so local models can be used by llm().
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L107))
 
 ### registerLocalModel
 
@@ -199,7 +217,11 @@ Register the llama-cpp provider so local models can be used by llm().
 registerLocalModel(value: string, cacheDir: string): string
 ```
 
-Register the provider and ensure the model is downloaded; returns the local .gguf path to pass to setModel/setLlmOptions with provider "llama-cpp". @param value - name, alias, hf: URI, or .gguf path @param cacheDir - download dir (empty string = per-user cache)
+Register the provider and ensure the model is downloaded; returns the local
+  .gguf path to pass to setModel/setLlmOptions with provider "llama-cpp".
+
+  @param value - name, alias, hf: URI, or .gguf path
+  @param cacheDir - download dir (empty string = per-user cache)
 
 **Parameters:**
 
@@ -210,4 +232,4 @@ Register the provider and ensure the model is downloaded; returns the local .ggu
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L112))

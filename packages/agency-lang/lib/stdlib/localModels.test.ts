@@ -84,12 +84,21 @@ describe("aliases", () => {
     expect(cfg.client.modelAliases.a).toBe("hf:x/y:Q4");
   });
   it("unaliasModel bails early when the file or alias is missing (no write)", () => {
-    _unaliasModel("ghost", aliasFile);
+    const r1 = _unaliasModel("ghost", aliasFile);
+    expect(r1).toEqual({ file: aliasFile, removed: false });
     expect(fs.existsSync(aliasFile)).toBe(false);
     fs.writeFileSync(aliasFile, JSON.stringify({ client: { defaultModel: "x" } }, null, 2));
     const before = fs.readFileSync(aliasFile, "utf-8");
-    _unaliasModel("ghost", aliasFile);
+    const r2 = _unaliasModel("ghost", aliasFile);
+    expect(r2).toEqual({ file: aliasFile, removed: false });
     expect(fs.readFileSync(aliasFile, "utf-8")).toBe(before);
+  });
+  it("unaliasModel returns { removed: true } when the alias was actually written out", () => {
+    fs.writeFileSync(aliasFile, "{}");
+    _aliasModel("toRemove", "hf:x/y:Q4", aliasFile);
+    expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: true });
+    // Idempotent: a second remove is a no-op and reports removed=false.
+    expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: false });
   });
 });
 

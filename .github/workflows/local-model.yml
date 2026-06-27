@@ -68,7 +68,7 @@ jobs:
       # Scoped to the model name; no restore-keys — a partial/poisoned cache
       # must never be used as a fallback.
       - name: Cache local models + node-llama-cpp prebuilt
-        uses: actions/cache@v4 # TODO: pin to SHA when bumping (see other workflows)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.agency-agent/models
@@ -79,11 +79,15 @@ jobs:
         working-directory: packages/agency-lang
         env:
           AGENCY_LLM_INTEGRATION: "1"
+          # The suite normally sandboxes HOME to a temp dir for local-dev
+          # safety; in CI we honor the real $HOME so the actions/cache step
+          # above can actually hit ~/.agency-agent/models on warm runs.
+          AGENCY_INTEGRATION_USE_REAL_HOME: "1"
         run: pnpm test:run tests/integration/local-model 2>&1 | tee integration.log
 
       - name: Upload log on failure
         if: failure()
-        uses: actions/upload-artifact@v4 # TODO: pin to SHA when bumping
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: integration-log
           path: packages/agency-lang/integration.log

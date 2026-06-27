@@ -1,5 +1,4 @@
 import {
-  _localModelsSupported,
   _resolveModelName,
   _downloadModel,
   _listDownloadedModels,
@@ -7,6 +6,7 @@ import {
   _aliasModel,
   _unaliasModel,
   _removeModel,
+  hasLocalModelSupport,
 } from "../stdlib/localModels.js";
 
 const BYTES_PER_GB = 1e9;
@@ -15,8 +15,12 @@ function formatGB(bytes: number): string {
   return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`;
 }
 
+/** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
+ *  override the same way `requireSupport()` in `localModels.ts` does — a
+ *  caller who supplies their own provider module doesn't need
+ *  smoltalk-llama-cpp resolvable, and we shouldn't block them. */
 function gate(): void {
-  if (!_localModelsSupported()) {
+  if (!hasLocalModelSupport()) {
     console.error("Local models need smoltalk-llama-cpp — run: npm i -g smoltalk-llama-cpp");
     process.exit(1);
   }
@@ -36,8 +40,12 @@ export function aliasAdd(name: string, uri: string, file?: string): string {
 }
 
 export function aliasRemove(name: string, file?: string): string {
-  const inspected = _unaliasModel(name, file ?? "");
-  console.log(`Removed alias "${name}" (from ${inspected})`);
+  const { file: inspected, removed } = _unaliasModel(name, file ?? "");
+  if (removed) {
+    console.log(`Removed alias "${name}" from ${inspected}`);
+  } else {
+    console.log(`Alias "${name}" not present in ${inspected}; nothing changed`);
+  }
   return inspected;
 }
 

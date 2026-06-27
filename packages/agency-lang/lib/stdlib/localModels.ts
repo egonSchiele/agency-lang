@@ -274,18 +274,24 @@ export function _aliasModel(name: string, uri: string, file: string = ""): strin
   return resolved;
 }
 
+/** Outcome of `_unaliasModel`. `removed` distinguishes the actual mutation
+ *  (true) from the "alias / file wasn't there, file untouched" no-op (false),
+ *  so the CLI can print an accurate message instead of always saying
+ *  "Removed alias …" even when nothing changed. */
+export type UnaliasResult = { file: string; removed: boolean };
+
 /** Remove an alias. Bails early (no write) if file or alias missing. */
-export function _unaliasModel(name: string, file: string = ""): string {
+export function _unaliasModel(name: string, file: string = ""): UnaliasResult {
   const resolved = resolveAliasFile(file);
   if (!fs.existsSync(resolved)) {
-    return resolved;
+    return { file: resolved, removed: false };
   }
   const cfg = readJson(resolved);
   if (!cfg.client?.modelAliases || !(name in cfg.client.modelAliases)) {
-    return resolved;
+    return { file: resolved, removed: false };
   }
   writeJson(resolved, withAlias(cfg, name, undefined));
-  return resolved;
+  return { file: resolved, removed: true };
 }
 
 export function _listDownloadedModels(
@@ -385,6 +391,19 @@ export function _localModelsSupported(): boolean {
   return resolveSmoltalkLlamaCppEntry() !== null;
 }
 
+/** Whether the local-model commands should be allowed to run. True when
+ *  smoltalk-llama-cpp is installed OR the caller has supplied their own
+ *  provider module via AGENCY_LLAMA_PROVIDER_MODULE. Mirrors the gate inside
+ *  `requireSupport()`; used by the CLI so `agency local download/list/remove`
+ *  works in the override scenario (otherwise the CLI would exit 1 even though
+ *  the underlying TS functions would happily run). */
+export function hasLocalModelSupport(): boolean {
+  if (process.env.AGENCY_LLAMA_PROVIDER_MODULE) {
+    return true;
+  }
+  return _localModelsSupported();
+}
+
 /** Expose the resolved `smoltalk-llama-cpp` entry path to the bundled
  *  `llama-cpp.mjs` via the AGENCY_SMOLTALK_LLAMA_CPP_PATH env var, so that
  *  the bundled module can dynamically import it even when the package lives
@@ -405,12 +424,17 @@ type LlamaBundle = {
 };
 
 /** Absolute fs path of the bundled llama-cpp provider module. Tests/advanced
- *  callers can override via AGENCY_LLAMA_PROVIDER_MODULE (also an fs path). */
+ *  callers can override via AGENCY_LLAMA_PROVIDER_MODULE (also an fs path).
+ *  The override is normalized to an absolute path so `_downloadModel`'s
+ *  `pathToFileURL(...)` call works even when callers pass a relative path
+ *  (which `loadProviderModuleByPath` would itself happily resolve, but the
+ *  download path bypasses that helper). */
 function bundledLlamaModule(): string {
-  return (
-    process.env.AGENCY_LLAMA_PROVIDER_MODULE ??
-    fileURLToPath(new URL("./providers/llama-cpp.mjs", import.meta.url))
-  );
+  const override = process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+  if (override !== undefined && override !== "") {
+    return path.isAbsolute(override) ? override : path.resolve(process.cwd(), override);
+  }
+  return fileURLToPath(new URL("./providers/llama-cpp.mjs", import.meta.url));
 }
 
 /** Guard the install-required commands. If the user set

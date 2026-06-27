@@ -38,10 +38,19 @@ If you change the curated `smollm2-135m` URI in `lib/stdlib/localModels.ts`,
 update **two** values:
 
 1. `EXPECTED_SHA256` in `tests/integration/local-model/smoltest.test.ts` —
-   capture by running the suite once with the assertion relaxed to a regex,
-   then paste the printed hash.
+   currently `null` (format-only check). The first green integration run
+   prints the actual hash; paste it in to enable strict tamper-canary
+   matching on subsequent runs.
 2. The cache key in `.github/workflows/local-model.yml` (bump the `v1` suffix
    or change the model identifier in the key).
+
+## Sandbox vs. real `$HOME`
+
+The suite normally redirects `HOME` and `AGENCY_MODELS_DIR` to a temp dir so
+a local run doesn't pollute `~/.agency-agent/models` or `~/agency.json`. Set
+`AGENCY_INTEGRATION_USE_REAL_HOME=1` to disable that sandbox — the workflow
+sets it so the `actions/cache` step can actually hit `~/.agency-agent/models`
+on warm runs.
 
 ## Updating the `smoltalk-llama-cpp` pin
 

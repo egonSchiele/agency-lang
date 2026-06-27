@@ -35,6 +35,9 @@ export type ModelInfo = {
    *  (apache-2.0 / mit); restrictively-licensed models (gemma, llama) are
    *  intentionally excluded. */
   license: string;
+  /** Pinned content SHA-256 (hex) of the resolved single-file GGUF, used to
+   *  verify the download. Absent for sharded models (see issue #348). */
+  sha256?: string;
 };
 
 /** Curated short-name → ModelInfo catalog. Permissive licenses only
@@ -230,6 +233,7 @@ export type AliasObject = {
   contextWindow?: number;
   license?: string;
   description?: string;
+  sha256?: string;
 };
 
 export type AliasValue = string | AliasObject;
@@ -255,6 +259,7 @@ export type ModelNameEntry = {
   description?: string;
   contextWindow?: number;
   license?: string;
+  sha256?: string;
 };
 
 export function _resolveModelName(value: string, file: string = ""): string {
@@ -278,7 +283,7 @@ export function _resolveModelName(value: string, file: string = ""): string {
 
 type EntryMeta = Pick<
   ModelNameEntry,
-  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license"
+  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license" | "sha256"
 >;
 
 /** Project the optional display-metadata fields off any source shape
@@ -295,6 +300,7 @@ function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
   if (src.description !== undefined) out.description = src.description;
   if (src.contextWindow !== undefined) out.contextWindow = src.contextWindow;
   if (src.license !== undefined) out.license = src.license;
+  if (src.sha256 !== undefined) out.sha256 = src.sha256;
   return out;
 }
 
@@ -388,6 +394,7 @@ export type CatalogModel = {
   contextWindow?: number;
   license?: string;
   description?: string;
+  sha256?: string;
 };
 
 /** Resolve the catalog URL: explicit arg → env → config → built-in default. */
@@ -423,6 +430,7 @@ const CatalogModelSchema = z.object({
   contextWindow: z.number().optional().catch(undefined),
   license: z.string().optional().catch(undefined),
   description: z.string().optional().catch(undefined),
+  sha256: z.string().optional().catch(undefined),
 });
 
 // Top-level catalog shape: a supported version + a name→entry object. Entries
@@ -486,6 +494,7 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
           contextWindow: d.contextWindow,
           license: d.license,
           description: d.description,
+          sha256: d.sha256,
         }),
       };
       return [name, model];

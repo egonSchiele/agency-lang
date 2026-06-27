@@ -413,6 +413,20 @@ describe("parseCatalog", () => {
     expect(out.m.params).toBeUndefined(); // 7 is not a string → dropped
     expect(out.m.sizeBytes).toBeUndefined(); // "big" is not a number → dropped
   });
+
+  it("keeps a valid sha256 and drops a non-string one", () => {
+    const out = parseCatalog(
+      JSON.stringify({
+        version: 1,
+        models: {
+          good: { uri: "hf:org/g:Q4_K_M", sha256: "abc123" },
+          bad: { uri: "hf:org/b:Q4_K_M", sha256: 123 },
+        },
+      }),
+    );
+    expect(out.good.sha256).toBe("abc123");
+    expect(out.bad.sha256).toBeUndefined(); // wrong type dropped, entry kept
+  });
 });
 
 describe("_refreshCatalog", () => {
@@ -497,6 +511,17 @@ describe("_refreshCatalog", () => {
     ).rejects.toThrow(/valid JSON/);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.keep).toBe("hf:k:Q4_K_M");
+  });
+
+  it("writes the catalog sha256 into the remote alias", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () =>
+        JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", sha256: "deadbeef" } } }),
+    });
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.m.sha256).toBe("deadbeef");
   });
 
   it("does not treat a prototype-named model as a user collision", async () => {

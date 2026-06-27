@@ -9,6 +9,8 @@ import {
   hasLocalModelSupport,
   formatGB,
   formatModelCatalog,
+  _refreshCatalog,
+  type RefreshResult,
 } from "../stdlib/localModels.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
@@ -95,4 +97,34 @@ export function runAliasAdd(name: string, uri: string): void {
 
 export function runAliasRemove(name: string): void {
   aliasRemove(name);
+}
+
+/** Format the lines `runRefresh` prints. Pure so it can be unit-tested without
+ *  a network call. `r.modelCount` is the size of the catalog blob; the
+ *  breakdown line accounts for every entry exactly once (added + updated +
+ *  unchanged + skipped = modelCount). */
+export function formatRefreshOutput(r: RefreshResult): string[] {
+  const lines: string[] = [];
+  for (const s of r.skipped) {
+    lines.push(`Skipped "${s.name}": kept your alias (${s.keptUri});`);
+    lines.push(`  remote would have set ${s.remoteUri}`);
+  }
+  lines.push(`Refreshed ${r.modelCount} models from ${r.url} → ${r.file}`);
+  lines.push(
+    `  (${r.added.length} added, ${r.updated.length} updated, ` +
+      `${r.unchanged.length} unchanged, ${r.removed.length} removed, ` +
+      `${r.skipped.length} skipped)`,
+  );
+  return lines;
+}
+
+export async function runRefresh(url?: string): Promise<void> {
+  let result: RefreshResult;
+  try {
+    result = await _refreshCatalog({ url: url ?? "" });
+  } catch (err) {
+    console.error(`Refresh failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+  for (const line of formatRefreshOutput(result)) console.log(line);
 }

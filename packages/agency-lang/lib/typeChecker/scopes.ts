@@ -20,7 +20,7 @@ import { Scope } from "./scope.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
-import { analyzeCondition, walkWithNarrowing } from "./narrowing.js";
+import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -384,7 +384,8 @@ export function walkScopeBody(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
-  for (const node of nodes) {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
     checkConstMutations(node, scope, ctx);
     switch (node.type) {
       case "assignment":
@@ -432,6 +433,23 @@ export function walkScopeBody(
         walkWithNarrowing(scope, node.thenBody, facts.then, aliases, ctx, walkScopeBody);
         if (node.elseBody) {
           walkWithNarrowing(scope, node.elseBody, facts.else, aliases, ctx, walkScopeBody);
+        }
+        // Post-guard narrowing: if exactly one branch always exits (returns),
+        // the statements AFTER this if run only on the surviving branch's
+        // condition, so walk the remainder of THIS body in a child scope that
+        // carries those facts. Delegating the tail here (and returning) keeps
+        // the refinement scoped to exactly the post-guard region.
+        // The early `return` is load-bearing: without it the outer for-loop
+        // would re-walk `rest` in the wrong (un-narrowed) scope, producing
+        // duplicate diagnostics and ignoring the post-guard facts entirely.
+        // Gate on the cheap checks (no facts, or no tail) BEFORE slicing —
+        // postGuardFacts returns [] for any `if` whose taken branch doesn't
+        // always-return, which is the vast majority, so an unconditional
+        // slice would allocate a throwaway array on every `if` in the AST.
+        const afterFacts = postGuardFacts(node, facts);
+        if (afterFacts.length > 0 && i + 1 < nodes.length) {
+          walkWithNarrowing(scope, nodes.slice(i + 1), afterFacts, aliases, ctx, walkScopeBody);
+          return;
         }
         break;
       }

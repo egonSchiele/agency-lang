@@ -1,4 +1,4 @@
-import type { AgencyNode, Expression, TypeAliasEntry } from "../types.js";
+import type { AgencyNode, Expression, TypeAliasEntry, IfElse } from "../types.js";
 import type { ResultType } from "../types/typeHints.js";
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
@@ -19,6 +19,30 @@ const NO_FACTS: ConditionFacts = { then: [], else: [] };
  * the function name is unambiguous — no resolveCall lookup is required.
  */
 export function analyzeCondition(condition: Expression): ConditionFacts {
+  // Boolean combinators (the parser desugars `!x` into a binOpExpression of
+  // the form { operator: "!", left: <true>, right: x }, so the operand is
+  // `.right`). These are the standard sound narrowing rules:
+  //   !c        → swap then/else
+  //   a && b    → then = then(a) ∪ then(b); else unknown (both could be false)
+  //   a || b    → else = else(a) ∪ else(b); then unknown (either could be true)
+  if (condition.type === "binOpExpression") {
+    if (condition.operator === "!") {
+      const inner = analyzeCondition(condition.right);
+      return { then: inner.else, else: inner.then };
+    }
+    if (condition.operator === "&&") {
+      const l = analyzeCondition(condition.left);
+      const r = analyzeCondition(condition.right);
+      return { then: [...l.then, ...r.then], else: [] };
+    }
+    if (condition.operator === "||") {
+      const l = analyzeCondition(condition.left);
+      const r = analyzeCondition(condition.right);
+      return { then: [], else: [...l.else, ...r.else] };
+    }
+    return NO_FACTS;
+  }
+
   if (condition.type !== "functionCall") return NO_FACTS;
   const fn = condition.functionName;
   if (fn !== "isSuccess" && fn !== "isFailure") return NO_FACTS;
@@ -37,6 +61,39 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
 /** Return a copy of a ResultType tagged as narrowed to one branch. */
 export function narrowToBranch(rt: ResultType, branch: "success" | "failure"): ResultType {
   return { ...rt, narrowedBranch: branch };
+}
+
+/**
+ * Conservative "this body always transfers control out of the enclosing
+ * function" check. Increment 2 counts ONLY `return`: `raise` (interrupt) can
+ * resume and continue, and `propagate` semantics are likewise non-trivial, so
+ * treating either as an exit could be unsound. False negatives are fine — they
+ * only cost a missed narrowing, never a wrong one.
+ */
+export function alwaysExits(body: AgencyNode[]): boolean {
+  return body.some(
+    (node) =>
+      node.type === "returnStatement" ||
+      (node.type === "ifElse" &&
+        !!node.elseBody &&
+        alwaysExits(node.thenBody) &&
+        alwaysExits(node.elseBody)),
+  );
+}
+
+/**
+ * Facts that hold for the statements *after* an `if`, given which branch (if
+ * any) always exits. If the then-branch exits and the else doesn't (or is
+ * absent), reaching the after-code means the condition was false → else-facts.
+ * Symmetrically for an exiting else-branch. If both or neither exit, nothing
+ * is known (both-exit ⇒ after-code is dead; neither ⇒ both paths merge).
+ */
+export function postGuardFacts(node: IfElse, facts: ConditionFacts): NarrowCandidate[] {
+  const thenExits = alwaysExits(node.thenBody);
+  const elseExits = !!node.elseBody && alwaysExits(node.elseBody);
+  if (thenExits && !elseExits) return facts.else;
+  if (elseExits && !thenExits) return facts.then;
+  return [];
 }
 
 /**

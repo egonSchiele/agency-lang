@@ -2,27 +2,24 @@ import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
-import { analyzeCondition, narrowToBranch } from "./narrowing.js";
+import { analyzeCondition, narrowToBranch, alwaysExits, postGuardFacts } from "./narrowing.js";
+import { walkNodes } from "../utils/node.js";
 import type { IfElse } from "../types.js";
 import type { ResultType } from "../types/typeHints.js";
 
-// Parse a snippet and pull the condition of the first `if` in `main`.
-function firstIfCondition(body: string) {
-  const src = `node main() {\n  let r = foo()\n  if (${body}) { }\n}`;
-  const parsed = parseAgency(src);
+// Parse a snippet and return the first ifElse node in main. Uses the shared
+// walkNodes traversal (lib/utils/node.ts) rather than a hand-rolled walker —
+// see docs/dev/anti-patterns.md "Duplicating existing code".
+function firstIf(srcBody: string): IfElse {
+  const parsed = parseAgency(`node main() {\n${srcBody}\n}`);
   if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);
-  // walk to the ifElse node
-  let cond: IfElse["condition"] | undefined;
-  const visit = (nodes: any[]) => {
-    for (const n of nodes) {
-      if (n.type === "ifElse") cond = n.condition;
-      for (const k of ["body", "thenBody", "elseBody"]) if (Array.isArray(n[k])) visit(n[k]);
-    }
-  };
-  visit(parsed.result.nodes);
-  if (!cond) throw new Error("no if condition found");
-  return cond;
+  for (const { node } of walkNodes(parsed.result.nodes)) {
+    if (node.type === "ifElse") return node;
+  }
+  throw new Error("no ifElse found");
 }
+
+const firstIfCondition = (cond: string) => firstIf(`if (${cond}) { }`).condition;
 
 const NO_FACTS = { then: [], else: [] };
 
@@ -54,6 +51,40 @@ describe("analyzeCondition", () => {
     ["isSuccess of a member access", "isSuccess(o.r)"],
   ])("produces no candidates for %s", (_label, src) => {
     expect(analyzeCondition(firstIfCondition(src))).toEqual(NO_FACTS);
+  });
+
+  it("negation swaps then/else", () => {
+    expect(analyzeCondition(firstIfCondition("!isSuccess(r)"))).toEqual({
+      then: [{ variableName: "r", branch: "failure" }],
+      else: [{ variableName: "r", branch: "success" }],
+    });
+  });
+
+  it("conjunction unions then-facts, drops else-facts", () => {
+    expect(analyzeCondition(firstIfCondition("isSuccess(a) && isSuccess(b)"))).toEqual({
+      then: [
+        { variableName: "a", branch: "success" },
+        { variableName: "b", branch: "success" },
+      ],
+      else: [],
+    });
+  });
+
+  it("disjunction unions else-facts, drops then-facts", () => {
+    expect(analyzeCondition(firstIfCondition("isFailure(a) || isFailure(b)"))).toEqual({
+      then: [],
+      else: [
+        { variableName: "a", branch: "success" },
+        { variableName: "b", branch: "success" },
+      ],
+    });
+  });
+
+  it("double negation is identity", () => {
+    expect(analyzeCondition(firstIfCondition("!!isSuccess(r)"))).toEqual({
+      then: [{ variableName: "r", branch: "success" }],
+      else: [{ variableName: "r", branch: "failure" }],
+    });
   });
 });
 
@@ -334,5 +365,224 @@ node main() {
   }
 }`);
     expect(errs.some((e) => /not assignable/.test(e))).toBe(true);
+  });
+});
+
+describe("Result narrowing — combinators", () => {
+  it("narrows both branches of an isSuccess else via negation", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (!isSuccess(r)) {
+    let e: number = r.error
+  } else {
+    let v: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'string' is not assignable to type 'number' (assignment to 'e').");
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'v').");
+  });
+
+  it("narrows every conjunct in an && guard", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let a = tryParse("ok")
+  let b = tryParse("ok")
+  if (isSuccess(a) && isSuccess(b)) {
+    let x: string = a.value
+    let y: string = b.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'x').");
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'y').");
+  });
+});
+
+describe("alwaysExits", () => {
+  it("true when the body has a top-level return", () => {
+    expect(alwaysExits(firstIf(`  if (isFailure(r)) { return 0 }`).thenBody)).toBe(true);
+  });
+  it("false when the body has no return", () => {
+    expect(alwaysExits(firstIf(`  if (isFailure(r)) { let x = 1 }`).thenBody)).toBe(false);
+  });
+  it("true when both arms of a nested if return", () => {
+    const node = firstIf(`  if (isFailure(r)) { if (x) { return 1 } else { return 2 } }`);
+    expect(alwaysExits(node.thenBody)).toBe(true);
+  });
+  it("false when only one arm of a nested if returns", () => {
+    const node = firstIf(`  if (isFailure(r)) { if (x) { return 1 } }`);
+    expect(alwaysExits(node.thenBody)).toBe(false);
+  });
+});
+
+describe("postGuardFacts", () => {
+  it("then-exits, no else → else-facts apply after", () => {
+    const node = firstIf(`  if (isFailure(r)) { return 0 }`);
+    expect(postGuardFacts(node, analyzeCondition(node.condition))).toEqual([
+      { variableName: "r", branch: "success" },
+    ]);
+  });
+  it("neither branch exits → no facts after", () => {
+    const node = firstIf(`  if (isFailure(r)) { let x = 1 }`);
+    expect(postGuardFacts(node, analyzeCondition(node.condition))).toEqual([]);
+  });
+});
+
+describe("Result narrowing — early-return guards", () => {
+  it("narrows after `if (isFailure(r)) { return }`", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (isFailure(r)) { return 0 }
+  let n: string = r.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+
+  it("narrows after a negated early-return guard", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (!isSuccess(r)) { return 0 }
+  let n: string = r.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+
+  it("narrows after an else-only exit", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (isSuccess(r)) { } else { return 0 }
+  let n: string = r.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+
+  it("does NOT narrow after a non-exiting guard but DOES after an exiting one", () => {
+    // Self-witnessing: `exiting.value` proves post-guard narrowing IS firing
+    // in this run; `merged.value` proves it correctly skips when the guard
+    // doesn't always exit. If post-guard wiring breaks entirely, the `exiting`
+    // assertion fails — no silent-pass trap.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let exiting = tryParse("ok")
+  if (isFailure(exiting)) { return 0 }
+  let e: string = exiting.value
+
+  let merged = tryParse("ok")
+  if (isFailure(merged)) { let x = 1 }
+  let m: string = merged.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'e').");
+    expect(errs).not.toContain("(assignment to 'm')");
+  });
+
+  it("respects the reassignment gate in the post-guard region", () => {
+    // Self-witnessing pair: `safe` proves post-guard narrowing fires;
+    // `unsafe` proves the reassignment gate fires when the post-guard tail
+    // reassigns the variable. Breaking narrowing entirely fails the `safe`
+    // assertion.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let safeR = tryParse("ok")
+  if (isFailure(safeR)) { return 0 }
+  let safe: string = safeR.value
+
+  let unsafeR = tryParse("ok")
+  if (isFailure(unsafeR)) { return 0 }
+  unsafeR = tryParse("again")
+  let unsafe: string = unsafeR.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'safe').");
+    expect(errs).not.toContain("(assignment to 'unsafe')");
+  });
+
+  it("narrows after a chain of early-return guards", () => {
+    // Locks that the recursive tail-walk correctly produces nested narrowings
+    // — two sequential early-return guards must each narrow a different
+    // variable for the rest of the body.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let a = tryParse("ok")
+  let b = tryParse("ok")
+  if (isFailure(a)) { return 0 }
+  if (isFailure(b)) { return 0 }
+  let x: string = a.value
+  let y: string = b.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'x').");
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'y').");
+  });
+
+  it("emits no post-guard facts when both branches exit", () => {
+    // postGuardFacts returns [] when both arms exit (after-code is dead).
+    // The dead `m.value` access must NOT narrow (no facts to apply) — but
+    // we still need a self-witness that post-guard narrowing exists, so
+    // pair with `e` from an exiting-then-only guard in the same body.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (isFailure(r)) { return 0 }
+  let e: string = r.value
+
+  let m = tryParse("ok")
+  if (isSuccess(m)) { return 1 } else { return 2 }
+  let dead: string = m.value
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'e').");
+    expect(errs).not.toContain("(assignment to 'dead')");
+  });
+
+  it("post-guard narrowing applies inside an outer if's body", () => {
+    // The index-loop change must work at every nesting depth, not just
+    // top-level. An inner early-return guard inside an outer if's then-body
+    // must still narrow the tail of THAT body.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (true) {
+    if (isFailure(r)) { return 0 }
+    let n: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+});
+
+describe("Result narrowing — || end-to-end", () => {
+  it("narrows in the else of an || guard via the union of else-facts", () => {
+    // If `isFailure(r) || other` is false in the else, then specifically
+    // `isFailure(r)` is false → `r` is Success in the else-branch. The
+    // disjunction-rule `else = else(l) ∪ else(r)` produces that fact.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  let other = tryParse("ok")
+  if (isFailure(r) || isFailure(other)) {
+  } else {
+    let n: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+
+  it("does NOT narrow in the then-branch of an || guard (soundness)", () => {
+    // `then: []` for disjunctions — either disjunct could be the true one,
+    // so we can't pin `r`. Pair with an end-to-end `&&` then-branch assertion
+    // in the same body to witness that narrowing IS otherwise functional.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  let other = tryParse("ok")
+  if (isSuccess(r) || isSuccess(other)) {
+    let n: string = r.value
+  }
+  if (isSuccess(r) && isSuccess(other)) {
+    let w: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'w').");
+    expect(errs).not.toContain("(assignment to 'n')");
   });
 });

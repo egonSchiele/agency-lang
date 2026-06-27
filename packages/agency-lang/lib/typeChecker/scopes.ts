@@ -20,7 +20,7 @@ import { Scope } from "./scope.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
-import { analyzeCondition, walkWithNarrowing } from "./narrowing.js";
+import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -384,7 +384,8 @@ export function walkScopeBody(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
-  for (const node of nodes) {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
     checkConstMutations(node, scope, ctx);
     switch (node.type) {
       case "assignment":
@@ -432,6 +433,20 @@ export function walkScopeBody(
         walkWithNarrowing(scope, node.thenBody, facts.then, aliases, ctx, walkScopeBody);
         if (node.elseBody) {
           walkWithNarrowing(scope, node.elseBody, facts.else, aliases, ctx, walkScopeBody);
+        }
+        // Post-guard narrowing: if exactly one branch always exits (returns),
+        // the statements AFTER this if run only on the surviving branch's
+        // condition, so walk the remainder of THIS body in a child scope that
+        // carries those facts. Delegating the tail here (and returning) keeps
+        // the refinement scoped to exactly the post-guard region.
+        // The early `return` is load-bearing: without it the outer for-loop
+        // would re-walk `rest` in the wrong (un-narrowed) scope, producing
+        // duplicate diagnostics and ignoring the post-guard facts entirely.
+        const afterFacts = postGuardFacts(node, facts);
+        const rest = nodes.slice(i + 1);
+        if (afterFacts.length > 0 && rest.length > 0) {
+          walkWithNarrowing(scope, rest, afterFacts, aliases, ctx, walkScopeBody);
+          return;
         }
         break;
       }

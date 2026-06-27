@@ -242,6 +242,47 @@ downstream code see e.g. `Schema<MyType>` and validate `.parse()` /
 `schema` is listed in `RESERVED_FUNCTION_NAMES` so users can't define
 their own `def schema()` (which would create parse ambiguity).
 
+## Type narrowing
+
+Flow-sensitive narrowing (`lib/typeChecker/narrowing.ts`) refines a
+`Result`-typed variable inside a guard so its branch-specific fields type
+correctly: inside `if (isSuccess(r))`, `r.value` synthesizes to the success
+type instead of `any`; inside `if (isFailure(r))` (or the `else` of an
+`isSuccess` guard), `r.error` synthesizes to the failure type. Because pattern
+syntax is lowered before the checker runs, `if (r is success(v))` arrives as
+`if (isSuccess(r)) { const v = r.value; … }`, so the binding `v` picks up the
+narrowed type with no pattern-specific code.
+
+`analyzeCondition(condition)` reports the narrowing candidates a guard implies
+for its then- and else-branches. It recognizes a single `isSuccess(x)` /
+`isFailure(x)` over a bare variable (both are `RESERVED_FUNCTION_NAMES`, so the
+match is unambiguous), and composes over boolean combinators: `!c` swaps
+then/else, `a && b` unions then-facts, `a || b` unions else-facts.
+
+`walkScopeBody` applies the facts by walking each branch in a `scope.child()`
+whose refinements are written with `declareLocal` — so they never leak past the
+branch, while real declarations inside the branch still flow to the function
+scope via `declare()`. The shared `walkWithNarrowing` helper encapsulates the
+"child scope + apply facts + walk" recipe.
+
+**Post-guard (early-return) narrowing:** when exactly one branch of an `if`
+provably always exits, the statements *after* the `if` run only on the surviving
+branch's condition, so they are walked in a child scope carrying those facts —
+e.g. after `if (isFailure(r)) { return … }`, `r` is Success for the rest of the
+block. `alwaysExits` decides exhaustiveness and is deliberately conservative: it
+counts only `return` (a `raise`/interrupt may resume, and `propagate` semantics
+are non-trivial, so treating them as exits could be unsound).
+
+**Soundness:** every narrowing is a false-negative-only approximation. A
+whole-body reassignment scan skips narrowing any variable the branch (or the
+post-guard tail) reassigns, since its type could change. The `narrowedBranch`
+marker on `ResultType` is set only by this layer and is stripped by `widenType`,
+so it never leaks through `declare()` into a function's inferred return type.
+
+Un-narrowed `Result` field access still synthesizes to `any` (the legacy
+escape hatch in `synthValueAccess`); tightening that into a hard error is a
+later increment.
+
 ## Diagnostics
 
 Diagnostics are checks that emit warnings or errors but don't affect type

@@ -204,9 +204,31 @@ function writeJson(file: string, value: unknown): void {
   fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
 }
 
-export function readModelAliases(file: string = ""): Record<string, string> {
+/** A model alias value: either the bare URI (hand-edit shorthand) or an
+ *  object carrying the URI plus optional display metadata. `source: "remote"`
+ *  marks an entry written by `agency local refresh` (see `_refreshCatalog`);
+ *  hand-added aliases have no `source`. */
+export type AliasObject = {
+  uri: string;
+  source?: "remote";
+  params?: string;
+  sizeBytes?: number;
+  category?: ModelCategory;
+  contextWindow?: number;
+  license?: string;
+  description?: string;
+};
+
+export type AliasValue = string | AliasObject;
+
+/** The URI an alias points at, regardless of string/object form. */
+export function aliasUri(value: AliasValue): string {
+  return typeof value === "string" ? value : value.uri;
+}
+
+export function readModelAliases(file: string = ""): Record<string, AliasValue> {
   const cfg = readJson(resolveAliasFile(file));
-  return (cfg.client?.modelAliases ?? {}) as Record<string, string>;
+  return (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
 }
 
 /** Entry returned by `_listModelNames`. */
@@ -227,7 +249,8 @@ export function _resolveModelName(value: string, file: string = ""): string {
     return value;
   }
   const aliases = readModelAliases(file);
-  const aliasTarget = aliases[value];
+  const aliasVal = aliases[value];
+  const aliasTarget = aliasVal === undefined ? undefined : aliasUri(aliasVal);
   const curated = CURATED_LOCAL_MODELS[value];
   const mapped = aliasTarget ?? curated?.uri;
   if (!mapped) {
@@ -240,24 +263,43 @@ export function _resolveModelName(value: string, file: string = ""): string {
   return mapped;
 }
 
+type EntryMeta = Pick<
+  ModelNameEntry,
+  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license"
+>;
+
+/** Project the optional display-metadata fields off any source shape
+ *  (`ModelInfo` or `AliasObject`). Returns only defined fields so the
+ *  spread below doesn't introduce stray `undefined` keys. */
+function metaFrom(src: Partial<EntryMeta>): EntryMeta {
+  const out: EntryMeta = {};
+  if (src.params !== undefined) out.params = src.params;
+  if (src.sizeBytes !== undefined) out.sizeBytes = src.sizeBytes;
+  if (src.category !== undefined) out.category = src.category;
+  if (src.description !== undefined) out.description = src.description;
+  if (src.contextWindow !== undefined) out.contextWindow = src.contextWindow;
+  if (src.license !== undefined) out.license = src.license;
+  return out;
+}
+
 export function _listModelNames(file: string = ""): ModelNameEntry[] {
-  const curated: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
-    ([name, info]) => ({
+  const curatedEntries: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
+    ([name, info]) => ({ name, target: info.uri, source: "curated", ...metaFrom(info) }),
+  );
+  const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
+    ([name, value]) => ({
       name,
-      target: info.uri,
-      source: "curated",
-      params: info.params,
-      sizeBytes: info.sizeBytes,
-      category: info.category,
-      description: info.description,
-      contextWindow: info.contextWindow,
-      license: info.license,
+      target: aliasUri(value),
+      source: "alias",
+      ...(typeof value === "object" ? metaFrom(value) : {}),
     }),
   );
-  const aliases: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
-    ([name, target]) => ({ name, target, source: "alias" }),
+  // Alias wins on name collision: the alias entry overwrites the curated one
+  // in the object literal because it comes later. `Object.values` then yields
+  // exactly one entry per name.
+  return Object.values(
+    Object.fromEntries([...curatedEntries, ...aliasEntries].map((e) => [e.name, e])),
   );
-  return [...curated, ...aliases];
 }
 
 export function _aliasModel(name: string, uri: string, file: string = ""): string {

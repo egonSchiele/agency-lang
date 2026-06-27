@@ -243,3 +243,40 @@ describe("formatModelCatalog", () => {
     expect(/\n\s*\n\s*$/.test(out)).toBe(false);
   });
 });
+
+describe("object-valued aliases", () => {
+  it("resolves an object alias to its uri", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { foo: { uri: "hf:org/repo:Q4_K_M" } } } }),
+    );
+    expect(_resolveModelName("foo", aliasFile)).toBe("hf:org/repo:Q4_K_M");
+  });
+
+  it("resolves a string alias to its uri (back-compat shape)", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { bar: "hf:org/bar:Q4_K_M" } } }),
+    );
+    expect(_resolveModelName("bar", aliasFile)).toBe("hf:org/bar:Q4_K_M");
+  });
+
+  it("lists an object alias with its metadata and dedupes by name (alias wins)", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            "smollm2-135m": { uri: "hf:custom/smol:Q4_K_M", params: "999M", source: "remote" },
+          },
+        },
+      }),
+    );
+    const entries = _listModelNames(aliasFile);
+    const matches = entries.filter((e) => e.name === "smollm2-135m");
+    expect(matches.length).toBe(1); // deduped: alias shadows the curated built-in
+    expect(matches[0].target).toBe("hf:custom/smol:Q4_K_M");
+    expect(matches[0].params).toBe("999M");
+    expect(matches[0].source).toBe("alias");
+  });
+});

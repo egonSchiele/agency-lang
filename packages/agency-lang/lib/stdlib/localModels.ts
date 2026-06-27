@@ -40,8 +40,8 @@ export type ModelInfo = {
 export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── Tiny (sub-1GB) ──────────────────────────────────────────────────────
   "smollm2-135m": {
-    uri: "hf:HuggingFaceTB/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
-    params: "135M", sizeBytes: 88_000_000, category: "tiny",
+    uri: "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+    params: "135M", sizeBytes: 105_000_000, category: "tiny",
     contextWindow: 8192, license: "apache-2.0",
     description: "Smallest practical chat model; used by our integration tests, runs anywhere.",
   },
@@ -88,7 +88,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
 
   // ── Large (8–25GB) ──────────────────────────────────────────────────────
   "phi-4-reasoning": {
-    uri: "hf:bartowski/Phi-4-reasoning-GGUF:Q4_K_M",
+    uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
     params: "14B", sizeBytes: 9_050_000_000, category: "reasoning",
     contextWindow: 32768, license: "mit",
     description: "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic.",

@@ -7,20 +7,9 @@ import {
   _unaliasModel,
   _removeModel,
   hasLocalModelSupport,
+  formatGB,
+  formatModelCatalog,
 } from "../stdlib/localModels.js";
-
-const BYTES_PER_GB = 1e9;
-
-function formatGB(bytes: number): string {
-  return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`;
-}
-
-/** Context window in compact units: 8192 → "8K", 131072 → "128K", 1e7 → "10M". */
-function formatCtx(tokens: number): string {
-  if (tokens >= 1_000_000) return `${Math.round(tokens / 1_000_000)}M`;
-  if (tokens >= 1024) return `${Math.round(tokens / 1024)}K`;
-  return `${tokens}`;
-}
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
  *  override the same way `requireSupport()` in `localModels.ts` does — a
@@ -94,22 +83,10 @@ export function runResolve(value: string): void {
 }
 
 export function runAliasList(): void {
-  // Curated entries print a fact line (params, category, size, context window,
-  // license) with the description on its own line — descriptions are too long
-  // for a single aligned table row. User aliases print name → target.
-  for (const m of _listModelNames()) {
-    if (m.source === "curated") {
-      const size = m.sizeBytes ? formatGB(m.sizeBytes) : "?";
-      const ctx = m.contextWindow ? `${formatCtx(m.contextWindow)} ctx` : "";
-      const facts = [m.params, m.category, size, ctx, m.license]
-        .filter(Boolean)
-        .join(" · ");
-      console.log(`${m.name}  (${facts})`);
-      if (m.description) console.log(`    ${m.description}`);
-    } else {
-      console.log(`${m.name} → ${m.target}  (alias)`);
-    }
-  }
+  // Aligned-table catalog (curated models + your aliases). The formatting
+  // lives in localModels.ts so the agent's bare `--local-model` output and
+  // this command render identically.
+  console.log(formatModelCatalog());
 }
 
 export function runAliasAdd(name: string, uri: string): void {

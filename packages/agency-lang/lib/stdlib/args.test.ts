@@ -1200,3 +1200,94 @@ describe("_parseArgsWith (end-to-end)", () => {
     ).toThrow(/v1 does not support negatable booleans/);
   });
 });
+
+describe("optionalValue flags", () => {
+  // A string flag whose value may be omitted. Bare → "", given → the value,
+  // absent → not present. Mirrors `agency agent --local-model`.
+  const schema: ArgsSchema = {
+    programName: "demo",
+    flags: {
+      model: { type: "string", optionalValue: true },
+      verbose: { type: "boolean", short: "v" },
+    },
+  };
+
+  it("yields \"\" when the flag is the last token (bare)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+  });
+
+  it("yields \"\" when the next token is another flag (bare)", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model", "--verbose"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+    expect(result!.flags.verbose).toBe(true);
+  });
+
+  it("yields \"\" for the explicit-empty --model= form", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model="], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("");
+  });
+
+  it("yields the value when one is given", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model", "smollm2-135m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("smollm2-135m");
+  });
+
+  it("yields the value with the inline --model=value form", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model=smollm2-135m"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("smollm2-135m");
+  });
+
+  it("is absent (not present) when the flag is not passed", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--verbose"], schema),
+    );
+    expect(ran).toBe(true);
+    expect("model" in result!.flags).toBe(false);
+  });
+
+  it("does not transform a look-alike positional after --", () => {
+    const { ran, result } = withMockedProcess(() =>
+      _parseArgsWith(["--model", "x", "--", "--model"], schema),
+    );
+    expect(ran).toBe(true);
+    expect(result!.flags.model).toBe("x");
+    expect(result!.positionals).toEqual(["--model"]);
+  });
+
+  it("renders the value placeholder as optional in --help", () => {
+    const help = formatHelp(normalizeSchema(schema));
+    expect(help).toContain("--model [<string>]");
+  });
+
+  it("rejects optionalValue on a non-string flag", () => {
+    expect(() =>
+      validateSchema({
+        flags: { n: { type: "number", optionalValue: true } },
+      } as ArgsSchema),
+    ).toThrow(/optionalValue/);
+  });
+
+  it("rejects optionalValue combined with choices", () => {
+    expect(() =>
+      validateSchema({
+        flags: { m: { type: "string", optionalValue: true, choices: ["a", "b"] } },
+      } as ArgsSchema),
+    ).toThrow(/optionalValue/);
+  });
+});

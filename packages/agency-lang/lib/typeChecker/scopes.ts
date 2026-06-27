@@ -20,6 +20,7 @@ import { Scope } from "./scope.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
+import { analyzeCondition, walkWithNarrowing } from "./narrowing.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -422,11 +423,23 @@ export function walkScopeBody(
         walkScopeBody(node.body, scope, ctx);
         break;
       }
-      case "ifElse":
-        walkScopeBody(node.thenBody, scope, ctx);
-        if (node.elseBody) walkScopeBody(node.elseBody, scope, ctx);
+      case "ifElse": {
+        // Refinements live in throwaway child scopes (walkWithNarrowing →
+        // declareLocal), so they never leak; real declarations inside the
+        // body still call declare(), which targets the function scope.
+        const facts = analyzeCondition(node.condition);
+        const aliases = ctx.getTypeAliases();
+        walkWithNarrowing(scope, node.thenBody, facts.then, aliases, ctx, walkScopeBody);
+        if (node.elseBody) {
+          walkWithNarrowing(scope, node.elseBody, facts.else, aliases, ctx, walkScopeBody);
+        }
         break;
-      case "whileLoop":
+      }
+      case "whileLoop": {
+        const facts = analyzeCondition(node.condition);
+        walkWithNarrowing(scope, node.body, facts.then, ctx.getTypeAliases(), ctx, walkScopeBody);
+        break;
+      }
       case "messageThread":
       case "parallelBlock":
       case "seqBlock":

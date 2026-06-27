@@ -1,4 +1,5 @@
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
+import type { ResultType } from "../types/typeHints.js";
 import type {
   NamedArgument,
   SplatExpression,
@@ -36,6 +37,44 @@ const RESULT_FIELDS = new Set<string>([
   "retryable",
   "success",
 ]);
+
+/**
+ * Resolve a field access on a `ResultType` against the narrowing layer.
+ * Returns:
+ *  - a `VariableType`  → caller should set `currentType = ...; break;`
+ *  - the string `"any"` → caller should `return "any"` (Result field on an
+ *    un-narrowed Result; un-typed escape hatch until Increment 3 tightens
+ *    `.value` on Failure into a hard error)
+ *  - `null` → no resolution; fall through to the next case in `synthValueAccess`
+ *
+ * Pulled out of `synthValueAccess` to keep that function under the
+ * structural linter's max-lines-per-function budget. Single caller; the
+ * extraction is purely organizational.
+ */
+function resolveResultFieldType(
+  resolved: ResultType,
+  fieldName: string,
+): VariableType | "any" | null {
+  // Narrowed to the Success branch (inside an isSuccess guard).
+  if (resolved.narrowedBranch === "success") {
+    if (fieldName === "value") return resolved.successType;
+    if (fieldName === "success") return BOOLEAN_T;
+  }
+  // Narrowed to the Failure branch (isFailure guard, or the else of an
+  // isSuccess guard).
+  if (resolved.narrowedBranch === "failure") {
+    if (fieldName === "error") return resolved.failureType;
+    if (fieldName === "success") return BOOLEAN_T;
+    // `.value` on a known-Failure result is illegal at runtime; Increment 3
+    // turns this into an error. The Failure-only metadata fields
+    // (checkpoint/retryable/functionName/args) just fall through to the
+    // `RESULT_FIELDS → any` line below — we deliberately don't enumerate
+    // them: the existing fallthrough is already the correct, single-source-
+    // of-truth answer.
+  }
+  if (RESULT_FIELDS.has(fieldName)) return "any";
+  return null;
+}
 
 /**
  * `synthType` returns `VariableType | "any"` where `"any"` is the literal
@@ -598,8 +637,13 @@ export function synthValueAccess(
         // does not exist" errors. Once narrowing lands, this can be tightened
         // so .value is only valid on the Success branch and .error/etc. are
         // only valid on Failure.
-        if (resolved.type === "resultType" && RESULT_FIELDS.has(element.name)) {
-          return "any";
+        if (resolved.type === "resultType") {
+          const resolution = resolveResultFieldType(resolved, element.name);
+          if (resolution === "any") return "any";
+          if (resolution !== null) {
+            currentType = resolution;
+            break;
+          }
         }
         if (resolved.type === "unionType") {
           const propTypes: VariableType[] = [];

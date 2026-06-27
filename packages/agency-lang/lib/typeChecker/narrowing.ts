@@ -1,7 +1,8 @@
-import type { AgencyNode, Expression } from "../types.js";
+import type { AgencyNode, Expression, TypeAliasEntry } from "../types.js";
 import type { ResultType } from "../types/typeHints.js";
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
+import { safeResolveType } from "./assignability.js";
 
 export type NarrowCandidate = { variableName: string; branch: "success" | "failure" };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
@@ -65,13 +66,20 @@ export function applyNarrowing(
   childScope: Scope,
   candidates: NarrowCandidate[],
   branchBody: AgencyNode[],
+  typeAliases: Record<string, TypeAliasEntry>,
 ): void {
   for (const cand of candidates) {
     const current = childScope.lookup(cand.variableName);
     if (!current || current === "any") continue;
-    if (current.type !== "resultType") continue;
+    // Resolve through type-alias variables (`let r: R = …` where
+    // `type R = Result<…>` is stored as `typeAliasVariable`, not `resultType`).
+    // Mirrors `synthValueAccess`, which also resolves before its Result check —
+    // without this, alias-typed Results silently never narrow, leaving them
+    // unfixable under Increment 3's hard-error flip.
+    const resolved = safeResolveType(current, typeAliases);
+    if (resolved.type !== "resultType") continue;
     if (isReassignedIn(branchBody, cand.variableName)) continue;
-    childScope.declareLocal(cand.variableName, narrowToBranch(current, cand.branch));
+    childScope.declareLocal(cand.variableName, narrowToBranch(resolved, cand.branch));
   }
 }
 
@@ -100,10 +108,11 @@ export function walkWithNarrowing<C>(
   parent: Scope,
   body: AgencyNode[],
   candidates: NarrowCandidate[],
+  typeAliases: Record<string, TypeAliasEntry>,
   ctx: C,
   walk: (body: AgencyNode[], scope: Scope, ctx: C) => void,
 ): void {
   const child = parent.child();
-  applyNarrowing(child, candidates, body);
+  applyNarrowing(child, candidates, body, typeAliases);
   walk(body, child, ctx);
 }

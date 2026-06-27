@@ -428,15 +428,16 @@ export function walkScopeBody(
         // declareLocal), so they never leak; real declarations inside the
         // body still call declare(), which targets the function scope.
         const facts = analyzeCondition(node.condition);
-        walkWithNarrowing(scope, node.thenBody, facts.then, ctx, walkScopeBody);
+        const aliases = ctx.getTypeAliases();
+        walkWithNarrowing(scope, node.thenBody, facts.then, aliases, ctx, walkScopeBody);
         if (node.elseBody) {
-          walkWithNarrowing(scope, node.elseBody, facts.else, ctx, walkScopeBody);
+          walkWithNarrowing(scope, node.elseBody, facts.else, aliases, ctx, walkScopeBody);
         }
         break;
       }
       case "whileLoop": {
         const facts = analyzeCondition(node.condition);
-        walkWithNarrowing(scope, node.body, facts.then, ctx, walkScopeBody);
+        walkWithNarrowing(scope, node.body, facts.then, ctx.getTypeAliases(), ctx, walkScopeBody);
         break;
       }
       case "messageThread":

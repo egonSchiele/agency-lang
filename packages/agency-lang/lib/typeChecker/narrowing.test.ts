@@ -202,6 +202,25 @@ node main() {
     expect(errs).not.toContain("(assignment to 'outside')");
   });
 
+  it("narrows an alias-typed Result (resolves the alias before the resultType check)", () => {
+    // Variables annotated with a type alias (`let r: R = ...` where
+    // `type R = Result<...>`) are stored in the scope as a
+    // `typeAliasVariable`, not a `resultType`. `applyNarrowing` must
+    // resolve through the alias so the narrowing fires — otherwise it
+    // silently doesn't, and Increment 3's hard-error flip would leave
+    // alias-typed Results un-narrowable (user adds the guard, still errors).
+    const errs = check(`${TRY_PARSE}
+type R = Result<number, string>
+
+node main() {
+  let r: R = tryParse("ok")
+  if (isSuccess(r)) {
+    let n: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+
   it("narrows independently in nested isSuccess guards", () => {
     // Locks that scope chaining narrows two different variables across two
     // nested guards. Catches a regression where the inner walkWithNarrowing

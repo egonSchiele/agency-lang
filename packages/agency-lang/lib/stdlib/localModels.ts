@@ -501,6 +501,146 @@ export async function fetchCatalog(url: string): Promise<string> {
   }
 }
 
+/** Merge a complete `modelAliases` map into a config object (spread, like
+ *  `withAlias` but replaces the whole map). */
+function withModelAliases(
+  cfg: Record<string, any>,
+  aliases: Record<string, AliasValue>,
+): Record<string, any> {
+  return { ...cfg, client: { ...(cfg.client ?? {}), modelAliases: aliases } };
+}
+
+export type SkippedAlias = { name: string; keptUri: string; remoteUri: string };
+
+export type RefreshResult = {
+  url: string;
+  file: string;
+  added: string[];
+  updated: string[];
+  unchanged: string[];
+  removed: string[];
+  skipped: SkippedAlias[];
+  modelCount: number;
+};
+
+/** One verdict per catalog entry. The merge ("what to write, what to report")
+ *  is a `map` from catalog entries to `Classification`s; everything else is a
+ *  filter/project on the resulting array. This is the entire policy of
+ *  refresh — keep it pure and testable in isolation. */
+type Classification =
+  | { kind: "skipped"; name: string; entry: SkippedAlias }
+  | { kind: "added"; name: string; value: AliasObject }
+  | { kind: "updated"; name: string; value: AliasObject }
+  | { kind: "unchanged"; name: string; value: AliasObject };
+
+/** Stable JSON for value-equality. The merge writes objects with consistent
+ *  key order via the spread below (`{ ...model, source: "remote" }`), so a
+ *  deep equality check via `JSON.stringify` is sufficient for managed-entry
+ *  diffing without pulling in `node:util.isDeepStrictEqual`. */
+function sameManagedValue(prev: AliasObject, next: AliasObject): boolean {
+  return JSON.stringify(prev) === JSON.stringify(next);
+}
+
+/** Classify one catalog entry against the previous state. Pure: no I/O, no
+ *  mutation, deterministic. Tested via `_refreshCatalog`'s end-to-end tests. */
+function classifyEntry(
+  name: string,
+  model: CatalogModel,
+  userAliases: Record<string, AliasValue>,
+  oldManaged: Record<string, AliasObject>,
+): Classification {
+  if (name in userAliases) {
+    return {
+      kind: "skipped",
+      name,
+      entry: { name, keptUri: aliasUri(userAliases[name]), remoteUri: model.uri },
+    };
+  }
+  const value: AliasObject = { ...model, source: "remote" };
+  const prev = oldManaged[name];
+  if (prev === undefined) {
+    return { kind: "added", name, value };
+  }
+  if (sameManagedValue(prev, value)) {
+    return { kind: "unchanged", name, value };
+  }
+  return { kind: "updated", name, value };
+}
+
+/** Predicate factory for declarative filtering by `Classification.kind`. */
+function isKind<K extends Classification["kind"]>(k: K) {
+  return (c: Classification): c is Extract<Classification, { kind: K }> => c.kind === k;
+}
+
+/** Fetch + validate the catalog, then rewrite the `source:"remote"` aliases in
+ *  agency.json from it. User-owned aliases are preserved and win on name
+ *  collisions (the remote entry is skipped). Throws (leaving the file
+ *  untouched) on fetch/parse/validation failure. */
+export async function _refreshCatalog(
+  opts: { url?: string; fetcher?: (url: string) => Promise<string>; file?: string } = {},
+): Promise<RefreshResult> {
+  const file = resolveAliasFile(opts.file ?? "");
+  const url = resolveCatalogUrl(opts.url ?? "", file);
+  const fetcher = opts.fetcher ?? fetchCatalog;
+
+  // Fetch + validate BEFORE reading/writing agency.json, so a failure leaves
+  // the file untouched.
+  const text = await fetcher(url);
+  const models = parseCatalog(text);
+
+  // Read aliases through the canonical helper (single source of truth for
+  // "how aliases come out of agency.json"). `cfg` is needed separately to
+  // round-trip non-alias fields back into the file on write.
+  const cfg = readJson(file);
+  const existing = readModelAliases(file);
+
+  // Partition existing aliases by who manages them.
+  const userAliases: Record<string, AliasValue> = Object.fromEntries(
+    Object.entries(existing).filter(([, v]) => !(typeof v === "object" && v.source === "remote")),
+  );
+  const oldManaged: Record<string, AliasObject> = Object.fromEntries(
+    Object.entries(existing).filter(
+      (e): e is [string, AliasObject] => typeof e[1] === "object" && e[1].source === "remote",
+    ),
+  );
+
+  // The entire merge policy: classify each catalog entry once. Everything
+  // downstream is a filter/project on this array.
+  const classifications: Classification[] = Object.entries(models).map(([name, model]) =>
+    classifyEntry(name, model, userAliases, oldManaged),
+  );
+
+  const namesIn = <K extends Classification["kind"]>(k: K): string[] =>
+    classifications.filter(isKind(k)).map((c) => c.name);
+
+  const added = namesIn("added");
+  const updated = namesIn("updated");
+  const unchanged = namesIn("unchanged");
+  const skipped = classifications.filter(isKind("skipped")).map((c) => c.entry);
+
+  // What ends up in `client.modelAliases`: user aliases (untouched) plus
+  // every non-skipped classification's value.
+  const writtenManaged: Record<string, AliasValue> = Object.fromEntries(
+    classifications.filter((c) => c.kind !== "skipped").map((c) => [c.name, (c as { value: AliasObject }).value]),
+  );
+  const next: Record<string, AliasValue> = { ...userAliases, ...writtenManaged };
+
+  const surviving = [...added, ...updated, ...unchanged];
+  const removed = Object.keys(oldManaged).filter((n) => !surviving.includes(n));
+
+  writeJson(file, withModelAliases(cfg, next));
+  return {
+    url,
+    file,
+    added,
+    updated,
+    unchanged,
+    removed,
+    skipped,
+    modelCount: Object.keys(models).length,
+  };
+}
+
 // Cached so we don't shell out repeatedly per process.
 let cachedGlobalRoots: string[] | null = null;
 

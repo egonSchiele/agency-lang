@@ -16,6 +16,7 @@ import {
   formatModelCatalog,
   resolveCatalogUrl,
   parseCatalog,
+  _refreshCatalog,
 } from "./localModels.js";
 
 let dir: string;
@@ -375,5 +376,90 @@ describe("parseCatalog", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe("_refreshCatalog", () => {
+  const blob = (models: Record<string, any>) => JSON.stringify({ version: 1, models });
+
+  it("writes blob models as source:remote aliases and reports them added", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({ "qwen3.5-2b": { uri: "hf:org/q:Q4_K_M", params: "2B" } }),
+    });
+    expect(r.added).toEqual(["qwen3.5-2b"]);
+    expect(r.modelCount).toBe(1); // total catalog entries
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases["qwen3.5-2b"]).toEqual({
+      uri: "hf:org/q:Q4_K_M", params: "2B", source: "remote",
+    });
+  });
+
+  it("skips a name that collides with a user alias; modelCount still counts the entry", async () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { "qwen3.5-2b": "hf:mine/custom:Q4_K_M" } } }),
+    );
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({ "qwen3.5-2b": { uri: "hf:org/remote:Q4_K_M" } }),
+    });
+    expect(r.skipped).toEqual([
+      { name: "qwen3.5-2b", keptUri: "hf:mine/custom:Q4_K_M", remoteUri: "hf:org/remote:Q4_K_M" },
+    ]);
+    expect(r.added).toEqual([]);
+    expect(r.modelCount).toBe(1); // catalog had 1 entry, even though we skipped it
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases["qwen3.5-2b"]).toBe("hf:mine/custom:Q4_K_M");
+  });
+
+  it("classifies re-runs: unchanged when value matches, updated when it differs, removed when absent", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    // First run: seed two managed entries.
+    await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({
+        a: { uri: "hf:org/a:Q4_K_M", params: "1B" },
+        b: { uri: "hf:org/b:Q4_K_M" },
+      }),
+    });
+    // Second run: `a` unchanged, `b` dropped, `c` added with same-uri but no
+    // metadata change vs first run (it's new — `added`), and `a` gets a new
+    // params value (this is the actual `updated` case).
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({
+        a: { uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
+        c: { uri: "hf:org/c:Q4_K_M" },               // new
+      }),
+    });
+    expect(r.added).toEqual(["c"]);
+    expect(r.updated).toEqual(["a"]);
+    expect(r.unchanged).toEqual([]);
+    expect(r.removed).toEqual(["b"]);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.b).toBeUndefined();
+    expect(cfg.client.modelAliases.a.params).toBe("2B");
+  });
+
+  it("reports unchanged when a re-run writes a byte-identical value", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    const fetcher = async () => blob({ a: { uri: "hf:org/a:Q4_K_M", params: "1B" } });
+    await _refreshCatalog({ file: aliasFile, fetcher });
+    const r = await _refreshCatalog({ file: aliasFile, fetcher });
+    expect(r.added).toEqual([]);
+    expect(r.updated).toEqual([]);
+    expect(r.unchanged).toEqual(["a"]);
+    expect(r.removed).toEqual([]);
+  });
+
+  it("leaves agency.json untouched when the blob is invalid", async () => {
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { keep: "hf:k:Q4_K_M" } } }));
+    await expect(
+      _refreshCatalog({ file: aliasFile, fetcher: async () => "{not json" }),
+    ).rejects.toThrow(/valid JSON/);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.keep).toBe("hf:k:Q4_K_M");
   });
 });

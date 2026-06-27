@@ -109,7 +109,17 @@ export def configureModels(
  *  the agent's models cache, and point every LLM call — including the deep
  *  subagents — at it, so a fully-local run needs no hosted-provider key. */
 export def configureLocalModel(value: string) {
-  const modelPath = registerLocalModel(value, "${AGENCY_AGENT_DIR}/models")
+  // `try` captures any failure (smoltalk-llama-cpp not installed, an unknown
+  // model name, a download error) as a Result instead of letting the runtime
+  // convert the throw to a Failure and silently continue into the REPL. A
+  // local-model setup failure is fatal: print it and exit, mirroring how
+  // `configureModels` exits on an unresolvable provider.
+  const result = try registerLocalModel(value, "${AGENCY_AGENT_DIR}/models")
+  if (isFailure(result)) {
+    print(result.error)
+    process.exit(1)
+  }
+  const modelPath = result.value
   setLlmOptions({ model: modelPath, provider: "llama-cpp" })
   slowModel = modelPath
   slowProvider = "llama-cpp"

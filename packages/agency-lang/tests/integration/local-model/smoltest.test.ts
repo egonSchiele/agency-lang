@@ -18,12 +18,15 @@ const TINY = "smollm2-135m";
 // hash here is a tamper canary: HF account compromise or CDN MITM that swaps
 // the file fails this assertion loudly even though we only run post-merge.
 //
-// Until a real hash is captured, this is `null` and the test only asserts
-// the format (64-char hex). When you capture the real hash from the first
-// successful integration run, paste it here and the test starts enforcing
-// exact-match. Format-only mode is loudly logged so the relaxed gate isn't
-// silently shipped indefinitely.
-const EXPECTED_SHA256: string | null = null;
+// Captured from Hugging Face's LFS metadata for
+// unsloth/SmolLM2-135M-Instruct-GGUF :: SmolLM2-135M-Instruct-Q4_K_M.gguf
+// (git-LFS oid == sha256 of the file content; 105,454,144 bytes). Update this
+// in lockstep with any change to the curated URI for `smollm2-135m` or if the
+// upstream repo re-quantizes the file (a legitimate change, not an attack).
+// If the value is ever set back to `null`, the test falls back to format-only
+// (64-char hex) and loudly logs the observed hash so it can be re-captured.
+const EXPECTED_SHA256: string | null =
+  "ed5fa30c487b282ec156c29062f1222e5c20875a944ac98289dbd242e947f747";
 
 let tmpHome: string;
 let origHome: string | undefined;

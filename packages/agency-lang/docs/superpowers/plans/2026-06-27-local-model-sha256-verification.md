@@ -159,7 +159,7 @@ git commit -m "Thread optional sha256 through model metadata types"
 Pure, independently-testable helpers: stream-hash a file, verify against an expected hash (quarantine on mismatch), and look up a pin by model name.
 
 **Files:**
-- Modify: `packages/agency-lang/lib/stdlib/localModels.ts` (add `import { createHash }`; add `fileSha256`, `verifyModelFile`, `pinnedSha256`, `listGgufBasenames`)
+- Modify: `packages/agency-lang/lib/stdlib/localModels.ts` (add `import { createHash }`; add `fileSha256`, `verifyModelFile`, `pinnedSha256`, `snapshotFreshness`)
 - Test: `packages/agency-lang/lib/stdlib/localModels.test.ts`
 
 **Interfaces:**
@@ -168,7 +168,8 @@ Pure, independently-testable helpers: stream-hash a file, verify against an expe
   - `function fileSha256(filePath: string): Promise<string>` (hex)
   - `function verifyModelFile(filePath: string, expected: string, name: string): Promise<void>` (resolves on match; on mismatch renames to `<filePath>.invalidSha` and throws)
   - `function pinnedSha256(value: string, file?: string): string | undefined`
-  - `function listGgufBasenames(dir: string): Set<string>`
+  - `type FreshnessProbe = (resolved: string) => boolean`
+  - `function snapshotFreshness(dir: string): FreshnessProbe`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -201,7 +202,8 @@ describe("model file verification", () => {
 
   it("pinnedSha256: curated, alias-object wins, string-alias + raw → undefined", () => {
     const k = Object.keys(CURATED_LOCAL_MODELS)[0];
-    // Curated entries don't carry a sha256 in the test build, so this is undefined…
+    // Curated lookup mirrors the curated entry's sha256 — undefined before the
+    // Task 4 pins are added, hex after; this assertion holds in both states.
     expect(pinnedSha256(k, aliasFile)).toBe(CURATED_LOCAL_MODELS[k].sha256);
     fs.writeFileSync(
       aliasFile,
@@ -245,20 +247,31 @@ import { createHash } from "node:crypto";
 Add near the `_downloadModel` area of `localModels.ts` (before `_downloadModel`):
 
 ```ts
-/** Stream-hash a file's SHA-256 (hex), never buffering the whole file. */
+/** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The
+ *  `update` is guarded so a synchronous throw in the data handler rejects the
+ *  promise instead of escaping it. */
 export function fileSha256(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash("sha256");
     const stream = fs.createReadStream(filePath);
     stream.on("error", reject);
-    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("data", (chunk) => {
+      try {
+        hash.update(chunk);
+      } catch (err) {
+        stream.destroy();
+        reject(err as Error);
+      }
+    });
     stream.on("end", () => resolve(hash.digest("hex")));
   });
 }
 
 /** Verify `filePath` against the expected hex SHA-256. On mismatch, rename the
  *  file to `<filePath>.invalidSha` (kept for inspection; won't be picked up, so
- *  the next run re-downloads) and throw. */
+ *  the next run re-downloads) and throw. A failed rename is logged (not
+ *  swallowed) and reflected in the thrown message, so a tampered file left in
+ *  place is never invisible. */
 export async function verifyModelFile(
   filePath: string,
   expected: string,
@@ -267,21 +280,26 @@ export async function verifyModelFile(
   const actual = await fileSha256(filePath);
   if (actual === expected) return;
   const quarantine = `${filePath}.invalidSha`;
+  let moved = true;
   try {
     fs.renameSync(filePath, quarantine);
-  } catch {
-    /* best effort: leave the file where it is */
+  } catch (err) {
+    moved = false;
+    console.warn(`Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`, err);
   }
   throw new Error(
     `SHA-256 verification failed for "${name}": expected ${expected}, got ${actual}. ` +
-      `The downloaded file was moved to ${quarantine} for inspection and will be re-downloaded next time.`,
+      (moved
+        ? `The downloaded file was moved to ${quarantine} for inspection and will be re-downloaded next time.`
+        : `The downloaded file at ${filePath} could NOT be moved aside — delete it manually before re-running.`),
   );
 }
 
 /** The pinned SHA-256 for a model name/alias, or undefined when none is known
  *  (raw uri/path, string alias, alias/curated without a hash, or a sharded
  *  model). An alias entry governs the name entirely — a user alias shadowing a
- *  curated name must NOT borrow the curated hash. */
+ *  curated name must NOT borrow the curated hash, but a user MAY opt in by
+ *  setting their own `sha256` on the alias object. */
 export function pinnedSha256(value: string, file: string = ""): string | undefined {
   if (isGgufPath(value) || isModelUri(value)) return undefined;
   const aliases = readModelAliases(file);
@@ -292,11 +310,18 @@ export function pinnedSha256(value: string, file: string = ""): string | undefin
   return CURATED_LOCAL_MODELS[value]?.sha256;
 }
 
-/** The set of `*.gguf` filenames already in `dir` (empty if it doesn't exist).
- *  Used to tell a fresh download from a cache hit. */
-export function listGgufBasenames(dir: string): Set<string> {
-  if (!fs.existsSync(dir)) return new Set();
-  return new Set(fs.readdirSync(dir).filter((f) => f.endsWith(".gguf")));
+/** Was the resolved file freshly downloaded (not already cached)? */
+export type FreshnessProbe = (resolved: string) => boolean;
+
+/** Snapshot the cache dir, returning a probe that reports whether a resolved
+ *  path is newly downloaded. node-llama-cpp stores models FLAT in `dir` with a
+ *  prefixed filename — no per-repo subdirs (verified against its
+ *  `buildHuggingFaceFilePrefix`) — so matching by basename is correct. */
+export function snapshotFreshness(dir: string): FreshnessProbe {
+  const present = fs.existsSync(dir)
+    ? new Set(fs.readdirSync(dir).filter((f) => f.endsWith(".gguf")))
+    : new Set<string>();
+  return (resolved) => !present.has(path.basename(resolved));
 }
 ```
 
@@ -324,8 +349,10 @@ Wire verification into the download path: hash the file only when it was just do
 - Test: `packages/agency-lang/lib/stdlib/localModels.test.ts` (update the existing fake-provider `describe`)
 
 **Interfaces:**
-- Consumes: `listGgufBasenames`, `pinnedSha256`, `verifyModelFile` (Task 2); existing `_resolveModelName`, `resolveCacheDir`, `bundledLlamaModule`, `requireSupport`, `exposeResolvedLlamaCppPath`.
+- Consumes: `snapshotFreshness`, `pinnedSha256`, `verifyModelFile` (Task 2); existing `_resolveModelName`, `resolveCacheDir`, `bundledLlamaModule`, `requireSupport`, `exposeResolvedLlamaCppPath`.
 - Produces: `_downloadModel(value, cacheDir)` now verifies a freshly-downloaded, pinned file before returning.
+
+> No new dynamic imports are introduced. The existing `await import(pathToFileURL(fsPath).href)` that loads the optional provider module keeps its `eslint-disable-next-line no-restricted-syntax` comment and is unchanged.
 
 - [ ] **Step 1: Update the fake provider to write a real file, and rewrite the existing assertions**
 
@@ -461,12 +488,13 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
   if (typeof mod.resolveModel !== "function") {
     throw new Error(`Local-model provider module must export resolveModel().`);
   }
-  // Snapshot the cache dir so we can tell a fresh download from a cache hit and
-  // verify the bytes only once, right after they're downloaded.
-  const before = listGgufBasenames(dir);
+  // Snapshot freshness BEFORE resolving so we verify the bytes only once, right
+  // after a real download (a cache hit is skipped — the file can't change on
+  // disk between runs).
+  const wasFresh = snapshotFreshness(dir);
   const resolved = await mod.resolveModel(target, dir);
   const expected = pinnedSha256(value);
-  if (expected !== undefined && !before.has(path.basename(resolved))) {
+  if (expected !== undefined && wasFresh(resolved)) {
     await verifyModelFile(resolved, expected, value);
   }
   return resolved;
@@ -551,6 +579,11 @@ Expected: FAIL — module not found.
 Create `packages/agency-lang/scripts/genModelHashes.ts`:
 
 ```ts
+// genModelHashes — mint pinned SHA-256 hashes for the curated models from
+// Hugging Face's X-Linked-ETag header (= the file's content sha256). This
+// script is the source of truth; the sha256 values committed in
+// CURATED_LOCAL_MODELS and data/model-catalog.json are a snapshot — re-run it
+// whenever an upstream repo re-uploads a file and the pin changes.
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -667,13 +700,15 @@ For each line printed under "paste these into CURATED_LOCAL_MODELS", add a `sha2
 
 - [ ] **Step 7: Verify the catalog and curated agree**
 
+Run from `packages/agency-lang` (same cwd as Step 5):
+
 ```bash
 export PATH="$PWD/node_modules/.bin:$PATH"
 make build > /tmp/v4-build2.log 2>&1 && echo BUILD_OK
 node -e '
 const fs=require("fs");
-const { CURATED_LOCAL_MODELS } = require("./packages/agency-lang/dist/lib/stdlib/localModels.js");
-const cat = JSON.parse(fs.readFileSync("packages/agency-lang/data/model-catalog.json","utf8"));
+const { CURATED_LOCAL_MODELS } = require("./dist/lib/stdlib/localModels.js");
+const cat = JSON.parse(fs.readFileSync("data/model-catalog.json","utf8"));
 let bad=0;
 for (const [n,info] of Object.entries(CURATED_LOCAL_MODELS)) {
   const c = (cat.models[n]||{}).sha256, k = info.sha256;
@@ -688,7 +723,11 @@ Expected: `curated and catalog sha256 agree`.
 
 ```bash
 git add packages/agency-lang/scripts/genModelHashes.ts packages/agency-lang/lib/stdlib/genModelHashes.test.ts packages/agency-lang/lib/stdlib/localModels.ts packages/agency-lang/data/model-catalog.json
-git commit -m "Add genModelHashes script and pin curated model sha256 hashes"
+git commit -m "Add genModelHashes script and pin curated model sha256 hashes
+
+The committed hashes are a snapshot minted from Hugging Face's X-Linked-ETag;
+genModelHashes.ts is the source of truth — re-run it when an upstream repo
+re-uploads a file and the pin changes."
 ```
 
 ---
@@ -754,7 +793,12 @@ see below). We then verify integrity:
 - On a mismatch the file is renamed to `<file>.gguf.invalidSha` (kept for
   inspection, not loaded) and an error is thrown.
 - Verification is **opportunistic**: models with no pin (user aliases, raw
-  URIs) are simply not verified.
+  URIs) are simply not verified. A user alias may opt in by setting its own
+  `sha256` on the alias object; it never borrows a curated model's hash.
+- We verify only freshly-downloaded files, never re-hashing an already-cached
+  one. So if `agency local refresh` changes a model's pin while you already have
+  the old file cached, the cached file is *not* retroactively re-checked — run
+  `agency local remove <name>` to force a fresh, verified re-download.
 
 ### Sharded models are NOT verified yet
 
@@ -775,7 +819,7 @@ suite; the deterministic unit tests live in `lib/stdlib/localModels.test.ts`,
 
 - [ ] **Step 2: Add the doc to the `CLAUDE.md` index**
 
-In the root `CLAUDE.md`, under "Pipeline and architecture" (or the nearest doc list), add:
+In the root `CLAUDE.md`, under "Pipeline and architecture" (or the nearest doc list), add the line below. (`AGENTS.md` is a symlink to `CLAUDE.md`, so this single edit covers both.)
 
 ```markdown
 - `docs/dev/local-models.md` — Local-model support: provider, name resolution, catalog refresh, and SHA-256 download verification
@@ -803,18 +847,29 @@ Expected: build OK; all pass except the 2 known-environmental `resolveSmoltalkLl
 
 - [ ] Smoke test (real download of the smallest model, verifies against its pin):
 ```bash
-AGENCY_MODELS_DIR=$(mktemp -d) node ./dist/scripts/agency.js local download smollm2-135m 2>&1 | tail -3
+export MODELS=$(mktemp -d)
+AGENCY_MODELS_DIR=$MODELS node ./dist/scripts/agency.js local download smollm2-135m 2>&1 | tail -3
 ```
-Expected: downloads + exits 0 (verification passes). Tamper check: re-run after truncating the file → expect a `SHA-256 verification failed` error and a `.invalidSha` file. (Optional — needs network + ~105 MB.)
+Expected: downloads + exits 0 (verification passes against the pinned hash).
+
+  Tamper check (must force a *fresh* download — verify-once skips an existing
+  file): remove the cached file, corrupt the catalog pin, and re-download into
+  the same dir so the new download is verified against the bad pin:
+```bash
+rm -f "$MODELS"/*.gguf
+# temporarily set CURATED smollm2-135m sha256 to "0"*64 (or edit data/model-catalog.json + refresh)
+AGENCY_MODELS_DIR=$MODELS node ./dist/scripts/agency.js local download smollm2-135m 2>&1 | tail -3
+```
+Expected: a `SHA-256 verification failed` error and a `*.gguf.invalidSha` file left in `$MODELS`. (Optional — needs network + ~105 MB; revert the pin edit afterward.)
 
 ---
 
 ## Self-review notes (already checked)
 
 - **Spec coverage:** schema (Task 1), verification primitives (Task 2), verify-on-fresh-download in `_downloadModel` (Task 3), generation script + real pins in both curated and catalog (Task 4), dev doc + sharded caveat + #348 link (Task 5). All spec sections map to a task.
-- **Type consistency:** `sha256?: string` added uniformly to `ModelInfo`/`AliasObject`/`CatalogModel`/`ModelNameEntry`; `fileSha256`/`verifyModelFile`/`pinnedSha256`/`listGgufBasenames` defined in Task 2 are used in Task 3 with the same signatures; `parseHfUri`/`pickSingleQuantFile` defined and tested in Task 4.
+- **Type consistency:** `sha256?: string` added uniformly to `ModelInfo`/`AliasObject`/`CatalogModel`/`ModelNameEntry`; `fileSha256`/`verifyModelFile`/`pinnedSha256`/`snapshotFreshness` defined in Task 2 are used in Task 3 with the same signatures; `parseHfUri`/`pickSingleQuantFile` defined and tested in Task 4.
 - **Pinning correctness:** `pinnedSha256` uses an own-property check so a user alias governs its name and never borrows a curated hash (tested).
-- **Verify-once:** the cache-dir snapshot makes a cache hit skip hashing (tested), so startup with a present model pays nothing.
+- **Verify-once:** `snapshotFreshness(dir)` returns a probe so the call site reads `wasFresh(resolved)`; a cache hit skips hashing (tested), so startup with a present model pays nothing. node-llama-cpp stores files flat in the dir (verified against `buildHuggingFaceFilePrefix`), so basename matching is correct.
 - **Header discipline:** the script reads `X-Linked-ETag` only, never `etag`/`x-xet-hash`.
 - **Known caveat:** the 2 `resolveSmoltalkLlamaCppFromRoots` tests fail environmentally, unrelated to this work.
 ```

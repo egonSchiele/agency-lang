@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   findPackageRoot,
+  findFileUp,
   resolveAgencyImportPath,
   getStdlibDir,
   toCompiledImportPath,
@@ -10,12 +11,12 @@ import {
   parsePkgImport,
   resolvePkgAgencyPath,
 } from "./importPaths.js";
-import { parseAgency } from "./parser.js";
-import { CompileStrategy, RunStrategy } from "./importStrategy.js";
-import { SymbolTable } from "./symbolTable.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { parseAgency } from "./parser.js";
+import { CompileStrategy, RunStrategy } from "./importStrategy.js";
+import { SymbolTable } from "./symbolTable.js";
 
 describe("findPackageRoot", () => {
   it("should find the package root from a nested directory", () => {
@@ -512,5 +513,33 @@ describe("isImportAllowed", () => {
     const policy = { allowKinds: ["bogus" as never] };
     expect(isImportAllowed("std::shell", policy)).toBe(false);
     expect(isImportAllowed("fs", policy)).toBe(false);
+  });
+});
+
+describe("findFileUp", () => {
+  let dir: string;
+  beforeEach(() => { dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fu-"))); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it("returns the path of the nearest matching file, walking up", () => {
+    const nested = path.join(dir, "a", "b", "c");
+    fs.mkdirSync(nested, { recursive: true });
+    const marker = path.join(dir, "agency.json");
+    fs.writeFileSync(marker, "{}");
+    expect(findFileUp(nested, "agency.json")).toBe(marker);
+  });
+  it("accepts a predicate so callers can match more than 'file exists'", () => {
+    const nested = path.join(dir, "a", "b");
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "wrong" }));
+    fs.writeFileSync(path.join(nested, "package.json"), JSON.stringify({ name: "right" }));
+    const found = findFileUp(nested, "package.json", (p) => {
+      try { return JSON.parse(fs.readFileSync(p, "utf-8")).name === "right"; }
+      catch { return false; }
+    });
+    expect(found).toBe(path.join(nested, "package.json"));
+  });
+  it("returns null when nothing matches", () => {
+    expect(findFileUp(dir, "definitely-not-a-real-file.xyz")).toBeNull();
   });
 });

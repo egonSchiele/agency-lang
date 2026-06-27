@@ -25,7 +25,7 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { configureModels } from "./shared.agency"
+import { configureModels, configureLocalModel } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
@@ -707,6 +707,10 @@ node main() {
       agent: {
         type: "string",
         description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
+      },
+      "local-model": {
+        type: "string",
+        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Sets fast+slow to the local model and ignores --model/--provider/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
       }
     }
   },
@@ -726,12 +730,17 @@ node main() {
   // Resolve + apply the fast/slow models. Absent string flags read as
   // `undefined`, and agency's `== null` does not match `undefined`, so
   // normalize via `??` (which does treat `undefined` as nullish) to "".
-  configureModels(
-    args.flags.model ?? "",
-    args.flags.fastmodel ?? "",
-    args.flags.slowmodel ?? "",
-    args.flags.provider ?? "",
-  )
+  const localModel = args.flags["local-model"] ?? ""
+  if (localModel != "") {
+    configureLocalModel(localModel)
+  } else {
+    configureModels(
+      args.flags.model ?? "",
+      args.flags.fastmodel ?? "",
+      args.flags.slowmodel ?? "",
+      args.flags.provider ?? "",
+    )
+  }
 
   // Positional args (everything after flags) are joined with spaces to
   // form the starting prompt. `--` ends flag parsing if a positional

@@ -8,6 +8,30 @@ import type { AgencyProgram } from "./types.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Walk up from `startDir` looking for a sibling file named `filename`.
+ *  Returns the absolute path of the first match, or `null` if no match is
+ *  found before reaching the filesystem root. An optional `accept` predicate
+ *  lets callers reject false-positive matches (e.g. a `package.json` with the
+ *  wrong `name` field) and keep walking. */
+export function findFileUp(
+  startDir: string,
+  filename: string,
+  accept: (absPath: string) => boolean = () => true,
+): string | null {
+  let dir = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(dir, filename);
+    if (fs.existsSync(candidate) && accept(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
 /**
  * Walk up from startDir until we find a directory containing package.json.
  *
@@ -21,32 +45,25 @@ export function findPackageRoot(
   startDir: string,
   packageName?: string,
 ): string {
-  let dir = startDir;
-  while (true) {
-    const pkgJsonPath = path.join(dir, "package.json");
-    if (fs.existsSync(pkgJsonPath)) {
-      if (packageName === undefined) {
-        return dir;
-      }
-      try {
-        const parsed = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
-        if (parsed.name === packageName) {
-          return dir;
-        }
-      } catch {
-        /* unparseable package.json — keep walking */
-      }
+  const found = findFileUp(startDir, "package.json", (pkgJsonPath) => {
+    if (packageName === undefined) {
+      return true;
     }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new Error(
-        packageName
-          ? `Could not find package root for '${packageName}' (no matching package.json found above ${startDir})`
-          : "Could not find package root (no package.json found)",
-      );
+    try {
+      return JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8")).name === packageName;
+    } catch {
+      /* unparseable package.json — keep walking */
+      return false;
     }
-    dir = parent;
+  });
+  if (found === null) {
+    throw new Error(
+      packageName
+        ? `Could not find package root for '${packageName}' (no matching package.json found above ${startDir})`
+        : "Could not find package root (no package.json found)",
+    );
   }
+  return path.dirname(found);
 }
 
 // Lazily resolve the package root so that bundled / packed outputs (which

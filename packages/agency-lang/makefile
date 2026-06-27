@@ -12,6 +12,8 @@ build:
 	tsc-alias
 	mkdir -p dist/lib/cli/runShim
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
+	mkdir -p dist/lib/stdlib/providers
+	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
 	# Bundle the user-facing Agency documentation alongside the shipped
 	# agents so `skillsDir(...)` can build a tool that lets an LLM read
 	# any guide / CLI / appendix page on demand.

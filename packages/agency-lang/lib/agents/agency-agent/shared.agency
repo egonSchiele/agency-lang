@@ -12,6 +12,7 @@
 import { setLlmOptions } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
+import { registerLocalModel } from "std::agency/local"
 
 import { resolveDetected, planModels } from "./lib/models.agency"
 
@@ -101,4 +102,15 @@ export def configureModels(
   })
   slowModel = plan.slowModel
   slowProvider = plan.slowProvider
+}
+
+/** Apply a local model (from `--local-model`) as BOTH the fast and slow
+ *  model: register the llama-cpp provider, download the model if needed into
+ *  the agent's models cache, and point every LLM call — including the deep
+ *  subagents — at it, so a fully-local run needs no hosted-provider key. */
+export def configureLocalModel(value: string) {
+  const modelPath = registerLocalModel(value, "${AGENCY_AGENT_DIR}/models")
+  setLlmOptions({ model: modelPath, provider: "llama-cpp" })
+  slowModel = modelPath
+  slowProvider = "llama-cpp"
 }

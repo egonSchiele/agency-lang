@@ -1,0 +1,5 @@
+import { registerLocalModel } from "std::agency/local"
+
+node main(): string {
+  return registerLocalModel("/abs/my.gguf", "/tmp/agency-localmodel-test")
+}

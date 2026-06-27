@@ -37,6 +37,15 @@ import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
+import {
+  runList as localList,
+  runDownload as localDownload,
+  runRemove as localRemove,
+  runResolve as localResolve,
+  runAliasList as localAliasList,
+  runAliasAdd as localAliasAdd,
+  runAliasRemove as localAliasRemove,
+} from "@/cli/local.js";
 import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
@@ -859,6 +868,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
         );
       },
     );
+
+  const localCmd = program.command("local").description("Manage and run local models");
+  localCmd.command("list").description("List downloaded models").action(localList);
+  localCmd.command("download").description("Download a model (curated name, alias, or hf: URI)")
+    .argument("<value>").action(localDownload);
+  localCmd.command("remove").description("Delete a downloaded model").argument("<name>")
+    .action(localRemove);
+  localCmd.command("resolve").description("Show what a name/alias resolves to").argument("<value>")
+    .action(localResolve);
+  const aliasCmd = localCmd.command("alias").description("Manage model name aliases");
+  aliasCmd.command("list").description("List usable short names (curated + aliases)").action(localAliasList);
+  aliasCmd.command("add").description("Add a short-name alias").argument("<name>").argument("<uri>")
+    .action(localAliasAdd);
+  aliasCmd.command("remove").description("Remove a short-name alias").argument("<name>")
+    .action(localAliasRemove);
 
   program
     .command("agent")

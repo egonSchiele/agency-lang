@@ -1,4 +1,4 @@
-import { _setLlmOptions } from "agency-lang/stdlib-lib/llm.js"
+import { _setLlmOptions, _registerProviderModule } from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
 
 /** @module
@@ -94,4 +94,14 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
     return failure("pickProvider: no recognized providers given (expected anthropic, google, or openai)")
   }
   return failure("No LLM API key found. Set one of: ${checked}")
+}
+
+export def registerProviderModule(path: string) {
+  """
+  Load a provider module by path at runtime and register its custom provider
+  for llm() calls. The module must export register({ registerProvider }).
+
+  @param path - Path to the provider module (.mjs/.js)
+  """
+  _registerProviderModule(path)
 }

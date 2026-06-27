@@ -105,6 +105,10 @@ export type ResultType = {
   successType: VariableType;
   failureType: VariableType;
   tags?: Tag[];
+  // Set ONLY by the type checker's narrowing layer (lib/typeChecker/narrowing.ts)
+  // when a variable has been narrowed inside an isSuccess/isFailure guard.
+  // Never produced by parsing or return-type inference. isAssignable ignores it.
+  narrowedBranch?: "success" | "failure";
 };
 
 /**

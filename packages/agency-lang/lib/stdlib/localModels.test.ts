@@ -377,6 +377,42 @@ describe("parseCatalog", () => {
       warn.mockRestore();
     }
   });
+
+  it("rejects an http: uri (insecure) but accepts hf:/https:/.gguf", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const out = parseCatalog(
+        JSON.stringify({
+          version: 1,
+          models: {
+            insecure: { uri: "http://example.com/m.gguf" },
+            secureHttps: { uri: "https://example.com/m.gguf" },
+            hf: { uri: "hf:org/m:Q4_K_M" },
+            gguf: { uri: "/abs/path/m.gguf" },
+          },
+        }),
+      );
+      expect(out.insecure).toBeUndefined();
+      expect(out.secureHttps.uri).toBe("https://example.com/m.gguf");
+      expect(out.hf.uri).toBe("hf:org/m:Q4_K_M");
+      expect(out.gguf.uri).toBe("/abs/path/m.gguf");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "insecure"'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("drops a wrongly-typed metadata field but keeps the entry (lenient)", () => {
+    const out = parseCatalog(
+      JSON.stringify({
+        version: 1,
+        models: { m: { uri: "hf:org/m:Q4_K_M", params: 7, sizeBytes: "big" } },
+      }),
+    );
+    expect(out.m.uri).toBe("hf:org/m:Q4_K_M");
+    expect(out.m.params).toBeUndefined(); // 7 is not a string → dropped
+    expect(out.m.sizeBytes).toBeUndefined(); // "big" is not a number → dropped
+  });
 });
 
 describe("_refreshCatalog", () => {
@@ -461,5 +497,34 @@ describe("_refreshCatalog", () => {
     ).rejects.toThrow(/valid JSON/);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.keep).toBe("hf:k:Q4_K_M");
+  });
+
+  it("does not treat a prototype-named model as a user collision", async () => {
+    fs.writeFileSync(aliasFile, "{}");
+    // "toString" exists on Object.prototype, so a naive `name in userAliases`
+    // would falsely report a collision. With own-property checks it's added.
+    const r = await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () => blob({ toString: { uri: "hf:org/ts:Q4_K_M" } }),
+    });
+    expect(r.added).toEqual(["toString"]);
+    expect(r.skipped).toEqual([]);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.toString.uri).toBe("hf:org/ts:Q4_K_M");
+  });
+
+  it("reads the catalog from a local file path via the default fetcher (no network)", async () => {
+    // Integration-ish: exercises the real fetchCatalog file branch + parse +
+    // merge, with no fetcher injected and no HTTP.
+    fs.writeFileSync(aliasFile, "{}");
+    const catalogPath = path.join(dir, "catalog.json");
+    fs.writeFileSync(
+      catalogPath,
+      JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", params: "2B" } } }),
+    );
+    const r = await _refreshCatalog({ url: catalogPath, file: aliasFile });
+    expect(r.added).toEqual(["m"]);
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.m).toEqual({ uri: "hf:org/m:Q4_K_M", params: "2B", source: "remote" });
   });
 });

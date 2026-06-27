@@ -50,6 +50,10 @@ value it skipped.
 URL resolution (first wins): the `[url]` argument, `AGENCY_MODEL_CATALOG_URL`,
 `client.modelCatalogUrl` in `agency.json`, then the built-in default
 (`raw.githubusercontent.com/egonSchiele/agency-lang/main/packages/agency-lang/data/model-catalog.json`).
+A remote URL must be `https://` (an `http://` source is rejected). The source
+may also be a **local file path** or `file://` URL — e.g.
+`agency local refresh ./my-catalog.json` — which reads the catalog from disk
+without any network call.
 
 > **Heads-up:** the first refresh writes one tagged entry per catalog model
 > into `client.modelAliases`, so a freshly-refreshed `agency.json` will be

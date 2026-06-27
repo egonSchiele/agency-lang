@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import { ttyColor } from "../utils/termcolors.js";
@@ -157,6 +158,18 @@ function isModelUri(v: string): boolean {
   return /^(hf:|https?:)/.test(v);
 }
 
+/** A model URI we'll accept from the *remote catalog*. Stricter than
+ *  `isModelUri`: any `scheme://` URL must be `https://` (so an overridden or
+ *  untrusted catalog can't point a download at a plaintext, MITM-able
+ *  endpoint — not even an `http://…/x.gguf`). Otherwise accept an `hf:` URI or
+ *  a local `.gguf` path. */
+function isCatalogUri(v: string): boolean {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(v)) {
+    return /^https:\/\//.test(v);
+  }
+  return v.startsWith("hf:") || isGgufPath(v);
+}
+
 /** The agency.json that owns aliases: nearest `agency.json` walking up from
  *  `startDir` (cwd by default); falls back to `~/agency.json` when none is
  *  found. Exported so the CLI can echo it on every write. */
@@ -269,9 +282,12 @@ type EntryMeta = Pick<
 >;
 
 /** Project the optional display-metadata fields off any source shape
- *  (`ModelInfo` or `AliasObject`). Returns only defined fields so the
- *  spread below doesn't introduce stray `undefined` keys. */
-function metaFrom(src: Partial<EntryMeta>): EntryMeta {
+ *  (`ModelInfo`, or an alias which may be a bare URI string). A string alias
+ *  carries no metadata, so it yields `{}` — which is why the call sites can
+ *  pass an `AliasValue` directly without a `typeof` guard. Returns only
+ *  defined fields so the spread doesn't introduce stray `undefined` keys. */
+function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
+  if (typeof src === "string") return {};
   const out: EntryMeta = {};
   if (src.params !== undefined) out.params = src.params;
   if (src.sizeBytes !== undefined) out.sizeBytes = src.sizeBytes;
@@ -291,7 +307,7 @@ export function _listModelNames(file: string = ""): ModelNameEntry[] {
       name,
       target: aliasUri(value),
       source: "alias",
-      ...(typeof value === "object" ? metaFrom(value) : {}),
+      ...metaFrom(value),
     }),
   );
   // Alias wins on name collision: the alias entry overwrites the curated one
@@ -394,30 +410,30 @@ const CATALOG_FETCH_TIMEOUT_MS = 15_000;
  *  5 MB cap guards against a misconfigured URL serving an arbitrary file. */
 const CATALOG_MAX_BYTES = 5_000_000;
 
-// Field-shape narrowers used by `parseCatalog`. Returning `undefined` for a
-// wrongly-typed field lets the resulting object literal drop the key
-// entirely (see the `Object.fromEntries(...filter(defined))` pattern below).
-function pickString(v: unknown): string | undefined {
-  return typeof v === "string" ? v : undefined;
-}
-function pickNumber(v: unknown): number | undefined {
-  return typeof v === "number" ? v : undefined;
-}
-function pickCategory(v: unknown): ModelCategory | undefined {
-  // `CATALOG_CATEGORIES` is a `readonly` tuple of literal types, so its
-  // `includes` rejects an arbitrary `unknown` — cast to a plain string
-  // array for the membership check, then narrow back.
-  if (typeof v !== "string") {
-    return undefined;
-  }
-  if (!(CATALOG_CATEGORIES as readonly string[]).includes(v)) {
-    return undefined;
-  }
-  return v as ModelCategory;
-}
+// One catalog entry. zod does the structural validation + coercion; the merge
+// reassembles a canonical-order object from `.data` (see `parseCatalog`). The
+// metadata fields are `.optional().catch(undefined)` so a wrongly-typed field
+// is dropped rather than failing the whole entry (lenient metadata); a
+// missing/insecure `uri` fails the entry (it's then skipped + warned).
+const CatalogModelSchema = z.object({
+  uri: z.string().refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
+  params: z.string().optional().catch(undefined),
+  sizeBytes: z.number().optional().catch(undefined),
+  category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
+  contextWindow: z.number().optional().catch(undefined),
+  license: z.string().optional().catch(undefined),
+  description: z.string().optional().catch(undefined),
+});
+
+// Top-level catalog shape: a supported version + a name→entry object. Entries
+// are validated individually (below) so one bad entry is skipped, not fatal.
+const CatalogTopSchema = z.object({
+  version: z.literal(SUPPORTED_CATALOG_VERSION),
+  models: z.record(z.string(), z.unknown()),
+});
 
 /** Strip keys whose value is `undefined` so the resulting object is JSON-clean
- *  (no `"params": undefined` after `JSON.stringify`). */
+ *  (no `"params": undefined` after `JSON.stringify`) and in canonical order. */
 function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
@@ -428,59 +444,117 @@ function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
  *  `uri` is missing/invalid; metadata fields with the wrong type are dropped
  *  but the entry is kept. */
 export function parseCatalog(text: string): Record<string, CatalogModel> {
-  let raw: any;
+  let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch (err) {
     throw new Error(`catalog is not valid JSON: ${(err as Error).message}`);
   }
-  if (typeof raw !== "object" || raw === null) {
+  const top = CatalogTopSchema.safeParse(raw);
+  if (!top.success) {
+    // Map zod's first issue to a precise, user-facing message.
+    const path = top.error.issues[0]?.path[0];
+    if (path === "version") {
+      throw new Error(
+        `unsupported catalog version ${JSON.stringify((raw as any)?.version)}; this ` +
+          `agency supports version ${SUPPORTED_CATALOG_VERSION}. Upgrade agency.`,
+      );
+    }
+    if (path === "models") {
+      throw new Error("catalog.models must be an object keyed by model name");
+    }
     throw new Error("catalog must be a JSON object");
   }
-  if (raw.version !== SUPPORTED_CATALOG_VERSION) {
-    throw new Error(
-      `unsupported catalog version ${JSON.stringify(raw.version)}; this agency ` +
-        `supports version ${SUPPORTED_CATALOG_VERSION}. Upgrade agency.`,
-    );
-  }
-  if (typeof raw.models !== "object" || raw.models === null || Array.isArray(raw.models)) {
-    throw new Error("catalog.models must be an object keyed by model name");
-  }
-  // Project each blob entry into either a validated `CatalogModel` (kept) or
-  // `null` (skipped + warned). The final `Object.fromEntries` drops the
-  // `null` pairs, leaving only the valid models.
-  const entries: ([string, CatalogModel] | null)[] = Object.entries(
-    raw.models as Record<string, any>,
-  ).map(([name, entry]) => {
-    if (typeof entry !== "object" || entry === null) {
-      console.warn(`[catalog] skipping "${name}": entry is not an object`);
-      return null;
-    }
-    const uri = entry.uri;
-    if (typeof uri !== "string" || !(isModelUri(uri) || isGgufPath(uri))) {
-      console.warn(`[catalog] skipping "${name}": invalid uri ${JSON.stringify(uri)}`);
-      return null;
-    }
-    const model: CatalogModel = {
-      uri,
-      ...compact({
-        params: pickString(entry.params),
-        sizeBytes: pickNumber(entry.sizeBytes),
-        category: pickCategory(entry.category),
-        contextWindow: pickNumber(entry.contextWindow),
-        license: pickString(entry.license),
-        description: pickString(entry.description),
-      }),
-    };
-    return [name, model];
-  });
+  // Validate each entry independently; a bad entry is skipped + warned, not
+  // fatal. Rebuild a canonical-order `CatalogModel` from the validated data.
+  const entries: ([string, CatalogModel] | null)[] = Object.entries(top.data.models).map(
+    ([name, entry]) => {
+      const parsed = CatalogModelSchema.safeParse(entry);
+      if (!parsed.success) {
+        console.warn(
+          `[catalog] skipping "${name}": ${parsed.error.issues[0]?.message ?? "invalid entry"}`,
+        );
+        return null;
+      }
+      const d = parsed.data;
+      const model: CatalogModel = {
+        uri: d.uri,
+        ...compact({
+          params: d.params,
+          sizeBytes: d.sizeBytes,
+          category: d.category,
+          contextWindow: d.contextWindow,
+          license: d.license,
+          description: d.description,
+        }),
+      };
+      return [name, model];
+    },
+  );
   return Object.fromEntries(entries.filter((e): e is [string, CatalogModel] => e !== null));
 }
 
-/** Default fetcher: HTTPS-only GET with a bounded timeout and body cap. */
+/** If `url` names a local file (a `file://` URL or a plain filesystem path —
+ *  i.e. not an `hf:`/`http(s)://` URL), return its path; else null. Lets refresh
+ *  read a catalog from disk (`agency local refresh ./catalog.json`), which also
+ *  makes the merge logic integration-testable without a network round-trip. */
+function catalogLocalPath(url: string): string | null {
+  if (url.startsWith("file://")) return fileURLToPath(url);
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) || url.startsWith("hf:")) return null;
+  return url;
+}
+
+/** Read a local catalog file, enforcing the byte cap up front via `stat`. */
+function readCatalogFile(path: string): string {
+  const size = fs.statSync(path).size;
+  if (size > CATALOG_MAX_BYTES) {
+    throw new Error(`catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`);
+  }
+  return fs.readFileSync(path, "utf-8");
+}
+
+/** Stream a response body, enforcing the byte cap as chunks arrive so a
+ *  large/malicious body can't be fully buffered first. Mirrors the capped
+ *  reader in `lib/stdlib/http.ts`; counts raw bytes (`byteLength`), not
+ *  UTF-16 code units. */
+async function readBodyCapped(res: Response, url: string, maxBytes: number): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  const chunks: string[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`catalog from ${url} exceeds ${maxBytes} bytes`);
+      }
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* already released */
+    }
+  }
+  chunks.push(decoder.decode());
+  return chunks.join("");
+}
+
+/** Default fetcher: a local file path / `file://` URL is read from disk;
+ *  otherwise an HTTPS-only GET with a bounded timeout and a streamed byte cap.
+ *  `http:` (and other non-https URL schemes) are rejected. */
 export async function fetchCatalog(url: string): Promise<string> {
+  const localPath = catalogLocalPath(url);
+  if (localPath !== null) {
+    return readCatalogFile(localPath);
+  }
   if (!url.startsWith("https://")) {
-    throw new Error(`catalog URL must be https: ${url}`);
+    throw new Error(`catalog URL must be https or a local file path: ${url}`);
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CATALOG_FETCH_TIMEOUT_MS);
@@ -489,13 +563,7 @@ export async function fetchCatalog(url: string): Promise<string> {
     if (!res.ok) {
       throw new Error(`fetch failed: HTTP ${res.status} ${res.statusText}`);
     }
-    const text = await res.text();
-    if (text.length > CATALOG_MAX_BYTES) {
-      throw new Error(
-        `catalog too large (${text.length} bytes; cap ${CATALOG_MAX_BYTES} bytes)`,
-      );
-    }
-    return text;
+    return await readBodyCapped(res, url, CATALOG_MAX_BYTES);
   } finally {
     clearTimeout(timer);
   }
@@ -549,7 +617,12 @@ function classifyEntry(
   userAliases: Record<string, AliasValue>,
   oldManaged: Record<string, AliasObject>,
 ): Classification {
-  if (name in userAliases) {
+  // Own-property checks (not `name in ...` / bare index access): a catalog
+  // model named like a prototype member (`toString`, `__proto__`, …) must not
+  // be treated as a collision with — or a previous value from — an inherited
+  // property the user never set.
+  const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+  if (has(userAliases, name)) {
     return {
       kind: "skipped",
       name,
@@ -557,7 +630,7 @@ function classifyEntry(
     };
   }
   const value: AliasObject = { ...model, source: "remote" };
-  const prev = oldManaged[name];
+  const prev = has(oldManaged, name) ? oldManaged[name] : undefined;
   if (prev === undefined) {
     return { kind: "added", name, value };
   }

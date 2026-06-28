@@ -942,6 +942,7 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
   requireSupport();
   exposeResolvedLlamaCppPath();
   const target = _resolveModelName(value);
+  const dir = resolveCacheDir(cacheDir);
   const fsPath = bundledLlamaModule();
   let mod: LlamaBundle;
   try {
@@ -953,7 +954,16 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
   if (typeof mod.resolveModel !== "function") {
     throw new Error(`Local-model provider module must export resolveModel().`);
   }
-  return await mod.resolveModel(target, resolveCacheDir(cacheDir));
+  // Snapshot freshness BEFORE resolving so we verify the bytes only once, right
+  // after a real download (a cache hit is skipped — the file can't change on
+  // disk between runs).
+  const wasFresh = snapshotFreshness(dir);
+  const resolved = await mod.resolveModel(target, dir);
+  const expected = pinnedSha256(value);
+  if (expected !== undefined && wasFresh(resolved)) {
+    await verifyModelFile(resolved, expected, value);
+  }
+  return resolved;
 }
 
 /** Convenience: register the provider + ensure the model is downloaded. */

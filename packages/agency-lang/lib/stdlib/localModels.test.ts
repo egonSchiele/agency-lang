@@ -210,9 +210,16 @@ describe("provider register + download (fake bundled module)", () => {
   function fakeModule(): string {
     const p = path.join(here2, "__tmp_fakellama.mjs");
     fs.writeFileSync(p, `import { BaseClient } from "smoltalk";
+      import * as fs from "node:fs";
+      import * as path from "node:path";
       class FakeLlama extends BaseClient { async textSync() { return { success: true, value: { output: "x", toolCalls: [] } }; } }
       export function register({ registerProvider }) { registerProvider("llama-cpp", FakeLlama); }
-      export async function resolveModel(target) { return "RESOLVED:" + target; }`);
+      export async function resolveModel(target, dir) {
+        fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, "model.gguf");
+        fs.writeFileSync(file, "FAKE:" + target);
+        return file;
+      }`);
     fakes.push(p);
     return p;
   }
@@ -228,15 +235,64 @@ describe("provider register + download (fake bundled module)", () => {
     await _registerLocalProvider();
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("FakeLlama");
   });
-  it("downloads (resolves) a curated name to a path", async () => {
+  it("downloads (resolves) a uri to a real path", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    const k = Object.keys(CURATED_LOCAL_MODELS)[0];
-    expect(await _downloadModel(k, "/cache")).toBe("RESOLVED:" + CURATED_LOCAL_MODELS[k].uri);
+    const out = await _downloadModel("hf:org/repo:Q4", dir); // raw uri → no pin
+    expect(out).toBe(path.join(dir, "model.gguf"));
+    expect(fs.existsSync(out)).toBe(true);
   });
   it("registerLocalModel registers and returns the resolved path", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    expect(await _registerLocalModel("/abs/my.gguf", "/cache")).toBe("RESOLVED:/abs/my.gguf");
+    const out = await _registerLocalModel("/abs/my.gguf", dir); // raw path → no pin
+    expect(out).toBe(path.join(dir, "model.gguf"));
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("FakeLlama");
+  });
+
+  it("verifies a freshly-downloaded pinned model (match → ok)", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    const target = "hf:org/x:Q4";
+    const sha = createHash("sha256").update("FAKE:" + target).digest("hex");
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: target, sha256: sha } } } }));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const out = await _downloadModel("mymodel", dir);
+      expect(fs.existsSync(out)).toBe(true);
+      expect(fs.existsSync(out + ".invalidSha")).toBe(false);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("quarantines a freshly-downloaded model whose hash is wrong", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } } }));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      await expect(_downloadModel("mymodel", dir)).rejects.toThrow(/SHA-256 verification failed/);
+      expect(fs.existsSync(path.join(dir, "model.gguf"))).toBe(false);
+      expect(fs.existsSync(path.join(dir, "model.gguf.invalidSha"))).toBe(true);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("does NOT re-verify an already-present (cache-hit) file", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    // Pre-create the model file so it's in the before-snapshot → treated as cached.
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "model.gguf"), "pre-existing");
+    // A deliberately-wrong pin would fail IF it verified — it must be skipped.
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } } }));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      await expect(_downloadModel("mymodel", dir)).resolves.toBe(path.join(dir, "model.gguf"));
+      expect(fs.existsSync(path.join(dir, "model.gguf.invalidSha"))).toBe(false);
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
 

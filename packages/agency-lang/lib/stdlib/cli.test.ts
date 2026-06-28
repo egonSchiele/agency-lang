@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { _internal, type PasteState } from "./cli.js";
 
 const {
@@ -12,6 +15,9 @@ const {
   modelsUsedThisTurn,
   fmtModels,
   prettyModel,
+  loadHistory,
+  saveHistory,
+  recordHistoryEntry,
 } = _internal;
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
@@ -277,5 +283,59 @@ describe("prettyModel", () => {
 
   it("handles a plain local .gguf path with no hf_ prefix or quant", () => {
     expect(prettyModel("/models/my-custom-model.gguf")).toBe("my-custom-model");
+  });
+});
+
+describe("history persistence (JSON)", () => {
+  let dir: string;
+  let file: string;
+  beforeEach(() => {
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "hist-")));
+    file = path.join(dir, "history.json");
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it("round-trips entries, preserving multi-line ones", () => {
+    // saveHistory takes readline order (newest-first).
+    const newestFirst = ["third\nwith newline", "second", "first"];
+    saveHistory(file, newestFirst, 100);
+    expect(loadHistory(file, 100)).toEqual(newestFirst);
+    // The on-disk form is JSON (so a newline can't corrupt it).
+    const onDisk = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(onDisk).toEqual(["first", "second", "third\nwith newline"]); // oldest-first
+  });
+
+  it("returns [] for a missing or non-array/corrupt file", () => {
+    expect(loadHistory(path.join(dir, "nope.json"), 100)).toEqual([]);
+    fs.writeFileSync(file, "{not json");
+    expect(loadHistory(file, 100)).toEqual([]);
+    fs.writeFileSync(file, JSON.stringify({ not: "an array" }));
+    expect(loadHistory(file, 100)).toEqual([]);
+  });
+
+  it("caps to max, keeping the newest", () => {
+    saveHistory(file, ["e", "d", "c", "b", "a"], 3); // newest-first
+    // Stored newest 3 (e, d, c); loaded back newest-first.
+    expect(loadHistory(file, 3)).toEqual(["e", "d", "c"]);
+  });
+});
+
+describe("recordHistoryEntry", () => {
+  it("makes the entry most-recent and drops the command that added it", () => {
+    const history = ["/paste", "older"]; // readline added "/paste"
+    recordHistoryEntry(history, "line one\nline two", "/paste");
+    expect(history).toEqual(["line one\nline two", "older"]);
+  });
+
+  it("removes an earlier duplicate of the same entry", () => {
+    const history = ["b", "pasted", "a"];
+    recordHistoryEntry(history, "pasted", "/paste");
+    expect(history).toEqual(["pasted", "b", "a"]);
+  });
+
+  it("is a no-op-safe prepend when the command isn't present", () => {
+    const history = ["a"];
+    recordHistoryEntry(history, "x", "/paste");
+    expect(history).toEqual(["x", "a"]);
   });
 });

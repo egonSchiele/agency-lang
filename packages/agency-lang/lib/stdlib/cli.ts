@@ -45,33 +45,78 @@ async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;
 }
 
-/** Read `historyFile` (a JSON array of entries, oldest first) and return
- *  them in the order Node's `readline` expects: newest first, capped at
- *  `max`. JSON (rather than one-entry-per-line) so a `/paste` buffer with
- *  embedded newlines round-trips instead of splitting into bogus entries.
- *  Returns `[]` on any I/O or parse error (or a non-array file) so a corrupt
- *  or missing history file never breaks startup. */
-function loadHistory(file: string, max: number): string[] {
-  if (!file || !existsSync(file)) return [];
+/** One-line summary of a multi-line buffer: its first line + a line count.
+ *  Shared by the recall preview stored in history and the submit banner, so a
+ *  recalled paste renders identically to when it was first pasted. */
+function summarizeMultiline(text: string): string {
+  const lines = text.split("\n");
+  return `${lines[0]} … (${lines.length} lines)`;
+}
+
+/** A history entry on disk: a plain string (ordinary single-line input) or a
+ *  collapsed multi-line paste stored as `{ preview, text }` — `preview` is the
+ *  one-line form shown in readline recall, `text` the full buffer resubmitted
+ *  on Enter. We never store a raw multi-line string in readline's history,
+ *  because Node `readline` renders/recalls an embedded-newline line buffer
+ *  incorrectly (the banner collides with its half-cleared rows). */
+type HistoryRecord = string | { preview: string; text: string };
+
+/** What `loadHistory` returns: the readline display list (newest-first, capped)
+ *  plus a map from a collapsed paste's preview line back to its full text. */
+type LoadedHistory = { entries: string[]; expansions: Record<string, string> };
+
+/** Read `historyFile` (a JSON array of `HistoryRecord`s, oldest first) into the
+ *  shape Node's `readline` expects: display entries newest-first, capped at
+ *  `max`, plus the preview→full-text map for collapsed pastes. JSON (rather
+ *  than one-entry-per-line) so a paste with embedded newlines round-trips
+ *  instead of splitting into bogus entries. Returns empties on any I/O or parse
+ *  error (or a non-array file) so a corrupt or missing file never breaks
+ *  startup. */
+function loadHistory(file: string, max: number): LoadedHistory {
+  const empty: LoadedHistory = { entries: [], expansions: {} };
+  if (!file || !existsSync(file)) return empty;
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8"));
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((e): e is string => typeof e === "string").reverse().slice(0, max);
+    if (!Array.isArray(parsed)) return empty;
+    const entries: string[] = [];
+    const expansions: Record<string, string> = {};
+    for (const rec of parsed) {
+      if (typeof rec === "string") {
+        entries.push(rec);
+      } else if (rec && typeof rec.preview === "string" && typeof rec.text === "string") {
+        entries.push(rec.preview);
+        expansions[rec.preview] = rec.text;
+      }
+    }
+    // Disk is oldest-first; readline wants newest-first, capped.
+    return { entries: entries.reverse().slice(0, max), expansions };
   } catch {
-    return [];
+    return empty;
   }
 }
 
-/** Persist `history` (in readline's newest-first order) to `file` as a JSON
- *  array stored oldest-first, so re-loading yields identical chronology and a
- *  multi-line entry survives intact. Creates parent dirs as needed. Swallows
- *  errors so a read-only HOME doesn't crash the REPL on exit. */
-function saveHistory(file: string, history: string[], max: number): void {
+/** Persist `history` (readline's newest-first order) to `file` as a JSON array
+ *  of `HistoryRecord`s stored oldest-first, so re-loading yields identical
+ *  chronology. An entry present in `expansions` is written as `{ preview, text }`
+ *  so a collapsed paste round-trips with its full buffer; every other entry is
+ *  written as a plain string. Creates parent dirs as needed. Swallows errors so
+ *  a read-only HOME doesn't crash the REPL on exit. */
+function saveHistory(
+  file: string,
+  history: string[],
+  max: number,
+  expansions: Record<string, string> = {},
+): void {
   if (!file) return;
   try {
     mkdirSync(dirname(file), { recursive: true });
     const oldestFirst = history.slice(0, max).slice().reverse();
-    const data = JSON.stringify(oldestFirst, null, 2) + "\n";
+    const records: HistoryRecord[] = oldestFirst.map((entry) =>
+      Object.prototype.hasOwnProperty.call(expansions, entry)
+        ? { preview: entry, text: expansions[entry] }
+        : entry,
+    );
+    const data = JSON.stringify(records, null, 2) + "\n";
     // Write to a sibling temp file, then rename into place. The rename is an
     // atomic swap (POSIX, and Windows via libuv's REPLACE_EXISTING), so a crash
     // mid-write can't leave a half-written file — which, as JSON, would parse to
@@ -81,6 +126,24 @@ function saveHistory(file: string, history: string[], max: number): void {
     renameSync(tmp, file);
   } catch {
     // Ignore — best-effort persistence.
+  }
+}
+
+/** Record a just-submitted `/paste` buffer into readline `history` for recall.
+ *  A multi-line buffer is stored as a one-line preview (its full text kept in
+ *  `expansions`) so readline never recalls a multi-line line buffer; a
+ *  single-line buffer is stored verbatim. */
+function recordPasteEntry(
+  history: string[],
+  buffer: string,
+  expansions: Record<string, string>,
+): void {
+  if (buffer.includes("\n")) {
+    const preview = summarizeMultiline(buffer);
+    recordHistoryEntry(history, preview, "/paste");
+    expansions[preview] = buffer;
+  } else {
+    recordHistoryEntry(history, buffer, "/paste");
   }
 }
 
@@ -387,6 +450,38 @@ async function openSlashPalette(
   return String(result.value);
 }
 
+/** Open the slash palette and repair readline history around it. Selecting a
+ *  command via the palette otherwise litters history with junk: the `/` trigger
+ *  commits `"/"`, and the modal's filter keystrokes leak through the shared
+ *  stdin so the confirming Enter commits a fragment like `"pa"` too. `mark` is
+ *  where history stood the instant `/` was pressed (captured by the trigger);
+ *  everything added since is rolled back, and on a pick the chosen command
+ *  (e.g. `"/paste"`) is recorded instead — one clean entry. Returns the picked
+ *  command, or null if cancelled. */
+async function pickFromSlashPalette(
+  rl: readline.Interface,
+  palette: [string, string][],
+  mark: number,
+): Promise<string | null> {
+  const picked = await openSlashPalette(palette);
+  const history = (rl as unknown as { history?: string[] }).history;
+  if (history) repairSlashHistory(history, mark, picked);
+  return picked;
+}
+
+/** Roll back the entries the slash palette polluted — `"/"` plus any leaked
+ *  filter keystrokes, i.e. everything added since `mark` — and, when a command
+ *  was picked, record it as one clean entry. `history` is readline's
+ *  newest-first array, mutated in place. A `mark` of -1 (no trigger fired)
+ *  skips the rollback. */
+function repairSlashHistory(history: string[], mark: number, picked: string | null): void {
+  if (mark >= 0) {
+    // Newest-first array, so entries added since `mark` sit at the front.
+    history.splice(0, Math.max(0, history.length - mark));
+  }
+  if (picked != null) recordHistoryEntry(history, picked, picked);
+}
+
 /**
  * Intercept `/` at an empty readline buffer and synthesize a submit
  * so the loop's slash-trigger fires immediately — no Enter required.
@@ -402,6 +497,7 @@ function installSlashTrigger(
   rl: readline.Interface,
   entries: [string, string][],
   useTTY: boolean,
+  onTrigger: () => void,
 ): () => void {
   if (!useTTY || entries.length === 0) return () => { };
   const rlAny = rl as unknown as {
@@ -417,6 +513,10 @@ function installSlashTrigger(
   ): void {
     const isSlash = key && (key.sequence === "/" || key.name === "slash");
     if (isSlash && (this.line ?? "") === "") {
+      // Mark where history stands *before* the synthesized submit commits "/",
+      // so the bare-`/` branch can roll back that "/" plus any palette-filter
+      // keystrokes that leak in while the modal is open.
+      onTrigger();
       // Substitute `/` into the buffer and synthesize Enter so the
       // pending `rl.question` resolves with "/". The main loop sees
       // it, opens `openSlashPalette`, and we never echo the `/`
@@ -662,7 +762,7 @@ export async function _runLineRepl(
   historyMax: number,
   paletteCommands: unknown,
 ): Promise<void> {
-  const initialHistory = loadHistory(historyFile, historyMax);
+  const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
   const palette = paletteEntries(paletteCommands);
   const rl = readline.createInterface({
     input: process.stdin,
@@ -754,11 +854,20 @@ export async function _runLineRepl(
   (globalThis as any)[clearHistoryKey] = () => {
     const h = (rl as unknown as { history?: string[] }).history;
     if (h) h.length = 0;
+    // Drop the collapsed-paste expansions too, so a cleared history can't
+    // resurrect a paste's full text on the next recall.
+    for (const k of Object.keys(expansions)) delete expansions[k];
   };
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
-  // in the loop body fires immediately and opens the palette modal.
-  const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
+  // in the loop body fires immediately and opens the palette modal. The
+  // trigger records where history stood the instant `/` was pressed, so the
+  // branch can roll back the junk entries the palette would otherwise leave.
+  let slashHistoryMark = -1;
+  const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY, () => {
+    const h = (rl as unknown as { history?: string[] }).history;
+    slashHistoryMark = h ? h.length : 0;
+  });
   try {
     while (true) {
       let line: string;
@@ -778,6 +887,16 @@ export async function _runLineRepl(
       if (useColor) process.stdout.write(COLOR_RESET);
       let trimmed = line.trim();
       if (trimmed.length === 0) continue;
+      // A recalled multi-line paste comes back as its one-line preview (that's
+      // all readline ever held for it); expand it to the full buffer so the
+      // turn and the banner see the original text. Storing the preview rather
+      // than the raw buffer is what keeps readline from ever recalling a
+      // multi-line line buffer — which it renders incorrectly, colliding with
+      // the banner.
+      if (Object.prototype.hasOwnProperty.call(expansions, line)) {
+        line = expansions[line];
+        trimmed = line.trim();
+      }
       // Bare `/` opens the slash-command palette via
       // `prompts.autocomplete` — the same modal the interrupt UI
       // uses, so palette and policy menus look and feel identical.
@@ -786,7 +905,8 @@ export async function _runLineRepl(
       // also type `/` + Enter manually. The picked command is fed
       // back through the normal onSubmit path; cancel just reprompts.
       if (trimmed === "/" && palette.length > 0) {
-        const picked = await openSlashPalette(palette);
+        const picked = await pickFromSlashPalette(rl, palette, slashHistoryMark);
+        slashHistoryMark = -1;
         if (picked == null) continue;
         line = picked;
         trimmed = picked;
@@ -805,14 +925,16 @@ export async function _runLineRepl(
         line = buffer;
         trimmed = buffer;
         // readline only saw the `/paste` keystrokes, not the buffer the editor
-        // produced — so add the buffer to history ourselves (replacing the
-        // `/paste` command entry) for up-arrow recall and persistence.
+        // produced — so add it to history ourselves (replacing the `/paste`
+        // command entry) for up-arrow recall and persistence. A multi-line
+        // buffer goes in as a one-line *preview*, with the full text kept in
+        // `expansions`, so readline never recalls a multi-line line buffer.
         const rlHistory = (rl as unknown as { history?: string[] }).history;
-        if (rlHistory) recordHistoryEntry(rlHistory, buffer, "/paste");
+        if (rlHistory) recordPasteEntry(rlHistory, buffer, expansions);
       }
 
       const banner = line.includes("\n")
-        ? ` User: ${line.split("\n")[0]} … (${line.split("\n").length} lines) \n`
+        ? ` User: ${summarizeMultiline(line)} \n`
         : ` User: ${line} \n`;
       process.stdout.write(color.bgBrightBlack.darkBlack(banner));
 
@@ -909,10 +1031,10 @@ export async function _runLineRepl(
     // recorded above) — so saving it preserves prior sessions instead of
     // overwriting the file with just this run's input. The `history` property
     // is undocumented-ish but stable across the Node versions we support, and
-    // is the only way to read it back. Multi-line entries are fine: the file
-    // is JSON, so a `/paste` buffer round-trips intact.
+    // is the only way to read it back. Collapsed pastes are fine: their full
+    // text rides along in `expansions` and is written as `{ preview, text }`.
     const accumulated = (rl as unknown as { history?: string[] }).history ?? [];
-    saveHistory(historyFile, accumulated, historyMax);
+    saveHistory(historyFile, accumulated, historyMax, expansions);
     rl.close();
   }
 }
@@ -1127,6 +1249,9 @@ export const _internal = {
   loadHistory,
   saveHistory,
   recordHistoryEntry,
+  recordPasteEntry,
+  repairSlashHistory,
+  summarizeMultiline,
 };
 
 export function _clearScreen(): void {

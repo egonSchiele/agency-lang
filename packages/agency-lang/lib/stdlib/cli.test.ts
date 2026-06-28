@@ -18,6 +18,9 @@ const {
   loadHistory,
   saveHistory,
   recordHistoryEntry,
+  recordPasteEntry,
+  repairSlashHistory,
+  summarizeMultiline,
 } = _internal;
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
@@ -295,28 +298,104 @@ describe("history persistence (JSON)", () => {
   });
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  it("round-trips entries, preserving multi-line ones", () => {
+  it("round-trips plain entries, tolerating a raw multi-line string", () => {
     // saveHistory takes readline order (newest-first).
     const newestFirst = ["third\nwith newline", "second", "first"];
     saveHistory(file, newestFirst, 100);
-    expect(loadHistory(file, 100)).toEqual(newestFirst);
+    expect(loadHistory(file, 100)).toEqual({ entries: newestFirst, expansions: {} });
     // The on-disk form is JSON (so a newline can't corrupt it).
     const onDisk = JSON.parse(fs.readFileSync(file, "utf8"));
     expect(onDisk).toEqual(["first", "second", "third\nwith newline"]); // oldest-first
   });
 
-  it("returns [] for a missing or non-array/corrupt file", () => {
-    expect(loadHistory(path.join(dir, "nope.json"), 100)).toEqual([]);
+  it("round-trips a collapsed paste as { preview, text }", () => {
+    const buffer = "write\nme\na\npoem!";
+    const preview = summarizeMultiline(buffer);
+    saveHistory(file, [preview, "before"], 100, { [preview]: buffer });
+    // readline gets the one-line preview; the full text rides back in expansions.
+    expect(loadHistory(file, 100)).toEqual({
+      entries: [preview, "before"],
+      expansions: { [preview]: buffer },
+    });
+    // On disk the paste is an object, so its newline can't split into rows.
+    const onDisk = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(onDisk).toEqual(["before", { preview, text: buffer }]); // oldest-first
+  });
+
+  it("returns empties for a missing or non-array/corrupt file", () => {
+    const empty = { entries: [], expansions: {} };
+    expect(loadHistory(path.join(dir, "nope.json"), 100)).toEqual(empty);
     fs.writeFileSync(file, "{not json");
-    expect(loadHistory(file, 100)).toEqual([]);
+    expect(loadHistory(file, 100)).toEqual(empty);
     fs.writeFileSync(file, JSON.stringify({ not: "an array" }));
-    expect(loadHistory(file, 100)).toEqual([]);
+    expect(loadHistory(file, 100)).toEqual(empty);
   });
 
   it("caps to max, keeping the newest", () => {
     saveHistory(file, ["e", "d", "c", "b", "a"], 3); // newest-first
     // Stored newest 3 (e, d, c); loaded back newest-first.
-    expect(loadHistory(file, 3)).toEqual(["e", "d", "c"]);
+    expect(loadHistory(file, 3)).toEqual({ entries: ["e", "d", "c"], expansions: {} });
+  });
+});
+
+describe("summarizeMultiline", () => {
+  it("renders first line + line count", () => {
+    expect(summarizeMultiline("write\nme\na\npoem!")).toBe("write … (4 lines)");
+  });
+  it("counts a trailing blank line", () => {
+    expect(summarizeMultiline("a\nb\n")).toBe("a … (3 lines)");
+  });
+});
+
+describe("repairSlashHistory", () => {
+  it("replaces the leaked `/` + filter entries with the chosen command", () => {
+    // Trigger fired with ["older"] present, so mark = 1. Then "/" and the
+    // leaked "pa" got committed (newest-first: ["pa", "/", "older"]).
+    const history = ["pa", "/", "older"];
+    repairSlashHistory(history, 1, "/paste");
+    expect(history).toEqual(["/paste", "older"]);
+  });
+
+  it("drops the junk even when nothing was picked (cancelled palette)", () => {
+    const history = ["pa", "/", "older"];
+    repairSlashHistory(history, 1, null);
+    expect(history).toEqual(["older"]);
+  });
+
+  it("dedupes an earlier copy of the chosen command", () => {
+    // mark=2: ["/paste", "older"] predate the trigger; "pa" + "/" were added
+    // after. The old "/paste" survives the rollback, then gets moved to front.
+    const history = ["pa", "/", "/paste", "older"];
+    repairSlashHistory(history, 2, "/paste");
+    expect(history).toEqual(["/paste", "older"]);
+  });
+
+  it("skips rollback when no trigger fired (mark = -1)", () => {
+    const history = ["typed", "older"];
+    repairSlashHistory(history, -1, "/cost");
+    expect(history).toEqual(["/cost", "typed", "older"]);
+  });
+});
+
+describe("recordPasteEntry", () => {
+  it("stores a multi-line paste as a one-line preview + expansion", () => {
+    const history = ["/paste", "older"];
+    const expansions: Record<string, string> = {};
+    const buffer = "write\nme\na\npoem!";
+    recordPasteEntry(history, buffer, expansions);
+    const preview = summarizeMultiline(buffer);
+    // readline only ever holds the one-line preview...
+    expect(history).toEqual([preview, "older"]);
+    // ...with the full text recoverable on submit.
+    expect(expansions).toEqual({ [preview]: buffer });
+  });
+
+  it("stores a single-line paste verbatim, no expansion", () => {
+    const history = ["/paste", "older"];
+    const expansions: Record<string, string> = {};
+    recordPasteEntry(history, "just one line", expansions);
+    expect(history).toEqual(["just one line", "older"]);
+    expect(expansions).toEqual({});
   });
 });
 
@@ -369,8 +448,8 @@ describe("_clearHistory", () => {
   it("clears the persisted file at the supplied path", () => {
     const file = path.join(dir, "history.json");
     saveHistory(file, ["c", "b", "a"], 100);
-    expect(loadHistory(file, 100)).toEqual(["c", "b", "a"]);
+    expect(loadHistory(file, 100).entries).toEqual(["c", "b", "a"]);
     _clearHistory(file);
-    expect(loadHistory(file, 100)).toEqual([]);
+    expect(loadHistory(file, 100).entries).toEqual([]);
   });
 });

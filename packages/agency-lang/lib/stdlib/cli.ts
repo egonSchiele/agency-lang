@@ -573,10 +573,27 @@ function fmtElapsed(ms: number): string {
  *  can't blow out the single-line footer. (Use `/cost` for the full
  *  per-model breakdown.) */
 const FOOTER_MODEL_CAP = 3;
+// Known GGUF quantization suffixes (e.g. `.Q4_K_M`, `.Q8_0`, `.IQ4_XS`, `.F16`).
+// Conservative on purpose: only strip a trailing segment that clearly names a
+// quant, so a real model-name segment (e.g. `…-v1.5`, `…-7B`) is left intact.
+const QUANT_SUFFIX = /\.(?:I?Q\d[\w]*|F16|F32|BF16)$/i;
+
+/** A readable footer label for a model. Hosted model IDs pass through
+ *  unchanged; a local GGUF path/filename is reduced to its model name —
+ *  `…/hf_unsloth_SmolLM2-135M-Instruct.Q4_K_M.gguf` → `SmolLM2-135M-Instruct` —
+ *  by taking the basename and dropping node-llama-cpp's `hf_<user>_` prefix,
+ *  the `.gguf` extension, and the quant suffix. */
+function prettyModel(name: string): string {
+  if (!name.endsWith(".gguf")) return name;
+  const base = (name.split(/[\\/]/).pop() ?? name).replace(/\.gguf$/, "");
+  return base.replace(/^hf_[^_]+_/, "").replace(QUANT_SUFFIX, "");
+}
+
 function fmtModels(models: string[]): string {
-  if (models.length <= FOOTER_MODEL_CAP) return models.join(", ");
-  const shown = models.slice(0, FOOTER_MODEL_CAP).join(", ");
-  return `${shown} +${models.length - FOOTER_MODEL_CAP} more`;
+  const pretty = models.map(prettyModel);
+  if (pretty.length <= FOOTER_MODEL_CAP) return pretty.join(", ");
+  const shown = pretty.slice(0, FOOTER_MODEL_CAP).join(", ");
+  return `${shown} +${pretty.length - FOOTER_MODEL_CAP} more`;
 }
 
 async function printFooter(
@@ -1064,6 +1081,7 @@ export const _internal = {
   readMultiline,
   modelsUsedThisTurn,
   fmtModels,
+  prettyModel,
 };
 
 export function _clearScreen(): void {

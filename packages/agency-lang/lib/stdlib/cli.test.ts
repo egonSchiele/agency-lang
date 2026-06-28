@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { _internal, type PasteState } from "./cli.js";
+import { _internal, _clearHistory, type PasteState } from "./cli.js";
 
 const {
   EMPTY_PASTE,
@@ -337,5 +337,21 @@ describe("recordHistoryEntry", () => {
     const history = ["a"];
     recordHistoryEntry(history, "x", "/paste");
     expect(history).toEqual(["x", "a"]);
+  });
+});
+
+describe("_clearHistory", () => {
+  afterEach(() => { delete (globalThis as Record<string, unknown>).__agencyClearHistory; });
+
+  it("invokes the installed __agencyClearHistory hook", () => {
+    const spy = vi.fn();
+    (globalThis as Record<string, unknown>).__agencyClearHistory = spy;
+    _clearHistory();
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  it("is a no-op when no REPL hook is installed", () => {
+    delete (globalThis as Record<string, unknown>).__agencyClearHistory;
+    expect(() => _clearHistory()).not.toThrow();
   });
 });

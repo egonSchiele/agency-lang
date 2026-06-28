@@ -44,7 +44,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
   @param onSubmit - Called with the submitted line; return `false` to
   exit or a string to print
   @param prompt - String shown before the input buffer (default "> ")
-  @param historyFile - Path to a newline-separated history file;
+  @param historyFile - Path to a JSON history file (array of entries);
   loaded at start and saved on exit. Empty string disables
   persistence.
   @param historyMax - Trim history to this many most-recent entries
@@ -62,7 +62,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L64))
 
 ### clearScreen
 
@@ -70,7 +70,18 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L122))
+
+### clearHistory
+
+```ts
+clearHistory()
+```
+
+Clear the REPL input history — both in-session up-arrow recall and the
+  persisted history file. A no-op outside an interactive `repl()` session.
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L126))
 
 ### termWidth
 
@@ -80,7 +91,7 @@ termWidth(): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L132))
 
 ### hline
 
@@ -97,4 +108,4 @@ hline(char: string, width: number): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L136))

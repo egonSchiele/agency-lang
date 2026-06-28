@@ -1,6 +1,6 @@
 import { getVersion } from "std::agency"
 import { parseArgs } from "std::args"
-import { clearMessages, pushMessage, repl, clearScreen } from "std::cli"
+import { clearMessages, pushMessage, repl, clearScreen, clearHistory } from "std::cli"
 import { today } from "std::date"
 import { setAgentCwd } from "std::index"
 import { box, render } from "std::layout"
@@ -185,6 +185,7 @@ def builtinPalette(): Record<string, string> {
   return {
     "/exit": "Exit the agent",
     "/clear": "Clear the conversation transcript",
+    "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
@@ -228,8 +229,13 @@ def _runTurn(msg: string): boolean {
     clearMessages()
     return true
   }
+  if (trimmed == "/clear-history") {
+    clearHistory()
+    pushMessage("Input history cleared.")
+    return true
+  }
   if (trimmed == "/help") {
-    pushMessage("Commands: /exit, /clear, /cost, /paste, /help")
+    pushMessage("Commands: /exit, /clear, /clear-history, /cost, /paste, /help")
     return true
   }
   if (trimmed == "/cost") {

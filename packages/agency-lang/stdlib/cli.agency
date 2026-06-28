@@ -2,6 +2,7 @@ import {
   _runLineRepl,
   _clearScreen,
   _termWidth,
+  _clearHistory,
  } from "agency-lang/stdlib-lib/cli.js"
 
 /*
@@ -101,7 +102,7 @@ export def repl(
   @param onSubmit - Called with the submitted line; return `false` to
   exit or a string to print
   @param prompt - String shown before the input buffer (default "> ")
-  @param historyFile - Path to a newline-separated history file;
+  @param historyFile - Path to a JSON history file (array of entries);
   loaded at start and saved on exit. Empty string disables
   persistence.
   @param historyMax - Trim history to this many most-recent entries
@@ -120,6 +121,12 @@ export def repl(
 
 export def clearScreen() {
   _clearScreen()
+}
+
+export def clearHistory() {
+  """Clear the REPL input history — both in-session up-arrow recall and the
+  persisted history file. A no-op outside an interactive `repl()` session."""
+  _clearHistory()
 }
 
 export safe def termWidth(): number {

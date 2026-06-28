@@ -730,6 +730,18 @@ export async function _runLineRepl(
   const prevStopSpinner = (globalThis as any)[stopSpinnerKey];
   (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
 
+  // Register a "clear history" hook so a command handler (e.g. the agent's
+  // `/clear-history`) can wipe the active session's recall + the persisted
+  // file without reaching into this readline directly. Same install/restore
+  // lifecycle as the hooks above.
+  const clearHistoryKey = "__agencyClearHistory";
+  const prevClearHistory = (globalThis as any)[clearHistoryKey];
+  (globalThis as any)[clearHistoryKey] = () => {
+    const h = (rl as unknown as { history?: string[] }).history;
+    if (h) h.length = 0;
+    saveHistory(historyFile, [], historyMax);
+  };
+
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal.
   const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
@@ -876,6 +888,7 @@ export async function _runLineRepl(
     teardownSlashTrigger();
     (globalThis as any)[overrideKey] = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
+    (globalThis as any)[clearHistoryKey] = prevClearHistory;
     // Persist whatever entries readline accumulated. `rl.history` is
     // newest-first and already contains the history we loaded at startup
     // PLUS everything added this session (including any `/paste` buffer we
@@ -1106,6 +1119,14 @@ export function _clearScreen(): void {
   // ANSI escape code to clear the screen and move the cursor to the top-left.
   //  process.stdout.write("\033[H\033[2J");
   process.stdout.write('\x1B[2J\x1B[H');
+}
+
+/** Clear the active `repl()` session's input history — both in-session recall
+ *  and the persisted history file — via the `__agencyClearHistory` hook
+ *  `_runLineRepl` installs. A no-op outside an interactive REPL. */
+export function _clearHistory(): void {
+  const fn = (globalThis as any).__agencyClearHistory;
+  if (typeof fn === "function") fn();
 }
 
 export function _termWidth(): number {

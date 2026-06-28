@@ -19,6 +19,9 @@ import type {
 } from "../types.js";
 import type { BinOpExpression } from "../types/binop.js";
 import type { ValueAccess } from "../types/access.js";
+import { walkNodesArray } from "../utils/node.js";
+import { liftCallbackBlocks } from "../preprocessors/liftCallbacks.js";
+import type { ResultPattern } from "../types/pattern.js";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -649,5 +652,75 @@ describe("result patterns", () => {
       });
       expect(eAccess.chain).toEqual([{ kind: "property", name: "error" }]);
     });
+  });
+});
+
+describe("match metadata preservation (matchSource)", () => {
+  function findTaggedAssignment(nodes: AgencyNode[]): Assignment | undefined {
+    const hit = walkNodesArray(nodes).find(
+      ({ node }) => node.type === "assignment" && node.matchSource,
+    );
+    return hit?.node as Assignment | undefined;
+  }
+
+  it("tags the lowered scrutinee assignment with the original match", () => {
+    const lowered = lower(`
+let r = foo()
+match (r) {
+  success(v) => print(v)
+  failure(e) => print(e)
+}
+`);
+    const tagged = findTaggedAssignment(lowered);
+    expect(tagged).toBeDefined();
+    const arms = tagged?.matchSource;
+    expect(arms?.length).toBe(2); // success + failure arms preserved
+    // Structure carried through, not just the arm count: the first arm is a
+    // `success(...)` result pattern.
+    const pattern = arms?.[0]?.caseValue;
+    expect(pattern !== "_" && (pattern as ResultPattern)?.kind).toBe("success");
+    // Slim snapshot: arms carry only the matcher metadata, never the body.
+    expect(arms?.[0]).not.toHaveProperty("body");
+  });
+
+  it("lowers a nested `is` in the match head — no isExpression survives", () => {
+    // Regression: a nested `is` in a compound scrutinee must be lowered to a
+    // boolean condition; if it survives raw, codegen has no isExpression
+    // handler and crashes ("Unhandled Agency node type: isExpression").
+    const lowered = lower(`
+let r = foo()
+let y = true
+match ((r is success) && y) {
+  success(v) => print("s")
+  failure(e) => print("f")
+}
+`);
+    const survived = walkNodesArray(lowered).some(
+      ({ node }) => node.type === "isExpression",
+    );
+    expect(survived).toBe(false);
+  });
+
+  it("survives liftCallbackBlocks (match nested in a callback block)", () => {
+    // Uses parseAgency + lowerPatterns directly rather than the `lower(...)`
+    // helper: `lower` wraps its input in a `node main()` body, but we want the
+    // callback block as the top-level shape fed to liftCallbackBlocks so the
+    // lift actually moves it. Do NOT "simplify" this back to `lower(...)`.
+    const src = `callback("onNodeStart") as data {
+  let r = foo()
+  match (r) {
+    success(v) => print(v)
+    failure(e) => print(e)
+  }
+}
+`;
+    const parsed = parseAgency(src, {}, false, false);
+    if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);
+    const loweredProgram = {
+      ...parsed.result,
+      nodes: lowerPatterns(parsed.result.nodes),
+    };
+    const lifted = liftCallbackBlocks(loweredProgram);
+    expect(findTaggedAssignment(lifted.nodes)).toBeDefined();
   });
 });

@@ -4,7 +4,7 @@ import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
 import { analyzeCondition, narrowToBranch, alwaysExits, postGuardFacts } from "./narrowing.js";
 import { walkNodes } from "../utils/node.js";
-import type { IfElse } from "../types.js";
+import type { Expression, IfElse } from "../types.js";
 import type { ResultType } from "../types/typeHints.js";
 
 // Parse a snippet and return the first ifElse node in main. Uses the shared
@@ -85,6 +85,63 @@ describe("analyzeCondition", () => {
       then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
       else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
     });
+  });
+
+  const disc = (keep: boolean, value = "answer", prop = "kind") => ({
+    variableName: "r",
+    refine: { kind: "discriminant", prop, literal: { type: "stringLiteralType", value }, keep },
+  });
+
+  it.each([
+    ['r.kind == "answer"', true, false],
+    ['"answer" == r.kind', true, false], // operand swap
+    ['r.kind != "answer"', false, true],
+    ['"answer" != r.kind', false, true], // operand swap, !=
+  ])("recognizes %s", (src, thenKeep, elseKeep) => {
+    const f = analyzeCondition(firstIfCondition(src));
+    expect(f.then[0]).toEqual(disc(thenKeep));
+    expect(f.else[0]).toEqual(disc(elseKeep));
+  });
+
+  it("recognizes numeric and boolean discriminants", () => {
+    expect(analyzeCondition(firstIfCondition("n.code == 1")).then[0].refine).toEqual({
+      kind: "discriminant",
+      prop: "code",
+      literal: { type: "numberLiteralType", value: "1" },
+      keep: true,
+    });
+    expect(analyzeCondition(firstIfCondition("r.ok == true")).then[0].refine).toEqual({
+      kind: "discriminant",
+      prop: "ok",
+      literal: { type: "booleanLiteralType", value: "true" },
+      keep: true,
+    });
+  });
+
+  it.each([
+    "r.kind == s.kind", // both member access
+    "x == 1", // no member access
+    'r.a.kind == "x"', // nested member — out of scope
+    "r.kind == r.text", // same var both sides, no literal
+    "r.kind == undefined", // undefined is a variableName, not a literal
+  ])("produces no candidates for %s", (src) => {
+    expect(analyzeCondition(firstIfCondition(src))).toEqual({ then: [], else: [] });
+  });
+
+  it("composes ! with a discriminant (swaps then/else)", () => {
+    // Agency has no `!(expr)` syntax, so build the negation directly: the parser
+    // desugars `!x` to a binOp { operator:"!", left:<true>, right:x }. This
+    // proves the generic `!` swap composes with discriminant facts.
+    const inner = firstIfCondition('r.kind == "answer"');
+    const negated: Expression = {
+      type: "binOpExpression",
+      operator: "!",
+      left: { type: "boolean", value: true },
+      right: inner,
+    };
+    const f = analyzeCondition(negated);
+    expect(f.then).toEqual([disc(false)]); // !(== answer) → then is the complement
+    expect(f.else).toEqual([disc(true)]);
   });
 });
 
@@ -584,5 +641,151 @@ node main() {
 }`);
     expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'w').");
     expect(errs).not.toContain("(assignment to 'n')");
+  });
+});
+
+const REPLY = `
+type Reply = { kind: "answer", text: string } | { kind: "clarify", question: string }
+def mk(): Reply { return { kind: "answer", text: "x" } }
+`;
+const has = (errs: string[], re: RegExp) => errs.filter((e) => re.test(e)).length;
+// Anchor on the `Property 'X' does not exist` access error specifically — a
+// looser regex spuriously matches the *other* member's field name as rendered
+// inside the type (`… on type '{ kind: "clarify", question: string }'`).
+const noQuestion = /Property 'question' does not exist/;
+const noText = /Property 'text' does not exist/;
+
+describe("discriminated-union narrowing — if/else", () => {
+  it("narrows to the matching member in then; complement in else", () => {
+    const errs = check(`${REPLY}
+node main() {
+  let r = mk()
+  if (r.kind == "answer") { let q = r.question } else { let t = r.text }
+}`);
+    expect(has(errs, noQuestion)).toBe(1); // then: r is answer → no `question`
+    expect(has(errs, noText)).toBe(1);     // else: r is clarify → no `text`
+  });
+
+  it("does NOT narrow outside the guard (control)", () => {
+    const errs = check(`${REPLY}
+node main() { let r = mk()\n  let q = r.question }`);
+    expect(has(errs, noQuestion)).toBe(0); // lenient union access
+  });
+
+  it("does NOT leak narrowing past the block", () => {
+    const errs = check(`${REPLY}
+node main() {
+  let r = mk()
+  if (r.kind == "answer") { }
+  let q = r.question
+}`);
+    expect(has(errs, noQuestion)).toBe(0);
+  });
+
+  it("skips narrowing when the variable is reassigned in the branch", () => {
+    const errs = check(`${REPLY}
+node main() {
+  let r = mk()
+  if (r.kind == "answer") { r = mk()\n    let q = r.question }
+}`);
+    expect(has(errs, noQuestion)).toBe(0);
+  });
+
+  it("narrows via != (then is complement)", () => {
+    const errs = check(`${REPLY}
+node main() {
+  let r = mk()
+  if (r.kind != "answer") { let t = r.text }
+}`);
+    expect(has(errs, noText)).toBe(1); // then: r is clarify → no `text`
+  });
+
+  it("narrows in a while body", () => {
+    const errs = check(`${REPLY}
+node main() {
+  let r = mk()
+  while (r.kind == "answer") { let q = r.question }
+}`);
+    expect(has(errs, noQuestion)).toBe(1);
+  });
+
+  it("narrows after an early-return guard (postGuardFacts × discriminant)", () => {
+    const errs = check(`${REPLY}
+node main() {
+  let r = mk()
+  if (r.kind != "answer") { return }
+  let q = r.question
+}`);
+    expect(has(errs, noQuestion)).toBe(1); // r is answer below the guard
+  });
+
+  it("composes with && (then-facts union)", () => {
+    const andErrs = check(`${REPLY}
+node main() {
+  let r = mk()
+  if (r.kind == "answer" && true) { let q = r.question }
+}`);
+    expect(has(andErrs, noQuestion)).toBe(1);
+    // NOTE: `!` composition is covered by the analyzeCondition unit test
+    // "composes ! with a discriminant" rather than e2e — Agency has no
+    // `!(expr)` syntax (the parser rejects a `!` before a parenthesized
+    // group), so `!(r.kind == "answer")` is not expressible in source.
+  });
+});
+
+describe("discriminated-union narrowing — literal kinds & shapes", () => {
+  it("narrows a boolean discriminant (foundation for r.success)", () => {
+    const errs = check(`
+type Tag = { ok: true, v: number } | { ok: false, err: string }
+def mkT(): Tag { return { ok: true, v: 1 } }
+node main() {
+  let t = mkT()
+  if (t.ok == true) { let e = t.err }
+}`);
+    expect(has(errs, /\berr\b.*does not exist|does not exist.*\berr\b/)).toBe(1);
+  });
+
+  it("narrows a numeric discriminant", () => {
+    const errs = check(`
+type N = { code: 1, a: number } | { code: 2, b: string }
+def mkN(): N { return { code: 1, a: 1 } }
+node main() {
+  let n = mkN()
+  if (n.code == 1) { let b = n.b }
+}`);
+    expect(has(errs, /\bb\b.*does not exist|does not exist.*\bb\b/)).toBe(1);
+  });
+
+  it("narrows a 3-member union to a 2-member union", () => {
+    const errs = check(`
+type T = { k: "a", x: number } | { k: "b", y: string } | { k: "c", z: boolean }
+def mkT3(): T { return { k: "a", x: 1 } }
+node main() {
+  let t = mkT3()
+  if (t.k != "a") { let x = t.x }
+}`);
+    // then: t is {b}|{c}; neither has `x` → error.
+    expect(has(errs, /\bx\b.*does not exist|does not exist.*\bx\b/)).toBe(1);
+  });
+
+  it("is a no-op on a non-union scrutinee", () => {
+    const errs = check(`
+node main() {
+  let p: { kind: string, n: number } = { kind: "x", n: 1 }
+  if (p.kind == "x") { let n = p.n }
+}`);
+    expect(errs.filter((e) => /does not exist/.test(e)).length).toBe(0);
+  });
+
+  it("does NOT narrow a mixed union with a non-literal discriminant member", () => {
+    const errs = check(`
+type Mixed = { kind: "a", x: number } | { kind: string, y: number }
+def mkM(): Mixed { return { kind: "a", x: 1 } }
+node main() {
+  let m = mkM()
+  if (m.kind == "a") { let y = m.y }
+}`);
+    // {kind:string} can't be proven disjoint → kept → no narrowing → m.y fine.
+    expect(errs.filter((e) => /does not exist/.test(e)).length).toBe(0);
   });
 });

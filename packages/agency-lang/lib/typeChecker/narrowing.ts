@@ -8,6 +8,7 @@ import type {
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
 import { safeResolveType } from "./assignability.js";
+import { literalToType } from "./literalType.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
@@ -42,9 +43,26 @@ const narrowers: {
     const resolved = safeResolveType(current, aliases);
     return resolved.type === "resultType" ? narrowToBranch(resolved, r.branch) : null;
   },
-  // discriminant added in the next increment.
-  discriminant: () => null,
+  discriminant: (r, current, aliases) =>
+    narrowUnionByDiscriminant(current, r.prop, r.literal, r.keep, aliases),
 };
+
+/**
+ * Recognize a single `v.prop` member access over a *bare variable* (exactly one
+ * property hop). Returns null for anything else — nested access (`a.b.c`), a
+ * non-variable base, index/call chains, etc. Variable-keyed only, so the
+ * narrowed scrutinee is statically the same binding at the access site.
+ */
+function asDiscriminantAccess(
+  e: Expression,
+): { variableName: string; prop: string } | null {
+  if (e.type !== "valueAccess") return null;
+  if (e.base.type !== "variableName") return null;
+  if (e.chain.length !== 1) return null;
+  const el = e.chain[0];
+  if (el.kind !== "property") return null;
+  return { variableName: e.base.value, prop: el.name };
+}
 
 /**
  * Inspect a (post-lowering) boolean condition and report the narrowing
@@ -77,6 +95,20 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       const r = analyzeCondition(condition.right);
       return { then: [], else: [...l.else, ...r.else] };
     }
+    if (condition.operator === "==" || condition.operator === "!=") {
+      // `v.prop == literal` / `!= literal` over a bare variable. Either operand
+      // order is accepted. then-branch keeps the matching member(s) for `==`
+      // (and the complement for `!=`); the else-branch is the inverse.
+      const acc = asDiscriminantAccess(condition.left) ?? asDiscriminantAccess(condition.right);
+      const lit = literalToType(condition.right) ?? literalToType(condition.left);
+      if (!acc || !lit) return NO_FACTS;
+      const keepThen = condition.operator === "==";
+      const mk = (keep: boolean): NarrowCandidate => ({
+        variableName: acc.variableName,
+        refine: { kind: "discriminant", prop: acc.prop, literal: lit, keep },
+      });
+      return { then: [mk(keepThen)], else: [mk(!keepThen)] };
+    }
     return NO_FACTS;
   }
 
@@ -98,6 +130,51 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
 /** Return a copy of a ResultType tagged as narrowed to one branch. */
 export function narrowToBranch(rt: ResultType, branch: "success" | "failure"): ResultType {
   return { ...rt, narrowedBranch: branch };
+}
+
+/**
+ * Does a member's discriminant-property type equal the tested literal?
+ * `"yes"`/`"no"` only when the property is itself the *same kind* of literal
+ * type; anything else (a non-literal prop type, a union, a different literal
+ * kind) is `"unknown"` — which keeps the member on both sides, preserving
+ * soundness.
+ */
+function literalTypeMatches(
+  t: VariableType,
+  literal: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+  aliases: Record<string, TypeAliasEntry>,
+): "yes" | "no" | "unknown" {
+  const r = safeResolveType(t, aliases);
+  if (r.type !== literal.type) return "unknown"; // non-literal prop, literal union, or kind mismatch
+  return r.value === literal.value ? "yes" : "no";
+}
+
+/**
+ * Filter a union's members by `prop == literal` (keep) or `prop != literal`
+ * (!keep). Sound/conservative: drops only provably-excluded members; never
+ * narrows to `never`; non-union → null (no narrowing).
+ */
+export function narrowUnionByDiscriminant(
+  type: VariableType,
+  prop: string,
+  literal: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+  keep: boolean,
+  aliases: Record<string, TypeAliasEntry>,
+): VariableType | null {
+  const resolved = safeResolveType(type, aliases);
+  if (resolved.type !== "unionType") return null;
+  const members = resolved.types;
+  const kept = members.filter((m) => {
+    const rm = safeResolveType(m, aliases);
+    const propType =
+      rm.type === "objectType"
+        ? rm.properties.find((p) => p.key === prop)?.value
+        : undefined;
+    const match = propType ? literalTypeMatches(propType, literal, aliases) : "unknown";
+    return keep ? match !== "no" : match !== "yes";
+  });
+  if (kept.length === members.length || kept.length === 0) return null;
+  return kept.length === 1 ? kept[0] : { type: "unionType", types: kept };
 }
 
 /**

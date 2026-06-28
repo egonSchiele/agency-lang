@@ -7,6 +7,7 @@ import type {
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
 import { isAssignable, safeResolveType } from "./assignability.js";
+import { literalToType } from "./literalType.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -142,12 +143,12 @@ export function synthType(
     case "number":
     case "unitLiteral":
       return NUMBER_T;
-    case "string": {
-      if (expr.segments.length === 1 && expr.segments[0].type === "text") {
-        return { type: "stringLiteralType", value: expr.segments[0].value };
-      }
-      return STRING_T;
-    }
+    case "string":
+      // Single source of truth for string→literal-type; shared with the
+      // discriminant-narrowing recognizer. number/boolean intentionally stay
+      // NUMBER_T/BOOLEAN_T above (synthType does not infer numeric/boolean
+      // literal types).
+      return literalToType(expr) ?? STRING_T;
     case "multiLineString":
       return STRING_T;
     case "boolean":

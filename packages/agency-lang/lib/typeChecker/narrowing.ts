@@ -1,13 +1,69 @@
-import type { AgencyNode, Expression, TypeAliasEntry, IfElse } from "../types.js";
-import type { ResultType } from "../types/typeHints.js";
+import type { AgencyNode, Expression, TypeAliasEntry, IfElse, VariableType } from "../types.js";
+import type {
+  ResultType,
+  StringLiteralType,
+  NumberLiteralType,
+  BooleanLiteralType,
+} from "../types/typeHints.js";
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
 import { safeResolveType } from "./assignability.js";
+import { literalToType } from "./literalType.js";
+import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 
-export type NarrowCandidate = { variableName: string; branch: "success" | "failure" };
+/**
+ * What a candidate narrows to. Tagged so a new narrowing form slots in as one
+ * `narrowers`-table entry without touching the apply loop. `resultBranch` is
+ * the `isSuccess`/`isFailure` Result narrowing; `discriminant` filters a union
+ * by `v.prop == literal`.
+ */
+export type Refine =
+  | { kind: "resultBranch"; branch: "success" | "failure" }
+  | {
+      kind: "discriminant";
+      prop: string;
+      literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
+      keep: boolean;
+    };
+export type NarrowCandidate = { variableName: string; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
 const NO_FACTS: ConditionFacts = { then: [], else: [] };
+
+// "what": given a refine + the variable's current (pre-resolved) type, the
+// narrowed type, or null for "no narrowing". The "how" (child scope,
+// reassignment gate, declareLocal) lives in applyNarrowing.
+const narrowers: {
+  [K in Refine["kind"]]: (
+    refine: Extract<Refine, { kind: K }>,
+    current: VariableType,
+    aliases: Record<string, TypeAliasEntry>,
+  ) => VariableType | null;
+} = {
+  resultBranch: (r, current, aliases) => {
+    const resolved = safeResolveType(current, aliases);
+    return resolved.type === "resultType" ? narrowToBranch(resolved, r.branch) : null;
+  },
+  discriminant: (r, current, aliases) =>
+    narrowUnionByDiscriminant(current, r.prop, r.literal, r.keep, aliases),
+};
+
+/**
+ * Recognize a single `v.prop` member access over a *bare variable* (exactly one
+ * property hop). Returns null for anything else — nested access (`a.b.c`), a
+ * non-variable base, index/call chains, etc. Variable-keyed only, so the
+ * narrowed scrutinee is statically the same binding at the access site.
+ */
+function asDiscriminantAccess(
+  e: Expression,
+): { variableName: string; prop: string } | null {
+  if (e.type !== "valueAccess") return null;
+  if (e.base.type !== "variableName") return null;
+  if (e.chain.length !== 1) return null;
+  const el = e.chain[0];
+  if (el.kind !== "property") return null;
+  return { variableName: e.base.value, prop: el.name };
+}
 
 /**
  * Inspect a (post-lowering) boolean condition and report the narrowing
@@ -40,6 +96,20 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       const r = analyzeCondition(condition.right);
       return { then: [], else: [...l.else, ...r.else] };
     }
+    if (condition.operator === "==" || condition.operator === "!=") {
+      // `v.prop == literal` / `!= literal` over a bare variable. Either operand
+      // order is accepted. then-branch keeps the matching member(s) for `==`
+      // (and the complement for `!=`); the else-branch is the inverse.
+      const acc = asDiscriminantAccess(condition.left) ?? asDiscriminantAccess(condition.right);
+      const lit = literalToType(condition.right) ?? literalToType(condition.left);
+      if (!acc || !lit) return NO_FACTS;
+      const keepThen = condition.operator === "==";
+      const mk = (keep: boolean): NarrowCandidate => ({
+        variableName: acc.variableName,
+        refine: { kind: "discriminant", prop: acc.prop, literal: lit, keep },
+      });
+      return { then: [mk(keepThen)], else: [mk(!keepThen)] };
+    }
     return NO_FACTS;
   }
 
@@ -53,14 +123,83 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
   const thenBranch = fn === "isSuccess" ? "success" : "failure";
   const elseBranch = fn === "isSuccess" ? "failure" : "success";
   return {
-    then: [{ variableName: name, branch: thenBranch }],
-    else: [{ variableName: name, branch: elseBranch }],
+    then: [{ variableName: name, refine: { kind: "resultBranch", branch: thenBranch } }],
+    else: [{ variableName: name, refine: { kind: "resultBranch", branch: elseBranch } }],
   };
 }
 
 /** Return a copy of a ResultType tagged as narrowed to one branch. */
 export function narrowToBranch(rt: ResultType, branch: "success" | "failure"): ResultType {
   return { ...rt, narrowedBranch: branch };
+}
+
+/**
+ * Does a member's discriminant-property type equal the tested literal?
+ * `"yes"`/`"no"` only when the property is itself the *same kind* of literal
+ * type; anything else (a non-literal prop type, a union, a different literal
+ * kind) is `"unknown"` — which keeps the member on both sides, preserving
+ * soundness.
+ */
+function literalTypeMatches(
+  t: VariableType,
+  literal: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+  aliases: Record<string, TypeAliasEntry>,
+): "yes" | "no" | "unknown" {
+  const r = safeResolveType(t, aliases);
+  if (r.type !== literal.type) return "unknown"; // non-literal prop, literal union, or kind mismatch
+  return literalValuesEqual(r, literal) ? "yes" : "no";
+}
+
+/**
+ * Compare two same-kind literal-type values, normalizing for the fact that the
+ * member's type-position value (`a`) is parsed differently from the
+ * expression-position discriminant (`b`):
+ *  - strings: the type parser captures escapes raw (`a\tb`) while the
+ *    expression parser unescapes them (`a⇥b`) — unescape `a` before comparing,
+ *    or an escaped discriminant tag would wrongly drop the matching member.
+ *  - numbers: compare numerically so `1` and `1.0` (both valid literal tags)
+ *    are equal despite different source text.
+ *  - booleans: already canonical (`"true"`/`"false"`).
+ */
+function literalValuesEqual(
+  a: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+  b: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+): boolean {
+  if (a.type === "stringLiteralType") {
+    return unescapeStringLiteralValue(a.value) === b.value;
+  }
+  if (a.type === "numberLiteralType") {
+    return Number(a.value) === Number(b.value);
+  }
+  return a.value === b.value;
+}
+
+/**
+ * Filter a union's members by `prop == literal` (keep) or `prop != literal`
+ * (!keep). Sound/conservative: drops only provably-excluded members; never
+ * narrows to `never`; non-union → null (no narrowing).
+ */
+export function narrowUnionByDiscriminant(
+  type: VariableType,
+  prop: string,
+  literal: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+  keep: boolean,
+  aliases: Record<string, TypeAliasEntry>,
+): VariableType | null {
+  const resolved = safeResolveType(type, aliases);
+  if (resolved.type !== "unionType") return null;
+  const members = resolved.types;
+  const kept = members.filter((m) => {
+    const rm = safeResolveType(m, aliases);
+    const propType =
+      rm.type === "objectType"
+        ? rm.properties.find((p) => p.key === prop)?.value
+        : undefined;
+    const match = propType ? literalTypeMatches(propType, literal, aliases) : "unknown";
+    return keep ? match !== "no" : match !== "yes";
+  });
+  if (kept.length === members.length || kept.length === 0) return null;
+  return kept.length === 1 ? kept[0] : { type: "unionType", types: kept };
 }
 
 /**
@@ -128,15 +267,26 @@ export function applyNarrowing(
   for (const cand of candidates) {
     const current = childScope.lookup(cand.variableName);
     if (!current || current === "any") continue;
-    // Resolve through type-alias variables (`let r: R = …` where
-    // `type R = Result<…>` is stored as `typeAliasVariable`, not `resultType`).
-    // Mirrors `synthValueAccess`, which also resolves before its Result check —
-    // without this, alias-typed Results silently never narrow, leaving them
-    // unfixable under Increment 3's hard-error flip.
-    const resolved = safeResolveType(current, typeAliases);
-    if (resolved.type !== "resultType") continue;
+    // "what to narrow to" is delegated to the refine's narrower. Each narrower
+    // resolves through type-alias variables itself (mirrors synthValueAccess) so
+    // alias-typed scrutinees still narrow; null means "leave the type as-is".
+    // Run it first: most `v.prop == literal` candidates aren't unions and bail
+    // here, so we skip the (more expensive) whole-body reassignment walk.
+    // The cast widens the table entry — indexing by `refine.kind` can't be
+    // statically correlated with the matching `refine` variant — but the call
+    // is sound: `narrowers[k]` is only ever invoked with the variant whose
+    // `kind` is `k`.
+    const narrow = narrowers[cand.refine.kind] as (
+      refine: Refine,
+      current: VariableType,
+      aliases: Record<string, TypeAliasEntry>,
+    ) => VariableType | null;
+    const narrowed = narrow(cand.refine, current, typeAliases);
+    if (narrowed === null) continue;
+    // Soundness gate: a branch that reassigns the variable may change its type
+    // mid-branch, so don't narrow it (whole-body scan, conservative).
     if (isReassignedIn(branchBody, cand.variableName)) continue;
-    childScope.declareLocal(cand.variableName, narrowToBranch(resolved, cand.branch));
+    childScope.declareLocal(cand.variableName, narrowed);
   }
 }
 

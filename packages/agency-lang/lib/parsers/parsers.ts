@@ -332,6 +332,55 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
 // preserved verbatim — both the backslash and the character — so existing
 // strings containing literal `\` followed by non-escape characters are
 // unaffected. This is the same behavior as Python's regular strings.
+/** Map the char after a `\` to its unescaped form. Unknown escapes are
+ *  preserved verbatim (`\` + char) so e.g. regex source keeps working. */
+export function unescapeStringChar(next: string): string {
+  switch (next) {
+    case "\\":
+      return "\\";
+    case '"':
+      return '"';
+    case "'":
+      return "'";
+    case "`":
+      return "`";
+    case "n":
+      return "\n";
+    case "t":
+      return "\t";
+    case "r":
+      return "\r";
+    case "0":
+      return "\0";
+    default:
+      return "\\" + next;
+  }
+}
+
+/** Unescape a raw string-literal body using the same escape table the string
+ *  expression parser applies. A string in *type* position (e.g. a discriminant
+ *  tag `{ kind: "a\tb" }`) is captured raw, while the same literal in
+ *  *expression* position is unescaped — normalize the raw form through this to
+ *  compare them. Mirrors `stringTextSegmentParserFor` (`\${` → `${`; unknown
+ *  escapes preserved). */
+export function unescapeStringLiteralValue(raw: string): string {
+  let out = "";
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === "\\" && i + 1 < raw.length) {
+      if (raw[i + 1] === "$" && raw[i + 2] === "{") {
+        out += "${";
+        i += 2;
+        continue;
+      }
+      out += unescapeStringChar(raw[i + 1]);
+      i += 1;
+      continue;
+    }
+    out += raw[i];
+  }
+  return out;
+}
+
 const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment> =>
   (input: string): ParserResult<TextSegment> => {
     let i = 0;
@@ -350,17 +399,7 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
           i += 3;
           continue;
         }
-        switch (next) {
-          case "\\": value += "\\"; break;
-          case '"': value += '"'; break;
-          case "'": value += "'"; break;
-          case "`": value += "`"; break;
-          case "n": value += "\n"; break;
-          case "t": value += "\t"; break;
-          case "r": value += "\r"; break;
-          case "0": value += "\0"; break;
-          default: value += "\\" + next; break;
-        }
+        value += unescapeStringChar(next);
         i += 2;
         continue;
       }

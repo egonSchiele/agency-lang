@@ -259,6 +259,31 @@ for its then- and else-branches. It recognizes a single `isSuccess(x)` /
 match is unambiguous), and composes over boolean combinators: `!c` swaps
 then/else, `a && b` unions then-facts, `a || b` unions else-facts.
 
+Each candidate carries a tagged `Refine` (`{ variableName, refine }`) and is
+applied through a declarative `narrowers` table keyed by `refine.kind` — so a
+new narrowing form is one table entry, not a change to the apply loop. The two
+forms today are `resultBranch` (above) and `discriminant`.
+
+**Discriminated-union narrowing:** `analyzeCondition` also recognizes
+`v.prop == literal` / `v.prop != literal` over a bare variable (either operand
+order; string/number/boolean literals via the shared `literalToType`).
+`narrowUnionByDiscriminant` then filters the union's members by that literal
+discriminant property — `if (r.kind == "answer")` narrows `r` to the matching
+member(s) in the then-branch and the complement in the else-branch. Like Result
+narrowing it is sound/conservative: a member whose discriminant property isn't a
+*matching-kind literal type* (a plain `string`, a wider union, a different
+literal kind) can't be proven disjoint, so it is kept — and narrowing to `never`
+(or to the full set) is suppressed entirely (returns "no narrowing"). Match arms
+come for free: `match (r) { { kind: "answer", data } => … }` lowers to
+`const __s = r; if (__s.kind == "answer") { const data = __s.data; … }`, so the
+bound field `data` reads the narrowed temp with no match-specific code.
+
+Two limitations: (1) only *bound fields* of the scrutinee narrow — the scrutinee
+variable in the source isn't re-typed, only the lowered temp; (2) a mixed union
+with a non-literal discriminant member (`{ kind: "a" } | { kind: string }`)
+doesn't narrow, by design (the `string` member can't be excluded). The `is`-form
+match (`match (x is …)`) is guard-based and intentionally untagged.
+
 `walkScopeBody` applies the facts by walking each branch in a `scope.child()`
 whose refinements are written with `declareLocal` — so they never leak past the
 branch, while real declarations inside the branch still flow to the function

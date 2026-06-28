@@ -817,3 +817,32 @@ node main() {
     expect(errs.some((e) => /string \| number|number \| string/.test(e))).toBe(false);
   });
 });
+
+describe("discriminated-union narrowing — literal normalization (soundness)", () => {
+  // Regression: a discriminant tag with an escape is stored raw in type
+  // position (`a\tb`) but unescaped in expression position (`a⇥b`). Without
+  // normalization the matching member is wrongly dropped → no narrowing → the
+  // other member's field types leniently → 0 errors. Normalized, the matching
+  // member is kept and narrowed → accessing the *other* member's field errors.
+  it("keeps the matching member when the discriminant tag has an escape", () => {
+    const errs = check(`
+type E = { kind: "a\\tb", x: number } | { kind: "c", y: string }
+def mkE(): E { return { kind: "a\\tb", x: 1 } }
+node main() {
+  let e = mkE()
+  if (e.kind == "a\\tb") { let y = e.y }
+}`);
+    expect(has(errs, /Property 'y' does not exist/)).toBe(1);
+  });
+
+  it("matches numeric discriminants numerically (1 vs 1.0)", () => {
+    const errs = check(`
+type N2 = { code: 1, a: number } | { code: 2, b: string }
+def mkN2(): N2 { return { code: 1, a: 1 } }
+node main() {
+  let n = mkN2()
+  if (n.code == 1.0) { let b = n.b }
+}`);
+    expect(has(errs, /Property 'b' does not exist/)).toBe(1);
+  });
+});

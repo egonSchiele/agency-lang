@@ -1,3 +1,9 @@
+## Unreleased
+
+### Language / Typechecker
+- Discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch; `match` arms narrow bound fields via the lowered scrutinee. Composes with `!`/`&&`/`||`/early-return/`while`.
+  - **Migration (typechecker-enabled projects only):** inside such a guard, accessing a property that exists on a *different* member is now an error — previously union property access was lenient. This is the intended behavior; update the access or guard accordingly.
+
 ## Jun 24 2026 — v0.6.4
 
 ### Language / Typechecker

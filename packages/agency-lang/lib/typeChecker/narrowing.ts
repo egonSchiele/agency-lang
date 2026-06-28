@@ -9,12 +9,13 @@ import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
 import { safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
+import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
  * `narrowers`-table entry without touching the apply loop. `resultBranch` is
- * the `isSuccess`/`isFailure` Result narrowing; `discriminant` (wired in the
- * next increment) filters a union by `v.prop == literal`.
+ * the `isSuccess`/`isFailure` Result narrowing; `discriminant` filters a union
+ * by `v.prop == literal`.
  */
 export type Refine =
   | { kind: "resultBranch"; branch: "success" | "failure" }
@@ -146,7 +147,31 @@ function literalTypeMatches(
 ): "yes" | "no" | "unknown" {
   const r = safeResolveType(t, aliases);
   if (r.type !== literal.type) return "unknown"; // non-literal prop, literal union, or kind mismatch
-  return r.value === literal.value ? "yes" : "no";
+  return literalValuesEqual(r, literal) ? "yes" : "no";
+}
+
+/**
+ * Compare two same-kind literal-type values, normalizing for the fact that the
+ * member's type-position value (`a`) is parsed differently from the
+ * expression-position discriminant (`b`):
+ *  - strings: the type parser captures escapes raw (`a\tb`) while the
+ *    expression parser unescapes them (`a⇥b`) — unescape `a` before comparing,
+ *    or an escaped discriminant tag would wrongly drop the matching member.
+ *  - numbers: compare numerically so `1` and `1.0` (both valid literal tags)
+ *    are equal despite different source text.
+ *  - booleans: already canonical (`"true"`/`"false"`).
+ */
+function literalValuesEqual(
+  a: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+  b: StringLiteralType | NumberLiteralType | BooleanLiteralType,
+): boolean {
+  if (a.type === "stringLiteralType") {
+    return unescapeStringLiteralValue(a.value) === b.value;
+  }
+  if (a.type === "numberLiteralType") {
+    return Number(a.value) === Number(b.value);
+  }
+  return a.value === b.value;
 }
 
 /**
@@ -242,15 +267,26 @@ export function applyNarrowing(
   for (const cand of candidates) {
     const current = childScope.lookup(cand.variableName);
     if (!current || current === "any") continue;
-    // Soundness gate: a branch that reassigns the variable may change its type
-    // mid-branch, so don't narrow it (whole-body scan, conservative).
-    if (isReassignedIn(branchBody, cand.variableName)) continue;
     // "what to narrow to" is delegated to the refine's narrower. Each narrower
     // resolves through type-alias variables itself (mirrors synthValueAccess) so
     // alias-typed scrutinees still narrow; null means "leave the type as-is".
-    const narrow = narrowers[cand.refine.kind];
-    const narrowed = narrow(cand.refine as never, current, typeAliases);
-    if (narrowed !== null) childScope.declareLocal(cand.variableName, narrowed);
+    // Run it first: most `v.prop == literal` candidates aren't unions and bail
+    // here, so we skip the (more expensive) whole-body reassignment walk.
+    // The cast widens the table entry — indexing by `refine.kind` can't be
+    // statically correlated with the matching `refine` variant — but the call
+    // is sound: `narrowers[k]` is only ever invoked with the variant whose
+    // `kind` is `k`.
+    const narrow = narrowers[cand.refine.kind] as (
+      refine: Refine,
+      current: VariableType,
+      aliases: Record<string, TypeAliasEntry>,
+    ) => VariableType | null;
+    const narrowed = narrow(cand.refine, current, typeAliases);
+    if (narrowed === null) continue;
+    // Soundness gate: a branch that reassigns the variable may change its type
+    // mid-branch, so don't narrow it (whole-body scan, conservative).
+    if (isReassignedIn(branchBody, cand.variableName)) continue;
+    childScope.declareLocal(cand.variableName, narrowed);
   }
 }
 

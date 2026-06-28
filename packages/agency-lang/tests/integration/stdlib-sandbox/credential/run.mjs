@@ -12,7 +12,7 @@ if (!process.env.CI) {
   process.exit(0);
 }
 
-const tests = ["email", "sms", "browser"];
+const tests = ["email", "sms", "browser", "tavily"];
 
 for (const name of tests) {
   run(rootDir, `Credential test: ${name}`,

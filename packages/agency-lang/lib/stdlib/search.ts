@@ -103,7 +103,9 @@ export async function _tavilySearch(
   }
 
   const data = await response.json();
-  const results = data?.results ?? [];
+  // Guard the shape: Tavily returns `results: [...]`, but tolerate a missing
+  // or non-array field rather than throwing in `.map`.
+  const results = Array.isArray(data?.results) ? data.results : [];
 
   // Map Tavily's `content` (the extracted snippet) onto `description` so the
   // result shape matches Brave's SearchResult exactly — a drop-in alternative.

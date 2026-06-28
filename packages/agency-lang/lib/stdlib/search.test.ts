@@ -235,6 +235,12 @@ describe("_tavilySearch", () => {
     expect(results).toEqual([]);
   });
 
+  it("returns empty array when results is not an array", async () => {
+    globalThis.fetch = mockFetchResponse({ results: null });
+    const results = await _tavilySearch("test");
+    expect(results).toEqual([]);
+  });
+
   it("returns empty array when results field is missing", async () => {
     globalThis.fetch = mockFetchResponse({});
     const results = await _tavilySearch("test");

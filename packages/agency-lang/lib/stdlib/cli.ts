@@ -5,6 +5,7 @@ import {
   writeFileSync,
   existsSync,
   mkdirSync,
+  renameSync,
 } from "fs";
 import { dirname } from "path";
 import { __call } from "../runtime/call.js";
@@ -44,35 +45,59 @@ async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;
 }
 
-/** Read `historyFile` (one entry per line, oldest first) and return
- *  the entries in the order Node's `readline` expects them: newest
- *  first, capped at `max`. Returns `[]` on any I/O error so a
- *  corrupt or missing history file never breaks startup. */
+/** Read `historyFile` (a JSON array of entries, oldest first) and return
+ *  them in the order Node's `readline` expects: newest first, capped at
+ *  `max`. JSON (rather than one-entry-per-line) so a `/paste` buffer with
+ *  embedded newlines round-trips instead of splitting into bogus entries.
+ *  Returns `[]` on any I/O or parse error (or a non-array file) so a corrupt
+ *  or missing history file never breaks startup. */
 function loadHistory(file: string, max: number): string[] {
   if (!file || !existsSync(file)) return [];
   try {
-    const raw = readFileSync(file, "utf8");
-    const lines = raw.split("\n").filter((l) => l.length > 0);
-    return lines.reverse().slice(0, max);
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e): e is string => typeof e === "string").reverse().slice(0, max);
   } catch {
     return [];
   }
 }
 
-/** Persist `history` (in readline's newest-first order) to `file`,
- *  storing it oldest-first one entry per line so re-loading yields
- *  identical chronology. Creates parent dirs as needed. Swallows
+/** Persist `history` (in readline's newest-first order) to `file` as a JSON
+ *  array stored oldest-first, so re-loading yields identical chronology and a
+ *  multi-line entry survives intact. Creates parent dirs as needed. Swallows
  *  errors so a read-only HOME doesn't crash the REPL on exit. */
 function saveHistory(file: string, history: string[], max: number): void {
   if (!file) return;
   try {
     mkdirSync(dirname(file), { recursive: true });
-    const trimmed = history.slice(0, max);
-    const lines = trimmed.slice().reverse();
-    writeFileSync(file, lines.join("\n") + (lines.length ? "\n" : ""), "utf8");
+    const oldestFirst = history.slice(0, max).slice().reverse();
+    const data = JSON.stringify(oldestFirst, null, 2) + "\n";
+    // Write to a sibling temp file, then rename into place. The rename is an
+    // atomic swap (POSIX, and Windows via libuv's REPLACE_EXISTING), so a crash
+    // mid-write can't leave a half-written file — which, as JSON, would parse to
+    // empty and silently wipe the user's history on the next load.
+    const tmp = `${file}.tmp-${process.pid}`;
+    writeFileSync(tmp, data, "utf8");
+    renameSync(tmp, file);
   } catch {
     // Ignore — best-effort persistence.
   }
+}
+
+/** Make `entry` the most-recent item in `history` (readline's newest-first
+ *  array), removing the `command` readline added for it (e.g. `/paste`, which
+ *  triggered the multi-line editor) and any earlier duplicate of `entry`. This
+ *  is how a pasted buffer reaches up-arrow recall and persistence — readline
+ *  never sees the buffer itself, only the `/paste` keystrokes. */
+function recordHistoryEntry(history: string[], entry: string, command: string): void {
+  for (let i = history.length - 1; i >= 0; i--) {
+    // `command` is matched after trimming because readline stores the raw line
+    // (`"/paste   "`), while the command itself is the trimmed form. `entry`
+    // (the pasted buffer) is matched exactly — its surrounding whitespace is
+    // content.
+    if (history[i] === entry || history[i].trim() === command) history.splice(i, 1);
+  }
+  history.unshift(entry);
 }
 
 /** Drives the line-mode REPL loop. Per iteration: prompt → await
@@ -717,6 +742,20 @@ export async function _runLineRepl(
   const prevStopSpinner = (globalThis as any)[stopSpinnerKey];
   (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
 
+  // Register a "clear history" hook so a command handler (e.g. the agent's
+  // `/clear-history`) can wipe this session's *live* recall. The hook only
+  // touches `rl.history` — a Node object owned by this running readline, which
+  // can't live anywhere but TS. The persisted *file* is cleared separately by
+  // `_clearHistory`, using a path Agency holds as a module global (so the file
+  // identity lives in the execution model, not in this closure). Same
+  // install/restore lifecycle as the hooks above.
+  const clearHistoryKey = "__agencyClearHistory";
+  const prevClearHistory = (globalThis as any)[clearHistoryKey];
+  (globalThis as any)[clearHistoryKey] = () => {
+    const h = (rl as unknown as { history?: string[] }).history;
+    if (h) h.length = 0;
+  };
+
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal.
   const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
@@ -765,6 +804,11 @@ export async function _runLineRepl(
         if (buffer === null || buffer.trim().length === 0) continue;
         line = buffer;
         trimmed = buffer;
+        // readline only saw the `/paste` keystrokes, not the buffer the editor
+        // produced — so add the buffer to history ourselves (replacing the
+        // `/paste` command entry) for up-arrow recall and persistence.
+        const rlHistory = (rl as unknown as { history?: string[] }).history;
+        if (rlHistory) recordHistoryEntry(rlHistory, buffer, "/paste");
       }
 
       const banner = line.includes("\n")
@@ -858,18 +902,16 @@ export async function _runLineRepl(
     teardownSlashTrigger();
     (globalThis as any)[overrideKey] = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
+    (globalThis as any)[clearHistoryKey] = prevClearHistory;
     // Persist whatever entries readline accumulated. `rl.history` is
     // newest-first and already contains the history we loaded at startup
-    // PLUS everything added this session — so saving it preserves prior
-    // sessions instead of overwriting the file with just this run's input.
-    // The `history` property is undocumented-ish but stable across the Node
-    // versions we support, and is the only way to read it back. Drop
-    // multi-line entries (a `/paste` buffer) — the on-disk format is one
-    // entry per line, so a multi-line entry would reload as several bogus
-    // ones.
-    const accumulated = (
-      (rl as unknown as { history?: string[] }).history ?? []
-    ).filter((entry) => !entry.includes("\n"));
+    // PLUS everything added this session (including any `/paste` buffer we
+    // recorded above) — so saving it preserves prior sessions instead of
+    // overwriting the file with just this run's input. The `history` property
+    // is undocumented-ish but stable across the Node versions we support, and
+    // is the only way to read it back. Multi-line entries are fine: the file
+    // is JSON, so a `/paste` buffer round-trips intact.
+    const accumulated = (rl as unknown as { history?: string[] }).history ?? [];
     saveHistory(historyFile, accumulated, historyMax);
     rl.close();
   }
@@ -1082,12 +1124,30 @@ export const _internal = {
   modelsUsedThisTurn,
   fmtModels,
   prettyModel,
+  loadHistory,
+  saveHistory,
+  recordHistoryEntry,
 };
 
 export function _clearScreen(): void {
   // ANSI escape code to clear the screen and move the cursor to the top-left.
   //  process.stdout.write("\033[H\033[2J");
   process.stdout.write('\x1B[2J\x1B[H');
+}
+
+/** Clear `repl()` input history. Splits cleanly along the state boundary:
+ *
+ *  - The persisted *file* is cleared at `path`, which the caller supplies.
+ *    Agency holds the path as a module global (`_historyFile`), so the file's
+ *    identity lives in the execution model rather than in a TS closure. Works
+ *    even with no active REPL; `saveHistory` no-ops on an empty path.
+ *  - The *live* in-session recall (`rl.history`) is a Node object owned by the
+ *    running readline, so that wipe goes through the `__agencyClearHistory`
+ *    hook `_runLineRepl` installs. A no-op outside an interactive REPL. */
+export function _clearHistory(path: string): void {
+  saveHistory(path, [], 0);
+  const fn = (globalThis as any).__agencyClearHistory;
+  if (typeof fn === "function") fn();
 }
 
 export function _termWidth(): number {

@@ -2,6 +2,7 @@ import {
   _runLineRepl,
   _clearScreen,
   _termWidth,
+  _clearHistory,
  } from "agency-lang/stdlib-lib/cli.js"
 
 /*
@@ -60,6 +61,12 @@ import {
 // needed to be re-exported here for line mode to work.
 export { pushMessage, clearMessages } from "std::ui"
 
+// The active `repl()` session's history-file path, held as an Agency module
+// global so it lives in the execution model (serialized, module-isolated)
+// rather than captured in a TS closure. `clearHistory()` reads it to know
+// which file to clear — the runtime remembers the path, not a TS hook.
+let _historyFile: string = ""
+
 export def repl(
   status: any,
   onSubmit: any,
@@ -101,13 +108,16 @@ export def repl(
   @param onSubmit - Called with the submitted line; return `false` to
   exit or a string to print
   @param prompt - String shown before the input buffer (default "> ")
-  @param historyFile - Path to a newline-separated history file;
+  @param historyFile - Path to a JSON history file (array of entries);
   loaded at start and saved on exit. Empty string disables
   persistence.
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description; reserved for
   WL6 tab completion
   """
+  // Publish the path to the execution-model global so `clearHistory()` can
+  // resolve which file to clear from Agency state rather than a TS closure.
+  _historyFile = historyFile
   _runLineRepl(
     status,
     onSubmit,
@@ -120,6 +130,16 @@ export def repl(
 
 export def clearScreen() {
   _clearScreen()
+}
+
+export def clearHistory() {
+  """Clear the input history of the **currently running** `repl()` session —
+  both its in-session up-arrow recall and the `historyFile` that session was
+  started with. The file path comes from the `_historyFile` execution-model
+  global (set by `repl()`), so the runtime remembers which file to clear; the
+  live up-arrow recall is wiped via the active REPL. A no-op when called
+  outside an interactive `repl()`."""
+  _clearHistory(_historyFile)
 }
 
 export safe def termWidth(): number {

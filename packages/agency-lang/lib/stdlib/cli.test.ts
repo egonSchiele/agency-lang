@@ -11,6 +11,7 @@ const {
   readMultiline,
   modelsUsedThisTurn,
   fmtModels,
+  prettyModel,
 } = _internal;
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
@@ -241,5 +242,40 @@ describe("fmtModels (footer cap)", () => {
 
   it("renders a single model plainly", () => {
     expect(fmtModels(["opus-4.8"])).toBe("opus-4.8");
+  });
+
+  it("prettifies a local GGUF model name", () => {
+    expect(fmtModels(["hf_unsloth_SmolLM2-135M-Instruct.Q4_K_M.gguf"])).toBe(
+      "SmolLM2-135M-Instruct",
+    );
+  });
+});
+
+describe("prettyModel", () => {
+  it("leaves a hosted model id untouched", () => {
+    expect(prettyModel("claude-opus-4-8")).toBe("claude-opus-4-8");
+    expect(prettyModel("gpt-5-mini")).toBe("gpt-5-mini");
+  });
+
+  it("reduces a node-llama-cpp download filename to the model name", () => {
+    expect(prettyModel("hf_unsloth_SmolLM2-135M-Instruct.Q4_K_M.gguf")).toBe(
+      "SmolLM2-135M-Instruct",
+    );
+  });
+
+  it("strips a full path and the .gguf extension", () => {
+    expect(prettyModel("/home/u/.agency-agent/models/hf_mistralai_Devstral-Small-2507.Q4_K_M.gguf")).toBe(
+      "Devstral-Small-2507",
+    );
+  });
+
+  it("keeps a non-quant version segment (only strips real quants)", () => {
+    expect(prettyModel("hf_nomic-ai_nomic-embed-text-v1.5.Q4_K_M.gguf")).toBe(
+      "nomic-embed-text-v1.5",
+    );
+  });
+
+  it("handles a plain local .gguf path with no hf_ prefix or quant", () => {
+    expect(prettyModel("/models/my-custom-model.gguf")).toBe("my-custom-model");
   });
 });

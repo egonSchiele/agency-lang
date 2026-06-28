@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { createHash } from "node:crypto";
 import {
   CURATED_LOCAL_MODELS,
   _resolveModelName,
@@ -17,6 +18,9 @@ import {
   resolveCatalogUrl,
   parseCatalog,
   _refreshCatalog,
+  fileSha256,
+  verifyModelFile,
+  pinnedSha256,
 } from "./localModels.js";
 
 let dir: string;
@@ -551,5 +555,62 @@ describe("_refreshCatalog", () => {
     expect(r.added).toEqual(["m"]);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.m).toEqual({ uri: "hf:org/m:Q4_K_M", params: "2B", source: "remote" });
+  });
+});
+
+describe("model file verification", () => {
+  it("fileSha256 matches node:crypto over the same bytes", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "hello-bytes");
+    const expected = createHash("sha256").update("hello-bytes").digest("hex");
+    expect(await fileSha256(p)).toBe(expected);
+  });
+
+  it("verifyModelFile resolves on a match", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "good");
+    const sha = createHash("sha256").update("good").digest("hex");
+    await expect(verifyModelFile(p, sha, "m")).resolves.toBeUndefined();
+    expect(fs.existsSync(p)).toBe(true); // left in place
+  });
+
+  it("verifyModelFile quarantines + throws on a mismatch", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "tampered");
+    await expect(verifyModelFile(p, "0".repeat(64), "m")).rejects.toThrow(/SHA-256 verification failed/);
+    expect(fs.existsSync(p)).toBe(false); // moved aside
+    expect(fs.existsSync(p + ".invalidSha")).toBe(true); // kept for inspection
+  });
+
+  it("pinnedSha256: curated, alias-object wins, string-alias + raw → undefined", () => {
+    const k = Object.keys(CURATED_LOCAL_MODELS)[0];
+    // Curated lookup mirrors the curated entry's sha256 — undefined before the
+    // Task 4 pins are added, hex after; this assertion holds in both states.
+    expect(pinnedSha256(k, aliasFile)).toBe(CURATED_LOCAL_MODELS[k].sha256);
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            obj: { uri: "hf:o/x:Q4", sha256: "aa" },
+            str: "hf:o/y:Q4",
+          },
+        },
+      }),
+    );
+    expect(pinnedSha256("obj", aliasFile)).toBe("aa"); // alias object hash
+    expect(pinnedSha256("str", aliasFile)).toBeUndefined(); // string alias has none
+    expect(pinnedSha256("hf:o/z:Q4", aliasFile)).toBeUndefined(); // raw uri
+    expect(pinnedSha256("/abs/x.gguf", aliasFile)).toBeUndefined(); // raw path
+  });
+
+  it("pinnedSha256: a user alias shadowing a curated name uses the alias (not curated)", () => {
+    const k = Object.keys(CURATED_LOCAL_MODELS)[0];
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { [k]: "hf:mine/custom:Q4" } } }),
+    );
+    // string alias governs → no pin (must NOT fall back to the curated hash)
+    expect(pinnedSha256(k, aliasFile)).toBeUndefined();
   });
 });

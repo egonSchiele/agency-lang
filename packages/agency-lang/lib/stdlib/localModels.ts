@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
@@ -858,6 +859,82 @@ export async function _registerLocalProvider(): Promise<void> {
   requireSupport();
   exposeResolvedLlamaCppPath();
   await loadProviderModuleByPath(bundledLlamaModule());
+}
+
+/** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The
+ *  `update` is guarded so a synchronous throw in the data handler rejects the
+ *  promise instead of escaping it. */
+export function fileSha256(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => {
+      try {
+        hash.update(chunk);
+      } catch (err) {
+        stream.destroy();
+        reject(err as Error);
+      }
+    });
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+/** Verify `filePath` against the expected hex SHA-256. On mismatch, rename the
+ *  file to `<filePath>.invalidSha` (kept for inspection; won't be picked up, so
+ *  the next run re-downloads) and throw. A failed rename is logged (not
+ *  swallowed) and reflected in the thrown message. */
+export async function verifyModelFile(
+  filePath: string,
+  expected: string,
+  name: string,
+): Promise<void> {
+  const actual = await fileSha256(filePath);
+  if (actual === expected) return;
+  const quarantine = `${filePath}.invalidSha`;
+  let moved = true;
+  try {
+    fs.renameSync(filePath, quarantine);
+  } catch (err) {
+    moved = false;
+    console.warn(`Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`, err);
+  }
+  throw new Error(
+    `SHA-256 verification failed for "${name}": expected ${expected}, got ${actual}. ` +
+      (moved
+        ? `The downloaded file was moved to ${quarantine} for inspection and will be re-downloaded next time.`
+        : `The downloaded file at ${filePath} could NOT be moved aside — delete it manually before re-running.`),
+  );
+}
+
+/** The pinned SHA-256 for a model name/alias, or undefined when none is known
+ *  (raw uri/path, string alias, alias/curated without a hash, or a sharded
+ *  model). An alias entry governs the name entirely — a user alias shadowing a
+ *  curated name must NOT borrow the curated hash, but a user MAY opt in by
+ *  setting their own `sha256` on the alias object. */
+export function pinnedSha256(value: string, file: string = ""): string | undefined {
+  if (isGgufPath(value) || isModelUri(value)) return undefined;
+  const aliases = readModelAliases(file);
+  if (Object.hasOwn(aliases, value)) {
+    const v = aliases[value];
+    return typeof v === "object" ? v.sha256 : undefined;
+  }
+  return CURATED_LOCAL_MODELS[value]?.sha256;
+}
+
+/** Was the resolved file freshly downloaded (not already cached)? */
+export type FreshnessProbe = (resolved: string) => boolean;
+
+/** Snapshot the cache dir, returning a probe that reports whether a resolved
+ *  path is newly downloaded. node-llama-cpp stores models FLAT in `dir` with a
+ *  prefixed filename — no per-repo subdirs (verified against its
+ *  `buildHuggingFaceFilePrefix`) — so matching by basename is correct. */
+export function snapshotFreshness(dir: string): FreshnessProbe {
+  const present = fs.existsSync(dir)
+    ? new Set(fs.readdirSync(dir).filter((f) => f.endsWith(".gguf")))
+    : new Set<string>();
+  return (resolved) => !present.has(path.basename(resolved));
 }
 
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */

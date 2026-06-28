@@ -114,6 +114,24 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(globals.getTokenStats().usage.totalTokens).toBe(15);
   });
 
+  it("records usage + model even when cost is undefined (free/local models)", () => {
+    // A local llama-cpp model has no pricing, so the completion's `cost` is
+    // undefined. The token usage must still be recorded (otherwise the agent
+    // footer shows ↑0 ↓0 and no model name).
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(15, 7), cost: undefined, model: "smollm2-135m" });
+    const stats = globals.getTokenStats();
+    expect(stats.usage.inputTokens).toBe(15);
+    expect(stats.usage.outputTokens).toBe(7);
+    expect(stats.usage.totalTokens).toBe(22);
+    expect(stats.models["smollm2-135m"]).toEqual({
+      inputTokens: 15,
+      outputTokens: 7,
+      totalCost: 0,
+    });
+    expect(stats.cost.totalCost).toBe(0);
+  });
+
   it("backfills the models slot for token-stats restored from older checkpoints", () => {
     const globals = GlobalStore.withTokenStats();
     // Simulate a checkpoint written before per-model tracking existed.

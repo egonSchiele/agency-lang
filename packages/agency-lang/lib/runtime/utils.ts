@@ -146,8 +146,13 @@ export function updateTokenStats(args: {
   cost: any;
   model?: string;
 }): void {
-  const { globals, usage, cost, model } = args;
-  if (!usage || !cost) return;
+  const { globals, usage, model } = args;
+  // `usage` is required, but `cost` may legitimately be absent: a free/local
+  // model (e.g. llama-cpp) has no pricing, so the completion carries token
+  // usage with no cost. Treat a missing cost as zero rather than dropping the
+  // usage — otherwise the agent footer shows ↑0 ↓0 and no model name.
+  if (!usage) return;
+  const cost = args.cost ?? {};
   const tokenStats = globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats");
   // Accumulate a per-model usage breakdown. Every LLM call (including
   // subagent/tool branches, which pointer-share this object) lands here,

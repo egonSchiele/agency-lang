@@ -52,11 +52,7 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // (openai → text-embedding-3-small, google → text-embedding-004,
 // ollama → nomic-embed-text). Set `embeddings.model` explicitly to override.
 export def enableAgentMemory() {
-  const _ = enableMemory(
-    {
-    dir: "${AGENCY_AGENT_DIR}/memory"
-  },
-  ) with approve
+  enableMemory({ dir: "${AGENCY_AGENT_DIR}/memory" }) with approve
 }
 
 // The slow ("deep reasoning") model + its provider, set once by

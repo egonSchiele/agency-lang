@@ -755,8 +755,11 @@ node main() {
       args.flags.slowmodel ?? "",
       args.flags.provider ?? "",
     )
-    // Persistent knowledge graph — only for hosted providers (which have an
-    // embedding endpoint). Must run before any handler/REPL is installed.
+    // Persistent knowledge graph — enabled for hosted providers, skipped for
+    // local models. (Some hosted providers, e.g. anthropic, still lack an
+    // embedding endpoint and just disable Tier-2 recall with a one-time
+    // notice; structured recall works regardless.) Must run before any
+    // handler/REPL is installed.
     enableAgentMemory()
   }
 

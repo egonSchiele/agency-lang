@@ -35,7 +35,10 @@ async function repoFiles(user: string, repo: string): Promise<string[]> {
  *  to the CDN, not the final CDN response. NEVER use `etag`/`x-xet-hash` (a
  *  different chunk hash). */
 async function fetchSha256(user: string, repo: string, file: string): Promise<string | null> {
-  const url = `https://huggingface.co/${user}/${repo}/resolve/main/${encodeURIComponent(file)}`;
+  // Encode per path segment so a subdir in `rfilename` (e.g. `gguf/model.gguf`)
+  // keeps its slashes — `encodeURIComponent` on the whole path would break it.
+  const encodedFile = file.split("/").map(encodeURIComponent).join("/");
+  const url = `https://huggingface.co/${user}/${repo}/resolve/main/${encodedFile}`;
   const res = await fetch(url, { method: "HEAD", redirect: "manual" });
   const etag = res.headers.get("x-linked-etag");
   if (!etag) return null;

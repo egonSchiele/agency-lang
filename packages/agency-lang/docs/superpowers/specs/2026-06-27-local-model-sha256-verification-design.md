@@ -43,8 +43,8 @@ are hashed at verify time.
 3. **On mismatch, rename** `<file>.gguf` → `<file>.gguf.invalidSha` (so it isn't
    picked up and triggers a clean re-download next time, but is left for the
    user to inspect) and throw a clear error.
-4. **Opportunistic.** Verify when a pin exists; skip with a one-time note
-   otherwise (sharded, user aliases, raw URIs).
+4. **Opportunistic.** Verify when a pin exists; skip silently otherwise
+   (sharded, user aliases, raw URIs) — see the "No pin" case below.
 5. **Pin in both** `CURATED_LOCAL_MODELS` and the seed catalog, so the default
    offline `--local-model <name>` (no refresh) is verified too.
 6. **v1 single-file only.** One `sha256` string per entry; sharded skipped.

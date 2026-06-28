@@ -474,18 +474,21 @@ describe("parseCatalog", () => {
     expect(out.m.sizeBytes).toBeUndefined(); // "big" is not a number → dropped
   });
 
-  it("keeps a valid sha256 and drops a non-string one", () => {
+  it("keeps a valid 64-hex sha256 (lowercased) and drops malformed ones", () => {
+    const upper = "A".repeat(64);
     const out = parseCatalog(
       JSON.stringify({
         version: 1,
         models: {
-          good: { uri: "hf:org/g:Q4_K_M", sha256: "abc123" },
-          bad: { uri: "hf:org/b:Q4_K_M", sha256: 123 },
+          good: { uri: "hf:org/g:Q4_K_M", sha256: upper },
+          tooShort: { uri: "hf:org/s:Q4_K_M", sha256: "abc123" },
+          notString: { uri: "hf:org/n:Q4_K_M", sha256: 123 },
         },
       }),
     );
-    expect(out.good.sha256).toBe("abc123");
-    expect(out.bad.sha256).toBeUndefined(); // wrong type dropped, entry kept
+    expect(out.good.sha256).toBe("a".repeat(64)); // valid → normalized lowercase, entry kept
+    expect(out.tooShort.sha256).toBeUndefined(); // not 64-hex → dropped, entry kept
+    expect(out.notString.sha256).toBeUndefined(); // wrong type → dropped, entry kept
   });
 });
 
@@ -574,14 +577,15 @@ describe("_refreshCatalog", () => {
   });
 
   it("writes the catalog sha256 into the remote alias", async () => {
+    const sha = "deadbeef".repeat(8); // a valid 64-hex sha256
     fs.writeFileSync(aliasFile, "{}");
     await _refreshCatalog({
       file: aliasFile,
       fetcher: async () =>
-        JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", sha256: "deadbeef" } } }),
+        JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", sha256: sha } } }),
     });
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
-    expect(cfg.client.modelAliases.m.sha256).toBe("deadbeef");
+    expect(cfg.client.modelAliases.m.sha256).toBe(sha);
   });
 
   it("does not treat a prototype-named model as a user collision", async () => {
@@ -628,6 +632,14 @@ describe("model file verification", () => {
     const sha = createHash("sha256").update("good").digest("hex");
     await expect(verifyModelFile(p, sha, "m")).resolves.toBeUndefined();
     expect(fs.existsSync(p)).toBe(true); // left in place
+  });
+
+  it("verifyModelFile matches an uppercase expected hash (case-insensitive)", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "good");
+    const sha = createHash("sha256").update("good").digest("hex").toUpperCase();
+    await expect(verifyModelFile(p, sha, "m")).resolves.toBeUndefined();
+    expect(fs.existsSync(p)).toBe(true);
   });
 
   it("verifyModelFile quarantines + throws on a mismatch", async () => {

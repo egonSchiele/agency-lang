@@ -54,6 +54,23 @@ Because we verify only freshly-downloaded files, a pin change (e.g. via
 have cached. Run `agency local remove <name>` to force a fresh, verified
 re-download.
 
+### Updating the pins
+
+**When you add a curated model, change a model's `uri`/quant, or an upstream
+repo re-uploads its GGUF, re-run the minting script** so the pinned hash matches
+the file users will download:
+
+```bash
+cd packages/agency-lang
+make build && node ./dist/scripts/genModelHashes.js
+```
+
+It HEADs each model's HF resolve URL, rewrites `data/model-catalog.json` with
+the fresh `sha256` values, and prints the lines to paste into
+`CURATED_LOCAL_MODELS`. A stale pin makes a legitimate file fail verification,
+so treat the script as the source of truth and the committed hashes as a
+snapshot.
+
 ### Sharded models are NOT verified yet
 
 `node-llama-cpp` handles two multi-part layouts: GGUF-split keeps the parts as

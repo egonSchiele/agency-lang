@@ -444,7 +444,14 @@ const CatalogModelSchema = z.object({
   contextWindow: z.number().optional().catch(undefined),
   license: z.string().optional().catch(undefined),
   description: z.string().optional().catch(undefined),
-  sha256: z.string().optional().catch(undefined),
+  // Must be a 64-hex SHA-256; normalized to lowercase. A malformed value (from
+  // an untrusted catalog) is dropped via `.catch`, not stored as a bad pin.
+  sha256: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/)
+    .transform((s) => s.toLowerCase())
+    .optional()
+    .catch(undefined),
 });
 
 // Top-level catalog shape: a supported version + a name→entry object. Entries
@@ -903,8 +910,11 @@ export async function verifyModelFile(
   expected: string,
   name: string,
 ): Promise<void> {
+  // `fileSha256` returns lowercase hex; normalize the expected pin so a
+  // valid-but-uppercase hash (e.g. from a hand-written alias) still matches.
+  const want = expected.toLowerCase();
   const actual = await fileSha256(filePath);
-  if (actual === expected) return;
+  if (actual === want) return;
   const quarantine = `${filePath}.invalidSha`;
   let moved = true;
   try {

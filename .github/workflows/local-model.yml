@@ -6,8 +6,9 @@
 #
 # Security:
 # - All third-party actions pinned to SHA (same pins as test-with-llm.yml).
-# - smoltalk-llama-cpp is installed with --save=false at a pinned version;
-#   it is NOT in package.json (so user `pnpm install` doesn't pull node-llama-cpp).
+# - smoltalk-llama-cpp is installed ad-hoc at a pinned version in CI only;
+#   it is NOT in the committed package.json (so user `pnpm install` doesn't
+#   pull node-llama-cpp).
 # - Models cache key is scoped to the model name + version; no restore-keys
 #   (a partial / poisoned cache must not be used as a fallback).
 # - Test verifies the downloaded GGUF's SHA256 against a committed expected
@@ -58,11 +59,15 @@ jobs:
       - name: Build
         run: make
 
-      # Install smoltalk-llama-cpp ONLY here, at a pinned version, without
-      # mutating package.json or the lockfile. --save=false keeps both clean.
+      # Install smoltalk-llama-cpp ONLY here, at a pinned version. pnpm 9's
+      # `add` rejects `--save=false` (ERR_PNPM_OPTION_NOT_SUPPORTED), so we add
+      # it directly: the package.json / lockfile edits it makes live only on the
+      # ephemeral CI runner and are never committed, and no later step runs a
+      # `--frozen-lockfile` check. It stays out of the *committed* manifests,
+      # which is what keeps a normal `pnpm install` from pulling node-llama-cpp.
       - name: Install smoltalk-llama-cpp (pinned, off-lockfile)
         working-directory: packages/agency-lang
-        run: pnpm add --save=false smoltalk-llama-cpp@${{ env.SMOLTALK_LLAMA_CPP_VERSION }}
+        run: pnpm add smoltalk-llama-cpp@${{ env.SMOLTALK_LLAMA_CPP_VERSION }}
 
       # Cache the downloaded GGUF + the node-llama-cpp prebuilt binary.
       # Scoped to the model name; no restore-keys — a partial/poisoned cache

@@ -26,15 +26,15 @@ const NO_FACTS = { then: [], else: [] };
 describe("analyzeCondition", () => {
   it("isSuccess(r): then→success, else→failure", () => {
     expect(analyzeCondition(firstIfCondition("isSuccess(r)"))).toEqual({
-      then: [{ variableName: "r", branch: "success" }],
-      else: [{ variableName: "r", branch: "failure" }],
+      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
+      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
     });
   });
 
   it("isFailure(r): then→failure, else→success", () => {
     expect(analyzeCondition(firstIfCondition("isFailure(r)"))).toEqual({
-      then: [{ variableName: "r", branch: "failure" }],
-      else: [{ variableName: "r", branch: "success" }],
+      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
+      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
     });
   });
 
@@ -55,16 +55,16 @@ describe("analyzeCondition", () => {
 
   it("negation swaps then/else", () => {
     expect(analyzeCondition(firstIfCondition("!isSuccess(r)"))).toEqual({
-      then: [{ variableName: "r", branch: "failure" }],
-      else: [{ variableName: "r", branch: "success" }],
+      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
+      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
     });
   });
 
   it("conjunction unions then-facts, drops else-facts", () => {
     expect(analyzeCondition(firstIfCondition("isSuccess(a) && isSuccess(b)"))).toEqual({
       then: [
-        { variableName: "a", branch: "success" },
-        { variableName: "b", branch: "success" },
+        { variableName: "a", refine: { kind: "resultBranch", branch: "success" } },
+        { variableName: "b", refine: { kind: "resultBranch", branch: "success" } },
       ],
       else: [],
     });
@@ -74,16 +74,16 @@ describe("analyzeCondition", () => {
     expect(analyzeCondition(firstIfCondition("isFailure(a) || isFailure(b)"))).toEqual({
       then: [],
       else: [
-        { variableName: "a", branch: "success" },
-        { variableName: "b", branch: "success" },
+        { variableName: "a", refine: { kind: "resultBranch", branch: "success" } },
+        { variableName: "b", refine: { kind: "resultBranch", branch: "success" } },
       ],
     });
   });
 
   it("double negation is identity", () => {
     expect(analyzeCondition(firstIfCondition("!!isSuccess(r)"))).toEqual({
-      then: [{ variableName: "r", branch: "success" }],
-      else: [{ variableName: "r", branch: "failure" }],
+      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
+      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
     });
   });
 });
@@ -419,7 +419,7 @@ describe("postGuardFacts", () => {
   it("then-exits, no else → else-facts apply after", () => {
     const node = firstIf(`  if (isFailure(r)) { return 0 }`);
     expect(postGuardFacts(node, analyzeCondition(node.condition))).toEqual([
-      { variableName: "r", branch: "success" },
+      { variableName: "r", refine: { kind: "resultBranch", branch: "success" } },
     ]);
   });
   it("neither branch exits → no facts after", () => {

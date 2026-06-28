@@ -1,13 +1,50 @@
-import type { AgencyNode, Expression, TypeAliasEntry, IfElse } from "../types.js";
-import type { ResultType } from "../types/typeHints.js";
+import type { AgencyNode, Expression, TypeAliasEntry, IfElse, VariableType } from "../types.js";
+import type {
+  ResultType,
+  StringLiteralType,
+  NumberLiteralType,
+  BooleanLiteralType,
+} from "../types/typeHints.js";
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
 import { safeResolveType } from "./assignability.js";
 
-export type NarrowCandidate = { variableName: string; branch: "success" | "failure" };
+/**
+ * What a candidate narrows to. Tagged so a new narrowing form slots in as one
+ * `narrowers`-table entry without touching the apply loop. `resultBranch` is
+ * the `isSuccess`/`isFailure` Result narrowing; `discriminant` (wired in the
+ * next increment) filters a union by `v.prop == literal`.
+ */
+export type Refine =
+  | { kind: "resultBranch"; branch: "success" | "failure" }
+  | {
+      kind: "discriminant";
+      prop: string;
+      literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
+      keep: boolean;
+    };
+export type NarrowCandidate = { variableName: string; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
 const NO_FACTS: ConditionFacts = { then: [], else: [] };
+
+// "what": given a refine + the variable's current (pre-resolved) type, the
+// narrowed type, or null for "no narrowing". The "how" (child scope,
+// reassignment gate, declareLocal) lives in applyNarrowing.
+const narrowers: {
+  [K in Refine["kind"]]: (
+    refine: Extract<Refine, { kind: K }>,
+    current: VariableType,
+    aliases: Record<string, TypeAliasEntry>,
+  ) => VariableType | null;
+} = {
+  resultBranch: (r, current, aliases) => {
+    const resolved = safeResolveType(current, aliases);
+    return resolved.type === "resultType" ? narrowToBranch(resolved, r.branch) : null;
+  },
+  // discriminant added in the next increment.
+  discriminant: () => null,
+};
 
 /**
  * Inspect a (post-lowering) boolean condition and report the narrowing
@@ -53,8 +90,8 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
   const thenBranch = fn === "isSuccess" ? "success" : "failure";
   const elseBranch = fn === "isSuccess" ? "failure" : "success";
   return {
-    then: [{ variableName: name, branch: thenBranch }],
-    else: [{ variableName: name, branch: elseBranch }],
+    then: [{ variableName: name, refine: { kind: "resultBranch", branch: thenBranch } }],
+    else: [{ variableName: name, refine: { kind: "resultBranch", branch: elseBranch } }],
   };
 }
 
@@ -128,15 +165,15 @@ export function applyNarrowing(
   for (const cand of candidates) {
     const current = childScope.lookup(cand.variableName);
     if (!current || current === "any") continue;
-    // Resolve through type-alias variables (`let r: R = …` where
-    // `type R = Result<…>` is stored as `typeAliasVariable`, not `resultType`).
-    // Mirrors `synthValueAccess`, which also resolves before its Result check —
-    // without this, alias-typed Results silently never narrow, leaving them
-    // unfixable under Increment 3's hard-error flip.
-    const resolved = safeResolveType(current, typeAliases);
-    if (resolved.type !== "resultType") continue;
+    // Soundness gate: a branch that reassigns the variable may change its type
+    // mid-branch, so don't narrow it (whole-body scan, conservative).
     if (isReassignedIn(branchBody, cand.variableName)) continue;
-    childScope.declareLocal(cand.variableName, narrowToBranch(resolved, cand.branch));
+    // "what to narrow to" is delegated to the refine's narrower. Each narrower
+    // resolves through type-alias variables itself (mirrors synthValueAccess) so
+    // alias-typed scrutinees still narrow; null means "leave the type as-is".
+    const narrow = narrowers[cand.refine.kind];
+    const narrowed = narrow(cand.refine as never, current, typeAliases);
+    if (narrowed !== null) childScope.declareLocal(cand.variableName, narrowed);
   }
 }
 

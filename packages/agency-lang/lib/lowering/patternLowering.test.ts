@@ -19,6 +19,9 @@ import type {
 } from "../types.js";
 import type { BinOpExpression } from "../types/binop.js";
 import type { ValueAccess } from "../types/access.js";
+import { walkNodesArray } from "../utils/node.js";
+import { liftCallbackBlocks } from "../preprocessors/liftCallbacks.js";
+import type { ResultPattern } from "../types/pattern.js";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -649,5 +652,60 @@ describe("result patterns", () => {
       });
       expect(eAccess.chain).toEqual([{ kind: "property", name: "error" }]);
     });
+  });
+});
+
+describe("match metadata preservation (matchSource)", () => {
+  function findTaggedAssignment(nodes: AgencyNode[]): Assignment | undefined {
+    const hit = walkNodesArray(nodes).find(
+      ({ node }) => node.type === "assignment" && node.matchSource,
+    );
+    return hit?.node as Assignment | undefined;
+  }
+
+  it("tags the lowered scrutinee assignment with the original match", () => {
+    const lowered = lower(`
+let r = foo()
+match (r) {
+  success(v) => print(v)
+  failure(e) => print(e)
+}
+`);
+    const tagged = findTaggedAssignment(lowered);
+    expect(tagged).toBeDefined();
+    expect(tagged?.matchSource?.type).toBe("matchBlock");
+    const cases = tagged?.matchSource?.cases.filter(
+      (c) => c.type === "matchBlockCase",
+    );
+    expect(cases?.length).toBe(2); // success + failure arms preserved
+    // Assert structure carried through, not just the arm count: the first arm
+    // is a `success(...)` result pattern.
+    const first = cases?.[0];
+    const pattern =
+      first?.type === "matchBlockCase" ? first.caseValue : undefined;
+    expect(pattern !== "_" && (pattern as ResultPattern)?.kind).toBe("success");
+  });
+
+  it("survives liftCallbackBlocks (match nested in a callback block)", () => {
+    // Uses parseAgency + lowerPatterns directly rather than the `lower(...)`
+    // helper: `lower` wraps its input in a `node main()` body, but we want the
+    // callback block as the top-level shape fed to liftCallbackBlocks so the
+    // lift actually moves it. Do NOT "simplify" this back to `lower(...)`.
+    const src = `callback("onNodeStart") as data {
+  let r = foo()
+  match (r) {
+    success(v) => print(v)
+    failure(e) => print(e)
+  }
+}
+`;
+    const parsed = parseAgency(src, {}, false, false);
+    if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);
+    const loweredProgram = {
+      ...parsed.result,
+      nodes: lowerPatterns(parsed.result.nodes),
+    };
+    const lifted = liftCallbackBlocks(loweredProgram);
+    expect(findTaggedAssignment(lifted.nodes)).toBeDefined();
   });
 });

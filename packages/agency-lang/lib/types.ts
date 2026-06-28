@@ -187,6 +187,14 @@ export type Assignment = BaseNode & {
   value: Expression | MessageThread;
   tags?: Tag[];
   exported?: boolean;
+  /** Set by pattern lowering on the synthetic scrutinee binding of a lowered
+   *  `match` with pattern arms. Lets the type checker recover the original arm
+   *  structure (exhaustiveness; future match-native narrowing) even though the
+   *  executable form is the lowered if-chain. Holds the *un-lowered* MatchBlock,
+   *  so its case bodies are pre-lowering — consumers must read only the arm
+   *  patterns (`caseValue`/`guard`), never the bodies. Ignored by codegen.
+   *  `MatchBlock` is already imported at the top of this file. */
+  matchSource?: MatchBlock;
 };
 
 export function globalScope(): Scope {

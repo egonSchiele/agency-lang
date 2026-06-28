@@ -282,6 +282,7 @@ class PatternLowerer {
       declKind: "const",
       value: node.expression,
       loc: node.loc,
+      matchSource: node,
     };
     const scrutineeRef = varRef(scrutineeName, node.loc);
 

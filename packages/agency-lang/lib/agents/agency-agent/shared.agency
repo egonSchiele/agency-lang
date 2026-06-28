@@ -39,23 +39,21 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // Persistent knowledge graph for every subagent. `setMemoryId(...)`
 // (called inside std::agent's router) scopes which graph their
 // `remember`/`recall` calls hit, so a single shared on-disk directory
-// cleanly hosts both. Using `static const _ = ...` is the documented
-// top-level pattern (see `stdlib/memory.agency`): the `with approve`
-// modifier needs an enclosing step path, which a bare top-level call
-// doesn't have. The underscore name signals "we want the side-effect,
-// not the value". We deliberately do NOT pin `embeddings.model`: the memory
-// layer derives the embedding model from the ACTIVE LLM provider (openai →
-// text-embedding-3-small, google → text-embedding-004, ollama → nomic-embed-text),
-// and disables Tier-2 (embedding-similarity) recall — with a one-time notice —
-// for providers that have no embedding endpoint (anthropic, and the llama-cpp
-// `--local-model` path). That keeps a local/offline run from making a doomed
-// remote embed call while structured recall keeps working. Set
-// `embeddings.model` explicitly to override.
-static const _memoryReady = enableMemory(
-  {
-  dir: "${AGENCY_AGENT_DIR}/memory"
-},
-) with approve
+// cleanly hosts both. `main()` calls this once, AFTER resolving the model,
+// so it can be skipped for `--local-model`: the llama-cpp provider has no
+// embedding endpoint, so enabling memory would only emit a one-time
+// "Tier-2 disabled" notice and add overhead. All `std::memory` calls
+// (`setMemoryId`/`recall`/`remember`) no-op when memory isn't enabled, so a
+// local run works fine without it. Calling `enableMemory(...)` from `main()`
+// is the documented pattern (see `stdlib/memory.agency`); `with approve`
+// auto-approves the dir creation and has the enclosing step path it needs
+// inside this def. We deliberately do NOT pin `embeddings.model`: for hosted
+// providers the memory layer derives it from the active LLM provider
+// (openai → text-embedding-3-small, google → text-embedding-004,
+// ollama → nomic-embed-text). Set `embeddings.model` explicitly to override.
+export def enableAgentMemory() {
+  enableMemory({ dir: "${AGENCY_AGENT_DIR}/memory" }) with approve
+}
 
 // The slow ("deep reasoning") model + its provider, set once by
 // `configureModels()`. The deep subagents (oracle, explorer) read these.

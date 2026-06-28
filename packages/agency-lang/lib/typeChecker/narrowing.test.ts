@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
-import { analyzeCondition, narrowToBranch, alwaysExits, postGuardFacts } from "./narrowing.js";
+import { analyzeCondition, alwaysExits, postGuardFacts } from "./narrowing.js";
 import { walkNodes } from "../utils/node.js";
 import type { Expression, IfElse } from "../types.js";
 import type { ResultType } from "../types/typeHints.js";
@@ -24,17 +24,36 @@ const firstIfCondition = (cond: string) => firstIf(`if (${cond}) { }`).condition
 const NO_FACTS = { then: [], else: [] };
 
 describe("analyzeCondition", () => {
-  it("isSuccess(r): then→success, else→failure", () => {
+  // isSuccess/isFailure (and `if (r.success)`) now narrow via a discriminant on
+  // the boolean `success` field (Result is consumed as a discriminated union).
+  const succ = (varName: string, keep: boolean) => ({
+    variableName: varName,
+    refine: {
+      kind: "discriminant",
+      prop: "success",
+      literal: { type: "booleanLiteralType", value: "true" },
+      keep,
+    },
+  });
+
+  it("isSuccess(r): then success==true, else success!=true", () => {
     expect(analyzeCondition(firstIfCondition("isSuccess(r)"))).toEqual({
-      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
-      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
+      then: [succ("r", true)],
+      else: [succ("r", false)],
     });
   });
 
-  it("isFailure(r): then→failure, else→success", () => {
+  it("isFailure(r): then success!=true, else success==true", () => {
     expect(analyzeCondition(firstIfCondition("isFailure(r)"))).toEqual({
-      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
-      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
+      then: [succ("r", false)],
+      else: [succ("r", true)],
+    });
+  });
+
+  it("if (r.success) truthiness → discriminant success==true", () => {
+    expect(analyzeCondition(firstIfCondition("r.success"))).toEqual({
+      then: [succ("r", true)],
+      else: [succ("r", false)],
     });
   });
 
@@ -55,17 +74,14 @@ describe("analyzeCondition", () => {
 
   it("negation swaps then/else", () => {
     expect(analyzeCondition(firstIfCondition("!isSuccess(r)"))).toEqual({
-      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
-      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
+      then: [succ("r", false)],
+      else: [succ("r", true)],
     });
   });
 
   it("conjunction unions then-facts, drops else-facts", () => {
     expect(analyzeCondition(firstIfCondition("isSuccess(a) && isSuccess(b)"))).toEqual({
-      then: [
-        { variableName: "a", refine: { kind: "resultBranch", branch: "success" } },
-        { variableName: "b", refine: { kind: "resultBranch", branch: "success" } },
-      ],
+      then: [succ("a", true), succ("b", true)],
       else: [],
     });
   });
@@ -73,17 +89,14 @@ describe("analyzeCondition", () => {
   it("disjunction unions else-facts, drops then-facts", () => {
     expect(analyzeCondition(firstIfCondition("isFailure(a) || isFailure(b)"))).toEqual({
       then: [],
-      else: [
-        { variableName: "a", refine: { kind: "resultBranch", branch: "success" } },
-        { variableName: "b", refine: { kind: "resultBranch", branch: "success" } },
-      ],
+      else: [succ("a", true), succ("b", true)],
     });
   });
 
   it("double negation is identity", () => {
     expect(analyzeCondition(firstIfCondition("!!isSuccess(r)"))).toEqual({
-      then: [{ variableName: "r", refine: { kind: "resultBranch", branch: "success" } }],
-      else: [{ variableName: "r", refine: { kind: "resultBranch", branch: "failure" } }],
+      then: [succ("r", true)],
+      else: [succ("r", false)],
     });
   });
 
@@ -142,31 +155,6 @@ describe("analyzeCondition", () => {
     const f = analyzeCondition(negated);
     expect(f.then).toEqual([disc(false)]); // !(== answer) → then is the complement
     expect(f.else).toEqual([disc(true)]);
-  });
-});
-
-describe("narrowToBranch", () => {
-  const rt: ResultType = {
-    type: "resultType",
-    successType: { type: "primitiveType", value: "number" },
-    failureType: { type: "primitiveType", value: "string" },
-  };
-
-  it.each(["success", "failure"] as const)("tags a copy as %s without mutating the original", (branch) => {
-    const narrowed = narrowToBranch(rt, branch);
-    expect(narrowed.narrowedBranch).toBe(branch);
-    expect(narrowed.successType).toEqual(rt.successType);
-    expect(narrowed.failureType).toEqual(rt.failureType);
-    expect(rt.narrowedBranch).toBeUndefined();
-  });
-
-  it("re-narrowing replaces the previous branch rather than stacking", () => {
-    // Inside `if (isSuccess(r)) { if (isFailure(r)) { ... } }`, the inner
-    // re-narrow must overwrite, not append, or downstream synthesis sees
-    // a stale branch tag.
-    const onceSuccess = narrowToBranch(rt, "success");
-    const reFailure = narrowToBranch(onceSuccess, "failure");
-    expect(reFailure.narrowedBranch).toBe("failure");
   });
 });
 
@@ -475,8 +463,12 @@ describe("alwaysExits", () => {
 describe("postGuardFacts", () => {
   it("then-exits, no else → else-facts apply after", () => {
     const node = firstIf(`  if (isFailure(r)) { return 0 }`);
+    // isFailure → else is success==true (Result narrows via discriminant on `success`).
     expect(postGuardFacts(node, analyzeCondition(node.condition))).toEqual([
-      { variableName: "r", refine: { kind: "resultBranch", branch: "success" } },
+      {
+        variableName: "r",
+        refine: { kind: "discriminant", prop: "success", literal: { type: "booleanLiteralType", value: "true" }, keep: true },
+      },
     ]);
   });
   it("neither branch exits → no facts after", () => {
@@ -844,5 +836,33 @@ node main() {
   if (n.code == 1.0) { let b = n.b }
 }`);
     expect(has(errs, /Property 'b' does not exist/)).toBe(1);
+  });
+});
+
+describe("Result-as-union (narrowing via discriminant)", () => {
+  it("if (r.success) narrows like isSuccess", () => {
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  if (r.success) { let n: string = r.value }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'n').");
+  });
+
+  it("match success/failure arms still type their binders", () => {
+    // Match arm bodies are expressions; witness the binder type by passing it to
+    // a helper whose param type mismatches (success v is number, failure e is string).
+    const errs = check(`${TRY_PARSE}
+def expectString(s: string) {}
+def expectNumber(n: number) {}
+node main() {
+  let r = tryParse("ok")
+  match (r) {
+    success(v) => expectString(v)
+    failure(e) => expectNumber(e)
+  }
+}`);
+    expect(errs.some((e) => /not assignable/.test(e) && /string/.test(e))).toBe(true);
+    expect(errs.some((e) => /not assignable/.test(e) && /number/.test(e))).toBe(true);
   });
 });

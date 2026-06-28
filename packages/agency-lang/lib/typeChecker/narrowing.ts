@@ -1,6 +1,5 @@
 import type { AgencyNode, Expression, TypeAliasEntry, IfElse, VariableType } from "../types.js";
 import type {
-  ResultType,
   StringLiteralType,
   NumberLiteralType,
   BooleanLiteralType,
@@ -9,22 +8,26 @@ import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
 import { safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
+import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
- * `narrowers`-table entry without touching the apply loop. `resultBranch` is
- * the `isSuccess`/`isFailure` Result narrowing; `discriminant` filters a union
- * by `v.prop == literal`.
+ * `narrowers`-table entry without touching the apply loop. `discriminant`
+ * filters a union by `v.prop == literal` — and now drives Result narrowing too
+ * (`isSuccess`/`isFailure`/`if (r.success)` all narrow on the `success` field,
+ * with Result viewed as a union via `resultToObjectUnion`).
+ *
+ * Kept as a (one-variant) discriminated union deliberately:
+ * `null-truthiness-narrowing` adds a `presence` variant and handler H3 may add
+ * more, each as one more `narrowers` entry.
  */
-export type Refine =
-  | { kind: "resultBranch"; branch: "success" | "failure" }
-  | {
-      kind: "discriminant";
-      prop: string;
-      literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
-      keep: boolean;
-    };
+export type Refine = {
+  kind: "discriminant";
+  prop: string;
+  literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
+  keep: boolean;
+};
 export type NarrowCandidate = { variableName: string; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
@@ -40,10 +43,6 @@ const narrowers: {
     aliases: Record<string, TypeAliasEntry>,
   ) => VariableType | null;
 } = {
-  resultBranch: (r, current, aliases) => {
-    const resolved = safeResolveType(current, aliases);
-    return resolved.type === "resultType" ? narrowToBranch(resolved, r.branch) : null;
-  },
   discriminant: (r, current, aliases) =>
     narrowUnionByDiscriminant(current, r.prop, r.literal, r.keep, aliases),
 };
@@ -113,6 +112,22 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
     return NO_FACTS;
   }
 
+  // Member-access truthiness: `if (r.success)` ⇒ discriminant `r.success == true`.
+  // SCOPE: fires ONLY for a member access (`v.prop`), never a bare variable
+  // (`if (x)` is presence narrowing — see null-truthiness-narrowing-spec.md; do
+  // NOT generalize this to bare vars). Non-boolean discriminants make
+  // narrowUnionByDiscriminant return null, so this is a sound no-op there.
+  if (condition.type === "valueAccess") {
+    const acc = asDiscriminantAccess(condition);
+    if (!acc) return NO_FACTS;
+    const litTrue: BooleanLiteralType = { type: "booleanLiteralType", value: "true" };
+    const truthy = (keep: boolean): NarrowCandidate => ({
+      variableName: acc.variableName,
+      refine: { kind: "discriminant", prop: acc.prop, literal: litTrue, keep },
+    });
+    return { then: [truthy(true)], else: [truthy(false)] };
+  }
+
   if (condition.type !== "functionCall") return NO_FACTS;
   const fn = condition.functionName;
   if (fn !== "isSuccess" && fn !== "isFailure") return NO_FACTS;
@@ -120,17 +135,15 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
   const arg = condition.arguments[0];
   if (arg.type !== "variableName") return NO_FACTS;
   const name = arg.value;
-  const thenBranch = fn === "isSuccess" ? "success" : "failure";
-  const elseBranch = fn === "isSuccess" ? "failure" : "success";
-  return {
-    then: [{ variableName: name, refine: { kind: "resultBranch", branch: thenBranch } }],
-    else: [{ variableName: name, refine: { kind: "resultBranch", branch: elseBranch } }],
-  };
-}
-
-/** Return a copy of a ResultType tagged as narrowed to one branch. */
-export function narrowToBranch(rt: ResultType, branch: "success" | "failure"): ResultType {
-  return { ...rt, narrowedBranch: branch };
+  // isSuccess(r) ⇔ r.success == true ; isFailure(r) ⇔ r.success != true.
+  // Result is consumed as a discriminated union on `success` (resultUnion.ts).
+  const successLit: BooleanLiteralType = { type: "booleanLiteralType", value: "true" };
+  const keepThen = fn === "isSuccess";
+  const onSuccess = (keep: boolean): NarrowCandidate => ({
+    variableName: name,
+    refine: { kind: "discriminant", prop: "success", literal: successLit, keep },
+  });
+  return { then: [onSuccess(keepThen)], else: [onSuccess(!keepThen)] };
 }
 
 /**
@@ -186,7 +199,10 @@ export function narrowUnionByDiscriminant(
   keep: boolean,
   aliases: Record<string, TypeAliasEntry>,
 ): VariableType | null {
-  const resolved = safeResolveType(type, aliases);
+  let resolved = safeResolveType(type, aliases);
+  // Result is a discriminated union on `success` — view it as one so the same
+  // member-filter handles isSuccess/isFailure/`if (r.success)` narrowing.
+  if (resolved.type === "resultType") resolved = resultToObjectUnion(resolved, aliases);
   if (resolved.type !== "unionType") return null;
   const members = resolved.types;
   const kept = members.filter((m) => {
@@ -250,13 +266,9 @@ export function postGuardFacts(node: IfElse, facts: ConditionFacts): NarrowCandi
  *     or a nested function that shadows `r` would also trip the gate.
  *
  * Refinements are written with declareLocal so they vanish when the child
- * scope is dropped at branch exit and never leak to the function scope.
- *
- * A `let r2 = r` inside a narrowed branch does NOT propagate the marker
- * outside the block: `scope.declare()` calls `widenType()`, which for
- * `resultType` rebuilds the object without `narrowedBranch`
- * (assignability.ts:370). `r2.value` outside the block is therefore the
- * usual un-narrowed `any`. Locked in by a test in narrowing.test.ts.
+ * scope is dropped at branch exit and never leak to the function scope. A
+ * narrowed binding is the concrete member type (e.g. a Result's success-member
+ * object type), so nothing branch-specific persists once the child is dropped.
  */
 export function applyNarrowing(
   childScope: Scope,

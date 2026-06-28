@@ -124,8 +124,10 @@ export def clearScreen() {
 }
 
 export def clearHistory() {
-  """Clear the REPL input history — both in-session up-arrow recall and the
-  persisted history file. A no-op outside an interactive `repl()` session."""
+  """Clear the input history of the **currently running** `repl()` session —
+  both its in-session up-arrow recall and the `historyFile` that session was
+  started with. Takes no path: it acts on the active REPL (which knows its own
+  file). A no-op when called outside an interactive `repl()`."""
   _clearHistory()
 }
 

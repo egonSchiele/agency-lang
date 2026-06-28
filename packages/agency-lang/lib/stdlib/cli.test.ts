@@ -327,6 +327,12 @@ describe("recordHistoryEntry", () => {
     expect(history).toEqual(["line one\nline two", "older"]);
   });
 
+  it("drops the command even when readline stored it with surrounding whitespace", () => {
+    const history = ["/paste   ", "older"]; // raw typed line, untrimmed
+    recordHistoryEntry(history, "pasted", "/paste");
+    expect(history).toEqual(["pasted", "older"]);
+  });
+
   it("removes an earlier duplicate of the same entry", () => {
     const history = ["b", "pasted", "a"];
     recordHistoryEntry(history, "pasted", "/paste");

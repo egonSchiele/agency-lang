@@ -78,8 +78,10 @@ clearScreen()
 clearHistory()
 ```
 
-Clear the REPL input history — both in-session up-arrow recall and the
-  persisted history file. A no-op outside an interactive `repl()` session.
+Clear the input history of the **currently running** `repl()` session —
+  both its in-session up-arrow recall and the `historyFile` that session was
+  started with. Takes no path: it acts on the active REPL (which knows its own
+  file). A no-op when called outside an interactive `repl()`.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L126))
 
@@ -91,7 +93,7 @@ termWidth(): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L134))
 
 ### hline
 
@@ -108,4 +110,4 @@ hline(char: string, width: number): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L138))

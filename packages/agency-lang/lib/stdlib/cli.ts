@@ -5,6 +5,7 @@ import {
   writeFileSync,
   existsSync,
   mkdirSync,
+  renameSync,
 } from "fs";
 import { dirname } from "path";
 import { __call } from "../runtime/call.js";
@@ -70,7 +71,14 @@ function saveHistory(file: string, history: string[], max: number): void {
   try {
     mkdirSync(dirname(file), { recursive: true });
     const oldestFirst = history.slice(0, max).slice().reverse();
-    writeFileSync(file, JSON.stringify(oldestFirst, null, 2) + "\n", "utf8");
+    const data = JSON.stringify(oldestFirst, null, 2) + "\n";
+    // Write to a sibling temp file, then rename into place. The rename is an
+    // atomic swap (POSIX, and Windows via libuv's REPLACE_EXISTING), so a crash
+    // mid-write can't leave a half-written file — which, as JSON, would parse to
+    // empty and silently wipe the user's history on the next load.
+    const tmp = `${file}.tmp-${process.pid}`;
+    writeFileSync(tmp, data, "utf8");
+    renameSync(tmp, file);
   } catch {
     // Ignore — best-effort persistence.
   }
@@ -83,7 +91,11 @@ function saveHistory(file: string, history: string[], max: number): void {
  *  never sees the buffer itself, only the `/paste` keystrokes. */
 function recordHistoryEntry(history: string[], entry: string, command: string): void {
   for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i] === entry || history[i] === command) history.splice(i, 1);
+    // `command` is matched after trimming because readline stores the raw line
+    // (`"/paste   "`), while the command itself is the trimmed form. `entry`
+    // (the pasted buffer) is matched exactly — its surrounding whitespace is
+    // content.
+    if (history[i] === entry || history[i].trim() === command) history.splice(i, 1);
   }
   history.unshift(entry);
 }

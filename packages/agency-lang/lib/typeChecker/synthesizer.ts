@@ -632,12 +632,12 @@ export function synthValueAccess(
     switch (element.kind) {
       case "property": {
         // Result<T, E>: allow access to runtime fields without flow narrowing.
-        // Until isSuccess/isFailure narrowing lands (Tier 2 PR B), users have
-        // no way to safely unwrap a Result. Treating these field accesses as
+        // isSuccess/isFailure narrowing has landed (lib/typeChecker/narrowing.ts),
+        // so inside a guard .value/.error already type precisely; OUTSIDE a guard
+        // there is still no proven branch, so treating these field accesses as
         // `any` keeps real Result code from flooding with spurious "property
-        // does not exist" errors. Once narrowing lands, this can be tightened
-        // so .value is only valid on the Success branch and .error/etc. are
-        // only valid on Failure.
+        // does not exist" errors. Tightening the un-narrowed access into a hard
+        // error is a later increment.
         if (resolved.type === "resultType") {
           const resolution = resolveResultFieldType(resolved, element.name);
           if (resolution === "any") return "any";

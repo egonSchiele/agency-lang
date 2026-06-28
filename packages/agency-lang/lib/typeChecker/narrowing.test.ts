@@ -789,3 +789,31 @@ node main() {
     expect(errs.filter((e) => /does not exist/.test(e)).length).toBe(0);
   });
 });
+
+describe("discriminated-union narrowing — match arms", () => {
+  it("types a bound field per arm via the narrowed temp", () => {
+    const errs = check(`
+type Reply = { kind: "answer", data: string } | { kind: "clarify", data: number }
+def mkR(): Reply { return { kind: "answer", data: "x" } }
+node main() {
+  let r = mkR()
+  match (r) {
+    { kind: "answer", data } => let n: number = data
+    { kind: "clarify", data } => let s: string = data
+  }
+}`);
+    // Narrowed per arm: answer.data is `string`, clarify.data is `number` —
+    // each exact, not the `string | number` union. (Substring `.some` rather
+    // than `toContain`: the assignment-context suffix "(assignment to 'x')" is
+    // only emitted for the first arm's lowered position, not the else arm —
+    // a cosmetic message detail, irrelevant to the narrowing under test.)
+    expect(errs.some((e) => e.includes("Type 'string' is not assignable to type 'number'"))).toBe(
+      true,
+    );
+    expect(errs.some((e) => e.includes("Type 'number' is not assignable to type 'string'"))).toBe(
+      true,
+    );
+    // Guard against the non-test failure mode: the un-narrowed union message must NOT appear.
+    expect(errs.some((e) => /string \| number|number \| string/.test(e))).toBe(false);
+  });
+});

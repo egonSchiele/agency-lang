@@ -50,8 +50,9 @@ export class GlobalStore {
       // updateTokenStats on every LLM call (across all branches, which
       // pointer-share this object), so subagent spend lands here too.
       // Read by the REPL footer (distinct models used this turn) and
-      // `/cost` (cumulative per-model breakdown).
-      models: {},
+      // `/cost` (cumulative per-model breakdown). Null-prototype so a
+      // provider-supplied model name (e.g. `__proto__`) can't pollute it.
+      models: Object.create(null),
       usage: {
         inputTokens: 0,
         outputTokens: 0,

@@ -140,10 +140,24 @@ export function normalizeModelUsage(rawModels: unknown): ModelUsage[] {
   return out;
 }
 
+/** The token-usage fields `updateTokenStats` reads (all optional — providers
+ *  vary, and a free/local model has no cost). */
+type StatUsage = {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  totalTokens?: number;
+};
+type StatCost = {
+  inputCost?: number;
+  outputCost?: number;
+  totalCost?: number;
+};
+
 export function updateTokenStats(args: {
   globals: GlobalStore;
-  usage: any;
-  cost: any;
+  usage: StatUsage | null | undefined;
+  cost?: StatCost | null;
   model?: string;
 }): void {
   const { globals, usage, model } = args;
@@ -160,7 +174,12 @@ export function updateTokenStats(args: {
   // attribute spend per model. Defensive against an absent `models` slot
   // for token-stats objects restored from older checkpoints.
   if (model) {
-    if (!tokenStats.models) tokenStats.models = {};
+    // Null-prototype so a provider-supplied model name like `__proto__` becomes
+    // a plain own key instead of mutating the object's prototype. Migrate a
+    // plain-`{}` map (fresh or restored-from-JSON) the first time we write.
+    if (!tokenStats.models || Object.getPrototypeOf(tokenStats.models) !== null) {
+      tokenStats.models = Object.assign(Object.create(null), tokenStats.models);
+    }
     const m = tokenStats.models[model] ??
       (tokenStats.models[model] = { inputTokens: 0, outputTokens: 0, totalCost: 0 });
     m.inputTokens += usage.inputTokens || 0;

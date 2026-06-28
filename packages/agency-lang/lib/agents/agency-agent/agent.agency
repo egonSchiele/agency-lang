@@ -26,7 +26,7 @@ import {
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import { printLocalCatalog } from "std::agency/local"
-import { configureModels, configureLocalModel } from "./shared.agency"
+import { configureModels, configureLocalModel, enableAgentMemory } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
@@ -745,6 +745,9 @@ node main() {
     process.exit(0)
   } else if (localModel) {
     configureLocalModel(localModel)
+    // Intentionally do NOT enable memory for a local model: the llama-cpp
+    // provider has no embedding endpoint, so memory would only emit a
+    // "Tier-2 disabled" notice. std::memory calls no-op while it's off.
   } else {
     configureModels(
       args.flags.model ?? "",
@@ -752,6 +755,9 @@ node main() {
       args.flags.slowmodel ?? "",
       args.flags.provider ?? "",
     )
+    // Persistent knowledge graph — only for hosted providers (which have an
+    // embedding endpoint). Must run before any handler/REPL is installed.
+    enableAgentMemory()
   }
 
   // Positional args (everything after flags) are joined with spaces to

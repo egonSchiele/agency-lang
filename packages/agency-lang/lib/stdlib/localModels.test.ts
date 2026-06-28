@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { createHash } from "node:crypto";
 import {
   CURATED_LOCAL_MODELS,
   _resolveModelName,
@@ -17,6 +18,9 @@ import {
   resolveCatalogUrl,
   parseCatalog,
   _refreshCatalog,
+  fileSha256,
+  verifyModelFile,
+  pinnedSha256,
 } from "./localModels.js";
 
 let dir: string;
@@ -206,9 +210,16 @@ describe("provider register + download (fake bundled module)", () => {
   function fakeModule(): string {
     const p = path.join(here2, "__tmp_fakellama.mjs");
     fs.writeFileSync(p, `import { BaseClient } from "smoltalk";
+      import * as fs from "node:fs";
+      import * as path from "node:path";
       class FakeLlama extends BaseClient { async textSync() { return { success: true, value: { output: "x", toolCalls: [] } }; } }
       export function register({ registerProvider }) { registerProvider("llama-cpp", FakeLlama); }
-      export async function resolveModel(target) { return "RESOLVED:" + target; }`);
+      export async function resolveModel(target, dir) {
+        fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, "model.gguf");
+        fs.writeFileSync(file, "FAKE:" + target);
+        return file;
+      }`);
     fakes.push(p);
     return p;
   }
@@ -224,15 +235,64 @@ describe("provider register + download (fake bundled module)", () => {
     await _registerLocalProvider();
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("FakeLlama");
   });
-  it("downloads (resolves) a curated name to a path", async () => {
+  it("downloads (resolves) a uri to a real path", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    const k = Object.keys(CURATED_LOCAL_MODELS)[0];
-    expect(await _downloadModel(k, "/cache")).toBe("RESOLVED:" + CURATED_LOCAL_MODELS[k].uri);
+    const out = await _downloadModel("hf:org/repo:Q4", dir); // raw uri → no pin
+    expect(out).toBe(path.join(dir, "model.gguf"));
+    expect(fs.existsSync(out)).toBe(true);
   });
   it("registerLocalModel registers and returns the resolved path", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    expect(await _registerLocalModel("/abs/my.gguf", "/cache")).toBe("RESOLVED:/abs/my.gguf");
+    const out = await _registerLocalModel("/abs/my.gguf", dir); // raw path → no pin
+    expect(out).toBe(path.join(dir, "model.gguf"));
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("FakeLlama");
+  });
+
+  it("verifies a freshly-downloaded pinned model (match → ok)", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    const target = "hf:org/x:Q4";
+    const sha = createHash("sha256").update("FAKE:" + target).digest("hex");
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: target, sha256: sha } } } }));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const out = await _downloadModel("mymodel", dir);
+      expect(fs.existsSync(out)).toBe(true);
+      expect(fs.existsSync(out + ".invalidSha")).toBe(false);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("quarantines a freshly-downloaded model whose hash is wrong", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } } }));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      await expect(_downloadModel("mymodel", dir)).rejects.toThrow(/SHA-256 verification failed/);
+      expect(fs.existsSync(path.join(dir, "model.gguf"))).toBe(false);
+      expect(fs.existsSync(path.join(dir, "model.gguf.invalidSha"))).toBe(true);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("does NOT re-verify an already-present (cache-hit) file", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    // Pre-create the model file so it's in the before-snapshot → treated as cached.
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "model.gguf"), "pre-existing");
+    // A deliberately-wrong pin would fail IF it verified — it must be skipped.
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } } }));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      await expect(_downloadModel("mymodel", dir)).resolves.toBe(path.join(dir, "model.gguf"));
+      expect(fs.existsSync(path.join(dir, "model.gguf.invalidSha"))).toBe(false);
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
 
@@ -413,6 +473,23 @@ describe("parseCatalog", () => {
     expect(out.m.params).toBeUndefined(); // 7 is not a string → dropped
     expect(out.m.sizeBytes).toBeUndefined(); // "big" is not a number → dropped
   });
+
+  it("keeps a valid 64-hex sha256 (lowercased) and drops malformed ones", () => {
+    const upper = "A".repeat(64);
+    const out = parseCatalog(
+      JSON.stringify({
+        version: 1,
+        models: {
+          good: { uri: "hf:org/g:Q4_K_M", sha256: upper },
+          tooShort: { uri: "hf:org/s:Q4_K_M", sha256: "abc123" },
+          notString: { uri: "hf:org/n:Q4_K_M", sha256: 123 },
+        },
+      }),
+    );
+    expect(out.good.sha256).toBe("a".repeat(64)); // valid → normalized lowercase, entry kept
+    expect(out.tooShort.sha256).toBeUndefined(); // not 64-hex → dropped, entry kept
+    expect(out.notString.sha256).toBeUndefined(); // wrong type → dropped, entry kept
+  });
 });
 
 describe("_refreshCatalog", () => {
@@ -499,6 +576,18 @@ describe("_refreshCatalog", () => {
     expect(cfg.client.modelAliases.keep).toBe("hf:k:Q4_K_M");
   });
 
+  it("writes the catalog sha256 into the remote alias", async () => {
+    const sha = "deadbeef".repeat(8); // a valid 64-hex sha256
+    fs.writeFileSync(aliasFile, "{}");
+    await _refreshCatalog({
+      file: aliasFile,
+      fetcher: async () =>
+        JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", sha256: sha } } }),
+    });
+    const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
+    expect(cfg.client.modelAliases.m.sha256).toBe(sha);
+  });
+
   it("does not treat a prototype-named model as a user collision", async () => {
     fs.writeFileSync(aliasFile, "{}");
     // "toString" exists on Object.prototype, so a naive `name in userAliases`
@@ -526,5 +615,70 @@ describe("_refreshCatalog", () => {
     expect(r.added).toEqual(["m"]);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.m).toEqual({ uri: "hf:org/m:Q4_K_M", params: "2B", source: "remote" });
+  });
+});
+
+describe("model file verification", () => {
+  it("fileSha256 matches node:crypto over the same bytes", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "hello-bytes");
+    const expected = createHash("sha256").update("hello-bytes").digest("hex");
+    expect(await fileSha256(p)).toBe(expected);
+  });
+
+  it("verifyModelFile resolves on a match", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "good");
+    const sha = createHash("sha256").update("good").digest("hex");
+    await expect(verifyModelFile(p, sha, "m")).resolves.toBeUndefined();
+    expect(fs.existsSync(p)).toBe(true); // left in place
+  });
+
+  it("verifyModelFile matches an uppercase expected hash (case-insensitive)", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "good");
+    const sha = createHash("sha256").update("good").digest("hex").toUpperCase();
+    await expect(verifyModelFile(p, sha, "m")).resolves.toBeUndefined();
+    expect(fs.existsSync(p)).toBe(true);
+  });
+
+  it("verifyModelFile quarantines + throws on a mismatch", async () => {
+    const p = path.join(dir, "m.gguf");
+    fs.writeFileSync(p, "tampered");
+    await expect(verifyModelFile(p, "0".repeat(64), "m")).rejects.toThrow(/SHA-256 verification failed/);
+    expect(fs.existsSync(p)).toBe(false); // moved aside
+    expect(fs.existsSync(p + ".invalidSha")).toBe(true); // kept for inspection
+  });
+
+  it("pinnedSha256: curated, alias-object wins, string-alias + raw → undefined", () => {
+    const k = Object.keys(CURATED_LOCAL_MODELS)[0];
+    // Curated lookup mirrors the curated entry's sha256 — undefined before the
+    // Task 4 pins are added, hex after; this assertion holds in both states.
+    expect(pinnedSha256(k, aliasFile)).toBe(CURATED_LOCAL_MODELS[k].sha256);
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            obj: { uri: "hf:o/x:Q4", sha256: "aa" },
+            str: "hf:o/y:Q4",
+          },
+        },
+      }),
+    );
+    expect(pinnedSha256("obj", aliasFile)).toBe("aa"); // alias object hash
+    expect(pinnedSha256("str", aliasFile)).toBeUndefined(); // string alias has none
+    expect(pinnedSha256("hf:o/z:Q4", aliasFile)).toBeUndefined(); // raw uri
+    expect(pinnedSha256("/abs/x.gguf", aliasFile)).toBeUndefined(); // raw path
+  });
+
+  it("pinnedSha256: a user alias shadowing a curated name uses the alias (not curated)", () => {
+    const k = Object.keys(CURATED_LOCAL_MODELS)[0];
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { [k]: "hf:mine/custom:Q4" } } }),
+    );
+    // string alias governs → no pin (must NOT fall back to the curated hash)
+    expect(pinnedSha256(k, aliasFile)).toBeUndefined();
   });
 });

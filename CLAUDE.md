@@ -114,6 +114,7 @@ Pipeline and architecture:
 - `docs/dev/locations.md` — How `loc.line` / `loc.col` / parse-mode template offset interact
 - `docs/dev/validation-annotations.md` — `@validate(...)` and `@jsonSchema(...)` internals: tag merging, `__agency_descriptor` contract, descriptor tree, runtime walker
 - `docs/dev/async-context.md` — `agencyStore` AsyncLocalStorage frame and `getRuntimeContext()` pattern for stdlib TS helpers
+- `docs/dev/local-models.md` — Local-model support: provider, name resolution, catalog refresh, and SHA-256 download verification
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

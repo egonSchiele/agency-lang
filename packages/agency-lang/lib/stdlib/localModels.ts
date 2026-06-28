@@ -47,48 +47,56 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── General ─────────────────────────────────────────────────────────────
   "smollm2-135m": {
     uri: "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+    sha256: "ed5fa30c487b282ec156c29062f1222e5c20875a944ac98289dbd242e947f747",
     params: "135M", sizeBytes: 105_000_000, category: "general",
     contextWindow: 8192, license: "apache-2.0",
     description: "Smallest practical chat model; used by our integration tests, runs anywhere.",
   },
   "qwen3.5-0.8b": {
     uri: "hf:unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
+    sha256: "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
     params: "0.8B", sizeBytes: 500_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Tiny model from Alibaba's current generation; good edge-device default.",
   },
   "qwen3.5-2b": {
     uri: "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
+    sha256: "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
     params: "2B", sizeBytes: 1_280_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Most popular modern small general model; runs on CPU comfortably.",
   },
   "qwen3.5-4b": {
     uri: "hf:unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
+    sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
     params: "4B", sizeBytes: 2_400_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
   },
   "qwen3.5-9b": {
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+    sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
     params: "9B", sizeBytes: 5_500_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Modern medium general model with strong tool use; 128K context.",
   },
   "gpt-oss-20b": {
     uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
+    sha256: "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
     params: "20B", sizeBytes: 12_000_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "OpenAI's open-weights release; balanced general model for ~16 GB machines.",
   },
   "mistral-small-3.1": {
     uri: "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
+    sha256: "6d670773c3908584349d41a5048d1472226b593c881fd394e8ac196c802e81e2",
     params: "24B", sizeBytes: 14_000_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Mistral's general 24B base model (also Devstral's foundation); broad utility.",
   },
   "qwen3.5-27b": {
     uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
+    sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
     params: "27B", sizeBytes: 16_000_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Modern dense general 27B; the practical ceiling for most workstations.",
@@ -97,12 +105,14 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── Reasoning ───────────────────────────────────────────────────────────
   "deepseek-r1-distill-llama-8b": {
     uri: "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
+    sha256: "0addb1339a82385bcd973186cd80d18dcc71885d45eabd899781a118d03827d9",
     params: "8B", sizeBytes: 4_920_000_000, category: "reasoning",
     contextWindow: 131072, license: "mit",
     description: "Chain-of-thought distill into Llama-8B; best small reasoning model.",
   },
   "phi-4-reasoning": {
     uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
+    sha256: "960d3870b218f91116c55bf81dc313e6cdbce31b1047bb2bc8bc7ea47899b032",
     params: "14B", sizeBytes: 9_050_000_000, category: "reasoning",
     contextWindow: 32768, license: "mit",
     description: "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic.",
@@ -111,12 +121,14 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── Coding ──────────────────────────────────────────────────────────────
   "devstral-small-2507": {
     uri: "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
+    sha256: "1bcc2b1b7b7ea3168ba2dbe782432c464f2240598bd193930122c41b117c1796",
     params: "24B", sizeBytes: 14_300_000_000, category: "coding",
     contextWindow: 131072, license: "apache-2.0",
     description: "Mistral's official coding-agent GGUF; #1 open-source on SWE-Bench at release.",
   },
   "qwen3-coder-30b-a3b": {
     uri: "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
+    sha256: "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
     params: "30B (A3B)", sizeBytes: 19_000_000_000, category: "coding",
     contextWindow: 262144, license: "apache-2.0",
     description: "Qwen's MoE coder (3.3B active); strong agentic coding + 256K context.",
@@ -125,6 +137,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── Embedding ───────────────────────────────────────────────────────────
   "nomic-embed-text": {
     uri: "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
+    sha256: "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac",
     params: "137M", sizeBytes: 89_000_000, category: "embedding",
     contextWindow: 8192, license: "apache-2.0",
     description: "Returns 768-dim embeddings; pair with a chat model for RAG.",

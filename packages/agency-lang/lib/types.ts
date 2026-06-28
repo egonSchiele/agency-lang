@@ -17,7 +17,7 @@ import { ExportFromStatement } from "./types/exportFromStatement.js";
 import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
 import { Literal, RawCode, RegexLiteral } from "./types/literals.js";
-import { MatchBlock } from "./types/matchBlock.js";
+import { MatchArmMeta, MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { GotoStatement } from "./types/gotoStatement.js";
@@ -188,13 +188,18 @@ export type Assignment = BaseNode & {
   tags?: Tag[];
   exported?: boolean;
   /** Set by pattern lowering on the synthetic scrutinee binding of a lowered
-   *  `match` with pattern arms. Lets the type checker recover the original arm
-   *  structure (exhaustiveness; future match-native narrowing) even though the
-   *  executable form is the lowered if-chain. Holds the *un-lowered* MatchBlock,
-   *  so its case bodies are pre-lowering — consumers must read only the arm
-   *  patterns (`caseValue`/`guard`), never the bodies. Ignored by codegen.
-   *  `MatchBlock` is already imported at the top of this file. */
-  matchSource?: MatchBlock;
+   *  `match` with pattern arms. A deep-cloned, body-free snapshot of the arms,
+   *  so the type checker can recover the original arm structure (exhaustiveness;
+   *  future match-native narrowing) even though the executable form is the
+   *  lowered if-chain. Cloned and slimmed deliberately: it neither retains the
+   *  un-lowered case bodies nor aliases live AST that later passes mutate in
+   *  place. Ignored by codegen.
+   *
+   *  Only the pattern-arm lowering path sets this. The other two "this was a
+   *  match" shapes are intentionally untagged: a literal/identifier match stays
+   *  as a `matchBlock` node (read directly), and the `is`-form match is
+   *  guard-based. A consumer must recognize all three deliberately. */
+  matchSource?: MatchArmMeta[];
 };
 
 export function globalScope(): Scope {

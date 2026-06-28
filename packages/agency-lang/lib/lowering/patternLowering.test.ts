@@ -673,17 +673,32 @@ match (r) {
 `);
     const tagged = findTaggedAssignment(lowered);
     expect(tagged).toBeDefined();
-    expect(tagged?.matchSource?.type).toBe("matchBlock");
-    const cases = tagged?.matchSource?.cases.filter(
-      (c) => c.type === "matchBlockCase",
-    );
-    expect(cases?.length).toBe(2); // success + failure arms preserved
-    // Assert structure carried through, not just the arm count: the first arm
-    // is a `success(...)` result pattern.
-    const first = cases?.[0];
-    const pattern =
-      first?.type === "matchBlockCase" ? first.caseValue : undefined;
+    const arms = tagged?.matchSource;
+    expect(arms?.length).toBe(2); // success + failure arms preserved
+    // Structure carried through, not just the arm count: the first arm is a
+    // `success(...)` result pattern.
+    const pattern = arms?.[0]?.caseValue;
     expect(pattern !== "_" && (pattern as ResultPattern)?.kind).toBe("success");
+    // Slim snapshot: arms carry only the matcher metadata, never the body.
+    expect(arms?.[0]).not.toHaveProperty("body");
+  });
+
+  it("lowers a nested `is` in the match head — no isExpression survives", () => {
+    // Regression: a nested `is` in a compound scrutinee must be lowered to a
+    // boolean condition; if it survives raw, codegen has no isExpression
+    // handler and crashes ("Unhandled Agency node type: isExpression").
+    const lowered = lower(`
+let r = foo()
+let y = true
+match ((r is success) && y) {
+  success(v) => print("s")
+  failure(e) => print("f")
+}
+`);
+    const survived = walkNodesArray(lowered).some(
+      ({ node }) => node.type === "isExpression",
+    );
+    expect(survived).toBe(false);
   });
 
   it("survives liftCallbackBlocks (match nested in a callback block)", () => {

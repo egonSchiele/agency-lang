@@ -280,9 +280,21 @@ class PatternLowerer {
       type: "assignment",
       variableName: scrutineeName,
       declKind: "const",
-      value: node.expression,
+      // Lower the scrutinee like any other assignment value, so a nested
+      // `is` in a compound head (e.g. `match ((x is A) && y) { … }`) is
+      // rewritten to its boolean condition instead of surviving raw into
+      // codegen, which has no isExpression handler.
+      value: this.lowerExpression(node.expression),
       loc: node.loc,
-      matchSource: node,
+      // Carry a slim, deep-cloned, body-free snapshot of the arms for a later
+      // exhaustiveness pass. Cloned so we neither retain the un-lowered case
+      // bodies nor alias live AST that scope resolution mutates in place. See
+      // Assignment.matchSource.
+      matchSource: structuredClone(
+        node.cases
+          .filter((c): c is MatchBlockCase => c.type === "matchBlockCase")
+          .map((c) => ({ caseValue: c.caseValue, guard: c.guard })),
+      ),
     };
     const scrutineeRef = varRef(scrutineeName, node.loc);
 

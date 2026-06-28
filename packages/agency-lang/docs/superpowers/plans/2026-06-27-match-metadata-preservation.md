@@ -2,6 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Post-review revision (after code review on the PR).** Three changes from the
+> body below were adopted from review and are what actually shipped:
+> 1. `matchSource` stores a **slim, deep-cloned, body-free** arm snapshot
+>    (`MatchArmMeta[]` = `{ caseValue, guard }[]`, defined in `types/matchBlock.ts`),
+>    **not** the live `MatchBlock`. This fixes (a) retaining every un-lowered case
+>    body through codegen and (b) aliasing live AST that scope resolution mutates
+>    in place (`matchSource` shared `node.expression`/`guard` objects with the
+>    emitted if-chain). The "consumers must not read bodies" caveat is gone.
+> 2. The scrutinee value is now `this.lowerExpression(node.expression)` (was
+>    `node.expression` raw) — a pre-existing codegen crash where a nested `is` in a
+>    compound match head (e.g. `match ((r is success) && y) { … }`) survived
+>    unlowered into codegen ("Unhandled Agency node type: isExpression").
+> 3. Doc comments now state that only the pattern-arm path is tagged; the
+>    literal-passthrough and `is`-form paths are intentionally untagged, and the
+>    eventual consumer must handle all three shapes.
+
 **Goal:** Stop discarding the original `match` structure during pattern lowering — carry it on the lowered scrutinee assignment as an optional `matchSource` field — so a later type-checker pass can do exhaustiveness checking. No behavior change.
 
 **Architecture:** `lowerMatchBlock` rewrites a pattern-arm `match` into `[scrutineeAssign, ifChain]` and currently drops the `MatchBlock`. Add `matchSource?: MatchBlock` to the `Assignment` type and set it on the synthetic scrutinee assignment. Codegen and every downstream pass ignore the field; it exists only for the type checker.

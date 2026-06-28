@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { _search } from "./search.js";
+import { _search, _tavilySearch } from "./search.js";
 
 const FAKE_KEY = "test-brave-api-key";
 
@@ -148,5 +148,138 @@ describe("_search", () => {
     const parsed = new URL(url);
     expect(parsed.searchParams.has("country")).toBe(false);
     expect(parsed.searchParams.has("freshness")).toBe(false);
+  });
+});
+
+const FAKE_TAVILY_KEY = "tvly-test-key";
+
+describe("_tavilySearch", () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = process.env.TAVILY_API_KEY;
+
+  beforeEach(() => {
+    process.env.TAVILY_API_KEY = FAKE_TAVILY_KEY;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (originalEnv !== undefined) {
+      process.env.TAVILY_API_KEY = originalEnv;
+    } else {
+      delete process.env.TAVILY_API_KEY;
+    }
+  });
+
+  it("POSTs to the Tavily search endpoint with query and default max_results", async () => {
+    const mockFetch = mockFetchResponse({ results: [] });
+    globalThis.fetch = mockFetch;
+
+    await _tavilySearch("test query");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("https://api.tavily.com/search");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body);
+    expect(body.query).toBe("test query");
+    expect(body.max_results).toBe(5);
+  });
+
+  it("sends API key as a Bearer token", async () => {
+    const mockFetch = mockFetchResponse({ results: [] });
+    globalThis.fetch = mockFetch;
+
+    await _tavilySearch("test");
+
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.headers.Authorization).toBe(`Bearer ${FAKE_TAVILY_KEY}`);
+  });
+
+  it("uses apiKey option over env var", async () => {
+    const mockFetch = mockFetchResponse({ results: [] });
+    globalThis.fetch = mockFetch;
+
+    await _tavilySearch("test", { apiKey: "tvly-override" });
+
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.headers.Authorization).toBe("Bearer tvly-override");
+  });
+
+  it("maps Tavily results (content -> description) to SearchResult array", async () => {
+    globalThis.fetch = mockFetchResponse({
+      answer: "ignored",
+      results: [
+        {
+          title: "Example",
+          url: "https://example.com",
+          content: "An example snippet",
+          score: 0.98,
+          raw_content: "ignored",
+        },
+      ],
+    });
+
+    const results = await _tavilySearch("test");
+
+    expect(results).toEqual([
+      {
+        title: "Example",
+        url: "https://example.com",
+        description: "An example snippet",
+      },
+    ]);
+  });
+
+  it("returns empty array when no results", async () => {
+    globalThis.fetch = mockFetchResponse({ results: [] });
+    const results = await _tavilySearch("test");
+    expect(results).toEqual([]);
+  });
+
+  it("returns empty array when results field is missing", async () => {
+    globalThis.fetch = mockFetchResponse({});
+    const results = await _tavilySearch("test");
+    expect(results).toEqual([]);
+  });
+
+  it("throws when no API key is available", async () => {
+    delete process.env.TAVILY_API_KEY;
+    await expect(_tavilySearch("test")).rejects.toThrow("TAVILY_API_KEY");
+  });
+
+  it("throws on non-200 response with status and body", async () => {
+    globalThis.fetch = mockFetchResponse({ detail: "Unauthorized" }, 401);
+
+    await expect(_tavilySearch("test")).rejects.toThrow(
+      "Tavily Search API error (401)",
+    );
+  });
+
+  it("includes optional params in the body when provided", async () => {
+    const mockFetch = mockFetchResponse({ results: [] });
+    globalThis.fetch = mockFetch;
+
+    await _tavilySearch("test", {
+      count: 10,
+      searchDepth: "advanced",
+      topic: "news",
+    });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.max_results).toBe(10);
+    expect(body.search_depth).toBe("advanced");
+    expect(body.topic).toBe("news");
+  });
+
+  it("omits empty-string options from the body", async () => {
+    const mockFetch = mockFetchResponse({ results: [] });
+    globalThis.fetch = mockFetch;
+
+    await _tavilySearch("test", { searchDepth: "", topic: "" });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect("search_depth" in body).toBe(false);
+    expect("topic" in body).toBe(false);
   });
 });

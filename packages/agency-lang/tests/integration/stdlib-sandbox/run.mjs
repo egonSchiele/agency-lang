@@ -31,6 +31,8 @@ runAllowFail(rootDir, "Stdlib sandbox: weather",
   "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/weather.agency");
 runAllowFail(rootDir, "Stdlib sandbox: search",
   "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/search.agency");
+runAllowFail(rootDir, "Stdlib sandbox: tavily",
+  "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/tavily.agency");
 
 // Agency-JS tests (test.js + fixture.json)
 run(rootDir, "Stdlib sandbox (agency-js tests)",

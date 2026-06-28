@@ -1,4 +1,4 @@
-import { _search } from "agency-lang/stdlib-lib/search.js"
+import { _search, _tavilySearch } from "agency-lang/stdlib-lib/search.js"
 
 type SearchResult = {
   title: string;
@@ -52,6 +52,39 @@ export safe def search(
     searchLang: searchLang,
     safesearch: safesearch,
     freshness: freshness
+  },
+  )
+}
+
+export safe def tavilySearch(
+  query: string,
+  count: number = 5,
+  apiKey: string = "",
+  searchDepth: string = "",
+  topic: string = "",
+): SearchResult[] {
+  """
+  Search the web with Tavily, a search API built for AI agents. Returns a list of results with title, url, and description. Set TAVILY_API_KEY env var or pass apiKey directly. A free key (no credit card) is available at https://tavily.com.
+
+  @param query - The search query
+  @param count - Number of results to return (default 5)
+  @param apiKey - Tavily API key (defaults to TAVILY_API_KEY env var)
+  @param searchDepth - Depth of the search ("basic" for fast results, "advanced" for deeper retrieval)
+  @param topic - Category of the search ("general" or "news")
+  """
+  return interrupt std::search("Are you sure you want to perform this web search?", {
+    query: query,
+    count: count,
+    searchDepth: searchDepth,
+    topic: topic
+  })
+  return _tavilySearch(
+    query,
+    {
+    count: count,
+    apiKey: apiKey,
+    searchDepth: searchDepth,
+    topic: topic
   },
   )
 }

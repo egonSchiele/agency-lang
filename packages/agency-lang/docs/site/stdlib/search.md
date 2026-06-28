@@ -41,3 +41,33 @@ Search the web. Returns a list of results with title, url, and description. Set 
 **Throws:** `std::search`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L18))
+
+### tavilySearch
+
+```ts
+tavilySearch(query: string, count: number, apiKey: string, searchDepth: string, topic: string): SearchResult[]
+```
+
+Search the web with Tavily, a search API built for AI agents. Returns a list of results with title, url, and description. Set TAVILY_API_KEY env var or pass apiKey directly. A free key (no credit card) is available at https://tavily.com.
+
+  @param query - The search query
+  @param count - Number of results to return (default 5)
+  @param apiKey - Tavily API key (defaults to TAVILY_API_KEY env var)
+  @param searchDepth - Depth of the search ("basic" for fast results, "advanced" for deeper retrieval)
+  @param topic - Category of the search ("general" or "news")
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| query | `string` |  |
+| count | `number` | 5 |
+| apiKey | `string` | "" |
+| searchDepth | `string` | "" |
+| topic | `string` | "" |
+
+**Returns:** `SearchResult[]`
+
+**Throws:** `std::search`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L59))

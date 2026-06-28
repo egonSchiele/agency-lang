@@ -347,17 +347,30 @@ describe("recordHistoryEntry", () => {
 });
 
 describe("_clearHistory", () => {
-  afterEach(() => { delete (globalThis as Record<string, unknown>).__agencyClearHistory; });
+  let dir: string;
+  beforeEach(() => { dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "clearhist-"))); });
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).__agencyClearHistory;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 
-  it("invokes the installed __agencyClearHistory hook", () => {
+  it("invokes the installed __agencyClearHistory hook (live recall)", () => {
     const spy = vi.fn();
     (globalThis as Record<string, unknown>).__agencyClearHistory = spy;
-    _clearHistory();
+    _clearHistory("");
     expect(spy).toHaveBeenCalledOnce();
   });
 
   it("is a no-op when no REPL hook is installed", () => {
     delete (globalThis as Record<string, unknown>).__agencyClearHistory;
-    expect(() => _clearHistory()).not.toThrow();
+    expect(() => _clearHistory("")).not.toThrow();
+  });
+
+  it("clears the persisted file at the supplied path", () => {
+    const file = path.join(dir, "history.json");
+    saveHistory(file, ["c", "b", "a"], 100);
+    expect(loadHistory(file, 100)).toEqual(["c", "b", "a"]);
+    _clearHistory(file);
+    expect(loadHistory(file, 100)).toEqual([]);
   });
 });

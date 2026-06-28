@@ -743,15 +743,17 @@ export async function _runLineRepl(
   (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
 
   // Register a "clear history" hook so a command handler (e.g. the agent's
-  // `/clear-history`) can wipe the active session's recall + the persisted
-  // file without reaching into this readline directly. Same install/restore
-  // lifecycle as the hooks above.
+  // `/clear-history`) can wipe this session's *live* recall. The hook only
+  // touches `rl.history` — a Node object owned by this running readline, which
+  // can't live anywhere but TS. The persisted *file* is cleared separately by
+  // `_clearHistory`, using a path Agency holds as a module global (so the file
+  // identity lives in the execution model, not in this closure). Same
+  // install/restore lifecycle as the hooks above.
   const clearHistoryKey = "__agencyClearHistory";
   const prevClearHistory = (globalThis as any)[clearHistoryKey];
   (globalThis as any)[clearHistoryKey] = () => {
     const h = (rl as unknown as { history?: string[] }).history;
     if (h) h.length = 0;
-    saveHistory(historyFile, [], historyMax);
   };
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
@@ -1133,10 +1135,17 @@ export function _clearScreen(): void {
   process.stdout.write('\x1B[2J\x1B[H');
 }
 
-/** Clear the active `repl()` session's input history — both in-session recall
- *  and the persisted history file — via the `__agencyClearHistory` hook
- *  `_runLineRepl` installs. A no-op outside an interactive REPL. */
-export function _clearHistory(): void {
+/** Clear `repl()` input history. Splits cleanly along the state boundary:
+ *
+ *  - The persisted *file* is cleared at `path`, which the caller supplies.
+ *    Agency holds the path as a module global (`_historyFile`), so the file's
+ *    identity lives in the execution model rather than in a TS closure. Works
+ *    even with no active REPL; `saveHistory` no-ops on an empty path.
+ *  - The *live* in-session recall (`rl.history`) is a Node object owned by the
+ *    running readline, so that wipe goes through the `__agencyClearHistory`
+ *    hook `_runLineRepl` installs. A no-op outside an interactive REPL. */
+export function _clearHistory(path: string): void {
+  saveHistory(path, [], 0);
   const fn = (globalThis as any).__agencyClearHistory;
   if (typeof fn === "function") fn();
 }

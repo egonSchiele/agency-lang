@@ -450,6 +450,38 @@ async function openSlashPalette(
   return String(result.value);
 }
 
+/** Open the slash palette and repair readline history around it. Selecting a
+ *  command via the palette otherwise litters history with junk: the `/` trigger
+ *  commits `"/"`, and the modal's filter keystrokes leak through the shared
+ *  stdin so the confirming Enter commits a fragment like `"pa"` too. `mark` is
+ *  where history stood the instant `/` was pressed (captured by the trigger);
+ *  everything added since is rolled back, and on a pick the chosen command
+ *  (e.g. `"/paste"`) is recorded instead — one clean entry. Returns the picked
+ *  command, or null if cancelled. */
+async function pickFromSlashPalette(
+  rl: readline.Interface,
+  palette: [string, string][],
+  mark: number,
+): Promise<string | null> {
+  const picked = await openSlashPalette(palette);
+  const history = (rl as unknown as { history?: string[] }).history;
+  if (history) repairSlashHistory(history, mark, picked);
+  return picked;
+}
+
+/** Roll back the entries the slash palette polluted — `"/"` plus any leaked
+ *  filter keystrokes, i.e. everything added since `mark` — and, when a command
+ *  was picked, record it as one clean entry. `history` is readline's
+ *  newest-first array, mutated in place. A `mark` of -1 (no trigger fired)
+ *  skips the rollback. */
+function repairSlashHistory(history: string[], mark: number, picked: string | null): void {
+  if (mark >= 0) {
+    // Newest-first array, so entries added since `mark` sit at the front.
+    history.splice(0, Math.max(0, history.length - mark));
+  }
+  if (picked != null) recordHistoryEntry(history, picked, picked);
+}
+
 /**
  * Intercept `/` at an empty readline buffer and synthesize a submit
  * so the loop's slash-trigger fires immediately — no Enter required.
@@ -465,6 +497,7 @@ function installSlashTrigger(
   rl: readline.Interface,
   entries: [string, string][],
   useTTY: boolean,
+  onTrigger: () => void,
 ): () => void {
   if (!useTTY || entries.length === 0) return () => { };
   const rlAny = rl as unknown as {
@@ -480,6 +513,10 @@ function installSlashTrigger(
   ): void {
     const isSlash = key && (key.sequence === "/" || key.name === "slash");
     if (isSlash && (this.line ?? "") === "") {
+      // Mark where history stands *before* the synthesized submit commits "/",
+      // so the bare-`/` branch can roll back that "/" plus any palette-filter
+      // keystrokes that leak in while the modal is open.
+      onTrigger();
       // Substitute `/` into the buffer and synthesize Enter so the
       // pending `rl.question` resolves with "/". The main loop sees
       // it, opens `openSlashPalette`, and we never echo the `/`
@@ -823,8 +860,14 @@ export async function _runLineRepl(
   };
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
-  // in the loop body fires immediately and opens the palette modal.
-  const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY);
+  // in the loop body fires immediately and opens the palette modal. The
+  // trigger records where history stood the instant `/` was pressed, so the
+  // branch can roll back the junk entries the palette would otherwise leave.
+  let slashHistoryMark = -1;
+  const teardownSlashTrigger = installSlashTrigger(rl, palette, useTTY, () => {
+    const h = (rl as unknown as { history?: string[] }).history;
+    slashHistoryMark = h ? h.length : 0;
+  });
   try {
     while (true) {
       let line: string;
@@ -862,7 +905,8 @@ export async function _runLineRepl(
       // also type `/` + Enter manually. The picked command is fed
       // back through the normal onSubmit path; cancel just reprompts.
       if (trimmed === "/" && palette.length > 0) {
-        const picked = await openSlashPalette(palette);
+        const picked = await pickFromSlashPalette(rl, palette, slashHistoryMark);
+        slashHistoryMark = -1;
         if (picked == null) continue;
         line = picked;
         trimmed = picked;
@@ -1206,6 +1250,7 @@ export const _internal = {
   saveHistory,
   recordHistoryEntry,
   recordPasteEntry,
+  repairSlashHistory,
   summarizeMultiline,
 };
 

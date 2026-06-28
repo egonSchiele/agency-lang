@@ -19,6 +19,7 @@ const {
   saveHistory,
   recordHistoryEntry,
   recordPasteEntry,
+  repairSlashHistory,
   summarizeMultiline,
 } = _internal;
 
@@ -343,6 +344,36 @@ describe("summarizeMultiline", () => {
   });
   it("counts a trailing blank line", () => {
     expect(summarizeMultiline("a\nb\n")).toBe("a … (3 lines)");
+  });
+});
+
+describe("repairSlashHistory", () => {
+  it("replaces the leaked `/` + filter entries with the chosen command", () => {
+    // Trigger fired with ["older"] present, so mark = 1. Then "/" and the
+    // leaked "pa" got committed (newest-first: ["pa", "/", "older"]).
+    const history = ["pa", "/", "older"];
+    repairSlashHistory(history, 1, "/paste");
+    expect(history).toEqual(["/paste", "older"]);
+  });
+
+  it("drops the junk even when nothing was picked (cancelled palette)", () => {
+    const history = ["pa", "/", "older"];
+    repairSlashHistory(history, 1, null);
+    expect(history).toEqual(["older"]);
+  });
+
+  it("dedupes an earlier copy of the chosen command", () => {
+    // mark=2: ["/paste", "older"] predate the trigger; "pa" + "/" were added
+    // after. The old "/paste" survives the rollback, then gets moved to front.
+    const history = ["pa", "/", "/paste", "older"];
+    repairSlashHistory(history, 2, "/paste");
+    expect(history).toEqual(["/paste", "older"]);
+  });
+
+  it("skips rollback when no trigger fired (mark = -1)", () => {
+    const history = ["typed", "older"];
+    repairSlashHistory(history, -1, "/cost");
+    expect(history).toEqual(["/cost", "typed", "older"]);
   });
 });
 

@@ -206,3 +206,32 @@ describe("unresolved typeAliasVariable assignability", () => {
     expect(isAssignable(colorRef, undefinedFoo, aliases)).toBe(false);
   });
 });
+
+describe("narrowed Result member assignable to Result type", () => {
+  const resultT: VariableType = {
+    type: "resultType",
+    successType: STRING_T,
+    failureType: STRING_T,
+  };
+  // The success member shape produced by resultToObjectUnion narrowing.
+  const successMember: VariableType = {
+    type: "objectType",
+    properties: [
+      { key: "success", value: { type: "booleanLiteralType", value: "true" } },
+      { key: "value", value: STRING_T },
+    ],
+  };
+
+  it("a narrowed success member is assignable back to the Result type", () => {
+    // e.g. `return parsed` after `if (isFailure(parsed)) return` narrowed it.
+    expect(isAssignable(successMember, resultT, {})).toBe(true);
+  });
+
+  it("an unrelated object is not assignable to the Result type", () => {
+    const other: VariableType = {
+      type: "objectType",
+      properties: [{ key: "nope", value: STRING_T }],
+    };
+    expect(isAssignable(other, resultT, {})).toBe(false);
+  });
+});

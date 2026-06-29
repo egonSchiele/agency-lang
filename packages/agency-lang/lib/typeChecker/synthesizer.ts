@@ -7,6 +7,7 @@ import type {
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
+import { typeAt } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
@@ -95,7 +96,32 @@ export function synthType(
   switch (expr.type) {
     case "variableName": {
       const scopeType = scope.lookup(expr.value);
-      if (scopeType) return scopeType;
+      if (scopeType) {
+        // Flow-sensitive narrowing: when a flow node is attached to this exact
+        // reference node (populated by buildFlowGraphs; present during
+        // checkScopes / Phase B), resolve through typeAt so narrowed types are
+        // consistent across passes. Relies on AST node identity — the flowOf
+        // WeakMap is keyed on the same node object the synthesizer receives. No
+        // flow node (buildScopes / inference, before flowEnv exists, or a
+        // synthetic node) → the declared scope type, unchanged. Only narrows a
+        // *variable* (scopeType found); the ref-resolution below is untouched.
+        if (ctx.flowEnv) {
+          const flow = ctx.flowEnv.flowOf.get(expr);
+          if (flow) {
+            // Resolve against the CURRENT scope's type aliases
+            // (ctx.getTypeAliases() tracks ctx.withScope), not the global
+            // snapshot captured once in buildFlowGraphs — a scope that overrides
+            // an alias must narrow against its own set. Safe with the shared
+            // memo: each flow node belongs to one scope, so it is only ever
+            // queried under that scope's alias context.
+            return typeAt({ variable: expr.value, chain: [] }, flow, {
+              ...ctx.flowEnv,
+              typeAliases: ctx.getTypeAliases(),
+            });
+          }
+        }
+        return scopeType;
+      }
       const fnDef = ctx.functionDefs[expr.value];
       if (fnDef) {
         return {

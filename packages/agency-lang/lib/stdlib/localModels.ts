@@ -33,8 +33,9 @@ export type ModelInfo = {
   /** Native context window in tokens. */
   contextWindow: number;
   /** License identifier (SPDX-ish). Curated entries are permissive only
-   *  (apache-2.0 / mit); restrictively-licensed models (gemma, llama) are
-   *  intentionally excluded. */
+   *  (apache-2.0 / mit); restrictively-licensed models (older Gemma's custom
+   *  terms, llama) are intentionally excluded. Gemma 4 ships under apache-2.0,
+   *  so it qualifies; Gemma 1–3 did not. */
   license: string;
   /** Pinned content SHA-256 (hex) of the resolved single-file GGUF, used to
    *  verify the download. Absent for sharded models (see issue #348). */
@@ -73,12 +74,26 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 131072, license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
   },
+  "gemma-4-e4b": {
+    uri: "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
+    sha256: "519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d",
+    params: "4B (E4B)", sizeBytes: 4_980_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Google's compact Gemma 4 (4.5B effective); ~5 GB, laptop-friendly multimodal model.",
+  },
   "qwen3.5-9b": {
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
     sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
     params: "9B", sizeBytes: 5_500_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Modern medium general model with strong tool use; 128K context.",
+  },
+  "gemma-4-12b": {
+    uri: "hf:unsloth/gemma-4-12b-it-GGUF:Q4_K_M",
+    sha256: "43fec98c5102b1c446b4ddd0a9439f1db3a2e1f2e0b8cd143ce1ea619a9403d6",
+    params: "12B", sizeBytes: 7_120_000_000, category: "general",
+    contextWindow: 262144, license: "apache-2.0",
+    description: "Google's mid-size Gemma 4 dense model; strong multilingual multimodal use, 256K context.",
   },
   "gpt-oss-20b": {
     uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
@@ -100,6 +115,20 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     params: "27B", sizeBytes: 16_000_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Modern dense general 27B; the practical ceiling for most workstations.",
+  },
+  "gemma-4-26b-a4b": {
+    uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
+    sha256: "34c746b1d50ab813e29cd46c4796e3f43c741901a582f93a67b55b9fc9687b35",
+    params: "26B (A4B)", sizeBytes: 16_900_000_000, category: "general",
+    contextWindow: 262144, license: "apache-2.0",
+    description: "Google's Gemma 4 MoE (3.8B active); fast yet capable multimodal model, 256K context.",
+  },
+  "gemma-4-31b": {
+    uri: "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
+    sha256: "9fdf3dc8b0384830b4402d151388c140bd8eb2abf8d60588d8224231198254a1",
+    params: "31B", sizeBytes: 18_300_000_000, category: "general",
+    contextWindow: 262144, license: "apache-2.0",
+    description: "Largest dense Gemma 4; top Gemma quality for high-RAM workstations, 256K context.",
   },
 
   // ── Reasoning ───────────────────────────────────────────────────────────

@@ -41,6 +41,16 @@
       "description": "Strong multilingual small general workhorse from Alibaba.",
       "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
     },
+    "gemma-4-e4b": {
+      "uri": "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
+      "params": "4B (E4B)",
+      "sizeBytes": 4980000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Google's compact Gemma 4 (4.5B effective); ~5 GB, laptop-friendly multimodal model.",
+      "sha256": "519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
+    },
     "qwen3.5-9b": {
       "uri": "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
       "params": "9B",
@@ -50,6 +60,16 @@
       "license": "apache-2.0",
       "description": "Modern medium general model with strong tool use; 128K context.",
       "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+    },
+    "gemma-4-12b": {
+      "uri": "hf:unsloth/gemma-4-12b-it-GGUF:Q4_K_M",
+      "params": "12B",
+      "sizeBytes": 7120000000,
+      "category": "general",
+      "contextWindow": 262144,
+      "license": "apache-2.0",
+      "description": "Google's mid-size Gemma 4 dense model; strong multilingual multimodal use, 256K context.",
+      "sha256": "43fec98c5102b1c446b4ddd0a9439f1db3a2e1f2e0b8cd143ce1ea619a9403d6"
     },
     "gpt-oss-20b": {
       "uri": "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
@@ -80,6 +100,26 @@
       "license": "apache-2.0",
       "description": "Modern dense general 27B; the practical ceiling for most workstations.",
       "sha256": "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806"
+    },
+    "gemma-4-26b-a4b": {
+      "uri": "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
+      "params": "26B (A4B)",
+      "sizeBytes": 16900000000,
+      "category": "general",
+      "contextWindow": 262144,
+      "license": "apache-2.0",
+      "description": "Google's Gemma 4 MoE (3.8B active); fast yet capable multimodal model, 256K context.",
+      "sha256": "34c746b1d50ab813e29cd46c4796e3f43c741901a582f93a67b55b9fc9687b35"
+    },
+    "gemma-4-31b": {
+      "uri": "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
+      "params": "31B",
+      "sizeBytes": 18300000000,
+      "category": "general",
+      "contextWindow": 262144,
+      "license": "apache-2.0",
+      "description": "Largest dense Gemma 4; top Gemma quality for high-RAM workstations, 256K context.",
+      "sha256": "9fdf3dc8b0384830b4402d151388c140bd8eb2abf8d60588d8224231198254a1"
     },
     "deepseek-r1-distill-llama-8b": {
       "uri": "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",

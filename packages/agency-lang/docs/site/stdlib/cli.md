@@ -62,7 +62,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L70))
 
 ### clearScreen
 
@@ -70,7 +70,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L131))
 
 ### clearHistory
 
@@ -80,10 +80,12 @@ clearHistory()
 
 Clear the input history of the **currently running** `repl()` session —
   both its in-session up-arrow recall and the `historyFile` that session was
-  started with. Takes no path: it acts on the active REPL (which knows its own
-  file). A no-op when called outside an interactive `repl()`.
+  started with. The file path comes from the `_historyFile` execution-model
+  global (set by `repl()`), so the runtime remembers which file to clear; the
+  live up-arrow recall is wiped via the active REPL. A no-op when called
+  outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L135))
 
 ### termWidth
 
@@ -93,7 +95,7 @@ termWidth(): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L145))
 
 ### hline
 
@@ -110,4 +112,4 @@ hline(char: string, width: number): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L149))

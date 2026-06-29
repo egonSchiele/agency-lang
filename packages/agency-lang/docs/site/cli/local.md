@@ -65,7 +65,7 @@ without any network call.
 
 - **Cache dir**: `AGENCY_MODELS_DIR` env var, else `client.modelsDir` in the nearest `agency.json`, else `~/.agency-agent/models`. The default is shared with `agency agent --local-model`, so a `local download` pre-populates what the agent reuses.
 - **Aliases**: written to the nearest `agency.json` walking up from the current directory; if none is found, `~/agency.json` is used. The CLI prints which file it edited on every add/remove.
-- **Curated catalog**: permissive licenses only (apache-2.0 / mit); restrictively-licensed weights (gemma, llama) are intentionally excluded.
+- **Curated catalog**: permissive licenses only (apache-2.0 / mit); restrictively-licensed weights (Gemma 1–3's custom terms, llama) are intentionally excluded. Gemma 4 ships under apache-2.0, so it is included.
 
 ### Config
 

@@ -193,6 +193,16 @@ structure.
 6. **Same-kind matching**: two primitive types match if their values are equal; two literal types match if their values are equal; two array types match if their element types are assignable; two object types use structural matching (source must have all target properties with compatible types)
 7. Otherwise, return `false`
 
+### The `never` type
+
+`never` is Agency's bottom type, represented as `{ type: "primitiveType", value: "never" }` — mirroring how `any` (the top type) and `unknown`/`void`/`null` are modeled as primitives, rather than as a distinct AST node. Its rules:
+
+- **Assignable to every type; nothing is assignable to it except `never` (and `any`).** The "assignable to everything" half is one early rule in `isAssignable` (right after the `any` short-circuit). The converse — what is assignable *to* `never` — is only `never` itself (falls out of same-kind matching, rule 6, since `never`'s value equals only `never`'s) plus `any`, which the universal `any` rule treats as assignable to everything (standard TypeScript behavior).
+- **Member access on `never` yields `never`** with no diagnostic (`synthValueAccess`), so a provably-unreachable value never flags spurious missing-member errors.
+- `formatType` prints `never`; the type parser accepts `never` as an annotation. Use `isNever` (`assignability.ts`) to test for it.
+
+Nothing *produces* `never` yet except an explicit `: never` annotation. The flow-typed checker (subsequent work) is what begins producing it — at fully-excluded discriminant narrowings and empty union joins — unlocking dead-branch and exhaustiveness diagnostics.
+
 ## Special cases for Agency
 
 ### Prompts

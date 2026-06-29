@@ -329,3 +329,15 @@ describe("optional-key coalescing (validation mapper)", () => {
     expect(out).toContain(".default(null).meta(");
   });
 });
+
+describe("never (bottom type) maps to z.never()", () => {
+  const never: VariableType = { type: "primitiveType", value: "never" };
+
+  it("maps never to z.never() on the LLM path", () => {
+    expect(mapTypeToZodSchema(never, {})).toBe("z.never()");
+  });
+
+  it("maps never to z.never() on the validation path", () => {
+    expect(mapTypeToValidationSchema(never, {})).toBe("z.never()");
+  });
+});

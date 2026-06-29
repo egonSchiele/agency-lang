@@ -6,12 +6,12 @@ import type {
 } from "../types/dataStructures.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
-import { isAssignable, safeResolveType } from "./assignability.js";
+import { isAssignable, isNever, safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
-import { ANY_T, BOOLEAN_T, NUMBER_T, REGEX_T, STRING_T } from "./primitives.js";
+import { ANY_T, BOOLEAN_T, NEVER_T, NUMBER_T, REGEX_T, STRING_T } from "./primitives.js";
 import {
   lookupArrayCallbackMethod,
   lookupPrimitiveMember,
@@ -615,6 +615,10 @@ export function synthValueAccess(
     const resolved = safeResolveType(currentType, typeAliases);
     if (resolved.type === "primitiveType" && resolved.value === "any")
       return "any";
+    // never is the bottom type: any access on it is itself never, and emits no
+    // diagnostic (a provably-unreachable receiver must not flag spurious
+    // missing-member errors).
+    if (isNever(resolved)) return NEVER_T;
 
     switch (element.kind) {
       case "property": {

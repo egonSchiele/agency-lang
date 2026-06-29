@@ -999,6 +999,39 @@ describe("objectPropertyParser", () => {
       },
     },
     {
+      input: "foo?: string",
+      expected: {
+        success: true,
+        result: {
+          key: "foo",
+          value: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "null" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "bar?: string | number",
+      expected: {
+        success: true,
+        result: {
+          key: "bar",
+          value: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+              { type: "primitiveType", value: "null" },
+            ],
+          },
+        },
+      },
+    },
+    {
       input: "x number",
       expected: { success: false },
     },

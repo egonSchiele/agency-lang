@@ -1047,7 +1047,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
     }
 
     if (value.type === "unionType") {
-      // If it's already a union, just add undefined to the list of types
+      // If it's already a union, just add null to the list of types
       return success(
         {
           key,
@@ -1055,7 +1055,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
             type: "unionType",
             types: [
               ...value.types,
-              { type: "primitiveType", value: "undefined" },
+              { type: "primitiveType", value: "null" },
             ],
           },
         },
@@ -1063,13 +1063,13 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
       );
     }
 
-    // If it's not a union, create a new union with the original type and undefined
+    // If it's not a union, create a new union with the original type and null
     return success(
       {
         key,
         value: {
           type: "unionType",
-          types: [value, { type: "primitiveType", value: "undefined" }],
+          types: [value, { type: "primitiveType", value: "null" }],
         },
       },
       result.rest,

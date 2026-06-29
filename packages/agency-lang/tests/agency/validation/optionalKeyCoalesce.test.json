@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"coalesced to null\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "schema({foo?: string}).parse({}) yields { foo: null }"
+    }
+  ]
+}

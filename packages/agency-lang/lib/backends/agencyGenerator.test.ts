@@ -734,3 +734,17 @@ describe("AgencyGenerator - string delimiter round-tripping", () => {
     expect(out).toBe('"hello"');
   });
 });
+
+describe("AgencyGenerator - optional key shorthand (nullish unification)", () => {
+  it("round-trips an optional key as key?: T", () => {
+    const parseResult = parseAgency("type Foo = { foo?: string }", {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+
+    const generator = new AgencyGenerator();
+    const result = generator.generate(parseResult.result);
+
+    expect(result.output).toContain("foo?: string");
+    expect(result.output).not.toContain("string | null");
+  });
+});

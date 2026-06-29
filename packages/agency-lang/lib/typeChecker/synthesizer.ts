@@ -23,7 +23,7 @@ import type { BuiltinSignature } from "./types.js";
 import { walkNodes } from "../utils/node.js";
 import { uniqBy } from "../utils.js";
 import type { BlockArgument } from "../types/blockArgument.js";
-import { UNDEFINED_T, VOID_T } from "./primitives.js";
+import { NULL_T, VOID_T } from "./primitives.js";
 
 /** Names treated as Result constructors (synth parameterizes ResultType from arg). */
 const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
@@ -863,7 +863,7 @@ function synthArrayCallbackMethod(
   if (cbKind === "void") return VOID_T;
   if (cbKind === "boolean") return BOOLEAN_T;
   if (cbKind === "elementOrUndef") {
-    return { type: "unionType", types: [elementT, UNDEFINED_T] };
+    return { type: "unionType", types: [elementT, NULL_T] };
   }
 
   // The remaining kinds (`arrayU`, `flatten`, `reduce`) all need the

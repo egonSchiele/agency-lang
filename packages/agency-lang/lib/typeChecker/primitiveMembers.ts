@@ -110,7 +110,7 @@ const STRING_MEMBERS: Record<string, PrimitiveMember> = {
 
   // Regex
   match:       { kind: "method", sig: {
-    params: [REGEX_T], returnType: { type: "unionType", types: [stringArray, { type: "primitiveType", value: "undefined" }] },
+    params: [REGEX_T], returnType: { type: "unionType", types: [stringArray, { type: "primitiveType", value: "null" }] },
   } },
 };
 
@@ -151,13 +151,13 @@ const ARRAY_MEMBERS: Record<string, PrimitiveMember> = {
   pop:         { kind: "method", sig: (r) => ({
     params: [], returnType: {
       type: "unionType",
-      types: [elementOf(r), { type: "primitiveType", value: "undefined" }],
+      types: [elementOf(r), { type: "primitiveType", value: "null" }],
     },
   }) },
   shift:       { kind: "method", sig: (r) => ({
     params: [], returnType: {
       type: "unionType",
-      types: [elementOf(r), { type: "primitiveType", value: "undefined" }],
+      types: [elementOf(r), { type: "primitiveType", value: "null" }],
     },
   }) },
   reverse:     { kind: "method", sig: (r) => ({ params: [], returnType: r }) },

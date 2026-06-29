@@ -1063,10 +1063,21 @@ export class TypeScriptBuilder {
     }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
-    // Agency uses strict equality/inequality: == → ===, != → !==
-    const emitOp = node.operator === "==" ? "===" :
-      node.operator === "!=" ? "!==" : node.operator;
-    return ts.binOp(leftNode, emitOp, rightNode, {
+    // All equality operators use unified nullish equality via the `__eq`
+    // runtime helper (null and undefined compare equal). There is no strict
+    // escape hatch: `===`/`!==` are stylistic aliases that compile identically
+    // to `==`/`!=`. See docs/dev/null-and-undefined.md.
+    if (
+      node.operator === "==" ||
+      node.operator === "===" ||
+      node.operator === "!=" ||
+      node.operator === "!=="
+    ) {
+      const eq = ts.call(ts.id("__eq"), [leftNode, rightNode]);
+      const negated = node.operator === "!=" || node.operator === "!==";
+      return negated ? ts.not(eq) : eq;
+    }
+    return ts.binOp(leftNode, node.operator, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });

@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -197,7 +197,7 @@ __stack.locals.c = 1000 - __stack.locals.a - __stack.locals.b;
 await runner.ifElse(1, [
 
   {
-    condition: async () => __stack.locals.a * __stack.locals.a + __stack.locals.b * __stack.locals.b === __stack.locals.c * __stack.locals.c,
+    condition: async () => __eq(__stack.locals.a * __stack.locals.a + __stack.locals.b * __stack.locals.b, __stack.locals.c * __stack.locals.c),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 runner.halt({

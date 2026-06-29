@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -219,7 +219,7 @@ await callHook({
       await runner.ifElse(1, [
 
   {
-    condition: async () => __stack.args.c === `1`,
+    condition: async () => __eq(__stack.args.c, `1`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -233,7 +233,7 @@ return;
       await runner.ifElse(2, [
 
   {
-    condition: async () => __stack.args.c === `2`,
+    condition: async () => __eq(__stack.args.c, `2`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -247,7 +247,7 @@ return;
       await runner.ifElse(3, [
 
   {
-    condition: async () => __stack.args.c === `3`,
+    condition: async () => __eq(__stack.args.c, `3`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -261,7 +261,7 @@ return;
       await runner.ifElse(4, [
 
   {
-    condition: async () => __stack.args.c === `4`,
+    condition: async () => __eq(__stack.args.c, `4`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -275,7 +275,7 @@ return;
       await runner.ifElse(5, [
 
   {
-    condition: async () => __stack.args.c === `5`,
+    condition: async () => __eq(__stack.args.c, `5`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -289,7 +289,7 @@ return;
       await runner.ifElse(6, [
 
   {
-    condition: async () => __stack.args.c === `6`,
+    condition: async () => __eq(__stack.args.c, `6`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -303,7 +303,7 @@ return;
       await runner.ifElse(7, [
 
   {
-    condition: async () => __stack.args.c === `7`,
+    condition: async () => __eq(__stack.args.c, `7`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -317,7 +317,7 @@ return;
       await runner.ifElse(8, [
 
   {
-    condition: async () => __stack.args.c === `8`,
+    condition: async () => __eq(__stack.args.c, `8`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -331,7 +331,7 @@ return;
       await runner.ifElse(9, [
 
   {
-    condition: async () => __stack.args.c === `9`,
+    condition: async () => __eq(__stack.args.c, `9`),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;

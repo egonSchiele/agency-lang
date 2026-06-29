@@ -28,6 +28,7 @@ import { validateTypeReferences } from "./validate.js";
 import { applySuppressions, parseSuppressions } from "./suppression.js";
 import { inferReturnTypes } from "./inference.js";
 import { buildScopes } from "./scopes.js";
+import { buildFlowGraphs } from "./flowBuilder.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
@@ -290,6 +291,9 @@ export class TypeChecker {
 
     // 3. Build scopes (collects variable types and checks assignments)
     const scopes = buildScopes(ctx);
+
+    // 3b. Build the flow graph (PR 1b — populated, not yet consulted).
+    buildFlowGraphs(scopes, ctx);
 
     // 4. Check function calls, return types, and expressions
     checkScopes(scopes, ctx);

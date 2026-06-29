@@ -38,6 +38,65 @@ function unwrapCallArg(arg: Expression | SplatExpression | NamedArgument): Expre
   return arg;
 }
 
+/**
+ * The immediate *expression* children of any AST node — the single source of
+ * truth for "what sub-expressions does this node contain". Consumed by
+ * `attachExpressionsToFlow` (flow builder) and `checkConstMutations`
+ * (scopes.ts) so neither re-implements the per-node-kind recursion. Returns
+ * `[]` for leaves and for nested definitions (`function`/`graphNode`), which
+ * own their scope and are walked separately.
+ */
+export function expressionChildren(node: AgencyNode): AgencyNode[] {
+  switch (node.type) {
+    case "binOpExpression":
+      return [node.left, node.right];
+    case "assignment":
+      return [node.value];
+    case "returnStatement":
+      return node.value ? [node.value] : [];
+    case "ifElse":
+      return [node.condition];
+    case "whileLoop":
+      return [node.condition];
+    case "forLoop":
+      return [node.iterable];
+    case "functionCall":
+    case "interruptStatement":
+      return node.arguments.map(unwrapCallArg);
+    case "valueAccess": {
+      const children: AgencyNode[] = [node.base];
+      for (const el of node.chain) {
+        if (el.kind === "index") {
+          children.push(el.index);
+        } else if (el.kind === "methodCall") {
+          children.push(el.functionCall);
+        }
+      }
+      return children;
+    }
+    case "agencyArray":
+      return node.items.map((item) => (item.type === "splat" ? item.value : item));
+    case "agencyObject":
+      return node.entries.map((entry) => entry.value);
+    case "string":
+    case "multiLineString": {
+      const children: AgencyNode[] = [];
+      for (const seg of node.segments) {
+        if (seg.type === "interpolation") {
+          children.push(seg.expression);
+        }
+      }
+      return children;
+    }
+    case "tryExpression":
+      return [node.call];
+    case "newExpression":
+      return node.arguments;
+    default:
+      return [];
+  }
+}
+
 /** Convert a function call argument to string. */
 function callArgToString(arg: Expression | SplatExpression | NamedArgument): string {
   if (arg.type === "splat") {

@@ -91,6 +91,9 @@ export type TypeCheckerContext = {
    *  interrupt call-graph analysis) can use a reliable per-file
    *  identity instead of looking names up in the global symbol table. */
   currentFile?: string;
+  /** Flow graph built by `buildFlowGraphs` (PR 1b). Populated but not yet
+   *  consulted — PR 2 routes `synthValueAccess` through `typeAt`. */
+  flowEnv?: import("./flow.js").FlowEnvironment;
   getTypeAliases(): Record<string, TypeAliasEntry>;
   withScope<T>(key: string, fn: () => T): T;
   inferReturnTypeFor(

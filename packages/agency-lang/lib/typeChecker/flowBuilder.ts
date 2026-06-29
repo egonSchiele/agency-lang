@@ -2,7 +2,8 @@ import type { AgencyNode } from "../types.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { expressionChildren, walkNodes } from "../utils/node.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
-import { type FlowNode, type FlowEnvironment } from "./flow.js";
+import { analyzeCondition } from "./narrowing.js";
+import { type FlowNode, type FlowEnvironment, wrapFacts, mergeFlows } from "./flow.js";
 
 /**
  * Attach `flow` to every variable-referencing node inside an expression. The
@@ -75,15 +76,17 @@ const statementRules: StatementRuleTable = {
     return { kind: "exit" };
   },
 
-  // Task 2 replaces this with wrapFacts + mergeFlows. For now, recurse both
-  // bodies linearly so refs get attached; flow passes through.
   ifElse: (node, flow, env) => {
     attachExpressionsToFlow(node.condition as AgencyNode, flow, env);
-    buildFlowGraph(node.thenBody, flow, env);
-    if (node.elseBody) {
-      buildFlowGraph(node.elseBody, flow, env);
-    }
-    return flow;
+    const facts = analyzeCondition(node.condition);
+    const thenEnd = buildFlowGraph(node.thenBody, wrapFacts(flow, facts.then), env);
+    const elseStart = wrapFacts(flow, facts.else);
+    const elseEnd = node.elseBody
+      ? buildFlowGraph(node.elseBody, elseStart, env)
+      : elseStart;
+    // Post-guard narrowing falls out: a returning branch ends in `exit`, which
+    // mergeFlows drops, leaving the surviving branch's (narrowed) flow.
+    return mergeFlows([thenEnd, elseEnd]);
   },
 
   // Task 3 adds widening. For now, recurse the body linearly.

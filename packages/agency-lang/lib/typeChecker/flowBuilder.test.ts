@@ -34,6 +34,15 @@ function freshEnv(
 
 const ref = (variable: string) => ({ variable, chain: [] as string[] });
 
+function find(body: AgencyNode[], pred: (n: AgencyNode) => boolean): AgencyNode {
+  for (const { node } of walkNodes(body)) {
+    if (pred(node)) {
+      return node;
+    }
+  }
+  throw new Error("node not found");
+}
+
 describe("buildFlowGraph — linear", () => {
   it("assign nodes carry the scope's type at the end of a straight-line body", () => {
     const body = parseBody(`let x = 5\nlet y = "hi"`);
@@ -75,5 +84,45 @@ describe("buildFlowGraph — linear", () => {
         expect(env.flowOf.get(node), `flowOf missing for ${node.type}`).toBeDefined();
       }
     }
+  });
+});
+
+describe("buildFlowGraph — ifElse", () => {
+  const memberA: VariableType = {
+    type: "objectType",
+    properties: [
+      { key: "kind", value: { type: "stringLiteralType", value: "a" } },
+      { key: "v", value: STR },
+    ],
+  };
+  const memberB: VariableType = {
+    type: "objectType",
+    properties: [
+      { key: "kind", value: { type: "stringLiteralType", value: "b" } },
+      { key: "v", value: NUM },
+    ],
+  };
+  const ab: VariableType = { type: "unionType", types: [memberA, memberB] };
+
+  it("narrows inside the then-branch at the access site", () => {
+    const body = parseBody(`if (u.kind == "a") {\n  print(u)\n}`);
+    const scope = new Scope("t");
+    scope.declare("u", ab);
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const insidePrint = find(body, (n) => n.type === "functionCall" && n.functionName === "print");
+    const uRef = find([insidePrint], (n) => n.type === "variableName" && n.value === "u");
+    expect(typeAt(ref("u"), env.flowOf.get(uRef)!, env)).toEqual(memberA);
+  });
+
+  it("post-guard: after a returning then-branch, the tail sees the complement member", () => {
+    const body = parseBody(`if (r.kind == "b") {\n  return r\n}\nprint(r)`);
+    const scope = new Scope("t");
+    scope.declare("r", ab);
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const tailPrint = find(body, (n) => n.type === "functionCall" && n.functionName === "print");
+    const rRef = find([tailPrint], (n) => n.type === "variableName" && n.value === "r");
+    expect(typeAt(ref("r"), env.flowOf.get(rRef)!, env)).toEqual(memberA);
   });
 });

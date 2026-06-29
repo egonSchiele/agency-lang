@@ -25,6 +25,23 @@ export function attachExpressionsToFlow(
   if (!node) {
     return;
   }
+  // Short-circuit: the RHS of `&&` runs only when the LHS is truthy (then-facts);
+  // the RHS of `||` only when the LHS is falsy (else-facts). Recurse through
+  // this same function (not the flow-agnostic child walk) so the split holds at
+  // any nesting depth.
+  if (
+    node.type === "binOpExpression" &&
+    (node.operator === "&&" || node.operator === "||")
+  ) {
+    attachExpressionsToFlow(node.left as AgencyNode, flow, env);
+    const leftFacts = analyzeCondition(node.left);
+    const rightFlow = wrapFacts(
+      flow,
+      node.operator === "&&" ? leftFacts.then : leftFacts.else,
+    );
+    attachExpressionsToFlow(node.right as AgencyNode, rightFlow, env);
+    return;
+  }
   if (node.type === "variableName" || node.type === "valueAccess") {
     env.flowOf.set(node, flow);
   }

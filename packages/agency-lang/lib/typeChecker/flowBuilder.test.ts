@@ -153,3 +153,36 @@ describe("buildFlowGraph — loops", () => {
     expect(reachesLoop(end)).toBe(true);
   });
 });
+
+describe("attachExpressionsToFlow — short-circuit", () => {
+  const memberA: VariableType = {
+    type: "objectType",
+    properties: [
+      { key: "kind", value: { type: "stringLiteralType", value: "a" } },
+      { key: "v", value: STR },
+    ],
+  };
+  const memberB: VariableType = {
+    type: "objectType",
+    properties: [
+      { key: "kind", value: { type: "stringLiteralType", value: "b" } },
+      { key: "v", value: NUM },
+    ],
+  };
+  const ab: VariableType = { type: "unionType", types: [memberA, memberB] };
+
+  it("RHS of && sees the LHS's then-narrowing", () => {
+    const body = parseBody(`let z = u.kind == "a" && u.kind == "a"`);
+    const scope = new Scope("t");
+    scope.declare("u", ab);
+    scope.declare("z", { type: "primitiveType", value: "boolean" });
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const andExpr = find(
+      body,
+      (n) => n.type === "binOpExpression" && n.operator === "&&",
+    ) as Extract<AgencyNode, { type: "binOpExpression" }>;
+    const rightU = find([andExpr.right as AgencyNode], (n) => n.type === "valueAccess");
+    expect(typeAt(ref("u"), env.flowOf.get(rightU)!, env)).toEqual(memberA);
+  });
+});

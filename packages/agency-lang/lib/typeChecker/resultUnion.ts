@@ -4,7 +4,7 @@ import type {
   VariableType,
   TypeAliasEntry,
 } from "../types/typeHints.js";
-import { ANY_T, BOOLEAN_T, STRING_T, UNDEFINED_T } from "./primitives.js";
+import { ANY_T, BOOLEAN_T, STRING_T, NULL_T } from "./primitives.js";
 
 const bool = (v: "true" | "false"): VariableType => ({
   type: "booleanLiteralType",
@@ -38,11 +38,11 @@ export function resultToObjectUnion(
           { key: "error", value: rt.failureType },
           { key: "checkpoint", value: ANY_T },
           { key: "retryable", value: BOOLEAN_T },
-          // runtime is `string | null` (result.ts); Agency has no `null`, so the
-          // surface type is `string | undefined`.
+          // runtime is `string | null` (result.ts); under nullish unification
+          // the one nothing-value is `null`, so the surface type is `string | null`.
           {
             key: "functionName",
-            value: { type: "unionType", types: [STRING_T, UNDEFINED_T] },
+            value: { type: "unionType", types: [STRING_T, NULL_T] },
           },
           // runtime is `Record<string, any> | null` (a record, not an array);
           // typed `any` here — tighten to a Record type later if useful.

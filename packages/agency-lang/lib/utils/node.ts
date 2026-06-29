@@ -1,4 +1,5 @@
 import {
+  AccessChainElement,
   AgencyNode,
   Expression,
   InterpolationSegment,
@@ -51,7 +52,7 @@ export function expressionChildren(node: AgencyNode): AgencyNode[] {
     case "binOpExpression":
       return [node.left, node.right];
     case "assignment":
-      return [node.value];
+      return [node.value, ...accessChainExpressions(node.accessChain)];
     case "returnStatement":
       return node.value ? [node.value] : [];
     case "ifElse":
@@ -63,21 +64,36 @@ export function expressionChildren(node: AgencyNode): AgencyNode[] {
     case "functionCall":
     case "interruptStatement":
       return node.arguments.map(unwrapCallArg);
-    case "valueAccess": {
-      const children: AgencyNode[] = [node.base];
-      for (const el of node.chain) {
-        if (el.kind === "index") {
-          children.push(el.index);
-        } else if (el.kind === "methodCall") {
-          children.push(el.functionCall);
+    case "gotoStatement":
+      return [node.nodeCall];
+    case "withModifier":
+    case "staticStatement":
+      return [node.statement];
+    case "matchBlock":
+      // The scrutinee. Case patterns + bodies are visited via walkScopeBody /
+      // the flow builder's matchBlock rule, not here.
+      return [node.expression];
+    case "valueAccess":
+      return [node.base, ...accessChainExpressions(node.chain)];
+    case "agencyArray":
+      return node.items.map((item) => (item.type === "splat" ? item.value : item));
+    case "agencyObject": {
+      const children: AgencyNode[] = [];
+      for (const entry of node.entries) {
+        if ("type" in entry && entry.type === "splat") {
+          children.push(entry.value);
+        } else {
+          // Non-splat entries are key/value; computedKey is optional. Cast
+          // mirrors getAllVariablesInBody (the union isn't cleanly narrowable).
+          const kv = entry as { computedKey?: Expression; value: Expression };
+          if (kv.computedKey) {
+            children.push(kv.computedKey);
+          }
+          children.push(kv.value);
         }
       }
       return children;
     }
-    case "agencyArray":
-      return node.items.map((item) => (item.type === "splat" ? item.value : item));
-    case "agencyObject":
-      return node.entries.map((entry) => entry.value);
     case "string":
     case "multiLineString": {
       const children: AgencyNode[] = [];
@@ -93,8 +109,30 @@ export function expressionChildren(node: AgencyNode): AgencyNode[] {
     case "newExpression":
       return node.arguments;
     default:
+      // Leaves (variableName, literals, …), comments, patterns, and nested
+      // definitions (function/graphNode) have no expression children here.
       return [];
   }
+}
+
+/** Expression operands carried by an access chain (`a[i]`, `a[i:j]`, `a.m(x)`). */
+function accessChainExpressions(chain: AccessChainElement[] | undefined): AgencyNode[] {
+  const out: AgencyNode[] = [];
+  for (const el of chain ?? []) {
+    if (el.kind === "index") {
+      out.push(el.index);
+    } else if (el.kind === "slice") {
+      if (el.start) {
+        out.push(el.start);
+      }
+      if (el.end) {
+        out.push(el.end);
+      }
+    } else if (el.kind === "methodCall") {
+      out.push(el.functionCall);
+    }
+  }
+  return out;
 }
 
 /** Convert a function call argument to string. */

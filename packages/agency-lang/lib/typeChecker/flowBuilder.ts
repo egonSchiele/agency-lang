@@ -57,10 +57,16 @@ export function attachExpressionsToFlow(
  */
 export function assignedNames(body: AgencyNode[]): string[] {
   const names: string[] = [];
-  for (const { node } of walkNodes(body)) {
+  for (const { node, ancestors } of walkNodes(body)) {
+    // Assignments inside a nested function/graphNode rebind a variable in THAT
+    // definition's scope, not the loop's — skip them so the back-edge doesn't
+    // widen names unnecessarily.
+    const insideNestedDef = ancestors.some(
+      (a) => a.type === "function" || a.type === "graphNode",
+    );
     const isBareRebind =
       node.type === "assignment" && !node.accessChain && !node.pattern;
-    if (isBareRebind && !names.includes(node.variableName)) {
+    if (!insideNestedDef && isBareRebind && !names.includes(node.variableName)) {
       names.push(node.variableName);
     }
   }
@@ -78,7 +84,9 @@ type StatementRuleTable = {
 
 const statementRules: StatementRuleTable = {
   assignment: (node, flow, env) => {
-    attachExpressionsToFlow(node.value as AgencyNode, flow, env);
+    // Attaches the RHS and any access-chain operands (e.g. `obj[i()] = v`),
+    // both covered by expressionChildren(assignment).
+    attachExpressionsToFlow(node, flow, env);
     // Only a bare `x = …` / `let x = …` rebinds the variable. Skip access-chain
     // writes (`obj.x = 5` — a mutation, not a rebind; matches walkScopeBody)
     // and destructuring patterns (`node.variableName` not meaningful). The RHS
@@ -140,11 +148,13 @@ const statementRules: StatementRuleTable = {
     return afterBody;
   },
 
-  // Match arms are conservative: each arm builds from the current flow, and the
-  // post-match flow is unchanged (match-arm narrowing is a separate track).
-  // `c.body` is a single node (matchBlock.ts:12), wrapped in `[]` to reuse
-  // buildFlowGraph — same shape as walkScopeBody (scopes.ts:470).
+  // Match arms are conservative: the scrutinee's refs attach to the current
+  // flow, each arm builds from it, and the post-match flow is unchanged
+  // (match-arm narrowing is a separate track). `c.body` is a single node
+  // (matchBlock.ts:12), wrapped in `[]` to reuse buildFlowGraph — same shape as
+  // walkScopeBody (scopes.ts:470).
   matchBlock: (node, flow, env) => {
+    attachExpressionsToFlow(node.expression as AgencyNode, flow, env);
     for (const c of node.cases) {
       if (c.type !== "comment" && c.type !== "newLine") {
         buildFlowGraph([c.body], flow, env);
@@ -160,10 +170,26 @@ const statementRules: StatementRuleTable = {
     }
     return flow;
   },
+
+  // `with …` / `static …` wrap a single statement — thread flow through it so a
+  // wrapped if/loop/assignment is modeled properly (walkScopeBody handles
+  // neither, so this is the only place their bodies get flow).
+  withModifier: (node, flow, env) => buildFlowGraph([node.statement], flow, env),
+  staticStatement: (node, flow, env) => buildFlowGraph([node.statement], flow, env),
 };
 
-/** Statements with no rule (e.g. `importStatement`) leave the flow unchanged. */
-const passThrough = (_node: AgencyNode, flow: FlowNode): FlowNode => flow;
+/**
+ * Statements with no explicit flow semantics (`interruptStatement`,
+ * `gotoStatement`, `newExpression`, bare expression statements, …) leave the
+ * flow unchanged but STILL attach their expression references — otherwise their
+ * `variableName`/`valueAccess` nodes would miss the `flowOf` invariant. Any node
+ * kind not in `statementRules` routes here, so the invariant is robust to node
+ * kinds not individually enumerated.
+ */
+const passThrough = (node: AgencyNode, flow: FlowNode, env: FlowEnvironment): FlowNode => {
+  attachExpressionsToFlow(node, flow, env);
+  return flow;
+};
 
 /**
  * Build the flow graph for one body. A pure fold: each statement's rule maps

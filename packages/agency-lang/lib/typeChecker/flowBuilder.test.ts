@@ -99,6 +99,25 @@ describe("buildFlowGraph — linear", () => {
       }
     }
   });
+
+  it("INVARIANT holds across slice / computed-key / index positions", () => {
+    // `lo`/`hi` live inside a slice; `key` inside a computed key — both were
+    // missed before expressionChildren covered slice + computedKey.
+    const body = parseBody(
+      `let arr = [10, 20, 30]\nlet lo = 0\nlet hi = 2\nlet part = arr[lo:hi]\nlet key = "k"\nlet obj = { [key]: part }\nprint(obj[key])`,
+    );
+    const scope = new Scope("t");
+    for (const name of ["arr", "lo", "hi", "part", "key", "obj"]) {
+      scope.declare(name, NUM);
+    }
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    for (const { node } of walkNodes(body)) {
+      if (node.type === "variableName" || node.type === "valueAccess") {
+        expect(env.flowOf.get(node), `flowOf missing for ${node.type}`).toBeDefined();
+      }
+    }
+  });
 });
 
 describe("buildFlowGraph — ifElse", () => {

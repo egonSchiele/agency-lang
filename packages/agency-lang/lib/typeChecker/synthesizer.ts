@@ -53,26 +53,13 @@ const RESULT_FIELDS = new Set<string>([
  * extraction is purely organizational.
  */
 function resolveResultFieldType(
-  resolved: ResultType,
+  _resolved: ResultType,
   fieldName: string,
 ): VariableType | "any" | null {
-  // Narrowed to the Success branch (inside an isSuccess guard).
-  if (resolved.narrowedBranch === "success") {
-    if (fieldName === "value") return resolved.successType;
-    if (fieldName === "success") return BOOLEAN_T;
-  }
-  // Narrowed to the Failure branch (isFailure guard, or the else of an
-  // isSuccess guard).
-  if (resolved.narrowedBranch === "failure") {
-    if (fieldName === "error") return resolved.failureType;
-    if (fieldName === "success") return BOOLEAN_T;
-    // `.value` on a known-Failure result is illegal at runtime; Increment 3
-    // turns this into an error. The Failure-only metadata fields
-    // (checkpoint/retryable/functionName/args) just fall through to the
-    // `RESULT_FIELDS → any` line below — we deliberately don't enumerate
-    // them: the existing fallthrough is already the correct, single-source-
-    // of-truth answer.
-  }
+  // Narrowed Results are now real member object types (narrowed via the
+  // discriminant engine), so this only sees UN-narrowed Results: keep the
+  // lenient `any` for known Result fields. Task 2 deletes this entirely and
+  // routes un-narrowed Results through strict union access.
   if (RESULT_FIELDS.has(fieldName)) return "any";
   return null;
 }

@@ -47,7 +47,10 @@ export def loadSettings(): Settings {
   if (!exists(name, dir)) {
     return {}
   }
-  const readResult = read(name, dir)
+  // `with approve` auto-approves the read interrupt — settings.json is
+  // an agent-internal preferences file the user implicitly opted into by
+  // running the agent. Mirrors std::policy's `parsePolicyFile` pattern.
+  const readResult = read(name, dir) with approve
   if (isFailure(readResult)) {
     return {}
   }
@@ -56,7 +59,15 @@ export def loadSettings(): Settings {
     print("Warning: ${SETTINGS_PATH} is not valid JSON; ignoring it.")
     return {}
   }
-  return parsed.value
+  // Defensive shape check: valid JSON like `null`, `42`, or `[1,2]` is
+  // not a settings object. Treat anything that isn't a plain object as
+  // empty so later writers (`settings.search = ...`) can't crash.
+  const value = parsed.value
+  if (value == null || typeof value != "object" || Array.isArray(value)) {
+    print("Warning: ${SETTINGS_PATH} is not a JSON object; ignoring it.")
+    return {}
+  }
+  return value
 }
 
 /*
@@ -72,9 +83,12 @@ export def saveSettings(settings: Settings) {
 
   @param settings - The Settings object to persist.
   """
-  mkdir(POLICY_DIR)
+  // `with approve` on both mkdir and write: persisting a user preference
+  // must never block the agent on an approval prompt or fail in a
+  // non-interactive run. The user opted in by changing the setting.
+  mkdir(POLICY_DIR) with approve
   const content = JSON.stringify(settings)
-  const result = write(SETTINGS_FILE, content, POLICY_DIR)
+  const result = write(SETTINGS_FILE, content, POLICY_DIR) with approve
   if (isFailure(result)) {
     print("Warning: could not save settings to ${SETTINGS_PATH}: ${result.error}")
   }

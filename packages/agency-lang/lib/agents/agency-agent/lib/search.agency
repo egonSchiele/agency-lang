@@ -27,7 +27,7 @@
 */
 import { env, isTTY } from "std::system"
 import { select, confirm, ChoiceItem } from "std::ui"
-import { search, tavilySearch } from "std::search"
+import { search as braveSearch, tavilySearch } from "std::search"
 import { loadSettings, saveSettings } from "./settings.agency"
 
 // --- Types ---------------------------------------------------------------
@@ -40,14 +40,24 @@ export type SearchContext = {
   savedBackend: string;
 }
 
-// `kind` is one of: "use" | "useWithNote" | "askWhich" | "confirm" |
-// "warnDisabled" | "promptMissing". Unused fields are "".
+// The four-field plan record. `kind` is a string-literal union so the
+// typechecker rejects typos at the plan-construction sites. Unused
+// fields are "" (kept as flat strings — heterogeneous payloads per
+// kind would add an arm-typed sum just to encode "this kind doesn't
+// use that field", which the consumer doesn't act on).
+export type PlanKind = "use" | "useWithNote" | "askWhich" | "confirm" | "warnDisabled" | "promptMissing"
+
 export type SearchPlan = {
-  kind: string;
+  kind: PlanKind;
   backend: string;
   note: string;
   reason: string;
 }
+
+// The four valid web-search backend names. Used as the return type of
+// `getSearchBackend()` so callers (and the typechecker) know the full
+// set of values they might branch on.
+export type SearchBackend = "hosted" | "tavily" | "brave" | "off"
 
 // Runtime state for the active session. Set ONCE by configureSearch at
 // startup; read by withWebSearch and the /search handler. Collapsing
@@ -156,7 +166,13 @@ export def isBackendAvailable(b: BackendDescriptor, ctx: SearchContext): boolean
   return true
 }
 
-def makePlan(kind: string, backend: string, note: string, reason: string): SearchPlan {
+/*
+  Single constructor for a SearchPlan record. Centralizing the literal
+  field shape keeps every planner branch a one-line `return makePlan(...)`
+  and means a future field addition (e.g. a `prompt:` field for a
+  confirm-with-custom-text kind) is a one-spot change.
+*/
+def makePlan(kind: PlanKind, backend: string, note: string, reason: string): SearchPlan {
   return { kind: kind, backend: backend, note: note, reason: reason }
 }
 
@@ -243,7 +259,7 @@ let session: SearchSession = { isLocal: false, activeBackend: "off" }
   Read the active web-search backend. Subagent calls go through
   `withWebSearch`, which calls this internally — direct callers are rare.
 */
-export def getSearchBackend(): string {
+export def getSearchBackend(): SearchBackend {
   """Return the active web-search backend: "hosted", "tavily", "brave", or "off"."""
   return session.activeBackend
 }
@@ -286,24 +302,27 @@ export def setSearchBackend(backend: string) {
   setActiveBackend(backend, true)
 }
 
-// --- Backend application tables (Task 5: withWebSearch) -----------------
+// --- Backend application tables (used by withWebSearch) ----------------
 //
-// Each backend contributes EITHER a client tool (Tavily/Brave) OR a
-// hostedTools list (hosted) OR nothing (off). Two lookup tables capture
-// that data so `withWebSearch` is a single table dispatch — no per-
-// backend if/else-if chain. Adding a new tool-backend means one entry in
-// TOOL_BACKENDS; adding a new hosted capability means one entry in
-// HOSTED_BACKENDS; nothing else changes.
+// Each backend contributes EITHER a client-side search tool
+// (Tavily/Brave) OR a hosted-capability list (hosted) OR nothing (off).
+// Two lookup tables capture that data so `withWebSearch` is a single
+// table dispatch — no per-backend if/else-if chain. Adding a new
+// client-tool backend means one entry in CLIENT_SEARCH_TOOLS_BY_BACKEND;
+// adding a new hosted capability means one entry in
+// HOSTED_SEARCH_CAPS_BY_BACKEND; nothing else changes.
 //
-// Tavily is renamed to "web_search" so the advertised tool name is
-// stable across backends and distinct from std::wikipedia's "search".
+// Both Tavily and Brave are exposed under the name "web_search" so the
+// advertised tool name is stable across backends (subagent prompts can
+// refer to a single tool name) and distinct from std::wikipedia's
+// "wikipedia_search".
 
-static const TOOL_BACKENDS: Record<string, any> = {
+static const CLIENT_SEARCH_TOOLS_BY_BACKEND: Record<string, any> = {
   tavily: tavilySearch.rename("web_search"),
-  brave: search
+  brave: braveSearch.rename("web_search")
 }
 
-static const HOSTED_BACKENDS: Record<string, string[]> = {
+static const HOSTED_SEARCH_CAPS_BY_BACKEND: Record<string, string[]> = {
   hosted: ["web_search"]
 }
 
@@ -324,9 +343,10 @@ def appendTool(opts: LlmOpts, tool: any) {
   The one declarative interface every subagent uses to opt into web
   search. Subagents say WHAT they want (these llm() options, with web
   search); the active backend is looked up in the two contribution
-  tables (TOOL_BACKENDS for client tools, HOSTED_BACKENDS for hosted
-  capabilities). `off` naturally falls through (it's in neither table)
-  and returns `opts` unchanged.
+  tables (CLIENT_SEARCH_TOOLS_BY_BACKEND for client tools,
+  HOSTED_SEARCH_CAPS_BY_BACKEND for hosted capabilities). `off`
+  naturally falls through (it's in neither table) and returns `opts`
+  unchanged.
 */
 export def withWebSearch(opts: LlmOpts): LlmOpts {
   """
@@ -338,18 +358,18 @@ export def withWebSearch(opts: LlmOpts): LlmOpts {
   @param opts - The llm() options to augment.
   """
   const name = getSearchBackend()
-  const tool = TOOL_BACKENDS[name]
+  const tool = CLIENT_SEARCH_TOOLS_BY_BACKEND[name]
   if (tool != null && tool != undefined) {
     appendTool(opts, tool)
   }
-  const hosted = HOSTED_BACKENDS[name]
+  const hosted = HOSTED_SEARCH_CAPS_BY_BACKEND[name]
   if (hosted != null && hosted != undefined) {
     opts.hostedTools = hosted
   }
   return opts
 }
 
-// --- Picker helper (Task 8: /search slash command) ----------------------
+// --- Picker helper for the /search slash command -----------------------
 
 /*
   Items shown in the /search picker and the startup `askWhich` prompt.

@@ -11,6 +11,7 @@ import {
 
 
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
+const stringArray = { type: "arrayType", elementType: string } as const;
 
 const optional = (t: VariableType): VariableType => ({
   type: "unionType",
@@ -57,7 +58,7 @@ const llmOptions: VariableType = {
     // Provider hosted tools (server-side) to enable for this call, by
     // capability name, e.g. ["web_search"]. Forwarded to smoltalk via the
     // LLMClient PromptConfig. See lib/runtime/llmClient.ts.
-    { key: "hostedTools", value: optional(anyArray) },
+    { key: "hostedTools", value: optional(stringArray) },
     // `memory: true` enables retrieval/injection on this llm() call.
     // The object form is reserved for future config (e.g. per-call
     // model override); for now only the boolean form is wired.

@@ -862,7 +862,7 @@ function synthArrayCallbackMethod(
   if (cbKind === "sameArray") return receiver;
   if (cbKind === "void") return VOID_T;
   if (cbKind === "boolean") return BOOLEAN_T;
-  if (cbKind === "elementOrUndef") {
+  if (cbKind === "elementOrNull") {
     return { type: "unionType", types: [elementT, NULL_T] };
   }
 

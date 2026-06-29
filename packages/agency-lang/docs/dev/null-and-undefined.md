@@ -235,8 +235,8 @@ today, so `x == null` would miss `undefined`. Three options:
   JS coercion footguns like `5 == "5"` can't arise). Complete and type-free at
   codegen, and a genuine safety improvement — but a *large* change touching
   every comparison in the corpus, with its own migration.
-- **D3 — runtime helper (chosen):** compile `==` to `__eq(a, b)` and `!=` to
-  `!__eq(a, b)`, where:
+- **D3 — runtime helper (chosen):** compile `==`/`===` to `__eq(a, b)` and
+  `!=`/`!==` to `!__eq(a, b)`, where:
 
   ```ts
   export function __eq(a: unknown, b: unknown): boolean {
@@ -256,8 +256,12 @@ Why `__eq` is correct: `a == null` (loose) is true for exactly `null` and
 `undefined` and nothing else (not `0`, `""`, `false`, `NaN`). So `(a == null &&
 b == null)` means "both nullish," while `a === b` handles everything else
 exactly. For any value `x`, `__eq(x, null) === __eq(x, undefined)`, and for two
-non-nullish values `__eq` is identical to `===`. `===`/`!==` remain strict as an
-explicit "exact" escape hatch.
+non-nullish values `__eq` is identical to `===`. **All four equality operators
+lower to `__eq`; there is no strict escape hatch.** A strict `===` would only let
+you distinguish `null` from `undefined` — the exact distinction this project
+removes — and would be a footgun (`x === null` silently missing an interop
+`undefined`). `===`/`!==` remain parseable as stylistic aliases of `==`/`!=` but
+compile identically.
 
 ## Consequences and how specific cases resolve
 

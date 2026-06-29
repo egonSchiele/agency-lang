@@ -261,3 +261,71 @@ describe("appendMeta", () => {
     expect(out).toMatch(/description:\s*"user email"/);
   });
 });
+
+describe("optional-key coalescing (validation mapper)", () => {
+  const optionalStringObj: VariableType = {
+    type: "objectType",
+    properties: [
+      {
+        key: "foo",
+        value: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "null" },
+          ],
+        },
+      },
+    ],
+  };
+
+  it("validation mapper makes a T | null key optional and coalesces to null", () => {
+    const out = mapTypeToValidationSchema(optionalStringObj, {});
+    expect(out).toContain(".optional().default(null)");
+  });
+
+  it("LLM mapper keeps a T | null key required (no optional/default)", () => {
+    const out = mapTypeToZodSchema(optionalStringObj, {});
+    expect(out).not.toContain(".optional()");
+    expect(out).not.toContain(".default(null)");
+  });
+
+  it("keeps .meta() the final call in the chain for a tagged optional key", () => {
+    const objWithTaggedOptional: VariableType = {
+      type: "objectType",
+      properties: [
+        {
+          key: "foo",
+          value: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "null" },
+            ],
+            tags: [
+              {
+                type: "tag",
+                name: "jsonSchema",
+                arguments: [
+                  {
+                    type: "agencyObject",
+                    entries: [
+                      {
+                        key: "description",
+                        value: { type: "string", segments: [{ type: "text", value: "a foo" }] },
+                      },
+                    ],
+                  },
+                ],
+              } as unknown as Tag,
+            ],
+          },
+        },
+      ],
+    };
+    const out = mapTypeToValidationSchema(objWithTaggedOptional, {});
+    // .meta(...) must be the last call — it must appear AFTER .default(null),
+    // otherwise Zod drops the metadata from toJSONSchema().
+    expect(out).toContain(".default(null).meta(");
+  });
+});

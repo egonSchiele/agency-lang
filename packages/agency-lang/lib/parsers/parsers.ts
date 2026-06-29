@@ -4180,10 +4180,14 @@ export const functionParameterParser: Parser<FunctionParameter> = memo(
         rest.defaultValue = { type: "null" };
         if (rest.typeHint) {
           const nullT = { type: "primitiveType", value: "null" };
-          rest.typeHint =
+          const existingMembers =
             rest.typeHint.type === "unionType"
-              ? { type: "unionType", types: [...rest.typeHint.types, nullT] }
-              : { type: "unionType", types: [rest.typeHint, nullT] };
+              ? rest.typeHint.types
+              : [rest.typeHint];
+          rest.typeHint = {
+            type: "unionType",
+            types: [...existingMembers, nullT],
+          };
         }
       }
       if (_validated) rest.validated = true;

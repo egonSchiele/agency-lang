@@ -171,20 +171,21 @@ function mapTypeToSchemaInner(
         if (prop.description) {
           inner2 += `.describe("${escape(prop.description)}")`;
         }
-        let propSchema = appendMeta(inner2, mergedTags);
         // Optional key (a `T | null` property): in validation/parse mode make
         // the key optional and coalesce a missing key to null, so
         // `schema(T).parse({})` succeeds with every declared key present. The
         // LLM path keeps it required+nullable (provider constraint).
+        // This MUST be applied before `appendMeta` so any `.meta(...)` stays the
+        // final call in the chain (Zod drops metadata otherwise).
         const isNullableProp =
           prop.value.type === "unionType" &&
           prop.value.types.some(
             (t) => t.type === "primitiveType" && t.value === "null",
           );
         if (optionalKeyMode === "optional-coalesce" && isNullableProp) {
-          propSchema = `${propSchema}.optional().default(null)`;
+          inner2 += `.optional().default(null)`;
         }
-        const str = `"${prop.key.replace(/"/g, '\\"')}": ${propSchema}`;
+        const str = `"${prop.key.replace(/"/g, '\\"')}": ${appendMeta(inner2, mergedTags)}`;
         return str;
       })
       .join(", ");

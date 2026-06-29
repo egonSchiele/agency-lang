@@ -4564,7 +4564,7 @@ describe("TypeChecker", () => {
   describe("v2: bang (!) validation", () => {
     const num: VariableType = { type: "primitiveType", value: "number" };
     const str: VariableType = { type: "primitiveType", value: "string" };
-    const undef: VariableType = { type: "primitiveType", value: "undefined" };
+    const nullish: VariableType = { type: "primitiveType", value: "null" };
     const person: VariableType = {
       type: "objectType",
       properties: [{ key: "name", value: str }],
@@ -5542,12 +5542,12 @@ describe("TypeChecker", () => {
     it("allows omitting an optional object property when calling a function", () => {
       // type Opts = { model?: string, temperature?: number }
       // def use(o: Opts) {}; use({ model: "gpt-4" })
-      const undef: VariableType = { type: "primitiveType", value: "undefined" };
+      const nullish: VariableType = { type: "primitiveType", value: "null" };
       const opts: VariableType = {
         type: "objectType",
         properties: [
-          { key: "model", value: { type: "unionType", types: [str, undef] } },
-          { key: "temperature", value: { type: "unionType", types: [num, undef] } },
+          { key: "model", value: { type: "unionType", types: [str, nullish] } },
+          { key: "temperature", value: { type: "unionType", types: [num, nullish] } },
         ],
       };
       const program: AgencyProgram = {
@@ -5578,12 +5578,12 @@ describe("TypeChecker", () => {
 
     it("still rejects omitting a required object property", () => {
       // type Opts = { model: string, temperature?: number }; use({}) — model required.
-      const undef: VariableType = { type: "primitiveType", value: "undefined" };
+      const nullish: VariableType = { type: "primitiveType", value: "null" };
       const opts: VariableType = {
         type: "objectType",
         properties: [
           { key: "model", value: str },
-          { key: "temperature", value: { type: "unionType", types: [num, undef] } },
+          { key: "temperature", value: { type: "unionType", types: [num, nullish] } },
         ],
       };
       const program: AgencyProgram = {
@@ -5812,7 +5812,7 @@ describe("TypeChecker", () => {
       const opts: VariableType = {
         type: "objectType",
         properties: [
-          { key: "model", value: { type: "unionType", types: [str, undef] } },
+          { key: "model", value: { type: "unionType", types: [str, nullish] } },
         ],
       };
       const program: AgencyProgram = {
@@ -5852,7 +5852,7 @@ describe("TypeChecker", () => {
             aliasedType: {
               type: "objectType",
               properties: [
-                { key: "a", value: { type: "unionType", types: [str, undef] } },
+                { key: "a", value: { type: "unionType", types: [str, nullish] } },
               ],
             },
           },

@@ -441,8 +441,9 @@ describe("desugar → codegen snapshot", () => {
     //    over the arm name strings.
     expect(ts).toMatch(/runner\d*\.fork\(\s*\d+\s*,\s*\[\s*`arm_0`\s*,\s*`arm_1`\s*\]/);
     // 2. Each arm is dispatched by a string-equality check on the arm param.
-    expect(ts).toMatch(/__arm_0\s*===?\s*`arm_0`/);
-    expect(ts).toMatch(/__arm_0\s*===?\s*`arm_1`/);
+    //    Equality lowers to the __eq runtime helper (nullish unification).
+    expect(ts).toMatch(/__eq\(\s*[^,]*__arm_0\s*,\s*`arm_0`\s*\)/);
+    expect(ts).toMatch(/__eq\(\s*[^,]*__arm_0\s*,\s*`arm_1`\s*\)/);
     // 3. Bindings (a from arm 0, b and c from the seq arm) are hoisted and
     //    assigned from __arms_0 indexed access.
     expect(ts).toMatch(/__arms_0\[0\]\.a/);

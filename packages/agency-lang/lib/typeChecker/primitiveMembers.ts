@@ -220,7 +220,7 @@ export function resolvePropertyType(
  *   "arrayU"      — `Array<U>`. e.g. `map`.
  *   "sameArray"   — `Array<T>` (callback's return is irrelevant). `filter`/`sort`.
  *   "void"        — `void`. `forEach`.
- *   "elementOrUndef" — `T | undefined`. `find`.
+ *   "elementOrNull" — `T | null`. `find`.
  *   "boolean"     — boolean. `some`/`every`.
  *   "flatten"     — `Array<U>` where the callback's return is `Array<U>` —
  *                   we unwrap one level. `flatMap`.
@@ -236,7 +236,7 @@ export const ARRAY_CALLBACK_METHOD_KINDS = {
   map: "arrayU",
   filter: "sameArray",
   forEach: "void",
-  find: "elementOrUndef",
+  find: "elementOrNull",
   some: "boolean",
   every: "boolean",
   sort: "sameArray",

@@ -102,12 +102,18 @@ export function applyRefine(
  */
 export function typeAt(ref: Reference, at: FlowNode, env: FlowEnvironment): ScopeType {
   const key = referenceKey(ref);
-  const perNode = env.memo.get(at);
-  const cached = perNode?.[key];
+  let perNode = env.memo.get(at);
+  if (perNode === undefined) {
+    // Null-prototype dict: keys are source identifiers (variable names), so a
+    // ref named "__proto__" / "toString" / "constructor" must not collide with
+    // Object.prototype on read. Mirrors scope.ts's own-property discipline.
+    perNode = Object.create(null) as Record<string, ScopeType>;
+    env.memo.set(at, perNode);
+  }
+  const cached = perNode[key];
   if (cached !== undefined) return cached;
   const result = computeTypeAt(ref, key, at, env);
-  if (perNode) perNode[key] = result;
-  else env.memo.set(at, { [key]: result });
+  perNode[key] = result;
   return result;
 }
 
@@ -133,7 +139,11 @@ function computeTypeAt(
     case "join":
       return uniteTypes(at.prev.map((p) => typeAt(ref, p, env)), env.typeAliases);
     case "loop":
-      return at.widened[key] ?? typeAt(ref, at.prev, env);
+      // Own-property check: `at.widened` may be a plain object, so a ref named
+      // "__proto__" / "toString" must not read from Object.prototype.
+      return Object.prototype.hasOwnProperty.call(at.widened, key)
+        ? at.widened[key]
+        : typeAt(ref, at.prev, env);
     case "exit":
       throw new Error("typeAt called on an unreachable (exit) flow node");
   }

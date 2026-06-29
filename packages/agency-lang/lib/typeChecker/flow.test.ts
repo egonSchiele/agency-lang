@@ -170,6 +170,29 @@ describe("typeAt", () => {
     expect(typeAt(ref("x"), start, e)).toEqual(STR);
     expect(typeAt(ref("x"), start, e)).toEqual(STR);
   });
+
+  it("memo does not false-hit on a reserved-word ref (toString)", () => {
+    // After caching one ref on a node, a query for a ref named "toString" must
+    // not read Object.prototype.toString from a plain-object cache.
+    const scope = new Scope("t");
+    scope.declare("x", NUM);
+    scope.declare("toString", STR);
+    const start: FlowNode = { kind: "start", scope };
+    const e = env(scope);
+    typeAt(ref("x"), start, e); // populate the memo for `start`
+    expect(typeAt(ref("toString"), start, e)).toEqual(STR);
+  });
+
+  it("loop widened lookup does not false-hit on a reserved-word ref", () => {
+    // `widened` maps only "x"; a query for "toString" must fall through to the
+    // predecessor, not read Object.prototype.toString.
+    const scope = new Scope("t");
+    scope.declare("x", STR);
+    scope.declare("toString", NUM);
+    const start: FlowNode = { kind: "start", scope };
+    const loop: FlowNode = { kind: "loop", prev: start, widened: { x: STR } };
+    expect(typeAt(ref("toString"), loop, env(scope))).toEqual(NUM);
+  });
 });
 
 describe("wrapFacts", () => {

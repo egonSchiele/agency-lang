@@ -20,7 +20,7 @@ cleaned up.
 
 The diagnostic is a self-contained module — it does NOT modify
 `checker.ts` or `synthesizer.ts`. See the [Diagnostics
-section](./typechecker.md#diagnostics) of the typechecker doc for the
+section](./typechecker/README.md#diagnostics) of the typechecker doc for the
 overall pattern.
 
 | File | Responsibility |

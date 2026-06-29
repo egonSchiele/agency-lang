@@ -4,6 +4,8 @@ The type checker (`lib/typeChecker/`) uses **bidirectional type checking** to ca
 
 This document explains what bidirectional type checking is, how it's implemented for Agency, the special cases required by the language, and how it gets triggered.
 
+**Flow-sensitive narrowing and exhaustiveness checking** have their own subtree — see [`narrowing/`](./narrowing/). That work is large and growing, so it lives separately from this overview.
+
 ## What is bidirectional type checking?
 
 Traditional type checkers work in one direction: they look at an expression and try to figure out what type it is (bottom-up). Bidirectional type checking adds a second direction: sometimes we already _know_ what type an expression should be, and we push that expectation _down_ into the expression (top-down).
@@ -254,69 +256,14 @@ their own `def schema()` (which would create parse ambiguity).
 
 ## Type narrowing
 
-Flow-sensitive narrowing (`lib/typeChecker/narrowing.ts`) refines a
-`Result`-typed variable inside a guard so its branch-specific fields type
-correctly: inside `if (isSuccess(r))`, `r.value` synthesizes to the success
-type instead of `any`; inside `if (isFailure(r))` (or the `else` of an
-`isSuccess` guard), `r.error` synthesizes to the failure type. Because pattern
-syntax is lowered before the checker runs, `if (r is success(v))` arrives as
-`if (isSuccess(r)) { const v = r.value; … }`, so the binding `v` picks up the
-narrowed type with no pattern-specific code.
+Flow-sensitive narrowing and exhaustiveness checking have their own subtree:
+**[`narrowing/`](./narrowing/)**. That is where the `analyzeCondition` fact engine,
+Result / discriminated-union narrowing, post-guard narrowing, the in-progress
+flow-typed model, and a capabilities/limitations matrix are documented. It is
+broken out because it is the fastest-growing part of the checker.
 
-`analyzeCondition(condition)` reports the narrowing candidates a guard implies
-for its then- and else-branches. It recognizes a single `isSuccess(x)` /
-`isFailure(x)` over a bare variable (both are `RESERVED_FUNCTION_NAMES`, so the
-match is unambiguous), and composes over boolean combinators: `!c` swaps
-then/else, `a && b` unions then-facts, `a || b` unions else-facts.
-
-Each candidate carries a tagged `Refine` (`{ variableName, refine }`) and is
-applied through a declarative `narrowers` table keyed by `refine.kind` — so a
-new narrowing form is one table entry, not a change to the apply loop. The two
-forms today are `resultBranch` (above) and `discriminant`.
-
-**Discriminated-union narrowing:** `analyzeCondition` also recognizes
-`v.prop == literal` / `v.prop != literal` over a bare variable (either operand
-order; string/number/boolean literals via the shared `literalToType`).
-`narrowUnionByDiscriminant` then filters the union's members by that literal
-discriminant property — `if (r.kind == "answer")` narrows `r` to the matching
-member(s) in the then-branch and the complement in the else-branch. Like Result
-narrowing it is sound/conservative: a member whose discriminant property isn't a
-*matching-kind literal type* (a plain `string`, a wider union, a different
-literal kind) can't be proven disjoint, so it is kept — and narrowing to `never`
-(or to the full set) is suppressed entirely (returns "no narrowing"). Match arms
-come for free: `match (r) { { kind: "answer", data } => … }` lowers to
-`const __s = r; if (__s.kind == "answer") { const data = __s.data; … }`, so the
-bound field `data` reads the narrowed temp with no match-specific code.
-
-Two limitations: (1) only *bound fields* of the scrutinee narrow — the scrutinee
-variable in the source isn't re-typed, only the lowered temp; (2) a mixed union
-with a non-literal discriminant member (`{ kind: "a" } | { kind: string }`)
-doesn't narrow, by design (the `string` member can't be excluded). The `is`-form
-match (`match (x is …)`) is guard-based and intentionally untagged.
-
-`walkScopeBody` applies the facts by walking each branch in a `scope.child()`
-whose refinements are written with `declareLocal` — so they never leak past the
-branch, while real declarations inside the branch still flow to the function
-scope via `declare()`. The shared `walkWithNarrowing` helper encapsulates the
-"child scope + apply facts + walk" recipe.
-
-**Post-guard (early-return) narrowing:** when exactly one branch of an `if`
-provably always exits, the statements *after* the `if` run only on the surviving
-branch's condition, so they are walked in a child scope carrying those facts —
-e.g. after `if (isFailure(r)) { return … }`, `r` is Success for the rest of the
-block. `alwaysExits` decides exhaustiveness and is deliberately conservative: it
-counts only `return` (a `raise`/interrupt may resume, and `propagate` semantics
-are non-trivial, so treating them as exits could be unsound).
-
-**Soundness:** every narrowing is a false-negative-only approximation. A
-whole-body reassignment scan skips narrowing any variable the branch (or the
-post-guard tail) reassigns, since its type could change. The `narrowedBranch`
-marker on `ResultType` is set only by this layer and is stripped by `widenType`,
-so it never leaks through `declare()` into a function's inferred return type.
-
-Un-narrowed `Result` field access still synthesizes to `any` (the legacy
-escape hatch in `synthValueAccess`); tightening that into a hard error is a
-later increment.
+See [`narrowing/README.md`](./narrowing/README.md) for the current implementation
+and the planned architecture.
 
 ## Diagnostics
 

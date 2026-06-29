@@ -93,7 +93,7 @@ Read these before starting work:
 
 Pipeline and architecture:
 - `docs/dev/typescript-ir.md` — Structured TsNode tree representation of generated TypeScript
-- `docs/dev/typechecker.md` — Bidirectional type checking
+- `docs/dev/typechecker/` — Bidirectional type checking (overview in `README.md`; flow-sensitive narrowing in `narrowing/`)
 - `docs/dev/interrupts.md` — How interrupts resume inside blocks using step counters (substeps)
 - `docs/dev/simplemachine.md` — Graph execution engine that runs compiled Agency programs
 - `docs/dev/async.md` — How async function calls work

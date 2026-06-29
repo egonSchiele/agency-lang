@@ -241,5 +241,5 @@ Five integration fixtures under [tests/integration/cli-main/fixtures/interrupts/
 ## Related docs
 
 - [interrupts.md](./interrupts.md) — how interrupts resume inside blocks at runtime (substeps).
-- [typechecker.md](./typechecker.md) — bidirectional type checking pipeline.
+- [typechecker](./typechecker/README.md) — bidirectional type checking pipeline.
 - [Spec](../superpowers/specs/2026-06-06-agency-interrupts-command-design.md) and [implementation plan](../superpowers/plans/2026-06-06-agency-interrupts-command.md).

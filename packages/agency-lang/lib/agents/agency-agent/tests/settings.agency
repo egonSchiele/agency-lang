@@ -1,0 +1,36 @@
+/*
+ * Tests for the agent's settings.json persistence layer.
+ *
+ * Each node sets up disk state inline (rather than relying on test
+ * ordering) so cases are independent. `with approve` auto-approves the
+ * fs interrupts that read/write/mkdir raise — the test is the user opt-in.
+ */
+import { loadSettings, saveSettings } from "../lib/settings.agency"
+import { POLICY_DIR, SETTINGS_FILE, SETTINGS_PATH } from "../lib/config.agency"
+import { remove } from "std::fs"
+
+node roundTripsTheSearchBackend(): string {
+  saveSettings({ search: { backend: "tavily" } }) with approve
+  const loaded = loadSettings() with approve
+  return loaded.search.backend
+}
+
+node missingFileLoadsAsEmpty(): string {
+  // Exercise the missing-file path: delete settings.json first.
+  remove(SETTINGS_PATH) with approve
+  const loaded = loadSettings() with approve
+  if (loaded.search == null || loaded.search == undefined) {
+    return "empty"
+  }
+  return "unexpected: ${loaded.search.backend}"
+}
+
+node corruptFileLoadsAsEmpty(): string {
+  // Write garbage and confirm the parse failure is swallowed.
+  write(SETTINGS_FILE, "not json{{{", POLICY_DIR) with approve
+  const loaded = loadSettings() with approve
+  if (loaded.search == null || loaded.search == undefined) {
+    return "empty"
+  }
+  return "unexpected: ${loaded.search.backend}"
+}

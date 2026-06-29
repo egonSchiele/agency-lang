@@ -14,6 +14,7 @@ import { ls, glob, grep } from "std::shell"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 import { getSlowModel, getSlowProvider } from "../shared.agency"
+import { withWebSearch } from "../lib/search.agency"
 
 // explorer gets a read-only view of the project via the raw read tools.
 // Relative paths resolve against the agent working directory (set by
@@ -149,15 +150,15 @@ export def explorerAgent(userMsg: string, allowHandoff: boolean): string {
     }
     reply = llm(
       userMsg,
-      {
-      tools: explorerTools,
-      model: getSlowModel(),
-      provider: getSlowProvider(),
-      reasoningEffort: "high",
-      thinking: {
-        enabled: true
-      }
-    },
+      withWebSearch({
+        tools: explorerTools,
+        model: getSlowModel(),
+        provider: getSlowProvider(),
+        reasoningEffort: "high",
+        thinking: {
+          enabled: true
+        }
+      }),
     )
   }
   return reply

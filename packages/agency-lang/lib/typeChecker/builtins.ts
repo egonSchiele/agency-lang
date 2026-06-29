@@ -54,6 +54,10 @@ const llmOptions: VariableType = {
       }),
     },
     { key: "tools", value: optional(anyArray) },
+    // Provider hosted tools (server-side) to enable for this call, by
+    // capability name, e.g. ["web_search"]. Forwarded to smoltalk via the
+    // LLMClient PromptConfig. See lib/runtime/llmClient.ts.
+    { key: "hostedTools", value: optional(anyArray) },
     // `memory: true` enables retrieval/injection on this llm() call.
     // The object form is reserved for future config (e.g. per-call
     // model override); for now only the boolean form is wired.

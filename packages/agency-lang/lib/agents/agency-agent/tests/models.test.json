@@ -1,0 +1,23 @@
+{
+  "sourceFile": "models.agency",
+  "tests": [
+    {
+      "nodeName": "openaiDetectedRoutesBothToResponses",
+      "input": "",
+      "expectedOutput": "\"openai-responses|openai-responses|gpt-4o-mini\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "anthropicDetectedKeepsNative",
+      "input": "",
+      "expectedOutput": "\"|anthropic\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "explicitOpenaiModelStillRoutedThroughResponses",
+      "input": "",
+      "expectedOutput": "\"openai-responses|openai-responses\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

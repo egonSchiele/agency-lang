@@ -8,6 +8,8 @@ export static const HISTORY_FILE = "history"
 export static const POLICY_DIR = path.join(os.homedir(), ".agency-agent")
 export static const POLICY_PATH = path.join(POLICY_DIR, POLICY_FILE)
 export static const HISTORY_PATH = path.join(POLICY_DIR, HISTORY_FILE)
+export static const SETTINGS_FILE = "settings.json"
+export static const SETTINGS_PATH = path.join(POLICY_DIR, SETTINGS_FILE)
 
 // Per-effect config driving the "approve-always-here" option. For each
 // effect we list the data fields the scoped rule should pin, plus a

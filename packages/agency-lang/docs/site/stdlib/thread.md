@@ -24,10 +24,10 @@ export type ModelCost = {
 ```ts
 export type GuardFailureData = {
   type: string;
-  maxCost: number | null;
-  actualCost: number | null;
-  maxTime: number | null;
-  actualTime: number | null
+  maxCost?: number;
+  actualCost?: number;
+  maxTime?: number;
+  actualTime?: number
 }
 ```
 

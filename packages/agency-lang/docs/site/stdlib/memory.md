@@ -12,9 +12,9 @@ name: "memory"
 export type MemoryConfig = {
   dir: string;
   model?: string;
-  autoExtract?: { interval: number | undefined };
-  compaction?: { trigger: "token" | "messages" | undefined; threshold: number | undefined };
-  embeddings?: { model: string | undefined }
+  autoExtract?: { interval: number | null };
+  compaction?: { trigger: "token" | "messages" | null; threshold: number | null };
+  embeddings?: { model: string | null }
 }
 ```
 

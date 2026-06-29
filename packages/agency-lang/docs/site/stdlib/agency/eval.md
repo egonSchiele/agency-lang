@@ -117,7 +117,7 @@ export type EvalRunResult = {
 ```ts
 export type EvalValue = {
   value: any;
-  threadId: string | null;
+  threadId?: string;
   tMs: number;
   truncated?: boolean
 }

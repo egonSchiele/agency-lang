@@ -21,6 +21,7 @@ import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
+import { expressionChildren } from "../utils/node.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -292,85 +293,11 @@ function checkConstMutations(
     });
   }
 
-  switch (node.type) {
-    case "binOpExpression":
-      checkConstMutations(node.left as AgencyNode, scope, ctx);
-      checkConstMutations(node.right as AgencyNode, scope, ctx);
-      break;
-    case "assignment":
-      checkConstMutations(node.value as AgencyNode, scope, ctx);
-      break;
-    case "returnStatement":
-      checkConstMutations(node.value as AgencyNode | undefined, scope, ctx);
-      break;
-    case "ifElse":
-      checkConstMutations(node.condition as AgencyNode, scope, ctx);
-      break;
-    case "whileLoop":
-      checkConstMutations(node.condition as AgencyNode, scope, ctx);
-      break;
-    case "forLoop":
-      checkConstMutations(node.iterable as AgencyNode, scope, ctx);
-      break;
-    case "functionCall":
-      for (const arg of node.arguments) {
-        const value =
-          arg.type === "splat" || arg.type === "namedArgument"
-            ? arg.value
-            : arg;
-        checkConstMutations(value as AgencyNode, scope, ctx);
-      }
-      break;
-    case "valueAccess":
-      checkConstMutations(node.base as AgencyNode, scope, ctx);
-      for (const element of node.chain) {
-        if (element.kind === "index") {
-          checkConstMutations(element.index as AgencyNode, scope, ctx);
-        } else if (element.kind === "methodCall") {
-          checkConstMutations(element.functionCall as AgencyNode, scope, ctx);
-        }
-      }
-      break;
-    case "agencyArray":
-      for (const item of node.items) {
-        const value = item.type === "splat" ? item.value : item;
-        checkConstMutations(value as AgencyNode, scope, ctx);
-      }
-      break;
-    case "agencyObject":
-      for (const entry of node.entries) {
-        const value =
-          "type" in entry && entry.type === "splat"
-            ? entry.value
-            : (entry as { value: AgencyNode }).value;
-        checkConstMutations(value as AgencyNode, scope, ctx);
-      }
-      break;
-    case "string":
-    case "multiLineString":
-      for (const seg of node.segments) {
-        if (seg.type === "interpolation") {
-          checkConstMutations(seg.expression as AgencyNode, scope, ctx);
-        }
-      }
-      break;
-    case "tryExpression":
-      checkConstMutations(node.call as AgencyNode, scope, ctx);
-      break;
-    case "newExpression":
-      for (const arg of node.arguments) {
-        checkConstMutations(arg as AgencyNode, scope, ctx);
-      }
-      break;
-    case "interruptStatement":
-      for (const arg of node.arguments) {
-        const value =
-          arg.type === "splat" || arg.type === "namedArgument"
-            ? arg.value
-            : arg;
-        checkConstMutations(value as AgencyNode, scope, ctx);
-      }
-      break;
+  // Recurse via the shared expressionChildren walker (lib/utils/node.ts) — the
+  // single source of truth for "what are this node's expression children",
+  // also used by the flow builder's attachExpressionsToFlow.
+  for (const child of expressionChildren(node)) {
+    checkConstMutations(child, scope, ctx);
   }
 }
 

@@ -1,5 +1,6 @@
 import type { AgencyNode, TypeAliasEntry, VariableType } from "../types.js";
 import type { Refine } from "./narrowing.js";
+import { narrowUnionByDiscriminant } from "./narrowing.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
 import { isNever } from "./assignability.js";
@@ -80,4 +81,60 @@ export function uniteTypes(
   }
   const uniques = Object.values(seen);
   return uniques.length === 1 ? uniques[0] : { type: "unionType", types: uniques };
+}
+
+/**
+ * Refine a (non-any) type by a single discriminant. Returns the narrowed type,
+ * or null for "no narrowing" — `narrowUnionByDiscriminant` already views Result
+ * as a union (resultUnion.ts) and is sound/conservative.
+ */
+export function applyRefine(
+  base: VariableType,
+  refine: Refine,
+  aliases: Record<string, TypeAliasEntry>,
+): VariableType | null {
+  return narrowUnionByDiscriminant(base, refine.prop, refine.literal, refine.keep, aliases);
+}
+
+/**
+ * The type of `ref` at flow node `at`. The single oracle every pass consults.
+ * Memoized per (flow node, reference key).
+ */
+export function typeAt(ref: Reference, at: FlowNode, env: FlowEnvironment): ScopeType {
+  const key = referenceKey(ref);
+  const perNode = env.memo.get(at);
+  const cached = perNode?.[key];
+  if (cached !== undefined) return cached;
+  const result = computeTypeAt(ref, key, at, env);
+  if (perNode) perNode[key] = result;
+  else env.memo.set(at, { [key]: result });
+  return result;
+}
+
+function computeTypeAt(
+  ref: Reference,
+  key: string,
+  at: FlowNode,
+  env: FlowEnvironment,
+): ScopeType {
+  switch (at.kind) {
+    case "start":
+      // Non-empty chains (property-path narrowing) are a follow-on; today every
+      // reference has an empty chain, so this is a bare scope lookup.
+      return at.scope.lookup(ref.variable) ?? "any";
+    case "assign":
+      return referenceKey(at.ref) === key ? at.type : typeAt(ref, at.prev, env);
+    case "narrow": {
+      if (referenceKey(at.ref) !== key) return typeAt(ref, at.prev, env);
+      const base = typeAt(ref, at.prev, env);
+      if (base === "any") return "any";
+      return applyRefine(base, at.refine, env.typeAliases) ?? base;
+    }
+    case "join":
+      return uniteTypes(at.prev.map((p) => typeAt(ref, p, env)), env.typeAliases);
+    case "loop":
+      return at.widened[key] ?? typeAt(ref, at.prev, env);
+    case "exit":
+      throw new Error("typeAt called on an unreachable (exit) flow node");
+  }
 }

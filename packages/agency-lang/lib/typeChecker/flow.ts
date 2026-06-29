@@ -178,3 +178,38 @@ export function mergeFlows(flows: FlowNode[]): FlowNode {
   if (live.length === 1) return live[0];
   return { kind: "join", prev: live };
 }
+
+/**
+ * Widen at a loop back-edge. For each name, compute its pre-loop and body-end
+ * type; if they differ (the body reassigned it) widen to their union, else pass
+ * the pre-loop type through. Sound: never under-widens a variable the body
+ * changed. Can over-widen when a narrowing actually holds across iterations —
+ * acceptable, documented (no fixpoint).
+ *
+ * The unchanged-check uses `JSON.stringify` equality (same as `uniteTypes`) and
+ * does NOT resolve type aliases — two structurally-different-but-equivalent
+ * aliased types read as "changed" and pessimistically widen. Same caveat as
+ * `uniteTypes`; revisit alongside it.
+ */
+export function widenAtLoopBackEdge(
+  loopEntry: FlowNode,
+  bodyEnd: FlowNode,
+  names: string[],
+  env: FlowEnvironment,
+): FlowNode {
+  // Null-prototype dict: keys are variable names, so a name like "__proto__"
+  // must not invoke the prototype setter on write (matches the read-side guard
+  // in typeAt's `loop` case and scope.ts's own-property discipline).
+  const widened: Record<string, ScopeType> = Object.create(null);
+  for (const name of names) {
+    const r: Reference = { variable: name, chain: [] };
+    const before = typeAt(r, loopEntry, env);
+    const after = bodyEnd.kind === "exit" ? before : typeAt(r, bodyEnd, env);
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      widened[referenceKey(r)] = before;
+    } else {
+      widened[referenceKey(r)] = uniteTypes([before, after], env.typeAliases);
+    }
+  }
+  return { kind: "loop", prev: loopEntry, widened };
+}

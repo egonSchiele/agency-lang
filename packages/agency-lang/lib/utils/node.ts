@@ -1,4 +1,5 @@
 import {
+  AccessChainElement,
   AgencyNode,
   Expression,
   InterpolationSegment,
@@ -36,6 +37,102 @@ function unwrapCallArg(arg: Expression | SplatExpression | NamedArgument): Expre
     return arg.value;
   }
   return arg;
+}
+
+/**
+ * The immediate *expression* children of any AST node — the single source of
+ * truth for "what sub-expressions does this node contain". Consumed by
+ * `attachExpressionsToFlow` (flow builder) and `checkConstMutations`
+ * (scopes.ts) so neither re-implements the per-node-kind recursion. Returns
+ * `[]` for leaves and for nested definitions (`function`/`graphNode`), which
+ * own their scope and are walked separately.
+ */
+export function expressionChildren(node: AgencyNode): AgencyNode[] {
+  switch (node.type) {
+    case "binOpExpression":
+      return [node.left, node.right];
+    case "assignment":
+      return [node.value, ...accessChainExpressions(node.accessChain)];
+    case "returnStatement":
+      return node.value ? [node.value] : [];
+    case "ifElse":
+      return [node.condition];
+    case "whileLoop":
+      return [node.condition];
+    case "forLoop":
+      return [node.iterable];
+    case "functionCall":
+    case "interruptStatement":
+      return node.arguments.map(unwrapCallArg);
+    case "gotoStatement":
+      return [node.nodeCall];
+    case "withModifier":
+    case "staticStatement":
+      return [node.statement];
+    case "matchBlock":
+      // The scrutinee. Case patterns + bodies are visited via walkScopeBody /
+      // the flow builder's matchBlock rule, not here.
+      return [node.expression];
+    case "valueAccess":
+      return [node.base, ...accessChainExpressions(node.chain)];
+    case "agencyArray":
+      return node.items.map((item) => (item.type === "splat" ? item.value : item));
+    case "agencyObject": {
+      const children: AgencyNode[] = [];
+      for (const entry of node.entries) {
+        if ("type" in entry && entry.type === "splat") {
+          children.push(entry.value);
+        } else {
+          // Non-splat entries are key/value; computedKey is optional. Cast
+          // mirrors getAllVariablesInBody (the union isn't cleanly narrowable).
+          const kv = entry as { computedKey?: Expression; value: Expression };
+          if (kv.computedKey) {
+            children.push(kv.computedKey);
+          }
+          children.push(kv.value);
+        }
+      }
+      return children;
+    }
+    case "string":
+    case "multiLineString": {
+      const children: AgencyNode[] = [];
+      for (const seg of node.segments) {
+        if (seg.type === "interpolation") {
+          children.push(seg.expression);
+        }
+      }
+      return children;
+    }
+    case "tryExpression":
+      return [node.call];
+    case "newExpression":
+      return node.arguments;
+    default:
+      // Leaves (variableName, literals, …), comments, patterns, and nested
+      // definitions (function/graphNode) have no expression children here.
+      return [];
+  }
+}
+
+/** Expression operands carried by an access chain (`a[i]`, `a[i:j]`, `a.m(x)`). */
+function accessChainExpressions(chain: AccessChainElement[] | undefined): AgencyNode[] {
+  const out: AgencyNode[] = [];
+  for (const el of chain ?? []) {
+    if (el.kind === "index") {
+      out.push(el.index);
+    } else if (el.kind === "slice") {
+      if (el.start) {
+        out.push(el.start);
+      }
+      if (el.end) {
+        out.push(el.end);
+      }
+    } else if (el.kind === "methodCall") {
+      out.push(el.functionCall);
+    }
+  }
+  return out;
 }
 
 /** Convert a function call argument to string. */

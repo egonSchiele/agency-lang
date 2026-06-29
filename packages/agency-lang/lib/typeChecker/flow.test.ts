@@ -6,6 +6,7 @@ import {
   applyRefine,
   wrapFacts,
   mergeFlows,
+  widenAtLoopBackEdge,
   type FlowNode,
   type FlowEnvironment,
 } from "./flow.js";
@@ -241,5 +242,25 @@ describe("mergeFlows", () => {
     const merged = mergeFlows([a, b]);
     expect(merged.kind).toBe("join");
     if (merged.kind === "join") expect(merged.prev).toEqual([a, b]);
+  });
+});
+
+describe("widenAtLoopBackEdge", () => {
+  it("widens a var reassigned in the body to the union of before and after", () => {
+    const scope = new Scope("t");
+    scope.declare("x", STR);
+    const loopEntry: FlowNode = { kind: "start", scope };
+    const bodyEnd: FlowNode = { kind: "assign", prev: loopEntry, ref: ref("x"), type: NUM };
+    const widened = widenAtLoopBackEdge(loopEntry, bodyEnd, ["x"], env(scope));
+    expect(widened.kind).toBe("loop");
+    expect(typeAt(ref("x"), widened, env(scope))).toEqual({ type: "unionType", types: [STR, NUM] });
+  });
+
+  it("passes an unchanged var through as its pre-loop type", () => {
+    const scope = new Scope("t");
+    scope.declare("x", STR);
+    const loopEntry: FlowNode = { kind: "start", scope };
+    const widened = widenAtLoopBackEdge(loopEntry, loopEntry, ["x"], env(scope));
+    expect(typeAt(ref("x"), widened, env(scope))).toEqual(STR);
   });
 });

@@ -1,4 +1,5 @@
 import type { Scope } from "./scope.js";
+import type { FlowEnvironment } from "./flow.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyNode,
@@ -32,7 +33,7 @@ export type TypeCheckResult = {
   /** The flow graph built during the check (PR 1b). Exposed for tests/tooling
    *  (identity guard now; LSP hover / PR 4 later). Undefined if the check threw
    *  before buildFlowGraphs. */
-  flowEnv?: import("./flow.js").FlowEnvironment;
+  flowEnv?: FlowEnvironment;
 };
 
 export type ScopeInfo = {
@@ -97,7 +98,7 @@ export type TypeCheckerContext = {
   currentFile?: string;
   /** Flow graph built by `buildFlowGraphs` (PR 1b). Populated but not yet
    *  consulted — PR 2 routes `synthValueAccess` through `typeAt`. */
-  flowEnv?: import("./flow.js").FlowEnvironment;
+  flowEnv?: FlowEnvironment;
   getTypeAliases(): Record<string, TypeAliasEntry>;
   withScope<T>(key: string, fn: () => T): T;
   inferReturnTypeFor(

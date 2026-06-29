@@ -108,7 +108,16 @@ export function synthType(
         if (ctx.flowEnv) {
           const flow = ctx.flowEnv.flowOf.get(expr);
           if (flow) {
-            return typeAt({ variable: expr.value, chain: [] }, flow, ctx.flowEnv);
+            // Resolve against the CURRENT scope's type aliases
+            // (ctx.getTypeAliases() tracks ctx.withScope), not the global
+            // snapshot captured once in buildFlowGraphs — a scope that overrides
+            // an alias must narrow against its own set. Safe with the shared
+            // memo: each flow node belongs to one scope, so it is only ever
+            // queried under that scope's alias context.
+            return typeAt({ variable: expr.value, chain: [] }, flow, {
+              ...ctx.flowEnv,
+              typeAliases: ctx.getTypeAliases(),
+            });
           }
         }
         return scopeType;

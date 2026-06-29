@@ -352,6 +352,7 @@ export class TypeChecker {
       scopes,
       interruptEffectsByFunction,
       interruptCallGraph,
+      flowEnv: ctx.flowEnv,
     };
   }
 

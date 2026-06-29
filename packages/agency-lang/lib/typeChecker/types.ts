@@ -29,6 +29,10 @@ export type TypeCheckResult = {
   scopes: ScopeInfo[];
   interruptEffectsByFunction: Record<string, InterruptEffect[]>;
   interruptCallGraph: InterruptCallGraph;
+  /** The flow graph built during the check (PR 1b). Exposed for tests/tooling
+   *  (identity guard now; LSP hover / PR 4 later). Undefined if the check threw
+   *  before buildFlowGraphs. */
+  flowEnv?: import("./flow.js").FlowEnvironment;
 };
 
 export type ScopeInfo = {

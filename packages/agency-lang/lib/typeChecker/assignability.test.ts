@@ -1,7 +1,41 @@
 import { describe, it, expect } from "vitest";
-import { isAssignable } from "./assignability.js";
+import { isAssignable, isNever, widenType } from "./assignability.js";
 import { formatTypeHint } from "../cli/util.js";
+import { NEVER_T, STRING_T, NUMBER_T } from "./primitives.js";
 import type { VariableType } from "../types.js";
+
+describe("never (bottom type)", () => {
+  const obj: VariableType = {
+    type: "objectType",
+    properties: [{ key: "a", value: STRING_T }],
+  };
+  const union: VariableType = { type: "unionType", types: [STRING_T, NUMBER_T] };
+
+  it("never is assignable to every type", () => {
+    expect(isAssignable(NEVER_T, STRING_T, {})).toBe(true);
+    expect(isAssignable(NEVER_T, NUMBER_T, {})).toBe(true);
+    expect(isAssignable(NEVER_T, obj, {})).toBe(true);
+    expect(isAssignable(NEVER_T, union, {})).toBe(true);
+    expect(isAssignable(NEVER_T, { type: "primitiveType", value: "any" }, {})).toBe(true);
+  });
+
+  it("nothing is assignable to never, except never", () => {
+    expect(isAssignable(STRING_T, NEVER_T, {})).toBe(false);
+    expect(isAssignable(obj, NEVER_T, {})).toBe(false);
+    expect(isAssignable(union, NEVER_T, {})).toBe(false);
+    expect(isAssignable(NEVER_T, NEVER_T, {})).toBe(true);
+  });
+
+  it("isNever recognizes only the never primitive", () => {
+    expect(isNever(NEVER_T)).toBe(true);
+    expect(isNever(STRING_T)).toBe(false);
+    expect(isNever("any")).toBe(false);
+  });
+
+  it("widenType passes never through unchanged", () => {
+    expect(widenType(NEVER_T)).toEqual(NEVER_T);
+  });
+});
 
 describe("functionRefType assignability", () => {
   const fnRef: VariableType = {

@@ -7,3 +7,4 @@ export const REGEX_T: VariableType = { type: "primitiveType", value: "regex" };
 export const VOID_T: VariableType = { type: "primitiveType", value: "void" };
 export const NULL_T: VariableType = { type: "primitiveType", value: "null" };
 export const ANY_T: VariableType = { type: "primitiveType", value: "any" };
+export const NEVER_T: VariableType = { type: "primitiveType", value: "never" };

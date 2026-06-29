@@ -389,6 +389,11 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
   }
 }
 
+/** True iff `vt` is the bottom type `never`. */
+export function isNever(vt: VariableType | "any"): boolean {
+  return vt !== "any" && vt.type === "primitiveType" && vt.value === "never";
+}
+
 /**
  * A type that admits `null` as a value, so the corresponding object
  * property may be absent from the source. Covers the `key?: T` desugaring
@@ -439,6 +444,13 @@ export function isAssignable(
     (resolvedSource.type === "primitiveType" && resolvedSource.value === "any") ||
     (resolvedTarget.type === "primitiveType" && resolvedTarget.value === "any")
   ) {
+    return true;
+  }
+
+  // never is the bottom type: assignable to every type. (Nothing is assignable
+  // TO never except never itself, which falls out of the same-kind primitive
+  // equality check below — never's value equals only never's value.)
+  if (resolvedSource.type === "primitiveType" && resolvedSource.value === "never") {
     return true;
   }
 

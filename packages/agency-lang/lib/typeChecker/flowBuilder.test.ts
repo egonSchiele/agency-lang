@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { Scope } from "./scope.js";
-import { typeAt, type FlowEnvironment } from "./flow.js";
+import { typeAt, type FlowEnvironment, type FlowNode } from "./flow.js";
 import { buildFlowGraph } from "./flowBuilder.js";
 import { walkNodes } from "../utils/node.js";
 import type { AgencyNode, VariableType } from "../types.js";
@@ -41,6 +41,20 @@ function find(body: AgencyNode[], pred: (n: AgencyNode) => boolean): AgencyNode 
     }
   }
   throw new Error("node not found");
+}
+
+/** True if a `loop` node is reachable from `f` via the prev-chain. */
+function reachesLoop(f: FlowNode): boolean {
+  if (f.kind === "loop") {
+    return true;
+  }
+  if (f.kind === "join") {
+    return f.prev.some(reachesLoop);
+  }
+  if (f.kind === "start" || f.kind === "exit") {
+    return false;
+  }
+  return reachesLoop(f.prev);
 }
 
 describe("buildFlowGraph — linear", () => {
@@ -124,5 +138,18 @@ describe("buildFlowGraph — ifElse", () => {
     const tailPrint = find(body, (n) => n.type === "functionCall" && n.functionName === "print");
     const rRef = find([tailPrint], (n) => n.type === "variableName" && n.value === "r");
     expect(typeAt(ref("r"), env.flowOf.get(rRef)!, env)).toEqual(memberA);
+  });
+});
+
+describe("buildFlowGraph — loops", () => {
+  it("a while loop builds a loop node on the back-edge", () => {
+    // Red under Task 1/2 (linear recursion → no loop node); green after Step 7.
+    const body = parseBody(`while (cond) {\n  x = 1\n}\nprint(x)`);
+    const scope = new Scope("t");
+    scope.declare("cond", { type: "primitiveType", value: "boolean" });
+    scope.declare("x", NUM);
+    const env = freshEnv(scope);
+    const end = buildFlowGraph(body, { kind: "start", scope }, env);
+    expect(reachesLoop(end)).toBe(true);
   });
 });

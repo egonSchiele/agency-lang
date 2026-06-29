@@ -3,7 +3,13 @@ import { Scope, type ScopeType } from "./scope.js";
 import { expressionChildren, walkNodes } from "../utils/node.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { analyzeCondition } from "./narrowing.js";
-import { type FlowNode, type FlowEnvironment, wrapFacts, mergeFlows } from "./flow.js";
+import {
+  type FlowNode,
+  type FlowEnvironment,
+  wrapFacts,
+  mergeFlows,
+  widenAtLoopBackEdge,
+} from "./flow.js";
 
 /**
  * Attach `flow` to every variable-referencing node inside an expression. The
@@ -89,16 +95,19 @@ const statementRules: StatementRuleTable = {
     return mergeFlows([thenEnd, elseEnd]);
   },
 
-  // Task 3 adds widening. For now, recurse the body linearly.
   whileLoop: (node, flow, env) => {
     attachExpressionsToFlow(node.condition as AgencyNode, flow, env);
-    buildFlowGraph(node.body, flow, env);
-    return flow;
+    const facts = analyzeCondition(node.condition);
+    const bodyEnd = buildFlowGraph(node.body, wrapFacts(flow, facts.then), env);
+    return wrapFacts(
+      widenAtLoopBackEdge(flow, bodyEnd, assignedNames(node.body), env),
+      facts.else,
+    );
   },
   forLoop: (node, flow, env) => {
     attachExpressionsToFlow(node.iterable as AgencyNode, flow, env);
-    buildFlowGraph(node.body, flow, env);
-    return flow;
+    const bodyEnd = buildFlowGraph(node.body, flow, env);
+    return widenAtLoopBackEdge(flow, bodyEnd, assignedNames(node.body), env);
   },
 
   // Intra-scope blocks thread flow through their body.

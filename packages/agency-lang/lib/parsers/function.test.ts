@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   functionParser,
+  functionParameterParser,
   docStringParser,
   graphNodeParser,
   messageThreadParser,
@@ -2016,7 +2017,13 @@ describe("functionParser", () => {
             {
               type: "functionParameter",
               name: "y",
-              typeHint: { type: "primitiveType", value: "number" },
+              typeHint: {
+                type: "unionType",
+                types: [
+                  { type: "primitiveType", value: "number" },
+                  { type: "primitiveType", value: "null" },
+                ],
+              },
               defaultValue: { type: "null" },
             },
           ],
@@ -3606,6 +3613,39 @@ describe("bang (!) validated type annotations", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.returnTypeValidated).toBeUndefined();
+    }
+  });
+});
+
+describe("functionParameterParser optional params (nullish unification)", () => {
+  it("widens an optional parameter's type hint to T | null", () => {
+    const result = functionParameterParser("x?: number");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.typeHint).toEqualWithoutLoc({
+        type: "unionType",
+        types: [
+          { type: "primitiveType", value: "number" },
+          { type: "primitiveType", value: "null" },
+        ],
+      });
+      // default value still injected so the runtime resolves an omitted arg to null
+      expect(result.result.defaultValue).toEqualWithoutLoc({ type: "null" });
+    }
+  });
+
+  it("appends null to an optional union-typed parameter", () => {
+    const result = functionParameterParser("x?: number | string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.typeHint).toEqualWithoutLoc({
+        type: "unionType",
+        types: [
+          { type: "primitiveType", value: "number" },
+          { type: "primitiveType", value: "string" },
+          { type: "primitiveType", value: "null" },
+        ],
+      });
     }
   });
 });

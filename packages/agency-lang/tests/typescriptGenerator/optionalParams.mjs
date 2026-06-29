@@ -163,7 +163,7 @@ async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
 __functionRefReviver.registry = __toolRegistry;
-async function __greet_impl(name: string, greeting: string | typeof __UNSET = __UNSET) {
+async function __greet_impl(name: string, greeting: string | null | typeof __UNSET = __UNSET) {
   const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
@@ -316,7 +316,7 @@ const greet = __AgencyFunction.create({
   toolDefinition: {
     name: "greet",
     description: "No description provided.",
-    schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: null"), })
+    schema: z.object({"name": z.string(), "greeting": z.union([z.string(), z.null()]).describe("Default: null"), })
   },
   safe: false,
   exported: false

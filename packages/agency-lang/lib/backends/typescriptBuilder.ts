@@ -1540,7 +1540,16 @@ export class TypeScriptBuilder {
     let zod = this.zodSchemaFor(typeHint);
     if (param.defaultValue) {
       const defaultStr = expressionToString(param.defaultValue);
-      zod += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
+      // A widened optional param (`x?: T` → `T | null`) is already nullable;
+      // only add `.nullable()` for params whose type is not already nullable
+      // (e.g. an explicit default `x: T = 5`), so the LLM may omit them.
+      const alreadyNullable =
+        typeHint.type === "unionType" &&
+        typeHint.types.some(
+          (t) => t.type === "primitiveType" && t.value === "null",
+        );
+      if (!alreadyNullable) zod += ".nullable()";
+      zod += `.describe(${JSON.stringify("Default: " + defaultStr)})`;
     }
     return { kind: "scalar", zod };
   }

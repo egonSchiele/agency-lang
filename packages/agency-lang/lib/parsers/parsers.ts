@@ -4171,8 +4171,20 @@ export const functionParameterParser: Parser<FunctionParameter> = memo(
     ),
     (result: any) => {
       const { __optional, validated: _validated, ...rest } = result;
+      // An optional param with no explicit default resolves to null when the
+      // arg is omitted. Inject that default AND widen the static type to
+      // `T | null` so the type matches the runtime value (nullish unification).
+      // When an explicit default is present (e.g. `x?: string = "hi"`), the
+      // value is never null, so neither the default nor the widening applies.
       if (__optional && !rest.defaultValue) {
         rest.defaultValue = { type: "null" };
+        if (rest.typeHint) {
+          const nullT = { type: "primitiveType", value: "null" };
+          rest.typeHint =
+            rest.typeHint.type === "unionType"
+              ? { type: "unionType", types: [...rest.typeHint.types, nullT] }
+              : { type: "unionType", types: [rest.typeHint, nullT] };
+        }
       }
       if (_validated) rest.validated = true;
       return rest as FunctionParameter;

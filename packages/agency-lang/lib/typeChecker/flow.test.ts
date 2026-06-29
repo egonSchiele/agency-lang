@@ -4,6 +4,8 @@ import {
   uniteTypes,
   typeAt,
   applyRefine,
+  wrapFacts,
+  mergeFlows,
   type FlowNode,
   type FlowEnvironment,
 } from "./flow.js";
@@ -167,5 +169,54 @@ describe("typeAt", () => {
     const e = env(scope);
     expect(typeAt(ref("x"), start, e)).toEqual(STR);
     expect(typeAt(ref("x"), start, e)).toEqual(STR);
+  });
+});
+
+describe("wrapFacts", () => {
+  it("returns the flow unchanged for no candidates", () => {
+    const start: FlowNode = { kind: "start", scope: new Scope("t") };
+    expect(wrapFacts(start, [])).toBe(start);
+  });
+
+  it("wraps one narrow node per candidate and narrows through it", () => {
+    const scope = new Scope("t");
+    scope.declare("u", ab);
+    const start: FlowNode = { kind: "start", scope };
+    const wrapped = wrapFacts(start, [
+      {
+        variableName: "u",
+        refine: {
+          kind: "discriminant",
+          prop: "kind",
+          literal: { type: "stringLiteralType", value: "a" },
+          keep: true,
+        },
+      },
+    ]);
+    expect(wrapped.kind).toBe("narrow");
+    expect(typeAt(ref("u"), wrapped, env(scope))).toEqual(memberA);
+  });
+});
+
+describe("mergeFlows", () => {
+  it("drops exit predecessors and returns the lone live flow", () => {
+    const start: FlowNode = { kind: "start", scope: new Scope("t") };
+    const exit: FlowNode = { kind: "exit" };
+    expect(mergeFlows([exit, start])).toBe(start);
+  });
+
+  it("all-exit merges to exit (dead code after)", () => {
+    expect(mergeFlows([{ kind: "exit" }, { kind: "exit" }])).toEqual({ kind: "exit" });
+  });
+
+  it("two live flows merge to a join", () => {
+    // Real merges share a scope (both branches of one `if`). Use the same
+    // Scope here to avoid suggesting cross-scope merges are valid.
+    const scope = new Scope("t");
+    const a: FlowNode = { kind: "start", scope };
+    const b: FlowNode = { kind: "assign", prev: a, ref: ref("x"), type: STR };
+    const merged = mergeFlows([a, b]);
+    expect(merged.kind).toBe("join");
+    if (merged.kind === "join") expect(merged.prev).toEqual([a, b]);
   });
 });

@@ -1,5 +1,5 @@
 import type { AgencyNode, TypeAliasEntry, VariableType } from "../types.js";
-import type { Refine } from "./narrowing.js";
+import type { Refine, NarrowCandidate } from "./narrowing.js";
 import { narrowUnionByDiscriminant } from "./narrowing.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
@@ -137,4 +137,34 @@ function computeTypeAt(
     case "exit":
       throw new Error("typeAt called on an unreachable (exit) flow node");
   }
+}
+
+/**
+ * Wrap `flow` in a `narrow` node for each candidate (innermost = first). With no
+ * candidates the flow is returned unchanged. Used by the builder (PR 1b) to turn
+ * a branch's ConditionFacts into flow nodes.
+ */
+export function wrapFacts(flow: FlowNode, candidates: NarrowCandidate[]): FlowNode {
+  return candidates.reduce<FlowNode>(
+    (prev, c) => ({
+      kind: "narrow",
+      prev,
+      ref: { variable: c.variableName, chain: [] },
+      refine: c.refine,
+    }),
+    flow,
+  );
+}
+
+/**
+ * Merge control-flow branch ends. `exit` predecessors (e.g. a branch that
+ * `return`ed) are dropped: reaching the code after a merge means a live branch
+ * got here. No live branches → `exit` (the after-code is unreachable). One →
+ * itself. Two or more → a `join`.
+ */
+export function mergeFlows(flows: FlowNode[]): FlowNode {
+  const live = flows.filter((f) => f.kind !== "exit");
+  if (live.length === 0) return { kind: "exit" };
+  if (live.length === 1) return live[0];
+  return { kind: "join", prev: live };
 }

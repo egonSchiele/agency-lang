@@ -57,6 +57,22 @@ describe("primitiveTypeParser", () => {
       },
     },
     {
+      input: "null",
+      expected: {
+        success: true,
+        result: { type: "primitiveType", value: "null" },
+      },
+    },
+    {
+      // `undefined` is accepted as a type keyword but normalized to `null`
+      // (nullish unification — there is one nothing-value).
+      input: "undefined",
+      expected: {
+        success: true,
+        result: { type: "primitiveType", value: "null" },
+      },
+    },
+    {
       input: "invalid",
       expected: { success: false },
     },

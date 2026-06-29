@@ -852,24 +852,31 @@ export function simpleLiteralParser(input: string): ParserResult<Literal> {
 
 export const primitiveTypeParser: Parser<PrimitiveType> = memo(
   "primitiveTypeParser",
-  seqC(
-    set("type", "primitiveType"),
-    capture(
-      or(
-        str("number"),
-        str("string"),
-        str("boolean"),
-        str("undefined"),
-        str("void"),
-        str("null"),
-        str("any"),
-        str("unknown"),
-        str("object"),
-        str("function"),
-        str("regex"),
+  map(
+    seqC(
+      set("type", "primitiveType"),
+      capture(
+        or(
+          str("number"),
+          str("string"),
+          str("boolean"),
+          str("undefined"),
+          str("void"),
+          str("null"),
+          str("any"),
+          str("unknown"),
+          str("object"),
+          str("function"),
+          str("regex"),
+        ),
+        "value",
       ),
-      "value",
     ),
+    // Nullish unification: the `undefined` type keyword is accepted (e.g. from
+    // imported TS type annotations) but normalized to `null` at parse time, so
+    // the stored AST never contains an `undefined` primitive. The *value*
+    // `undefined` remains unparseable. See docs/dev/null-and-undefined.md.
+    (r: PrimitiveType) => (r.value === "undefined" ? { ...r, value: "null" } : r),
   ),
 );
 

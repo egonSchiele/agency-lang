@@ -143,7 +143,7 @@ git commit -F /tmp/commit-eq.txt
 
 **Interfaces:**
 - Consumes: `__eq` from Task 1 (runtime export) and `ts.call`/`ts.id`/`ts.not` from `lib/ir/builders.ts` (`call(callee, args)`, `id(name)`, `not(condition)`).
-- Produces: generated code where Agency `a == b` emits `__eq(a, b)` and `a != b` emits `!__eq(a, b)`; `===`/`!==` remain strict.
+- Produces: generated code where Agency `a == b` and `a === b` both emit `__eq(a, b)`, and `a != b` and `a !== b` both emit `!__eq(a, b)`. There is no strict-equality escape hatch (`===`/`!==` are stylistic aliases that compile identically to `==`/`!=`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -154,7 +154,9 @@ node main() {
   let obj: { a?: string } = {}
   let absent = obj.a
   if (absent == null) {
-    if (null == absent) {
+    // `===` must also catch the (runtime-undefined) absent key — no strict
+    // escape hatch; both operators unify null and undefined.
+    if (absent === null) {
       return "absent is null"
     }
   }
@@ -203,12 +205,19 @@ with:
 ```ts
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
-    // `==` / `!=` use unified nullish equality via the `__eq` runtime helper
-    // (null and undefined compare equal). `===` / `!==` stay strict as the
-    // explicit "exact" escape hatch. See docs/dev/null-and-undefined.md.
-    if (node.operator === "==" || node.operator === "!=") {
+    // All equality operators use unified nullish equality via the `__eq`
+    // runtime helper (null and undefined compare equal). There is no strict
+    // escape hatch: `===`/`!==` are stylistic aliases that compile identically
+    // to `==`/`!=`. See docs/dev/null-and-undefined.md.
+    if (
+      node.operator === "==" ||
+      node.operator === "===" ||
+      node.operator === "!=" ||
+      node.operator === "!=="
+    ) {
       const eq = ts.call(ts.id("__eq"), [leftNode, rightNode]);
-      return node.operator === "==" ? eq : ts.not(eq);
+      const negated = node.operator === "!=" || node.operator === "!==";
+      return negated ? ts.not(eq) : eq;
     }
     return ts.binOp(leftNode, node.operator, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),

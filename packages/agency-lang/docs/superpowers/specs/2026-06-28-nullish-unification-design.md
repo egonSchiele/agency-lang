@@ -161,9 +161,14 @@ information at the comparison site.
   reduce to "is `x` nullish?"), and for two non-nullish values `__eq` is
   identical to `===`.
 
-- Codegen (`typescriptBuilder.ts:1067–1068`): `==` → `__eq(left, right)`, `!=`
-  → `!__eq(left, right)`. **`===`/`!==` stay strict** as the explicit "exact"
-  escape hatch. `<`, `>`, `<=`, `>=`, `=~`, `!~` are untouched.
+- Codegen (`typescriptBuilder.ts:1067–1068`): **all four equality operators
+  lower to `__eq`** — `==` and `===` → `__eq(left, right)`, `!=` and `!==` →
+  `!__eq(left, right)`. There is deliberately **no strict-equality escape
+  hatch**: since `null` and `undefined` are one value, distinguishing them is
+  never desirable, and a strict `=== null` would be a footgun that silently
+  misses an interop `undefined` — the exact bug this project fixes. `===`/`!==`
+  remain parseable as stylistic aliases of `==`/`!=` (for users with JS habits)
+  but compile identically. `<`, `>`, `<=`, `>=`, `=~`, `!~` are untouched.
 
 - Using a helper (not an inline `a === b || (a == null && b == null)`) is
   deliberate: operands are passed as arguments and therefore **evaluated
@@ -206,13 +211,12 @@ The two existing Zod mappers stay split by purpose:
   checks against `null` and type-checks.
 - A runtime `undefined` flowing in from interop is caught by `__eq` (§2): `x ==
   null` is true for it.
-- Documented sharp edge: passing an actually-`undefined` value *back* into TS
-  code that strictly distinguishes `=== undefined` from `=== null` is the one
-  rare case where the absorption is observable. The surface escape hatch is
-  `===` / `!==`, which are parseable Agency operators (`parsers.ts:2628–2629`)
-  and stay strict (they pass through codegen unchanged), so a user who genuinely
-  needs to distinguish `null` from `undefined` can still write `x === null`. This
-  is a doc note, not a code change.
+- Documented sharp edge: Agency intentionally provides **no way** to distinguish
+  `null` from `undefined` — both `==` and `===` unify them via `__eq`, and the
+  value `undefined` is unwritable. In the rare case of passing a value back into
+  TS code that strictly distinguishes `=== undefined` from `=== null`, Agency
+  cannot express that distinction. This is an accepted, by-design consequence of
+  unification, not a supported scenario — a doc note, not a code change.
 
 ### §5 Migration & coordination
 
@@ -241,8 +245,12 @@ coordination points:
 - **Narrowing recognition is unaffected by the `==`→`__eq` codegen change.**
   `analyzeCondition` keys on the AST operator `==` / `!=` (`narrowing.ts:99`),
   which is upstream of codegen, so `if (x == null)` is recognized regardless of
-  how `==` lowers. And the unified-null semantics of `__eq` *match* what
-  null-narrowing does: stripping the `null` member catches both a runtime `null`
+  how `==` lowers. **Note for Project 2:** because `===`/`!==` now unify too
+  (both lower to `__eq`), the null-narrowing recognizer must treat `=== null` /
+  `!== null` identically to `== null` / `!= null` — add the strict operators to
+  the recognizer alongside the loose ones. And the unified-null semantics of
+  `__eq` *match* what null-narrowing does: stripping the `null` member catches
+  both a runtime `null`
   and an interop `undefined`. The old `T | undefined` representation would have
   made the narrowing and the runtime disagree — another reason to land this
   first.

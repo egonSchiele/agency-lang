@@ -4,6 +4,7 @@ import { substituteTypeParams } from "./substitute.js";
 import { mapTypes } from "./typeWalker.js";
 import { mergeTagSets } from "./mergeTags.js";
 import { applyValueArgs } from "./valueParamSubstitution.js";
+import { resultToObjectUnion } from "./resultUnion.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -601,6 +602,21 @@ export function isAssignable(
     return (
       isAssignable(resolvedSource.successType, resolvedTarget.successType, typeAliases) &&
       isAssignable(resolvedSource.failureType, resolvedTarget.failureType, typeAliases)
+    );
+  }
+
+  // A narrowed Result *member* (object form, produced by viewing Result as a
+  // discriminated union via resultToObjectUnion) is assignable back to the
+  // Result type it came from — e.g. `return parsed` where `parsed` was narrowed
+  // to `{ success: true, value: T }` by an `isFailure` early-return guard. The
+  // flow checker (PR 2) surfaces this on returns/args/assignments. Expand the
+  // target Result to its object union and check structurally. Only when the
+  // source is NOT itself a Result (that case is handled covariantly above).
+  if (resolvedTarget.type === "resultType" && resolvedSource.type !== "resultType") {
+    return isAssignable(
+      resolvedSource,
+      resultToObjectUnion(resolvedTarget, typeAliases),
+      typeAliases,
     );
   }
 

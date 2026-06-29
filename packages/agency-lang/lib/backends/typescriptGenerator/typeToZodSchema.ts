@@ -114,6 +114,12 @@ function mapTypeToSchemaInner(
         return "z.record(z.string(), z.any())";
       case "regex":
         return "z.instanceof(RegExp)";
+      case "never":
+        // The bottom type is uninhabited: reject every value, so runtime
+        // validation matches the type checker (which treats never as
+        // uninhabited). Without this, never fell through to DEFAULT_SCHEMA
+        // (z.string()) and wrongly accepted strings.
+        return "z.never()";
       default:
         return DEFAULT_SCHEMA;
     }

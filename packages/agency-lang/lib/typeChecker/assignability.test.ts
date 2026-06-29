@@ -19,11 +19,14 @@ describe("never (bottom type)", () => {
     expect(isAssignable(NEVER_T, { type: "primitiveType", value: "any" }, {})).toBe(true);
   });
 
-  it("nothing is assignable to never, except never", () => {
+  it("nothing is assignable to never, except never (and any)", () => {
     expect(isAssignable(STRING_T, NEVER_T, {})).toBe(false);
     expect(isAssignable(obj, NEVER_T, {})).toBe(false);
     expect(isAssignable(union, NEVER_T, {})).toBe(false);
     expect(isAssignable(NEVER_T, NEVER_T, {})).toBe(true);
+    // `any` is assignable to everything via the universal `any` rule, including
+    // never (standard TypeScript behavior). Locks the clarified semantics.
+    expect(isAssignable({ type: "primitiveType", value: "any" }, NEVER_T, {})).toBe(true);
   });
 
   it("isNever recognizes only the never primitive", () => {

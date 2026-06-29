@@ -447,9 +447,10 @@ export function isAssignable(
     return true;
   }
 
-  // never is the bottom type: assignable to every type. (Nothing is assignable
-  // TO never except never itself, which falls out of the same-kind primitive
-  // equality check below — never's value equals only never's value.)
+  // never is the bottom type: assignable to every type. The converse — what is
+  // assignable TO never — is only never itself (falls out of the same-kind
+  // primitive equality check below, since never's value equals only never's)
+  // and `any` (the universal `any` rule above already accepts any -> anything).
   if (resolvedSource.type === "primitiveType" && resolvedSource.value === "never") {
     return true;
   }

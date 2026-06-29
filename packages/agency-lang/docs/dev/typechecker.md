@@ -197,7 +197,7 @@ structure.
 
 `never` is Agency's bottom type, represented as `{ type: "primitiveType", value: "never" }` — mirroring how `any` (the top type) and `unknown`/`void`/`null` are modeled as primitives, rather than as a distinct AST node. Its rules:
 
-- **Assignable to every type; nothing is assignable to it except `never`.** The "assignable to everything" half is one early rule in `isAssignable` (right after the `any` short-circuit); the "nothing assignable to it" half falls out of same-kind matching (rule 6), since `never`'s value equals only `never`'s value.
+- **Assignable to every type; nothing is assignable to it except `never` (and `any`).** The "assignable to everything" half is one early rule in `isAssignable` (right after the `any` short-circuit). The converse — what is assignable *to* `never` — is only `never` itself (falls out of same-kind matching, rule 6, since `never`'s value equals only `never`'s) plus `any`, which the universal `any` rule treats as assignable to everything (standard TypeScript behavior).
 - **Member access on `never` yields `never`** with no diagnostic (`synthValueAccess`), so a provably-unreachable value never flags spurious missing-member errors.
 - `formatType` prints `never`; the type parser accepts `never` as an annotation. Use `isNever` (`assignability.ts`) to test for it.
 

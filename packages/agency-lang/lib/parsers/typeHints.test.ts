@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { formatTypeHint } from "../cli/util.js";
 import {
   primitiveTypeParser,
   arrayTypeParser,
@@ -73,6 +74,13 @@ describe("primitiveTypeParser", () => {
       },
     },
     {
+      input: "never",
+      expected: {
+        success: true,
+        result: { type: "primitiveType", value: "never" },
+      },
+    },
+    {
       input: "invalid",
       expected: { success: false },
     },
@@ -96,6 +104,20 @@ describe("primitiveTypeParser", () => {
           const result = primitiveTypeParser(input);
           expect(result.success).toBe(false);
         });
+    }
+  });
+});
+
+describe("never type round-trip", () => {
+  it("parses 'never' and formats back to 'never'", () => {
+    const parsed = primitiveTypeParser("never");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.result).toEqualWithoutLoc({
+        type: "primitiveType",
+        value: "never",
+      });
+      expect(formatTypeHint(parsed.result)).toBe("never");
     }
   });
 });

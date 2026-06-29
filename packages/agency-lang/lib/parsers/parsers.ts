@@ -868,6 +868,7 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
           str("object"),
           str("function"),
           str("regex"),
+          str("never"),
         ),
         "value",
       ),

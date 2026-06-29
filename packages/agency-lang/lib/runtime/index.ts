@@ -140,6 +140,7 @@ export {
 } from "./result.js";
 export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
 export { Schema, __validateType } from "./schema.js";
+export { __eq } from "./eq.js";
 export {
   __validateChain,
   __validateChainRecursive,

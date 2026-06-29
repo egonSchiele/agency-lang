@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer coalesced\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "missing outer optional object coalesces to null (no recursion into b)"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"absent is null\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

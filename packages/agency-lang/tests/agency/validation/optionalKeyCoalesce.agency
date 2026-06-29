@@ -1,0 +1,11 @@
+node main() {
+  const s = schema({ foo?: string })
+  const r = s.parse({})
+  if (isSuccess(r)) {
+    if (r.value.foo == null) {
+      return "coalesced to null"
+    }
+    return "present but not null"
+  }
+  return "parse failed"
+}

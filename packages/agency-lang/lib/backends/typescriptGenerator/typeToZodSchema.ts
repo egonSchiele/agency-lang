@@ -52,14 +52,26 @@ export function appendMeta(schemaExpr: string, tags: Tag[] | undefined): string 
  * concatenation per `mergeTagSets`) instead of letting Zod's chained
  * `.meta()` overwrite the alias-level metadata.
  */
+/**
+ * How an optional object key (a property typed `T | null`) is encoded:
+ * - `required-nullable`: the key stays required and nullable
+ *   (`z.union([T, z.null()])`). Used for the LLM structured-output path,
+ *   because OpenAI strict mode requires every field to be `required`.
+ * - `optional-coalesce`: the key becomes optional and a missing key
+ *   coalesces to `null` (`...optional().default(null)`). Used for the
+ *   validation/parse path so `schema(T).parse({})` succeeds.
+ */
+type OptionalKeyMode = "required-nullable" | "optional-coalesce";
+
 function mapTypeToSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
+  optionalKeyMode: OptionalKeyMode = "required-nullable",
 ): string {
   return appendMeta(
-    mapTypeToSchemaInner(variableType, typeAliases, resultHandler, typeAliasesFull),
+    mapTypeToSchemaInner(variableType, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode),
     variableType.tags,
   );
 }
@@ -69,10 +81,11 @@ function mapTypeToSchemaInner(
   typeAliases: Record<string, VariableType>,
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
+  optionalKeyMode: OptionalKeyMode = "required-nullable",
 ): string {
   const recurse = (vt: VariableType) =>
     appendMeta(
-      mapTypeToSchemaInner(vt, typeAliases, resultHandler, typeAliasesFull),
+      mapTypeToSchemaInner(vt, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode),
       vt.tags,
     );
 
@@ -149,6 +162,7 @@ function mapTypeToSchemaInner(
           typeAliases,
           resultHandler,
           typeAliasesFull,
+          optionalKeyMode,
         );
         // .describe(...) must come BEFORE .meta(...) — Zod requires
         // .meta() to be the final call in the chain or the metadata is
@@ -156,6 +170,20 @@ function mapTypeToSchemaInner(
         let inner2 = inner;
         if (prop.description) {
           inner2 += `.describe("${escape(prop.description)}")`;
+        }
+        // Optional key (a `T | null` property): in validation/parse mode make
+        // the key optional and coalesce a missing key to null, so
+        // `schema(T).parse({})` succeeds with every declared key present. The
+        // LLM path keeps it required+nullable (provider constraint).
+        // This MUST be applied before `appendMeta` so any `.meta(...)` stays the
+        // final call in the chain (Zod drops metadata otherwise).
+        const isNullableProp =
+          prop.value.type === "unionType" &&
+          prop.value.types.some(
+            (t) => t.type === "primitiveType" && t.value === "null",
+          );
+        if (optionalKeyMode === "optional-coalesce" && isNullableProp) {
+          inner2 += `.optional().default(null)`;
         }
         const str = `"${prop.key.replace(/"/g, '\\"')}": ${appendMeta(inner2, mergedTags)}`;
         return str;
@@ -186,6 +214,7 @@ function mapTypeToSchemaInner(
         typeAliases,
         resultHandler,
         typeAliasesFull,
+        optionalKeyMode,
       );
     }
     return variableType.aliasName;
@@ -220,6 +249,7 @@ export function mapTypeToZodSchema(
     typeAliases,
     (vt, ta) => mapTypeToZodSchema((vt as any).successType, ta, typeAliasesFull),
     typeAliasesFull,
+    "required-nullable",
   );
 }
 
@@ -245,5 +275,6 @@ export function mapTypeToValidationSchema(
       return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })])`;
     },
     typeAliasesFull,
+    "optional-coalesce",
   );
 }

@@ -1,0 +1,11 @@
+node main() {
+  const s = schema({ a?: { b?: string } })
+  const r = s.parse({})
+  if (isSuccess(r)) {
+    if (r.value.a == null) {
+      return "outer coalesced"
+    }
+    return "outer present"
+  }
+  return "parse failed"
+}

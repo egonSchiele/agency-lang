@@ -390,9 +390,9 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
 }
 
 /**
- * A type that admits `undefined` as a value, so the corresponding object
+ * A type that admits `null` as a value, so the corresponding object
  * property may be absent from the source. Covers the `key?: T` desugaring
- * (parsed as `T | undefined`) plus `any`, which subsumes undefined.
+ * (parsed as `T | null`) plus `any`, which subsumes null.
  */
 function isOptionalType(
   vt: VariableType,
@@ -400,7 +400,7 @@ function isOptionalType(
 ): boolean {
   const resolved = safeResolveType(vt, typeAliases);
   if (resolved.type === "primitiveType")
-    return resolved.value === "undefined" || resolved.value === "any";
+    return resolved.value === "null" || resolved.value === "any";
   if (resolved.type === "unionType")
     return resolved.types.some((t) => isOptionalType(t, typeAliases));
   return false;

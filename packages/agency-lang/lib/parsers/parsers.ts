@@ -852,24 +852,31 @@ export function simpleLiteralParser(input: string): ParserResult<Literal> {
 
 export const primitiveTypeParser: Parser<PrimitiveType> = memo(
   "primitiveTypeParser",
-  seqC(
-    set("type", "primitiveType"),
-    capture(
-      or(
-        str("number"),
-        str("string"),
-        str("boolean"),
-        str("undefined"),
-        str("void"),
-        str("null"),
-        str("any"),
-        str("unknown"),
-        str("object"),
-        str("function"),
-        str("regex"),
+  map(
+    seqC(
+      set("type", "primitiveType"),
+      capture(
+        or(
+          str("number"),
+          str("string"),
+          str("boolean"),
+          str("undefined"),
+          str("void"),
+          str("null"),
+          str("any"),
+          str("unknown"),
+          str("object"),
+          str("function"),
+          str("regex"),
+        ),
+        "value",
       ),
-      "value",
     ),
+    // Nullish unification: the `undefined` type keyword is accepted (e.g. from
+    // imported TS type annotations) but normalized to `null` at parse time, so
+    // the stored AST never contains an `undefined` primitive. The *value*
+    // `undefined` remains unparseable. See docs/dev/null-and-undefined.md.
+    (r: PrimitiveType) => (r.value === "undefined" ? { ...r, value: "null" } : r),
   ),
 );
 
@@ -1047,7 +1054,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
     }
 
     if (value.type === "unionType") {
-      // If it's already a union, just add undefined to the list of types
+      // If it's already a union, just add null to the list of types
       return success(
         {
           key,
@@ -1055,7 +1062,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
             type: "unionType",
             types: [
               ...value.types,
-              { type: "primitiveType", value: "undefined" },
+              { type: "primitiveType", value: "null" },
             ],
           },
         },
@@ -1063,13 +1070,13 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
       );
     }
 
-    // If it's not a union, create a new union with the original type and undefined
+    // If it's not a union, create a new union with the original type and null
     return success(
       {
         key,
         value: {
           type: "unionType",
-          types: [value, { type: "primitiveType", value: "undefined" }],
+          types: [value, { type: "primitiveType", value: "null" }],
         },
       },
       result.rest,
@@ -4164,8 +4171,24 @@ export const functionParameterParser: Parser<FunctionParameter> = memo(
     ),
     (result: any) => {
       const { __optional, validated: _validated, ...rest } = result;
+      // An optional param with no explicit default resolves to null when the
+      // arg is omitted. Inject that default AND widen the static type to
+      // `T | null` so the type matches the runtime value (nullish unification).
+      // When an explicit default is present (e.g. `x?: string = "hi"`), the
+      // value is never null, so neither the default nor the widening applies.
       if (__optional && !rest.defaultValue) {
         rest.defaultValue = { type: "null" };
+        if (rest.typeHint) {
+          const nullT = { type: "primitiveType", value: "null" };
+          const existingMembers =
+            rest.typeHint.type === "unionType"
+              ? rest.typeHint.types
+              : [rest.typeHint];
+          rest.typeHint = {
+            type: "unionType",
+            types: [...existingMembers, nullT],
+          };
+        }
       }
       if (_validated) rest.validated = true;
       return rest as FunctionParameter;

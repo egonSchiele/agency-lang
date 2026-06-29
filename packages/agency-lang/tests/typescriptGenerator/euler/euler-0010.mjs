@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -246,7 +246,7 @@ return;
       await runner.ifElse(3, [
 
   {
-    condition: async () => __stack.args.n % 2 === 0 || __stack.args.n % 3 === 0,
+    condition: async () => __eq(__stack.args.n % 2, 0) || __eq(__stack.args.n % 3, 0),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -264,7 +264,7 @@ __stack.locals.i = 5;
 await runner.ifElse(0, [
 
   {
-    condition: async () => __stack.args.n % __stack.locals.i === 0 || __stack.args.n % (__stack.locals.i + 2) === 0,
+    condition: async () => __eq(__stack.args.n % __stack.locals.i, 0) || __eq(__stack.args.n % (__stack.locals.i + 2), 0),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;

@@ -57,6 +57,22 @@ describe("primitiveTypeParser", () => {
       },
     },
     {
+      input: "null",
+      expected: {
+        success: true,
+        result: { type: "primitiveType", value: "null" },
+      },
+    },
+    {
+      // `undefined` is accepted as a type keyword but normalized to `null`
+      // (nullish unification — there is one nothing-value).
+      input: "undefined",
+      expected: {
+        success: true,
+        result: { type: "primitiveType", value: "null" },
+      },
+    },
+    {
       input: "invalid",
       expected: { success: false },
     },
@@ -995,6 +1011,39 @@ describe("objectPropertyParser", () => {
         result: {
           key: "x",
           value: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "foo?: string",
+      expected: {
+        success: true,
+        result: {
+          key: "foo",
+          value: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "null" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "bar?: string | number",
+      expected: {
+        success: true,
+        result: {
+          key: "bar",
+          value: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+              { type: "primitiveType", value: "null" },
+            ],
+          },
         },
       },
     },

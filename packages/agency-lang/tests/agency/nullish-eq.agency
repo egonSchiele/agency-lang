@@ -1,0 +1,12 @@
+node main() {
+  let obj: { a?: string } = {}
+  let absent = obj.a
+  if (absent == null) {
+    // `===` must also catch the (runtime-undefined) absent key — no strict
+    // escape hatch; both operators unify null and undefined.
+    if (absent === null) {
+      return "absent is null"
+    }
+  }
+  return "wrong"
+}

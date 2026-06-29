@@ -5,7 +5,7 @@ import {
   BOOLEAN_T as boolean,
   NUMBER_T as number,
   STRING_T as string,
-  UNDEFINED_T as undef,
+  NULL_T as nullT,
   VOID_T as voidT,
 } from "./primitives.js";
 
@@ -14,7 +14,7 @@ const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 
 const optional = (t: VariableType): VariableType => ({
   type: "unionType",
-  types: [t, undef],
+  types: [t, nullT],
 });
 
 /**

@@ -623,22 +623,22 @@ export class AgencyGenerator {
   // Type system methods
 
   private stringifyProp(prop: ObjectProperty): string {
-    const isUnionWithUndefined =
+    const isUnionWithNull =
       prop.value.type === "unionType" &&
       prop.value.types.some(
-        (t) => t.type === "primitiveType" && t.value === "undefined",
+        (t) => t.type === "primitiveType" && t.value === "null",
       );
 
-    if (isUnionWithUndefined) {
-      const nonUndefinedTypes = (prop.value as any).types.filter(
+    if (isUnionWithNull) {
+      const nonNullTypes = (prop.value as any).types.filter(
         (t: VariableType) =>
-          !(t.type === "primitiveType" && t.value === "undefined"),
+          !(t.type === "primitiveType" && t.value === "null"),
       );
-      const unionWithoutUndefined: VariableType =
-        nonUndefinedTypes.length === 1
-          ? nonUndefinedTypes[0]
-          : { type: "unionType", types: nonUndefinedTypes };
-      let str = `${prop.key}?: ${variableTypeToString(unionWithoutUndefined, this.typeAliases, true)}`;
+      const unionWithoutNull: VariableType =
+        nonNullTypes.length === 1
+          ? nonNullTypes[0]
+          : { type: "unionType", types: nonNullTypes };
+      let str = `${prop.key}?: ${variableTypeToString(unionWithoutNull, this.typeAliases, true)}`;
       if (prop.description) {
         str += ` # ${prop.description}`;
       }

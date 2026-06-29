@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inner coalesced\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "parse({a: {}}) coalesces the inner missing optional key to null"
+    }
+  ]
+}

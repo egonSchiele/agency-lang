@@ -276,7 +276,7 @@ A fenced or indented code block. `language` is the info string for fenced
 export type CodeBlock = {
   type: "code-block";
   content: string;
-  language: string | null
+  language?: string
 }
 ```
 

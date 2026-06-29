@@ -137,7 +137,7 @@ git commit -F /tmp/commit-eq.txt
 
 **Files:**
 - Modify: `lib/backends/typescriptBuilder.ts:1064-1072` (the equality branch of binop codegen)
-- Modify: `lib/templates/backends/typescriptGenerator/imports.mustache:26-27` (add `__eq` to the runtime import list)
+- Modify: `lib/templates/backends/typescriptGenerator/imports.mustache:25` (the `success, failure, ..., __catchResult,` line — add `__eq` to the runtime import list)
 - Regenerate: `lib/templates/backends/typescriptGenerator/imports.ts` (via `pnpm run templates` — do not edit by hand)
 - Test: `tests/agency/nullish-eq.agency` + `tests/agency/nullish-eq.test.json`
 
@@ -277,6 +277,15 @@ git commit -F /tmp/commit-eq-codegen.txt
 
 **Interfaces:**
 - Produces: parsing `key?: T` yields `ObjectProperty { key, value: { type: "unionType", types: [T, { type: "primitiveType", value: "null" }] } }`.
+
+> **Task-group ordering (Tasks 3–5):** Tasks 3, 4, and 5 form a unit — after
+> Task 3 flips the parser to `T | null` but before Task 5 retargets the checker
+> off `"undefined"`, the type checker still keys on `"undefined"`, so an optional
+> key looks non-optional to the checker. Each of these tasks' own unit tests
+> (parser/typechecker-unit) is self-contained and safe to run, but do **not**
+> run `make fixtures` or a package-wide typecheck *between* Tasks 3 and 5 — the
+> intermediate state is internally inconsistent and failures are hard to
+> attribute. Land 3 → 4 → 5 in sequence, then resume fixture/typecheck runs.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -566,9 +575,15 @@ Expected: PASS. If `assignability.test.ts` has cases asserting `undefined`-based
 
 - [ ] **Step 9: Typecheck the package to catch stragglers**
 
-Run: `pnpm test:run` is too broad; instead build to surface any remaining `UNDEFINED_T` references:
-Run: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep -i "UNDEFINED_T\|undef" || echo "no stragglers"`
-Expected: `no stragglers`. Fix any remaining references (repoint to `NULL_T`).
+First surface any remaining `UNDEFINED_T` identifier references via the compiler:
+Run: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep -i "UNDEFINED_T\|undef" || echo "no UNDEFINED_T refs"`
+Expected: `no UNDEFINED_T refs`.
+
+Then a second pass for string-literal `"undefined"` *type* references the
+compiler won't flag (the identifier sweep misses `value: "undefined"` and
+`t.value === "undefined"`):
+Run: `grep -rn '"undefined"' lib/typeChecker/ --include="*.ts" | grep -v ".test.ts" | grep -v "typeof"`
+Expected: only the *defensive backstop* matches remain (e.g. `isNullishPrimitive` in `synthesizer.ts`, `isNullableType` in `validationDescriptor.ts`, which intentionally accept both `"null"` and `"undefined"`). Repoint any *optionality* references to `"null"`; leave the dual-accepting backstops alone.
 
 - [ ] **Step 10: Commit**
 
@@ -701,18 +716,25 @@ git commit -F /tmp/commit-optional-param.txt
 
 - [ ] **Step 1: Write the failing test**
 
-In `lib/backends/agencyGenerator.test.ts`, add a round-trip test (match the file's existing format/parse helpers; conceptually):
+In `lib/backends/agencyGenerator.test.ts`, add a round-trip test. The file has
+no `formatAgency` helper; it uses `parseAgency(input, {}, false)` then
+`new AgencyGenerator().generate(parseResult.result)` and asserts on
+`result.output` (both `parseAgency` and `AgencyGenerator` are already imported).
+Follow that pattern:
 
 ```ts
 it("round-trips an optional key as key?: T", () => {
-  const src = "type Foo = { foo?: string }";
-  const formatted = formatAgency(src); // use the file's existing format helper
-  expect(formatted).toContain("foo?: string");
-  expect(formatted).not.toContain("foo: string | null");
+  const parseResult = parseAgency("type Foo = { foo?: string }", {}, false);
+  expect(parseResult.success).toBe(true);
+  if (!parseResult.success) return;
+
+  const generator = new AgencyGenerator();
+  const result = generator.generate(parseResult.result);
+
+  expect(result.output).toContain("foo?: string");
+  expect(result.output).not.toContain("string | null");
 });
 ```
-
-If the test file has no `formatAgency` helper, follow the existing pattern in that file for parsing then running `AgencyGenerator` and asserting on the output string.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -917,6 +939,48 @@ Create `tests/agency/validation/optionalKeyNested.test.json`:
 Run: `pnpm run a test tests/agency/validation/optionalKeyNested.agency`
 Expected: PASS.
 
+Then add the *recursive* variant that exercises the inner level (spec §Testing
+requires `parse({ a: {} })` → `{ a: { b: null } }` — this confirms
+`optionalKeyMode` is threaded into nested objects, not just applied at the top).
+
+Create `tests/agency/validation/optionalKeyRecursive.agency`:
+
+```
+node main() {
+  const s = schema({ a?: { b?: string } })
+  const r = s.parse({ a: {} })
+  if (isSuccess(r)) {
+    if (r.value.a != null) {
+      if (r.value.a.b == null) {
+        return "inner coalesced"
+      }
+      return "inner present"
+    }
+    return "outer null"
+  }
+  return "parse failed"
+}
+```
+
+Create `tests/agency/validation/optionalKeyRecursive.test.json`:
+
+```json
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inner coalesced\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "parse({a: {}}) coalesces the inner missing optional key to null"
+    }
+  ]
+}
+```
+
+Run: `pnpm run a test tests/agency/validation/optionalKeyRecursive.agency`
+Expected: PASS — confirms the recursive thread of `optionalKeyMode`.
+
 - [ ] **Step 6: Confirm the LLM mapper path is unchanged**
 
 Run: `pnpm test:run lib/backends/toolSchemaContribution.test.ts`
@@ -925,7 +989,7 @@ Expected: PASS — LLM tool schemas still emit required + nullable keys (no `.op
 - [ ] **Step 7: Commit**
 
 ```bash
-git add lib/backends/typescriptGenerator/typeToZodSchema.ts tests/agency/validation/optionalKeyCoalesce.agency tests/agency/validation/optionalKeyCoalesce.test.json tests/agency/validation/optionalKeyNested.agency tests/agency/validation/optionalKeyNested.test.json
+git add lib/backends/typescriptGenerator/typeToZodSchema.ts tests/agency/validation/optionalKeyCoalesce.agency tests/agency/validation/optionalKeyCoalesce.test.json tests/agency/validation/optionalKeyNested.agency tests/agency/validation/optionalKeyNested.test.json tests/agency/validation/optionalKeyRecursive.agency tests/agency/validation/optionalKeyRecursive.test.json
 git commit -F /tmp/commit-schema-coalesce.txt
 ```
 
@@ -945,10 +1009,14 @@ git commit -F /tmp/commit-schema-coalesce.txt
 Run: `make && make fixtures`
 Expected: completes; `git status` shows regenerated fixtures under `tests/typescriptGenerator/`.
 
-- [ ] **Step 2: Find lingering `| undefined` type references in tests/fixtures**
+- [ ] **Step 2: Find lingering `| undefined` type references in tests/fixtures/stdlib**
 
-Run: `grep -rn "value: \"undefined\"\|| undefined\|: undefined\b" tests/ lib/ --include="*.ts" --include="*.agency" | grep -v "typeof.*undefined\|!== undefined\|=== undefined\|== \"undefined\"\|!= undefined" | grep -vi "errors.ts\|asyncContext.ts"`
-Expected: review each hit. Repoint *type-level* `undefined` (optionality) to `null`; leave *runtime* `undefined` JS-guard checks (`typeof x !== "undefined"`, `x === undefined` in TS source) alone.
+Run: `grep -rn 'value: "undefined"\|| undefined\|: undefined\b' tests/ lib/ --include="*.ts" --include="*.agency" | grep -v "typeof\|!== undefined\|=== undefined\|!= undefined\|== undefined"`
+Expected: review each hit. The content filter (not file-name exclusions) drops runtime JS-guards (`typeof x !== "undefined"`, `x === undefined` in TS source such as `errors.ts`/`asyncContext.ts`). Repoint any remaining *type-level* `undefined` (optionality) to `null`; leave runtime guards alone.
+
+Then explicitly confirm the stdlib Agency sources contain no `undefined` type tokens (they should use `key?:`, which is fine):
+Run: `grep -rn "undefined" lib/stdlib --include="*.agency" || echo "stdlib clean"`
+Expected: `stdlib clean`.
 
 - [ ] **Step 3: Retarget the null-truthiness narrowing spec note**
 
@@ -990,4 +1058,15 @@ git commit -F /tmp/commit-final-sweep.txt
 
 **Type consistency:** `__eq(a: unknown, b: unknown): boolean` used identically in Tasks 1–2. `NULL_T` defined in Task 5, consumed in Task 5 tests. `OptionalKeyMode` defined and threaded in Task 8. Optional-key union shape `{ type:"unionType", types:[T, {primitiveType,"null"}] }` consistent across Tasks 3, 6, 7, 8. ✓
 
-**One judgment call surfaced for the user:** Task 6 (optional-parameter type widening) is the fiddliest piece — it changes optional-param tool-schema output and may require updating `toolSchemaContribution.test.ts` assertions. It is included to honor spec §1, but could be deferred to Project 2 (the param *value* is already `null`; only the static type precision is at stake). Flag for the user if they prefer a smaller first PR.
+**One judgment call surfaced for the user:** Task 6 (optional-parameter type widening) is the fiddliest piece — it changes optional-param tool-schema output and may require updating `toolSchemaContribution.test.ts` assertions. It is included to honor spec §1, but could be deferred to Project 2 (the param *value* is already `null`; only the static type precision is at stake). Per user direction, **Task 6 is kept**.
+
+## Review incorporation (2026-06-28)
+
+Addressed an external plan review (`2026-06-28-nullish-unification-review.md`):
+
+- **Tasks 3–5 ordering risk** → added an explicit task-group note: do not run `make fixtures` or a package-wide typecheck between Tasks 3 and 5 (intermediate state is internally inconsistent).
+- **Too-narrow straggler grep** → Task 5 Step 9 now adds a string-literal `"undefined"` pass; Task 9 Step 2 drops the unjustified file-name exclusions in favor of content filters and adds an explicit `lib/stdlib` `.agency` check.
+- **Missing recursion test** → Task 8 now adds `optionalKeyRecursive` (`parse({a: {}})` → `{a: {b: null}}`) to exercise the threaded `optionalKeyMode`.
+- **`formatAgency` helper** → Task 7 now uses the real `parseAgency` + `AgencyGenerator().generate()` pattern (verified present in `agencyGenerator.test.ts`).
+- **Stale `imports.mustache` line ref** → corrected to line 25.
+- **`===` escape-hatch doc note (optional nit)** → moot: the escape hatch was removed entirely (both `==` and `===` lower to `__eq`); there is no longer a way — or need — to document distinguishing `null` from `undefined`.

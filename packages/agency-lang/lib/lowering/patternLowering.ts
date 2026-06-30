@@ -531,7 +531,7 @@ class PatternLowerer {
           return this.extractBindings(el, indexAccess(source, i, loc), declKind, loc);
         });
       case "variableName":
-        return [makeAssign(pattern.value, source, declKind, loc)];
+        return [makeAssign(pattern.value, cloneExpr(source), declKind, loc)];
       case "wildcardPattern":
       case "restPattern":
         return [];
@@ -603,7 +603,7 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       break;
     default: {
       // Literal — equality check
-      checks.push(makeBinOp(source, "==", pattern as Expression, pattern.loc));
+      checks.push(makeBinOp(cloneExpr(source), "==", pattern as Expression, pattern.loc));
       break;
     }
   }
@@ -617,7 +617,7 @@ function resultCheckCall(
   return {
     type: "functionCall",
     functionName: kind === "success" ? "isSuccess" : "isFailure",
-    arguments: [source],
+    arguments: [cloneExpr(source)],
     loc: loc as SourceLocation,
   };
 }
@@ -728,18 +728,33 @@ function sliceCall(source: Expression, start: number, loc: SourceLocation | unde
   );
 }
 
+/**
+ * Deep-clone an expression before embedding it into generated AST. The pattern
+ * lowering reuses one scrutinee (`__scrutinee_N`) reference across every arm's
+ * condition and binding; embedding the SAME node object in multiple positions
+ * aliases it, and the flow checker keys narrowing on AST-node identity — so a
+ * shared scrutinee node would resolve to whichever branch the flow builder
+ * walked last (e.g. the `success` arm's `.value` narrowing against the `failure`
+ * member). Cloning at each embedding guarantees every occurrence is a distinct
+ * node, preserving the one-node-per-occurrence invariant the flow graph relies on.
+ */
+function cloneExpr<T extends Expression>(e: T): T {
+  return structuredClone(e);
+}
+
 function chainAccess(
   source: Expression,
   chain: AccessChainElement[],
   loc: SourceLocation | undefined,
 ): ValueAccess {
+  const base = cloneExpr(source);
   // If source is already a ValueAccess, append to its chain.
-  if (source.type === "valueAccess") {
-    return { ...source, chain: [...source.chain, ...chain] };
+  if (base.type === "valueAccess") {
+    return { ...base, chain: [...base.chain, ...chain] };
   }
   return {
     type: "valueAccess",
-    base: source as unknown as ValueAccess["base"],
+    base: base as unknown as ValueAccess["base"],
     chain,
     loc: loc as SourceLocation,
   };
@@ -769,7 +784,7 @@ function makeObjectRestCall(
   return {
     type: "functionCall",
     functionName: "__objectRest",
-    arguments: [source, keysArray],
+    arguments: [cloneExpr(source), keysArray],
     loc: loc as SourceLocation,
   };
 }

@@ -24,6 +24,11 @@ export type ToolCall = {
 export type PromptConfig = {
   messages: Message[];
   tools?: ToolDefinition[];
+  /** Server-side hosted tools to enable for this call, by capability name
+   *  (e.g. ["web_search"]). Distinct from `tools` (client functions): hosted
+   *  tools run on the provider and return results inline. A client that does
+   *  not support hosted tools simply ignores this field. */
+  hostedTools?: string[];
   maxTokens?: number;
   temperature?: number;
   responseFormat?: ZodType;
@@ -188,13 +193,14 @@ export class SmoltalkClient implements LLMClient {
     const {
       messages, tools, responseFormat, abortSignal,
       model, apiKey, maxTokens, temperature, provider,
-      thinking, reasoningEffort, metadata,
+      thinking, reasoningEffort, metadata, hostedTools,
     } = config;
 
     return {
       ...metadata,
       messages, tools, responseFormat, abortSignal,
       model, maxTokens, temperature, provider, thinking, reasoningEffort,
+      hostedTools,
       openAiApiKey: apiKey,
     } as Omit<SmolConfig, "stream">;
   }

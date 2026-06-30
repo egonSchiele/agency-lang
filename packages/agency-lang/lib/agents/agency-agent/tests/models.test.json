@@ -1,0 +1,23 @@
+{
+  "sourceFile": "models.agency",
+  "tests": [
+    {
+      "nodeName": "openaiDetectedRoutesBothToResponses",
+      "input": "",
+      "expectedOutput": "{\"fastModel\":\"gpt-4o-mini\",\"fastProvider\":\"openai-responses\",\"slowModel\":\"gpt-5.5\",\"slowProvider\":\"openai-responses\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "anthropicDetectedKeepsNative",
+      "input": "",
+      "expectedOutput": "{\"fastModel\":\"claude-sonnet-4-6\",\"fastProvider\":\"\",\"slowModel\":\"claude-opus-4-8\",\"slowProvider\":\"anthropic\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "explicitOpenaiModelStillRoutedThroughResponses",
+      "input": "",
+      "expectedOutput": "{\"fastModel\":\"gpt-4o\",\"fastProvider\":\"openai-responses\",\"slowModel\":\"gpt-4o\",\"slowProvider\":\"openai-responses\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

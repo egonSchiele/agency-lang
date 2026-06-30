@@ -1,0 +1,91 @@
+/*
+ * Tests for planSearchSetup — the pure decision over SearchContext.
+ * Every branch in the resolution tree is covered: cloud vs local,
+ * saved-and-usable vs saved-and-unusable, first-run with zero/one/two
+ * keys, and the non-TTY auto-resolution path.
+ *
+ * Also covers withWebSearch's application of the active backend (Task 5).
+ */
+import { planSearchSetup, withWebSearch, setActiveBackend } from "../lib/search.agency"
+
+def ctx(isLocal: boolean, isTty: boolean, tav: boolean, brave: boolean, saved: string): any {
+  return { isLocal: isLocal, isTty: isTty, hasTavily: tav, hasBrave: brave, savedBackend: saved }
+}
+
+def report(p: any): string {
+  return "${p.kind}|${p.backend}"
+}
+
+// --- planSearchSetup ---------------------------------------------------
+
+node cloudFirstRunDefaultsToHostedWithANote(): string {
+  return report(planSearchSetup(ctx(false, true, false, false, "")))
+}
+
+node localFirstRunBothKeysAsksWhich(): string {
+  return report(planSearchSetup(ctx(true, true, true, true, "")))
+}
+
+node localFirstRunOnlyTavilyConfirms(): string {
+  return report(planSearchSetup(ctx(true, true, true, false, "")))
+}
+
+node localFirstRunNoKeysPromptsMissing(): string {
+  return report(planSearchSetup(ctx(true, true, false, false, "")))
+}
+
+node savedHostedOnLocalWarns(): string {
+  return report(planSearchSetup(ctx(true, true, false, false, "hosted")))
+}
+
+node savedTavilyWithoutKeyWarns(): string {
+  return report(planSearchSetup(ctx(false, true, false, false, "tavily")))
+}
+
+node savedTavilyWithKeyIsUsed(): string {
+  return report(planSearchSetup(ctx(false, true, true, false, "tavily")))
+}
+
+node nonTtyLocalBothKeysDefaultsToTavily(): string {
+  return report(planSearchSetup(ctx(true, false, true, true, "")))
+}
+
+node savedOffIsRespected(): string {
+  return report(planSearchSetup(ctx(false, true, false, false, "off")))
+}
+
+node unknownSavedBackendWarnsAndDisables(): string {
+  return report(planSearchSetup(ctx(false, true, true, true, "bing")))
+}
+
+// --- withWebSearch -----------------------------------------------------
+// Each test sets the active backend WITHOUT persisting (`persist: false`)
+// so the test run never touches ~/.agency-agent/settings.json.
+
+node hostedBackendSetsHostedToolsAndLeavesTools(): string {
+  setActiveBackend("hosted", false)
+  const opts = withWebSearch({ memory: true, tools: [] })
+  // Pipe-delimited: "<first hostedTool>|<tools length>"
+  return "${opts.hostedTools[0]}|${opts.tools.length}"
+}
+
+node tavilyBackendAppendsOneSearchTool(): string {
+  setActiveBackend("tavily", false)
+  const opts = withWebSearch({ memory: true, tools: [] })
+  const hostedSet = opts.hostedTools != null && opts.hostedTools != undefined
+  return "${opts.tools.length}|${hostedSet}"
+}
+
+node offBackendLeavesOptsUnchanged(): string {
+  setActiveBackend("off", false)
+  const opts = withWebSearch({ memory: true, tools: [] })
+  const hostedSet = opts.hostedTools != null && opts.hostedTools != undefined
+  return "${opts.tools.length}|${hostedSet}"
+}
+
+node tavilyDoesNotMutateTheCallersSharedToolsArray(): string {
+  setActiveBackend("tavily", false)
+  const shared = []
+  withWebSearch({ tools: shared })
+  return "${shared.length}"
+}

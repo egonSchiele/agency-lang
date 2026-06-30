@@ -1,0 +1,19 @@
+{
+  "sourceFile": "search.agency",
+  "tests": [
+    { "nodeName": "cloudFirstRunDefaultsToHostedWithANote", "input": "", "expectedOutput": "\"useWithNote|hosted\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "localFirstRunBothKeysAsksWhich", "input": "", "expectedOutput": "\"askWhich|\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "localFirstRunOnlyTavilyConfirms", "input": "", "expectedOutput": "\"confirm|tavily\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "localFirstRunNoKeysPromptsMissing", "input": "", "expectedOutput": "\"promptMissing|off\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "savedHostedOnLocalWarns", "input": "", "expectedOutput": "\"warnDisabled|off\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "savedTavilyWithoutKeyWarns", "input": "", "expectedOutput": "\"warnDisabled|off\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "savedTavilyWithKeyIsUsed", "input": "", "expectedOutput": "\"use|tavily\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nonTtyLocalBothKeysDefaultsToTavily", "input": "", "expectedOutput": "\"useWithNote|tavily\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "savedOffIsRespected", "input": "", "expectedOutput": "\"use|off\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknownSavedBackendWarnsAndDisables", "input": "", "expectedOutput": "\"warnDisabled|off\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "hostedBackendSetsHostedToolsAndLeavesTools", "input": "", "expectedOutput": "\"web_search|0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "tavilyBackendAppendsOneSearchTool", "input": "", "expectedOutput": "\"1|false\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "offBackendLeavesOptsUnchanged", "input": "", "expectedOutput": "\"0|false\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "tavilyDoesNotMutateTheCallersSharedToolsArray", "input": "", "expectedOutput": "\"0\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

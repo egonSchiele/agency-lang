@@ -27,6 +27,7 @@ import {
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import { printLocalCatalog } from "std::agency/local"
 import { configureModels, configureLocalModel, enableAgentMemory } from "./shared.agency"
+import { configureSearch, setSearchBackend, getSearchBackend, availableBackendItems } from "./lib/search.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
@@ -187,6 +188,7 @@ def builtinPalette(): Record<string, string> {
     "/clear": "Clear the conversation transcript",
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
+    "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
   }
@@ -235,7 +237,22 @@ def _runTurn(msg: string): boolean {
     return true
   }
   if (trimmed == "/help") {
-    pushMessage("Commands: /exit, /clear, /clear-history, /cost, /paste, /help")
+    pushMessage("Commands: /exit, /clear, /clear-history, /cost, /search, /paste, /help")
+    return true
+  }
+  if (trimmed == "/search") {
+    const opts = availableBackendItems()
+    const choice = chooseOption(
+      "Web search backend",
+      "Pick how this agent searches the web. Current: ${getSearchBackend()}",
+      opts,
+      false,
+      true
+    )
+    if (choice != "" && choice != null && choice != undefined) {
+      setSearchBackend(choice)
+      pushMessage("Web search backend set to: ${choice}")
+    }
     return true
   }
   if (trimmed == "/cost") {
@@ -754,6 +771,7 @@ node main() {
     // Intentionally do NOT enable memory for a local model: the llama-cpp
     // provider has no embedding endpoint, so memory would only emit a
     // "Tier-2 disabled" notice. std::memory calls no-op while it's off.
+    configureSearch(true)
   } else {
     configureModels(
       args.flags.model ?? "",
@@ -767,6 +785,7 @@ node main() {
     // notice; structured recall works regardless.) Must run before any
     // handler/REPL is installed.
     enableAgentMemory()
+    configureSearch(false)
   }
 
   // Positional args (everything after flags) are joined with spaces to

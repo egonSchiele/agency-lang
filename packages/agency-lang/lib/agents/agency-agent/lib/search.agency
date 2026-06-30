@@ -1,0 +1,471 @@
+/** @module
+  Web-search backend selection for the agency agent.
+
+  One active backend at a time:
+  - `hosted` — provider-native `web_search` (OpenAI Responses / Anthropic /
+    Google); free with the user's LLM key, but only on a cloud provider.
+  - `tavily` / `brave` — `std::search` client tools, keyed from
+    `TAVILY_API_KEY` / `BRAVE_API_KEY`. Work with any model, including
+    local ones.
+  - `off` — no web search.
+
+  Split into a PURE decision (`planSearchSetup`) and an imperative shell
+  (`configureSearch`) so the branchy resolution is testable without a TTY
+  or LLM. `getSearchBackend()` reads a module variable (the runtime source
+  of truth) so subagent calls never touch disk; `setActiveBackend` updates
+  the variable and (optionally) persists to settings.json.
+
+  ## Typical flow
+
+  ```ts
+  // main()
+  configureSearch(isLocal)               // resolves + persists at startup
+
+  // any subagent's llm() call
+  reply = llm(userMsg, withWebSearch({ memory: true, tools: tools }))
+  ```
+*/
+import { env, isTTY } from "std::system"
+import { select, confirm, ChoiceItem } from "std::ui"
+import { search as braveSearch, tavilySearch } from "std::search"
+import { loadSettings, saveSettings } from "./settings.agency"
+
+// --- Types ---------------------------------------------------------------
+
+export type SearchContext = {
+  isLocal: boolean;
+  isTty: boolean;
+  hasTavily: boolean;
+  hasBrave: boolean;
+  savedBackend: string;
+}
+
+// The four-field plan record. `kind` is a string-literal union so the
+// typechecker rejects typos at the plan-construction sites. Unused
+// fields are "" (kept as flat strings — heterogeneous payloads per
+// kind would add an arm-typed sum just to encode "this kind doesn't
+// use that field", which the consumer doesn't act on).
+export type PlanKind = "use" | "useWithNote" | "askWhich" | "confirm" | "warnDisabled" | "promptMissing"
+
+export type SearchPlan = {
+  kind: PlanKind;
+  backend: string;
+  note: string;
+  reason: string;
+}
+
+// The four valid web-search backend names. Used as the return type of
+// `getSearchBackend()` so callers (and the typechecker) know the full
+// set of values they might branch on.
+export type SearchBackend = "hosted" | "tavily" | "brave" | "off"
+
+// Runtime state for the active session. Set ONCE by configureSearch at
+// startup; read by withWebSearch and the /search handler. Collapsing
+// activeBackend + isLocalSession into one record (rather than two
+// independent module vars) closes the order-dependent-mutable-state hole
+// the earlier draft of this plan flagged.
+export type SearchSession = {
+  isLocal: boolean;
+  activeBackend: string;
+}
+
+// Pure data descriptor for one backend. Listed availability rules
+// (`cloudOnly`, `envKey`) replace the per-backend if-chains that earlier
+// drafts duplicated across planSaved, availableBackendItems, and
+// planSearchSetup. Adding a new backend = appending one entry here.
+type BackendDescriptor = {
+  name: string;
+  label: string;
+  envKey: string;
+  cloudOnly: boolean;
+  unavailableMessage: string;
+  firstRunNote: string;
+}
+
+// Mirror of the llm() thinking field — see lib/typechecker/builtins.ts.
+// Extracted instead of inlining as a nested object literal type (anti-pattern).
+export type ThinkingConfig = {
+  enabled: boolean;
+  budgetTokens?: number;
+}
+
+// The slice of llm() options that flows through withWebSearch. ONLY the
+// fields the subagents currently use are listed — we deliberately do NOT
+// expose an `extras: Record<string, any>` escape hatch, because that
+// would silently let typos through. Add fields here as new subagent call
+// sites need them.
+export type LlmOpts = {
+  tools?: any[];
+  hostedTools?: string[];
+  model?: string;
+  provider?: string;
+  memory?: boolean;
+  reasoningEffort?: string;
+  thinking?: ThinkingConfig;
+}
+
+// --- The backend catalog (single source of truth) ------------------------
+
+static const BACKENDS: BackendDescriptor[] = [
+  {
+    name: "hosted",
+    label: "Hosted (provider web search)",
+    envKey: "",
+    cloudOnly: true,
+    unavailableMessage: "Hosted web search needs a cloud provider; it is off for this local-model session. Run /search to pick Tavily or Brave.",
+    firstRunNote: "Web search is enabled using your LLM provider. Run /search to switch to Tavily or Brave."
+  },
+  {
+    name: "tavily",
+    label: "Tavily",
+    envKey: "TAVILY_API_KEY",
+    cloudOnly: false,
+    unavailableMessage: "Saved search backend is Tavily but TAVILY_API_KEY is not set. Web search is off. Set the key or run /search.",
+    firstRunNote: "Using Tavily for web search (TAVILY_API_KEY found). Run /search to change."
+  },
+  {
+    name: "brave",
+    label: "Brave",
+    envKey: "BRAVE_API_KEY",
+    cloudOnly: false,
+    unavailableMessage: "Saved search backend is Brave but BRAVE_API_KEY is not set. Web search is off. Set the key or run /search.",
+    firstRunNote: "Using Brave for web search (BRAVE_API_KEY found). Run /search to change."
+  },
+  {
+    name: "off",
+    label: "Off (no web search)",
+    envKey: "",
+    cloudOnly: false,
+    unavailableMessage: "",
+    firstRunNote: ""
+  }
+]
+
+def findBackend(name: string): any {
+  for (b in BACKENDS) {
+    if (b.name == name) {
+      return b
+    }
+  }
+  return null
+}
+
+// Single availability rule used everywhere a backend's usability is
+// checked. The cloud/local fact and the env-key check come straight from
+// the descriptor — no per-backend branches.
+export def isBackendAvailable(b: BackendDescriptor, ctx: SearchContext): boolean {
+  if (b.cloudOnly && ctx.isLocal) {
+    return false
+  }
+  if (b.envKey == "TAVILY_API_KEY" && !ctx.hasTavily) {
+    return false
+  }
+  if (b.envKey == "BRAVE_API_KEY" && !ctx.hasBrave) {
+    return false
+  }
+  return true
+}
+
+/*
+  Single constructor for a SearchPlan record. Centralizing the literal
+  field shape keeps every planner branch a one-line `return makePlan(...)`
+  and means a future field addition (e.g. a `prompt:` field for a
+  confirm-with-custom-text kind) is a one-spot change.
+*/
+def makePlan(kind: PlanKind, backend: string, note: string, reason: string): SearchPlan {
+  return { kind: kind, backend: backend, note: note, reason: reason }
+}
+
+// --- Pure decision -------------------------------------------------------
+
+// Look up the saved backend in BACKENDS and produce the plan: "use" if
+// available, "warnDisabled" with the descriptor's own message if not,
+// "warnDisabled" for unknown values. No per-backend branches.
+def planSaved(ctx: SearchContext): SearchPlan {
+  const b = findBackend(ctx.savedBackend)
+  if (b == null) {
+    return makePlan("warnDisabled", "off", "",
+      "Unknown saved search backend '${ctx.savedBackend}'. Web search is off for this session; run /search to pick a valid backend.")
+  }
+  if (!isBackendAvailable(b, ctx)) {
+    return makePlan("warnDisabled", "off", "", b.unavailableMessage)
+  }
+  return makePlan("use", b.name, "", "")
+}
+
+// First-run logic for local models: which keyed backends are usable.
+// Drives the askWhich / confirm / promptMissing branches without
+// repeating the per-backend availability rules.
+def usableLocalBackends(ctx: SearchContext): BackendDescriptor[] {
+  const result: BackendDescriptor[] = []
+  for (b in BACKENDS) {
+    if (b.name == "off" || b.name == "hosted") {
+      continue
+    }
+    if (isBackendAvailable(b, ctx)) {
+      result.push(b)
+    }
+  }
+  return result
+}
+
+/*
+  The pure decision. Given the session context, returns exactly one
+  SearchPlan describing what to do. No I/O — `configureSearch` is the
+  imperative shell that actually prompts, prints, and persists.
+*/
+export def planSearchSetup(ctx: SearchContext): SearchPlan {
+  """
+  Decide the web-search backend to use for the current session. Pure:
+  no disk, no LLM, no prompts. The returned plan tells the caller which
+  branch to take (apply silently / apply with note / ask user / warn).
+
+  @param ctx - The session context (cloud/local, TTY, available env keys, saved preference).
+  """
+  if (ctx.savedBackend != "") {
+    return planSaved(ctx)
+  }
+  // First run, cloud: default to hosted with a note.
+  if (!ctx.isLocal) {
+    const hosted = findBackend("hosted")
+    return makePlan("useWithNote", "hosted", hosted.firstRunNote, "")
+  }
+  // First run, local: pick from whichever keyed backends are usable.
+  const usable = usableLocalBackends(ctx)
+  if (usable.length == 0) {
+    return makePlan("promptMissing", "off", "", "")
+  }
+  if (usable.length >= 2) {
+    if (ctx.isTty) {
+      return makePlan("askWhich", "", "", "")
+    }
+    // Non-TTY: pick the first usable backend (Tavily, per BACKENDS order).
+    return makePlan("useWithNote", usable[0].name, usable[0].firstRunNote, "")
+  }
+  // Exactly one keyed backend is usable.
+  if (ctx.isTty) {
+    return makePlan("confirm", usable[0].name, "", "")
+  }
+  return makePlan("useWithNote", usable[0].name, usable[0].firstRunNote, "")
+}
+
+// --- Runtime state + setter ---------------------------------------------
+
+// The runtime source of truth for the session. Initialized to a sentinel
+// (off / not-local); configureSearch overwrites both fields at startup.
+let session: SearchSession = { isLocal: false, activeBackend: "off" }
+
+/*
+  Read the active web-search backend. Subagent calls go through
+  `withWebSearch`, which calls this internally — direct callers are rare.
+*/
+export def getSearchBackend(): SearchBackend {
+  """Return the active web-search backend: "hosted", "tavily", "brave", or "off"."""
+  return session.activeBackend
+}
+
+export def getSearchSession(): SearchSession {
+  """Return the full session record (isLocal + activeBackend)."""
+  return session
+}
+
+/*
+  Set the active backend. `persist == true` also writes it to
+  settings.json (used by /search and by configureSearch when the resolved
+  choice should become the saved preference). `persist == false` is the
+  session-only path used by warnDisabled — re-adding the missing key (or
+  switching back to a cloud provider) should restore the saved choice on
+  the next run, so we must not overwrite it now.
+*/
+export def setActiveBackend(backend: string, persist: boolean) {
+  """
+  Set the active web-search backend. If `persist` is true, also save it
+  to settings.json so the choice survives across sessions.
+
+  @param backend - One of "hosted", "tavily", "brave", or "off".
+  @param persist - Whether to also persist the choice to disk.
+  """
+  session.activeBackend = backend
+  if (persist) {
+    const settings = loadSettings()
+    settings.search = { backend: backend }
+    saveSettings(settings)
+  }
+}
+
+/*
+  Convenience for the /search slash command and any caller that always
+  wants to persist. Equivalent to `setActiveBackend(backend, true)`.
+*/
+export def setSearchBackend(backend: string) {
+  """Set + persist the active web-search backend."""
+  setActiveBackend(backend, true)
+}
+
+// --- Backend application tables (used by withWebSearch) ----------------
+//
+// Each backend contributes EITHER a client-side search tool
+// (Tavily/Brave) OR a hosted-capability list (hosted) OR nothing (off).
+// Two lookup tables capture that data so `withWebSearch` is a single
+// table dispatch — no per-backend if/else-if chain. Adding a new
+// client-tool backend means one entry in CLIENT_SEARCH_TOOLS_BY_BACKEND;
+// adding a new hosted capability means one entry in
+// HOSTED_SEARCH_CAPS_BY_BACKEND; nothing else changes.
+//
+// Both Tavily and Brave are exposed under the name "web_search" so the
+// advertised tool name is stable across backends (subagent prompts can
+// refer to a single tool name) and distinct from std::wikipedia's
+// "wikipedia_search".
+
+static const CLIENT_SEARCH_TOOLS_BY_BACKEND: Record<string, any> = {
+  tavily: tavilySearch.rename("web_search"),
+  brave: braveSearch.rename("web_search")
+}
+
+static const HOSTED_SEARCH_CAPS_BY_BACKEND: Record<string, string[]> = {
+  hosted: ["web_search"]
+}
+
+/*
+  Append `tool` to `opts.tools` WITHOUT mutating the caller's array, which
+  may be a shared `static const` like `explorerTools`. Builds a fresh
+  array via array spread.
+*/
+def appendTool(opts: LlmOpts, tool: any) {
+  let base = opts.tools
+  if (base == null || base == undefined) {
+    base = []
+  }
+  opts.tools = [...base, tool]
+}
+
+/*
+  The one declarative interface every subagent uses to opt into web
+  search. Subagents say WHAT they want (these llm() options, with web
+  search); the active backend is looked up in the two contribution
+  tables (CLIENT_SEARCH_TOOLS_BY_BACKEND for client tools,
+  HOSTED_SEARCH_CAPS_BY_BACKEND for hosted capabilities). `off`
+  naturally falls through (it's in neither table) and returns `opts`
+  unchanged.
+*/
+export def withWebSearch(opts: LlmOpts): LlmOpts {
+  """
+  Apply the active web-search backend to an llm() options object and
+  return it. Subagents call this around every conversational llm()
+  invocation so a single backend switch (via /search) takes effect
+  everywhere with no per-callsite changes.
+
+  @param opts - The llm() options to augment.
+  """
+  const name = getSearchBackend()
+  const tool = CLIENT_SEARCH_TOOLS_BY_BACKEND[name]
+  if (tool != null && tool != undefined) {
+    appendTool(opts, tool)
+  }
+  const hosted = HOSTED_SEARCH_CAPS_BY_BACKEND[name]
+  if (hosted != null && hosted != undefined) {
+    opts.hostedTools = hosted
+  }
+  return opts
+}
+
+// --- Picker helper for the /search slash command -----------------------
+
+/*
+  Items shown in the /search picker and the startup `askWhich` prompt.
+  Built from BACKENDS filtered by isBackendAvailable against the current
+  session — no per-backend rules duplicated here.
+*/
+export def availableBackendItems(): ChoiceItem[] {
+  const ctx: SearchContext = {
+    isLocal: session.isLocal,
+    isTty: true,
+    hasTavily: env("TAVILY_API_KEY") != null && env("TAVILY_API_KEY") != "",
+    hasBrave: env("BRAVE_API_KEY") != null && env("BRAVE_API_KEY") != "",
+    savedBackend: ""
+  }
+  const result: ChoiceItem[] = []
+  for (b in BACKENDS) {
+    if (isBackendAvailable(b, ctx)) {
+      result.push({ key: b.name, label: b.label })
+    }
+  }
+  return result
+}
+
+// --- Imperative shell (Task 6: configureSearch) -------------------------
+
+/*
+  The imperative shell over `planSearchSetup`. Records `isLocal` in the
+  shared `session`, builds the SearchContext from the environment, asks
+  `planSearchSetup` what to do, then runs the one matching effect:
+  apply silently, apply with a printed note, ask the user (select /
+  confirm), or warn-and-disable.
+
+  Called once from `main()` at startup. The dispatch on `plan.kind`
+  below is intrinsically a heterogeneous-effect switch (each branch
+  prints / prompts / persists differently), so it stays as a chain —
+  but each branch is a single statement ending in one call to
+  `setActiveBackend(backend, persist)` so the shape is uniform.
+*/
+export def configureSearch(isLocal: boolean) {
+  """
+  Resolve, apply, and persist the web-search backend at startup.
+  Prompts the user only for local models with usable env keys; cloud
+  defaults silently to hosted with a one-line note. Skips prompts on a
+  non-TTY (auto-resolves to the best available backend).
+
+  @param isLocal - True when the agent is running against a local model (e.g. llama-cpp).
+  """
+  // Set the session's isLocal field as the FIRST statement so any
+  // downstream code that reads `session` sees a coherent record.
+  session.isLocal = isLocal
+
+  const settings = loadSettings()
+  let saved = ""
+  if (settings.search != null && settings.search != undefined) {
+    saved = settings.search.backend ?? ""
+  }
+
+  const ctx: SearchContext = {
+    isLocal: isLocal,
+    isTty: isTTY(),
+    hasTavily: env("TAVILY_API_KEY") != null && env("TAVILY_API_KEY") != "",
+    hasBrave: env("BRAVE_API_KEY") != null && env("BRAVE_API_KEY") != "",
+    savedBackend: saved
+  }
+  const p = planSearchSetup(ctx)
+
+  if (p.kind == "use") {
+    setActiveBackend(p.backend, true)
+  } else if (p.kind == "useWithNote") {
+    print(p.note)
+    setActiveBackend(p.backend, true)
+  } else if (p.kind == "warnDisabled") {
+    // Session-only off: do NOT overwrite the saved preference, so
+    // re-adding the key (or running on a cloud provider) restores it
+    // next time. `persist = false` encodes that contract explicitly.
+    print(p.reason)
+    setActiveBackend("off", false)
+  } else if (p.kind == "promptMissing") {
+    print("No web-search key found. Set TAVILY_API_KEY or BRAVE_API_KEY and run /search to enable web search.")
+    setActiveBackend("off", true)
+  } else if (p.kind == "askWhich") {
+    const choice = select("Use which provider for web search?", availableBackendItems())
+    let backend = "off"
+    if (isSuccess(choice)) {
+      backend = choice.value
+    }
+    setActiveBackend(backend, true)
+  } else if (p.kind == "confirm") {
+    const ok = confirm("Found a ${p.backend} key. Use ${p.backend} for web search?", true)
+    let backend = "off"
+    if (isSuccess(ok) && ok.value) {
+      backend = p.backend
+    }
+    if (backend == "off") {
+      print("Web search left off. Run /search to enable it later.")
+    }
+    setActiveBackend(backend, true)
+  }
+}

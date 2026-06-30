@@ -42,6 +42,16 @@ export static const MODELS: Record<string, ProviderModels> = {
   }
 }
 
+// The agent always uses the OpenAI Responses API (not Chat Completions) for
+// OpenAI, so provider-hosted web search is available on every OpenAI model.
+// For any other provider the caller's resolved provider is used unchanged.
+def agentProvider(detected: string, fallback: string): string {
+  if (detected == "openai") {
+    return "openai-responses"
+  }
+  return fallback
+}
+
 // The concrete models + providers to apply, produced by `planModels`.
 // `fastProvider` is what `setLlmOptions` receives ("" lets smoltalk
 // resolve the provider from the model name).
@@ -145,10 +155,17 @@ export def planModels(
     slowProvider = MODELS[detected].slowProvider
   }
 
+  // The fast wrap is the one that matters in the common case: when env
+  // auto-detection picks OpenAI, `provider` is "" and agentProvider promotes
+  // it to "openai-responses". The slow wrap is a no-op on the default branch
+  // (MODELS.openai.slowProvider is already "openai-responses") but is needed
+  // when --slow / --model passes an OpenAI model with a non-responses
+  // `provider` flag — the local `slowProvider` here is the locally-computed
+  // value above, not the function parameter.
   return {
     fastModel: fastModel,
-    fastProvider: provider,
+    fastProvider: agentProvider(detected, provider),
     slowModel: slowModel,
-    slowProvider: slowProvider
+    slowProvider: agentProvider(detected, slowProvider)
   }
 }

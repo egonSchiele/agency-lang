@@ -6,7 +6,7 @@
   "customWithModel": "ollama",
   "planOpenai": {
     "fastModel": "gpt-4o-mini",
-    "fastProvider": "openai",
+    "fastProvider": "openai-responses",
     "slowModel": "gpt-5.5",
     "slowProvider": "openai-responses"
   },

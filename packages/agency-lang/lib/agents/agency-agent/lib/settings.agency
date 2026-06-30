@@ -1,0 +1,95 @@
+/** @module
+  Generic on-disk settings for the agency agent — the first general
+  settings file (alongside `policy.json` and the history dir under
+  `~/.agency-agent`). Stores user preferences only; never secrets.
+
+  Mirrors std::policy's `parsePolicyFile` pattern: read + parseJSON,
+  returning empty settings on any failure so a missing or corrupt file
+  never crashes startup.
+
+  ## Usage
+
+  ```ts
+  import { loadSettings, saveSettings } from "./settings.agency"
+
+  const s = loadSettings()
+  s.search = { backend: "tavily" }
+  saveSettings(s)
+  ```
+*/
+import { dirname, basename } from "std::path"
+import { exists } from "std::shell"
+import { mkdir } from "std::fs"
+
+import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
+
+export type SearchSettings = {
+  backend?: string;
+}
+
+export type Settings = {
+  search?: SearchSettings;
+}
+
+/*
+  Read + parse the settings file. Tolerates a missing or unparseable
+  file by returning empty settings — the agent must boot even if the
+  user (or a previous bad run) wrote garbage to the file.
+*/
+export def loadSettings(): Settings {
+  """
+  Read settings.json and return the parsed Settings. Returns an empty
+  object on any failure (file missing, unreadable, or malformed JSON);
+  malformed JSON additionally prints a warning so the user notices.
+  """
+  const dir = dirname(SETTINGS_PATH)
+  const name = basename(SETTINGS_PATH)
+  if (!exists(name, dir)) {
+    return {}
+  }
+  // `with approve` auto-approves the read interrupt — settings.json is
+  // an agent-internal preferences file the user implicitly opted into by
+  // running the agent. Mirrors std::policy's `parsePolicyFile` pattern.
+  const readResult = read(name, dir) with approve
+  if (isFailure(readResult)) {
+    return {}
+  }
+  const parsed = try parseJSON(readResult.value)
+  if (isFailure(parsed)) {
+    print("Warning: ${SETTINGS_PATH} is not valid JSON; ignoring it.")
+    return {}
+  }
+  // Defensive shape check: valid JSON like `null`, `42`, or `[1,2]` is
+  // not a settings object. Treat anything that isn't a plain object as
+  // empty so later writers (`settings.search = ...`) can't crash.
+  const value = parsed.value
+  if (value == null || typeof value != "object" || Array.isArray(value)) {
+    print("Warning: ${SETTINGS_PATH} is not a JSON object; ignoring it.")
+    return {}
+  }
+  return value
+}
+
+/*
+  Serialize + write the settings file, creating `~/.agency-agent/` if
+  it does not exist. A write failure is logged but never thrown — the
+  agent should keep running even if it can't persist a preference.
+*/
+export def saveSettings(settings: Settings) {
+  """
+  Write settings.json with the given Settings object, creating
+  ~/.agency-agent/ if needed. Logs a warning on write failure but does
+  not throw.
+
+  @param settings - The Settings object to persist.
+  """
+  // `with approve` on both mkdir and write: persisting a user preference
+  // must never block the agent on an approval prompt or fail in a
+  // non-interactive run. The user opted in by changing the setting.
+  mkdir(POLICY_DIR) with approve
+  const content = JSON.stringify(settings)
+  const result = write(SETTINGS_FILE, content, POLICY_DIR) with approve
+  if (isFailure(result)) {
+    print("Warning: could not save settings to ${SETTINGS_PATH}: ${result.error}")
+  }
+}

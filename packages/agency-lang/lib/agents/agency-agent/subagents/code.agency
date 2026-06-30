@@ -22,6 +22,7 @@ import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
+import { withWebSearch } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
@@ -372,10 +373,10 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
         systemMessage(codeSysPrompt)
         _first = false
       }
-      reply = llm(userMsg, {
+      reply = llm(userMsg, withWebSearch({
         memory: true,
         tools: tools
-      })
+      }))
 
       const feedback = review(reply)
       if (feedbackHasErrors(feedback)) {

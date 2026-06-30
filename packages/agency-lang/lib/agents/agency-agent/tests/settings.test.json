@@ -1,0 +1,23 @@
+{
+  "sourceFile": "settings.agency",
+  "tests": [
+    {
+      "nodeName": "roundTripsTheSearchBackend",
+      "input": "",
+      "expectedOutput": "\"tavily\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "missingFileLoadsAsEmpty",
+      "input": "",
+      "expectedOutput": "\"empty\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "corruptFileLoadsAsEmpty",
+      "input": "",
+      "expectedOutput": "\"empty\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

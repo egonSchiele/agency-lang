@@ -13,7 +13,6 @@ import { todoWrite, todoList, handoff } from "std::agent"
 import { filter } from "std::array"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall, setMemoryId } from "std::memory"
-import { search } from "std::search"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import { systemMessage } from "std::thread"
@@ -24,6 +23,7 @@ import {
  } from "std::wikipedia"
 
 import { agentNames } from "../lib/config.agency"
+import { withWebSearch } from "../lib/search.agency"
 
 
 // Bundled docs live one level above the agent's compiled JS. Built
@@ -78,7 +78,9 @@ When you need information:
       README and get it as readable Markdown.
     * `fetchJSON(url)` / `fetch(url)` for any specific URL where
       you already know the endpoint.
-    * `search(query)` when you need an open-ended web search.
+    * When Wikipedia and fetch don't have it, you can search the
+      web for open-ended questions. Use this as a last resort, not
+      a first reflex.
   Cite the source URL in your reply whenever you used one of these.
 
 - You have a persistent knowledge graph scoped to research work.
@@ -132,7 +134,6 @@ export static const researchTools: any[] = [
   fetch,
   fetchJSON,
   fetchMarkdown,
-  search,
   remember,
   recall,
   highlight.partial(language: "ts"),
@@ -164,10 +165,10 @@ export def researchAgent(userMsg: string, allowHandoff: boolean) {
     if (allowHandoff) {
       tools.push(handoff.partial(validCategories: otherAgents))
     }
-    reply = llm(userMsg, {
+    reply = llm(userMsg, withWebSearch({
       memory: true,
       tools: tools
-    })
+    }))
   }
   return reply
 }

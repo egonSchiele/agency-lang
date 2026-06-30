@@ -1,0 +1,18 @@
+/*
+ * Tests for planModels' provider-routing rule: OpenAI is always promoted to
+ * the Responses API (both fast and slow) so hosted web_search works on the
+ * agent's default models. Other providers are unchanged.
+ */
+import { planModels, ModelPlan } from "../lib/models.agency"
+
+node openaiDetectedRoutesBothToResponses(): ModelPlan {
+  return planModels("", "", "", "", "openai")
+}
+
+node anthropicDetectedKeepsNative(): ModelPlan {
+  return planModels("", "", "", "", "anthropic")
+}
+
+node explicitOpenaiModelStillRoutedThroughResponses(): ModelPlan {
+  return planModels("gpt-4o", "", "", "openai", "openai")
+}

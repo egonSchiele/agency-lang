@@ -3504,6 +3504,74 @@ export class TypeScriptBuilder {
     return generateBuiltinHelpers(this.functionsUsed);
   }
 
+  /** Build the baked `smoltalkDefaults` object: nested per-provider `apiKey`
+   *  and `baseUrl` maps (each key/URL falling back to its conventional env
+   *  var), plus model/logLevel/statelog and an optional default provider.
+   *  `ollama` is intentionally omitted from `apiKey` — it uses OLLAMA_HOST. */
+  private buildSmoltalkDefaults(cfg: AgencyConfig): TsNode {
+    // Base URLs: litellm/openai-compat take an env fallback (they require an
+    // explicit URL); openRouter/deepInfra have baked defaults in smoltalk, so
+    // only emit them when overridden in agency.json.
+    const baseUrlFields: Record<string, TsNode> = {
+      liteLlm: cfg.client?.baseUrl?.liteLlm
+        ? ts.str(cfg.client.baseUrl.liteLlm)
+        : ts.binOp(ts.env("LITELLM_BASE_URL"), "||", ts.str("")),
+      openAiCompat: cfg.client?.baseUrl?.openAiCompat
+        ? ts.str(cfg.client.baseUrl.openAiCompat)
+        : ts.binOp(ts.env("OPENAI_COMPAT_BASE_URL"), "||", ts.str("")),
+    };
+    if (cfg.client?.baseUrl?.openRouter) {
+      baseUrlFields.openRouter = ts.str(cfg.client.baseUrl.openRouter);
+    }
+    if (cfg.client?.baseUrl?.deepInfra) {
+      baseUrlFields.deepInfra = ts.str(cfg.client.baseUrl.deepInfra);
+    }
+
+    const smoltalkFields: Record<string, TsNode> = {
+      // API keys are nested under `apiKey`, each falling back to its
+      // conventional env var. `ollama` is intentionally omitted — it uses
+      // OLLAMA_HOST (not an API key).
+      apiKey: ts.obj({
+        openAi: cfg.client?.apiKey?.openAi
+          ? ts.str(cfg.client.apiKey.openAi)
+          : ts.binOp(ts.env("OPENAI_API_KEY"), "||", ts.str("")),
+        google: cfg.client?.apiKey?.google
+          ? ts.str(cfg.client.apiKey.google)
+          : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
+        anthropic: cfg.client?.apiKey?.anthropic
+          ? ts.str(cfg.client.apiKey.anthropic)
+          : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
+        openRouter: cfg.client?.apiKey?.openRouter
+          ? ts.str(cfg.client.apiKey.openRouter)
+          : ts.binOp(ts.env("OPENROUTER_API_KEY"), "||", ts.str("")),
+        deepInfra: cfg.client?.apiKey?.deepInfra
+          ? ts.str(cfg.client.apiKey.deepInfra)
+          : ts.binOp(ts.env("DEEPINFRA_API_KEY"), "||", ts.str("")),
+        liteLlm: cfg.client?.apiKey?.liteLlm
+          ? ts.str(cfg.client.apiKey.liteLlm)
+          : ts.binOp(ts.env("LITELLM_API_KEY"), "||", ts.str("")),
+        openAiCompat: cfg.client?.apiKey?.openAiCompat
+          ? ts.str(cfg.client.apiKey.openAiCompat)
+          : ts.binOp(ts.env("OPENAI_COMPAT_API_KEY"), "||", ts.str("")),
+      }),
+      baseUrl: ts.obj(baseUrlFields),
+      model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
+      logLevel: ts.str(cfg.client?.logLevel || "warn"),
+      statelog: ts.obj({
+        host: ts.str(cfg.client?.statelog?.host || ""),
+        projectId: ts.str(cfg.client?.statelog?.projectId || ""),
+        apiKey: ts.binOp(ts.env("STATELOG_SMOLTALK_API_KEY"), "||", ts.str("")),
+        traceId: $(ts.id("nanoid")).call().done(),
+      }),
+    };
+    // Emit a default provider only when configured — otherwise leave it unset
+    // so smoltalk's normal model→provider registry lookup still applies.
+    if (cfg.client?.defaultProvider) {
+      smoltalkFields.provider = ts.str(cfg.client.defaultProvider);
+    }
+    return ts.obj(smoltalkFields);
+  }
+
   private generateImports(): string {
     const cfg = this.agencyConfig;
 
@@ -3545,25 +3613,7 @@ export class TypeScriptBuilder {
     }
     const statelogConfig = ts.obj(statelogFields);
 
-    const smoltalkDefaults = ts.obj({
-      openAiApiKey: cfg.client?.openAiApiKey
-        ? ts.str(cfg.client.openAiApiKey)
-        : ts.binOp(ts.env("OPENAI_API_KEY"), "||", ts.str("")),
-      googleApiKey: cfg.client?.googleApiKey
-        ? ts.str(cfg.client.googleApiKey)
-        : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
-      anthropicApiKey: cfg.client?.anthropicApiKey
-        ? ts.str(cfg.client.anthropicApiKey)
-        : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
-      model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
-      logLevel: ts.str(cfg.client?.logLevel || "warn"),
-      statelog: ts.obj({
-        host: ts.str(cfg.client?.statelog?.host || ""),
-        projectId: ts.str(cfg.client?.statelog?.projectId || ""),
-        apiKey: ts.binOp(ts.env("STATELOG_SMOLTALK_API_KEY"), "||", ts.str("")),
-        traceId: $(ts.id("nanoid")).call().done(),
-      }),
-    });
+    const smoltalkDefaults = this.buildSmoltalkDefaults(cfg);
 
     const runtimeCtxArgs: Record<string, TsNode> = {
       statelogConfig,

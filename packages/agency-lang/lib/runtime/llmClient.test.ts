@@ -8,7 +8,7 @@ import {
   SmolOverloadedError,
   SmolAuthError,
 } from "smoltalk";
-import { SmoltalkClient } from "./llmClient.js";
+import { SmoltalkClient, toSmolConfig } from "./llmClient.js";
 
 describe("SmoltalkClient.normalizeError", () => {
   const client = new SmoltalkClient();
@@ -42,5 +42,39 @@ describe("SmoltalkClient.normalizeError", () => {
   it("returns just the message for a non-smoltalk error", () => {
     const n = client.normalizeError(new Error("ECONNRESET"));
     expect(n).toEqual({ message: "ECONNRESET" });
+  });
+});
+
+describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
+  // prompt.ts builds the PromptConfig as `{ ...clientConfig, metadata: clientConfig }`,
+  // so the nested apiKey/baseUrl maps arrive via metadata. toSmolConfig must
+  // NOT clobber them (which would break non-OpenAI + hosted providers).
+  it("preserves the full nested apiKey + baseUrl maps from the client config", () => {
+    const clientConfig = {
+      model: "z-ai/glm-5.2",
+      provider: "openrouter",
+      apiKey: { openAi: "sk-o", anthropic: "sk-a", openRouter: "sk-or" },
+      baseUrl: { openRouter: "https://or/v1" },
+    };
+    const promptConfig = { ...clientConfig, messages: [], metadata: clientConfig } as any;
+    const out = toSmolConfig(promptConfig) as any;
+    expect(out.apiKey).toEqual({ openAi: "sk-o", anthropic: "sk-a", openRouter: "sk-or" });
+    expect(out.baseUrl).toEqual({ openRouter: "https://or/v1" });
+    expect(out.provider).toBe("openrouter");
+  });
+
+  it("overrides only openAi when a per-call apiKey string is supplied", () => {
+    const clientConfig = {
+      model: "gpt-4o",
+      apiKey: { openAi: "sk-baked", anthropic: "sk-a" },
+    };
+    const promptConfig = {
+      ...clientConfig,
+      apiKey: "sk-percall", // a per-call string override
+      messages: [],
+      metadata: clientConfig,
+    } as any;
+    const out = toSmolConfig(promptConfig) as any;
+    expect(out.apiKey).toEqual({ openAi: "sk-percall", anthropic: "sk-a" });
   });
 });

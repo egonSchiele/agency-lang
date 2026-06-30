@@ -1,12 +1,49 @@
 # Custom & local model providers
 
 Agency selects models through smoltalk, which ships providers for OpenAI,
-Anthropic, Google, and Ollama. To use a **custom or local** provider — for
+Anthropic, Google, and Ollama, plus four built-in **hosted open-model**
+providers (OpenRouter, DeepInfra, LiteLLM, and a generic OpenAI-compatible
+provider — see below). To use any *other* **custom or local** provider — for
 example a local model via [`smoltalk-llama-cpp`](https://github.com/egonSchiele/smoltalk/tree/main/packages/smoltalk-llama-cpp) —
 you register it with a small **provider module** that Agency loads at startup.
 
 Agency never depends on the provider package itself: you install it, and you
 write the few lines that register it.
+
+## Hosted open-model providers (built in)
+
+To run open models (GLM, Qwen, DeepSeek, gpt-oss, …) on a hosted service, use
+one of smoltalk's four built-in providers — **no provider module needed**, just
+a key:
+
+| Service | `provider` value | Base URL | API key (config / env) |
+|---|---|---|---|
+| OpenRouter | `openrouter` | baked in (override `baseUrl.openRouter`) | `apiKey.openRouter` / `OPENROUTER_API_KEY` |
+| DeepInfra | `deepinfra` | baked in (override `baseUrl.deepInfra`) | `apiKey.deepInfra` / `DEEPINFRA_API_KEY` |
+| LiteLLM (self-hosted proxy) | `litellm` | **required**: `baseUrl.liteLlm` / `LITELLM_BASE_URL` | `apiKey.liteLlm` / `LITELLM_API_KEY` |
+| Any OpenAI-compatible API (Fireworks, Together, Groq, …) | `openai-compat` | **required**: `baseUrl.openAiCompat` / `OPENAI_COMPAT_BASE_URL` | `apiKey.openAiCompat` / `OPENAI_COMPAT_API_KEY` |
+
+Set the key via the env var, or in `agency.json` under `client.apiKey`. Because
+these model names aren't in smoltalk's model registry, you must always **name
+the provider explicitly** — either globally via `client.defaultProvider`, or
+per call: `llm("...", { provider: "openrouter", model: "z-ai/glm-5.2" })`.
+
+```jsonc
+// agency.json — set OpenRouter as the default provider + model
+{
+  "client": {
+    "apiKey": { "openRouter": "sk-or-..." },
+    "defaultProvider": "openrouter",
+    "defaultModel": "z-ai/glm-5.2"
+  }
+}
+```
+
+OpenRouter and DeepInfra return the real per-request cost in their responses, so
+Agency's cost tracking works automatically with no price table. Services reached
+via `openai-compat` (e.g. Fireworks, Together) report token usage but not cost.
+LiteLLM cost is read from a response header and is available for non-streaming
+calls only.
 
 ## Local models (the easy way)
 

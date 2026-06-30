@@ -61,9 +61,19 @@ const __globalCtx = new RuntimeContext({
     observability: false
   },
   smoltalkDefaults: {
-    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
-    anthropicApiKey: __process.env["ANTHROPIC_API_KEY"] || "",
+    apiKey: {
+      openAi: __process.env["OPENAI_API_KEY"] || "",
+      google: __process.env["GEMINI_API_KEY"] || "",
+      anthropic: __process.env["ANTHROPIC_API_KEY"] || "",
+      openRouter: __process.env["OPENROUTER_API_KEY"] || "",
+      deepInfra: __process.env["DEEPINFRA_API_KEY"] || "",
+      liteLlm: __process.env["LITELLM_API_KEY"] || "",
+      openAiCompat: __process.env["OPENAI_COMPAT_API_KEY"] || ""
+    },
+    baseUrl: {
+      liteLlm: __process.env["LITELLM_BASE_URL"] || "",
+      openAiCompat: __process.env["OPENAI_COMPAT_BASE_URL"] || ""
+    },
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {

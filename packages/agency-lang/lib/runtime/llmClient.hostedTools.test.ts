@@ -1,26 +1,23 @@
 import { describe, it, expect } from "vitest";
 import type { PromptConfig, LLMClient } from "./llmClient.js";
-import { SmoltalkClient } from "./llmClient.js";
+import { toSmolConfig } from "./llmClient.js";
 
-describe("SmoltalkClient hostedTools forwarding", () => {
+describe("toSmolConfig hostedTools forwarding", () => {
   it("includes hostedTools in the smoltalk config", () => {
-    const client = new SmoltalkClient();
-    // toSmolConfig is private; exercise it through a typed cast so the test
-    // pins the contract (hostedTools must survive the config translation).
-    const smol = (client as any).toSmolConfig({
+    // Pins the contract: hostedTools must survive the config translation.
+    const smol = toSmolConfig({
       messages: [],
       model: "gpt-4o-mini",
       hostedTools: ["web_search"],
-    });
+    } as unknown as PromptConfig);
     expect(smol.hostedTools).toEqual(["web_search"]);
   });
 
   it("omits hostedTools when not provided", () => {
-    const client = new SmoltalkClient();
-    const smol = (client as any).toSmolConfig({
+    const smol = toSmolConfig({
       messages: [],
       model: "gpt-4o-mini",
-    });
+    } as unknown as PromptConfig);
     expect(smol.hostedTools).toBeUndefined();
   });
 });

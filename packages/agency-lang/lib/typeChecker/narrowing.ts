@@ -12,7 +12,8 @@ import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 // Type-only import: `flow.ts` imports `Refine`/`NarrowCandidate` from here, so a
 // value import would cycle. `Reference` is the narrowed path (variable + chain).
-import type { PathSegment, Reference } from "./flow.js";
+import { chainToSegments } from "./flow.js";
+import type { Reference } from "./flow.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
@@ -65,41 +66,38 @@ export function narrowByRefine(
 /**
  * A stable single-hop property path: a bare variable, or `variable.property`.
  * Returns the `Reference`, or null for anything else (calls, index/computed
- * keys, method hops, slices, or >1 property hop). M2 extends to multi-hop +
- * index; M1 caps at one hop so the narrowed scrutinee is statically stable.
+ * keys, method hops, slices). A stable path is a bare variable or any chain of
+ * property + literal-non-negative-integer-index hops over one (M2). The shared
+ * `chainToSegments` (flow.ts) is the single source of the stability rule.
  */
 function asPathReference(e: Expression): Reference | null {
   if (e.type === "variableName") return { variable: e.value, chain: [] };
-  if (e.type === "valueAccess" && e.base.type === "variableName" && e.chain.length === 1) {
-    const el = e.chain[0];
-    if (el.kind === "property") return { variable: e.base.value, chain: [{ kind: "prop", name: el.name }] };
+  if (e.type === "valueAccess" && e.base.type === "variableName") {
+    const chain = chainToSegments(e.chain);
+    return chain === null ? null : { variable: e.base.value, chain };
   }
   return null;
 }
 
 /**
- * Recognize `V.prop` where the *receiver* `V` is a single-hop path (a bare
- * variable, or one property hop). The discriminant is the FINAL property; the
- * narrowed reference is the receiver. So `obj.kind` → ref `{obj,[]}`, prop
- * `kind`; `obj.payload.kind` → ref `{obj,[payload]}`, prop `kind`. A receiver of
- * >1 hop (`a.b.c.kind`) returns null (M2). Variable-keyed, so the narrowed
- * scrutinee is statically the same binding at the access site.
+ * Recognize `V.prop` where the *receiver* `V` is any stable path. The
+ * discriminant is the FINAL hop (must be a property); the narrowed reference is
+ * the receiver prefix. So `obj.kind` → ref `{obj,[]}`, prop `kind`;
+ * `obj.payload.kind` → ref `{obj,[payload]}`; `arr[0].kind` → ref `{arr,[[0]]}`,
+ * prop `kind`. An unstable hop before the discriminant (`arr[i()].kind`) → null.
+ * Variable-keyed, so the narrowed scrutinee is statically the same binding at
+ * the access site.
  */
 function asDiscriminantAccess(
   e: Expression,
 ): { ref: Reference; prop: string } | null {
-  if (e.type !== "valueAccess") return null;
-  if (e.base.type !== "variableName") return null;
-  if (e.chain.length < 1 || e.chain.length > 2) return null;
-  if (e.chain.some((el) => el.kind !== "property")) return null;
-  const props = e.chain.map((el) => (el.kind === "property" ? el.name : ""));
-  const prop = props[props.length - 1];
-  // [] for one hop, [p] for two hops — all property segments (Task 1 keeps the
-  // 1-2 property-hop ceiling; Task 2 generalizes via chainToSegments).
-  const receiverChain: PathSegment[] = props
-    .slice(0, -1)
-    .map((name) => ({ kind: "prop", name }));
-  return { ref: { variable: e.base.value, chain: receiverChain }, prop };
+  if (e.type !== "valueAccess" || e.base.type !== "variableName") return null;
+  if (e.chain.length < 1) return null;
+  const last = e.chain[e.chain.length - 1];
+  if (last.kind !== "property") return null; // discriminant must be a static prop
+  const receiver = chainToSegments(e.chain.slice(0, -1));
+  if (receiver === null) return null; // an unstable hop before the discriminant
+  return { ref: { variable: e.base.value, chain: receiver }, prop: last.name };
 }
 
 /**

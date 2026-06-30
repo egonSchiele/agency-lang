@@ -82,13 +82,12 @@ describe("analyzeCondition", () => {
     ["isSuccess with zero args", "isSuccess()"],
     ["isSuccess with too many args", "isSuccess(r, r)"],
     ["isSuccess of a call", 'isSuccess(tryParse("x"))'],
-    // M1 path ceiling: these scrutinees are NOT single-hop property paths.
-    ["isSuccess of an index", "isSuccess(obj[0])"],
-    ["isSuccess of a two-hop path", "isSuccess(obj.r.s)"],
+    // Unstable scrutinees stay NO_FACTS even under M2 (calls/slices can't be
+    // statically pinned). Multi-hop + literal-index are now POSITIVE — see the
+    // M2 recognizer block below.
     ["isSuccess of a method call", "isSuccess(obj.method())"],
-    ["discriminant on an index receiver", 'obj[0].kind == "x"'],
-    ["discriminant on a two-hop receiver", 'a.b.c.kind == "x"'],
-    ["presence on an index", "obj[0] != null"],
+    ["isSuccess of a computed index", "isSuccess(obj[i])"],
+    ["isSuccess of a slice", "isSuccess(obj[0:2])"],
   ])("produces no candidates for %s", (_label, src) => {
     expect(analyzeCondition(firstIfCondition(src))).toEqual(NO_FACTS);
   });
@@ -137,6 +136,48 @@ describe("analyzeCondition", () => {
       succP("a", ["r"], true),
       succP("b", ["r"], true),
     ]);
+  });
+
+  // ── Multi-hop + literal-index member paths (M2) ───────────────────────────
+  it("isSuccess(o.inner.r) narrows a two-hop property path", () => {
+    expect(analyzeCondition(firstIfCondition("isSuccess(o.inner.r)")).then[0]).toEqual(
+      succP("o", ["inner", "r"], true));
+  });
+
+  it('a.b.c == "x" splits to receiver a.b and discriminant c', () => {
+    expect(analyzeCondition(firstIfCondition('a.b.c == "x"')).then[0]).toEqual(
+      discP("a", ["b"], "c", "x", true));
+  });
+
+  it("isSuccess(arr[0]) narrows the index path", () => {
+    expect(analyzeCondition(firstIfCondition("isSuccess(arr[0])")).then[0].ref).toEqual(
+      { variable: "arr", chain: [{ kind: "index", index: 0 }] });
+  });
+
+  it('arr[0].kind == "x" splits to receiver arr[0] and discriminant kind', () => {
+    expect(analyzeCondition(firstIfCondition('arr[0].kind == "x"')).then[0].ref).toEqual(
+      { variable: "arr", chain: [{ kind: "index", index: 0 }] });
+  });
+
+  it('"click" == arr[0].kind narrows the same as the other operand order', () => {
+    expect(analyzeCondition(firstIfCondition('"click" == arr[0].kind')).then[0].ref).toEqual(
+      { variable: "arr", chain: [{ kind: "index", index: 0 }] });
+  });
+
+  it("arr[0] != null narrows the index path (presence)", () => {
+    expect(analyzeCondition(firstIfCondition("arr[0] != null")).then[0]).toEqual({
+      ref: { variable: "arr", chain: [{ kind: "index", index: 0 }] },
+      refine: { kind: "presence", present: true },
+    });
+  });
+
+  it.each([
+    ["non-integer index", "isSuccess(arr[0.5])"],
+    ["negative index", "isSuccess(arr[-1])"],
+    ["unstable receiver before discriminant", 'arr[f()].kind == "x"'],
+    ["last hop is an index (not a property)", "arr[0] == 5"],
+  ])("M2 recognizer rejects %s → NO_FACTS", (_label, src) => {
+    expect(analyzeCondition(firstIfCondition(src))).toEqual(NO_FACTS);
   });
 
   it("negation swaps then/else", () => {

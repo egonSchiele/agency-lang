@@ -1,7 +1,12 @@
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
 import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { isAssignable, safeResolveType } from "./assignability.js";
+import {
+  isAssignable,
+  isOptionalType,
+  safeResolveType,
+} from "./assignability.js";
+import { BOOLEAN_T } from "./primitives.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -137,6 +142,36 @@ export function checkType(
   if (expr.type === "agencyObject") {
     checkExcessObjectProperties(expr, expectedType, context, ctx);
   }
+}
+
+/**
+ * Check an `if` / `while` condition. Conditions must be `boolean`, EXCEPT an
+ * optional (`T | null`) is accepted as a presence test (`if (x)` ⇒ x is non-null
+ * in the then-branch — see null/truthiness narrowing). Synthesizes the condition
+ * once (no double-report) and mirrors `checkType`'s "(condition)" diagnostic.
+ */
+export function checkConditionType(
+  condition: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  const actualType = synthType(condition, scope, ctx);
+  if (actualType === "any") {
+    return;
+  }
+  const typeAliases = ctx.getTypeAliases();
+  if (isOptionalType(actualType, typeAliases)) {
+    return;
+  }
+  if (isAssignable(actualType, BOOLEAN_T, typeAliases)) {
+    return;
+  }
+  ctx.errors.push({
+    message: `Type '${formatTypeHint(actualType)}' is not assignable to type 'boolean' (condition).`,
+    expectedType: formatTypeHint(BOOLEAN_T),
+    actualType: formatTypeHint(actualType),
+    loc: condition.loc,
+  });
 }
 
 /**

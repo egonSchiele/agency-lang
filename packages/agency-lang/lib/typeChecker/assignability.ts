@@ -400,7 +400,7 @@ export function isNever(vt: VariableType | "any"): boolean {
  * property may be absent from the source. Covers the `key?: T` desugaring
  * (parsed as `T | null`) plus `any`, which subsumes null.
  */
-function isOptionalType(
+export function isOptionalType(
   vt: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {

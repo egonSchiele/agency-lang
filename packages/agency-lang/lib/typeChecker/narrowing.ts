@@ -77,6 +77,30 @@ function asDiscriminantAccess(
 }
 
 /**
+ * `null` lexes as a bare identifier (`variableName` with value `"null"`), not a
+ * distinct literal node — recognize both that and the `NullLiteral` shape.
+ */
+function isNullExpr(e: Expression): boolean {
+  return (
+    e.type === "null" || (e.type === "variableName" && e.value === "null")
+  );
+}
+
+/**
+ * Recognize a presence test `x == null` / `x != null` over a *bare variable*
+ * (either operand order). Returns the variable name, or null otherwise.
+ */
+function asPresenceTest(left: Expression, right: Expression): string | null {
+  if (left.type === "variableName" && !isNullExpr(left) && isNullExpr(right)) {
+    return left.value;
+  }
+  if (right.type === "variableName" && !isNullExpr(right) && isNullExpr(left)) {
+    return right.value;
+  }
+  return null;
+}
+
+/**
  * Inspect a (post-lowering) boolean condition and report the narrowing
  * candidates it implies for the then- and else-branches.
  *
@@ -108,6 +132,20 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       return { then: [], else: [...l.else, ...r.else] };
     }
     if (condition.operator === "==" || condition.operator === "!=") {
+      // Presence test: `x == null` / `x != null` over a bare variable (either
+      // operand order). Narrows by stripping/keeping the `null` member. Disjoint
+      // from the discriminant shape below (bare variable + `null` literal vs a
+      // `valueAccess`), so it's checked first with no precedence concern.
+      const presenceVar = asPresenceTest(condition.left, condition.right);
+      if (presenceVar) {
+        // `x != null` → then: present (non-null); `x == null` → then: absent.
+        const presentThen = condition.operator === "!=";
+        const mkP = (present: boolean): NarrowCandidate => ({
+          variableName: presenceVar,
+          refine: { kind: "presence", present },
+        });
+        return { then: [mkP(presentThen)], else: [mkP(!presentThen)] };
+      }
       // `v.prop == literal` / `!= literal` over a bare variable. Either operand
       // order is accepted. then-branch keeps the matching member(s) for `==`
       // (and the complement for `!=`); the else-branch is the inverse.
@@ -138,6 +176,19 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       refine: { kind: "discriminant", prop: acc.prop, literal: litTrue, keep },
     });
     return { then: [truthy(true)], else: [truthy(false)] };
+  }
+
+  // Bare-variable truthiness: `if (x)` ⇒ presence in the then-branch, absence
+  // in the else. Strips only the `null` member (other falsy values stay) — see
+  // narrowUnionByPresence. Member-access truthiness (`if (r.success)`) is the
+  // discriminant case in the `valueAccess` branch above; this fires ONLY for a
+  // bare variable.
+  if (condition.type === "variableName" && condition.value !== "null") {
+    const mkP = (present: boolean): NarrowCandidate => ({
+      variableName: condition.value,
+      refine: { kind: "presence", present },
+    });
+    return { then: [mkP(true)], else: [mkP(false)] };
   }
 
   if (condition.type !== "functionCall") return NO_FACTS;

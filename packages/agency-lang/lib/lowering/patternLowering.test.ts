@@ -416,6 +416,30 @@ describe("temp uniqueness", () => {
     };
     expect(find(a)).toBe(find(b));
   });
+
+  it("emits a DISTINCT scrutinee node object per occurrence (flow-graph node identity)", () => {
+    // The flow checker keys narrowing on AST-node identity, so each lowered
+    // reference to the `__scrutinee` temp (every arm's isSuccess/isFailure guard
+    // and .value/.error binding) MUST be its own node object. Sharing one node
+    // collapsed all occurrences to a single flow position — see the match-over-
+    // Result regression in narrowing.test.ts.
+    const lowered = lower(
+      `let r = success(1)\nmatch (r) {\n  success(v) => v\n  failure(e) => e\n}`,
+    );
+    const scrutNodes: object[] = [];
+    const collect = (o: unknown): void => {
+      if (!o || typeof o !== "object") return;
+      const node = o as Record<string, unknown>;
+      if (node.type === "variableName" && typeof node.value === "string" && node.value.startsWith("__scrutinee")) {
+        scrutNodes.push(node);
+      }
+      for (const k of Object.keys(node)) collect(node[k]);
+    };
+    collect(lowered);
+    // Multiple references exist (guards + bindings) and every one is unique.
+    expect(scrutNodes.length).toBeGreaterThan(1);
+    expect(new Set(scrutNodes).size).toBe(scrutNodes.length);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -411,6 +411,28 @@ node main() {
 }`);
     expect(errs.some((e) => /not assignable/.test(e))).toBe(true);
   });
+
+  it("a clean match over a Result produces NO spurious error (node-identity regression)", () => {
+    // REGRESSION: pattern lowering reused ONE `__scrutinee` node object across
+    // every arm's isSuccess/isFailure guard and .value/.error binding. The flow
+    // graph keys narrowing on AST-node identity, so all occurrences collapsed to
+    // whichever branch the flow builder walked last (the failure arm) — and the
+    // success arm's `.value` was then checked against the failure member, raising
+    // a spurious "Property 'value' does not exist on '{ success: false, … }'".
+    // Each occurrence must be a distinct node (cloned at embedding in
+    // patternLowering). The existing arm tests above assert a specific error
+    // *exists* (binder inference, via the separate child-scope path); they never
+    // asserted the ABSENCE of the spurious flow-check error — this does.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  match (r) {
+    success(v) => v
+    failure(e) => e
+  }
+}`);
+    expect(errs).toEqual([]);
+  });
 });
 
 describe("Result narrowing — combinators", () => {

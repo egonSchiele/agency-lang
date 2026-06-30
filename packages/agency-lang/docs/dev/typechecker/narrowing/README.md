@@ -177,6 +177,17 @@ synthesizes its RHS to declare `v`). Emitting there would be a false positive on
 narrowed access; the flow-aware `checkScopes` pass re-synthesizes every value access
 and is the single source of the diagnostic.
 
+**Block bodies narrow.** Trailing `as` blocks and inline `\… -> …` blocks narrow
+with the enclosing flow wherever the block-bearing call appears (statement,
+assignment value, pipe operand, argument). `attachExpressionsToFlow` walks the
+block body (`functionCall.block.body` / `blockArgument.body`) as statements with
+the live flow, so a guarded `r.value` / `b.r.value` inside a block resolves, and a
+guard nested in the block builds its own `narrow` nodes. CAVEAT: this narrows as
+if the block runs in the enclosing flow; a deferred callback that executes after a
+later reassignment is the classic closure-staleness limitation (mainstream
+checkers narrow `const` but not reassigned `let` across closures) and is not
+specially handled.
+
 Un-narrowed `Result` field access still synthesizes to `any` (the legacy escape
 hatch in `synthValueAccess`); tightening that into a hard error is a later increment
 (the enforced-Result-safety flip, which the flow-typed model unblocks).

@@ -1,5 +1,7 @@
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
-import type { ResultType } from "../types/typeHints.js";
+import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
+import type { SourceLocation } from "../types/base.js";
+import { resultToObjectUnion } from "./resultUnion.js";
 import type {
   NamedArgument,
   SplatExpression,
@@ -63,6 +65,93 @@ function resolveResultFieldType(
   // routes un-narrowed Results through strict union access.
   if (RESULT_FIELDS.has(fieldName)) return "any";
   return null;
+}
+
+type StrictSeverity = "silent" | "warn" | "error";
+
+/** The configured strict union-member-access severity (default "silent"). */
+function strictMemberAccessSeverity(ctx: TypeCheckerContext): StrictSeverity {
+  return ctx.config.typechecker?.strictMemberAccess ?? "silent";
+}
+
+/** Emit a strict-member-access diagnostic at the configured severity. */
+function reportStrictMemberAccess(
+  ctx: TypeCheckerContext,
+  severity: "warn" | "error",
+  message: string,
+  loc: SourceLocation | undefined,
+): void {
+  ctx.errors.push({
+    message,
+    loc,
+    severity: severity === "warn" ? "warning" : "error",
+  });
+}
+
+/**
+ * Collect a property's type across the members of a union. `type` is the
+ * collapsed result over members that HAVE the property (a single hit unwraps;
+ * none → `null`). `missing` is true when at least one member lacks it —
+ * covering BOTH an object member without the property AND a non-object member
+ * (e.g. `string` in `{a:string} | string`); both require narrowing, so both
+ * count as missing for the strict check.
+ */
+function unionPropertyAccess(
+  members: VariableType[],
+  fieldName: string,
+  aliases: Record<string, TypeAliasEntry>,
+): { type: VariableType | null; missing: boolean } {
+  const types: VariableType[] = [];
+  let missing = false;
+  for (const member of members) {
+    const resolvedMember = safeResolveType(member, aliases);
+    const prop =
+      resolvedMember.type === "objectType"
+        ? resolvedMember.properties.find((p) => p.key === fieldName)?.value
+        : undefined;
+    if (prop) {
+      types.push(prop);
+    } else {
+      missing = true;
+    }
+  }
+  const type =
+    types.length === 0
+      ? null
+      : types.length === 1
+        ? types[0]
+        : { type: "unionType" as const, types };
+  return { type, missing };
+}
+
+/**
+ * Strict-aware property access on a union receiver. Returns the collapsed
+ * member type, or `null` when no member has the field (caller emits the hard
+ * "does not exist" error). When the field is present on some-but-not-all
+ * members, emits the gated strict diagnostic — a narrowed receiver is a single
+ * object member and never reaches here, so this never fires on guarded code.
+ */
+function accessUnionField(
+  union: UnionType,
+  fieldName: string,
+  aliases: Record<string, TypeAliasEntry>,
+  ctx: TypeCheckerContext,
+  loc: SourceLocation | undefined,
+): VariableType | null {
+  const { type, missing } = unionPropertyAccess(union.types, fieldName, aliases);
+  if (type === null) {
+    return null;
+  }
+  const severity = strictMemberAccessSeverity(ctx);
+  if (missing && severity !== "silent") {
+    reportStrictMemberAccess(
+      ctx,
+      severity,
+      `Property '${fieldName}' is not available on every member of '${formatTypeHint(union)}'; narrow the value (e.g. with a guard) before accessing it.`,
+      loc,
+    );
+  }
+  return type;
 }
 
 /**
@@ -664,30 +753,21 @@ export function synthValueAccess(
           }
         }
         if (resolved.type === "unionType") {
-          const propTypes: VariableType[] = [];
-          for (const member of resolved.types) {
-            const resolvedMember = safeResolveType(member, typeAliases);
-            if (resolvedMember.type === "objectType") {
-              const prop = resolvedMember.properties.find(
-                (p) => p.key === element.name,
-              );
-              // eslint-disable-next-line max-depth -- collecting union member property types
-              if (prop) propTypes.push(prop.value);
-            }
-          }
-          if (propTypes.length > 0) {
-            if (propTypes.length === 1) {
-              currentType = propTypes[0];
-            } else {
-              currentType = { type: "unionType", types: propTypes };
-            }
-          } else {
+          const memberType = accessUnionField(
+            resolved,
+            element.name,
+            typeAliases,
+            ctx,
+            expr.loc,
+          );
+          if (memberType === null) {
             ctx.errors.push({
               message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
               loc: expr.loc,
             });
             return "any";
           }
+          currentType = memberType;
         } else if (resolved.type === "objectType") {
           const prop = resolved.properties.find((p) => p.key === element.name);
           if (prop) {

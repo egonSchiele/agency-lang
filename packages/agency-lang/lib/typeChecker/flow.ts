@@ -3,7 +3,7 @@ import type { Refine, NarrowCandidate } from "./narrowing.js";
 import { narrowByRefine } from "./narrowing.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
-import { isNever } from "./assignability.js";
+import { isNever, safeResolveType } from "./assignability.js";
 
 // NOTE: `narrowUnionByDiscriminant` and `NarrowCandidate` are added in Task 2
 // and Task 3 respectively, alongside the code that uses them. Keeping each
@@ -20,6 +20,44 @@ export type Reference = { variable: string; chain: string[] };
 /** Stable string key for a reference (map keys, equality). */
 export function referenceKey(ref: Reference): string {
   return ref.chain.length === 0 ? ref.variable : `${ref.variable}.${ref.chain.join(".")}`;
+}
+
+/**
+ * Resolve successive property hops on a type — DIAGNOSTIC-FREE (unlike
+ * `synthValueAccess`, which emits strict-member-access errors). Returns "any" on
+ * any hop that can't be resolved (missing property, non-object/Record receiver),
+ * so path narrowing stays conservative. M1: property hops only.
+ */
+function resolvePath(
+  baseType: ScopeType,
+  chain: string[],
+  aliases: Record<string, TypeAliasEntry>,
+): ScopeType {
+  let current: ScopeType = baseType;
+  for (const prop of chain) {
+    if (current === "any") return "any";
+    const resolved = safeResolveType(current, aliases);
+    if (resolved.type === "objectType") {
+      const p = resolved.properties.find((pr) => pr.key === prop);
+      current = p ? p.value : "any";
+    } else if (resolved.type === "genericType" && resolved.name === "Record") {
+      current = resolved.typeArgs[1];
+    } else {
+      return "any";
+    }
+  }
+  return current;
+}
+
+/**
+ * True if `prefix` is a proper prefix of `path` (same variable; `prefix.chain`
+ * is a leading sub-sequence of `path.chain`). Used for prefix invalidation:
+ * reassigning `box` (or `box.r`) drops a narrowing on `box.r` (or `box.r.value`).
+ */
+export function isPrefixOf(prefix: Reference, path: Reference): boolean {
+  if (prefix.variable !== path.variable) return false;
+  if (prefix.chain.length >= path.chain.length) return false;
+  return prefix.chain.every((seg, i) => seg === path.chain[i]);
 }
 
 /**
@@ -125,12 +163,22 @@ function computeTypeAt(
   env: FlowEnvironment,
 ): ScopeType {
   switch (at.kind) {
-    case "start":
-      // Non-empty chains (property-path narrowing) are a follow-on; today every
-      // reference has an empty chain, so this is a bare scope lookup.
-      return at.scope.lookup(ref.variable) ?? "any";
-    case "assign":
-      return referenceKey(at.ref) === key ? at.type : typeAt(ref, at.prev, env);
+    case "start": {
+      const base = at.scope.lookup(ref.variable) ?? "any";
+      return ref.chain.length === 0 ? base : resolvePath(base, ref.chain, env.typeAliases);
+    }
+    case "assign": {
+      // Exact match → the assigned type. A reassignment of any PREFIX of the
+      // queried path (e.g. assigning `box` invalidates `box.r`) drops the
+      // narrowing: re-resolve the path's tail from the freshly-assigned base.
+      // Disjoint refs pass through to the pre-assignment flow unchanged.
+      if (referenceKey(at.ref) === key) return at.type;
+      if (isPrefixOf(at.ref, ref)) {
+        const base = typeAt(at.ref, at, env);
+        return resolvePath(base, ref.chain.slice(at.ref.chain.length), env.typeAliases);
+      }
+      return typeAt(ref, at.prev, env);
+    }
     case "narrow": {
       if (referenceKey(at.ref) !== key) return typeAt(ref, at.prev, env);
       const base = typeAt(ref, at.prev, env);
@@ -142,9 +190,20 @@ function computeTypeAt(
     case "loop":
       // Own-property check: `at.widened` may be a plain object, so a ref named
       // "__proto__" / "toString" must not read from Object.prototype.
-      return Object.prototype.hasOwnProperty.call(at.widened, key)
-        ? at.widened[key]
-        : typeAt(ref, at.prev, env);
+      if (Object.prototype.hasOwnProperty.call(at.widened, key)) {
+        return at.widened[key];
+      }
+      // A reassigned PREFIX (the bare base var, the only shape `assignedNames`
+      // widens) invalidates this path: re-resolve from the widened base rather
+      // than trusting the (possibly narrowed) pre-loop flow. Otherwise
+      // `while (…) { box = …; box.r.value }` would trust a stale narrowing.
+      if (
+        ref.chain.length > 0 &&
+        Object.prototype.hasOwnProperty.call(at.widened, ref.variable)
+      ) {
+        return resolvePath(at.widened[ref.variable], ref.chain, env.typeAliases);
+      }
+      return typeAt(ref, at.prev, env);
     case "exit":
       throw new Error("typeAt called on an unreachable (exit) flow node");
   }
@@ -160,11 +219,45 @@ export function wrapFacts(flow: FlowNode, candidates: NarrowCandidate[]): FlowNo
     (prev, c) => ({
       kind: "narrow",
       prev,
-      ref: { variable: c.variableName, chain: [] },
+      ref: c.ref,
       refine: c.refine,
     }),
     flow,
   );
+}
+
+/**
+ * Does a `narrow` node for `ref` (exact key) apply on the flow path before any
+ * rebinding of it? Walk back until the first node that (re)establishes the ref's
+ * base — `start`/`loop`/`exit`, or an `assign` to `ref` or a prefix of it —
+ * returning true iff a `narrow` for `ref` is seen first. `synthValueAccess` uses
+ * this to route a member-path read through `typeAt` ONLY when narrowing genuinely
+ * applies, so an un-narrowed path still hits the structural walk's diagnostics
+ * (e.g. strict member access on un-guarded `b.r.value`).
+ */
+export function flowHasNarrowFor(ref: Reference, flow: FlowNode): boolean {
+  const key = referenceKey(ref);
+  let at: FlowNode = flow;
+  for (;;) {
+    switch (at.kind) {
+      case "narrow":
+        if (referenceKey(at.ref) === key) return true;
+        at = at.prev;
+        break;
+      case "assign":
+        // a rebind of the ref or any prefix resets it — no narrowing survives
+        if (referenceKey(at.ref) === key || isPrefixOf(at.ref, ref)) return false;
+        at = at.prev;
+        break;
+      case "join":
+        // sound only if narrowing holds on ALL predecessors
+        return at.prev.every((p) => flowHasNarrowFor(ref, p));
+      case "start":
+      case "loop":
+      case "exit":
+        return false;
+    }
+  }
 }
 
 /**

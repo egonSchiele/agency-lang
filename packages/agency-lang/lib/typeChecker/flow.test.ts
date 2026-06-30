@@ -7,6 +7,8 @@ import {
   wrapFacts,
   mergeFlows,
   widenAtLoopBackEdge,
+  flowHasNarrowFor,
+  isPrefixOf,
   type FlowNode,
   type FlowEnvironment,
 } from "./flow.js";
@@ -208,7 +210,7 @@ describe("wrapFacts", () => {
     const start: FlowNode = { kind: "start", scope };
     const wrapped = wrapFacts(start, [
       {
-        variableName: "u",
+        ref: { variable: "u", chain: [] },
         refine: {
           kind: "discriminant",
           prop: "kind",
@@ -262,5 +264,195 @@ describe("widenAtLoopBackEdge", () => {
     const loopEntry: FlowNode = { kind: "start", scope };
     const widened = widenAtLoopBackEdge(loopEntry, loopEntry, ["x"], env(scope));
     expect(typeAt(ref("x"), widened, env(scope))).toEqual(STR);
+  });
+});
+
+// ── Property paths (M1) ─────────────────────────────────────────────────────
+const RESULT: VariableType = { type: "resultType", successType: NUM, failureType: STR };
+// box : { r: Result<number, string> }
+const boxType: VariableType = { type: "objectType", properties: [{ key: "r", value: RESULT }] };
+const pathRef = (variable: string, ...chain: string[]) => ({ variable, chain });
+const successRefine = {
+  kind: "discriminant" as const,
+  prop: "success",
+  literal: { type: "booleanLiteralType" as const, value: "true" as const },
+  keep: true,
+};
+const boxScope = () => {
+  const s = new Scope("p");
+  s.declare("box", boxType);
+  return s;
+};
+
+describe("typeAt — property paths (M1)", () => {
+  it("start: plain one-hop resolves to the property type (no narrowing)", () => {
+    const s = boxScope();
+    expect(typeAt(pathRef("box", "r"), { kind: "start", scope: s }, env(s))).toEqual(RESULT);
+  });
+
+  it("start: missing property → any", () => {
+    const s = boxScope();
+    expect(typeAt(pathRef("box", "bogus"), { kind: "start", scope: s }, env(s))).toBe("any");
+  });
+
+  it("start: non-object base → any (no primitive-member lookup)", () => {
+    const s = new Scope("p");
+    s.declare("str", STR);
+    expect(typeAt(pathRef("str", "length"), { kind: "start", scope: s }, env(s))).toBe("any");
+  });
+
+  it("start: Record<K,V> base → V", () => {
+    const s = new Scope("p");
+    s.declare("m", { type: "genericType", name: "Record", typeArgs: [STR, NUM] });
+    expect(typeAt(pathRef("m", "anyKey"), { kind: "start", scope: s }, env(s))).toEqual(NUM);
+  });
+
+  it("start: resolves through a type alias per hop", () => {
+    const s = new Scope("p");
+    s.declare("box", { type: "typeAliasVariable", aliasName: "Box" });
+    const e: FlowEnvironment = {
+      scope: s,
+      flowOf: new WeakMap(),
+      memo: new WeakMap(),
+      typeAliases: { Box: { body: boxType } },
+    };
+    expect(typeAt(pathRef("box", "r"), { kind: "start", scope: s }, e)).toEqual(RESULT);
+  });
+
+  it("narrow: applies the refine to the one-hop path (structural assertion)", () => {
+    const s = boxScope();
+    const narrow: FlowNode = {
+      kind: "narrow",
+      prev: { kind: "start", scope: s },
+      ref: pathRef("box", "r"),
+      refine: successRefine,
+    };
+    const t = typeAt(pathRef("box", "r"), narrow, env(s));
+    expect(typeof t === "object" && t.type).toBe("objectType");
+    const succ = (t as { properties: { key: string; value: VariableType }[] }).properties.find((p) => p.key === "success");
+    expect(succ?.value).toEqual({ type: "booleanLiteralType", value: "true" });
+  });
+
+  it("join: unites a narrowed-path predecessor with an un-narrowed one", () => {
+    const s = boxScope();
+    const start: FlowNode = { kind: "start", scope: s };
+    const narrowed: FlowNode = { kind: "narrow", prev: start, ref: pathRef("box", "r"), refine: successRefine };
+    const join: FlowNode = { kind: "join", prev: [narrowed, start] };
+    const t = typeAt(pathRef("box", "r"), join, env(s));
+    expect(typeof t === "object" && t.type).toBe("unionType");
+  });
+});
+
+describe("typeAt — path prefix invalidation (M1)", () => {
+  const narrowedBoxR = (s: Scope): FlowNode => ({
+    kind: "narrow",
+    prev: { kind: "start", scope: s },
+    ref: pathRef("box", "r"),
+    refine: successRefine,
+  });
+
+  it("reassigning the base var (box) drops the box.r narrowing → un-narrowed Result", () => {
+    const s = boxScope();
+    const reassigned: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box"), type: boxType };
+    const after = typeAt(pathRef("box", "r"), reassigned, env(s));
+    // Pin to the SPECIFIC type: after reassigning box, box.r is the un-narrowed
+    // Result (a resultType), not the success object member. A regression to "any"
+    // would slip past a mere `!== before` check.
+    expect(typeof after === "object" && after.type).toBe("resultType");
+  });
+
+  it("reassigning the path itself (box.r) drops its narrowing (exact-key branch)", () => {
+    const s = boxScope();
+    const reassigned: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    expect(typeAt(pathRef("box", "r"), reassigned, env(s))).toEqual(RESULT);
+  });
+
+  it("sibling assignment (box.q) leaves box.r narrowed (the foot-gun)", () => {
+    const s = boxScope();
+    const assignSibling: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "q"), type: NUM };
+    const t = typeAt(pathRef("box", "r"), assignSibling, env(s));
+    expect(typeof t === "object" && t.type).toBe("objectType");
+  });
+
+  it("disjoint variable assignment (other) leaves box.r narrowed", () => {
+    const s = boxScope();
+    s.declare("other", NUM);
+    const assignOther: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("other"), type: STR };
+    const t = typeAt(pathRef("box", "r"), assignOther, env(s));
+    expect(typeof t === "object" && t.type).toBe("objectType");
+  });
+
+  it("multi-hop (M2-ready): reassigning box.r invalidates box.r.value", () => {
+    const s = boxScope();
+    // box.r narrowed to success; then box.r reassigned to a fresh Result.
+    const reassigned: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    // box.r.value re-resolves from the reassigned (un-narrowed) Result → success
+    // member's `.value` is gone; structural resolve of `.value` on a resultType
+    // is "any" (diagnostic-free resolvePath).
+    expect(typeAt(pathRef("box", "r", "value"), reassigned, env(s))).toBe("any");
+  });
+
+  it("loop back-edge: a body reassign of the base re-resolves box.r from widened", () => {
+    const s = boxScope();
+    // Pre-loop narrowed; the loop body reassigned `box` (bare), so widened["box"]
+    // holds the post-body box type. box.r must re-resolve from THAT, not trust
+    // the pre-loop narrowed flow.
+    const loop: FlowNode = { kind: "loop", prev: narrowedBoxR(s), widened: { box: boxType } };
+    const after = typeAt(pathRef("box", "r"), loop, env(s));
+    expect(typeof after === "object" && after.type).toBe("resultType");
+  });
+});
+
+describe("flowHasNarrowFor (M1 strict gate)", () => {
+  it("true when a narrow for the exact path applies", () => {
+    const s = boxScope();
+    const narrow: FlowNode = { kind: "narrow", prev: { kind: "start", scope: s }, ref: pathRef("box", "r"), refine: successRefine };
+    expect(flowHasNarrowFor(pathRef("box", "r"), narrow)).toBe(true);
+  });
+
+  it("false at a plain start (no narrow on the path)", () => {
+    const s = boxScope();
+    expect(flowHasNarrowFor(pathRef("box", "r"), { kind: "start", scope: s })).toBe(false);
+  });
+
+  it("false after the base var is reassigned (prefix rebind resets it)", () => {
+    const s = boxScope();
+    const narrow: FlowNode = { kind: "narrow", prev: { kind: "start", scope: s }, ref: pathRef("box", "r"), refine: successRefine };
+    const reassigned: FlowNode = { kind: "assign", prev: narrow, ref: pathRef("box"), type: boxType };
+    expect(flowHasNarrowFor(pathRef("box", "r"), reassigned)).toBe(false);
+  });
+
+  it("true through a sibling assignment (box.q does not reset box.r)", () => {
+    const s = boxScope();
+    const narrow: FlowNode = { kind: "narrow", prev: { kind: "start", scope: s }, ref: pathRef("box", "r"), refine: successRefine };
+    const sibling: FlowNode = { kind: "assign", prev: narrow, ref: pathRef("box", "q"), type: NUM };
+    expect(flowHasNarrowFor(pathRef("box", "r"), sibling)).toBe(true);
+  });
+
+  it("requires the narrow on ALL join predecessors", () => {
+    const s = boxScope();
+    const start: FlowNode = { kind: "start", scope: s };
+    const narrowed: FlowNode = { kind: "narrow", prev: start, ref: pathRef("box", "r"), refine: successRefine };
+    expect(flowHasNarrowFor(pathRef("box", "r"), { kind: "join", prev: [narrowed, narrowed] })).toBe(true);
+    expect(flowHasNarrowFor(pathRef("box", "r"), { kind: "join", prev: [narrowed, start] })).toBe(false);
+  });
+});
+
+describe("isPrefixOf", () => {
+  it("a proper same-variable chain prefix is a prefix", () => {
+    expect(isPrefixOf(pathRef("box"), pathRef("box", "r"))).toBe(true);
+    expect(isPrefixOf(pathRef("box", "r"), pathRef("box", "r", "value"))).toBe(true);
+  });
+
+  it("equal chains are NOT a (proper) prefix", () => {
+    expect(isPrefixOf(pathRef("box", "r"), pathRef("box", "r"))).toBe(false);
+  });
+
+  it("different variables are never a prefix", () => {
+    expect(isPrefixOf(pathRef("box"), pathRef("other", "r"))).toBe(false);
+  });
+
+  it("a diverging chain segment is not a prefix", () => {
+    expect(isPrefixOf(pathRef("box", "q"), pathRef("box", "r", "value"))).toBe(false);
   });
 });

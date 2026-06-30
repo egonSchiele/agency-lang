@@ -9,7 +9,7 @@ import type {
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
-import { typeAt } from "./flow.js";
+import { typeAt, flowHasNarrowFor } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
@@ -89,8 +89,18 @@ type StrictSeverity = "silent" | "warn" | "error";
  * un-guarded access to a branch-specific union member (notably `r.value` on an
  * un-narrowed Result) is a hard error. Set `strictMemberAccess: "silent"` to
  * opt out (restores the old lenient behavior).
+ *
+ * Strict access is FLOW-SENSITIVE: whether a member is reachable depends on
+ * narrowing (`if (isSuccess(b.r)) { b.r.value }`), which is only known once the
+ * flow graph exists. The pre-flow inference passes (return-type inference and
+ * scope-building, where an untyped `let v = b.r.value` synthesizes its RHS to
+ * declare `v`) run with `ctx.flowEnv` unset — emitting here would be a false
+ * positive on narrowed access. Suppress in that window; the flow-aware
+ * `checkScopes` pass re-synthesizes every value access and emits the genuine
+ * diagnostic.
  */
 function strictMemberAccessSeverity(ctx: TypeCheckerContext): StrictSeverity {
+  if (!ctx.flowEnv) return "silent";
   return ctx.config.typechecker?.strictMemberAccess ?? "error";
 }
 
@@ -761,15 +771,50 @@ function validateAgencyFunctionMethod(
   }
 }
 
+/**
+ * Flow-sensitive path narrowing (M1): if `expr` is a single-hop property path
+ * `base.prop` whose flow node carries a `narrow` for that exact ref, return the
+ * narrowed type of the one-hop prefix — so `b.r.value` reads the narrowed `b.r`
+ * inside `if (isSuccess(b.r))`. `null` means no narrowing applies; the caller
+ * then resolves the base structurally and the chain walk's diagnostics (strict
+ * member access) run on the un-narrowed access. (Bare-base narrowing, `r.value`,
+ * flows through `synthType(expr.base)` and needs nothing here.)
+ *
+ * The `flowHasNarrowFor` gate is required: without it, `typeAt` would return the
+ * structural (un-narrowed) member type and short-circuiting on it would suppress
+ * the strict-member-access error that un-guarded `b.r.value` must still raise.
+ */
+function narrowedPathPrefix(
+  expr: ValueAccess,
+  ctx: TypeCheckerContext,
+): VariableType | "any" | null {
+  const first = expr.chain[0];
+  if (!ctx.flowEnv || expr.base.type !== "variableName" || first?.kind !== "property") {
+    return null;
+  }
+  const flow = ctx.flowEnv.flowOf.get(expr);
+  const ref = { variable: expr.base.value, chain: [first.name] };
+  if (!flow || !flowHasNarrowFor(ref, flow)) {
+    return null;
+  }
+  return typeAt(ref, flow, { ...ctx.flowEnv, typeAliases: ctx.getTypeAliases() });
+}
+
 export function synthValueAccess(
   expr: ValueAccess,
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  let currentType = synthType(expr.base, scope, ctx);
   const typeAliases = ctx.getTypeAliases();
 
-  for (const element of expr.chain) {
+  // When a narrowed single-hop prefix applies, start the structural walk from
+  // its type at the next hop; otherwise resolve the base and walk the whole chain.
+  const narrowedPrefix = narrowedPathPrefix(expr, ctx);
+  let currentType =
+    narrowedPrefix === null ? synthType(expr.base, scope, ctx) : narrowedPrefix;
+  const chainStart = narrowedPrefix === null ? 0 : 1;
+
+  for (const element of expr.chain.slice(chainStart)) {
     // Validate .partial()/.describe() even when the base type is unknown,
     // since we can check argument structure against the function definition.
     // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.

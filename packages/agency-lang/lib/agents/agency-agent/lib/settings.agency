@@ -22,13 +22,47 @@ import { exists } from "std::shell"
 import { mkdir } from "std::fs"
 
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
+import { isKnownSlot, canonicalSlot } from "./slots.agency"
 
 export type SearchSettings = {
   backend?: string;
 }
 
+export type ModelSettings = {
+  price?: string;
+  provider?: string;
+  allowedProviders?: string[];
+  slots?: Record<string, string>;
+  pin?: string
+}
+
 export type Settings = {
   search?: SearchSettings;
+  model?: ModelSettings
+}
+
+/** Return a NEW ModelSettings with unknown slot keys dropped (warned). Does NOT
+  mutate the input. Pure except the warning print. */
+export def sanitizeModelSettings(m: ModelSettings): ModelSettings {
+  if (m.slots == undefined) {
+    return m
+  }
+  let kept: Record<string, string> = {}
+  for (key in m.slots) {
+    if (isKnownSlot(key)) {
+      kept[canonicalSlot(key)] = m.slots[key]
+    } else {
+      print("Warning: settings.json model.slots has unknown slot '${key}'; ignoring it.")
+    }
+  }
+  return { ...m, slots: kept }
+}
+
+export def getModelSettings(s: Settings): ModelSettings {
+  if (s.model == undefined) {
+    return {}
+  }
+  return s.model
 }
 
 /*
@@ -66,6 +100,9 @@ export def loadSettings(): Settings {
   if (value == null || typeof value != "object" || Array.isArray(value)) {
     print("Warning: ${SETTINGS_PATH} is not a JSON object; ignoring it.")
     return {}
+  }
+  if (value.model != undefined) {
+    value.model = sanitizeModelSettings(value.model)
   }
   return value
 }

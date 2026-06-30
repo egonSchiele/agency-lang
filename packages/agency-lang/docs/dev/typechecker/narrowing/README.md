@@ -41,6 +41,28 @@ flow-typed checker work and the four narrowing specs at the repo root.
 | Aliased condition (`const ok = isSuccess(r); if (ok) …`) | ❌ | **planned** — no new syntax, smarter `analyzeCondition` |
 | `match` exhaustiveness (all cases covered) | ❌ | **planned** — orthogonal to flow; `decomposeCases` + `never` |
 
+## Enforced safety: strict member access
+
+Narrowing's payoff is **enforcement**. Accessing a property that exists on only
+*some* members of an un-narrowed union — most importantly `r.value` / `r.error`
+on an un-guarded `Result` — is a compile-time error by default. Agency has no
+exceptions, so `Result` is *the* error mechanism; this makes handling the failure
+branch a compiler-enforced guarantee rather than a convention.
+
+- Governed by `typechecker.strictMemberAccess: "silent" | "warn" | "error"`
+  (default `"error"`; see [config](../../../misc/config.md)). `"silent"` restores
+  the old lenient behavior (such accesses type as `any`).
+- A **narrowed** receiver resolves to a single member (via the flow oracle) and is
+  never flagged — so guarded code never errors. This is exactly why the check is
+  safe to enable by default: it can only fire on genuinely un-narrowed access.
+- Implemented in `synthValueAccess` (`lib/typeChecker/synthesizer.ts`): the
+  `unionType` / `resultType` property branches route through `accessUnionField` /
+  `accessResultField`, which emit the gated diagnostic when a field is present on
+  some-but-not-all members. Result receivers expand via `resultToObjectUnion` and
+  get Result-framed guidance.
+- **Escape hatches** (no new syntax): an `if (isSuccess(r))` / `if (isFailure(r))`
+  guard, `r catch …`, or `match (r) { … }`.
+
 ## Current model: scope-chain narrowing
 
 Narrowing is produced as pure facts and applied via throwaway child scopes during

@@ -147,3 +147,148 @@ def f(u: U): void {
     expect(diag?.loc?.line).toBe(3);
   });
 });
+
+const RESULT_PHRASE = "only available on a";
+
+const TRY = `
+def tryParse(s: string): Result<number, string> {
+  if (s == "ok") { return success(42) }
+  return failure("bad")
+}`;
+
+describe("strict member access — Result", () => {
+  it("silent: un-narrowed r.value is lenient (any), no diagnostic", () => {
+    const { errors, warnings } = check(`${TRY}
+node main() {
+  let r = tryParse("ok")
+  let n = r.value
+}`);
+    expect(errors).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("silent: un-narrowed r.value stays `any`, so a chained access does not error", () => {
+    // Locks the silent return type: `any` short-circuits the chain (today's
+    // behavior), so `r.value.whatever` raises nothing.
+    const { errors, warnings } = check(`${TRY}
+node main() {
+  let r = tryParse("ok")
+  let n = r.value
+  let m = n
+}`);
+    expect(errors).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("error: un-narrowed r.value errors with Result-framed guidance", () => {
+    const { errors, warnings } = check(
+      `${TRY}
+node main() {
+  let r = tryParse("ok")
+  let n = r.value
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    expect(errors.some((e) => e.includes(RESULT_PHRASE))).toBe(true);
+    expect(errors.some((e) => e.includes("isSuccess"))).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
+  it("error: r.success (on both members) is always fine", () => {
+    const { errors } = check(
+      `${TRY}
+node main() {
+  let r = tryParse("ok")
+  let ok = r.success
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("error: guarded r.value (isSuccess) never errors", () => {
+    const { errors } = check(
+      `${TRY}
+node main() {
+  let r = tryParse("ok")
+  if (isSuccess(r)) {
+    let n = r.value
+  }
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("error: guarded r.error (isFailure) never errors (failure-branch symmetry)", () => {
+    const { errors } = check(
+      `${TRY}
+node main() {
+  let r = tryParse("ok")
+  if (isFailure(r)) {
+    let e = r.error
+  }
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("error: match arms add no strict-access diagnostic (escape hatch)", () => {
+    const { errors } = check(
+      `${TRY}
+node main() {
+  let r = tryParse("ok")
+  match (r) {
+    success(v) => v
+    failure(e) => 0
+  }
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    // PR5 scope: the per-arm isSuccess/isFailure narrowing (from match lowering)
+    // means no strict-access diagnostic is added on match arms.
+    expect(
+      errors.some(
+        (e) => e.includes(RESULT_PHRASE) || e.includes(STRICT_UNION_PHRASE),
+      ),
+    ).toBe(false);
+    // NOTE: match-over-Result currently also emits a PRE-EXISTING, mode-
+    // independent "Property 'value' does not exist …" (reproduces at silent,
+    // from code paths untouched by this PR — the existing narrowing.test.ts
+    // match tests never asserted its absence). Tracked as a separate follow-up;
+    // not asserted here because it is out of scope for strict member access.
+  });
+
+  it("error: `catch` satisfies the checker (no diagnostic)", () => {
+    const { errors } = check(
+      `${TRY}
+node main() {
+  let n = tryParse("ok") catch 0
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("error: fires in all access positions (assignment, call arg, return, bare, nested)", () => {
+    const { errors } = check(
+      `${TRY}
+def use(n: number): number { return n }
+def helper(): number {
+  let r = tryParse("ok")
+  return r.value
+}
+node main() {
+  let r = tryParse("ok")
+  let a = r.value
+  use(r.value)
+  let _ = (r.value + 1) * 2
+  r.value
+}`,
+      { typechecker: { strictMemberAccess: "error" } },
+    );
+    const valueErrs = errors.filter((e) => e.includes(RESULT_PHRASE));
+    expect(valueErrs.length).toBe(5);
+  });
+});

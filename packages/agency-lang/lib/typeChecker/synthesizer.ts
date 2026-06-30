@@ -42,6 +42,21 @@ const RESULT_FIELDS = new Set<string>([
   "success",
 ]);
 
+// The Result fields that exist on exactly one branch (everything except
+// `success`, which is on both). Derived from RESULT_FIELDS so adding a field in
+// one place updates both. `value` is success-only; the rest are failure-only.
+const RESULT_BRANCH_FIELDS = new Set(
+  [...RESULT_FIELDS].filter((f) => f !== "success"),
+);
+
+function resultFieldMessage(fieldName: string): string {
+  // Invariant (per lib/runtime/result.ts): `value` is the only success-only
+  // field; every other branch field is failure-only. Update if Result grows a
+  // new success-side field.
+  const branch = fieldName === "value" ? "success" : "failure";
+  return `'.${fieldName}' is only available on a ${branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) { … }'.`;
+}
+
 /**
  * Resolve a field access on a `ResultType` against the narrowing layer.
  * Returns:
@@ -150,6 +165,42 @@ function accessUnionField(
       `Property '${fieldName}' is not available on every member of '${formatTypeHint(union)}'; narrow the value (e.g. with a guard) before accessing it.`,
       loc,
     );
+  }
+  return type;
+}
+
+/**
+ * Strict-aware property access on a Result receiver. At `silent`, defers to the
+ * lenient `resolveResultFieldType` (`any` for Result fields) — behavior-
+ * preserving. At `warn`/`error`, expands the Result to its object union and,
+ * for a branch-specific field, emits a Result-framed diagnostic. Narrowed
+ * Results are already object members and never reach here.
+ *
+ * Return contract matches `resolveResultFieldType`: `"any"` → caller returns
+ * `"any"`; a type → caller sets `currentType`; `null` → fall through to the
+ * generic "does not exist" handling.
+ */
+function accessResultField(
+  result: ResultType,
+  fieldName: string,
+  aliases: Record<string, TypeAliasEntry>,
+  ctx: TypeCheckerContext,
+  loc: SourceLocation | undefined,
+): VariableType | "any" | null {
+  const severity = strictMemberAccessSeverity(ctx);
+  if (severity === "silent") {
+    return resolveResultFieldType(result, fieldName);
+  }
+  const { type, missing } = unionPropertyAccess(
+    resultToObjectUnion(result, aliases).types,
+    fieldName,
+    aliases,
+  );
+  if (type === null) {
+    return null;
+  }
+  if (missing && RESULT_BRANCH_FIELDS.has(fieldName)) {
+    reportStrictMemberAccess(ctx, severity, resultFieldMessage(fieldName), loc);
   }
   return type;
 }
@@ -745,12 +796,20 @@ export function synthValueAccess(
         // does not exist" errors. Tightening the un-narrowed access into a hard
         // error is a later increment.
         if (resolved.type === "resultType") {
-          const resolution = resolveResultFieldType(resolved, element.name);
-          if (resolution === "any") return "any";
-          if (resolution !== null) {
-            currentType = resolution;
+          const fieldType = accessResultField(
+            resolved,
+            element.name,
+            typeAliases,
+            ctx,
+            expr.loc,
+          );
+          if (fieldType === "any") return "any";
+          if (fieldType !== null) {
+            currentType = fieldType;
             break;
           }
+          // null → fall through to generic handling (bogus Result field →
+          // "does not exist"), matching today's behavior.
         }
         if (resolved.type === "unionType") {
           const memberType = accessUnionField(

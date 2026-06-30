@@ -200,12 +200,12 @@ export interface AgencyConfig {
      * Strictness of union member access. When a property exists on some but
      * not all members of an un-narrowed union (e.g. `r.value` on an
      * un-guarded `Result`), this governs the diagnostic:
-     * - "silent": no diagnostic (default; lenient — today's behavior)
+     * - "silent": no diagnostic (lenient — such accesses type as `any`)
      * - "warn": emit a warning
-     * - "error": emit an error
+     * - "error": emit an error (default)
      * Narrow first (guard / `catch` / `match`) to access branch-specific
-     * members safely. To disable after the default moves to "error", set
-     * this back to "silent".
+     * members safely. Set to "silent" to opt out and restore the old lenient
+     * behavior.
      */
     strictMemberAccess?: "silent" | "warn" | "error";
   };

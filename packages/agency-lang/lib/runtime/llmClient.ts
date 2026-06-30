@@ -131,11 +131,11 @@ export type LLMClient = {
 
 export class SmoltalkClient implements LLMClient {
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
-    return smoltalk.text({ ...this.toSmolConfig(config), stream: false });
+    return smoltalk.text({ ...toSmolConfig(config), stream: false });
   }
 
   async *textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
-    yield* smoltalk.text({ ...this.toSmolConfig(config), stream: true });
+    yield* smoltalk.text({ ...toSmolConfig(config), stream: true });
   }
 
   async embed(
@@ -189,19 +189,29 @@ export class SmoltalkClient implements LLMClient {
     return normalized;
   }
 
-  private toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
-    const {
-      messages, tools, responseFormat, abortSignal,
-      model, apiKey, maxTokens, temperature, provider,
-      thinking, reasoningEffort, metadata, hostedTools,
-    } = config;
+}
 
-    return {
-      ...metadata,
-      messages, tools, responseFormat, abortSignal,
-      model, maxTokens, temperature, provider, thinking, reasoningEffort,
-      hostedTools,
-      apiKey: { openAi: apiKey },
-    } as Omit<SmolConfig, "stream">;
-  }
+/** Convert agency's PromptConfig into smoltalk's SmolConfig.
+ *  The nested `apiKey` map (every provider's key) and `baseUrl` arrive via
+ *  `...metadata` (the merged smoltalk client config) and MUST be preserved —
+ *  replacing `apiKey` wholesale here would clobber non-OpenAI / hosted-provider
+ *  keys. Only override `apiKey.openAi` when a per-call key STRING is supplied. */
+export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
+  const {
+    messages, tools, responseFormat, abortSignal,
+    model, apiKey, maxTokens, temperature, provider,
+    thinking, reasoningEffort, metadata, hostedTools,
+  } = config;
+
+  const metaApiKey = (metadata as { apiKey?: SmolConfig["apiKey"] } | undefined)
+    ?.apiKey;
+  return {
+    ...metadata,
+    messages, tools, responseFormat, abortSignal,
+    model, maxTokens, temperature, provider, thinking, reasoningEffort,
+    hostedTools,
+    ...(typeof apiKey === "string"
+      ? { apiKey: { ...metaApiKey, openAi: apiKey } }
+      : {}),
+  } as Omit<SmolConfig, "stream">;
 }

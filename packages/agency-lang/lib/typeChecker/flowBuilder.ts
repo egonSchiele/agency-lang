@@ -87,6 +87,13 @@ const statementRules: StatementRuleTable = {
     // Attaches the RHS and any access-chain operands (e.g. `obj[i()] = v`),
     // both covered by expressionChildren(assignment).
     attachExpressionsToFlow(node, flow, env);
+    // Record the pre-assignment flow on the assignment node itself. The Phase B
+    // access-chain target check (checkAssignmentValue) builds a *synthetic* base
+    // `variableName` node to resolve `obj.field`/`obj[k]` writes; that synthetic
+    // node has no flowOf entry of its own, so without this the base would resolve
+    // to its flat (un-narrowed) scope type. The check reads this entry to narrow
+    // the base via typeAt.
+    env.flowOf.set(node, flow);
     // Only a bare `x = …` / `let x = …` rebinds the variable. Skip access-chain
     // writes (`obj.x = 5` — a mutation, not a rebind; matches walkScopeBody)
     // and destructuring patterns (`node.variableName` not meaningful). The RHS

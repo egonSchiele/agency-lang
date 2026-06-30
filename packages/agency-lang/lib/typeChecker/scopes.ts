@@ -17,6 +17,7 @@ import { resultTypeForValidation } from "./validation.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
+import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
@@ -211,12 +212,16 @@ export function checkAssignmentValue(
     return;
   }
   if (node.accessChain) {
+    // The flow recorded for this assignment (flowBuilder) lets the access-chain
+    // target resolve a narrowed base via typeAt — see synthAccessChainTargetType.
+    const flowNode = ctx.flowEnv?.flowOf.get(node);
     const lhsType = synthAccessChainTargetType(
       node.variableName,
       node.accessChain,
       node.loc,
       scope,
       ctx,
+      flowNode,
     );
     const rhsType = synthType(node.value, scope, ctx);
     reportNotAssignable(ctx, node.variableName, rhsType, lhsType, node.loc);
@@ -236,6 +241,13 @@ export function checkAssignmentValue(
  * already encodes all the rules we'd otherwise duplicate (object property
  * lookup, record value type, union narrowing, etc.). Any diagnostics raised
  * by the synthesizer here are part of the regular typecheck output.
+ *
+ * `flowNode` (the flow recorded for the assignment) makes the synthetic base
+ * flow-aware: registering it in `flowOf` routes the base's `synthType` through
+ * `typeAt`, so a narrowed base (`t.box.n = …` inside `if (t.kind == "a")`)
+ * resolves `t` to the narrowed member rather than its wide declared type. The
+ * base node is synthetic, so without this it has no `flowOf` entry of its own
+ * and falls back to the flat `scope.lookup`.
  */
 function synthAccessChainTargetType(
   variableName: string,
@@ -243,12 +255,16 @@ function synthAccessChainTargetType(
   loc: SourceLocation | undefined,
   scope: Scope,
   ctx: TypeCheckerContext,
+  flowNode: FlowNode | undefined,
 ): VariableType | "any" {
   const base: VariableNameLiteral = {
     type: "variableName",
     value: variableName,
     loc,
   };
+  if (flowNode && ctx.flowEnv) {
+    ctx.flowEnv.flowOf.set(base, flowNode);
+  }
   const synthetic: ValueAccess = {
     type: "valueAccess",
     base,

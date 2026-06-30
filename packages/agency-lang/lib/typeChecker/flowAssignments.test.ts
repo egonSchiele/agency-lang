@@ -60,4 +60,37 @@ def f(r: R2): string {
   return s
 }`)).toEqual([]);
   });
+
+  it("access-chain write checks the LHS target against the NARROWED base", () => {
+    // `t.box.n = "wrong"` writes a member whose type depends on narrowing the
+    // base `t`. Inside the `kind == "a"` guard, t.box.n is `number`, so the
+    // string RHS must error. The LHS target is synthesized from a *synthetic*
+    // base node, so this only passes if that base resolves through the flow
+    // graph (typeAt) — a flat scope.lookup would see the wide union and the
+    // string would be assignable to `number | string`, silently dropping it.
+    expect(check(`
+type T = { kind: "a", box: { n: number } } | { kind: "b", box: { n: string } }
+def f(t: T): void {
+  if (t.kind == "a") {
+    t.box.n = "wrong"
+  }
+}`)).toContainEqual(
+      expect.stringContaining("not assignable to type 'number'"),
+    );
+  });
+
+  it("access-chain index write checks against the narrowed record value type", () => {
+    // Symmetric to the property-write case but through a Record index write
+    // (`t.m["k"] = …`): the value type is `number` once `t` is narrowed to the
+    // "a" member, so the string RHS must error.
+    expect(check(`
+type T = { kind: "a", m: Record<string, number> } | { kind: "b", m: Record<string, string> }
+def f(t: T): void {
+  if (t.kind == "a") {
+    t.m["k"] = "wrong"
+  }
+}`)).toContainEqual(
+      expect.stringContaining("not assignable to type 'number'"),
+    );
+  });
 });

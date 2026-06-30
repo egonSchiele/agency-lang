@@ -3545,10 +3545,28 @@ export class TypeScriptBuilder {
     }
     const statelogConfig = ts.obj(statelogFields);
 
+    // Base URLs: litellm/openai-compat take an env fallback (they require an
+    // explicit URL); openRouter/deepInfra have baked defaults in smoltalk, so
+    // only emit them when overridden in agency.json.
+    const baseUrlFields: Record<string, TsNode> = {
+      liteLlm: cfg.client?.baseUrl?.liteLlm
+        ? ts.str(cfg.client.baseUrl.liteLlm)
+        : ts.binOp(ts.env("LITELLM_BASE_URL"), "||", ts.str("")),
+      openAiCompat: cfg.client?.baseUrl?.openAiCompat
+        ? ts.str(cfg.client.baseUrl.openAiCompat)
+        : ts.binOp(ts.env("OPENAI_COMPAT_BASE_URL"), "||", ts.str("")),
+    };
+    if (cfg.client?.baseUrl?.openRouter) {
+      baseUrlFields.openRouter = ts.str(cfg.client.baseUrl.openRouter);
+    }
+    if (cfg.client?.baseUrl?.deepInfra) {
+      baseUrlFields.deepInfra = ts.str(cfg.client.baseUrl.deepInfra);
+    }
+
     const smoltalkDefaults = ts.obj({
       // API keys are nested under `apiKey`, each falling back to its
       // conventional env var. `ollama` is intentionally omitted — it uses
-      // OLLAMA_HOST (not an API key). The hosted providers are added below.
+      // OLLAMA_HOST (not an API key).
       apiKey: ts.obj({
         openAi: cfg.client?.apiKey?.openAi
           ? ts.str(cfg.client.apiKey.openAi)
@@ -3559,7 +3577,20 @@ export class TypeScriptBuilder {
         anthropic: cfg.client?.apiKey?.anthropic
           ? ts.str(cfg.client.apiKey.anthropic)
           : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
+        openRouter: cfg.client?.apiKey?.openRouter
+          ? ts.str(cfg.client.apiKey.openRouter)
+          : ts.binOp(ts.env("OPENROUTER_API_KEY"), "||", ts.str("")),
+        deepInfra: cfg.client?.apiKey?.deepInfra
+          ? ts.str(cfg.client.apiKey.deepInfra)
+          : ts.binOp(ts.env("DEEPINFRA_API_KEY"), "||", ts.str("")),
+        liteLlm: cfg.client?.apiKey?.liteLlm
+          ? ts.str(cfg.client.apiKey.liteLlm)
+          : ts.binOp(ts.env("LITELLM_API_KEY"), "||", ts.str("")),
+        openAiCompat: cfg.client?.apiKey?.openAiCompat
+          ? ts.str(cfg.client.apiKey.openAiCompat)
+          : ts.binOp(ts.env("OPENAI_COMPAT_API_KEY"), "||", ts.str("")),
       }),
+      baseUrl: ts.obj(baseUrlFields),
       model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),
       statelog: ts.obj({

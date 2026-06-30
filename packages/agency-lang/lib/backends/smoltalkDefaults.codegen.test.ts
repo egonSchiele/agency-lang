@@ -40,4 +40,24 @@ describe("smoltalkDefaults codegen", () => {
     const out = generate(PROGRAM, { client: { apiKey: { anthropic: "sk-ant-test" } } });
     expect(out).toContain("sk-ant-test");
   });
+
+  it("emits the hosted providers' apiKey env fallbacks", () => {
+    const out = generate(PROGRAM);
+    expect(out).toContain("OPENROUTER_API_KEY");
+    expect(out).toContain("DEEPINFRA_API_KEY");
+    expect(out).toContain("LITELLM_API_KEY");
+    expect(out).toContain("OPENAI_COMPAT_API_KEY");
+  });
+
+  it("emits a baseUrl map with litellm/openai-compat env fallbacks", () => {
+    const out = generate(PROGRAM);
+    expect(out).toContain("baseUrl");
+    expect(out).toContain("LITELLM_BASE_URL");
+    expect(out).toContain("OPENAI_COMPAT_BASE_URL");
+  });
+
+  it("bakes a configured openRouter base URL override", () => {
+    const out = generate(PROGRAM, { client: { baseUrl: { openRouter: "https://proxy.test/v1" } } });
+    expect(out).toContain("https://proxy.test/v1");
+  });
 });

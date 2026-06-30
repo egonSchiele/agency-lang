@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "searchDisabled",
+      "input": "",
+      "expectedOutput": "\"I can't browse the internet for real-time news updates. However, you can easily find the latest news for Minnesota by checking reputable news websites, such as local newspapers (like the Star Tribune or Pioneer Press) or national news outlets that cover state news. If there's a specific topic you're interested in, I can help summarize or provide background information!\"",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Does the response indicate that the LLM does not have access to the internet? Any other extra information is fine, and doesn't need to count positively or negatively towards the score. As long as the message indicates that the LLM cannot browse the internet, give it a perfect score.",
+          "desiredAccuracy": 80
+        }
+      ]
+    },
+    {
+      "nodeName": "searchEnabled",
+      "input": "",
+      "expectedOutput": "\"Here are some recent news stories from Minnesota:\\n\\n**Medicaid Funding Halted Over Fraud Concerns**\\n\\nIn February 2026, Vice President JD Vance announced that the Trump administration would temporarily halt $259 million in Medicaid funding to Minnesota due to fraud concerns. The Centers for Medicare and Medicaid Services identified significant fraud in 14 state Medicaid programs, potentially accounting for over half of the $18 billion allocated since 2018. ([washingtonpost.com](https://www.washingtonpost.com/politics/2026/02/25/trump-minnesota-medicaid-withholding/?utm_source=openai))\\n\\n**Wildfire Response in Two Harbors**\\n\\nIn May 2026, Governor Tim Walz visited Two Harbors to assess wildfire damage firsthand. The Stewart Trail Fire had burned approximately 355 acres, destroying 34 structures, including homes and outbuildings. The fire was over 60% contained, but evacuation orders and Highway 61 closures remained in effect. Additionally, a man was arrested for firing a shot at a wildfire-fighting airplane near Orr, Minnesota. ([kvrr.com](https://www.kvrr.com/2026/05/18/gov-walz-visits-two-harbors-to-survey-wildfire-fighting-efforts/?utm_source=openai))\\n\\n**Massive Pandemic Fraud Scheme Uncovered**\\n\\nIn May 2026, Aimee Bock, former leader of the nonprofit \\\"Feeding Our Future,\\\" was sentenced to nearly 42 years in prison for orchestrating a $250 million pandemic relief fraud scheme. The Justice Department described it as the \\\"single largest COVID-19 fraud scheme in the country.\\\" ([foxnews.com](https://www.foxnews.com/us/minnesota-fraud-mastermind-gets-nearly-42-years-prison-massive-250m-feeding-future-scheme.amp?utm_source=openai))\\n\\n**Environmental Concerns in Minnesota**\\n\\nMinnesota's list of polluted waters has grown, with issues including mercury contamination from coal-fired power plants, sulfate harming wild rice, and \\\"forever chemicals\\\" accumulating in fish. However, some lakes, rivers, and streams have shown modest improvements. ([mprnews.org](https://www.mprnews.org/environment?utm_source=openai))\\n\\n**Recent Crime Incidents**\\n\\n- *Cold Spring Group Home Stabbing*: In June 2026, a 33-year-old man was arrested after fatally stabbing an employee at a Cold Spring group home. The suspect is being held in the Stearns County Jail pending possible charges. ([mprnews.org](https://www.mprnews.org/minnesota?utm_source=openai))\\n\\n- *Cass County Deputy-Involved Shooting*: In November 2025, a shooting in Cass County resulted in the death of 37-year-old James Weyaus and the injury of Deputy Kaleb Cherne. The Minnesota Bureau of Criminal Apprehension is investigating the incident. ([cbsnews.com](https://www.cbsnews.com/minnesota/news/deadly-deputy-shooting-cass-county-minnesota-bca-id/?intcid=CNR-02-0623&utm_source=openai))\\n\\n\\n## Highlights:\\n- [Trump administration intensifies Minnesota Medicaid fraud crackdown - The Washington Post](https://www.washingtonpost.com/politics/2026/02/25/trump-minnesota-medicaid-withholding/?utm_source=openai), Published on Tuesday, February 24\\n- [Gov. Walz visits Two Harbors to survey wildfire fighting efforts - KVRR Local News](https://www.kvrr.com/2026/05/18/gov-walz-visits-two-harbors-to-survey-wildfire-fighting-efforts/?utm_source=openai), Published on Sunday, May 17\\n- [Minnesota nonprofit leader gets 42 years in $250M pandemic fraud scheme | Fox News](https://www.foxnews.com/us/minnesota-fraud-mastermind-gets-nearly-42-years-prison-massive-250m-feeding-future-scheme.amp?utm_source=openai), Published on Wednesday, May 20 \"",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The response should contain some recent news stories from Minnesota. It doesn't matter what the specific stories are – as long as it's clear that the LLM has been able to pull news stories about Minnesota, give it a perfect score.",
+          "desiredAccuracy": 80
+        }
+      ]
+    }
+  ]
+}

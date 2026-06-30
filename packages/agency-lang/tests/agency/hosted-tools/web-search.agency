@@ -1,0 +1,20 @@
+node searchDisabled() {
+  const response = llm(
+    "Look up latest news stories for Minnesota",
+    {
+    provider: "openai-responses"
+  },
+  )
+  return response
+}
+
+node searchEnabled() {
+  const response = llm(
+    "Look up latest news stories for Minnesota",
+    {
+    provider: "openai-responses",
+    hostedTools: ["web_search"]
+  },
+  )
+  return response
+}

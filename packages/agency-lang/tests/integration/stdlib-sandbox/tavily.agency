@@ -1,0 +1,23 @@
+import { tavilySearch } from "std::search"
+import { env } from "std::system"
+
+node main() {
+  // Skip the live API call if no key is configured. The unit tests in
+  // lib/stdlib/search.test.ts cover the request/header/parsing logic.
+  const key = env("TAVILY_API_KEY")
+  if (key == null || key == "") {
+    return "tavily ok"
+  }
+
+  const results = tavilySearch("agency language programming", count: 3)
+  if (length(results) == 0) {
+    return "tavily failed: no results"
+  }
+
+  const first = results[0]
+  if (first.url == "") {
+    return "tavily failed: empty url"
+  }
+
+  return "tavily ok"
+}

@@ -13,6 +13,7 @@
  */
 import { pickProvider, envVarFor } from "std::llm"
 import { env } from "std::system"
+import { slotKind } from "./slots.agency"
 
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
@@ -228,4 +229,35 @@ export def parseModelSpec(spec: string, providerEstablished: boolean, knownProvi
     return { model: spec.substring(idx + 1), provider: prefix }
   }
   return { model: spec, provider: "" }
+}
+
+// Field order { model, provider, via } is locked by JSON snapshot tests.
+export type Resolved = {
+  model: string;
+  provider: string;
+  via: string
+}
+
+/** Built-in default for (provider, slot, price). Phase 1 honors only "standard",
+  deriving fast/slow from `planModels` along the DETECTED-provider path (provider
+  arg empty, detected = provider) so the values are byte-identical to today's env
+  auto-detection. `derived` slots (embedding) return empty — memory derives the
+  embed model from the active provider. Providers without baked defaults →
+  failure. Dispatch on SLOT_KIND so the mapping lives in one table. */
+export def priceDefault(provider: string, slot: string, price: string): Result<Resolved> {
+  if (MODELS[provider] == undefined) {
+    return failure("Provider '${provider}' has no built-in defaults; pass an explicit model.")
+  }
+  const plan = planModels("", "", "", "", provider)
+  const kind = slotKind(slot)
+  if (kind == "fast") {
+    return success({ model: plan.fastModel, provider: plan.fastProvider, via: "built-in·price=${price}" })
+  }
+  if (kind == "slow") {
+    return success({ model: plan.slowModel, provider: plan.slowProvider, via: "built-in·price=${price}" })
+  }
+  if (kind == "derived") {
+    return success({ model: "", provider: "", via: "built-in·embedding(derived)" })
+  }
+  return failure("Unknown slot '${slot}'.")
 }

@@ -18,6 +18,12 @@ import { env } from "std::system"
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
 // extended thinking; native providers use their own. Used as fallbacks
 // when the user doesn't pass --model / --fastmodel / --slowmodel.
+//
+// OpenRouter fronts many open models; its defaults are a reasoning model
+// for the fast path and GLM for deep work (the model the custom-providers
+// doc uses). `slowProvider` stays "openrouter" — no Responses-style API.
+// (Keep these notes out of the object literal below: comments inside an
+// object literal hit a parser bug.)
 type ProviderModels = {
   fast: string;
   slow: string;
@@ -39,7 +45,40 @@ export static const MODELS: Record<string, ProviderModels> = {
     fast: "gemini-3.5-flash",
     slow: "gemini-3.1-pro-preview",
     slowProvider: "google"
+  },
+  openrouter: {
+    fast: "deepseek/deepseek-r1",
+    slow: "z-ai/glm-5.2",
+    slowProvider: "openrouter"
   }
+}
+
+// Hosted providers smoltalk reaches through a user-supplied base URL (a
+// self-hosted proxy / generic OpenAI-compatible endpoint). We validate the
+// base URL upfront — alongside the API key — so the agent fails loudly at
+// startup instead of surfacing smoltalk's error on the first llm() call.
+// These have no default models (the model names are deployment-specific), so
+// they are NOT in MODELS and always require an explicit --model.
+static const BASE_URL_PROVIDERS: Record<string, string> = {
+  litellm: "LITELLM_BASE_URL"
+}
+
+/** Verify a provider's required env config is present. Checks the API-key
+ *  var (via `envVarFor`) and, for proxy providers, the base-URL var. A
+ *  truly-custom/local provider (no recognized key var, no base-URL
+ *  requirement) passes through untouched, so `--provider llama-cpp --model
+ *  x.gguf` still needs no hosted key. Returns the provider on success or a
+ *  ready-to-print failure. */
+def checkProviderEnv(provider: string): Result<string> {
+  const varName = envVarFor(provider)
+  if (varName != "" && (env(varName) == null || env(varName) == "")) {
+    return failure("No API key for provider '${provider}'. Set ${varName}.")
+  }
+  const baseVar = BASE_URL_PROVIDERS[provider]
+  if (baseVar != undefined && (env(baseVar) == null || env(baseVar) == "")) {
+    return failure("Provider '${provider}' needs a base URL. Set ${baseVar} (your proxy URL).")
+  }
+  return success(provider)
 }
 
 // The agent always uses the OpenAI Responses API (not Chat Completions) for
@@ -65,17 +104,20 @@ export type ModelPlan = {
 /** Decide which provider's default models to use, given the four
  *  (already-normalized-to-"") CLI flag values.
  *
- *  - An explicit `--provider` for a *recognized* provider (a key in
- *    MODELS) wins outright: we use its defaults and SKIP env
- *    auto-detection entirely. This is what lets `--provider openai`
- *    work even when a stale/invalid ANTHROPIC_API_KEY is set. We also
- *    verify that provider's API key is present so we fail loudly up
- *    front instead of mid-run.
- *  - An explicit `--provider` for an *unrecognized* provider (a custom
- *    or local one) has no built-in defaults, so it's only valid
- *    alongside an explicit model; otherwise it's an error.
+ *  - An explicit `--provider` for a provider with defaults (a key in
+ *    MODELS: openai/anthropic/google/openrouter) wins outright: we use
+ *    its defaults and SKIP env auto-detection entirely. This is what lets
+ *    `--provider openai` work even when a stale/invalid ANTHROPIC_API_KEY
+ *    is set. We also verify the provider's key (and base URL, for a proxy)
+ *    is present via `checkProviderEnv` so we fail loudly up front.
+ *  - An explicit `--provider` for a provider WITHOUT defaults (a proxy
+ *    like litellm, or a custom/local one) is only valid alongside an
+ *    explicit model; otherwise it's an error. With a model it still goes
+ *    through `checkProviderEnv`, so a recognized proxy's missing
+ *    key/base-URL is caught here too.
  *  - With no `--provider`, fall back to env auto-detection
- *    (`pickProvider`) whenever defaults are actually needed.
+ *    (`pickProvider`, with openrouter as a last resort) whenever defaults
+ *    are actually needed.
  *
  *  Returns the provider name whose MODELS bucket should supply defaults,
  *  or a failure whose message is ready to print. */
@@ -89,28 +131,25 @@ export def resolveDetected(
   const needSlow = slow == "" && model == ""
 
   if (provider != "") {
-    if (MODELS[provider] == undefined) {
-      // Custom/local provider — no defaults to fall back on.
-      if (needFast || needSlow) {
-        const known = Object.keys(MODELS)
-        return failure(
-          "--provider ${provider} has no built-in defaults; also pass --model (or --fastmodel/--slowmodel). Providers with defaults: ${known.join(", ")}.",
-        )
-      }
-      // Models fully specified; the defaults bucket is never read.
-      return success(provider)
+    // A provider with no built-in defaults (a custom/local one, or a proxy
+    // like litellm whose model names are deployment-specific) can't supply
+    // fast/slow models, so it's only usable alongside an explicit model.
+    if (MODELS[provider] == undefined && (needFast || needSlow)) {
+      const known = Object.keys(MODELS)
+      return failure(
+        "--provider ${provider} has no built-in defaults; also pass --model (or --fastmodel/--slowmodel). Providers with defaults: ${known.join(", ")}.",
+      )
     }
-    // Recognized provider forced. Fail loudly now if its key is missing
+    // Recognized provider (a forced one with defaults, or a proxy with an
+    // explicit model): fail loudly now if its key / base URL is missing
     // rather than emitting a confusing auth error on the first llm() call.
-    const varName = envVarFor(provider)
-    if (varName != "" && (env(varName) == null || env(varName) == "")) {
-      return failure("No API key for provider '${provider}'. Set ${varName}.")
-    }
-    return success(provider)
+    return checkProviderEnv(provider)
   }
 
   if (needFast || needSlow) {
-    return pickProvider()
+    // Env auto-detection. openrouter is last so an explicit big-three key
+    // still wins; it's only picked when it's the only key present.
+    return pickProvider(["anthropic", "google", "openai", "openrouter"])
   }
   // Everything came from --model; the defaults bucket is never read.
   return success("openai")

@@ -45,6 +45,29 @@ via `openai-compat` (e.g. Fireworks, Together) report token usage but not cost.
 LiteLLM cost is read from a response header and is available for non-streaming
 calls only.
 
+### Using a hosted provider with `agency agent`
+
+The agent recognizes these via the existing `--provider` / `--model` flags:
+
+```bash
+# OpenRouter has built-in default models, so the provider name is enough.
+# (Auto-detected too: if OPENROUTER_API_KEY is the only LLM key set, a bare
+# `agency agent` selects it. Override the models with --model / --fastmodel /
+# --slowmodel.)
+export OPENROUTER_API_KEY=sk-or-...
+agency agent --provider openrouter
+
+# LiteLLM has no built-in defaults (model names are gateway-specific) and needs
+# a base URL, so pass --model and set both env vars. The agent validates the
+# key and base URL up front.
+export LITELLM_API_KEY=...  LITELLM_BASE_URL=https://your-proxy/v1
+agency agent --provider litellm --model your-gateway-model
+```
+
+Any other provider (`deepinfra`, `openai-compat`, or a custom/local one) also
+works with `--provider X --model Y` — it just has no baked defaults, so a model
+is required.
+
 ## Local models (the easy way)
 
 Install the local-model package once, then use the `agency local` tools or the

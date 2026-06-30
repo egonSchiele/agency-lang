@@ -18,6 +18,18 @@
       "input": "",
       "expectedOutput": "{\"fastModel\":\"gpt-4o\",\"fastProvider\":\"openai-responses\",\"slowModel\":\"gpt-4o\",\"slowProvider\":\"openai-responses\"}",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "openrouterDetectedUsesDefaults",
+      "input": "",
+      "expectedOutput": "{\"fastModel\":\"deepseek/deepseek-r1\",\"fastProvider\":\"openrouter\",\"slowModel\":\"z-ai/glm-5.2\",\"slowProvider\":\"openrouter\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "litellmWithoutModelIsError",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

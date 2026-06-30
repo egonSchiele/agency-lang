@@ -803,7 +803,7 @@ node main() {
       },
       provider: {
         type: "string",
-        description: "Force the LLM provider. Given alone (openai/anthropic/google) it selects that provider's default models and skips env auto-detection; pair it with --model for a custom/local model name"
+        description: "Force the LLM provider. Given alone (openai/anthropic/google/openrouter) it selects that provider's default models and skips env auto-detection; pair it with --model for any other provider (e.g. litellm, openai-compat, or a custom/local model)"
       },
       interactive: {
         type: "boolean",

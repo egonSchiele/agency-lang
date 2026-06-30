@@ -3,7 +3,7 @@
  * the Responses API (both fast and slow) so hosted web_search works on the
  * agent's default models. Other providers are unchanged.
  */
-import { planModels, ModelPlan } from "../lib/models.agency"
+import { planModels, resolveDetected, ModelPlan } from "../lib/models.agency"
 
 node openaiDetectedRoutesBothToResponses(): ModelPlan {
   return planModels("", "", "", "", "openai")
@@ -15,4 +15,21 @@ node anthropicDetectedKeepsNative(): ModelPlan {
 
 node explicitOpenaiModelStillRoutedThroughResponses(): ModelPlan {
   return planModels("gpt-4o", "", "", "openai", "openai")
+}
+
+// `--provider openrouter` alone resolves to the baked open-model defaults,
+// both routed through the openrouter provider (no Responses promotion).
+node openrouterDetectedUsesDefaults(): ModelPlan {
+  return planModels("", "", "", "openrouter", "openrouter")
+}
+
+// litellm has no built-in defaults (deployment-specific model names), so
+// `--provider litellm` with no model is an error — caught before any env
+// read, so this is deterministic regardless of LITELLM_* env vars.
+node litellmWithoutModelIsError(): boolean {
+  const r = resolveDetected("", "", "", "litellm")
+  if (r is failure(f)) {
+    return true
+  }
+  return false
 }

@@ -87,8 +87,10 @@ envVarFor(provider: string): string
 
 Return the environment variable that holds the API key for a recognized
   provider, or "" for an unrecognized name. Recognized: "anthropic"
-  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
-  (OPENAI_API_KEY).
+  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai" (OPENAI_API_KEY),
+  "openrouter" (OPENROUTER_API_KEY), "litellm" (LITELLM_API_KEY). Note that
+  "litellm" also requires a base URL (LITELLM_BASE_URL); this returns only
+  the API-key var.
 
   @param provider - The provider name to map
 
@@ -109,9 +111,9 @@ pickProvider(order: string[]): Result<string>
 ```
 
 Return the first provider in `order` whose API-key environment variable
-  is set, or a failure if none are. Recognized providers: "anthropic"
-  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
-  (OPENAI_API_KEY).
+  is set, or a failure if none are. A provider is checkable when `envVarFor`
+  knows its key var (anthropic, google, openai, openrouter, litellm);
+  unrecognized names in `order` are skipped.
 
   @param order - Providers to check, highest preference first
 
@@ -123,7 +125,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L77))
 
 ### registerProviderModule
 
@@ -142,4 +144,4 @@ Load a provider module by path at runtime and register its custom provider
 |---|---|---|
 | path | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L107))

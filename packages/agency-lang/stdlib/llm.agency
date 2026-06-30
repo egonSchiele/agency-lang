@@ -49,8 +49,10 @@ export def envVarFor(provider: string): string {
   """
   Return the environment variable that holds the API key for a recognized
   provider, or "" for an unrecognized name. Recognized: "anthropic"
-  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
-  (OPENAI_API_KEY).
+  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai" (OPENAI_API_KEY),
+  "openrouter" (OPENROUTER_API_KEY), "litellm" (LITELLM_API_KEY). Note that
+  "litellm" also requires a base URL (LITELLM_BASE_URL); this returns only
+  the API-key var.
 
   @param provider - The provider name to map
   """
@@ -63,15 +65,21 @@ export def envVarFor(provider: string): string {
   if (provider == "openai") {
     return "OPENAI_API_KEY"
   }
+  if (provider == "openrouter") {
+    return "OPENROUTER_API_KEY"
+  }
+  if (provider == "litellm") {
+    return "LITELLM_API_KEY"
+  }
   return ""
 }
 
 export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Result<string, string> {
   """
   Return the first provider in `order` whose API-key environment variable
-  is set, or a failure if none are. Recognized providers: "anthropic"
-  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai"
-  (OPENAI_API_KEY).
+  is set, or a failure if none are. A provider is checkable when `envVarFor`
+  knows its key var (anthropic, google, openai, openrouter, litellm);
+  unrecognized names in `order` are skipped.
 
   @param order - Providers to check, highest preference first
   """
@@ -91,7 +99,7 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
     }
   }
   if (checked == "") {
-    return failure("pickProvider: no recognized providers given (expected anthropic, google, or openai)")
+    return failure("pickProvider: no recognized providers given (expected one of anthropic, google, openai, openrouter, litellm)")
   }
   return failure("No LLM API key found. Set one of: ${checked}")
 }

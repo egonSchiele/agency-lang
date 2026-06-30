@@ -63,6 +63,26 @@ branch a compiler-enforced guarantee rather than a convention.
 - **Escape hatches** (no new syntax): an `if (isSuccess(r))` / `if (isFailure(r))`
   guard, `r catch …`, or `match (r) { … }`.
 
+## Match exhaustiveness
+
+A `match` over a **closed** value type — a `Result`, or a closed literal/value
+union (`"a" | "b"`) — that doesn't cover every case and has no `_` arm is a
+diagnostic, governed by `typechecker.matchExhaustiveness: "silent" | "warn" |
+"error"` (default `"silent"`; see [config](../../../misc/config.md)).
+
+- A shared `decomposeCases(type)` (`typeCases.ts`) enumerates a value type's
+  cases; `checkMatchExhaustiveness` (`matchExhaustiveness.ts`) reports the cases
+  the **un-guarded** arms leave uncovered. Effect sets enumerate via
+  `resolveEffectSet`, not here, so `decomposeCases` returns *open* for them.
+- **Conservative — never a false "missing case":** open types (`string`,
+  `number`, `any`, unions containing `any`, effect sets) are never required;
+  a guarded arm never counts toward coverage; a `_` (or un-guarded bare binder)
+  satisfies any match. **B1 scope:** Result + closed literal/value unions.
+  Object/tagged-union discriminant coverage (`{kind:"a"}`) is **B2** — until then
+  a non-discriminated object union is treated as un-coverable (no diagnostic).
+- The `match(x is …)` form is never checked (its lowered output carries no
+  `matchSource`), by construction.
+
 ## Current model: scope-chain narrowing
 
 Narrowing is produced as pure facts and applied via throwaway child scopes during

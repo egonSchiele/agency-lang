@@ -28,14 +28,16 @@ flow-typed checker work and the four narrowing specs at the repo root.
 |---|---|---|
 | `isSuccess(r)` / `isFailure(r)` on a bare variable | ✅ | then- and else-branch; `r.value` / `r.error` type precisely |
 | `r.prop == literal` / `!= literal` on a bare variable | ✅ | discriminated-union member filter (either operand order; string/number/boolean literals) |
+| Same guards on a **single-hop member-path** scrutinee (`b.r`, `e.payload`) | ✅ | M1 — `isSuccess(b.r)`, `b.r.kind == "x"`, `b.r != null` narrow the path; `b.r.value` then types precisely. One hop only (`base.prop`); see the nested-access row for multi-hop |
 | `match` arm **bound fields** | ✅ | free via lowering to a `__s` temp — no match-specific code |
 | `!c`, `a && b`, `a || b` combinators | ✅ | `!` swaps then/else; `&&` unions then-facts; `\|\|` unions else-facts |
 | Post-guard / early-return (`if (isFailure(r)) { return }` ⇒ `r` is Success after) | ✅ | `alwaysExits` counts only `return` (conservative) |
-| Nested-access scrutinee (`a.b.c`, `obj.field`) | ❌ | single-hop **bare variable** only |
+| Single-hop member-path scrutinee (`obj.field`) | ✅ | M1 — see the member-path row above |
+| Multi-hop / index nested scrutinee (`a.b.c`, `arr[0]`) | ❌ | M2 follow-on — `Reference.chain` only encodes one property hop today (`asPathReference`'s one-hop ceiling); index segments aren't yet representable |
 | The scrutinee *variable* in a `match` arm (vs a bound field) | ❌ | only bound fields narrow; the source var isn't re-typed |
 | Mixed union with a non-literal discriminant member | ❌ | by design — the `string` member can't be proven disjoint |
 | Narrowing to `never` (dead-branch detection) | ❌ | suppressed today; **planned** with the flow model + `never` |
-| `null` / truthiness (`if (x != null)`, `if (x == null)`, `if (x)`) | ✅ | strips/keeps the `null` member of a `T \| null` optional; bare-variable scrutinee only. `x != null` / `x == null` are exact and narrow **both** branches. Bare `if (x)` narrows **only the then-branch** to non-null: the runtime uses JS truthiness, so a falsy `x` may be `""`/`0`/`false` (not just `null`), so the else-branch (and the post-`while` region) is left unnarrowed — narrowing it to `null` would be unsound. `if (x)` is accepted as a condition for optionals (an opt-in carve-out from the boolean-only condition rule — see `checkConditionType`). |
+| `null` / truthiness (`if (x != null)`, `if (x == null)`, `if (x)`) | ✅ | strips/keeps the `null` member of a `T \| null` optional; bare variable or single-hop member-path scrutinee (`c.timeout`). `x != null` / `x == null` are exact and narrow **both** branches. Bare `if (x)` narrows **only the then-branch** to non-null: the runtime uses JS truthiness, so a falsy `x` may be `""`/`0`/`false` (not just `null`), so the else-branch (and the post-`while` region) is left unnarrowed — narrowing it to `null` would be unsound. `if (x)` is accepted as a condition for optionals (an opt-in carve-out from the boolean-only condition rule — see `checkConditionType`). |
 | `typeof` / value-kind split of plain unions (`number \| string`) | ❌ | **planned fast-follow** — needs surface syntax |
 | User-defined type guards (`def isFoo(x): x is Foo`) | ❌ | **planned fast-follow** — needs `x is T` syntax |
 | Aliased condition (`const ok = isSuccess(r); if (ok) …`) | ❌ | **planned** — no new syntax, smarter `analyzeCondition` |
@@ -157,6 +159,24 @@ scan skips narrowing any variable the branch (or the post-guard tail) reassigns,
 since its type could change. The `narrowedBranch` marker on `ResultType` is set only
 by this layer and is stripped by `widenType`, so it never leaks through `declare()`
 into a function's inferred return type.
+
+**Member-path prefix invalidation (M1).** A narrowing of `box.r` is keyed on the
+whole path. Reassigning the path *or any prefix of it* drops the narrowing: after
+`box = …` (or `box.r = …`), `box.r` re-resolves from the reassigned base, not the
+stale narrowed flow. `typeAt`'s `assign` case detects this via `isPrefixOf(at.ref,
+ref)` and re-resolves through `resolvePath`; the `loop` back-edge case does the same
+when the body widened the base var. A *sibling* assignment (`box.q = …`) is **not** a
+prefix, so it correctly leaves `box.r` narrowed. `flowHasNarrowFor` — the gate
+`synthValueAccess` uses before short-circuiting a path read through `typeAt` — applies
+the same prefix rule, so an un-guarded (or re-bound) `box.r.value` still hits the
+structural walk's strict-member-access diagnostic.
+
+Strict member access is itself flow-sensitive, so `strictMemberAccessSeverity`
+returns `silent` whenever `ctx.flowEnv` is unset — i.e. during the pre-flow inference
+passes (return-type inference; scope-building, where an untyped `let v = b.r.value`
+synthesizes its RHS to declare `v`). Emitting there would be a false positive on
+narrowed access; the flow-aware `checkScopes` pass re-synthesizes every value access
+and is the single source of the diagnostic.
 
 Un-narrowed `Result` field access still synthesizes to `any` (the legacy escape
 hatch in `synthValueAccess`); tightening that into a hard error is a later increment

@@ -100,6 +100,22 @@ describe("buildFlowGraph — linear", () => {
     }
   });
 
+  it("REGRESSION (M1): a property-access valueAccess (obj.field) gets a flowOf entry", () => {
+    // synthValueAccess's member-path narrowing gate silently degrades to "no
+    // narrowing" if a `.property` valueAccess stops being attached to the flow
+    // graph. Pin it: the `obj.field` node must have a flowOf entry.
+    const body = parseBody(`let obj = { field: 1 }\nprint(obj.field)`);
+    const scope = new Scope("t");
+    scope.declare("obj", { type: "objectType", properties: [{ key: "field", value: NUM }] });
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const access = find(
+      body,
+      (n) => n.type === "valueAccess" && n.base.type === "variableName" && n.base.value === "obj",
+    );
+    expect(env.flowOf.get(access)).toBeDefined();
+  });
+
   it("INVARIANT holds across slice / computed-key / index positions", () => {
     // `lo`/`hi` live inside a slice; `key` inside a computed key — both were
     // missed before expressionChildren covered slice + computedKey.

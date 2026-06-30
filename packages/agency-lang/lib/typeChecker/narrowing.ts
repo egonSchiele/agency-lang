@@ -10,6 +10,9 @@ import { safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
+// Type-only import: `flow.ts` imports `Refine`/`NarrowCandidate` from here, so a
+// value import would cycle. `Reference` is the narrowed path (variable + chain).
+import type { Reference } from "./flow.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
@@ -27,7 +30,7 @@ export type Refine =
       keep: boolean;
     }
   | { kind: "presence"; present: boolean };
-export type NarrowCandidate = { variableName: string; refine: Refine };
+export type NarrowCandidate = { ref: Reference; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
 const NO_FACTS: ConditionFacts = { then: [], else: [] };
@@ -60,20 +63,39 @@ export function narrowByRefine(
 }
 
 /**
- * Recognize a single `v.prop` member access over a *bare variable* (exactly one
- * property hop). Returns null for anything else — nested access (`a.b.c`), a
- * non-variable base, index/call chains, etc. Variable-keyed only, so the
- * narrowed scrutinee is statically the same binding at the access site.
+ * A stable single-hop property path: a bare variable, or `variable.property`.
+ * Returns the `Reference`, or null for anything else (calls, index/computed
+ * keys, method hops, slices, or >1 property hop). M2 extends to multi-hop +
+ * index; M1 caps at one hop so the narrowed scrutinee is statically stable.
+ */
+function asPathReference(e: Expression): Reference | null {
+  if (e.type === "variableName") return { variable: e.value, chain: [] };
+  if (e.type === "valueAccess" && e.base.type === "variableName" && e.chain.length === 1) {
+    const el = e.chain[0];
+    if (el.kind === "property") return { variable: e.base.value, chain: [el.name] };
+  }
+  return null;
+}
+
+/**
+ * Recognize `V.prop` where the *receiver* `V` is a single-hop path (a bare
+ * variable, or one property hop). The discriminant is the FINAL property; the
+ * narrowed reference is the receiver. So `obj.kind` → ref `{obj,[]}`, prop
+ * `kind`; `obj.payload.kind` → ref `{obj,[payload]}`, prop `kind`. A receiver of
+ * >1 hop (`a.b.c.kind`) returns null (M2). Variable-keyed, so the narrowed
+ * scrutinee is statically the same binding at the access site.
  */
 function asDiscriminantAccess(
   e: Expression,
-): { variableName: string; prop: string } | null {
+): { ref: Reference; prop: string } | null {
   if (e.type !== "valueAccess") return null;
   if (e.base.type !== "variableName") return null;
-  if (e.chain.length !== 1) return null;
-  const el = e.chain[0];
-  if (el.kind !== "property") return null;
-  return { variableName: e.base.value, prop: el.name };
+  if (e.chain.length < 1 || e.chain.length > 2) return null;
+  if (e.chain.some((el) => el.kind !== "property")) return null;
+  const props = e.chain.map((el) => (el.kind === "property" ? el.name : ""));
+  const prop = props[props.length - 1];
+  const receiverChain = props.slice(0, -1); // [] for one hop, [p] for two hops
+  return { ref: { variable: e.base.value, chain: receiverChain }, prop };
 }
 
 /**
@@ -88,17 +110,14 @@ function isNullExpr(e: Expression): boolean {
 }
 
 /**
- * Recognize a presence test `x == null` / `x != null` over a *bare variable*
- * (either operand order). Returns the variable name, or null otherwise.
+ * Recognize a presence test `x == null` / `x != null` over a single-hop path
+ * (a bare variable or `obj.field`), either operand order. Returns the
+ * `Reference`, or null otherwise.
  */
-function asPresenceTest(left: Expression, right: Expression): string | null {
-  if (left.type === "variableName" && !isNullExpr(left) && isNullExpr(right)) {
-    return left.value;
-  }
-  if (right.type === "variableName" && !isNullExpr(right) && isNullExpr(left)) {
-    return right.value;
-  }
-  return null;
+function asPresenceTest(left: Expression, right: Expression): Reference | null {
+  const tryOne = (a: Expression, b: Expression): Reference | null =>
+    !isNullExpr(a) && isNullExpr(b) ? asPathReference(a) : null;
+  return tryOne(left, right) ?? tryOne(right, left);
 }
 
 /**
@@ -133,29 +152,28 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       return { then: [], else: [...l.else, ...r.else] };
     }
     if (condition.operator === "==" || condition.operator === "!=") {
-      // Presence test: `x == null` / `x != null` over a bare variable (either
+      // Presence test: `x == null` / `x != null` over a single-hop path (either
       // operand order). Narrows by stripping/keeping the `null` member. Disjoint
-      // from the discriminant shape below (bare variable + `null` literal vs a
-      // `valueAccess`), so it's checked first with no precedence concern.
-      const presenceVar = asPresenceTest(condition.left, condition.right);
-      if (presenceVar) {
+      // from the discriminant shape below (path-vs-`null`-literal vs `V.prop`).
+      const presenceRef = asPresenceTest(condition.left, condition.right);
+      if (presenceRef) {
         // `x != null` → then: present (non-null); `x == null` → then: absent.
         const presentThen = condition.operator === "!=";
         const mkP = (present: boolean): NarrowCandidate => ({
-          variableName: presenceVar,
+          ref: presenceRef,
           refine: { kind: "presence", present },
         });
         return { then: [mkP(presentThen)], else: [mkP(!presentThen)] };
       }
-      // `v.prop == literal` / `!= literal` over a bare variable. Either operand
-      // order is accepted. then-branch keeps the matching member(s) for `==`
-      // (and the complement for `!=`); the else-branch is the inverse.
+      // `V.prop == literal` / `!= literal` over a single-hop receiver `V`. Either
+      // operand order. then-branch keeps the matching member(s) for `==` (and the
+      // complement for `!=`); the else-branch is the inverse.
       const acc = asDiscriminantAccess(condition.left) ?? asDiscriminantAccess(condition.right);
       const lit = literalToType(condition.right) ?? literalToType(condition.left);
       if (!acc || !lit) return NO_FACTS;
       const keepThen = condition.operator === "==";
       const mk = (keep: boolean): NarrowCandidate => ({
-        variableName: acc.variableName,
+        ref: acc.ref,
         refine: { kind: "discriminant", prop: acc.prop, literal: lit, keep },
       });
       return { then: [mk(keepThen)], else: [mk(!keepThen)] };
@@ -173,7 +191,7 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
     if (!acc) return NO_FACTS;
     const litTrue: BooleanLiteralType = { type: "booleanLiteralType", value: "true" };
     const truthy = (keep: boolean): NarrowCandidate => ({
-      variableName: acc.variableName,
+      ref: acc.ref,
       refine: { kind: "discriminant", prop: acc.prop, literal: litTrue, keep },
     });
     return { then: [truthy(true)], else: [truthy(false)] };
@@ -191,7 +209,7 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
     return {
       then: [
         {
-          variableName: condition.value,
+          ref: { variable: condition.value, chain: [] },
           refine: { kind: "presence", present: true },
         },
       ],
@@ -204,14 +222,16 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
   if (fn !== "isSuccess" && fn !== "isFailure") return NO_FACTS;
   if (condition.arguments.length !== 1) return NO_FACTS;
   const arg = condition.arguments[0];
-  if (arg.type !== "variableName") return NO_FACTS;
-  const name = arg.value;
+  // Skip splat / named args (not Expressions); only a bare var or one-hop path.
+  if (arg.type !== "variableName" && arg.type !== "valueAccess") return NO_FACTS;
+  const ref = asPathReference(arg);
+  if (!ref) return NO_FACTS;
   // isSuccess(r) ⇔ r.success == true ; isFailure(r) ⇔ r.success != true.
   // Result is consumed as a discriminated union on `success` (resultUnion.ts).
   const successLit: BooleanLiteralType = { type: "booleanLiteralType", value: "true" };
   const keepThen = fn === "isSuccess";
   const onSuccess = (keep: boolean): NarrowCandidate => ({
-    variableName: name,
+    ref,
     refine: { kind: "discriminant", prop: "success", literal: successLit, keep },
   });
   return { then: [onSuccess(keepThen)], else: [onSuccess(!keepThen)] };
@@ -384,7 +404,13 @@ export function applyNarrowing(
   typeAliases: Record<string, TypeAliasEntry>,
 ): void {
   for (const cand of candidates) {
-    const current = childScope.lookup(cand.variableName);
+    // The legacy child-scope path narrows a bare variable (declareLocal by name).
+    // Member-path candidates (chain.length > 0) are handled only by the flow
+    // path (typeAt); skip them here — declaring a local named "obj.r" is
+    // meaningless. Inference is bare-variable-only; path narrowing is Phase-B.
+    if (cand.ref.chain.length !== 0) continue;
+    const name = cand.ref.variable;
+    const current = childScope.lookup(name);
     if (!current || current === "any") continue;
     // "what to narrow to" is delegated to narrowByRefine (the same dispatcher
     // the flow path uses). It resolves through type-alias variables itself
@@ -396,8 +422,8 @@ export function applyNarrowing(
     if (narrowed === null) continue;
     // Soundness gate: a branch that reassigns the variable may change its type
     // mid-branch, so don't narrow it (whole-body scan, conservative).
-    if (isReassignedIn(branchBody, cand.variableName)) continue;
-    childScope.declareLocal(cand.variableName, narrowed);
+    if (isReassignedIn(branchBody, name)) continue;
+    childScope.declareLocal(name, narrowed);
   }
 }
 

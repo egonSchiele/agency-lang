@@ -27,7 +27,17 @@ describe("analyzeCondition", () => {
   // isSuccess/isFailure (and `if (r.success)`) now narrow via a discriminant on
   // the boolean `success` field (Result is consumed as a discriminated union).
   const succ = (varName: string, keep: boolean) => ({
-    variableName: varName,
+    ref: { variable: varName, chain: [] as string[] },
+    refine: {
+      kind: "discriminant",
+      prop: "success",
+      literal: { type: "booleanLiteralType", value: "true" },
+      keep,
+    },
+  });
+  // Path-aware success builder (one-hop receiver).
+  const succP = (variable: string, chain: string[], keep: boolean) => ({
+    ref: { variable, chain },
     refine: {
       kind: "discriminant",
       prop: "success",
@@ -66,10 +76,62 @@ describe("analyzeCondition", () => {
     ["unrelated function call", "foo(r)"],
     ["isSuccess with zero args", "isSuccess()"],
     ["isSuccess with too many args", "isSuccess(r, r)"],
-    ["isSuccess of a non-variable", "isSuccess(tryParse(\"x\"))"],
-    ["isSuccess of a member access", "isSuccess(o.r)"],
+    ["isSuccess of a call", 'isSuccess(tryParse("x"))'],
+    // M1 path ceiling: these scrutinees are NOT single-hop property paths.
+    ["isSuccess of an index", "isSuccess(obj[0])"],
+    ["isSuccess of a two-hop path", "isSuccess(obj.r.s)"],
+    ["isSuccess of a method call", "isSuccess(obj.method())"],
+    ["discriminant on an index receiver", 'obj[0].kind == "x"'],
+    ["discriminant on a two-hop receiver", 'a.b.c.kind == "x"'],
+    ["presence on an index", "obj[0] != null"],
   ])("produces no candidates for %s", (_label, src) => {
     expect(analyzeCondition(firstIfCondition(src))).toEqual(NO_FACTS);
+  });
+
+  // ── Single-hop member paths (M1) ──────────────────────────────────────────
+  const presP = (variable: string, chain: string[], present: boolean) => ({
+    ref: { variable, chain },
+    refine: { kind: "presence", present },
+  });
+  const discP = (variable: string, chain: string[], prop: string, value: string, keep: boolean) => ({
+    ref: { variable, chain },
+    refine: { kind: "discriminant", prop, literal: { type: "stringLiteralType", value }, keep },
+  });
+
+  it("isSuccess(obj.r): full candidate, path ref (was the old NO_FACTS member-access row)", () => {
+    expect(analyzeCondition(firstIfCondition("isSuccess(obj.r)"))).toEqual({
+      then: [succP("obj", ["r"], true)],
+      else: [succP("obj", ["r"], false)],
+    });
+  });
+  it("isFailure(obj.r): symmetric (then keep=false)", () => {
+    expect(analyzeCondition(firstIfCondition("isFailure(obj.r)")).then[0]).toEqual(
+      succP("obj", ["r"], false));
+  });
+  it('obj.kind == "x": discriminant, bare-variable receiver — full candidate', () => {
+    expect(analyzeCondition(firstIfCondition('obj.kind == "x"')).then[0]).toEqual(
+      discP("obj", [], "kind", "x", true));
+  });
+  it('obj.payload.kind == "x": receiver obj.payload (one hop), prop kind — full candidate', () => {
+    expect(analyzeCondition(firstIfCondition('obj.payload.kind == "x"')).then[0]).toEqual(
+      discP("obj", ["payload"], "kind", "x", true));
+  });
+  it("box.r != null / == null / swapped: presence on a one-hop path", () => {
+    expect(analyzeCondition(firstIfCondition("box.r != null")).then[0]).toEqual(presP("box", ["r"], true));
+    expect(analyzeCondition(firstIfCondition("box.r == null")).then[0]).toEqual(presP("box", ["r"], false));
+    expect(analyzeCondition(firstIfCondition("null != box.r")).then[0]).toEqual(presP("box", ["r"], true));
+  });
+  it("if (obj.r.success): member-access truthiness → discriminant on the one-hop receiver", () => {
+    expect(analyzeCondition(firstIfCondition("obj.r.success")).then[0]).toEqual(succP("obj", ["r"], true));
+  });
+  it("!isSuccess(obj.r): negation swaps then/else", () => {
+    expect(analyzeCondition(firstIfCondition("!isSuccess(obj.r)")).then[0]).toEqual(succP("obj", ["r"], false));
+  });
+  it("isSuccess(a.r) && isSuccess(b.r): two path facts in then", () => {
+    expect(analyzeCondition(firstIfCondition("isSuccess(a.r) && isSuccess(b.r)")).then).toEqual([
+      succP("a", ["r"], true),
+      succP("b", ["r"], true),
+    ]);
   });
 
   it("negation swaps then/else", () => {
@@ -101,7 +163,7 @@ describe("analyzeCondition", () => {
   });
 
   const disc = (keep: boolean, value = "answer", prop = "kind") => ({
-    variableName: "r",
+    ref: { variable: "r", chain: [] as string[] },
     refine: { kind: "discriminant", prop, literal: { type: "stringLiteralType", value }, keep },
   });
 
@@ -132,13 +194,17 @@ describe("analyzeCondition", () => {
   });
 
   it.each([
-    "r.kind == s.kind", // both member access
+    "r.kind == s.kind", // both member access (RHS not a literal)
     "x == 1", // no member access
-    'r.a.kind == "x"', // nested member — out of scope
     "r.kind == r.text", // same var both sides, no literal
     "r.kind == undefined", // undefined is a variableName, not a literal
   ])("produces no candidates for %s", (src) => {
     expect(analyzeCondition(firstIfCondition(src))).toEqual({ then: [], else: [] });
+  });
+
+  it('r.a.kind == "x": one-hop receiver r.a now narrows (M1; was out-of-scope)', () => {
+    expect(analyzeCondition(firstIfCondition('r.a.kind == "x"')).then[0]).toEqual(
+      discP("r", ["a"], "kind", "x", true));
   });
 
   it("composes ! with a discriminant (swaps then/else)", () => {
@@ -488,7 +554,7 @@ describe("postGuardFacts", () => {
     // isFailure → else is success==true (Result narrows via discriminant on `success`).
     expect(postGuardFacts(node, analyzeCondition(node.condition))).toEqual([
       {
-        variableName: "r",
+        ref: { variable: "r", chain: [] },
         refine: { kind: "discriminant", prop: "success", literal: { type: "booleanLiteralType", value: "true" }, keep: true },
       },
     ]);

@@ -1,5 +1,6 @@
 import type { VariableType, TypeAliasEntry } from "../types.js";
 import { safeResolveType } from "./assignability.js";
+import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 
 export type TypeCase =
   | { kind: "resultSuccess" }
@@ -12,7 +13,10 @@ export type CaseSet = { cases: TypeCase[]; closed: boolean };
 const OPEN: CaseSet = { cases: [], closed: false };
 
 function literalCase(t: VariableType): TypeCase | null {
-  if (t.type === "stringLiteralType") return { kind: "literal", value: t.value };
+  // Unescape so a string-literal TYPE value (stored escaped, e.g. `a\nb`) keys
+  // identically to a match arm's text value (already unescaped, a real newline)
+  // — see matchExhaustiveness.armLiteral.
+  if (t.type === "stringLiteralType") return { kind: "literal", value: unescapeStringLiteralValue(t.value) };
   if (t.type === "numberLiteralType") return { kind: "literal", value: Number(t.value) };
   if (t.type === "booleanLiteralType") return { kind: "literal", value: t.value === "true" };
   return null;

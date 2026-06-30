@@ -41,6 +41,7 @@ import {
   checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
+import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { checkEffectPayloads } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
@@ -324,6 +325,9 @@ export class TypeChecker {
 
     // 6d. Check interrupt payloads against `effect` declarations.
     checkEffectPayloads(scopes, ctx);
+
+    // 6e. Match exhaustiveness over closed value types (opt-in, default silent).
+    checkMatchExhaustiveness(scopes, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

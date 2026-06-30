@@ -27,6 +27,7 @@ import {
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import { printLocalCatalog } from "std::agency/local"
 import { configureModels, configureLocalModel, enableAgentMemory } from "./shared.agency"
+import { parseModelFlag } from "./lib/models.agency"
 import { configureSearch, setSearchBackend, getSearchBackend, availableBackendItems } from "./lib/search.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -814,10 +815,15 @@ node main() {
         type: "string",
         description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
       },
+      local: {
+        type: "string",
+        optional: true,
+        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value for guided setup. Pins all slots to the local model; mutually exclusive with --model/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+      },
       "local-model": {
         type: "string",
         optional: true,
-        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value to list available models. Sets fast+slow to the local model and ignores --model/--provider/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+        description: "Deprecated alias for --local."
       }
     }
   },
@@ -830,37 +836,58 @@ node main() {
     VERBOSE = true
   }
 
-  // Resolve which models to use. Explicit flags win; otherwise detect a
-  // provider from API-key env vars and use that provider's defaults. The
-  // fast model becomes the run-wide default via `setModel`; the slow
-  // model is read by the deep-reasoning subagents (oracle, explorer).
-  // `--local-model` is an optionalValue flag, giving three states:
-  //   absent  → `undefined` (compares false to both "" and null in agency)
-  //   bare    → "" (user wants to see the choices)
-  //   value   → the model name / hf: URI / .gguf path
-  // A bare flag lists the catalog and exits before any handlers/REPL start.
-  const localModel = args.flags["local-model"]
-  if (localModel == "") {
-    print("--local-model needs a model to run. Pick one of these short names:")
+  // Model setup. `--local` (deprecated alias: `--local-model`) is an optional-
+  // value flag with three states: absent → undefined; bare "" → guided setup;
+  // value → that local model. `--local` and the hosted flags (--model /
+  // --fastmodel / --slowmodel) are mutually exclusive — local and hosted are
+  // different in kind (provider llama-cpp, no embedding endpoint).
+  const localVal = args.flags["local"] ?? args.flags["local-model"]
+  const modelArg = args.flags.model ?? ""
+  const hasModelFlags = modelArg != "" || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
+  if (localVal != undefined && hasModelFlags) {
+    print(color.red("Pass either --model (hosted) or --local (local), not both."))
+    process.exit(1)
+  }
+  if (localVal == "") {
+    // Bare --local: list the catalog and exit. (Guided setup added in a later step.)
+    print("--local needs a model to run. Pick one of these short names:")
     print("(or pass an hf: URI, a .gguf path, or an alias from `agency local alias add`)")
     print("")
     printLocalCatalog()
     print("")
-    print("Example: agency agent --local-model smollm2-135m")
+    print("Example: agency agent --local smollm2-135m")
     process.exit(0)
-  } else if (localModel) {
-    configureLocalModel(localModel)
+  } else if (localVal != undefined) {
+    configureLocalModel(localVal)
     // Intentionally do NOT enable memory for a local model: the llama-cpp
     // provider has no embedding endpoint, so memory would only emit a
     // "Tier-2 disabled" notice. std::memory calls no-op while it's off.
     configureSearch(true)
   } else {
-    configureModels(
-      args.flags.model ?? "",
-      args.flags.fastmodel ?? "",
-      args.flags.slowmodel ?? "",
-      args.flags.provider ?? "",
-    )
+    // Hosted path. --model accepts `slot=model` (per-slot) or a bare model
+    // (global pin); explicit --fastmodel/--slowmodel win over a --model slot=.
+    const parsed = parseModelFlag(modelArg)
+    let modelGlobal = ""
+    let fastFlag = ""
+    let slowFlag = ""
+    if (modelArg != "") {
+      if (parsed.slot == "") {
+        modelGlobal = parsed.model
+      } else if (parsed.slot == "main") {
+        fastFlag = parsed.model
+      } else if (parsed.slot == "reasoning") {
+        slowFlag = parsed.model
+      }
+    }
+    const fm = args.flags.fastmodel ?? ""
+    const sm = args.flags.slowmodel ?? ""
+    if (fm != "") {
+      fastFlag = fm
+    }
+    if (sm != "") {
+      slowFlag = sm
+    }
+    configureModels(modelGlobal, fastFlag, slowFlag, args.flags.provider ?? "")
     // Persistent knowledge graph — enabled for hosted providers, skipped for
     // local models. (Some hosted providers, e.g. anthropic, still lack an
     // embedding endpoint and just disable Tier-2 recall with a one-time

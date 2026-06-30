@@ -3,7 +3,7 @@
  * the Responses API (both fast and slow) so hosted web_search works on the
  * agent's default models. Other providers are unchanged.
  */
-import { planModels, resolveDetected, ModelPlan, parseModelSpec, ModelSpec, priceDefault, Resolved } from "../lib/models.agency"
+import { planModels, resolveDetected, ModelPlan, parseModelSpec, ModelSpec, priceDefault, Resolved, parseModelFlag } from "../lib/models.agency"
 
 static const KNOWN = ["openai", "anthropic", "google", "openrouter", "litellm"]
 
@@ -54,3 +54,8 @@ node priceReasoningAnthropic(): Resolved { return okR(priceDefault("anthropic", 
 node priceMainOpenaiPromoted(): Resolved { return okR(priceDefault("openai", "main", "standard")) }
 node priceEmbeddingDerived(): Resolved { return okR(priceDefault("anthropic", "embedding", "standard")) }
 node priceUnknownProviderFails(): boolean { return isFailure(priceDefault("litellm", "main", "standard")) }
+
+node modelFlagPerSlot(): { slot: string; model: string } { return parseModelFlag("reasoning=claude-opus-4-8") }
+node modelFlagGlobal(): { slot: string; model: string } { return parseModelFlag("gpt-5.5") }
+node modelFlagAliasFast(): { slot: string; model: string } { return parseModelFlag("fast=gpt-4o") }
+node modelFlagUnifiedNoMissplit(): { slot: string; model: string } { return parseModelFlag("anthropic/claude-opus-4-8") }

@@ -13,7 +13,7 @@
  */
 import { pickProvider, envVarFor } from "std::llm"
 import { env } from "std::system"
-import { slotKind } from "./slots.agency"
+import { slotKind, canonicalSlot } from "./slots.agency"
 
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
@@ -267,4 +267,17 @@ export def priceDefault(provider: string, slot: string, price: string): Result<R
   not a hand-maintained list, so it never drifts. Used by parseModelSpec. */
 export def knownProviders(): string[] {
   return Object.keys(MODELS).concat(Object.keys(BASE_URL_PROVIDERS))
+}
+
+/** Split a --model value: `slot=model` → per-slot (alias-resolved); a bare
+  `model` → global pin ({slot:""}). The "=" must precede any "/" so a unified
+  provider/model value (anthropic/claude) is NOT misread as a slot assignment.
+  Returns {slot, model} (distinct shape from parseModelSpec's {model, provider}). */
+export def parseModelFlag(value: string): { slot: string; model: string } {
+  const eq = value.indexOf("=")
+  const slash = value.indexOf("/")
+  if (eq > 0 && (slash == -1 || eq < slash)) {
+    return { slot: canonicalSlot(value.substring(0, eq)), model: value.substring(eq + 1) }
+  }
+  return { slot: "", model: value }
 }

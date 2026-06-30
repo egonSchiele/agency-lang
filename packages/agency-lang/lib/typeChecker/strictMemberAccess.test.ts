@@ -30,12 +30,15 @@ function check(source: string, config: Partial<AgencyConfig> = {}) {
 const U = `type U = { kind: "a", v: string } | { kind: "b", w: number }`;
 
 describe("strict member access — general union", () => {
-  it("silent (default): un-narrowed branch-specific access is lenient, no diagnostic", () => {
-    const { errors, warnings } = check(`
+  it("silent: un-narrowed branch-specific access is lenient, no diagnostic", () => {
+    const { errors, warnings } = check(
+      `
 ${U}
 def f(u: U): void {
   let x = u.v
-}`);
+}`,
+      { typechecker: { strictMemberAccess: "silent" } },
+    );
     expect(errors).toEqual([]);
     expect(warnings).toEqual([]);
   });
@@ -158,11 +161,14 @@ def tryParse(s: string): Result<number, string> {
 
 describe("strict member access — Result", () => {
   it("silent: un-narrowed r.value is lenient (any), no diagnostic", () => {
-    const { errors, warnings } = check(`${TRY}
+    const { errors, warnings } = check(
+      `${TRY}
 node main() {
   let r = tryParse("ok")
   let n = r.value
-}`);
+}`,
+      { typechecker: { strictMemberAccess: "silent" } },
+    );
     expect(errors).toEqual([]);
     expect(warnings).toEqual([]);
   });
@@ -170,12 +176,15 @@ node main() {
   it("silent: un-narrowed r.value stays `any`, so a chained access does not error", () => {
     // Locks the silent return type: `any` short-circuits the chain (today's
     // behavior), so `r.value.whatever` raises nothing.
-    const { errors, warnings } = check(`${TRY}
+    const { errors, warnings } = check(
+      `${TRY}
 node main() {
   let r = tryParse("ok")
   let n = r.value
   let m = n
-}`);
+}`,
+      { typechecker: { strictMemberAccess: "silent" } },
+    );
     expect(errors).toEqual([]);
     expect(warnings).toEqual([]);
   });

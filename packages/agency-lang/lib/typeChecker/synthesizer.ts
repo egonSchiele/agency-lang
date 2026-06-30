@@ -84,9 +84,14 @@ function resolveResultFieldType(
 
 type StrictSeverity = "silent" | "warn" | "error";
 
-/** The configured strict union-member-access severity (default "silent"). */
+/**
+ * The configured strict union-member-access severity. Defaults to "error":
+ * un-guarded access to a branch-specific union member (notably `r.value` on an
+ * un-narrowed Result) is a hard error. Set `strictMemberAccess: "silent"` to
+ * opt out (restores the old lenient behavior).
+ */
 function strictMemberAccessSeverity(ctx: TypeCheckerContext): StrictSeverity {
-  return ctx.config.typechecker?.strictMemberAccess ?? "silent";
+  return ctx.config.typechecker?.strictMemberAccess ?? "error";
 }
 
 /** Emit a strict-member-access diagnostic at the configured severity. */

@@ -634,6 +634,27 @@ node main() {
     expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'w').");
     expect(errs).not.toContain("(assignment to 'n')");
   });
+
+  it("re-narrows a Result after a || guard merge (heterogeneous-union join)", () => {
+    // Regression for the flow join bug: an `if (… || …)` with no else merges the
+    // then-branch (raw `Result<…>`) with the else-branch (Result expanded to its
+    // `{success:false,…}` object form by applyRefine). uniteTypes produces a
+    // heterogeneous `Result<…> | {success:false,…}` union; a LATER guard's
+    // narrowUnionByDiscriminant must expand the raw `resultType` member to its
+    // object form to re-narrow — otherwise it survives every filter and silently
+    // blocks narrowing, dropping the `(assignment to 'w')` error below.
+    const errs = check(`${TRY_PARSE}
+node main() {
+  let r = tryParse("ok")
+  let other = tryParse("ok")
+  if (isSuccess(r) || isSuccess(other)) {
+  }
+  if (isSuccess(r)) {
+    let w: string = r.value
+  }
+}`);
+    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'w').");
+  });
 });
 
 const REPLY = `

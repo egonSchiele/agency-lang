@@ -17,6 +17,7 @@ import { resultTypeForValidation } from "./validation.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
+import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
@@ -136,13 +137,8 @@ export function declareVariable(
         node.loc,
       );
     }
-    checkType(
-      node.value,
-      newType,
-      scope,
-      `assignment to '${node.variableName}'`,
-      ctx,
-    );
+    // The value-vs-annotation check (checkType) now runs in the flow-aware
+    // checkAssignmentsInScope (Phase B) — see checkAssignmentValue.
     // The runtime wraps validated values in Result<T, string>, so the
     // declared scope type must match — otherwise downstream property accesses
     // see `T` instead of the actual `Result<T, string>` and silently miscompile.
@@ -154,37 +150,9 @@ export function declareVariable(
     return;
   }
 
+  // Reassignment / access-chain writes don't (re)declare; their value-vs-target
+  // checks now run in checkAssignmentsInScope (flow-aware). Nothing to do here.
   if (existingType) {
-    if (node.accessChain) {
-      // Property / index writes (e.g. `obj.field = x`, `votes["k"] = v`)
-      // target the *member* type the chain resolves to, not the whole
-      // variable type. Synthesize the LHS by walking the chain through
-      // the read-side synthesizer, then compare the RHS against that.
-      const lhsType = synthAccessChainTargetType(
-        node.variableName,
-        node.accessChain,
-        node.loc,
-        scope,
-        ctx,
-      );
-      const rhsType = synthType(node.value, scope, ctx);
-      reportNotAssignable(
-        ctx,
-        node.variableName,
-        rhsType,
-        lhsType,
-        node.loc,
-      );
-      return;
-    }
-    const valueType = synthType(node.value, scope, ctx);
-    reportNotAssignable(
-      ctx,
-      node.variableName,
-      valueType,
-      existingType,
-      node.loc,
-    );
     return;
   }
 
@@ -211,6 +179,59 @@ export function declareVariable(
 }
 
 /**
+ * The value-vs-target type checks for an assignment, factored out of
+ * `declareVariable` so they can run in the flow-aware Phase B pass
+ * (`checkAssignmentsInScope`) rather than during scope declaration. Pure
+ * checking — no declaration. No-op for non-assignments.
+ */
+export function checkAssignmentValue(
+  node: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  if (node.type !== "assignment") {
+    return;
+  }
+  const newType = node.typeHint;
+  if (newType) {
+    // Annotated + accessChain is intentionally checked against the whole
+    // declared type (matches declareVariable). Property/index writes against
+    // the chain target are only checked when the assignment is *un-annotated*
+    // (the accessChain branch below).
+    checkType(
+      node.value,
+      newType,
+      scope,
+      `assignment to '${node.variableName}'`,
+      ctx,
+    );
+    return;
+  }
+  const existingType = scope.lookup(node.variableName);
+  if (existingType === undefined) {
+    return;
+  }
+  if (node.accessChain) {
+    // The flow recorded for this assignment (flowBuilder) lets the access-chain
+    // target resolve a narrowed base via typeAt — see synthAccessChainTargetType.
+    const flowNode = ctx.flowEnv?.flowOf.get(node);
+    const lhsType = synthAccessChainTargetType(
+      node.variableName,
+      node.accessChain,
+      node.loc,
+      scope,
+      ctx,
+      flowNode,
+    );
+    const rhsType = synthType(node.value, scope, ctx);
+    reportNotAssignable(ctx, node.variableName, rhsType, lhsType, node.loc);
+    return;
+  }
+  const valueType = synthType(node.value, scope, ctx);
+  reportNotAssignable(ctx, node.variableName, valueType, existingType, node.loc);
+}
+
+/**
  * Synthesize the read-side type of `variableName + accessChain` and return
  * it as the assignment target. Used for property/index writes
  * (`obj.field = …`, `votes["k"] = …`) where the LHS type is the member the
@@ -220,6 +241,13 @@ export function declareVariable(
  * already encodes all the rules we'd otherwise duplicate (object property
  * lookup, record value type, union narrowing, etc.). Any diagnostics raised
  * by the synthesizer here are part of the regular typecheck output.
+ *
+ * `flowNode` (the flow recorded for the assignment) makes the synthetic base
+ * flow-aware: registering it in `flowOf` routes the base's `synthType` through
+ * `typeAt`, so a narrowed base (`t.box.n = …` inside `if (t.kind == "a")`)
+ * resolves `t` to the narrowed member rather than its wide declared type. The
+ * base node is synthetic, so without this it has no `flowOf` entry of its own
+ * and falls back to the flat `scope.lookup`.
  */
 function synthAccessChainTargetType(
   variableName: string,
@@ -227,12 +255,16 @@ function synthAccessChainTargetType(
   loc: SourceLocation | undefined,
   scope: Scope,
   ctx: TypeCheckerContext,
+  flowNode: FlowNode | undefined,
 ): VariableType | "any" {
   const base: VariableNameLiteral = {
     type: "variableName",
     value: variableName,
     loc,
   };
+  if (flowNode && ctx.flowEnv) {
+    ctx.flowEnv.flowOf.set(base, flowNode);
+  }
   const synthetic: ValueAccess = {
     type: "valueAccess",
     base,

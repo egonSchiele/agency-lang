@@ -24,6 +24,7 @@ import {
   checkExcessObjectProperties,
 } from "./utils.js";
 import { Scope } from "./scope.js";
+import { checkAssignmentValue } from "./scopes.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
@@ -172,7 +173,24 @@ export function checkScopes(
         checkReturnTypesInScope(scope, ctx);
       }
       checkExpressionsInScope(scope, ctx);
+      checkAssignmentsInScope(scope, ctx);
     });
+  }
+}
+
+/**
+ * Flow-aware Phase B pass for assignment value-vs-target checks (annotated
+ * `checkType`, access-chain writes, reassignment). Moved here from
+ * `declareVariable` (Phase A) so the checks narrow through the flow graph —
+ * `synthType`/`checkType` consult `ctx.flowEnv`, which is populated by
+ * `buildFlowGraphs` before `checkScopes` runs.
+ */
+function checkAssignmentsInScope(info: ScopeInfo, ctx: TypeCheckerContext): void {
+  for (const { node, scopes } of walkNodes(info.body)) {
+    if (!isInScope(scopes, info)) {
+      continue;
+    }
+    checkAssignmentValue(node, info.scope, ctx);
   }
 }
 

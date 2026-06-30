@@ -44,7 +44,14 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
 | Option | Type | Description |
 |--------|------|-------------|
 | `maxToolCallRounds` | `number` | Max LLM-to-tool iterations before halting (default: 10) |
-| `client` | `Partial<SmolPromptConfig>` | Smoltalk client defaults — `logLevel`, `defaultModel`, `openAiApiKey`, `googleApiKey`, and nested `statelog` config |
+| `client` | `Partial<SmolConfig>` | Smoltalk client defaults — `logLevel`, `defaultModel`, `defaultProvider`, nested `apiKey`/`baseUrl` maps, and nested `statelog` config |
+
+> **Breaking change (smoltalk 0.6.0):** the flat `client.openAiApiKey` /
+> `googleApiKey` / `anthropicApiKey` fields are removed. Nest keys under
+> `client.apiKey` instead — `{ "apiKey": { "openAi": "…", "anthropic": "…" } }`
+> — and custom provider URLs under `client.baseUrl`. Each key still falls back
+> to its conventional env var (`OPENAI_API_KEY`, etc.). See
+> `guide/custom-providers` for the hosted providers and `defaultProvider`.
 
 ### Logging and tracing
 
@@ -74,7 +81,8 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
   "allowedFetchDomains": ["api.example.com"],
   "client": {
     "defaultModel": "gpt-4o",
-    "logLevel": "error"
+    "logLevel": "error",
+    "apiKey": { "openAi": "sk-...", "anthropic": "sk-ant-..." }
   },
   "log": {
     "host": "https://agency-lang.com",

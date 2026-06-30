@@ -44,12 +44,12 @@ def f(): void {
     ]);
   });
 
-  it("post-guard narrowing flows into assignment checks (via flow, not child scope)", () => {
-    // The architectural goal of PR 3: the flow graph (PR 2) carries the
-    // post-guard narrowing into the Phase B assignment check — the path that
-    // previously required the postGuardFacts / walkWithNarrowing dance in
-    // walkScopeBody. Behavior-preserving (passed before too); this locks that
-    // it still holds once the child-scope dance is gone.
+  it("post-guard narrowing flows into the assignment check via the flow graph", () => {
+    // The assignment value-check now runs in the flow-aware Phase B pass, so the
+    // flow graph (PR 2) — not the child-scope walk — carries the post-guard
+    // narrowing (early-return on the `err` arm leaves `r` narrowed to `ok`) into
+    // the `let s: string = r.value` check. Behavior-preserving (passed before via
+    // the child-scope path too); this locks that the flow path covers it.
     expect(check(`
 type R2 = { kind: "ok", value: string } | { kind: "err", msg: string }
 def f(r: R2): string {

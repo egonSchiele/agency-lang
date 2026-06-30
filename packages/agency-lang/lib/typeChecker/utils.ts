@@ -146,9 +146,12 @@ export function checkType(
 
 /**
  * Check an `if` / `while` condition. Conditions must be `boolean`, EXCEPT an
- * optional (`T | null`) is accepted as a presence test (`if (x)` ⇒ x is non-null
- * in the then-branch — see null/truthiness narrowing). Synthesizes the condition
- * once (no double-report) and mirrors `checkType`'s "(condition)" diagnostic.
+ * optional (`T | null`) is accepted as a presence test. The runtime evaluates
+ * conditions with JS truthiness, so `if (x)` only licenses narrowing `x` to
+ * non-null in the THEN-branch (a falsy `x` may be `""`/`0`/`false` as well as
+ * `null`, so the else-branch is not narrowed — see narrowing.ts). Synthesizes
+ * the condition once (no double-report) and mirrors `checkType`'s "(condition)"
+ * diagnostic.
  */
 export function checkConditionType(
   condition: AgencyNode,

@@ -77,8 +77,9 @@ function asDiscriminantAccess(
 }
 
 /**
- * `null` lexes as a bare identifier (`variableName` with value `"null"`), not a
- * distinct literal node — recognize both that and the `NullLiteral` shape.
+ * `null` can reach the type checker as either the dedicated `NullLiteral` node
+ * (`type: "null"`) or — in binary-operand position, as observed for `x != null`
+ * — a bare `variableName` whose value is `"null"`. Recognize both shapes.
  */
 function isNullExpr(e: Expression): boolean {
   return (
@@ -178,17 +179,24 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
     return { then: [truthy(true)], else: [truthy(false)] };
   }
 
-  // Bare-variable truthiness: `if (x)` ⇒ presence in the then-branch, absence
-  // in the else. Strips only the `null` member (other falsy values stay) — see
-  // narrowUnionByPresence. Member-access truthiness (`if (r.success)`) is the
-  // discriminant case in the `valueAccess` branch above; this fires ONLY for a
-  // bare variable.
+  // Bare-variable truthiness: `if (x)` strips `null` in the THEN-branch only.
+  // The runtime evaluates conditions with JS truthiness (runner.ts), so a falsy
+  // `x` can be a non-null value (`""`/`0`/`false`) as well as `null` — the
+  // else-branch (and the post-`while` region) therefore CANNOT be narrowed to
+  // `null` (that would be unsound). Truthy ⇒ non-null is the only safe fact.
+  // Explicit `x == null` / `x != null` (above) are exact and narrow both sides.
+  // Member-access truthiness (`if (r.success)`) is the discriminant case in the
+  // `valueAccess` branch above; this fires ONLY for a bare variable.
   if (condition.type === "variableName" && condition.value !== "null") {
-    const mkP = (present: boolean): NarrowCandidate => ({
-      variableName: condition.value,
-      refine: { kind: "presence", present },
-    });
-    return { then: [mkP(true)], else: [mkP(false)] };
+    return {
+      then: [
+        {
+          variableName: condition.value,
+          refine: { kind: "presence", present: true },
+        },
+      ],
+      else: [],
+    };
   }
 
   if (condition.type !== "functionCall") return NO_FACTS;

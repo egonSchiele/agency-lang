@@ -76,6 +76,32 @@ def f(x: string | null): void {
 }`)).toEqual([]);
   });
 
+  it("SOUNDNESS: if (x) else-branch is NOT narrowed to null (falsy may be non-null)", () => {
+    // The runtime uses JS truthiness, so a falsy `x: string | null` may be `""`,
+    // not just `null`. Narrowing the else to `null` would be unsound, so x stays
+    // `string | null` there — assigning it to a `null` annotation must error.
+    const errs = check(`
+def f(x: string | null): void {
+  if (x) {
+  } else {
+    let n: null = x
+  }
+}`);
+    expect(errs.some((e) => e.includes("not assignable"))).toBe(true);
+  });
+
+  it("SOUNDNESS: post-while(x) region is NOT narrowed to null", () => {
+    // Symmetric to the else case: after `while (x)` exits, x is falsy (possibly
+    // a non-null `""`), so it must NOT be narrowed to `null`.
+    const errs = check(`
+def f(x: string | null): void {
+  while (x) {
+  }
+  let n: null = x
+}`);
+    expect(errs.some((e) => e.includes("not assignable"))).toBe(true);
+  });
+
   it("if (x == null) else: the else-branch is narrowed to non-null", () => {
     expect(check(`
 def f(x: string | null): void {

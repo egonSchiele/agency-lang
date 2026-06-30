@@ -28,11 +28,11 @@ flow-typed checker work and the four narrowing specs at the repo root.
 |---|---|---|
 | `isSuccess(r)` / `isFailure(r)` on a bare variable | ✅ | then- and else-branch; `r.value` / `r.error` type precisely |
 | `r.prop == literal` / `!= literal` on a bare variable | ✅ | discriminated-union member filter (either operand order; string/number/boolean literals) |
-| Same guards on a **single-hop member-path** scrutinee (`b.r`, `e.payload`) | ✅ | M1 — `isSuccess(b.r)`, `b.r.kind == "x"`, `b.r != null` narrow the path; `b.r.value` then types precisely. One hop only (`base.prop`); see the nested-access row for multi-hop |
+| Same guards on a **member-path** scrutinee (`b.r`, `o.inner.r`, `arr[0]`) | ✅ | M1 (single-hop) + M2 (multi-hop + literal-index) — `isSuccess(arr[0])`, `o.inner.r.kind == "x"`, `b.r != null` narrow the path; `arr[0].value` then types precisely |
 | `match` arm **bound fields** | ✅ | free via lowering to a `__s` temp — no match-specific code |
 | `!c`, `a && b`, `a || b` combinators | ✅ | `!` swaps then/else; `&&` unions then-facts; `\|\|` unions else-facts |
 | Post-guard / early-return (`if (isFailure(r)) { return }` ⇒ `r` is Success after) | ✅ | `alwaysExits` counts only `return` (conservative) |
-| Multi-hop / index nested scrutinee (`a.b.c`, `arr[0]`) | ❌ | M2 follow-on — `Reference.chain` only encodes one property hop today (`asPathReference`'s one-hop ceiling); index segments aren't yet representable |
+| Multi-hop + literal-index member paths (`a.b.c`, `arr[0]`) | ✅ | M2 — `Reference.chain` is `PathSegment[]` (property + literal-index hops); `arr[0]` narrows per-index (does not leak to `arr[1]`). Covers **array-nested patterns** (`[success(v), _]`). Computed/dynamic index (`arr[i]`), slices, and method hops stay un-narrowable |
 | The scrutinee *variable* in a `match` arm (vs a bound field) | ❌ | only bound fields narrow; the source var isn't re-typed |
 | Mixed union with a non-literal discriminant member | ❌ | by design — the `string` member can't be proven disjoint |
 | Narrowing to `never` (dead-branch detection) | ❌ | suppressed today; **planned** with the flow model + `never` |
@@ -159,16 +159,23 @@ since its type could change. The `narrowedBranch` marker on `ResultType` is set 
 by this layer and is stripped by `widenType`, so it never leaks through `declare()`
 into a function's inferred return type.
 
-**Member-path prefix invalidation (M1).** A narrowing of `box.r` is keyed on the
-whole path. Reassigning the path *or any prefix of it* drops the narrowing: after
-`box = …` (or `box.r = …`), `box.r` re-resolves from the reassigned base, not the
-stale narrowed flow. `typeAt`'s `assign` case detects this via `isPrefixOf(at.ref,
-ref)` and re-resolves through `resolvePath`; the `loop` back-edge case does the same
-when the body widened the base var. A *sibling* assignment (`box.q = …`) is **not** a
-prefix, so it correctly leaves `box.r` narrowed. `flowHasNarrowFor` — the gate
-`synthValueAccess` uses before short-circuiting a path read through `typeAt` — applies
-the same prefix rule, so an un-guarded (or re-bound) `box.r.value` still hits the
-structural walk's strict-member-access diagnostic.
+**Member-path prefix invalidation.** A narrowing of `box.r` (or `arr[0]`) is keyed
+on the whole path — `Reference.chain` is a `PathSegment[]` of `prop`/`index` hops,
+so `box.r` and `arr[0]` (and a numeric property `obj["0"]` vs `arr[0]`) never alias
+in `referenceKey`/`isPrefixOf`. Reassigning the path *or any prefix of it* drops the
+narrowing: after `box = …`, `box.r = …`, `b.inner = …`, or `arr[0] = …`, the path
+re-resolves from the reassigned base, not the stale narrowed flow. `typeAt`'s
+`assign` case detects this via `isPrefixOf(at.ref, ref)` and re-resolves through
+`resolvePath`; the `loop` back-edge case does the same when the body widened the
+base var; and the flow builder now emits a path-keyed `assign` node for stable
+access-chain WRITES (`obj.field = x`, `arr[0] = x`) so a mutation invalidates too
+(an unstable target like `obj[i()] = x` can't be keyed and passes through — no
+aliasing analysis). A *sibling* assignment (`box.q = …`) is **not** a prefix, so it
+correctly leaves `box.r` narrowed. At the access site `synthValueAccess` consults
+the LONGEST narrowed stable prefix via `stablePrefix` (so `o.inner.r.value` reads the
+more precise `o.inner.r` narrowing, and a later unstable hop — `a.b[i()].x` — doesn't
+block narrowing the stable `a.b` prefix), behind the `flowHasNarrowFor` gate so an
+un-guarded (or re-bound) access still hits the strict-member-access diagnostic.
 
 Strict member access is itself flow-sensitive, so `strictMemberAccessSeverity`
 returns `silent` whenever `ctx.flowEnv` is unset — i.e. during the pre-flow inference

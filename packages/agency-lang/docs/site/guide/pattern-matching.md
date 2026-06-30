@@ -166,6 +166,10 @@ match (pair) {
 }
 ```
 
+The bound value (`v` above) is narrowed precisely — it has the success
+value's type, so it can be used wherever that type is required (e.g. passed
+to a function expecting a `number`), with no extra guard.
+
 Note: `failure(e)` binds only the error string. For checkpoint,
 functionName, or args, use the traditional `if (isFailure(result))`
 form and access fields on the result variable directly.

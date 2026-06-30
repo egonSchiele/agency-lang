@@ -13,39 +13,51 @@ import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
- * `narrowers`-table entry without touching the apply loop. `discriminant`
- * filters a union by `v.prop == literal` — and now drives Result narrowing too
- * (`isSuccess`/`isFailure`/`if (r.success)` all narrow on the `success` field,
- * with Result viewed as a union via `resultToObjectUnion`).
- *
- * Kept as a (one-variant) discriminated union deliberately:
- * `null-truthiness-narrowing` adds a `presence` variant and handler H3 may add
- * more, each as one more `narrowers` entry.
+ * more `narrowByRefine` case. `discriminant` filters a union by
+ * `v.prop == literal` — and drives Result narrowing too (`isSuccess`/`isFailure`/
+ * `if (r.success)` all narrow on the `success` field, with Result viewed as a
+ * union via `resultToObjectUnion`). `presence` filters the `null` member for
+ * optional / truthiness narrowing (`if (x != null)` / `if (x)`).
  */
-export type Refine = {
-  kind: "discriminant";
-  prop: string;
-  literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
-  keep: boolean;
-};
+export type Refine =
+  | {
+      kind: "discriminant";
+      prop: string;
+      literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
+      keep: boolean;
+    }
+  | { kind: "presence"; present: boolean };
 export type NarrowCandidate = { variableName: string; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
 const NO_FACTS: ConditionFacts = { then: [], else: [] };
 
-// "what": given a refine + the variable's current (pre-resolved) type, the
-// narrowed type, or null for "no narrowing". The "how" (child scope,
-// reassignment gate, declareLocal) lives in applyNarrowing.
-const narrowers: {
-  [K in Refine["kind"]]: (
-    refine: Extract<Refine, { kind: K }>,
-    current: VariableType,
-    aliases: Record<string, TypeAliasEntry>,
-  ) => VariableType | null;
-} = {
-  discriminant: (r, current, aliases) =>
-    narrowUnionByDiscriminant(current, r.prop, r.literal, r.keep, aliases),
-};
+/**
+ * The single Refine dispatcher: given a refine + the variable's current
+ * (pre-resolved) type, the narrowed type, or null for "no narrowing". Used by
+ * BOTH the flow path (`applyRefine`, flow.ts) and the legacy child-scope path
+ * (`applyNarrowing`). The switch is exhaustive, so a new `Refine` variant is a
+ * compile error here. (The "how" — child scope, reassignment gate,
+ * declareLocal — lives in `applyNarrowing`.)
+ */
+export function narrowByRefine(
+  refine: Refine,
+  current: VariableType,
+  aliases: Record<string, TypeAliasEntry>,
+): VariableType | null {
+  switch (refine.kind) {
+    case "discriminant":
+      return narrowUnionByDiscriminant(
+        current,
+        refine.prop,
+        refine.literal,
+        refine.keep,
+        aliases,
+      );
+    case "presence":
+      return narrowUnionByPresence(current, refine.present, aliases);
+  }
+}
 
 /**
  * Recognize a single `v.prop` member access over a *bare variable* (exactly one
@@ -228,6 +240,33 @@ export function narrowUnionByDiscriminant(
 }
 
 /**
+ * Filter the `null` member of a union for presence narrowing.
+ * - `present: true`  (e.g. `if (x != null)`): drop the `null` member.
+ * - `present: false` (e.g. `if (x == null)`): keep only the `null` member.
+ * Returns `null` (no narrowing) for a non-union type, a union with no `null`
+ * member, or any result that would be empty — so it never narrows to `never`.
+ */
+export function narrowUnionByPresence(
+  type: VariableType,
+  present: boolean,
+  aliases: Record<string, TypeAliasEntry>,
+): VariableType | null {
+  const resolved = safeResolveType(type, aliases);
+  if (resolved.type !== "unionType") {
+    return null;
+  }
+  const isNull = (m: VariableType): boolean => {
+    const r = safeResolveType(m, aliases);
+    return r.type === "primitiveType" && r.value === "null";
+  };
+  const kept = resolved.types.filter((m) => (present ? !isNull(m) : isNull(m)));
+  if (kept.length === resolved.types.length || kept.length === 0) {
+    return null;
+  }
+  return kept.length === 1 ? kept[0] : { type: "unionType", types: kept };
+}
+
+/**
  * Conservative "this body always transfers control out of the enclosing
  * function" check. Increment 2 counts ONLY `return`: `raise` (interrupt) can
  * resume and continue, and `propagate` semantics are likewise non-trivial, so
@@ -288,21 +327,13 @@ export function applyNarrowing(
   for (const cand of candidates) {
     const current = childScope.lookup(cand.variableName);
     if (!current || current === "any") continue;
-    // "what to narrow to" is delegated to the refine's narrower. Each narrower
-    // resolves through type-alias variables itself (mirrors synthValueAccess) so
-    // alias-typed scrutinees still narrow; null means "leave the type as-is".
-    // Run it first: most `v.prop == literal` candidates aren't unions and bail
-    // here, so we skip the (more expensive) whole-body reassignment walk.
-    // The cast widens the table entry — indexing by `refine.kind` can't be
-    // statically correlated with the matching `refine` variant — but the call
-    // is sound: `narrowers[k]` is only ever invoked with the variant whose
-    // `kind` is `k`.
-    const narrow = narrowers[cand.refine.kind] as (
-      refine: Refine,
-      current: VariableType,
-      aliases: Record<string, TypeAliasEntry>,
-    ) => VariableType | null;
-    const narrowed = narrow(cand.refine, current, typeAliases);
+    // "what to narrow to" is delegated to narrowByRefine (the same dispatcher
+    // the flow path uses). It resolves through type-alias variables itself
+    // (mirrors synthValueAccess) so alias-typed scrutinees still narrow; null
+    // means "leave the type as-is". Run it first: most `v.prop == literal`
+    // candidates aren't unions and bail here, so we skip the (more expensive)
+    // whole-body reassignment walk.
+    const narrowed = narrowByRefine(cand.refine, current, typeAliases);
     if (narrowed === null) continue;
     // Soundness gate: a branch that reassigns the variable may change its type
     // mid-branch, so don't narrow it (whole-body scan, conservative).

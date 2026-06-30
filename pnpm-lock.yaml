@@ -38,8 +38,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
-        specifier: ^0.5.1
-        version: 0.5.1(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.0)
+        specifier: ^0.6.0
+        version: 0.6.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.0)
       tarsec:
         specifier: 0.4.7
         version: 0.4.7
@@ -2578,8 +2578,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.5.1:
-    resolution: {integrity: sha512-gUCvRSbPW0HT/q6NTRTVW0tIhuhR5n8K5++Y5YNtr0hGc2PUZUnkvCfVYtFNML2yeOshAKVJlcpmKy+llx+5ng==}
+  smoltalk@0.6.0:
+    resolution: {integrity: sha512-6Wq/IAcHfiX0sfkgmnrNixLkNHHnatN5u/NwCJe5COZJyuzQUITbGT6OOCfQhQ48MNVBQEd81pRIqqrIN72ctA==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -5443,7 +5443,7 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.5.1(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.0):
+  smoltalk@0.6.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.0):
     dependencies:
       '@anthropic-ai/sdk': 0.78.0(zod@4.3.6)
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))

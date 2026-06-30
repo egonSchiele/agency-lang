@@ -30,6 +30,11 @@
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]
-    }
+    },
+    { "nodeName": "specSplitOnKnownProvider", "input": "", "expectedOutput": "{\"model\":\"claude-opus-4-8\",\"provider\":\"anthropic\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "specOpenrouterMultiSegment", "input": "", "expectedOutput": "{\"model\":\"deepseek/deepseek-r1\",\"provider\":\"openrouter\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "specProviderEstablishedNoSplit", "input": "", "expectedOutput": "{\"model\":\"deepseek/deepseek-r1\",\"provider\":\"\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "specBareModel", "input": "", "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "specUnknownPrefixNoSplit", "input": "", "expectedOutput": "{\"model\":\"unknown-vendor/some-model\",\"provider\":\"\"}", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

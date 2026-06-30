@@ -208,3 +208,24 @@ export def planModels(
     slowProvider: agentProvider(detected, slowProvider)
   }
 }
+
+// Field order { model, provider } is locked by JSON snapshot tests — do not reorder.
+export type ModelSpec = {
+  model: string;
+  provider: string
+}
+
+/** Parse a possibly-unified model spec. When a provider is already established
+  (explicit --provider/settings), never split: the whole string is the model id
+  (OpenRouter ids contain "/"). Else split on the FIRST "/" only when the prefix
+  is a recognized provider; otherwise the whole string is the model. */
+export def parseModelSpec(spec: string, providerEstablished: boolean, knownProviders: string[]): ModelSpec {
+  if (providerEstablished) { return { model: spec, provider: "" } }
+  const idx = spec.indexOf("/")
+  if (idx <= 0) { return { model: spec, provider: "" } }
+  const prefix = spec.substring(0, idx)
+  if (knownProviders.includes(prefix)) {
+    return { model: spec.substring(idx + 1), provider: prefix }
+  }
+  return { model: spec, provider: "" }
+}

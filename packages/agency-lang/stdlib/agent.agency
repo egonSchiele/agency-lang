@@ -281,11 +281,13 @@ def runOneTurnPrompt(
   """
   let reply = ""
   const spec = config.agents[category]
-  if (spec.type != "prompt") {
+  if (spec.type == "agent") {
     // Unreachable in practice: routeIteration() sends agent-type specs to
     // runOneTurnAgent, so only prompt-type specs reach here. The guard narrows
     // `spec` to PromptSpec so its prompt-only fields (systemPrompt / tools /
-    // memory) type-check without an un-narrowed-union error.
+    // memory) type-check without an un-narrowed-union error. Bailing only on
+    // the "agent" case (rather than `!= "prompt"`) keeps a spec whose `type`
+    // is omitted on the prompt path, matching routeIteration's dispatch.
     return reply
   }
   thread(label: category, summarize: true, session: category) {

@@ -32,7 +32,6 @@ flow-typed checker work and the four narrowing specs at the repo root.
 | `match` arm **bound fields** | ✅ | free via lowering to a `__s` temp — no match-specific code |
 | `!c`, `a && b`, `a || b` combinators | ✅ | `!` swaps then/else; `&&` unions then-facts; `\|\|` unions else-facts |
 | Post-guard / early-return (`if (isFailure(r)) { return }` ⇒ `r` is Success after) | ✅ | `alwaysExits` counts only `return` (conservative) |
-| Single-hop member-path scrutinee (`obj.field`) | ✅ | M1 — see the member-path row above |
 | Multi-hop / index nested scrutinee (`a.b.c`, `arr[0]`) | ❌ | M2 follow-on — `Reference.chain` only encodes one property hop today (`asPathReference`'s one-hop ceiling); index segments aren't yet representable |
 | The scrutinee *variable* in a `match` arm (vs a bound field) | ❌ | only bound fields narrow; the source var isn't re-typed |
 | Mixed union with a non-literal discriminant member | ❌ | by design — the `string` member can't be proven disjoint |

@@ -771,31 +771,48 @@ function validateAgencyFunctionMethod(
   }
 }
 
+/**
+ * Flow-sensitive path narrowing (M1): if `expr` is a single-hop property path
+ * `base.prop` whose flow node carries a `narrow` for that exact ref, return the
+ * narrowed type of the one-hop prefix — so `b.r.value` reads the narrowed `b.r`
+ * inside `if (isSuccess(b.r))`. `null` means no narrowing applies; the caller
+ * then resolves the base structurally and the chain walk's diagnostics (strict
+ * member access) run on the un-narrowed access. (Bare-base narrowing, `r.value`,
+ * flows through `synthType(expr.base)` and needs nothing here.)
+ *
+ * The `flowHasNarrowFor` gate is required: without it, `typeAt` would return the
+ * structural (un-narrowed) member type and short-circuiting on it would suppress
+ * the strict-member-access error that un-guarded `b.r.value` must still raise.
+ */
+function narrowedPathPrefix(
+  expr: ValueAccess,
+  ctx: TypeCheckerContext,
+): VariableType | "any" | null {
+  const first = expr.chain[0];
+  if (!ctx.flowEnv || expr.base.type !== "variableName" || first?.kind !== "property") {
+    return null;
+  }
+  const flow = ctx.flowEnv.flowOf.get(expr);
+  const ref = { variable: expr.base.value, chain: [first.name] };
+  if (!flow || !flowHasNarrowFor(ref, flow)) {
+    return null;
+  }
+  return typeAt(ref, flow, { ...ctx.flowEnv, typeAliases: ctx.getTypeAliases() });
+}
+
 export function synthValueAccess(
   expr: ValueAccess,
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  let currentType = synthType(expr.base, scope, ctx);
   const typeAliases = ctx.getTypeAliases();
 
-  // Flow-sensitive path narrowing (M1): when the first hop forms a narrowed
-  // single-hop path `base.prop` (e.g. `b.r` inside `if (isSuccess(b.r))`),
-  // resolve THAT prefix through typeAt and continue the structural walk from the
-  // next hop — so `b.r.value` sees the narrowed `b.r`. (Bare-base narrowing,
-  // `r.value`, already flows through `synthType(expr.base)` above.) Gate on
-  // flowHasNarrowFor so we only short-circuit the prefix when narrowing genuinely
-  // applies; otherwise the structural walk's diagnostics (strict member access)
-  // still run on un-narrowed access.
-  let chainStart = 0;
-  if (ctx.flowEnv && expr.base.type === "variableName" && expr.chain[0]?.kind === "property") {
-    const flow = ctx.flowEnv.flowOf.get(expr);
-    const ref = { variable: expr.base.value, chain: [expr.chain[0].name] };
-    if (flow && flowHasNarrowFor(ref, flow)) {
-      currentType = typeAt(ref, flow, { ...ctx.flowEnv, typeAliases: ctx.getTypeAliases() });
-      chainStart = 1;
-    }
-  }
+  // When a narrowed single-hop prefix applies, start the structural walk from
+  // its type at the next hop; otherwise resolve the base and walk the whole chain.
+  const narrowedPrefix = narrowedPathPrefix(expr, ctx);
+  let currentType =
+    narrowedPrefix === null ? synthType(expr.base, scope, ctx) : narrowedPrefix;
+  const chainStart = narrowedPrefix === null ? 0 : 1;
 
   for (const element of expr.chain.slice(chainStart)) {
     // Validate .partial()/.describe() even when the base type is unknown,

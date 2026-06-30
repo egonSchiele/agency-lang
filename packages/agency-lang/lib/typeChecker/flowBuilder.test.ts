@@ -133,6 +133,19 @@ describe("buildFlowGraph — linear", () => {
     expect(env.flowOf.get(access)).toBeDefined();
   });
 
+  it("REGRESSION (M2): an index valueAccess (arr[0]) gets a flowOf entry", () => {
+    const body = parseBody(`let arr = [1, 2]\nprint(arr[0])`);
+    const scope = new Scope("t");
+    scope.declare("arr", { type: "arrayType", elementType: NUM });
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const access = find(
+      body,
+      (n) => n.type === "valueAccess" && n.base.type === "variableName" && n.base.value === "arr",
+    );
+    expect(env.flowOf.get(access)).toBeDefined();
+  });
+
   it("INVARIANT holds across slice / computed-key / index positions", () => {
     // `lo`/`hi` live inside a slice; `key` inside a computed key — both were
     // missed before expressionChildren covered slice + computedKey.

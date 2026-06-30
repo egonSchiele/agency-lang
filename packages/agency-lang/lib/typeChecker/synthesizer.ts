@@ -9,7 +9,7 @@ import type {
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
-import { typeAt, flowHasNarrowFor } from "./flow.js";
+import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
@@ -772,32 +772,39 @@ function validateAgencyFunctionMethod(
 }
 
 /**
- * Flow-sensitive path narrowing (M1): if `expr` is a single-hop property path
- * `base.prop` whose flow node carries a `narrow` for that exact ref, return the
- * narrowed type of the one-hop prefix — so `b.r.value` reads the narrowed `b.r`
- * inside `if (isSuccess(b.r))`. `null` means no narrowing applies; the caller
- * then resolves the base structurally and the chain walk's diagnostics (strict
- * member access) run on the un-narrowed access. (Bare-base narrowing, `r.value`,
- * flows through `synthType(expr.base)` and needs nothing here.)
+ * Flow-sensitive path narrowing (M2): if a stable prefix of `expr` carries a
+ * `narrow` for that exact ref, return its narrowed type and how many chain
+ * elements it consumes — so `arr[0].value` reads the narrowed `arr[0]` and
+ * `o.inner.r.value` reads the narrowed `o.inner.r`. Searches the LONGEST prefix
+ * first (so the most precise narrowing wins). `null` = no narrowing → the caller
+ * resolves the base structurally and the chain walk's diagnostics (strict member
+ * access) run on the un-narrowed access. (Bare-base narrowing, `r.value`, flows
+ * through `synthType(expr.base)` and needs nothing here.)
+ *
+ * `stablePrefix` (not `chainToSegments`) is used so a later UNSTABLE hop doesn't
+ * block narrowing an earlier stable prefix (`a.b[i()].x` can still use a narrowed
+ * `a.b`).
  *
  * The `flowHasNarrowFor` gate is required: without it, `typeAt` would return the
  * structural (un-narrowed) member type and short-circuiting on it would suppress
- * the strict-member-access error that un-guarded `b.r.value` must still raise.
+ * the strict-member-access error that un-guarded access must still raise.
  */
 function narrowedPathPrefix(
   expr: ValueAccess,
   ctx: TypeCheckerContext,
-): VariableType | "any" | null {
-  const first = expr.chain[0];
-  if (!ctx.flowEnv || expr.base.type !== "variableName" || first?.kind !== "property") {
-    return null;
-  }
+): { type: VariableType | "any"; consumed: number } | null {
+  if (!ctx.flowEnv || expr.base.type !== "variableName") return null;
   const flow = ctx.flowEnv.flowOf.get(expr);
-  const ref = { variable: expr.base.value, chain: [{ kind: "prop" as const, name: first.name }] };
-  if (!flow || !flowHasNarrowFor(ref, flow)) {
-    return null;
+  if (!flow) return null;
+  const stable = stablePrefix(expr.chain);
+  const env = { ...ctx.flowEnv, typeAliases: ctx.getTypeAliases() };
+  for (let len = stable.length; len >= 1; len--) {
+    const ref = { variable: expr.base.value, chain: stable.slice(0, len) };
+    if (flowHasNarrowFor(ref, flow)) {
+      return { type: typeAt(ref, flow, env), consumed: len };
+    }
   }
-  return typeAt(ref, flow, { ...ctx.flowEnv, typeAliases: ctx.getTypeAliases() });
+  return null;
 }
 
 export function synthValueAccess(
@@ -807,12 +814,12 @@ export function synthValueAccess(
 ): VariableType | "any" {
   const typeAliases = ctx.getTypeAliases();
 
-  // When a narrowed single-hop prefix applies, start the structural walk from
-  // its type at the next hop; otherwise resolve the base and walk the whole chain.
+  // When a narrowed stable prefix applies, start the structural walk from its
+  // type at the next hop; otherwise resolve the base and walk the whole chain.
   const narrowedPrefix = narrowedPathPrefix(expr, ctx);
   let currentType =
-    narrowedPrefix === null ? synthType(expr.base, scope, ctx) : narrowedPrefix;
-  const chainStart = narrowedPrefix === null ? 0 : 1;
+    narrowedPrefix === null ? synthType(expr.base, scope, ctx) : narrowedPrefix.type;
+  const chainStart = narrowedPrefix === null ? 0 : narrowedPrefix.consumed;
 
   for (const element of expr.chain.slice(chainStart)) {
     // Validate .partial()/.describe() even when the base type is unknown,

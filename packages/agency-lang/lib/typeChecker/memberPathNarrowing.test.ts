@@ -133,3 +133,120 @@ node main() {
 }`)).toEqual([]);
   });
 });
+
+describe("narrowing inside block bodies", () => {
+  const BLOCKDEFS = `
+def wrap(value: number, block: (number) => number): number { return block(value) }
+def applyN(n: number, block: (number) => number): number { return block(n) }`;
+
+  it("bare var narrows inside an expression-position trailing block", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  if (isSuccess(r)) {
+    let n: number = wrap(3) as value {
+      let inner: number = r.value
+      return inner
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("bare var narrows inside an inline block", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  if (isSuccess(r)) {
+    let n: number = applyN(3, \\x -> r.value)
+  }
+}`)).toEqual([]);
+  });
+
+  it("member path narrows inside an expression-position trailing block", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+type Box = { r: Result<number, string> }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    let n: number = wrap(3) as value {
+      let inner: number = b.r.value
+      return inner
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("member path narrows inside an inline block", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+type Box = { r: Result<number, string> }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    let n: number = applyN(3, \\x -> b.r.value)
+  }
+}`)).toEqual([]);
+  });
+
+  it("narrows inside an inline block passed as a named argument", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  if (isSuccess(r)) {
+    let n: number = applyN(n: 3, block: \\x -> r.value)
+  }
+}`)).toEqual([]);
+  });
+
+  it("a guard nested inside a block body narrows within the block", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  let m: number = wrap(3) as value {
+    if (isFailure(r)) {
+      return 0
+    } else {
+      let inner: number = r.value
+      return inner
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("statement-position block still narrows (no regression)", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  if (isSuccess(r)) {
+    wrap(3) as value {
+      let inner: number = r.value
+      return inner
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("reassignment inside a block body drops the narrowing (exactly one error)", () => {
+    const errs = check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  let m: number = wrap(3) as value {
+    if (isSuccess(r)) {
+      r = failure("x")
+      let inner: number = r.value
+      return inner
+    }
+    return 0
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("CONTROL: un-guarded access inside a block still errors", () => {
+    expect(check(`${TRY}${BLOCKDEFS}
+node main() {
+  let r = tryParse("ok")
+  let n: number = wrap(3) as value {
+    let inner: number = r.value
+    return inner
+  }
+}`).some((m) => /only available on a success Result/.test(m))).toBe(true);
+  });
+});

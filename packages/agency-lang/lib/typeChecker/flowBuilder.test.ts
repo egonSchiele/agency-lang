@@ -116,6 +116,23 @@ describe("buildFlowGraph — linear", () => {
     expect(env.flowOf.get(access)).toBeDefined();
   });
 
+  it("REGRESSION: a valueAccess inside an expression-position block body gets a flowOf entry", () => {
+    // A block on a call used as an EXPRESSION (assignment value) must have its
+    // body flow-walked, so a `.property` access inside it narrows. Pins the
+    // mechanism (flowOf attached), not just the outcome.
+    const body = parseBody(`let n = wrap(3) as value {\n  let inner = obj.field\n  return inner\n}`);
+    const scope = new Scope("t");
+    scope.declare("obj", { type: "objectType", properties: [{ key: "field", value: NUM }] });
+    scope.declare("wrap", { type: "primitiveType", value: "any" });
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const access = find(
+      body,
+      (n) => n.type === "valueAccess" && n.base.type === "variableName" && n.base.value === "obj",
+    );
+    expect(env.flowOf.get(access)).toBeDefined();
+  });
+
   it("INVARIANT holds across slice / computed-key / index positions", () => {
     // `lo`/`hi` live inside a slice; `key` inside a computed key — both were
     // missed before expressionChildren covered slice + computedKey.

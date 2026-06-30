@@ -45,6 +45,24 @@ export function attachExpressionsToFlow(
   if (node.type === "variableName" || node.type === "valueAccess") {
     env.flowOf.set(node, flow);
   }
+  // Block bodies narrow with the enclosing flow, regardless of where the
+  // block-bearing call sits (statement, assignment value, pipe operand,
+  // argument). A trailing block is `functionCall.block`; an inline `\… -> …`
+  // block is a `blockArgument` reached via the call's arguments. Walk the body
+  // as statements (buildFlowGraph) so declarations + nested guards inside the
+  // block get flow nodes. The statement-level `functionCall` rule relies on this
+  // (it no longer walks the block itself), so the body is walked exactly once.
+  // CAVEAT: this narrows as if the block runs in the enclosing flow — a deferred
+  // callback that runs after a later reassignment is the classic closure-
+  // staleness limitation (pre-existing for statement-position blocks; not
+  // addressed here).
+  if (node.type === "functionCall" && node.block) {
+    buildFlowGraph(node.block.body, flow, env);
+  }
+  if (node.type === "blockArgument") {
+    buildFlowGraph(node.body, flow, env);
+    return; // body walked as statements; no expression children to attach
+  }
   for (const child of expressionChildren(node)) {
     attachExpressionsToFlow(child, flow, env);
   }
@@ -171,10 +189,11 @@ const statementRules: StatementRuleTable = {
   },
 
   functionCall: (node, flow, env) => {
+    // attachExpressionsToFlow now descends into node.block / blockArgument
+    // bodies itself, so the block body is walked exactly once here. Do NOT
+    // re-add an explicit `buildFlowGraph(node.block.body, …)` — that would
+    // double-walk the body.
     attachExpressionsToFlow(node, flow, env);
-    if (node.block) {
-      buildFlowGraph(node.block.body, flow, env);
-    }
     return flow;
   },
 

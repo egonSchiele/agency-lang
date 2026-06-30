@@ -60,4 +60,16 @@ describe("smoltalkDefaults codegen", () => {
     const out = generate(PROGRAM, { client: { baseUrl: { openRouter: "https://proxy.test/v1" } } });
     expect(out).toContain("https://proxy.test/v1");
   });
+
+  it("omits provider when defaultProvider is unset", () => {
+    const out = generate(PROGRAM);
+    // anchor to a baked `provider: "<literal>"` pair, not the bare token —
+    // `provider` appears elsewhere in generated output (metadata, embed calls).
+    expect(out).not.toMatch(/provider:\s*"/);
+  });
+
+  it("bakes provider when defaultProvider is set", () => {
+    const out = generate(PROGRAM, { client: { defaultProvider: "openrouter" } });
+    expect(out).toMatch(/provider:\s*"openrouter"/);
+  });
 });

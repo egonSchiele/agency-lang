@@ -3563,7 +3563,7 @@ export class TypeScriptBuilder {
       baseUrlFields.deepInfra = ts.str(cfg.client.baseUrl.deepInfra);
     }
 
-    const smoltalkDefaults = ts.obj({
+    const smoltalkFields: Record<string, TsNode> = {
       // API keys are nested under `apiKey`, each falling back to its
       // conventional env var. `ollama` is intentionally omitted — it uses
       // OLLAMA_HOST (not an API key).
@@ -3599,7 +3599,13 @@ export class TypeScriptBuilder {
         apiKey: ts.binOp(ts.env("STATELOG_SMOLTALK_API_KEY"), "||", ts.str("")),
         traceId: $(ts.id("nanoid")).call().done(),
       }),
-    });
+    };
+    // Emit a default provider only when configured — otherwise leave it unset
+    // so smoltalk's normal model→provider registry lookup still applies.
+    if (cfg.client?.defaultProvider) {
+      smoltalkFields.provider = ts.str(cfg.client.defaultProvider);
+    }
+    const smoltalkDefaults = ts.obj(smoltalkFields);
 
     const runtimeCtxArgs: Record<string, TsNode> = {
       statelogConfig,

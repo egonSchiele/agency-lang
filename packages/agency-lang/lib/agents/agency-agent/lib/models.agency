@@ -261,3 +261,10 @@ export def priceDefault(provider: string, slot: string, price: string): Result<R
   }
   return failure("Unknown slot '${slot}'.")
 }
+
+/** Providers Agency can actually configure: those with baked defaults plus the
+  base-URL proxy providers. Source-of-truth derived (MODELS + BASE_URL_PROVIDERS),
+  not a hand-maintained list, so it never drifts. Used by parseModelSpec. */
+export def knownProviders(): string[] {
+  return Object.keys(MODELS).concat(Object.keys(BASE_URL_PROVIDERS))
+}

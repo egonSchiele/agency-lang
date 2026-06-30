@@ -8,8 +8,42 @@
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
 import { agentReply } from "../agent.agency"
+import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
+import { resolveAll, buildLayers, Ctx } from "../lib/resolution.agency"
+import { knownProviders, Resolved } from "../lib/models.agency"
 
 node respondsToAMessage(): boolean {
   const reply = agentReply("hello")
   return reply == "Hi from the agent!"
+}
+
+// End-to-end of the wired apply→read path (env-independent — empty settings, no
+// resolveDetected). Proves applyResolved/getResolvedSlots match the built-in
+// (planModels) defaults for anthropic. Back-compat guard (review #4).
+node applyResolvedSetsSlots(): string {
+  const ctx: Ctx = { provider: "anthropic", price: "standard" }
+  const layers = buildLayers("", "", {}, {}, knownProviders(), false)
+  const all = resolveAll(layers, ctx)
+  if (isFailure(all)) {
+    return "FAIL"
+  }
+  applyResolved(promoteAll(all.value))
+  const s = getResolvedSlots()
+  const main = s["main"]
+  const reasoning = s["reasoning"]
+  if (main == undefined || reasoning == undefined) {
+    return "MISSING"
+  }
+  return "${main.model}|${reasoning.model}|${reasoning.provider}"
+}
+
+// The agent promotes openai → openai-responses on the override path too.
+node promotesOpenaiProvider(): string {
+  const slots: Record<string, Resolved> = { main: { model: "gpt-4o", provider: "openai", via: "x" } }
+  const out = promoteAll(slots)
+  const m = out["main"]
+  if (m == undefined) {
+    return "MISSING"
+  }
+  return m.provider
 }

@@ -1,7 +1,8 @@
 You'll need the environment variables for whichever providers you use:
 
 ```
-STATELOG_API_KEY
+STATELOG_API_KEY            # statelog client auth
+STATELOG_SMOLTALK_API_KEY   # smoltalk's own LLM-call tracing/auth
 OPENAI_API_KEY
 GEMINI_API_KEY
 ANTHROPIC_API_KEY
@@ -24,6 +25,7 @@ Agency supports .env files, so you can set these in a .env or .env.local file li
 
 ```
 STATELOG_API_KEY="<your-key>"
+STATELOG_SMOLTALK_API_KEY="<your-key>"
 OPENAI_API_KEY="<your-key>"
 GEMINI_API_KEY="<your-key>"
 ANTHROPIC_API_KEY="<your-key>"

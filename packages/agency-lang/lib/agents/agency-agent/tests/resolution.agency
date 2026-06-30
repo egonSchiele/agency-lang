@@ -1,0 +1,65 @@
+import { resolveSlot, resolveAll, buildLayers, Layer, Ctx } from "../lib/resolution.agency"
+import { Resolved } from "../lib/models.agency"
+
+static const CTX: Ctx = { provider: "anthropic", price: "standard" }
+def empty(name: string): Layer { return { name: name, perSlot: {}, pin: null } }
+
+// Unwrap a Result<Resolved> for assertion; the sentinel won't match any
+// expected output, so an unexpected failure fails the test loudly.
+def okR(r: Result<Resolved>): Resolved {
+  if (isFailure(r)) {
+    return { model: "ERR", provider: "ERR", via: "ERR" }
+  }
+  return r.value
+}
+
+// immediacy-outer: CLI global-pin beats settings per-slot (the flipped item-1 case).
+node cliPinBeatsSettingsSlot(): Resolved {
+  let cli = empty("cli"); cli.pin = { model: "gpt-5.5", provider: "" }
+  let set = empty("settings"); set.perSlot = { reasoning: { model: "opus", provider: "" } }
+  return okR(resolveSlot("reasoning", [empty("in-session"), cli, set], CTX))
+}
+// in-session per-slot beats CLI per-slot (immediacy).
+node inSessionPerSlotBeatsCli(): Resolved {
+  let s = empty("in-session"); s.perSlot = { main: { model: "a", provider: "anthropic" } }
+  let cli = empty("cli"); cli.perSlot = { main: { model: "b", provider: "anthropic" } }
+  return okR(resolveSlot("main", [s, cli], CTX))
+}
+// in-session pin beats CLI pin.
+node inSessionPinBeatsCliPin(): Resolved {
+  let s = empty("in-session"); s.pin = { model: "a", provider: "anthropic" }
+  let cli = empty("cli"); cli.pin = { model: "b", provider: "anthropic" }
+  return okR(resolveSlot("main", [s, cli], CTX))
+}
+// within settings: per-slot beats pin.
+node settingsPerSlotBeatsSettingsPin(): Resolved {
+  let set = empty("settings"); set.pin = { model: "pin", provider: "anthropic" }
+  set.perSlot = { main: { model: "slot", provider: "anthropic" } }
+  return okR(resolveSlot("main", [empty("in-session"), empty("cli"), set], CTX))
+}
+// no layer → built-in default; empty provider inherits ctx.
+node fallsToBuiltinDefault(): Resolved {
+  return okR(resolveSlot("main", [empty("in-session"), empty("cli"), empty("settings")], CTX))
+}
+// resolveAll propagates failure for a default-less provider with no override.
+node resolveAllPropagatesFailure(): boolean {
+  const ctx: Ctx = { provider: "litellm", price: "standard" }
+  return isFailure(resolveAll([empty("in-session"), empty("cli"), empty("settings")], ctx))
+}
+// back-compat parity: built-in default equals planModels for anthropic main.
+node parityMainAnthropic(): Resolved {
+  return okR(resolveSlot("main", [empty("in-session"), empty("cli"), empty("settings")], CTX))
+}
+// buildLayers: CLI --model gpt-5.5 over settings slots.reasoning=opus → gpt-5.5.
+node buildLayersImmediacyOuter(): Resolved {
+  const layers = buildLayers("", "gpt-5.5", {}, { slots: { reasoning: "opus" } }, ["anthropic", "openai"], false)
+  const all = resolveAll(layers, CTX)
+  if (isFailure(all)) {
+    return { model: "ERR", provider: "ERR", via: "ERR" }
+  }
+  const m = all.value["reasoning"]
+  if (m == undefined) {
+    return { model: "ERR", provider: "ERR", via: "ERR" }
+  }
+  return m
+}

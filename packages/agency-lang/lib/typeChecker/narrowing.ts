@@ -204,7 +204,16 @@ export function narrowUnionByDiscriminant(
   // member-filter handles isSuccess/isFailure/`if (r.success)` narrowing.
   if (resolved.type === "resultType") resolved = resultToObjectUnion(resolved, aliases);
   if (resolved.type !== "unionType") return null;
-  const members = resolved.types;
+  // A union *member* may itself be a Result — e.g. a flow join where one branch
+  // kept the raw `Result<…>` and another expanded it to its `{success:…}` object
+  // form (mergeFlows + uniteTypes produce `Result<…> | {success:false,…}`).
+  // Expand such members so the discriminant filter below sees homogeneous object
+  // members; otherwise a raw `resultType` has no discriminant property, survives
+  // every filter, and silently blocks narrowing.
+  const members = resolved.types.flatMap((m) => {
+    const rm = safeResolveType(m, aliases);
+    return rm.type === "resultType" ? resultToObjectUnion(rm, aliases).types : [m];
+  });
   const kept = members.filter((m) => {
     const rm = safeResolveType(m, aliases);
     const propType =

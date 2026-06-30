@@ -136,13 +136,8 @@ export function declareVariable(
         node.loc,
       );
     }
-    checkType(
-      node.value,
-      newType,
-      scope,
-      `assignment to '${node.variableName}'`,
-      ctx,
-    );
+    // The value-vs-annotation check (checkType) now runs in the flow-aware
+    // checkAssignmentsInScope (Phase B) — see checkAssignmentValue.
     // The runtime wraps validated values in Result<T, string>, so the
     // declared scope type must match — otherwise downstream property accesses
     // see `T` instead of the actual `Result<T, string>` and silently miscompile.
@@ -154,37 +149,9 @@ export function declareVariable(
     return;
   }
 
+  // Reassignment / access-chain writes don't (re)declare; their value-vs-target
+  // checks now run in checkAssignmentsInScope (flow-aware). Nothing to do here.
   if (existingType) {
-    if (node.accessChain) {
-      // Property / index writes (e.g. `obj.field = x`, `votes["k"] = v`)
-      // target the *member* type the chain resolves to, not the whole
-      // variable type. Synthesize the LHS by walking the chain through
-      // the read-side synthesizer, then compare the RHS against that.
-      const lhsType = synthAccessChainTargetType(
-        node.variableName,
-        node.accessChain,
-        node.loc,
-        scope,
-        ctx,
-      );
-      const rhsType = synthType(node.value, scope, ctx);
-      reportNotAssignable(
-        ctx,
-        node.variableName,
-        rhsType,
-        lhsType,
-        node.loc,
-      );
-      return;
-    }
-    const valueType = synthType(node.value, scope, ctx);
-    reportNotAssignable(
-      ctx,
-      node.variableName,
-      valueType,
-      existingType,
-      node.loc,
-    );
     return;
   }
 
@@ -208,6 +175,55 @@ export function declareVariable(
   }
   const inferred = synthType(node.value, scope, ctx);
   scope.declare(node.variableName, widenType(inferred), isConst);
+}
+
+/**
+ * The value-vs-target type checks for an assignment, factored out of
+ * `declareVariable` so they can run in the flow-aware Phase B pass
+ * (`checkAssignmentsInScope`) rather than during scope declaration. Pure
+ * checking — no declaration. No-op for non-assignments.
+ */
+export function checkAssignmentValue(
+  node: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  if (node.type !== "assignment") {
+    return;
+  }
+  const newType = node.typeHint;
+  if (newType) {
+    // Annotated + accessChain is intentionally checked against the whole
+    // declared type (matches declareVariable). Property/index writes against
+    // the chain target are only checked when the assignment is *un-annotated*
+    // (the accessChain branch below).
+    checkType(
+      node.value,
+      newType,
+      scope,
+      `assignment to '${node.variableName}'`,
+      ctx,
+    );
+    return;
+  }
+  const existingType = scope.lookup(node.variableName);
+  if (existingType === undefined) {
+    return;
+  }
+  if (node.accessChain) {
+    const lhsType = synthAccessChainTargetType(
+      node.variableName,
+      node.accessChain,
+      node.loc,
+      scope,
+      ctx,
+    );
+    const rhsType = synthType(node.value, scope, ctx);
+    reportNotAssignable(ctx, node.variableName, rhsType, lhsType, node.loc);
+    return;
+  }
+  const valueType = synthType(node.value, scope, ctx);
+  reportNotAssignable(ctx, node.variableName, valueType, existingType, node.loc);
 }
 
 /**

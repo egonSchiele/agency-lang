@@ -2809,12 +2809,19 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(0);
     });
 
-    it("validates an unannotated reassignment against the type in effect at that point, not the final type", () => {
+    it("checks an unannotated reassignment against the final declared type of a re-declared variable (flow-checker PR 3)", () => {
       // let x: string = "a"     OK
-      // x = "b"                  OK at this point — x is still string
+      // x = "b"                  flagged: x's *final* declared type is number
       // let x: number = 1        ERROR: number not assignable to string (re-decl)
-      // The middle reassignment must NOT be flagged just because x is later
-      // re-declared as number.
+      //
+      // PR 3 moved assignment value-checks out of the source-order Phase A walk
+      // into a flow-aware Phase B pass (checkAssignmentsInScope) over the final
+      // flat scope, so a reassignment is now checked against the variable's
+      // final declared type rather than the type in effect at that source point.
+      // This only affects variables re-declared with a *different* type — already
+      // an erroneous program (the re-declaration itself errors) — and it matches
+      // how PR 2 already resolves *reads* of re-declared variables (assign nodes
+      // carry scope.lookup, the final type). Bounded, documented behavior change.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -2839,9 +2846,14 @@ describe("TypeChecker", () => {
       };
 
       const { errors } = typeCheck(program);
-      // Exactly one error: the re-declaration `let x: number` clashing with prior `string`.
-      expect(errors).toHaveLength(1);
-      expect(errors[0].message).toContain("'number' is not assignable to type 'string'");
+      const messages = errors.map((e) => e.message);
+      // Two errors now: (1) the re-declaration `let x: number` clashing with the
+      // prior `string`; (2) the middle reassignment `x = "b"` checked against x's
+      // final declared type (number).
+      expect(messages).toEqual([
+        "Type 'number' is not assignable to type 'string'.",
+        `Type '"b"' is not assignable to type 'number'.`,
+      ]);
     });
 
     it("should error on property access on 'unknown'", () => {

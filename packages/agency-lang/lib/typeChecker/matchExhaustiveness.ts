@@ -71,7 +71,10 @@ function describeCase(c: TypeCase): string {
     case "member":
       return "an object case";
     case "literal":
-      return typeof c.value === "string" ? `"${c.value}"` : String(c.value);
+      // JSON-encode so a string value renders quoted-and-escaped (a newline/quote
+      // can't make the diagnostic multi-line or ambiguous); numbers/booleans print
+      // bare (JSON.stringify(2) → "2", JSON.stringify(true) → "true").
+      return JSON.stringify(c.value);
   }
 }
 

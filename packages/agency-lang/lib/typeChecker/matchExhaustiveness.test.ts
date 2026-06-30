@@ -78,15 +78,16 @@ node main() {
   });
 
   it("warn: emitted as a warning, not an error", () => {
-    const parsed = parseAgency(`${TRY}
+    const src = `${TRY}
 node main() {
   let r = tryParse("ok")
   match (r) {
     success(v) => v
   }
-}`);
+}`;
+    const parsed = parseAgency(src);
     if (!parsed.success) throw new Error("parse");
-    const info = buildCompilationUnit(parsed.result, undefined, undefined, "");
+    const info = buildCompilationUnit(parsed.result, undefined, undefined, src);
     const errs = typeCheck(parsed.result, { typechecker: { matchExhaustiveness: "warn" } }, info).errors;
     expect(errs.some((e) => e.severity === "warning" && /not exhaustive/i.test(e.message))).toBe(true);
     expect(errs.some((e) => (e.severity ?? "error") === "error" && /not exhaustive/i.test(e.message))).toBe(false);

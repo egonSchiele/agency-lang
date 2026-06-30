@@ -18,6 +18,7 @@ import { ScopeInfo } from "./types.js";
 import type { BuiltinSignature, TypeCheckerContext } from "./types.js";
 import {
   checkType,
+  checkConditionType,
   isAnyType,
   getParamsForNodeOrFunc,
   getBlockSlot,
@@ -822,7 +823,7 @@ function checkExpressionsInScope(
         synthType(node.value, info.scope, ctx);
       }
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
-      checkType(node.condition, BOOLEAN_T, info.scope, "condition", ctx);
+      checkConditionType(node.condition, info.scope, ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {
       checkCatchDefaultType(node, info.scope, ctx);
     } else if (

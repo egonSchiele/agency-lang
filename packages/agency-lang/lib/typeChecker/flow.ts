@@ -1,6 +1,6 @@
 import type { AgencyNode, TypeAliasEntry, VariableType } from "../types.js";
 import type { Refine, NarrowCandidate } from "./narrowing.js";
-import { narrowUnionByDiscriminant } from "./narrowing.js";
+import { narrowByRefine } from "./narrowing.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
 import { isNever } from "./assignability.js";
@@ -84,16 +84,17 @@ export function uniteTypes(
 }
 
 /**
- * Refine a (non-any) type by a single discriminant. Returns the narrowed type,
- * or null for "no narrowing" — `narrowUnionByDiscriminant` already views Result
- * as a union (resultUnion.ts) and is sound/conservative.
+ * Refine a (non-any) type by a single refine. Returns the narrowed type, or
+ * null for "no narrowing". Delegates to `narrowByRefine` (the shared dispatcher)
+ * so discriminant and presence narrowing stay in lockstep with the legacy path;
+ * both are sound/conservative (Result is viewed as a union via resultUnion.ts).
  */
 export function applyRefine(
   base: VariableType,
   refine: Refine,
   aliases: Record<string, TypeAliasEntry>,
 ): VariableType | null {
-  return narrowUnionByDiscriminant(base, refine.prop, refine.literal, refine.keep, aliases);
+  return narrowByRefine(refine, base, aliases);
 }
 
 /**

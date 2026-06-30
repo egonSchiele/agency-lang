@@ -35,7 +35,7 @@ flow-typed checker work and the four narrowing specs at the repo root.
 | The scrutinee *variable* in a `match` arm (vs a bound field) | ❌ | only bound fields narrow; the source var isn't re-typed |
 | Mixed union with a non-literal discriminant member | ❌ | by design — the `string` member can't be proven disjoint |
 | Narrowing to `never` (dead-branch detection) | ❌ | suppressed today; **planned** with the flow model + `never` |
-| `null` / truthiness (`if (x != null)`, `if (x)`) | ❌ | **planned** (now unblocked by nullish unification — `T \| null`) |
+| `null` / truthiness (`if (x != null)`, `if (x == null)`, `if (x)`) | ✅ | strips/keeps the `null` member of a `T \| null` optional; bare-variable scrutinee only. `x != null` / `x == null` are exact and narrow **both** branches. Bare `if (x)` narrows **only the then-branch** to non-null: the runtime uses JS truthiness, so a falsy `x` may be `""`/`0`/`false` (not just `null`), so the else-branch (and the post-`while` region) is left unnarrowed — narrowing it to `null` would be unsound. `if (x)` is accepted as a condition for optionals (an opt-in carve-out from the boolean-only condition rule — see `checkConditionType`). |
 | `typeof` / value-kind split of plain unions (`number \| string`) | ❌ | **planned fast-follow** — needs surface syntax |
 | User-defined type guards (`def isFoo(x): x is Foo`) | ❌ | **planned fast-follow** — needs `x is T` syntax |
 | Aliased condition (`const ok = isSuccess(r); if (ok) …`) | ❌ | **planned** — no new syntax, smarter `analyzeCondition` |

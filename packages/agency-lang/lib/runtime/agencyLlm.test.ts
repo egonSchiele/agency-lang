@@ -6,6 +6,7 @@ import { DeterministicClient } from "./deterministicClient.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { RuntimeContext } from "./state/context.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { _setLlmOptions } from "../stdlib/llm.js";
 
 function makeCtx(): RuntimeContext<any> {
   return new RuntimeContext({
@@ -97,6 +98,23 @@ describe("agency.llm — basic behavior", () => {
     const before = ctx.stateStack.localCost;
     await inFrame(ctx, threads, () => agency.llm("hi"));
     expect(ctx.stateStack.localCost).toBeGreaterThan(before);
+  });
+
+  it("hosted-provider path: an explicit provider reaches the client and its cost rolls up", async () => {
+    // Guards the hosted-provider scenario: a provider set via setLlmOptions
+    // (required for hosted model names not in smoltalk's registry) reaches the
+    // client config, and the completion's cost is rolled into the branch total.
+    const ctx = makeCtx();
+    const client = new RecordingClient(["ok"]); // returns a fixed totalCost 0.000002
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const before = ctx.stateStack.localCost;
+    await inFrame(ctx, threads, async () => {
+      _setLlmOptions({ provider: "openrouter", model: "z-ai/glm-5.2" });
+      return agency.llm("hi");
+    });
+    expect((client.configs[0] as any).provider).toBe("openrouter");
+    expect(ctx.stateStack.localCost).toBeCloseTo(before + 0.000002, 9);
   });
 
   it("structured output: parses the response against opts.schema", async () => {

@@ -62,6 +62,12 @@ This lets you prevent specific built-in functions from being generated in the ou
   - **`undefinedFunctions`** (`"silent" | "warn" | "error"`): What to do when a called
     function (or `Namespace.method(...)` chain on a JS global) cannot be resolved.
     Default: `"silent"`. Recommend setting to `"warn"` once your codebase is clean.
+  - **`strictMemberAccess`** (`"silent" | "warn" | "error"`): What to do when a property
+    that exists on only some members of an un-narrowed union is accessed — most
+    importantly `r.value` / `r.error` on an un-guarded `Result`. Default: `"error"`.
+    Narrow first to access branch-specific members safely: an `if (isSuccess(r))` /
+    `if (isFailure(r))` guard, `r catch …`, or `match (r) { … }`. Set to `"silent"`
+    to restore the old lenient behavior (such accesses type as `any`).
 
 **Example:**
 ```json

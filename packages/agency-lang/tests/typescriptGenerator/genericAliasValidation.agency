@@ -7,5 +7,7 @@ def process(c: Container<number>!) {
 
 node main() {
   let c = process({ value: 42 })
-  print(c.value)
+  if (isSuccess(c)) {
+    print(c.value)
+  }
 }

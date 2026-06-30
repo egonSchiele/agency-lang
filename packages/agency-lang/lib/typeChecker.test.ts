@@ -4470,9 +4470,11 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
-    it("Result.value access types as any (until narrowing lands)", () => {
+    it("Result.value access types as any under strictMemberAccess: silent", () => {
       // const r: Result<number, any> = success(10)
       // const n: string = r.value   -- string, not number; .value is `any` so this passes.
+      // strictMemberAccess defaults to "error" now; "silent" restores the old
+      // lenient escape this test documents.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4499,10 +4501,14 @@ describe("TypeChecker", () => {
         ],
       };
       // Result.value escapes to any; assignable to anything.
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(
+        typeCheck(program, {
+          typechecker: { strictMemberAccess: "silent" },
+        }).errors,
+      ).toHaveLength(0);
     });
 
-    it("Result.error / .checkpoint / .args also type as any", () => {
+    it("Result.error / .checkpoint / .args also type as any (strictMemberAccess: silent)", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4538,7 +4544,11 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(
+        typeCheck(program, {
+          typechecker: { strictMemberAccess: "silent" },
+        }).errors,
+      ).toHaveLength(0);
     });
 
     it("Result.unknownField still errors", () => {
@@ -4953,7 +4963,7 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /not allowed on handler/i.test(e.message))).toBe(true);
     });
 
-    it("allows .value/.error on a validated Result via RESULT_FIELDS escape", () => {
+    it("allows .value/.error on a validated Result via RESULT_FIELDS escape (strictMemberAccess: silent)", () => {
       // const r: Person! = {...}; const v = r.value; const e = r.error
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -4990,7 +5000,11 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(
+        typeCheck(program, {
+          typechecker: { strictMemberAccess: "silent" },
+        }).errors,
+      ).toHaveLength(0);
     });
 
     it("errors on arbitrary property access on a validated Result (the bug class this catches)", () => {

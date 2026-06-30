@@ -280,8 +280,15 @@ def runOneTurnPrompt(
   assembly. Returns the LLM's reply (string).
   """
   let reply = ""
+  const spec = config.agents[category]
+  if (spec.type != "prompt") {
+    // Unreachable in practice: routeIteration() sends agent-type specs to
+    // runOneTurnAgent, so only prompt-type specs reach here. The guard narrows
+    // `spec` to PromptSpec so its prompt-only fields (systemPrompt / tools /
+    // memory) type-check without an un-narrowed-union error.
+    return reply
+  }
   thread(label: category, summarize: true, session: category) {
-    const spec = config.agents[category]
     if (spec.memory == true) {
       setMemoryId(category)
     }

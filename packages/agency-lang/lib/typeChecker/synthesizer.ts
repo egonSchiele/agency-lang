@@ -1,5 +1,7 @@
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
-import type { ResultType } from "../types/typeHints.js";
+import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
+import type { SourceLocation } from "../types/base.js";
+import { resultToObjectUnion } from "./resultUnion.js";
 import type {
   NamedArgument,
   SplatExpression,
@@ -40,6 +42,21 @@ const RESULT_FIELDS = new Set<string>([
   "success",
 ]);
 
+// The Result fields that exist on exactly one branch (everything except
+// `success`, which is on both). Derived from RESULT_FIELDS so adding a field in
+// one place updates both. `value` is success-only; the rest are failure-only.
+const RESULT_BRANCH_FIELDS = new Set(
+  [...RESULT_FIELDS].filter((f) => f !== "success"),
+);
+
+function resultFieldMessage(fieldName: string): string {
+  // Invariant (per lib/runtime/result.ts): `value` is the only success-only
+  // field; every other branch field is failure-only. Update if Result grows a
+  // new success-side field.
+  const branch = fieldName === "value" ? "success" : "failure";
+  return `'.${fieldName}' is only available on a ${branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) { … }'.`;
+}
+
 /**
  * Resolve a field access on a `ResultType` against the narrowing layer.
  * Returns:
@@ -63,6 +80,134 @@ function resolveResultFieldType(
   // routes un-narrowed Results through strict union access.
   if (RESULT_FIELDS.has(fieldName)) return "any";
   return null;
+}
+
+type StrictSeverity = "silent" | "warn" | "error";
+
+/**
+ * The configured strict union-member-access severity. Defaults to "error":
+ * un-guarded access to a branch-specific union member (notably `r.value` on an
+ * un-narrowed Result) is a hard error. Set `strictMemberAccess: "silent"` to
+ * opt out (restores the old lenient behavior).
+ */
+function strictMemberAccessSeverity(ctx: TypeCheckerContext): StrictSeverity {
+  return ctx.config.typechecker?.strictMemberAccess ?? "error";
+}
+
+/** Emit a strict-member-access diagnostic at the configured severity. */
+function reportStrictMemberAccess(
+  ctx: TypeCheckerContext,
+  severity: "warn" | "error",
+  message: string,
+  loc: SourceLocation | undefined,
+): void {
+  ctx.errors.push({
+    message,
+    loc,
+    severity: severity === "warn" ? "warning" : "error",
+  });
+}
+
+/**
+ * Collect a property's type across the members of a union. `type` is the
+ * collapsed result over members that HAVE the property (a single hit unwraps;
+ * none → `null`). `missing` is true when at least one member lacks it —
+ * covering BOTH an object member without the property AND a non-object member
+ * (e.g. `string` in `{a:string} | string`); both require narrowing, so both
+ * count as missing for the strict check.
+ */
+function unionPropertyAccess(
+  members: VariableType[],
+  fieldName: string,
+  aliases: Record<string, TypeAliasEntry>,
+): { type: VariableType | null; missing: boolean } {
+  const types: VariableType[] = [];
+  let missing = false;
+  for (const member of members) {
+    const resolvedMember = safeResolveType(member, aliases);
+    const prop =
+      resolvedMember.type === "objectType"
+        ? resolvedMember.properties.find((p) => p.key === fieldName)?.value
+        : undefined;
+    if (prop) {
+      types.push(prop);
+    } else {
+      missing = true;
+    }
+  }
+  const type =
+    types.length === 0
+      ? null
+      : types.length === 1
+        ? types[0]
+        : { type: "unionType" as const, types };
+  return { type, missing };
+}
+
+/**
+ * Strict-aware property access on a union receiver. Returns the collapsed
+ * member type, or `null` when no member has the field (caller emits the hard
+ * "does not exist" error). When the field is present on some-but-not-all
+ * members, emits the gated strict diagnostic — a narrowed receiver is a single
+ * object member and never reaches here, so this never fires on guarded code.
+ */
+function accessUnionField(
+  union: UnionType,
+  fieldName: string,
+  aliases: Record<string, TypeAliasEntry>,
+  ctx: TypeCheckerContext,
+  loc: SourceLocation | undefined,
+): VariableType | null {
+  const { type, missing } = unionPropertyAccess(union.types, fieldName, aliases);
+  if (type === null) {
+    return null;
+  }
+  const severity = strictMemberAccessSeverity(ctx);
+  if (missing && severity !== "silent") {
+    reportStrictMemberAccess(
+      ctx,
+      severity,
+      `Property '${fieldName}' is not available on every member of '${formatTypeHint(union)}'; narrow the value (e.g. with a guard) before accessing it.`,
+      loc,
+    );
+  }
+  return type;
+}
+
+/**
+ * Strict-aware property access on a Result receiver. At `silent`, defers to the
+ * lenient `resolveResultFieldType` (`any` for Result fields) — behavior-
+ * preserving. At `warn`/`error`, expands the Result to its object union and,
+ * for a branch-specific field, emits a Result-framed diagnostic. Narrowed
+ * Results are already object members and never reach here.
+ *
+ * Return contract matches `resolveResultFieldType`: `"any"` → caller returns
+ * `"any"`; a type → caller sets `currentType`; `null` → fall through to the
+ * generic "does not exist" handling.
+ */
+function accessResultField(
+  result: ResultType,
+  fieldName: string,
+  aliases: Record<string, TypeAliasEntry>,
+  ctx: TypeCheckerContext,
+  loc: SourceLocation | undefined,
+): VariableType | "any" | null {
+  const severity = strictMemberAccessSeverity(ctx);
+  if (severity === "silent") {
+    return resolveResultFieldType(result, fieldName);
+  }
+  const { type, missing } = unionPropertyAccess(
+    resultToObjectUnion(result, aliases).types,
+    fieldName,
+    aliases,
+  );
+  if (type === null) {
+    return null;
+  }
+  if (missing && RESULT_BRANCH_FIELDS.has(fieldName)) {
+    reportStrictMemberAccess(ctx, severity, resultFieldMessage(fieldName), loc);
+  }
+  return type;
 }
 
 /**
@@ -648,46 +793,44 @@ export function synthValueAccess(
 
     switch (element.kind) {
       case "property": {
-        // Result<T, E>: allow access to runtime fields without flow narrowing.
-        // isSuccess/isFailure narrowing has landed (lib/typeChecker/narrowing.ts),
-        // so inside a guard .value/.error already type precisely; OUTSIDE a guard
-        // there is still no proven branch, so treating these field accesses as
-        // `any` keeps real Result code from flooding with spurious "property
-        // does not exist" errors. Tightening the un-narrowed access into a hard
-        // error is a later increment.
+        // Result<T, E> field access. Inside a guard, `resolved` is already the
+        // narrowed member (an objectType, handled below), so this branch only
+        // sees UN-narrowed Results. `accessResultField` enforces strict access
+        // per `strictMemberAccess` (default "error"): a branch-specific field
+        // (.value/.error/…) without narrowing is diagnosed with Result-framed
+        // guidance; `strictMemberAccess: "silent"` keeps the lenient `any`.
         if (resolved.type === "resultType") {
-          const resolution = resolveResultFieldType(resolved, element.name);
-          if (resolution === "any") return "any";
-          if (resolution !== null) {
-            currentType = resolution;
+          const fieldType = accessResultField(
+            resolved,
+            element.name,
+            typeAliases,
+            ctx,
+            expr.loc,
+          );
+          if (fieldType === "any") return "any";
+          if (fieldType !== null) {
+            currentType = fieldType;
             break;
           }
+          // null → fall through to generic handling (bogus Result field →
+          // "does not exist"), matching today's behavior.
         }
         if (resolved.type === "unionType") {
-          const propTypes: VariableType[] = [];
-          for (const member of resolved.types) {
-            const resolvedMember = safeResolveType(member, typeAliases);
-            if (resolvedMember.type === "objectType") {
-              const prop = resolvedMember.properties.find(
-                (p) => p.key === element.name,
-              );
-              // eslint-disable-next-line max-depth -- collecting union member property types
-              if (prop) propTypes.push(prop.value);
-            }
-          }
-          if (propTypes.length > 0) {
-            if (propTypes.length === 1) {
-              currentType = propTypes[0];
-            } else {
-              currentType = { type: "unionType", types: propTypes };
-            }
-          } else {
+          const memberType = accessUnionField(
+            resolved,
+            element.name,
+            typeAliases,
+            ctx,
+            expr.loc,
+          );
+          if (memberType === null) {
             ctx.errors.push({
               message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
               loc: expr.loc,
             });
             return "any";
           }
+          currentType = memberType;
         } else if (resolved.type === "objectType") {
           const prop = resolved.properties.find((p) => p.key === element.name);
           if (prop) {

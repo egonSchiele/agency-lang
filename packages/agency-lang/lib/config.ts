@@ -196,6 +196,18 @@ export interface AgencyConfig {
      * - "error": emit an error
      */
     undefinedVariables?: "silent" | "warn" | "error";
+    /**
+     * Strictness of union member access. When a property exists on some but
+     * not all members of an un-narrowed union (e.g. `r.value` on an
+     * un-guarded `Result`), this governs the diagnostic:
+     * - "silent": no diagnostic (lenient — such accesses type as `any`)
+     * - "warn": emit a warning
+     * - "error": emit an error (default)
+     * Narrow first (guard / `catch` / `match`) to access branch-specific
+     * members safely. Set to "silent" to opt out and restore the old lenient
+     * behavior.
+     */
+    strictMemberAccess?: "silent" | "warn" | "error";
   };
 
   /** Enable debugger mode — auto-inserts breakpoints before every step */
@@ -422,6 +434,7 @@ export const AgencyConfigSchema = z
         strictTypes: z.boolean(),
         undefinedFunctions: z.enum(["silent", "warn", "error"]),
         undefinedVariables: z.enum(["silent", "warn", "error"]),
+        strictMemberAccess: z.enum(["silent", "warn", "error"]),
       })
       .partial(),
     debugger: z.boolean(),

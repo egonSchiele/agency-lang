@@ -364,20 +364,29 @@ if (hasInterrupts(__stack.locals.c)) {
           return;
         }
       });
-      await runner.step(2, async (runner) => {
+      await runner.ifElse(2, [
+
+  {
+    condition: async () => await isSuccess(__stack.locals.c),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
-          type: "positional",
-          args: [__stack.locals.c.value]
-        });
+                type: "positional",
+                args: [__stack.locals.c.value]
+              });
 if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-      });
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
+    },
+  },
+
+]);
     })
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
@@ -445,4 +454,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"genericAliasValidation.agency:process":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2}}};
+export const __sourceMap = {"genericAliasValidation.agency:process":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2},"2.0":{"line":10,"col":4}}};

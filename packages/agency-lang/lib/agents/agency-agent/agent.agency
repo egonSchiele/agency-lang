@@ -4,7 +4,7 @@ import { clearMessages, pushMessage, repl, clearScreen, clearHistory } from "std
 import { today } from "std::date"
 import { setAgentCwd } from "std::index"
 import { box, render } from "std::layout"
-import { setMemoryId } from "std::memory"
+import { setMemoryId, disableMemory } from "std::memory"
 import {
   ScopedRuleFields,
   cliPolicyHandler,
@@ -26,8 +26,10 @@ import {
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import { printLocalCatalog } from "std::agency/local"
-import { configureModels, configureLocalModel, enableAgentMemory } from "./shared.agency"
-import { parseModelFlag } from "./lib/models.agency"
+import { configureModels, configureLocalModel, enableAgentMemory, getResolvedSlots, applyResolved, promoteAll, currentProvider } from "./shared.agency"
+import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
+import { buildLayers, resolveAll, diffResolved, Ctx, SlotChange } from "./lib/resolution.agency"
+import { getModelSettings, loadSettings } from "./lib/settings.agency"
 import { configureSearch, setSearchBackend, getSearchBackend, availableBackendItems } from "./lib/search.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -251,6 +253,7 @@ def builtinPalette(): Record<string, string> {
     "/clear": "Clear the conversation transcript",
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
+    "/model": "Switch the model (bare to pick, or slot=model)",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
@@ -273,6 +276,60 @@ def mergedPalette(): Record<string, string> {
     out[key] = builtins[key]
   }
   return out
+}
+
+// In-session model selection state. One mutable cell holding the current
+// Session (the pin + per-slot overrides chosen via /model this run). switchModel
+// is pure over this value — it copies, never mutates — so it stays testable.
+export type Session = {
+  pin: string;
+  slots: Record<string, string>
+}
+
+let _session: Session = { pin: "", slots: {} }
+
+/** Apply an in-session model selection. Copies `prior` (never mutates), folds in
+  the new spec (bare → pin; slot=model → per-slot), resolves, applies, and returns
+  the new session + assignment + the slots that changed (so the caller can react,
+  e.g. the cross-provider recall notice). Turn-boundary semantics: takes effect on
+  the NEXT turn; no in-flight call is mutated. */
+export def switchModel(
+  prior: Session, spec: string, ctx: Ctx, before: Record<string, Resolved>,
+): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
+  let nextSlots: Record<string, string> = {}
+  for (k in prior.slots) {
+    nextSlots[k] = prior.slots[k]
+  }
+  let next: Session = { pin: prior.pin, slots: nextSlots }
+  const parsed = parseModelFlag(spec)
+  if (parsed.slot == "") {
+    next.pin = parsed.model
+  } else {
+    next.slots[parsed.slot] = parsed.model
+  }
+
+  const layers = buildLayers(next.pin, next.slots, "", {}, getModelSettings(loadSettings()), knownProviders(), false)
+  const all = resolveAll(layers, ctx)
+  if (isFailure(all)) {
+    pushMessage(color.red("Could not switch model: ${all.error}"))
+    return { session: prior, resolved: before, changes: [] }
+  }
+  const resolved = promoteAll(all.value)
+  applyResolved(resolved)
+  return { session: next, resolved: resolved, changes: diffResolved(before, resolved) }
+}
+
+/** React to one resolved-slot change. Phase 1: a `main`-slot provider change
+  means the embedding space behind memory changed, so pause memory and warn.
+  (std::memory has no tier-2-only toggle yet — full pause; structured recall
+  returns when a selective toggle lands.) Returns true iff it emitted the notice. */
+export def reactToSlotChange(change: SlotChange): boolean {
+  if (change.slot == "main" && change.before.provider != change.after.provider) {
+    pushMessage(color.dim("⚠ Provider changed — memory is paused until restart (recall would be unreliable)."))
+    disableMemory()
+    return true
+  }
+  return false
 }
 
 // Slash-command + user-message dispatcher invoked by `repl()` for
@@ -344,6 +401,49 @@ def _runTurn(msg: string): boolean {
     }
     return true
   }
+  if (trimmed == "/model" || trimmed.startsWith("/model ")) {
+    let spec = ""
+    if (trimmed != "/model") {
+      spec = trimmed.substring(7).trim()
+    }
+    if (spec == "") {
+      pushMessage("Current models:")
+      const cur = getResolvedSlots()
+      for (slot in Object.keys(cur)) {
+        const r = cur[slot]
+        if (r != undefined) {
+          pushMessage("  ${slot}: ${r.model} (${r.via})")
+        }
+      }
+      let noItems: ChoiceItem[] = []
+      const choice = chooseOption(
+        "Model",
+        "Type a model, or slot=model (e.g. reasoning=claude-opus-4-8). Empty to cancel.",
+        noItems,
+        false,
+        true,
+      )
+      if (choice == "" || choice == null || choice == undefined) {
+        return true
+      }
+      spec = choice
+    }
+    const ctx: Ctx = { provider: currentProvider(), price: "standard" }
+    const out = switchModel(_session, spec, ctx, getResolvedSlots())
+    _session = out.session
+    for (change in out.changes) {
+      reactToSlotChange(change)
+    }
+    pushMessage("Model set:")
+    for (slot in Object.keys(out.resolved)) {
+      const r = out.resolved[slot]
+      if (r != undefined) {
+        pushMessage(color.dim("  ${slot}: ${r.model} (${r.via})"))
+      }
+    }
+    return true
+  }
+
   // Hand the message to the agent. `agentReply` does the slash-command
   // expansion and the actual agent work; the REPL just renders the reply.
   // Wrap in `try` so a terminal LLM failure (e.g. the connection dropped and

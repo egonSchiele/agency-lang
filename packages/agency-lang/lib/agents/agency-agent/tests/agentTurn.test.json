@@ -9,6 +9,10 @@
       "llmMocks": [{ "return": "Hi from the agent!" }]
     },
     { "nodeName": "applyResolvedSetsSlots", "input": "", "expectedOutput": "\"claude-sonnet-4-6|claude-opus-4-8|anthropic\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "promotesOpenaiProvider", "input": "", "expectedOutput": "\"openai-responses\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "promotesOpenaiProvider", "input": "", "expectedOutput": "\"openai-responses\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "switchPinsAllSlots", "input": "", "expectedOutput": "\"gpt-5.5|gpt-5.5\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "switchPerSlotOnly", "input": "", "expectedOutput": "\"claude-opus-4-8|claude-sonnet-4-6\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "switchReportsChanges", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "switchDoesNotMutatePrior", "input": "", "expectedOutput": "\"\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

@@ -173,6 +173,7 @@ export def configureModels(
   }
   const layers = buildLayers(
     "",
+    {},
     model,
     cliSlots,
     getModelSettings(loadSettings()),

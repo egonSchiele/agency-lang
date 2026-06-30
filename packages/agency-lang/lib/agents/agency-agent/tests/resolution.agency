@@ -52,7 +52,7 @@ node parityMainAnthropic(): Resolved {
 }
 // buildLayers: CLI --model gpt-5.5 over settings slots.reasoning=opus → gpt-5.5.
 node buildLayersImmediacyOuter(): Resolved {
-  const layers = buildLayers("", "gpt-5.5", {}, { slots: { reasoning: "opus" } }, ["anthropic", "openai"], false)
+  const layers = buildLayers("", {}, "gpt-5.5", {}, { slots: { reasoning: "opus" } }, ["anthropic", "openai"], false)
   const all = resolveAll(layers, CTX)
   if (isFailure(all)) {
     return { model: "ERR", provider: "ERR", via: "ERR" }

@@ -66,10 +66,11 @@ def slotsToValues(slots: Record<string, string>, kp: string[], est: boolean): Re
   is implicit via priceDefault). Each raw value is parsed so a unified
   provider/model carries its own provider. */
 export def buildLayers(
-  sessionPin: string, cliModel: string, cliSlots: Record<string, string>,
+  sessionPin: string, sessionSlots: Record<string, string>,
+  cliModel: string, cliSlots: Record<string, string>,
   settings: ModelSettings, knownProviders: string[], providerEstablished: boolean,
 ): Layer[] {
-  let inSession: Layer = { name: "in-session", perSlot: {}, pin: null }
+  let inSession: Layer = { name: "in-session", perSlot: slotsToValues(sessionSlots, knownProviders, providerEstablished), pin: null }
   if (sessionPin != "") {
     inSession.pin = toValue(sessionPin, knownProviders, providerEstablished)
   }

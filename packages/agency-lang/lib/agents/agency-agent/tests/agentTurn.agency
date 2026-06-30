@@ -7,10 +7,11 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
-import { agentReply } from "../agent.agency"
+import { agentReply, switchModel, Session } from "../agent.agency"
 import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
 import { resolveAll, buildLayers, Ctx } from "../lib/resolution.agency"
 import { knownProviders, Resolved } from "../lib/models.agency"
+import { saveSettings } from "../lib/settings.agency"
 
 node respondsToAMessage(): boolean {
   const reply = agentReply("hello")
@@ -22,7 +23,7 @@ node respondsToAMessage(): boolean {
 // (planModels) defaults for anthropic. Back-compat guard (review #4).
 node applyResolvedSetsSlots(): string {
   const ctx: Ctx = { provider: "anthropic", price: "standard" }
-  const layers = buildLayers("", "", {}, {}, knownProviders(), false)
+  const layers = buildLayers("", {}, "", {}, {}, knownProviders(), false)
   const all = resolveAll(layers, ctx)
   if (isFailure(all)) {
     return "FAIL"
@@ -46,4 +47,45 @@ node promotesOpenaiProvider(): string {
     return "MISSING"
   }
   return m.provider
+}
+
+static const SWITCH_CTX: Ctx = { provider: "anthropic", price: "standard" }
+static const SWITCH_BEFORE: Record<string, Resolved> = {
+  main: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
+  reasoning: { model: "claude-opus-4-8", provider: "anthropic", via: "x" },
+  embedding: { model: "", provider: "anthropic", via: "x" }
+}
+def freshSession(): Session { return { pin: "", slots: {} } }
+def slotModel(r: Record<string, Resolved>, slot: string): string {
+  const v = r[slot]
+  if (v == undefined) {
+    return "MISSING"
+  }
+  return v.model
+}
+
+// A bare /model spec sets the in-session global pin → all slots become gpt-5.5
+// (pin wins over any on-disk settings, so no clear needed).
+node switchPinsAllSlots(): string {
+  const out = switchModel(freshSession(), "gpt-5.5", SWITCH_CTX, SWITCH_BEFORE)
+  return "${slotModel(out.resolved, "main")}|${slotModel(out.resolved, "reasoning")}"
+}
+// A slot=model spec sets only that slot in-session; main keeps its built-in
+// default (doesn't collapse routing). Clear settings for determinism.
+node switchPerSlotOnly(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "reasoning=claude-opus-4-8", SWITCH_CTX, SWITCH_BEFORE)
+  return "${slotModel(out.resolved, "reasoning")}|${slotModel(out.resolved, "main")}"
+}
+// Only the changed slot is reported in `changes`.
+node switchReportsChanges(): number {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "main=gpt-4o", SWITCH_CTX, SWITCH_BEFORE)
+  return out.changes.length
+}
+// switchModel copies prior; it must not mutate the caller's session.
+node switchDoesNotMutatePrior(): string {
+  const prior = freshSession()
+  switchModel(prior, "gpt-5.5", SWITCH_CTX, SWITCH_BEFORE)
+  return prior.pin
 }

@@ -102,6 +102,41 @@ def f(x: string | null): void {
     expect(errs.some((e) => e.includes("not assignable"))).toBe(true);
   });
 
+  it("SOUNDNESS: if (!x) then-branch (x falsy) is NOT narrowed to null", () => {
+    // `!` swaps then/else; the then-branch of `!x` is the falsy region, which
+    // must not be narrowed to null (it inherits the now-empty truthiness else).
+    const errs = check(`
+def f(x: string | null): void {
+  if (!x) {
+    let n: null = x
+  }
+}`);
+    expect(errs.some((e) => e.includes("not assignable"))).toBe(true);
+  });
+
+  it("SOUNDNESS: || of truthiness tests does NOT narrow the else to null", () => {
+    // `||` threads else = else(l) ∪ else(r); with truthiness contributing no
+    // else-fact, the else-branch stays unnarrowed.
+    const errs = check(`
+def f(x: string | null, y: string | null): void {
+  if (x || y) {
+  } else {
+    let n: null = x
+  }
+}`);
+    expect(errs.some((e) => e.includes("not assignable"))).toBe(true);
+  });
+
+  it("&& of bare truthiness narrows both operands to non-null in the then-branch", () => {
+    expect(check(`
+def f(x: string | null, y: string | null): void {
+  if (x && y) {
+    let s: string = x
+    let t: string = y
+  }
+}`)).toEqual([]);
+  });
+
   it("if (x == null) else: the else-branch is narrowed to non-null", () => {
     expect(check(`
 def f(x: string | null): void {

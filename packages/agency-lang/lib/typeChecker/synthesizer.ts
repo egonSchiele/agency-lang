@@ -793,7 +793,7 @@ function narrowedPathPrefix(
     return null;
   }
   const flow = ctx.flowEnv.flowOf.get(expr);
-  const ref = { variable: expr.base.value, chain: [first.name] };
+  const ref = { variable: expr.base.value, chain: [{ kind: "prop" as const, name: first.name }] };
   if (!flow || !flowHasNarrowFor(ref, flow)) {
     return null;
   }

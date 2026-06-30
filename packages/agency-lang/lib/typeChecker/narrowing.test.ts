@@ -6,6 +6,11 @@ import { analyzeCondition, alwaysExits, postGuardFacts } from "./narrowing.js";
 import { walkNodes } from "../utils/node.js";
 import type { Expression, IfElse } from "../types.js";
 import type { ResultType } from "../types/typeHints.js";
+import type { PathSegment } from "./flow.js";
+
+// Path-segment constructor — builders take string[] chains and map to `prop`
+// segments so existing property-path callers stay unchanged (M2 representation).
+const prop = (name: string): PathSegment => ({ kind: "prop", name });
 
 // Parse a snippet and return the first ifElse node in main. Uses the shared
 // walkNodes traversal (lib/utils/node.ts) rather than a hand-rolled walker —
@@ -27,7 +32,7 @@ describe("analyzeCondition", () => {
   // isSuccess/isFailure (and `if (r.success)`) now narrow via a discriminant on
   // the boolean `success` field (Result is consumed as a discriminated union).
   const succ = (varName: string, keep: boolean) => ({
-    ref: { variable: varName, chain: [] as string[] },
+    ref: { variable: varName, chain: [] as PathSegment[] },
     refine: {
       kind: "discriminant",
       prop: "success",
@@ -35,9 +40,9 @@ describe("analyzeCondition", () => {
       keep,
     },
   });
-  // Path-aware success builder (one-hop receiver).
+  // Path-aware success builder — string chain mapped to `prop` segments.
   const succP = (variable: string, chain: string[], keep: boolean) => ({
-    ref: { variable, chain },
+    ref: { variable, chain: chain.map(prop) },
     refine: {
       kind: "discriminant",
       prop: "success",
@@ -90,12 +95,12 @@ describe("analyzeCondition", () => {
 
   // ── Single-hop member paths (M1) ──────────────────────────────────────────
   const presP = (variable: string, chain: string[], present: boolean) => ({
-    ref: { variable, chain },
+    ref: { variable, chain: chain.map(prop) },
     refine: { kind: "presence", present },
   });
-  const discP = (variable: string, chain: string[], prop: string, value: string, keep: boolean) => ({
-    ref: { variable, chain },
-    refine: { kind: "discriminant", prop, literal: { type: "stringLiteralType", value }, keep },
+  const discP = (variable: string, chain: string[], propName: string, value: string, keep: boolean) => ({
+    ref: { variable, chain: chain.map(prop) },
+    refine: { kind: "discriminant", prop: propName, literal: { type: "stringLiteralType", value }, keep },
   });
 
   it("isSuccess(obj.r): full candidate, path ref (was the old NO_FACTS member-access row)", () => {
@@ -163,7 +168,7 @@ describe("analyzeCondition", () => {
   });
 
   const disc = (keep: boolean, value = "answer", prop = "kind") => ({
-    ref: { variable: "r", chain: [] as string[] },
+    ref: { variable: "r", chain: [] as PathSegment[] },
     refine: { kind: "discriminant", prop, literal: { type: "stringLiteralType", value }, keep },
   });
 

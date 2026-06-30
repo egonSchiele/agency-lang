@@ -12,7 +12,7 @@ import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 // Type-only import: `flow.ts` imports `Refine`/`NarrowCandidate` from here, so a
 // value import would cycle. `Reference` is the narrowed path (variable + chain).
-import type { Reference } from "./flow.js";
+import type { PathSegment, Reference } from "./flow.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one
@@ -72,7 +72,7 @@ function asPathReference(e: Expression): Reference | null {
   if (e.type === "variableName") return { variable: e.value, chain: [] };
   if (e.type === "valueAccess" && e.base.type === "variableName" && e.chain.length === 1) {
     const el = e.chain[0];
-    if (el.kind === "property") return { variable: e.base.value, chain: [el.name] };
+    if (el.kind === "property") return { variable: e.base.value, chain: [{ kind: "prop", name: el.name }] };
   }
   return null;
 }
@@ -94,7 +94,11 @@ function asDiscriminantAccess(
   if (e.chain.some((el) => el.kind !== "property")) return null;
   const props = e.chain.map((el) => (el.kind === "property" ? el.name : ""));
   const prop = props[props.length - 1];
-  const receiverChain = props.slice(0, -1); // [] for one hop, [p] for two hops
+  // [] for one hop, [p] for two hops — all property segments (Task 1 keeps the
+  // 1-2 property-hop ceiling; Task 2 generalizes via chainToSegments).
+  const receiverChain: PathSegment[] = props
+    .slice(0, -1)
+    .map((name) => ({ kind: "prop", name }));
   return { ref: { variable: e.base.value, chain: receiverChain }, prop };
 }
 

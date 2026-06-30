@@ -323,9 +323,11 @@ export class MemoryManager {
         // Pass the provider explicitly so smoltalk routes to the right embed
         // endpoint even when the model name doesn't imply it (e.g. ollama).
         provider: options?.provider,
-        ollamaHost: (this.smoltalkDefaults as any).ollamaHost,
-        openAiApiKey: (this.smoltalkDefaults as any).openAiApiKey,
-        googleApiKey: (this.smoltalkDefaults as any).googleApiKey,
+        apiKey: {
+          openAi: (this.smoltalkDefaults as any).apiKey?.openAi,
+          google: (this.smoltalkDefaults as any).apiKey?.google,
+        },
+        baseUrl: { ollama: (this.smoltalkDefaults as any).baseUrl?.ollama },
       } as any);
       const timeTaken = performance.now() - startTime;
       if (!result.success) {

@@ -6,11 +6,10 @@ import { buildCompilationUnit } from "@/compilationUnit.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { AgencyConfig } from "@/config.js";
 
-// Codegen wiring: anthropicApiKey must be emitted into smoltalkDefaults
-// alongside openAiApiKey/googleApiKey — from the agency.json value when
-// set, else falling back to the ANTHROPIC_API_KEY env var. Without this,
-// Anthropic models can't be used as run-wide defaults the same way the
-// other providers can.
+// Codegen wiring: API keys are emitted into smoltalkDefaults under a nested
+// `apiKey` map (and base URLs under `baseUrl`), each falling back to its
+// conventional env var when not set in agency.json. These tests guard the
+// shape of that generated block for the built-in and hosted providers.
 function generate(source: string, config?: Partial<AgencyConfig>): string {
   const parseResult = parseAgency(source, {}, false);
   if (!parseResult.success) {
@@ -25,15 +24,20 @@ function generate(source: string, config?: Partial<AgencyConfig>): string {
 
 const PROGRAM = "node main() {\n  const x = 1\n}\n";
 
-describe("anthropicApiKey codegen", () => {
-  it("emits anthropicApiKey with an ANTHROPIC_API_KEY env fallback by default", () => {
+describe("smoltalkDefaults codegen", () => {
+  it("emits a nested apiKey map with env fallbacks by default", () => {
     const out = generate(PROGRAM);
-    expect(out).toContain("anthropicApiKey");
+    expect(out).toContain("apiKey");
+    expect(out).toContain("OPENAI_API_KEY");
+    expect(out).toContain("GEMINI_API_KEY");
     expect(out).toContain("ANTHROPIC_API_KEY");
+    // the old flat field names must be gone
+    expect(out).not.toContain("openAiApiKey");
+    expect(out).not.toContain("anthropicApiKey");
   });
 
-  it("bakes a literal client.anthropicApiKey when configured", () => {
-    const out = generate(PROGRAM, { client: { anthropicApiKey: "sk-ant-test" } });
+  it("bakes a literal client.apiKey.anthropic when configured", () => {
+    const out = generate(PROGRAM, { client: { apiKey: { anthropic: "sk-ant-test" } } });
     expect(out).toContain("sk-ant-test");
   });
 });

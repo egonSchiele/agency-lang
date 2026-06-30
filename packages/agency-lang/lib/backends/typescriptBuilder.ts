@@ -3546,15 +3546,20 @@ export class TypeScriptBuilder {
     const statelogConfig = ts.obj(statelogFields);
 
     const smoltalkDefaults = ts.obj({
-      openAiApiKey: cfg.client?.openAiApiKey
-        ? ts.str(cfg.client.openAiApiKey)
-        : ts.binOp(ts.env("OPENAI_API_KEY"), "||", ts.str("")),
-      googleApiKey: cfg.client?.googleApiKey
-        ? ts.str(cfg.client.googleApiKey)
-        : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
-      anthropicApiKey: cfg.client?.anthropicApiKey
-        ? ts.str(cfg.client.anthropicApiKey)
-        : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
+      // API keys are nested under `apiKey`, each falling back to its
+      // conventional env var. `ollama` is intentionally omitted — it uses
+      // OLLAMA_HOST (not an API key). The hosted providers are added below.
+      apiKey: ts.obj({
+        openAi: cfg.client?.apiKey?.openAi
+          ? ts.str(cfg.client.apiKey.openAi)
+          : ts.binOp(ts.env("OPENAI_API_KEY"), "||", ts.str("")),
+        google: cfg.client?.apiKey?.google
+          ? ts.str(cfg.client.apiKey.google)
+          : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
+        anthropic: cfg.client?.apiKey?.anthropic
+          ? ts.str(cfg.client.apiKey.anthropic)
+          : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
+      }),
       model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),
       statelog: ts.obj({

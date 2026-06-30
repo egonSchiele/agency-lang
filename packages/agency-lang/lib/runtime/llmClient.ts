@@ -201,7 +201,7 @@ export class SmoltalkClient implements LLMClient {
       messages, tools, responseFormat, abortSignal,
       model, maxTokens, temperature, provider, thinking, reasoningEffort,
       hostedTools,
-      openAiApiKey: apiKey,
+      apiKey: { openAi: apiKey },
     } as Omit<SmolConfig, "stream">;
   }
 }

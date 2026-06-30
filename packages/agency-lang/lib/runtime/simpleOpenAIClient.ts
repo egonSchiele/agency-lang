@@ -75,7 +75,7 @@ export class SimpleOpenAIClient implements LLMClient {
     input: string | string[],
     config?: Partial<EmbedConfig>,
   ): Promise<Result<EmbedResult>> {
-    const apiKey = config?.openAiApiKey ?? this.apiKey;
+    const apiKey = config?.apiKey?.openAi ?? this.apiKey;
     const model = config?.model ?? DEFAULT_EMBEDDING_MODEL;
     const body: Record<string, unknown> = { model, input };
     if (config?.dimensions) body.dimensions = config.dimensions;

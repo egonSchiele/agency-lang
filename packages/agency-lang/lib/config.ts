@@ -121,9 +121,23 @@ export interface AgencyConfig {
   client?: Partial<{
     logLevel: "error" | "warn" | "info" | "debug";
     defaultModel: string;
-    openAiApiKey: string;
-    googleApiKey: string;
-    anthropicApiKey: string;
+    defaultProvider: string;
+    apiKey: {
+      openAi?: string;
+      google?: string;
+      anthropic?: string;
+      ollama?: string;
+      openRouter?: string;
+      deepInfra?: string;
+      liteLlm?: string;
+      openAiCompat?: string;
+    };
+    baseUrl: {
+      openRouter?: string;
+      deepInfra?: string;
+      liteLlm?: string;
+      openAiCompat?: string;
+    };
     /**
      * Max characters of a single tool result fed back to the LLM.
      * Results longer than this are truncated (with a marker) in what
@@ -367,9 +381,27 @@ export const AgencyConfigSchema = z
       .object({
         logLevel: z.enum(["error", "warn", "info", "debug"]),
         defaultModel: z.string(),
-        openAiApiKey: z.string(),
-        googleApiKey: z.string(),
-        anthropicApiKey: z.string(),
+        defaultProvider: z.string(),
+        apiKey: z
+          .object({
+            openAi: z.string(),
+            google: z.string(),
+            anthropic: z.string(),
+            ollama: z.string(),
+            openRouter: z.string(),
+            deepInfra: z.string(),
+            liteLlm: z.string(),
+            openAiCompat: z.string(),
+          })
+          .partial(),
+        baseUrl: z
+          .object({
+            openRouter: z.string(),
+            deepInfra: z.string(),
+            liteLlm: z.string(),
+            openAiCompat: z.string(),
+          })
+          .partial(),
         maxToolResultChars: z.number(),
         providerModules: z.array(z.string()),
         modelAliases: z.record(z.string(), z.string()),

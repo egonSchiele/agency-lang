@@ -208,6 +208,17 @@ export interface AgencyConfig {
      * behavior.
      */
     strictMemberAccess?: "silent" | "warn" | "error";
+    /**
+     * Whether a `match` over a closed value type (a Result, or a closed
+     * literal/value union) that doesn't cover every case and has no `_` arm is
+     * a diagnostic:
+     * - "silent": no diagnostic (default)
+     * - "warn": emit a warning
+     * - "error": emit an error
+     * Conservative: open types (string/number/any, effect sets) are never
+     * required to be exhaustive; only a `_` arm satisfies them.
+     */
+    matchExhaustiveness?: "silent" | "warn" | "error";
   };
 
   /** Enable debugger mode — auto-inserts breakpoints before every step */
@@ -435,6 +446,7 @@ export const AgencyConfigSchema = z
         undefinedFunctions: z.enum(["silent", "warn", "error"]),
         undefinedVariables: z.enum(["silent", "warn", "error"]),
         strictMemberAccess: z.enum(["silent", "warn", "error"]),
+        matchExhaustiveness: z.enum(["silent", "warn", "error"]),
       })
       .partial(),
     debugger: z.boolean(),

@@ -218,7 +218,7 @@ function checkAssignmentsInScope(info: ScopeInfo, ctx: TypeCheckerContext): void
  * accept method-body nodes when info is the global scope, otherwise
  * those expressions never get checked.
  */
-function isInScope(scopes: WalkScope[], info: ScopeInfo): boolean {
+export function isInScope(scopes: WalkScope[], info: ScopeInfo): boolean {
   if (scopes.length === 0) return true;
   const innermostKey = getScopeKey(scopes[scopes.length - 1]);
   if (innermostKey === info.scopeKey) return true;

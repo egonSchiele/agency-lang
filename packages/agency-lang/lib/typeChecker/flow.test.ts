@@ -408,6 +408,15 @@ describe("typeAt — path prefix invalidation (M1)", () => {
     const after = typeAt(pathRef("box", "r"), loop, env(s));
     expect(typeof after === "object" && after.type).toBe("resultType");
   });
+
+  it("an access-chain write (path-keyed assign) drops flowHasNarrowFor AND re-resolves typeAt", () => {
+    // The flow LAYER already handles a path-keyed assign (referenceKey + isPrefixOf
+    // are generic); Task 4 only makes flowBuilder EMIT this node for `box.r = …`.
+    const s = boxScope();
+    const write: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    expect(flowHasNarrowFor(pathRef("box", "r"), write)).toBe(false);
+    expect(typeAt(pathRef("box", "r"), write, env(s))).toEqual(RESULT);
+  });
 });
 
 describe("flowHasNarrowFor (M1 strict gate)", () => {

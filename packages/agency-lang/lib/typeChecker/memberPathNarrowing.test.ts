@@ -395,3 +395,65 @@ def f(rs: Result<number, string>[]): void {
 }`)).toEqual([]);
   });
 });
+
+describe("member-path scrutinee narrowing — write invalidation (M2 soundness)", () => {
+  it("SOUNDNESS: mutating the path (b.r = …) drops the narrowing — exactly one error", () => {
+    const errs = check(`${TRY}
+type Box = { r: Result<number, string> }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    b.r = failure("x")
+    let n: number = b.r.value
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("SOUNDNESS: writing rs[0] = failure(…) drops rs[0] narrowing — exactly one error", () => {
+    const errs = check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  if (isSuccess(rs[0])) {
+    rs[0] = failure("x")
+    let n: number = rs[0].value
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("SOUNDNESS: writing b.other = … keeps b.r narrowed (no spurious error)", () => {
+    expect(check(`${TRY}
+type Box = { r: Result<number, string>, other: number }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    b.other = 5
+    let n: number = b.r.value
+  }
+}`)).toEqual([]);
+  });
+
+  it("SOUNDNESS: writing b.inner = … drops the b.inner.r narrowing — exactly one error", () => {
+    const errs = check(`${TRY}
+type In = { r: Result<number, string> }
+type Box = { inner: In }
+def otherIn(): In { return { r: failure("x") } }
+def f(b: Box): void {
+  if (isSuccess(b.inner.r)) {
+    b.inner = otherIn()
+    let n: number = b.inner.r.value
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("SOUNDNESS: an unstable write target neither errors nor drops unrelated narrowing", () => {
+    expect(check(`${TRY}
+type Box = { r: Result<number, string>, xs: number[] }
+def idx(): number { return 0 }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    b.xs[idx()] = 9
+    let n: number = b.r.value
+  }
+}`)).toEqual([]);
+  });
+});

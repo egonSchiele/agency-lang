@@ -141,6 +141,15 @@ export function stablePrefix(elements: AccessChainElement[]): PathSegment[] {
   return segs;
 }
 
+/** The DECLARED (un-narrowed) type of a path, from the base var's scope type. */
+export function declaredPathType(
+  scope: Scope,
+  ref: Reference,
+  aliases: Record<string, TypeAliasEntry>,
+): ScopeType {
+  return resolvePath(scope.lookup(ref.variable) ?? "any", ref.chain, aliases);
+}
+
 /**
  * A program point. Type checking builds and discards this graph per check; it
  * NEVER appears in AST output, so it cannot affect lowering, codegen, or

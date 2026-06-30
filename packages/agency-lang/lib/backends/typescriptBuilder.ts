@@ -3504,47 +3504,11 @@ export class TypeScriptBuilder {
     return generateBuiltinHelpers(this.functionsUsed);
   }
 
-  private generateImports(): string {
-    const cfg = this.agencyConfig;
-
-    const statelogFields: Record<string, TsNode> = {
-      host: ts.str(cfg.log?.host || ""),
-      apiKey: cfg.log?.apiKey
-        ? ts.str(cfg.log.apiKey)
-        : ts.binOp(ts.env("STATELOG_API_KEY"), "||", ts.str("")),
-      projectId: ts.str(cfg.log?.projectId || ""),
-      debugMode: ts.bool(cfg.log?.debugMode || false),
-      observability: ts.bool(cfg.observability || false),
-    };
-    if (cfg.log?.logFile) {
-      statelogFields.logFile = ts.str(cfg.log.logFile);
-    }
-    if (cfg.log?.requestTimeoutMs !== undefined) {
-      statelogFields.requestTimeoutMs = ts.raw(
-        String(cfg.log.requestTimeoutMs),
-      );
-    }
-    if (cfg.log?.metadata) {
-      const metaFields: Record<string, TsNode> = {};
-      if (cfg.log.metadata.tags) {
-        metaFields.tags = ts.raw(JSON.stringify(cfg.log.metadata.tags));
-      }
-      if (cfg.log.metadata.environment) {
-        metaFields.environment = ts.str(cfg.log.metadata.environment);
-      }
-      if (cfg.log.metadata.userId) {
-        metaFields.userId = ts.str(cfg.log.metadata.userId);
-      }
-      if (cfg.log.metadata.agentVersion) {
-        metaFields.agentVersion = ts.str(cfg.log.metadata.agentVersion);
-      }
-      if (cfg.log.metadata.custom) {
-        metaFields.custom = ts.raw(JSON.stringify(cfg.log.metadata.custom));
-      }
-      statelogFields.metadata = ts.obj(metaFields);
-    }
-    const statelogConfig = ts.obj(statelogFields);
-
+  /** Build the baked `smoltalkDefaults` object: nested per-provider `apiKey`
+   *  and `baseUrl` maps (each key/URL falling back to its conventional env
+   *  var), plus model/logLevel/statelog and an optional default provider.
+   *  `ollama` is intentionally omitted from `apiKey` — it uses OLLAMA_HOST. */
+  private buildSmoltalkDefaults(cfg: AgencyConfig): TsNode {
     // Base URLs: litellm/openai-compat take an env fallback (they require an
     // explicit URL); openRouter/deepInfra have baked defaults in smoltalk, so
     // only emit them when overridden in agency.json.
@@ -3605,7 +3569,51 @@ export class TypeScriptBuilder {
     if (cfg.client?.defaultProvider) {
       smoltalkFields.provider = ts.str(cfg.client.defaultProvider);
     }
-    const smoltalkDefaults = ts.obj(smoltalkFields);
+    return ts.obj(smoltalkFields);
+  }
+
+  private generateImports(): string {
+    const cfg = this.agencyConfig;
+
+    const statelogFields: Record<string, TsNode> = {
+      host: ts.str(cfg.log?.host || ""),
+      apiKey: cfg.log?.apiKey
+        ? ts.str(cfg.log.apiKey)
+        : ts.binOp(ts.env("STATELOG_API_KEY"), "||", ts.str("")),
+      projectId: ts.str(cfg.log?.projectId || ""),
+      debugMode: ts.bool(cfg.log?.debugMode || false),
+      observability: ts.bool(cfg.observability || false),
+    };
+    if (cfg.log?.logFile) {
+      statelogFields.logFile = ts.str(cfg.log.logFile);
+    }
+    if (cfg.log?.requestTimeoutMs !== undefined) {
+      statelogFields.requestTimeoutMs = ts.raw(
+        String(cfg.log.requestTimeoutMs),
+      );
+    }
+    if (cfg.log?.metadata) {
+      const metaFields: Record<string, TsNode> = {};
+      if (cfg.log.metadata.tags) {
+        metaFields.tags = ts.raw(JSON.stringify(cfg.log.metadata.tags));
+      }
+      if (cfg.log.metadata.environment) {
+        metaFields.environment = ts.str(cfg.log.metadata.environment);
+      }
+      if (cfg.log.metadata.userId) {
+        metaFields.userId = ts.str(cfg.log.metadata.userId);
+      }
+      if (cfg.log.metadata.agentVersion) {
+        metaFields.agentVersion = ts.str(cfg.log.metadata.agentVersion);
+      }
+      if (cfg.log.metadata.custom) {
+        metaFields.custom = ts.raw(JSON.stringify(cfg.log.metadata.custom));
+      }
+      statelogFields.metadata = ts.obj(metaFields);
+    }
+    const statelogConfig = ts.obj(statelogFields);
+
+    const smoltalkDefaults = this.buildSmoltalkDefaults(cfg);
 
     const runtimeCtxArgs: Record<string, TsNode> = {
       statelogConfig,

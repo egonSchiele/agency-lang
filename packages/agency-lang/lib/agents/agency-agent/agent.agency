@@ -128,6 +128,68 @@ callback("onLLMCallEnd") as data {
   }
 }
 
+// Map a transient LLM retry reason (an `LLMRetryReason` from the runtime
+// retry layer) to a short, human-facing label. `connectionLost` is the
+// lost-internet / closed-the-laptop case; the rest cover provider hiccups
+// and our own per-call timeout.
+export def retryReasonLabel(reason: string): string {
+  if (reason == "connectionLost") {
+    return "Connection lost"
+  }
+  if (reason == "timeout") {
+    return "Request timed out"
+  }
+  if (reason == "streamInterrupted") {
+    return "Connection interrupted"
+  }
+  if (reason == "rateLimit") {
+    return "Rate limited"
+  }
+  if (reason == "overloaded") {
+    return "Model overloaded"
+  }
+  if (reason == "serverError") {
+    return "Server error"
+  }
+  return reason
+}
+
+// A transient LLM failure (lost connection, timeout, server hiccup) the
+// runtime is about to retry. Surface a dim, one-line heads-up so the user
+// understands the pause instead of staring at a frozen prompt — this is the
+// "lost internet / closed the laptop" experience the abort taxonomy made
+// distinguishable. Gated like the other traces so piped one-shot output
+// stays clean. `attempt` is the 1-based retry number; `maxRetries` is the
+// configured retry budget.
+callback("onLLMRetry") as data {
+  if (_showTraces()) {
+    pushMessage(
+      color.dim(
+        "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
+      ),
+    )
+  }
+}
+
+// Turn a terminal (retries-exhausted) LLM failure into a short, actionable
+// message. The runtime's exhausted-retry error text embeds the reason in
+// parens, e.g. "LLM call failed after 3 attempts (connectionLost): ...". We
+// recognize the transport reasons that mean "the network or model dropped"
+// and give concrete advice; anything else echoes the raw error so nothing
+// is hidden.
+export def formatTurnFailure(errText: string): string {
+  if (errText.includes("(connectionLost)") || errText.includes("(streamInterrupted)")) {
+    return "⚠ Lost the connection to the model and couldn't recover after retrying.\nCheck your internet connection and try again."
+  }
+  if (errText.includes("(timeout)")) {
+    return "⚠ The model took too long to respond — the request timed out after retrying.\nTry again, perhaps with a smaller request."
+  }
+  if (errText.includes("(rateLimit)") || errText.includes("(overloaded)") || errText.includes("(serverError)")) {
+    return "⚠ The model provider is busy and the request failed after retrying.\nWait a moment and try again."
+  }
+  return "⚠ The request failed: ${errText}"
+}
+
 type ToolCallData = {
   name: string;
   arguments: any
@@ -283,11 +345,19 @@ def _runTurn(msg: string): boolean {
   }
   // Hand the message to the agent. `agentReply` does the slash-command
   // expansion and the actual agent work; the REPL just renders the reply.
-  const reply = agentReply(msg)
-  if (reply != "" && reply != null && reply != undefined) {
-    pushMessage(highlight("${reply}\n", language: "markdown"))
-  } else {
-    pushMessage(color.red("No reply generated."))
+  // Wrap in `try` so a terminal LLM failure (e.g. the connection dropped and
+  // retries were exhausted) renders a friendly heads-up instead of a raw
+  // Failure object. Aborts/interrupts are NOT caught here — `try` re-throws
+  // them so an Esc-cancel still reaches the policy handler.
+  const result = try agentReply(msg)
+  if (result is success(reply)) {
+    if (reply != "" && reply != null && reply != undefined) {
+      pushMessage(highlight("${reply}\n", language: "markdown"))
+    } else {
+      pushMessage(color.red("No reply generated."))
+    }
+  } else if (result is failure(f)) {
+    pushMessage(color.red(formatTurnFailure("${f.error}")))
   }
   return true
 }
@@ -640,7 +710,15 @@ def oneShotAgent(target: string, prompt: string): string {
   const handler = setupSession(false)
   let reply: string = ""
   handle {
-    reply = agentReplyVia(target, prompt)
+    // `try` converts a terminal LLM failure (retries exhausted on a dropped
+    // connection / timeout) into a friendly message; aborts/interrupts still
+    // propagate to the handler below.
+    const result = try agentReplyVia(target, prompt)
+    if (result is success(r)) {
+      reply = r
+    } else if (result is failure(f)) {
+      reply = formatTurnFailure("${f.error}")
+    }
   } with (data) {
     return handler(data)
   }
@@ -652,11 +730,15 @@ def oneShotAgent(target: string, prompt: string): string {
 // Mirrors the reply-rendering half of `_runTurn`.
 def _runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
-  const reply = agentReplyVia(target, msg)
-  if (reply != "" && reply != null && reply != undefined) {
-    pushMessage(highlight("${reply}\n", language: "markdown"))
-  } else {
-    pushMessage(color.red("No reply generated."))
+  const result = try agentReplyVia(target, msg)
+  if (result is success(reply)) {
+    if (reply != "" && reply != null && reply != undefined) {
+      pushMessage(highlight("${reply}\n", language: "markdown"))
+    } else {
+      pushMessage(color.red("No reply generated."))
+    }
+  } else if (result is failure(f)) {
+    pushMessage(color.red(formatTurnFailure("${f.error}")))
   }
 }
 

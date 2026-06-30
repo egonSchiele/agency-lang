@@ -1,0 +1,35 @@
+/*
+ * Tests the connection-aware turn messaging added on top of the abort
+ * taxonomy: `retryReasonLabel` (transient retry reason -> human label) and
+ * `formatTurnFailure` (a retries-exhausted llm() failure -> actionable
+ * message). Both are pure string logic, so this harness needs no LLM — it
+ * just checks the mappings the REPL relies on to tell the user "you lost
+ * the connection" instead of dumping a raw Failure.
+ */
+import { retryReasonLabel, formatTurnFailure } from "../agent.agency"
+
+node connectionLostLabel(): boolean {
+  return retryReasonLabel("connectionLost") == "Connection lost"
+}
+
+node unknownReasonPassesThrough(): boolean {
+  return retryReasonLabel("somethingNew") == "somethingNew"
+}
+
+// The runtime's exhausted-retry error embeds the reason in parens; a dropped
+// connection should yield the internet-check guidance, not the raw error.
+node connectionLostFailureIsFriendly(): boolean {
+  const msg = formatTurnFailure("LLM call failed after 3 attempts (connectionLost): fetch failed")
+  return msg.includes("Lost the connection") && msg.includes("internet")
+}
+
+node timeoutFailureIsFriendly(): boolean {
+  const msg = formatTurnFailure("LLM call failed after 3 attempts (timeout): call exceeded 600000ms")
+  return msg.includes("timed out")
+}
+
+// Anything we don't specifically recognize must still surface, not vanish.
+node unknownFailureEchoesRawError(): boolean {
+  const msg = formatTurnFailure("some other problem")
+  return msg.includes("some other problem")
+}

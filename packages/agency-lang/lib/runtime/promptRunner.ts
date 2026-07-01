@@ -165,7 +165,7 @@ export class PromptRunner {
     keyPrefix: string,
     items: T[],
     keyFor: (item: T, index: number) => string,
-    branchFn: (item: T, b: BranchRunner) => Promise<void>,
+    branchFn: (item: T, b: BranchRunner, index: number) => Promise<void>,
   ): Promise<RunBatchResult<void>> {
     const branches = items.map(() => new BranchRunner(this.opts.self));
     const parentFrame = this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
@@ -202,7 +202,7 @@ export class PromptRunner {
       children: items.map((item, i) => ({
         key: keyFor(item, i),
         invoke: async () => {
-          await branchFn(item, branches[i]);
+          await branchFn(item, branches[i], i);
           // Surface the branch's collected interrupts (if any) as the
           // invoke's return value. runBatch will batch them with sibling
           // interrupts and stamp the shared checkpoint.

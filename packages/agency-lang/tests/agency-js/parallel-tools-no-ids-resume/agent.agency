@@ -1,0 +1,12 @@
+def succeedTool(): string {
+  return "SUCCEED_RESULT"
+}
+
+def interruptTool(): string {
+  interrupt("approve interrupt-tool")
+  return "INTERRUPT_RESULT"
+}
+
+node main() {
+  return llm("call both tools in parallel", { tools: [succeedTool, interruptTool] })
+}

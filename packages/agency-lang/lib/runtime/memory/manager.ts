@@ -10,15 +10,9 @@ import {
 import { MemoryGraph } from "./graph.js";
 import { EmbeddingManager } from "./embeddings.js";
 import { MemoryCacheEntry } from "./cacheEntry.js";
-import {
-  buildExtractionPrompt,
-  parseExtractionResult,
-} from "./extraction.js";
+import { buildExtractionPrompt, parseExtractionResult } from "./extraction.js";
 import type { ExtractionResult, NewObservation } from "./extraction.js";
-import {
-  structuredLookup,
-  formatRetrievalResults,
-} from "./retrieval.js";
+import { structuredLookup, formatRetrievalResults } from "./retrieval.js";
 import {
   shouldCompact,
   buildCompactionPrompt,
@@ -140,7 +134,7 @@ const DEFAULT_EMBEDDING_THRESHOLD = 0.3;
 const EMBED_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: "text-embedding-3-small",
   "openai-responses": "text-embedding-3-small",
-  google: "text-embedding-004",
+  google: "gemini-embedding-001",
   ollama: "nomic-embed-text",
 };
 const SUMMARY_MESSAGE_PREFIX = "Previous conversation summary:\n";
@@ -433,7 +427,10 @@ export class MemoryManager {
   /** Embed `text`, or return null (logging once) when Tier-2 is disabled
    *  because the active provider has no embedding endpoint. Callers treat null
    *  as "skip semantic embedding for this item" — no remote call is made. */
-  private async embedOrSkip(text: string, phase: string): Promise<number[] | null> {
+  private async embedOrSkip(
+    text: string,
+    phase: string,
+  ): Promise<number[] | null> {
     const target = this.resolveEmbedding();
     if (!target) {
       await this.noteEmbeddingDisabled();
@@ -486,7 +483,7 @@ export class MemoryManager {
     const entry = this.cache[this.getMemoryId()];
     if (!entry) {
       throw new Error(
-        `MemoryManager not initialized for memoryId "${this.getMemoryId()}". Call init() first.`
+        `MemoryManager not initialized for memoryId "${this.getMemoryId()}". Call init() first.`,
       );
     }
     return entry.getGraph();
@@ -676,9 +673,7 @@ export class MemoryManager {
       }
       await this.applyExtractionFromLLM(result);
     } catch (err) {
-      this.logger.debug(
-        `[memory] remember caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] remember caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -691,7 +686,7 @@ export class MemoryManager {
   // `recallForInjection` (which intentionally stops here for latency).
   private async tier1And2(
     entry: MemoryCacheEntry,
-    query: string
+    query: string,
   ): Promise<string[]> {
     const orderedIds: string[] = [];
 
@@ -802,9 +797,7 @@ export class MemoryManager {
       );
       return result;
     } catch (err) {
-      this.logger.debug(
-        `[memory] recall caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] recall caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -988,9 +981,7 @@ export class MemoryManager {
       }
       await this.applyForgetFromLLM(parsed);
     } catch (err) {
-      this.logger.debug(
-        `[memory] forget caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] forget caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -1010,16 +1001,13 @@ export class MemoryManager {
         entry.turnsSinceExtraction = 0;
       }
     } catch (err) {
-      this.logger.debug(
-        `[memory] onTurn caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] onTurn caught: ${(err as Error).message}`);
       throw err;
     }
   }
 
-
   async compactIfNeeded(
-    messages: smoltalk.Message[]
+    messages: smoltalk.Message[],
   ): Promise<CompactionPlan | null> {
     const spanId = this.statelogClient?.startSpan("memoryCompaction");
     try {
@@ -1027,7 +1015,8 @@ export class MemoryManager {
       const compactionConfig = {
         trigger: this.config.compaction?.trigger ?? ("token" as const),
         threshold:
-          this.config.compaction?.threshold ?? MEMORY_COMPACTION_DEFAULT_THRESHOLD,
+          this.config.compaction?.threshold ??
+          MEMORY_COMPACTION_DEFAULT_THRESHOLD,
       };
       if (!shouldCompact(messages, compactionConfig)) return null;
       this.logger.debug(
@@ -1150,7 +1139,7 @@ export class MemoryManager {
 
   private async autoExtract(
     entry: MemoryCacheEntry,
-    messages: smoltalk.Message[]
+    messages: smoltalk.Message[],
   ): Promise<void> {
     const prompt = buildExtractionPrompt(messages, entry.getGraph());
     const response = await this._text(prompt, {
@@ -1159,9 +1148,7 @@ export class MemoryManager {
     });
     const result = parseExtractionResult(response);
     if (!result) {
-      this.logger.debug(
-        `[memory] autoExtract: parse returned null (no-op)`,
-      );
+      this.logger.debug(`[memory] autoExtract: parse returned null (no-op)`);
       return;
     }
     const outcome = entry.applyExtraction(result, this.source);
@@ -1174,7 +1161,7 @@ export class MemoryManager {
 
   private async generateEmbeddings(
     entry: MemoryCacheEntry,
-    observations: NewObservation[]
+    observations: NewObservation[],
   ): Promise<void> {
     let failures = 0;
     for (const { id } of observations) {
@@ -1245,7 +1232,7 @@ export class MemoryManager {
 
   private async embeddingRecallEntityIds(
     entry: MemoryCacheEntry,
-    query: string
+    query: string,
   ): Promise<string[]> {
     let queryVector: number[];
     try {
@@ -1265,11 +1252,9 @@ export class MemoryManager {
       );
       return [];
     }
-    const similar = entry.getEmbeddings().findSimilar(
-      queryVector,
-      DEFAULT_RECALL_K,
-      DEFAULT_EMBEDDING_THRESHOLD
-    );
+    const similar = entry
+      .getEmbeddings()
+      .findSimilar(queryVector, DEFAULT_RECALL_K, DEFAULT_EMBEDDING_THRESHOLD);
     if (similar.length === 0) return [];
 
     // O(k) lookup via the maintained reverse index instead of O(E*O*k).
@@ -1377,10 +1362,7 @@ export type ForgetResult = z.infer<typeof ForgetResultSchema>;
  * `logLevel` — falling back to a no-op silently is fine for tests
  * that don't care about diagnostics.
  */
-function parseForgetResult(
-  text: string,
-  logger?: Logger,
-): ForgetResult | null {
+function parseForgetResult(text: string, logger?: Logger): ForgetResult | null {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -1392,9 +1374,7 @@ function parseForgetResult(
   }
   const result = ForgetResultSchema.safeParse(raw);
   if (!result.success) {
-    logger?.warn(
-      `[memory] forget parse failed: ${result.error.message}`,
-    );
+    logger?.warn(`[memory] forget parse failed: ${result.error.message}`);
     return null;
   }
   return result.data;

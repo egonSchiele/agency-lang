@@ -74,6 +74,14 @@ This lets you prevent specific built-in functions from being generated in the ou
     `"error"`. Conservative: open types (`string`/`number`/`any`, effect sets)
     are never required to be exhaustive; a guarded arm doesn't count toward
     coverage; a `_` arm always satisfies it.
+  - **`definiteReturns`** (`"silent" | "warn" | "error"`): What to do when a
+    function that declares a non-void return type can reach the end of its body
+    without `return`ing a value (Agency has no implicit returns). Default:
+    `"warn"`. Exempt: functions with no return type, or a `void`/`never` return
+    type, and graph nodes. This first release also **skips any function that uses
+    a `match`** — whether a match-ending function returns on every path depends on
+    match exhaustiveness, which will be integrated in a follow-up; until then such
+    functions are never flagged (no false positives).
 
 **Example:**
 ```json

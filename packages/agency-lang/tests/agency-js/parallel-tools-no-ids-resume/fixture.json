@@ -1,0 +1,8 @@
+{
+  "finalData": "all done",
+  "llmCallCount": 2,
+  "toolResponseContents": [
+    "INTERRUPT_RESULT",
+    "SUCCEED_RESULT"
+  ]
+}

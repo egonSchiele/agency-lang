@@ -42,6 +42,7 @@ import {
 } from "./interruptAnalysis.js";
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
+import { checkDefiniteReturns } from "./definiteReturns.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
@@ -342,8 +343,12 @@ export class TypeChecker {
     // 6d. Check interrupt payloads against `effect` declarations (shared registry).
     checkEffectPayloads(scopes, ctx, effectRegistry);
 
-    // 6e. Match exhaustiveness over closed value types (opt-in, default silent).
+    // 6e. Match exhaustiveness over closed value types.
     checkMatchExhaustiveness(scopes, ctx);
+
+    // 6f. Definite-return: a function with a non-void return type must `return`
+    // on every path. Reads the per-scope terminal flow node from buildFlowGraphs.
+    checkDefiniteReturns(scopes, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

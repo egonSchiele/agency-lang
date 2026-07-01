@@ -4,8 +4,7 @@ Browse the hosted model catalog and fetch fresh model data.
 
 ## `agency models list`
 
-List hosted text models from the built-in catalog (plus anything loaded this
-process). Filterable:
+List hosted text models from the built-in catalog. Filterable:
 
 ```bash
 agency models list                       # all models

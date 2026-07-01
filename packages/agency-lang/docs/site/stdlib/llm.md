@@ -202,19 +202,13 @@ Metadata for one hosted model by name, or null if the name is unknown or
 loadModelData(path: string): Result<number>
 ```
 
-Load additional model data from a JSON file (the shape printed by
-  `agency models refresh`) and register it for this program. Both the file's
-  `models` and its optional `hostedTools` are layered over any previously
-  loaded data and over the built-in catalog, with this file winning on
-  provider+name collisions; unlisted fields on an existing entry are preserved.
-  Affects llm() model resolution and cost accounting as well as
-  listHostedModels() / hostedModelInfo().
+Load model data from a JSON file (the shape `agency models refresh` prints)
+  and register it for this program, so `llm()` and the model catalog
+  (`listHostedModels` / `hostedModelInfo`) recognize those models. Multiple
+  loads accumulate. Returns the number of models loaded, or a failure if the
+  file cannot be read.
 
-  Returns the number of models in THIS file (not the running total registered),
-  or a failure describing why the file could not be loaded.
-
-  @param path - Path to a model-data JSON file (relative to the working
-    directory, or absolute)
+  @param path - Path to a model-data JSON file
 
 **Parameters:**
 
@@ -224,4 +218,4 @@ Load additional model data from a JSON file (the shape printed by
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L160))

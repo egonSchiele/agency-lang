@@ -150,21 +150,22 @@ export def hostedModelInfo(name: string): HostedModelInfo | null {
   return _hostedModelInfo(name)
 }
 
+// Accumulation details (kept out of the docstring, which is also the LLM tool
+// description): when called more than once, the newly loaded file wins over
+// previously loaded files and over the built-in catalog on provider+name
+// collisions, deep-merging fields so a partial entry augments an existing one
+// instead of replacing it; `hostedTools` are merged too. The returned count is
+// the number of models in this file, not the running total registered. `path`
+// is resolved relative to the working directory, or used as-is if absolute.
 export def loadModelData(path: string): Result<number, string> {
   """
-  Load additional model data from a JSON file (the shape printed by
-  `agency models refresh`) and register it for this program. Both the file's
-  `models` and its optional `hostedTools` are layered over any previously
-  loaded data and over the built-in catalog, with this file winning on
-  provider+name collisions; unlisted fields on an existing entry are preserved.
-  Affects llm() model resolution and cost accounting as well as
-  listHostedModels() / hostedModelInfo().
+  Load model data from a JSON file (the shape `agency models refresh` prints)
+  and register it for this program, so `llm()` and the model catalog
+  (`listHostedModels` / `hostedModelInfo`) recognize those models. Multiple
+  loads accumulate. Returns the number of models loaded, or a failure if the
+  file cannot be read.
 
-  Returns the number of models in THIS file (not the running total registered),
-  or a failure describing why the file could not be loaded.
-
-  @param path - Path to a model-data JSON file (relative to the working
-    directory, or absolute)
+  @param path - Path to a model-data JSON file
   """
   const res = _loadModelData(path)
   if (res.ok) {

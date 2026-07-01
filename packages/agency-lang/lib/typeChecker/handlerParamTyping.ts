@@ -19,14 +19,17 @@ function bodyHasNestedHandle(body: AgencyNode[]): boolean {
 
 /**
  * The type of an inline handler param whose body raises `kinds`. Matches the
- * runtime interrupt object `{ effect, message, data, origin }` (interrupts.ts) —
- * ALL FOUR fields, so the common `e.message`/`e.data`/`e.origin` reads still
- * type-check. Only `effect` is refined (the literal union of raisable kinds), so
+ * runtime interrupt object `{ effect, message, data, origin }` (interrupts.ts).
+ * Only `effect` is refined (the literal union of raisable kinds), so
  * `match (e.effect)` is a value-track literal-union match (checked by
- * match-exhaustiveness B1). This is a closed object, so reading any OTHER field
- * is now a "does not exist" error (intended). A single kind stays a bare literal
- * (a one-member match is not exhaustiveness-checked, which is fine). Payload
- * safety on `.data` is H3.
+ * match-exhaustiveness B1). The other 3 fields stay `any`.
+ *
+ * NOTE: although this is a closed `objectType`, it does NOT make `e.<field>` a
+ * "does not exist" error — field-access checking runs in `checkScopes`, BEFORE
+ * this pass re-types the param, so the refined type only ever reaches
+ * `checkMatchExhaustiveness`. A single kind stays a bare literal (a one-member
+ * match is not exhaustiveness-checked, which is fine). Payload typing on `.data`
+ * per effect is H3.
  */
 function handlerParamType(kinds: string[]): VariableType {
   const effect: VariableType =
@@ -55,15 +58,20 @@ function handlerParamType(kinds: string[]): VariableType {
  * param stays `any` (already declared by buildScopes) → conservative.
  *
  * SOUNDNESS — colliding param names. `Scope.declare` writes to the FUNCTION scope
- * and overwrites, so two inline handlers in the same function that share a param
- * name would clobber each other (the later type would win for the earlier
- * handler's `match (e.effect)`). We SKIP any param name used by >1 eligible
- * handler in the same scope → those stay `any` (a missed warning, never wrong).
+ * and overwrites, so an inline handler param clobbers ANY same-named inline
+ * handler param in the same function scope (including one with an explicit
+ * annotation or one skipped for a nested handle). We count EVERY inline handler
+ * param name in the scope and skip any name used more than once → those stay as
+ * declared by buildScopes (a missed warning, never a wrong one).
  *
  * SOUNDNESS — nested handles. `collectRaisableEffects` walks the whole body,
  * including inside a nested `handle`, so it counts effects the inner handler
  * already catches → over-reporting → a false "missing case". Handlers whose body
- * contains a nested handle are skipped above (fall back to `any`).
+ * contains a nested handle are not eligible (fall back to `any`).
+ *
+ * Runs each scope under `ctx.withScope(info.scopeKey, …)` so `collectRaisableEffects`
+ * → `synthType` resolves scope-local type aliases against the right scope (mirrors
+ * `checkHandlerBodyInterrupts`).
  */
 export function refineInlineHandlerParams(
   scopes: ScopeInfo[],
@@ -72,24 +80,29 @@ export function refineInlineHandlerParams(
 ): void {
   let changed = false;
   for (const info of scopes) {
-    const eligible: { node: Extract<AgencyNode, { type: "handleBlock" }>; name: string }[] = [];
-    for (const { node, scopes: nodeScopes } of walkNodes(info.body)) {
-      if (!isInScope(nodeScopes, info)) continue;
-      if (node.type !== "handleBlock" || node.handler.kind !== "inline") continue;
-      if (node.handler.param.typeHint) continue; // explicit annotation wins
-      if (bodyHasNestedHandle(node.body)) continue; // nested handle → over-count
-      eligible.push({ node, name: node.handler.param.name });
-    }
-    const nameCount = new Map<string, number>();
-    for (const h of eligible) nameCount.set(h.name, (nameCount.get(h.name) ?? 0) + 1);
+    ctx.withScope(info.scopeKey, () => {
+      // Count EVERY inline handler param name (eligible or not) — a shared name
+      // means typing one would clobber the other's function-scoped binding.
+      const nameCount = new Map<string, number>();
+      const eligible: { node: Extract<AgencyNode, { type: "handleBlock" }>; name: string }[] = [];
+      for (const { node, scopes: nodeScopes } of walkNodes(info.body)) {
+        if (!isInScope(nodeScopes, info)) continue;
+        if (node.type !== "handleBlock" || node.handler.kind !== "inline") continue;
+        const name = node.handler.param.name;
+        nameCount.set(name, (nameCount.get(name) ?? 0) + 1);
+        if (node.handler.param.typeHint) continue; // explicit annotation wins
+        if (bodyHasNestedHandle(node.body)) continue; // nested handle → over-count
+        eligible.push({ node, name });
+      }
 
-    for (const h of eligible) {
-      if ((nameCount.get(h.name) ?? 0) > 1) continue; // colliding name → leave `any`
-      const kinds = collectRaisableEffects(h.node.body, info, interruptEffectsByFunction, ctx);
-      if (kinds.length === 0) continue; // fall back to `any`
-      info.scope.declare(h.name, handlerParamType(kinds));
-      changed = true;
-    }
+      for (const h of eligible) {
+        if ((nameCount.get(h.name) ?? 0) > 1) continue; // shared name → leave as-is
+        const kinds = collectRaisableEffects(h.node.body, info, interruptEffectsByFunction, ctx);
+        if (kinds.length === 0) continue; // fall back to `any`
+        info.scope.declare(h.name, handlerParamType(kinds));
+        changed = true;
+      }
+    });
   }
   // We mutated scope types after the flow graph + its `typeAt` memo were built,
   // so any cached `e`-is-`any` result is now stale. The flow env's soundness

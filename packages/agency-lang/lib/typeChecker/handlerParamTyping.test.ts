@@ -138,6 +138,24 @@ node main() {
     expect(warnings.some((w) => /not exhaustive/i.test(w.message))).toBe(false);
   });
 
+  it("SOUNDNESS: a param name shared with an ANNOTATED handler is not clobbered", () => {
+    // The first handler is annotated `e: any`; the second is eligible with the
+    // SAME name. Typing the second would clobber the first's binding → the first
+    // match(e.effect) would see the second's effect union and be wrongly flagged.
+    // The name-count includes the annotated handler, so the eligible one is
+    // skipped → neither is flagged.
+    const warnings = warningsFrom(`
+effect mytest::alpha { }
+effect mytest::beta { }
+def raiseA() { raise mytest::alpha("a", {}) }
+def raiseB() { raise mytest::beta("b", {}) }
+node main() {
+  handle { raiseA() } with (e: any) { match (e.effect) { "mytest::alpha" => 1 } }
+  handle { raiseB() } with (e) { match (e.effect) { "mytest::beta" => 2 } }
+}`);
+    expect(warnings.some((w) => /not exhaustive/i.test(w.message))).toBe(false);
+  });
+
   it("transitive raise (effect raised inside a called function) reaches the match", () => {
     const warnings = warningsFrom(`
 effect mytest::alpha { }

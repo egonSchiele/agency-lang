@@ -47,6 +47,7 @@ import {
   runAliasAdd as localAliasAdd,
   runAliasRemove as localAliasRemove,
 } from "@/cli/local.js";
+import { modelsList, modelsRefresh } from "@/cli/hostedModels.js";
 import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
@@ -886,6 +887,15 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(localAliasAdd);
   aliasCmd.command("remove").description("Remove a short-name alias").argument("<name>")
     .action(localAliasRemove);
+
+  const modelsCmd = program.command("models").description("Browse the hosted model catalog");
+  modelsCmd.command("list").description("List hosted models (filterable)")
+    .option("--provider <name>", "Only this provider")
+    .option("--max-price <usd>", "Max input $/1M tokens", parseFloat)
+    .option("--min-context <tokens>", "Min context window", parseInt)
+    .action((opts: { provider?: string; maxPrice?: number; minContext?: number }) => modelsList(opts));
+  modelsCmd.command("refresh").description("Refresh the hosted model catalog from the remote source")
+    .argument("[url]", "Override the catalog URL").action((url?: string) => modelsRefresh(url));
 
   program
     .command("agent")

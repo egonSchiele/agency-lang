@@ -1,0 +1,29 @@
+/** @module Pure filtering of the hosted model catalog for the agent's
+  /model and /models pickers. No I/O.
+
+  Mirrors the TS predicate in lib/cli/hostedModels.ts (selectHostedModels) —
+  keep the two in sync; both are unit-tested so drift shows up as a failure. */
+import { HostedModelInfo } from "std::llm"
+
+export type ModelFilters = {
+  provider?: string;
+  maxPrice?: number
+}
+
+export def filterHostedModels(
+  models: HostedModelInfo[],
+  filters: ModelFilters,
+): HostedModelInfo[] {
+  let out: HostedModelInfo[] = []
+  for (model in models) {
+    if (filters.provider != null && filters.provider != "" && model.provider != filters.provider) {
+      continue
+    }
+    if (filters.maxPrice != null && model.inputCost > filters.maxPrice) {
+      continue
+    }
+    out.push(model)
+  }
+  return out
+}
+

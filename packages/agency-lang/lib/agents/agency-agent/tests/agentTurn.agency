@@ -179,3 +179,58 @@ node reactSilentOnSameProvider(): boolean {
   return reactToSlotChange(change)
 }
 
+
+import { modelChoiceItems, parseModelsFilters } from "../agent.agency"
+import { hostedModelInfo } from "std::llm"
+
+// Built from the real baked catalog, so a bare filter yields items.
+node modelItemsNonEmpty(): boolean {
+  return modelChoiceItems({}).length > 0
+}
+
+// The provider filter must ACTUALLY narrow: every returned item resolves to an
+// anthropic model (via hostedModelInfo on the item key). If modelChoiceItems
+// ignored the filter, a non-anthropic item would appear and this returns false
+// — the thing a plain length>0 check cannot catch.
+node modelItemsFilterOnlyAnthropic(): boolean {
+  const items = modelChoiceItems({ provider: "anthropic" })
+  if (items.length == 0) {
+    return false
+  }
+  for (item in items) {
+    const info = hostedModelInfo(item.key)
+    if (info == null) {
+      return false
+    }
+    if (info.provider != "anthropic") {
+      return false
+    }
+  }
+  return true
+}
+
+// ...and the filtered set is a strict subset of the whole catalog.
+node modelItemsFilterNarrows(): boolean {
+  return modelChoiceItems({ provider: "anthropic" }).length < modelChoiceItems({}).length
+}
+
+// The item key is the model name (what switchModel receives); guards a
+// key/label swap. hostedModelInfo resolving it confirms it is a real name.
+node modelItemKeyIsModelName(): boolean {
+  const items = modelChoiceItems({ provider: "anthropic" })
+  return hostedModelInfo(items[0].key) != null
+}
+
+// `/models` arg parsing (extracted so it is unit-testable, no magic offset).
+node parseModelsBareIsEmpty(): boolean {
+  const filters = parseModelsFilters("/models")
+  return filters.provider == null
+}
+node parseModelsProviderArg(): boolean {
+  const filters = parseModelsFilters("/models anthropic")
+  return filters.provider == "anthropic"
+}
+node parseModelsTrailingSpaceIsEmpty(): boolean {
+  const filters = parseModelsFilters("/models   ")
+  return filters.provider == null
+}

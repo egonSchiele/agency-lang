@@ -15,6 +15,7 @@ import {
 import { today } from "std::date"
 import { setAgentCwd } from "std::index"
 import { box, render } from "std::layout"
+import { listHostedModels, hostedModelInfo } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
 import {
   ScopedRuleFields,
@@ -35,6 +36,7 @@ import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
+import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
 import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
 import {
   buildLayers,
@@ -283,6 +285,7 @@ def builtinPalette(): Record<string, string> {
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
     "/model": "Switch the model (bare to pick, or slot=model)",
+    "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
@@ -407,6 +410,37 @@ export def reactToSlotChange(change: SlotChange): boolean {
   return false
 }
 
+// ChoiceItem list for the model pickers: the hosted catalog, filtered, each
+// labeled with provider + input price for an informed pick.
+export def modelChoiceItems(filters: ModelFilters): ChoiceItem[] {
+  let items: ChoiceItem[] = []
+  for (model in filterHostedModels(listHostedModels(), filters)) {
+    const label = "${model.name}  (${model.provider}, $${model.inputCost}/1M in)"
+    items.push({
+      key: model.name,
+      label: label
+    })
+  }
+  return items
+}
+
+// Parse a `/models [provider]` command line into filters. Bare `/models` (or a
+// trailing-space-only arg) yields no filters; `/models <provider>` narrows to
+// one provider. Extracted from the handler so it is unit-testable.
+export def parseModelsFilters(cmd: string): ModelFilters {
+  const prefix = "/models "
+  if (!cmd.startsWith(prefix)) {
+    return {}
+  }
+  const arg = cmd.substring(prefix.length).trim()
+  if (arg == "") {
+    return {}
+  }
+  return {
+    provider: arg
+  }
+}
+
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
 def _runTurn(msg: string): boolean {
@@ -433,7 +467,7 @@ def _runTurn(msg: string): boolean {
   }
   if (trimmed == "/help") {
     pushMessage(
-      "Commands: /exit, /clear, /clear-history, /cost, /model, /local, /search, /paste, /help",
+      "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /paste, /help",
     )
     return true
   }
@@ -494,11 +528,11 @@ def _runTurn(msg: string): boolean {
           pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
         }
       }
-      let noItems: ChoiceItem[] = []
+      const items = modelChoiceItems({})
       const choice = chooseOption(
         "Model",
-        "Type a model, or slot=model (e.g. reasoning=claude-opus-4-8). Empty to cancel.",
-        noItems,
+        "Pick a model, or type one (or slot=model, e.g. reasoning=claude-opus-4-8). Empty to cancel.",
+        items,
         allowFreeText: true,
         allowCancel: true,
       )
@@ -522,6 +556,20 @@ def _runTurn(msg: string): boolean {
       if (resolved != null) {
         pushMessage(color.dim("  ${slot}: ${resolved.model} (${resolved.via})"))
       }
+    }
+    return true
+  }
+  if (trimmed == "/models" || trimmed.startsWith("/models ")) {
+    const filters = parseModelsFilters(trimmed)
+    const models = filterHostedModels(listHostedModels(), filters)
+    if (models.length == 0) {
+      pushMessage("No models match.")
+      return true
+    }
+    for (model in models) {
+      pushMessage(
+        "  ${model.name}  (${model.provider}, $${model.inputCost}/1M in, ${model.contextWindow} ctx)",
+      )
     }
     return true
   }

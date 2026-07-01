@@ -1,0 +1,7 @@
+{ "sourceFile": "modelFilters.agency", "tests": [
+  { "nodeName": "filterByProvider", "input": "", "expectedOutput": "\"1:pricey-closed\"", "evaluationCriteria": [{ "type": "exact" }] },
+  { "nodeName": "filterMaxPrice", "input": "", "expectedOutput": "\"1:cheap-oss\"", "evaluationCriteria": [{ "type": "exact" }] },
+  { "nodeName": "providerAndPriceCombine", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+  { "nodeName": "emptyProviderPassesAll", "input": "", "expectedOutput": "2", "evaluationCriteria": [{ "type": "exact" }] },
+  { "nodeName": "noFiltersPassesAll", "input": "", "expectedOutput": "2", "evaluationCriteria": [{ "type": "exact" }] }
+]}

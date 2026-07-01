@@ -1,6 +1,25 @@
-import { describe, it, expect } from "vitest";
-import { _setLlmOptions } from "./llm.js";
+import { describe, it, expect, vi } from "vitest";
+import { _setLlmOptions, _listHostedModels, _hostedModelInfo } from "./llm.js";
 import { agencyStore } from "../runtime/asyncContext.js";
+
+// Deterministic smoltalk catalog so the shim's mapping/filtering is tested
+// against a small fixture, not smoltalk's baked (external, version-churning)
+// data. The real-catalog wiring is covered separately (name-agnostically) in
+// llm.hostedCatalog.integration.test.ts.
+const { FIXTURE_MODELS } = vi.hoisted(() => ({
+  FIXTURE_MODELS: [
+    { type: "text", modelName: "fixture-text", provider: "openai", openWeights: false, inputTokenCost: 0.15, outputTokenCost: 0.6, maxInputTokens: 128000, family: "gpt-mini" },
+    // A text model with every optional field absent → exercises the ?? defaults.
+    { type: "text", modelName: "fixture-bare" },
+    { type: "embeddings", modelName: "fixture-embed", provider: "openai" },
+  ],
+}));
+vi.mock("smoltalk", () => ({
+  getAllModels: () => FIXTURE_MODELS,
+  getModel: (name: string) => FIXTURE_MODELS.find((model) => model.modelName === name),
+  refreshModels: vi.fn(),
+  registerModelData: vi.fn(),
+}));
 
 // _setLlmOptions writes the ACTIVE stack's `other.llmDefaults`. A bare
 // `{ other: {} }` stand-in stack is enough to exercise the merge.
@@ -39,5 +58,43 @@ describe("_setLlmOptions", () => {
     withStack(stack, () => _setLlmOptions({ temperature: 0.5 }));
     expect(stack.other.llmDefaults.model).toBe("keep");
     expect(stack.other.llmDefaults.temperature).toBe(0.5);
+  });
+});
+
+describe("hosted catalog accessor (over a fixture)", () => {
+  it("maps every field incl. family, and applies ?? defaults for absent ones", () => {
+    const all = _listHostedModels();
+    expect(all.find((model) => model.name === "fixture-text")).toEqual({
+      name: "fixture-text",
+      provider: "openai",
+      openWeights: false,
+      inputCost: 0.15,
+      outputCost: 0.6,
+      contextWindow: 128000,
+      family: "gpt-mini",
+    });
+    // A text model missing every optional field falls back to sane defaults —
+    // guards the `?? ""` / `?? 0` / `?? false` mapping.
+    expect(all.find((model) => model.name === "fixture-bare")).toEqual({
+      name: "fixture-bare",
+      provider: "",
+      openWeights: false,
+      inputCost: 0,
+      outputCost: 0,
+      contextWindow: 0,
+      family: "",
+    });
+  });
+  it("excludes non-text models", () => {
+    // fixture-embed (embeddings) must not appear; if the `type === "text"`
+    // filter regressed it would leak in here.
+    expect(_listHostedModels().map((model) => model.name)).toEqual(["fixture-text", "fixture-bare"]);
+  });
+  it("_hostedModelInfo returns a text model, or null for unknown/non-text", () => {
+    expect(_hostedModelInfo("fixture-text")?.provider).toBe("openai");
+    expect(_hostedModelInfo("no-such-model")).toBeNull();
+    // Non-text name → null (the `&& model.type === "text"` guard). Drop the
+    // guard and this returns a malformed HostedModelInfo instead of null:
+    expect(_hostedModelInfo("fixture-embed")).toBeNull();
   });
 });

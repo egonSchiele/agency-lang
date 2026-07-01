@@ -1,4 +1,9 @@
-import { _setLlmOptions, _registerProviderModule } from "agency-lang/stdlib-lib/llm.js"
+import {
+  _setLlmOptions,
+  _registerProviderModule,
+  _listHostedModels,
+  _hostedModelInfo,
+} from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
 
 /** @module
@@ -112,4 +117,34 @@ export def registerProviderModule(path: string) {
   @param path - Path to the provider module (.mjs/.js)
   """
   _registerProviderModule(path)
+}
+
+// Field order is mirrored by the TS HostedModelInfo in lib/stdlib/llm.ts and is
+// JSON-compared by callers in tests; do not reorder.
+export type HostedModelInfo = {
+  name: string;
+  provider: string;
+  openWeights: boolean;
+  inputCost: number;
+  outputCost: number;
+  contextWindow: number;
+  family: string
+}
+
+export def listHostedModels(): HostedModelInfo[] {
+  """
+  All known hosted text models (baked catalog plus any refreshed data), for
+  discovery and model pickers. Backed by smoltalk's getAllModels.
+  """
+  return _listHostedModels()
+}
+
+export def hostedModelInfo(name: string): HostedModelInfo | null {
+  """
+  Metadata for one hosted model by name, or null if the name is unknown or
+  is not a text model.
+
+  @param name - The hosted model name (e.g. "gpt-4o-mini")
+  """
+  return _hostedModelInfo(name)
 }

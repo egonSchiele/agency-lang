@@ -1,4 +1,4 @@
-import { listThreads } from "std::threads"
+import { listThreads } from "std::thread"
 import { userMessage } from "std::thread"
 
 // Verifies `subthread(hidden: true) { ... }` excludes the created

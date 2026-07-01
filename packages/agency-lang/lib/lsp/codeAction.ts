@@ -10,7 +10,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { SymbolTable } from "../symbolTable.js";
 import { uriToPath } from "./uri.js";
-import { getStdlibFiles } from "../importPaths.js";
+import { getStdlibFiles, stdlibModuleName } from "../importPaths.js";
 
 // Lazily built index: symbol name → "std::module"
 let stdlibIndex: Record<string, string> | null = null;
@@ -19,12 +19,12 @@ function getStdlibIndex(): Record<string, string> {
   if (stdlibIndex) return stdlibIndex;
   stdlibIndex = {};
   for (const filePath of getStdlibFiles()) {
-    const moduleName = path.basename(filePath, ".agency");
+    const moduleName = stdlibModuleName(filePath);
     const content = fs.readFileSync(filePath, "utf-8");
     const exportPattern = /export\s+(?:safe\s+)?(?:def|node)\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
     let m: RegExpExecArray | null;
     while ((m = exportPattern.exec(content)) !== null) {
-      stdlibIndex[m[1]] = `std::${moduleName}`;
+      stdlibIndex[m[1]] = moduleName;
     }
   }
   return stdlibIndex;

@@ -4,6 +4,18 @@
 - Discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch; `match` arms narrow bound fields via the lowered scrutinee. Composes with `!`/`&&`/`||`/early-return/`while`.
   - **Migration (typechecker-enabled projects only):** inside such a guard, accessing a property that exists on a *different* member is now an error — previously union property access was lenient. This is the intended behavior; update the access or guard accordingly.
 
+### Standard Library
+- Reorganized the standard library into capability-grouped modules. Generic-named modules now live under a domain prefix, and two coupled pairs/trios were merged. Distinctive names (`std::syntax`, `std::markdown`, `std::http`, `std::wikipedia`, `std::weather`, `std::math`, and the agent core) stay flat.
+  - **Breaking — update your imports:**
+    - `std::threads` → `std::thread` (merged; the current-thread and cross-thread APIs now live in one module)
+    - `std::types`, `std::schemas`, `std::validators` → `std::validation` (folded into one module)
+    - `std::layout`, `std::table`, `std::chart`, `std::cli` → `std::ui/layout`, `std::ui/table`, `std::ui/chart`, `std::ui/cli` (the interactive `std::ui` module is unchanged)
+    - `std::keyring`, `std::oauth` → `std::auth/keyring`, `std::auth/oauth`
+    - `std::email`, `std::sms`, `std::imessage` → `std::messaging/email`, `std::messaging/sms`, `std::messaging/imessage`
+    - `std::search`, `std::browser` → `std::web/search`, `std::web/browser`
+  - There is no compatibility shim — old paths no longer resolve.
+  - Effect identifiers are unchanged: the `std::search` **effect** (used in `raises`/`interrupt`/policy) keeps its name even though the module moved to `std::web/search`, because effect names are a separate namespace.
+
 ## Jun 24 2026 — v0.6.4
 
 ### Language / Typechecker

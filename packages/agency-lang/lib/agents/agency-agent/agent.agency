@@ -11,10 +11,10 @@ import {
   repl,
   clearScreen,
   clearHistory,
- } from "std::cli"
+ } from "std::ui/cli"
 import { today } from "std::date"
 import { setAgentCwd } from "std::index"
-import { box, render } from "std::layout"
+import { box, render } from "std::ui/layout"
 import { listHostedModels, hostedModelInfo } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
 import {

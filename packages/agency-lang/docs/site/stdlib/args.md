@@ -20,7 +20,7 @@ name: "args"
   ## Usage contract
 
   Call `parseArgs` as the **first thing** in `main`, before installing
-  handlers, before starting a REPL (`std::ui` / `std::cli`), before
+  handlers, before starting a REPL (`std::ui` / `std::ui/cli`), before
   any side-effectful initialization. The function exits the process
   on usage errors and on `--help`; running it before any handlers /
   checkpoints / TUI exist keeps that exit safe.

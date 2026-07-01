@@ -166,7 +166,7 @@ shape with just one or two numbers (or strings) changing, you can lift those
 numbers out as **value parameters** on the alias itself:
 
 ```ts
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })
@@ -314,14 +314,14 @@ const checked: NumberInRange(0, 100)! = a.value + 5
 
 ### Pre-baked stdlib types
 
-`std::types` already exports the most common parameterized shapes:
+`std::validation` already exports the most common parameterized shapes:
 
 - `NumberInRange(low, high)`
 - `StringWithLength(min, max)`
 - `MatchesPattern(pat)`
 - `BoundedArray<T>(min, max)`
 
-See the [`std::types` reference](../stdlib/types.md) for the full list.
+See the [`std::validation` reference](../stdlib/validation.md) for the full list.
 
 ## References
 - [minimum](https://json-schema.org/draft/2020-12/draft-bhutton-json-schema-validation-00#rfc.section.6.2.4)

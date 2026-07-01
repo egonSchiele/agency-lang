@@ -61,7 +61,7 @@ Usage: greet [options] [args...]
 
 ## Usage contract
 
-Call `parseArgs` as the **first thing** in `main`, before installing handlers, before starting a REPL (`std::ui` or `std::cli`), before any side-effectful initialization. The parser exits the process on usage errors and on `--help` — running it before anything exists that would need cleanup keeps that exit safe.
+Call `parseArgs` as the **first thing** in `main`, before installing handlers, before starting a REPL (`std::ui` or `std::ui/cli`), before any side-effectful initialization. The parser exits the process on usage errors and on `--help` — running it before anything exists that would need cleanup keeps that exit safe.
 
 ## What the schema accepts
 

@@ -2,7 +2,7 @@
 // The descriptor wraps the value-param factory CALL in a `nullable` descriptor,
 // so null must short-circuit (validation skipped) while a non-null value still
 // runs the factory's validator chain (min 1 / max 10).
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

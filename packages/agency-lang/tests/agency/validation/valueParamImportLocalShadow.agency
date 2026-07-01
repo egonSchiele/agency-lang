@@ -1,7 +1,7 @@
 // The factory model must be immune to a consumer defining its own `min`.
-// NumberInRange's validator chain is built in std::types, so its `min`
+// NumberInRange's validator chain is built in std::validation, so its `min`
 // resolves there; a local `min` here cannot hijack validation.
-import { NumberInRange } from "std::types"
+import { NumberInRange } from "std::validation"
 
 // A local `min` that ALWAYS passes. If validation bound to THIS, an
 // out-of-range value would wrongly pass.

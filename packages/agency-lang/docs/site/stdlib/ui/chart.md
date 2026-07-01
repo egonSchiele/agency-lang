@@ -4,10 +4,10 @@ name: "chart"
 
 # chart
 
-## Module: std::chart
+## Module: std::ui/chart
 
   Horizontal bar charts for terminal output. A `barChart(...)` returns a
-  layout node; render it with `render` from `std::layout`, so a chart
+  layout node; render it with `render` from `std::ui/layout`, so a chart
   nests inside `box` / `row` / `column`.
 
   Two construction styles, same result:
@@ -16,8 +16,8 @@ name: "chart"
     arrays. `data[i].values` aligns to `keys` by index.
 
     ```ts
-    import { barChart } from "std::chart"
-    import { render } from "std::layout"
+    import { barChart } from "std::ui/chart"
+    import { render } from "std::ui/layout"
 
     const c = barChart(
       title: "Revenue by quarter",
@@ -61,7 +61,7 @@ export type BarKey = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L48))
 
 ### Bar
 
@@ -75,7 +75,7 @@ export type Bar = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L55))
 
 ### BarMode
 
@@ -83,7 +83,7 @@ export type Bar = {
 export type BarMode = "stacked" | "grouped"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L60))
 
 ### ChartBuilder
 
@@ -97,7 +97,7 @@ export type ChartBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L63))
 
 ## Functions
 
@@ -110,7 +110,7 @@ barChart(title: string, mode: BarMode, keys: BarKey[], data: Bar[], showValues: 
 Render a horizontal bar chart as a layout node. When calling this as
   an LLM tool, use the data form: pass `keys` (one per series) and
   `data` (one entry per category, whose `values` array lines up with
-  `keys` by index). Render the result with `render` from `std::layout`.
+  `keys` by index). Render the result with `render` from `std::ui/layout`.
 
   @param title - Heading shown above the chart
   @param mode - "grouped" draws one bar per key; "stacked" stacks the keys into one bar
@@ -139,4 +139,4 @@ Render a horizontal bar chart as a layout node. When calling this as
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L92))

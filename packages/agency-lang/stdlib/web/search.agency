@@ -8,7 +8,7 @@ type SearchResult = {
 
 /*
   Usage from Agency code:
-  import { search } from "std::search"
+  import { search } from "std::web/search"
 
   node main() {
     const results = search("agency language programming")

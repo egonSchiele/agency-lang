@@ -1,4 +1,4 @@
-// std::layout — node tree types + leaf renderers.
+// std::ui/layout — node tree types + leaf renderers.
 //
 // Every value the Agency side passes to `render()` is a `LayoutNode`.
 // Containers (row / column / box / table) live in their own files and
@@ -58,7 +58,7 @@ export function parseWidth(raw: unknown): Width | null {
     if (match) return { kind: "percent", value: parseFloat(match[1]) };
   }
   throw new Error(
-    `std::layout: invalid width ${JSON.stringify(raw)}. ` +
+    `std::ui/layout: invalid width ${JSON.stringify(raw)}. ` +
     `Expected a number, "full", or "<n>%" (e.g. "50%").`,
   );
 }
@@ -120,7 +120,7 @@ export const LEAF_RENDERERS: Record<
   },
   space: (_n) => {
     throw new Error(
-      "std::layout: `space` must be resolved by its parent row/column. " +
+      "std::ui/layout: `space` must be resolved by its parent row/column. " +
       "Found one outside a container at render time.",
     );
   },
@@ -128,7 +128,7 @@ export const LEAF_RENDERERS: Record<
     const length = n.attrs.length as number | undefined;
     if (length == null || length === 0) {
       throw new Error(
-        "std::layout: bare `hline()` (no `length`) must be resolved by " +
+        "std::ui/layout: bare `hline()` (no `length`) must be resolved by " +
         "its parent column. Found one outside a container at render time.",
       );
     }
@@ -139,7 +139,7 @@ export const LEAF_RENDERERS: Record<
     const length = n.attrs.length as number | undefined;
     if (length == null || length === 0) {
       throw new Error(
-        "std::layout: bare `vline()` (no `length`) must be resolved by " +
+        "std::ui/layout: bare `vline()` (no `length`) must be resolved by " +
         "its parent row. Found one outside a container at render time.",
       );
     }

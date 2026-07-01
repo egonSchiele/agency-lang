@@ -1,4 +1,4 @@
-// std::layout — text layout renderer (public entry point).
+// std::ui/layout — text layout renderer (public entry point).
 //
 // Two layers (see docs/superpowers/specs/2026-06-02-layout-module-design.md):
 //   * Agency-side (stdlib/layout.agency) — pure data construction.

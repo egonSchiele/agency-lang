@@ -60,7 +60,7 @@ import {
 
   ### See also
 
-  `std::layout` is the sibling module for *static* terminal output —
+  `std::ui/layout` is the sibling module for *static* terminal output —
   splash screens, summary panels, side-by-side columns. It exports
   `box`, `row`, `column`, and several leaves with the same names as
   this module; if you import from both, alias one set on import.
@@ -1220,8 +1220,8 @@ export def chooseOption(
   print("\n")
   // Cyan rule across the terminal as a visual divider before the
   // title/body banner. Inlined to avoid duplicating an exported
-  // `hline` here — the public one lives in `std::cli`, and
-  // re-importing it would introduce a std::ui ↔ std::cli cycle.
+  // `hline` here — the public one lives in `std::ui/cli`, and
+  // re-importing it would introduce a std::ui ↔ std::ui/cli cycle.
   // The string literal is bound to a `const` first because the
   // parser doesn't accept method calls directly on a string literal
   // ("─".repeat(...) fails; see TODO.md).
@@ -1993,7 +1993,7 @@ export def repl(
   _activeRepl = null
 }
 
-// `clearScreen`, `termWidth`, and `hline` live in `std::cli` (the
+// `clearScreen`, `termWidth`, and `hline` live in `std::ui/cli` (the
 // single canonical home). Importing them from there inside this
-// module would create a std::ui ↔ std::cli cycle, so internal use
+// module would create a std::ui ↔ std::ui/cli cycle, so internal use
 // inlines `_termWidth()` from the TS bridge above.

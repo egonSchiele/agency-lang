@@ -1,4 +1,4 @@
-import { search } from "std::search"
+import { search } from "std::web/search"
 import { env } from "std::system"
 
 node main() {

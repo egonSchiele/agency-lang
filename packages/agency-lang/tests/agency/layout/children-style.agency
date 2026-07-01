@@ -1,4 +1,4 @@
-import { box, row, column, text, vline, render } from "std::layout"
+import { box, row, column, text, vline, render } from "std::ui/layout"
 
 // Same banner as banner.agency, but constructed using `children: [...]`
 // arrays + top-level constructors instead of trailing `as name { ... }`

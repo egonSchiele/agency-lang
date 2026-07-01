@@ -202,7 +202,7 @@ export const ttyColor: ColorFunction = process.stdout.isTTY
  * `process.stdout.isTTY` alone is unreliable when Agency runs through nested
  * spawns (some intermediate hops drop the TTY flag), so the env-var fallbacks
  * give the user explicit overrides. Shared by stdlib helpers that expose an
- * `"auto" | boolean` color option (e.g. `std::layout::render`, `std::syntax::diff`).
+ * `"auto" | boolean` color option (e.g. `std::ui/layout::render`, `std::syntax::diff`).
  */
 export function autoUseColor(): boolean {
   if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") {

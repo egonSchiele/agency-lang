@@ -7,7 +7,7 @@ name: "imessage"
 ## Usage
 
   ```ts
-  import { sendIMessage } from "std::imessage"
+  import { sendIMessage } from "std::messaging/imessage"
 
   node main() {
     const result = sendIMessage("+15551234567", "Hello from my agent!")
@@ -50,4 +50,4 @@ Send an iMessage via the macOS Messages app. Only works on macOS with Messages.a
 
 **Throws:** `std::sendIMessage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/imessage.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L25))

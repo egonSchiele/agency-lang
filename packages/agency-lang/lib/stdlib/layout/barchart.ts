@@ -1,4 +1,4 @@
-// std::layout — horizontal bar chart renderer for std::chart.
+// std::ui/layout — horizontal bar chart renderer for std::ui/chart.
 //
 // Value→cell scaling and the largest-remainder rounding in
 // `stackSegments` (so stacked segments sum exactly to the bar length)
@@ -92,12 +92,12 @@ export function validateChart(keys: ResolvedKey[], data: Bar[], mode: BarMode): 
   for (const bar of data) {
     if (bar.values.length !== expected) {
       throw new Error(
-        `std::chart: bar "${bar.label}" has ${bar.values.length} value(s) but there are ${expected} key(s).`,
+        `std::ui/chart: bar "${bar.label}" has ${bar.values.length} value(s) but there are ${expected} key(s).`,
       );
     }
     for (const v of bar.values) {
       if (!Number.isFinite(v)) {
-        throw new Error(`std::chart: bar "${bar.label}" has a non-finite value.`);
+        throw new Error(`std::ui/chart: bar "${bar.label}" has a non-finite value.`);
       }
     }
     if (mode === "stacked") {
@@ -105,7 +105,7 @@ export function validateChart(keys: ResolvedKey[], data: Bar[], mode: BarMode): 
       const hasNeg = bar.values.some((v) => v < 0);
       if (hasPos && hasNeg) {
         throw new Error(
-          `std::chart: stacked bar "${bar.label}" mixes positive and negative values; uniform sign required.`,
+          `std::ui/chart: stacked bar "${bar.label}" mixes positive and negative values; uniform sign required.`,
         );
       }
     }
@@ -222,7 +222,7 @@ export function renderBarChart(node: LayoutNode): Block {
   const resolvedWidth: number | undefined = typeof a.resolvedWidth === "number" ? a.resolvedWidth : undefined;
 
   if (typeof a.max === "number" && (!Number.isFinite(a.max) || a.max < 0)) {
-    throw new Error(`std::chart: max must be a non-negative number, got ${a.max}.`);
+    throw new Error(`std::ui/chart: max must be a non-negative number, got ${a.max}.`);
   }
 
   // Value shown per row (grouped → one per key; stacked → category total).

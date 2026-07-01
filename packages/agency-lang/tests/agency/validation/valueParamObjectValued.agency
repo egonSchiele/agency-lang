@@ -4,7 +4,7 @@
 // Substitution must reach into the object body and update the property
 // type and its merged @jsonSchema tag.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })

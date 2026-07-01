@@ -1,7 +1,7 @@
-// std::layout — `Block` primitive + algebra (pad / beside / above / styled).
+// std::ui/layout — `Block` primitive + algebra (pad / beside / above / styled).
 //
 // A `Block` is a rectangular array of lines. All composition in
-// std::layout reduces to four operators:
+// std::ui/layout reduces to four operators:
 //   * `pad`     — widen / heighten a block, aligning original content
 //   * `beside`  — concatenate two blocks horizontally
 //   * `above`   — stack two blocks vertically

@@ -1,4 +1,4 @@
-import { box, row, column, text, vline } from "std::layout"
+import { box, row, column, text, vline } from "std::ui/layout"
 
 // Child types appear in source order — defends against accidental
 // re-ordering inside _makeBuilder / container constructors.

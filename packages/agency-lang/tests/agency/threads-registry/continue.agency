@@ -1,4 +1,4 @@
-import { getThread, currentThreadId } from "std::threads"
+import { getThread, currentThreadId } from "std::thread"
 import { userMessage } from "std::thread"
 
 // Verify thread(continue: id) resumes a previously-closed thread:

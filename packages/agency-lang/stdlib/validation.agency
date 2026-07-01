@@ -1,7 +1,9 @@
 import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max, _minLength, _maxLength, _matches } from "agency-lang/stdlib-lib/validators.js"
 
 /** @module
-  Validator functions intended for use with `@validate(...)` annotations.
+  Validation surface: validator functions for `@validate(...)`, pre-baked
+  `@jsonSchema(...)` format fragments, and opaque validated type aliases
+  that combine the two.
 
   Each validator takes a single value and returns a `Result` — `success(value)`
   if the value is valid (optionally transformed), or `failure(reason)` if not.
@@ -9,7 +11,7 @@ import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max
   Single-argument validators (`isEmail`, `isUrl`, …) can be used directly:
 
   ```ts
-  import { isEmail } from "std::validators"
+  import { isEmail } from "std::validation"
 
   @validate(isEmail)
   type Email = string
@@ -22,7 +24,7 @@ import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max
   single-argument validator the chain can call with each value:
 
   ```ts
-  import { min, max } from "std::validators"
+  import { min, max } from "std::validation"
 
   @validate(min.partial(n: 0), max.partial(n: 150))
   type Age = number
@@ -31,6 +33,36 @@ import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max
   Validators only run for types annotated with `!` (the bang operator).
   See the [type validation guide](../guide/type-validation.md) for full
   details on `@validate(...)` and how it integrates with `!` validation.
+
+  The `@jsonSchema(...)` format fragments are plain object constants —
+  nothing magic. Spread them into your own `@jsonSchema(...)` annotations
+  to attach the matching JSON Schema `format` field:
+
+  ```ts
+  import { emailFormat } from "std::validation"
+
+  @jsonSchema({ ...emailFormat, description: "primary contact" })
+  type Email = string
+  ```
+
+  They exist to spare callers from typing `{ format: "..." }` every time
+  and to keep format names consistent across a codebase.
+
+  The type aliases combine `@validate(...)` and `@jsonSchema(...)` for the
+  most common string-shaped opaque types. Use them in place of plain
+  `string` whenever the value must conform to one of these formats:
+
+  ```ts
+  import { Email } from "std::validation"
+
+  def main() {
+    const e: Email! = "user@example.com"   // validated at runtime
+  }
+  ```
+
+  Aliases here only carry annotations — they are still plain `string` from
+  TypeScript's perspective. Validation runs on `!` sites; structured-output
+  LLM calls get the JSON Schema `format` hint via `.meta(...)`.
 */
 
 export safe def isEmail(value: string): Result {
@@ -148,3 +180,62 @@ export safe def matches(pattern: string, value: string): Result {
   """
   return _matches(pattern, value)
 }
+
+/** `{ format: "email" }` — RFC 5322 email format. */
+export static const emailFormat = { format: "email" }
+
+/** `{ format: "uri" }` — RFC 3986 URI. */
+export static const urlFormat = { format: "uri" }
+
+/** `{ format: "uuid" }` — canonical 8-4-4-4-12 UUID. */
+export static const uuidFormat = { format: "uuid" }
+
+/** `{ format: "date-time" }` — ISO 8601 date-time. */
+export static const dateTimeFormat = { format: "date-time" }
+
+/** `{ format: "date" }` — ISO 8601 date (no time). */
+export static const dateFormat = { format: "date" }
+
+/** `{ format: "ipv4" }` — dotted-quad IPv4 address. */
+export static const ipv4Format = { format: "ipv4" }
+
+/** `{ format: "ipv6" }` — IPv6 address. */
+export static const ipv6Format = { format: "ipv6" }
+
+/** A syntactically valid email address. */
+@validate(isEmail)
+@jsonSchema({ ...emailFormat })
+export type Email = string
+
+/** An http:// or https:// URL. (Named `URLString` so it does not shadow
+    JavaScript's global `URL` constructor.) */
+@validate(isUrl)
+@jsonSchema({ ...urlFormat })
+export type URLString = string
+
+/** A canonical 8-4-4-4-12 hex UUID string. (Named `UUIDString` for symmetry
+    with `URLString`.) */
+@validate(isUuid)
+@jsonSchema({ ...uuidFormat })
+export type UUIDString = string
+
+/** A number that must lie within the inclusive range `[low, high]`.
+    Use as `NumberInRange(0, 100)` etc. — both bounds substitute into the
+    `@validate(...)` and `@jsonSchema(...)` tags at the use site. */
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+export type NumberInRange(low: number, high: number) = number
+
+/** A string whose length is in the inclusive range `[min, max]`. */
+@validate(minLength.partial(n: min), maxLength.partial(n: max))
+@jsonSchema({ minLength: min, maxLength: max })
+export type StringWithLength(min: number, max: number) = string
+
+/** A string that matches the given regular expression `pat`. */
+@validate(matches.partial(pattern: pat))
+@jsonSchema({ pattern: pat })
+export type MatchesPattern(pat: string) = string
+
+/** An array whose length is in the inclusive range `[min, max]`. */
+@jsonSchema({ minItems: min, maxItems: max })
+export type BoundedArray<T>(min: number, max: number) = T[]

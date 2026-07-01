@@ -297,7 +297,7 @@ The bound variable receives the transformed value. See
 
 ### Parameterized validators via PFA
 
-`std::validators` ships parameterized validators (`min`, `max`,
+`std::validation` ships parameterized validators (`min`, `max`,
 `minLength`, `maxLength`, `matches`) as ordinary two-argument Agency
 `def` functions where the configuration parameter comes first and the
 value comes last. Users bind the configuration via Agency [partial

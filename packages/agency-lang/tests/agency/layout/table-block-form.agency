@@ -1,5 +1,5 @@
-import { text } from "std::layout"
-import { table } from "std::table"
+import { text } from "std::ui/layout"
+import { table } from "std::ui/table"
 
 // Builds the same logical table as `table-data-form.agency`, but via
 // the trailing block. The fixture's `expectedOutput` is byte-identical

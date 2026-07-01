@@ -5,7 +5,7 @@
       "input": "",
       "expectedOutput": "{\"tooLow\":false,\"ok\":true,\"localMin\":true}",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "A consumer-defined `min` does not affect an imported value-param alias's validation (factory resolves validators in std::types); the local `min` remains usable."
+      "description": "A consumer-defined `min` does not affect an imported value-param alias's validation (factory resolves validators in std::validation); the local `min` remains usable."
     }
   ]
 }

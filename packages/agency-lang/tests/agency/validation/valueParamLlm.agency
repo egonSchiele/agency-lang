@@ -6,7 +6,7 @@
 // runtime to confirm both ends — the schema constrained the model and
 // the resulting value satisfies the same @validate tag.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })

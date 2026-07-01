@@ -67,7 +67,7 @@ const result = llm("Read the config file", { tools: [readFromTemp] })
 
 Now the readFile function can only read the files in the `/tmp` directory!
 
-PFAs are a really easy way to restrict the capabilities you provide to an LLM. The functions in the agency's standard library are written with PFA in mind. For example, `std::email` has several functions to send email. They have `allowList` and `blockList` parameters so that you can restrict who the LLM can send emails to.
+PFAs are a really easy way to restrict the capabilities you provide to an LLM. The functions in the agency's standard library are written with PFA in mind. For example, `std::messaging/email` has several functions to send email. They have `allowList` and `blockList` parameters so that you can restrict who the LLM can send emails to.
 
 Now obviously PFAs aren't magic. You as the function author need to make sure the restriction is actually obeyed. For example, if you wrote the readFile function in such a way that you just ignored the `dir` parameter, then the LLM could again read any file on your system. 
 

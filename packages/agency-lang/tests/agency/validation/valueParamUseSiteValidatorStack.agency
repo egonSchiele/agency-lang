@@ -4,7 +4,7 @@
 //   - the factory's own bounds (min 1 / max 10 from NumberInRange), and
 //   - the use-site `min 3`.
 // This exercises the IIFE single-evaluation path at runtime, not just codegen.
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

@@ -1,5 +1,5 @@
-import { barChart } from "std::chart"
-import { render } from "std::layout"
+import { barChart } from "std::ui/chart"
+import { render } from "std::ui/layout"
 
 // Data-param form.
 node testDataForm() {

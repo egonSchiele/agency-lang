@@ -7,7 +7,7 @@ name: "keyring"
 ## Usage
 
   ```ts
-  import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::keyring"
+  import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::auth/keyring"
 
   node main() {
     if (isKeyringAvailable()) {
@@ -54,7 +54,7 @@ Store a secret in the system keyring (macOS Keychain or Linux Secret Service). T
 
 **Throws:** `std::setSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/keyring.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L29))
 
 ### getSecret
 
@@ -78,7 +78,7 @@ Retrieve a secret from the system keyring by key. Returns the secret value as a 
 
 **Throws:** `std::getSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/keyring.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L45))
 
 ### deleteSecret
 
@@ -102,7 +102,7 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 
 **Throws:** `std::deleteSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/keyring.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L60))
 
 ### isKeyringAvailable
 
@@ -114,4 +114,4 @@ Check if the system keyring is available on this platform. Returns true on macOS
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/keyring.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L75))

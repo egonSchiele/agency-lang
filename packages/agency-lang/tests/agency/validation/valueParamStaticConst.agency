@@ -5,7 +5,7 @@
 // Returns an object of per-assertion isSuccess() flags so a regression diff
 // pinpoints which assertion misbehaved.
 
-import { min } from "std::validators"
+import { min } from "std::validation"
 
 static const DEFAULT_AGE = 18
 

@@ -1,7 +1,7 @@
 /** @module
   Usage from Agency code:
   ```ts
-  import { browserUse } from "std::browser"
+  import { browserUse } from "std::web/browser"
   node main() {
     const result = browserUse("Find the top 3 trending repos on GitHub today")
     print(result.output)

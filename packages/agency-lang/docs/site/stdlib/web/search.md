@@ -40,7 +40,7 @@ Search the web. Returns a list of results with title, url, and description. Set 
 
 **Throws:** `std::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L18))
 
 ### tavilySearch
 
@@ -70,4 +70,4 @@ Search the web with Tavily, a search API built for AI agents. Returns a list of 
 
 **Throws:** `std::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/search.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L59))

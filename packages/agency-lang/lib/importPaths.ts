@@ -94,17 +94,40 @@ export function getAgentsDir(): string {
 }
 
 /**
- * Returns all .agency files in the stdlib directory as absolute paths.
+ * Returns all .agency files in the stdlib directory (recursively) as
+ * absolute paths.
  */
 export function getStdlibFiles(): string[] {
-  try {
-    const dir = getStdlibDir();
-    return fs.readdirSync(dir)
-      .filter((f) => f.endsWith(".agency"))
-      .map((f) => path.join(dir, f));
-  } catch {
-    return [];
-  }
+  const dir = getStdlibDir();
+  const out: string[] = [];
+  const walk = (d: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) {
+        walk(full);
+      } else if (e.isFile() && e.name.endsWith(".agency")) {
+        out.push(full);
+      }
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+/**
+ * Map an absolute stdlib .agency file path to its `std::`-qualified module
+ * name (POSIX-separated, no extension). e.g. `<stdlib>/ui/table.agency`
+ * -> `std::ui/table`.
+ */
+export function stdlibModuleName(absPath: string): string {
+  const rel = path.relative(getStdlibDir(), absPath).replace(/\.agency$/, "");
+  return "std::" + rel.split(path.sep).join("/");
 }
 
 /**

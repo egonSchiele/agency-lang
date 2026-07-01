@@ -1,4 +1,4 @@
-import { box, row, column, text, raw, space, hline, vline } from "std::layout"
+import { box, row, column, text, raw, space, hline, vline } from "std::ui/layout"
 
 // Each test exercises one top-level constructor and returns the node
 // so the .test.json fixture can assert its `type` and the keys of its

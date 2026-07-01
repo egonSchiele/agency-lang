@@ -1,4 +1,4 @@
-import { box, row, column, text, vline, render } from "std::layout"
+import { box, row, column, text, vline, render } from "std::ui/layout"
 
 // Build a small splash-style layout and return the rendered string.
 // Forces color: false so the fixture stays plain ASCII regardless of

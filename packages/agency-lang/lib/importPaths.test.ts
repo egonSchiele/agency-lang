@@ -10,6 +10,8 @@ import {
   agencyImportTargets,
   parsePkgImport,
   resolvePkgAgencyPath,
+  getStdlibFiles,
+  stdlibModuleName,
 } from "./importPaths.js";
 import * as fs from "fs";
 import * as os from "os";
@@ -513,6 +515,21 @@ describe("isImportAllowed", () => {
     const policy = { allowKinds: ["bogus" as never] };
     expect(isImportAllowed("std::shell", policy)).toBe(false);
     expect(isImportAllowed("fs", policy)).toBe(false);
+  });
+});
+
+describe("getStdlibFiles recursion", () => {
+  it("includes modules nested in subdirectories", () => {
+    const files = getStdlibFiles();
+    const rels = files.map((f) => path.relative(getStdlibDir(), f));
+    expect(rels).toContain(path.join("agency", "eval.agency"));
+    expect(rels).toContain("array.agency");
+  });
+
+  it("stdlibModuleName qualifies subdir paths with std:: and forward slashes", () => {
+    const abs = path.join(getStdlibDir(), "agency", "eval.agency");
+    expect(stdlibModuleName(abs)).toBe("std::agency/eval");
+    expect(stdlibModuleName(path.join(getStdlibDir(), "array.agency"))).toBe("std::array");
   });
 });
 

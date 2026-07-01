@@ -1,4 +1,4 @@
-// std::layout — `box` container.
+// std::ui/layout — `box` container.
 //
 // A bordered panel. Single-child boxes use the child directly;
 // multi-child (or empty) wrap in an implicit `column` so the children

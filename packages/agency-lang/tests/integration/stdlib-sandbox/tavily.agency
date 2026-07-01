@@ -1,4 +1,4 @@
-import { tavilySearch } from "std::search"
+import { tavilySearch } from "std::web/search"
 import { env } from "std::system"
 
 node main() {

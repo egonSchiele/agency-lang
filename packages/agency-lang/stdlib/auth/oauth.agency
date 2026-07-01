@@ -5,7 +5,7 @@ import { fetchJSON } from "std::http"
   ## Usage
 
   ```ts
-  import { authorize, getAccessToken, isAuthorized } from "std::oauth"
+  import { authorize, getAccessToken, isAuthorized } from "std::auth/oauth"
 
   node main() {
     if (!isAuthorized("google-calendar")) {

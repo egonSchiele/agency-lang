@@ -4,7 +4,7 @@
 // the use site of the outer alias, while the inner alias also sees
 // the literal `18` for its `low` parameter.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

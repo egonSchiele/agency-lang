@@ -1,10 +1,10 @@
-import { LayoutNode, Width } from "std::layout"
+import { LayoutNode, Width } from "std::ui/layout"
 
 /** @module
-  ## Module: std::chart
+  ## Module: std::ui/chart
 
   Horizontal bar charts for terminal output. A `barChart(...)` returns a
-  layout node; render it with `render` from `std::layout`, so a chart
+  layout node; render it with `render` from `std::ui/layout`, so a chart
   nests inside `box` / `row` / `column`.
 
   Two construction styles, same result:
@@ -13,8 +13,8 @@ import { LayoutNode, Width } from "std::layout"
     arrays. `data[i].values` aligns to `keys` by index.
 
     ```ts
-    import { barChart } from "std::chart"
-    import { render } from "std::layout"
+    import { barChart } from "std::ui/chart"
+    import { render } from "std::ui/layout"
 
     const c = barChart(
       title: "Revenue by quarter",
@@ -105,7 +105,7 @@ export safe def barChart(
   Render a horizontal bar chart as a layout node. When calling this as
   an LLM tool, use the data form: pass `keys` (one per series) and
   `data` (one entry per category, whose `values` array lines up with
-  `keys` by index). Render the result with `render` from `std::layout`.
+  `keys` by index). Render the result with `render` from `std::ui/layout`.
 
   @param title - Heading shown above the chart
   @param mode - "grouped" draws one bar per key; "stacked" stacks the keys into one bar

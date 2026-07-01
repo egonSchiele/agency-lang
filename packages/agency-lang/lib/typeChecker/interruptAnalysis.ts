@@ -440,6 +440,28 @@ export function checkHandlerBodyInterrupts(
  *  through `interruptEffectsByFunction`, so transitive interrupts via tool
  *  calls, function refs in args, or `goto` targets are caught with no
  *  duplicated walker logic. */
+/**
+ * Every interrupt effect kind `body` can raise, transitively — direct raises
+ * plus the propagated kinds of everything it calls. The single source of the
+ * "what can this body raise" computation, shared by handler-offender detection
+ * and handler-param typing (H1).
+ */
+export function collectRaisableEffects(
+  body: AgencyNode[],
+  info: ScopeInfo,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  ctx: TypeCheckerContext,
+): string[] {
+  const profile = collectFromBody(body, info.scope, ctx);
+  const kinds = [...profile.kinds];
+  for (const callee of profile.callees) {
+    for (const k of interruptEffectsByFunction[callee] ?? []) {
+      addUnique(kinds, k.effect);
+    }
+  }
+  return kinds;
+}
+
 function collectHandlerOffenderKinds(
   node: { handler: { kind: string; functionName?: string; body?: any[] } },
   info: ScopeInfo,
@@ -450,14 +472,7 @@ function collectHandlerOffenderKinds(
     const ks = interruptEffectsByFunction[node.handler.functionName!] ?? [];
     return ks.map((k) => k.effect);
   }
-  const profile = collectFromBody(node.handler.body ?? [], info.scope, ctx);
-  const kinds = [...profile.kinds];
-  for (const callee of profile.callees) {
-    for (const k of interruptEffectsByFunction[callee] ?? []) {
-      addUnique(kinds, k.effect);
-    }
-  }
-  return kinds;
+  return collectRaisableEffects(node.handler.body ?? [], info, interruptEffectsByFunction, ctx);
 }
 
 /** Narrow a call-argument slot (which may be a positional Expression,

@@ -1,6 +1,6 @@
 import {
   _listHostedModels,
-  _refreshHostedCatalog,
+  _fetchModelData,
   type HostedModelInfo,
 } from "../stdlib/llm.js";
 
@@ -55,9 +55,9 @@ export async function modelsList(opts: ModelsListOpts): Promise<void> {
 }
 
 export async function modelsRefresh(url?: string): Promise<void> {
-  const res = await _refreshHostedCatalog(url ?? "");
+  const res = await _fetchModelData(url ?? "");
   if (res.ok) {
-    console.log(`Refreshed hosted model catalog (${res.count} models).`);
+    console.log(res.json); // stdout only — clean JSON for redirection
   } else {
     console.error(`Refresh failed: ${res.error}`);
     process.exitCode = 1;

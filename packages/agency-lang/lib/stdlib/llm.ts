@@ -110,18 +110,17 @@ export function _hostedModelInfo(name: string): HostedModelInfo | null {
   return model && model.type === "text" ? toHostedInfo(model) : null;
 }
 
-/** Fetch a fresh model-data blob and register it into smoltalk's in-memory
- *  catalog for this process. Returns a plain status (no smoltalk types leak
- *  out). NOTE: registration is process-local — it does not persist to disk. */
-export async function _refreshHostedCatalog(
+/** Fetch the latest model-data blob and return it pre-serialized. No
+ *  registration — the CLI prints this to stdout for the user to save and later
+ *  load with `std::llm.loadModelData`. */
+export async function _fetchModelData(
   url: string,
-): Promise<{ ok: boolean; count: number; error: string }> {
+): Promise<{ ok: boolean; json: string; error: string }> {
   const res = await refreshModels(url ? { url } : {});
   if (res.success) {
-    registerModelData(res.value);
-    return { ok: true, count: res.value.models.length, error: "" };
+    return { ok: true, json: JSON.stringify(res.value, null, 2), error: "" };
   }
-  return { ok: false, count: 0, error: res.error };
+  return { ok: false, json: "", error: res.error };
 }
 
 /** Read a model-data JSON file (the shape `agency models refresh` prints) and

@@ -441,4 +441,46 @@ describe("agency.interrupt — recursive-handler guard", () => {
     expect(results).toHaveLength(N);
     for (const r of results) expect(isApproved(r)).toBe(true);
   });
+
+  // Realistic mix: wide concurrency AND genuine (but shallow, legitimate)
+  // nesting at the same time — e.g. an LLM fires many tool calls in one
+  // round, and each tool's handler itself raises one further interrupt. Each
+  // lineage reaches depth 2, well under the limit; the guard must count that
+  // per-lineage depth (2), NOT the sum across all the concurrent lineages
+  // (~2·N), which the old shared counter did.
+  it("allows wide concurrency where each lineage also nests legitimately", async () => {
+    const ctx = makeMockCtx();
+    // One handler resolves both kinds. For an "outer" interrupt it raises
+    // exactly ONE "inner" interrupt (depth-2 nesting) before approving; an
+    // "inner" interrupt it approves outright, so nesting is bounded at 2 and
+    // never recurses into the guard.
+    const handler = async (intr: { effect: string }) => {
+      if (intr.effect === "outer") {
+        await agency.interrupt({ effect: "inner", message: "nested once", data: {} });
+      }
+      return approve("ok");
+    };
+    const N = 15; // wide fan-out; depth per lineage is only 2
+    let results: any[] = [];
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "parallel-nested" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(handler, async () => {
+            results = await Promise.all(
+              Array.from({ length: N }, (_, i) =>
+                agency.interrupt({
+                  effect: "outer",
+                  message: `outer ${i}`,
+                  data: { i },
+                }),
+              ),
+            );
+          });
+        });
+        return "done";
+      }),
+    );
+    expect(results).toHaveLength(N);
+    for (const r of results) expect(isApproved(r)).toBe(true);
+  });
 });

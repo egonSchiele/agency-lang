@@ -4,7 +4,7 @@ import { _sendSms } from "agency-lang/stdlib-lib/sms.js"
   ## Usage
 
   ```ts
-  import { sendSms } from "std::sms"
+  import { sendSms } from "std::messaging/sms"
 
   node main() {
     const result = sendSms("+15551234567", "Hello from my agent!")

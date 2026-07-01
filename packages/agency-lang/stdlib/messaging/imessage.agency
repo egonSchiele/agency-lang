@@ -4,7 +4,7 @@ import { _sendIMessage } from "agency-lang/stdlib-lib/imessage.js"
   ## Usage
 
   ```ts
-  import { sendIMessage } from "std::imessage"
+  import { sendIMessage } from "std::messaging/imessage"
 
   node main() {
     const result = sendIMessage("+15551234567", "Hello from my agent!")

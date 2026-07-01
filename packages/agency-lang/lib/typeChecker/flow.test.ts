@@ -9,22 +9,29 @@ import {
   widenAtLoopBackEdge,
   flowHasNarrowFor,
   isPrefixOf,
+  segKey,
   type FlowNode,
   type FlowEnvironment,
 } from "./flow.js";
 import { Scope } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
 import type { VariableType } from "../types.js";
+import type { PathSegment } from "./flow.js";
 
 const STR: VariableType = { type: "primitiveType", value: "string" };
 const NUM: VariableType = { type: "primitiveType", value: "number" };
+const NUMA: VariableType = { type: "arrayType", elementType: NUM };
+
+// Path-segment constructors (PathSegment[] replaced string[] chains in M2).
+const prop = (name: string): PathSegment => ({ kind: "prop", name });
+const idx = (index: number): PathSegment => ({ kind: "index", index });
 
 describe("referenceKey", () => {
   it("is the bare variable for an empty chain", () => {
     expect(referenceKey({ variable: "x", chain: [] })).toBe("x");
   });
   it("dotted-joins a non-empty chain", () => {
-    expect(referenceKey({ variable: "u", chain: ["profile", "email"] })).toBe("u.profile.email");
+    expect(referenceKey({ variable: "u", chain: [prop("profile"), prop("email")] })).toBe("u.profile.email");
   });
 });
 
@@ -58,7 +65,7 @@ describe("uniteTypes", () => {
 function env(scope: Scope): FlowEnvironment {
   return { scope, flowOf: new WeakMap(), typeAliases: {}, memo: new WeakMap() };
 }
-const ref = (variable: string) => ({ variable, chain: [] as string[] });
+const ref = (variable: string) => ({ variable, chain: [] as PathSegment[] });
 
 // A discriminated union: { kind: "a", v: string } | { kind: "b", v: number }
 const memberA: VariableType = {
@@ -271,7 +278,7 @@ describe("widenAtLoopBackEdge", () => {
 const RESULT: VariableType = { type: "resultType", successType: NUM, failureType: STR };
 // box : { r: Result<number, string> }
 const boxType: VariableType = { type: "objectType", properties: [{ key: "r", value: RESULT }] };
-const pathRef = (variable: string, ...chain: string[]) => ({ variable, chain });
+const pathRef = (variable: string, ...names: string[]) => ({ variable, chain: names.map(prop) });
 const successRefine = {
   kind: "discriminant" as const,
   prop: "success",
@@ -401,6 +408,15 @@ describe("typeAt — path prefix invalidation (M1)", () => {
     const after = typeAt(pathRef("box", "r"), loop, env(s));
     expect(typeof after === "object" && after.type).toBe("resultType");
   });
+
+  it("an access-chain write (path-keyed assign) drops flowHasNarrowFor AND re-resolves typeAt", () => {
+    // The flow LAYER already handles a path-keyed assign (referenceKey + isPrefixOf
+    // are generic); Task 4 only makes flowBuilder EMIT this node for `box.r = …`.
+    const s = boxScope();
+    const write: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    expect(flowHasNarrowFor(pathRef("box", "r"), write)).toBe(false);
+    expect(typeAt(pathRef("box", "r"), write, env(s))).toEqual(RESULT);
+  });
 });
 
 describe("flowHasNarrowFor (M1 strict gate)", () => {
@@ -454,5 +470,71 @@ describe("isPrefixOf", () => {
 
   it("a diverging chain segment is not a prefix", () => {
     expect(isPrefixOf(pathRef("box", "q"), pathRef("box", "r", "value"))).toBe(false);
+  });
+});
+
+describe("PathSegment helpers + index resolution (M2)", () => {
+  it("referenceKey encodes property and index segments distinctly", () => {
+    expect(referenceKey({ variable: "box", chain: [prop("r")] })).toBe("box.r");
+    expect(referenceKey({ variable: "arr", chain: [idx(0)] })).toBe("arr.[0]");
+    expect(referenceKey({ variable: "x", chain: [] })).toBe("x");
+    expect(referenceKey({ variable: "m", chain: [prop("a"), idx(2), prop("b")] })).toBe("m.a.[2].b");
+  });
+
+  it("segKey distinguishes a numeric property from an index", () => {
+    expect(segKey(prop("0"))).toBe("0");
+    expect(segKey(idx(0))).toBe("[0]");
+    expect(segKey(prop("0"))).not.toBe(segKey(idx(0)));
+  });
+
+  it("isPrefixOf compares segments structurally (prop vs index do not alias)", () => {
+    expect(isPrefixOf({ variable: "arr", chain: [] }, { variable: "arr", chain: [idx(0)] })).toBe(true);
+    expect(isPrefixOf({ variable: "arr", chain: [idx(0)] }, { variable: "arr", chain: [idx(0), prop("value")] })).toBe(true);
+    expect(isPrefixOf({ variable: "arr", chain: [idx(0)] }, { variable: "arr", chain: [idx(1), prop("value")] })).toBe(false);
+    expect(isPrefixOf({ variable: "arr", chain: [prop("0")] }, { variable: "arr", chain: [idx(0), prop("v")] })).toBe(false);
+  });
+
+  // resolvePath is module-private (declaredPathType is the public seam); exercise
+  // it through typeAt's `start` case, which calls it for a non-empty chain.
+  const startWith = (name: string, t: VariableType): FlowNode => {
+    const s = new Scope("t");
+    s.declare(name, t);
+    return { kind: "start", scope: s };
+  };
+  const at = (variable: string, chain: PathSegment[], t: VariableType) =>
+    typeAt({ variable, chain }, startWith(variable, t), env(startWithScope(variable, t)));
+  const startWithScope = (name: string, t: VariableType): Scope => {
+    const s = new Scope("t");
+    s.declare(name, t);
+    return s;
+  };
+
+  it("resolves an index segment into the array element type", () => {
+    expect(at("arr", [idx(0)], NUMA)).toEqual(NUM);
+    expect(at("arr", [idx(5)], NUMA)).toEqual(NUM); // any literal index → elementType
+  });
+
+  it("returns any for an index on a non-array, non-Record receiver", () => {
+    expect(at("n", [idx(0)], NUM)).toBe("any");
+  });
+
+  it("resolves an index segment into a Record<K,V> value type", () => {
+    const REC: VariableType = { type: "genericType", name: "Record", typeArgs: [STR, NUM] };
+    expect(at("m", [idx(0)], REC)).toEqual(NUM);
+  });
+
+  it("returns any for an index hop into an objectType", () => {
+    const OBJ: VariableType = { type: "objectType", properties: [{ key: "a", value: NUM }] };
+    expect(at("o", [idx(0)], OBJ)).toBe("any");
+  });
+
+  it("assigning arr[0] invalidates arr[0] (index exact-key + element re-resolve)", () => {
+    const s = new Scope("t");
+    s.declare("arr", { type: "arrayType", elementType: RESULT });
+    const start: FlowNode = { kind: "start", scope: s };
+    const narrowed: FlowNode = { kind: "narrow", prev: start, ref: { variable: "arr", chain: [idx(0)] }, refine: successRefine };
+    const reassigned: FlowNode = { kind: "assign", prev: narrowed, ref: { variable: "arr", chain: [idx(0)] }, type: RESULT };
+    const after = typeAt({ variable: "arr", chain: [idx(0)] }, reassigned, env(s));
+    expect(typeof after === "object" && after.type).toBe("resultType");
   });
 });

@@ -4,60 +4,70 @@ import { narrowByRefine } from "./narrowing.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
 import { isNever, safeResolveType } from "./assignability.js";
-
-// NOTE: `narrowUnionByDiscriminant` and `NarrowCandidate` are added in Task 2
-// and Task 3 respectively, alongside the code that uses them. Keeping each
-// commit's imports tight to its surface area.
+// The pure path-segment core lives in its own module so `narrowing.ts` can
+// value-import it (chainToSegments) without a runtime cycle back through
+// `flow.ts` (which value-imports `narrowByRefine` from `narrowing.ts`). Re-export
+// it here so existing importers of `flow.js` are unaffected.
+import type { PathSegment, Reference } from "./pathSegments.js";
+import { referenceKey, isPrefixOf } from "./pathSegments.js";
+export {
+  type PathSegment,
+  type Reference,
+  segKey,
+  referenceKey,
+  isPrefixOf,
+  toSegment,
+  chainToSegments,
+  stablePrefix,
+} from "./pathSegments.js";
 
 /**
- * A normalized reference path — the bound thing being narrowed. Today the
- * builder only emits empty chains (bare variables); the `chain` is reserved so
- * property-path narrowing (`if (user.profile != null) { user.profile.email }`)
- * can be added without revisiting `FlowNode` or `typeAt`'s signature.
- */
-export type Reference = { variable: string; chain: string[] };
-
-/** Stable string key for a reference (map keys, equality). */
-export function referenceKey(ref: Reference): string {
-  return ref.chain.length === 0 ? ref.variable : `${ref.variable}.${ref.chain.join(".")}`;
-}
-
-/**
- * Resolve successive property hops on a type — DIAGNOSTIC-FREE (unlike
+ * Resolve successive path hops on a type — DIAGNOSTIC-FREE (unlike
  * `synthValueAccess`, which emits strict-member-access errors). Returns "any" on
- * any hop that can't be resolved (missing property, non-object/Record receiver),
- * so path narrowing stays conservative. M1: property hops only.
+ * any hop that can't be resolved (missing property, non-object/Record/array
+ * receiver), so path narrowing stays conservative. Handles property and
+ * literal-index hops (no tuple types exist, so an index resolves to the array
+ * element type regardless of the index value).
  */
 function resolvePath(
   baseType: ScopeType,
-  chain: string[],
+  chain: PathSegment[],
   aliases: Record<string, TypeAliasEntry>,
 ): ScopeType {
   let current: ScopeType = baseType;
-  for (const prop of chain) {
+  for (const seg of chain) {
     if (current === "any") return "any";
     const resolved = safeResolveType(current, aliases);
-    if (resolved.type === "objectType") {
-      const p = resolved.properties.find((pr) => pr.key === prop);
-      current = p ? p.value : "any";
-    } else if (resolved.type === "genericType" && resolved.name === "Record") {
-      current = resolved.typeArgs[1];
+    if (seg.kind === "prop") {
+      if (resolved.type === "objectType") {
+        const p = resolved.properties.find((pr) => pr.key === seg.name);
+        current = p ? p.value : "any";
+      } else if (resolved.type === "genericType" && resolved.name === "Record") {
+        current = resolved.typeArgs[1];
+      } else {
+        return "any";
+      }
     } else {
-      return "any";
+      // index segment: array element, or Record value (Record<K,V>[i] → V)
+      if (resolved.type === "arrayType") {
+        current = resolved.elementType;
+      } else if (resolved.type === "genericType" && resolved.name === "Record") {
+        current = resolved.typeArgs[1];
+      } else {
+        return "any";
+      }
     }
   }
   return current;
 }
 
-/**
- * True if `prefix` is a proper prefix of `path` (same variable; `prefix.chain`
- * is a leading sub-sequence of `path.chain`). Used for prefix invalidation:
- * reassigning `box` (or `box.r`) drops a narrowing on `box.r` (or `box.r.value`).
- */
-export function isPrefixOf(prefix: Reference, path: Reference): boolean {
-  if (prefix.variable !== path.variable) return false;
-  if (prefix.chain.length >= path.chain.length) return false;
-  return prefix.chain.every((seg, i) => seg === path.chain[i]);
+/** The DECLARED (un-narrowed) type of a path, from the base var's scope type. */
+export function declaredPathType(
+  scope: Scope,
+  ref: Reference,
+  aliases: Record<string, TypeAliasEntry>,
+): ScopeType {
+  return resolvePath(scope.lookup(ref.variable) ?? "any", ref.chain, aliases);
 }
 
 /**

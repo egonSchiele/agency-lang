@@ -1,4 +1,5 @@
 import type { AgencyNode } from "../types.js";
+import type { AccessChainElement } from "../types/access.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { expressionChildren, walkNodes } from "../utils/node.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
@@ -9,7 +10,29 @@ import {
   wrapFacts,
   mergeFlows,
   widenAtLoopBackEdge,
+  chainToSegments,
+  declaredPathType,
 } from "./flow.js";
+
+/**
+ * The flow node after an access-chain write (`obj.field = x`, `arr[0] = x`): a
+ * path-keyed `assign` so the path's narrowing is dropped (the field/element was
+ * rebound). Returns `null` for an UNSTABLE target (`obj[i()] = x`) — it can't be
+ * keyed, so it passes through (a known soundness gap; no aliasing analysis). The
+ * assigned type is the path's DECLARED (un-narrowed) type, matching the
+ * bare-rebind case.
+ */
+function assignNodeForAccessChainWrite(
+  variableName: string,
+  accessChain: AccessChainElement[],
+  flow: FlowNode,
+  env: FlowEnvironment,
+): FlowNode | null {
+  const chain = chainToSegments(accessChain);
+  if (chain === null) return null;
+  const ref = { variable: variableName, chain };
+  return { kind: "assign", prev: flow, ref, type: declaredPathType(env.scope, ref, env.typeAliases) };
+}
 
 /**
  * Attach `flow` to every variable-referencing node inside an expression. The
@@ -111,13 +134,18 @@ const statementRules: StatementRuleTable = {
     // node has no flowOf entry of its own, so without this the base would resolve
     // to its flat (un-narrowed) scope type. The check reads this entry to narrow
     // the base via typeAt.
+    // env.flowOf.set(node, flow) above records the PRE-write flow on the node
+    // for the Phase-B access-chain target check — DO NOT reorder it below the
+    // branches.
     env.flowOf.set(node, flow);
-    // Only a bare `x = …` / `let x = …` rebinds the variable. Skip access-chain
-    // writes (`obj.x = 5` — a mutation, not a rebind; matches walkScopeBody)
-    // and destructuring patterns (`node.variableName` not meaningful). The RHS
-    // is still attached above; PR 2 must not trust assign nodes for these.
-    if (node.accessChain || node.pattern) {
-      return flow;
+    if (node.pattern) {
+      return flow; // destructuring — variableName not meaningful
+    }
+    if (node.accessChain) {
+      // A write to a STABLE path (`obj.field = x`, `arr[0] = x`) emits a
+      // path-keyed assign so the path's narrowing drops. Unstable targets
+      // (`obj[i()] = x`) can't be keyed → pass through unchanged.
+      return assignNodeForAccessChainWrite(node.variableName, node.accessChain, flow, env) ?? flow;
     }
     return {
       kind: "assign",

@@ -250,3 +250,210 @@ node main() {
 }`).some((m) => /only available on a success Result/.test(m))).toBe(true);
   });
 });
+
+describe("member-path scrutinee narrowing — multi-hop + index (M2)", () => {
+  it("literal-index Result guard narrows (rs[0].value)", () => {
+    expect(check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  if (isSuccess(rs[0])) {
+    let n: number = rs[0].value
+  }
+}`)).toEqual([]);
+  });
+
+  it("HEADLINE: array-nested Result pattern narrows the binder", () => {
+    expect(check(`${TRY}
+def takesNumber(n: number): number { return n }
+def f(pair: Result<number, string>[]): number {
+  match (pair) {
+    [success(v), _] => takesNumber(v)
+    _ => 0
+  }
+}`)).toEqual([]);
+  });
+
+  it("multi-hop property guard narrows (o.inner.r)", () => {
+    expect(check(`${TRY}
+type Inner = { r: Result<number, string> }
+type Outer = { inner: Inner }
+def f(o: Outer): void {
+  if (isSuccess(o.inner.r)) {
+    let n: number = o.inner.r.value
+  }
+}`)).toEqual([]);
+  });
+
+  it("CRITICAL: un-narrowed index access STILL errors", () => {
+    expect(check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  let n: number = rs[0].value
+}`).some((m) => /only available on a success Result/.test(m))).toBe(true);
+  });
+
+  it("index narrowing does not leak across indices (rs[0] guarded, rs[1] not)", () => {
+    expect(check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  if (isSuccess(rs[0])) {
+    let n: number = rs[1].value
+  }
+}`).some((m) => /only available on a success Result/.test(m))).toBe(true);
+  });
+
+  it("narrowing flows through a pipe operand (rs[0].value |> double)", () => {
+    // `|>` yields a Result (auto-unwrap semantics), so we don't pin the binding
+    // type — assert ONLY that the narrowed operand `rs[0].value` raised no
+    // strict-access error (i.e. narrowing reached the pipe operand).
+    expect(check(`${TRY}
+def double(x: number): number { return x * 2 }
+def f(rs: Result<number, string>[]): void {
+  if (isSuccess(rs[0])) {
+    let n = rs[0].value |> double
+  }
+}`).some((m) => /only available on a success Result/.test(m))).toBe(false);
+  });
+
+  it("narrowing flows into a trailing block body (… as value { rs[0].value })", () => {
+    expect(check(`${TRY}
+def wrap(value: number, block: (number) => number): number { return block(value) }
+def f(rs: Result<number, string>[]): void {
+  if (isSuccess(rs[0])) {
+    let n: number = wrap(3) as value {
+      let inner: number = rs[0].value
+      return inner
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("LONGEST PREFIX: o.inner.r.value reads the longer (more precise) narrowing", () => {
+    expect(check(`${TRY}
+type In = { r: Result<number, string> }
+type Out = { inner: In | null }
+def f(o: Out): void {
+  if (o.inner != null) {
+    if (isSuccess(o.inner.r)) {
+      let n: number = o.inner.r.value
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("BREAK-vs-NULL: a stable (multi-hop) prefix narrows under an unstable later hop", () => {
+    // t.mid.item is narrowed (2-hop receiver discriminant); the access
+    // t.mid.item.data[pick()] has an UNSTABLE trailing index. stablePrefix must
+    // still yield [mid,item,data] (not null) so the narrowed t.mid.item prefix is
+    // consulted and `.data` resolves on the ok member. Requires longest-prefix +
+    // break-vs-null together.
+    expect(check(`
+type Item = { kind: "ok", data: number[] } | { kind: "err", msg: string }
+type Mid = { item: Item }
+type Top = { mid: Mid }
+def pick(): number { return 0 }
+def f(t: Top): void {
+  if (t.mid.item.kind == "ok") {
+    let n: number = t.mid.item.data[pick()]
+  }
+}`)).toEqual([]);
+  });
+
+  it("deeper multi-hop: isSuccess(x.a.b.c) narrows x.a.b.c.value", () => {
+    expect(check(`${TRY}
+type C = { c: Result<number, string> }
+type B = { b: C }
+type A = { a: B }
+def f(x: A): void {
+  if (isSuccess(x.a.b.c)) {
+    let n: number = x.a.b.c.value
+  }
+}`)).toEqual([]);
+  });
+
+  it("discriminant on an index path: if (rs[0].kind == \"click\") narrows rs[0].x", () => {
+    expect(check(`
+type Ev = { kind: "click", x: number } | { kind: "scroll", d: number }
+def takesNumber(n: number): void {}
+def f(rs: Ev[]): void {
+  if (rs[0].kind == "click") { takesNumber(rs[0].x) }
+}`)).toEqual([]);
+  });
+
+  it("index else-branch (isFailure(rs[0]) else → success)", () => {
+    expect(check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  if (isFailure(rs[0])) {
+  } else {
+    let n: number = rs[0].value
+  }
+}`)).toEqual([]);
+  });
+
+  it("index post-guard return (the major Result idiom)", () => {
+    expect(check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  if (isFailure(rs[0])) { return }
+  let n: number = rs[0].value
+}`)).toEqual([]);
+  });
+});
+
+describe("member-path scrutinee narrowing — write invalidation (M2 soundness)", () => {
+  it("SOUNDNESS: mutating the path (b.r = …) drops the narrowing — exactly one error", () => {
+    const errs = check(`${TRY}
+type Box = { r: Result<number, string> }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    b.r = failure("x")
+    let n: number = b.r.value
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("SOUNDNESS: writing rs[0] = failure(…) drops rs[0] narrowing — exactly one error", () => {
+    const errs = check(`${TRY}
+def f(rs: Result<number, string>[]): void {
+  if (isSuccess(rs[0])) {
+    rs[0] = failure("x")
+    let n: number = rs[0].value
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("SOUNDNESS: writing b.other = … keeps b.r narrowed (no spurious error)", () => {
+    expect(check(`${TRY}
+type Box = { r: Result<number, string>, other: number }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    b.other = 5
+    let n: number = b.r.value
+  }
+}`)).toEqual([]);
+  });
+
+  it("SOUNDNESS: writing b.inner = … drops the b.inner.r narrowing — exactly one error", () => {
+    const errs = check(`${TRY}
+type In = { r: Result<number, string> }
+type Box = { inner: In }
+def otherIn(): In { return { r: failure("x") } }
+def f(b: Box): void {
+  if (isSuccess(b.inner.r)) {
+    b.inner = otherIn()
+    let n: number = b.inner.r.value
+  }
+}`);
+    expect(errs.filter((m) => /only available on a success Result/.test(m)).length).toBe(1);
+  });
+
+  it("SOUNDNESS: an unstable write target neither errors nor drops unrelated narrowing", () => {
+    expect(check(`${TRY}
+type Box = { r: Result<number, string>, xs: number[] }
+def idx(): number { return 0 }
+def f(b: Box): void {
+  if (isSuccess(b.r)) {
+    b.xs[idx()] = 9
+    let n: number = b.r.value
+  }
+}`)).toEqual([]);
+  });
+});

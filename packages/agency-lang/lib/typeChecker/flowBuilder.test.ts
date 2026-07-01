@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { Scope } from "./scope.js";
-import { typeAt, type FlowEnvironment, type FlowNode } from "./flow.js";
+import { typeAt, type FlowEnvironment, type FlowNode, type PathSegment } from "./flow.js";
 import { buildFlowGraph } from "./flowBuilder.js";
 import { walkNodes } from "../utils/node.js";
 import type { AgencyNode, VariableType } from "../types.js";
@@ -32,7 +32,7 @@ function freshEnv(
   return { scope, flowOf: new WeakMap(), typeAliases, memo: new WeakMap() };
 }
 
-const ref = (variable: string) => ({ variable, chain: [] as string[] });
+const ref = (variable: string) => ({ variable, chain: [] as PathSegment[] });
 
 function find(body: AgencyNode[], pred: (n: AgencyNode) => boolean): AgencyNode {
   for (const { node } of walkNodes(body)) {
@@ -129,6 +129,19 @@ describe("buildFlowGraph — linear", () => {
     const access = find(
       body,
       (n) => n.type === "valueAccess" && n.base.type === "variableName" && n.base.value === "obj",
+    );
+    expect(env.flowOf.get(access)).toBeDefined();
+  });
+
+  it("REGRESSION (M2): an index valueAccess (arr[0]) gets a flowOf entry", () => {
+    const body = parseBody(`let arr = [1, 2]\nprint(arr[0])`);
+    const scope = new Scope("t");
+    scope.declare("arr", { type: "arrayType", elementType: NUM });
+    const env = freshEnv(scope);
+    buildFlowGraph(body, { kind: "start", scope }, env);
+    const access = find(
+      body,
+      (n) => n.type === "valueAccess" && n.base.type === "variableName" && n.base.value === "arr",
     );
     expect(env.flowOf.get(access)).toBeDefined();
   });

@@ -88,11 +88,12 @@ node main() {
     expect(errs.some((e) => /does not exist|not assignable/i.test(e.message))).toBe(false);
   });
 
-  it("NOT a breaking change: reading an unknown field is still allowed", () => {
-    // Field-access checking runs in checkScopes, BEFORE this pass re-types `e`.
-    // The refined `.effect` type only ever reaches checkMatchExhaustiveness, so
-    // no field read (known or unknown) is re-checked against the object type —
-    // `e.notARealField` stays allowed exactly as it was when `e` was `any`.
+  it("H3: reading an unknown field on `e` is now a 'does not exist' error", () => {
+    // This pass now runs BEFORE checkScopes, so `e` is the closed interrupt
+    // object `{ effect, message, data, origin }` during field-access checking.
+    // A field outside those four is a real error — the interrupt object has
+    // exactly those members. (Under H1 this read was permissively allowed
+    // because the retype happened after checkScopes.)
     const errs = errorsFrom(`
 effect mytest::alpha { }
 def risky() { raise mytest::alpha("a", {}) }
@@ -101,7 +102,7 @@ node main() {
     return e.notARealField
   }
 }`);
-    expect(errs.some((e) => /does not exist/i.test(e.message))).toBe(false);
+    expect(errs.some((e) => /does not exist/i.test(e.message))).toBe(true);
   });
 
   it("functionRef handler is untouched (no crash, no spurious diagnostic)", () => {
@@ -229,5 +230,67 @@ node main() {
   }
 }`);
     expect(warnings.some((w) => /not exhaustive/i.test(w.message))).toBe(false);
+  });
+});
+
+// A "hard error" is any diagnostic with severity "error" (or no explicit
+// severity, which renders as an error — e.g. type-mismatch diagnostics).
+const hardErrorsFrom = (source: string) =>
+  allErrors(source).filter((e) => (e.severity ?? "error") === "error");
+
+describe("handler param payload typing (H3)", () => {
+  it("types e as a discriminated union so match(e) checks B2 exhaustiveness", () => {
+    const warnings = warningsFrom(`
+effect payl::a { x: number }
+effect payl::b { y: string }
+def risky() { raise payl::a("a", { x: 1 })\n raise payl::b("b", { y: "s" }) }
+node main() {
+  handle { risky() } with (e) {
+    match (e) {
+      { effect: "payl::a" } => 1
+    }
+  }
+}`);
+    // match(e) over the 2-member discriminated union is non-exhaustive: missing payl::b.
+    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /payl::b/.test(w.message))).toBe(true);
+  });
+
+  it("errors on a payload-shape mismatch after narrowing on e.effect", () => {
+    const errs = hardErrorsFrom(`
+effect h3::deposit { amount: number }
+def takesString(s: string): string { return s }
+def risky() { raise h3::deposit("d", { amount: 1 }) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "h3::deposit") { takesString(e.data.amount) }
+  }
+}`);
+    expect(errs.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a correctly-typed payload use after narrowing", () => {
+    const errs = hardErrorsFrom(`
+effect h3::deposit { amount: number }
+def takesNum(n: number): number { return n }
+def risky() { raise h3::deposit("d", { amount: 1 }) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "h3::deposit") { takesNum(e.data.amount) }
+  }
+}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("still refines e.effect for exhaustiveness (H1 regression)", () => {
+    const warnings = warningsFrom(`
+effect h3::a { }
+effect h3::b { }
+def risky() { raise h3::a("a", {})\n raise h3::b("b", {}) }
+node main() {
+  handle { risky() } with (e) {
+    match (e.effect) { "h3::a" => 1 }
+  }
+}`);
+    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /h3::b/.test(w.message))).toBe(true);
   });
 });

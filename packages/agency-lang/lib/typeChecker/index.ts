@@ -43,7 +43,7 @@ import {
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
-import { checkEffectPayloads } from "./effectPayloadCheck.js";
+import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
@@ -294,14 +294,29 @@ export class TypeChecker {
     // 3. Build scopes (collects variable types and checks assignments)
     const scopes = buildScopes(ctx);
 
-    // 3b. Build the flow graph (PR 1b — populated, not yet consulted).
+    // 3a. Analyze interrupts (pure — returns transitive effect sets and pushes
+    // no diagnostics; the ctx.errors sites in interruptAnalysis.ts belong to the
+    // consumer passes below). Moved ahead of flow/checkScopes so the handler-param
+    // refinement can run before field-access checking.
+    const interruptEffectsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
+
+    // 3b. Build the ambient effect→payload registry ONCE and share it with both
+    // the handler-param refinement (below) and checkEffectPayloads (6d). Building
+    // it once avoids double-reporting payload conflicts.
+    const effectRegistry = buildEffectRegistry(ctx);
+
+    // 3c. H3: re-type each eligible inline handler param `e` as a per-effect
+    // discriminated union carrying that effect's declared payload as `data`.
+    // MUST run before checkScopes so `e.data` usage sites narrow correctly.
+    refineInlineHandlerParams(scopes, interruptEffectsByFunction, ctx, effectRegistry);
+
+    // 3d. Build the flow graph AFTER the param retype, so its `typeAt` oracle is
+    // seeded with the refined `e` (no stale-memo reset needed).
     buildFlowGraphs(scopes, ctx);
 
-    // 4. Check function calls, return types, and expressions
+    // 4. Check function calls, return types, and expressions. `e.data` is now
+    // payload-typed → narrowing on `e.effect` makes `e.data` concrete here.
     checkScopes(scopes, ctx);
-
-    // 5. Analyze interrupts using functionRefType
-    const interruptEffectsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
 
     // 5a. Build the per-function interrupt call graph used by
     // `agency interrupts` for static handler-set analysis. The
@@ -324,15 +339,8 @@ export class TypeChecker {
     // exceeded by its transitively-inferred effect set.
     checkRaisesDeclarations(interruptEffectsByFunction, ctx);
 
-    // 6d. Check interrupt payloads against `effect` declarations.
-    checkEffectPayloads(scopes, ctx);
-
-    // 6d-bis. H1: refine each eligible inline handler param's `.effect` to the
-    // literal union of effect kinds its body can raise (now that the call-graph
-    // exists), so `checkMatchExhaustiveness` sees a closed literal-union
-    // scrutinee. Type-only; runs after every interrupt check (none of which read
-    // the param type) and before exhaustiveness.
-    refineInlineHandlerParams(scopes, interruptEffectsByFunction, ctx);
+    // 6d. Check interrupt payloads against `effect` declarations (shared registry).
+    checkEffectPayloads(scopes, ctx, effectRegistry);
 
     // 6e. Match exhaustiveness over closed value types (opt-in, default silent).
     checkMatchExhaustiveness(scopes, ctx);

@@ -7,9 +7,9 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
-import { agentReply, switchModel, Session } from "../agent.agency"
+import { agentReply, switchModel, reactToSlotChange, Session } from "../agent.agency"
 import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
-import { resolveAll, buildLayers, Ctx } from "../lib/resolution.agency"
+import { resolveAll, buildLayers, Ctx, SlotChange } from "../lib/resolution.agency"
 import { knownProviders, Resolved } from "../lib/models.agency"
 import { saveSettings } from "../lib/settings.agency"
 
@@ -88,4 +88,23 @@ node switchDoesNotMutatePrior(): string {
   const prior = freshSession()
   switchModel(prior, "gpt-5.5", SWITCH_CTX, SWITCH_BEFORE)
   return prior.pin
+}
+
+// A main-slot provider change emits the recall notice (and pauses memory).
+node reactNotifiesOnMainProviderChange(): boolean {
+  const change: SlotChange = {
+    slot: "main",
+    before: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
+    after: { model: "gpt-5.5", provider: "openai-responses", via: "y" }
+  }
+  return reactToSlotChange(change)
+}
+// A same-provider change does not — recall is unaffected.
+node reactSilentOnSameProvider(): boolean {
+  const change: SlotChange = {
+    slot: "main",
+    before: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
+    after: { model: "claude-opus-4-8", provider: "anthropic", via: "y" }
+  }
+  return reactToSlotChange(change)
 }

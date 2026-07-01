@@ -209,7 +209,9 @@ export def configureLocalModel(value: string) {
     return
   }
   const modelPath = result.value
-  setLlmOptions({ model: modelPath, provider: "llama-cpp" })
-  slowModel = modelPath
-  slowProvider = "llama-cpp"
+  // Local pins every slot to the one llama-cpp model. Route through
+  // applyResolved so getResolvedSlots() reflects it (the explain view + the
+  // /local recall diff). Embedding is empty — llama-cpp has no embed endpoint.
+  const r: Resolved = { model: modelPath, provider: "llama-cpp", via: "local" }
+  applyResolved({ main: r, reasoning: r, embedding: { model: "", provider: "llama-cpp", via: "local" } })
 }

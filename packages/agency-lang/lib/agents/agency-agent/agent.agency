@@ -25,7 +25,7 @@ import {
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { printLocalCatalog } from "std::agency/local"
+import { printLocalCatalog, localModelsSupported, listModelNames } from "std::agency/local"
 import { configureModels, configureLocalModel, enableAgentMemory, getResolvedSlots, applyResolved, promoteAll, currentProvider } from "./shared.agency"
 import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
 import { buildLayers, resolveAll, diffResolved, Ctx, SlotChange } from "./lib/resolution.agency"
@@ -254,6 +254,7 @@ def builtinPalette(): Record<string, string> {
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
     "/model": "Switch the model (bare to pick, or slot=model)",
+    "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
@@ -326,7 +327,9 @@ export def switchModel(
 export def reactToSlotChange(change: SlotChange): boolean {
   if (change.slot == "main" && change.before.provider != change.after.provider) {
     pushMessage(color.dim("⚠ Provider changed — memory is paused until restart (recall would be unreliable)."))
-    disableMemory()
+    // `with approve`: the agent is deliberately auto-pausing memory on a
+    // provider switch, not asking the user — so don't surface an approval prompt.
+    disableMemory() with approve
     return true
   }
   return false
@@ -441,6 +444,28 @@ def _runTurn(msg: string): boolean {
         pushMessage(color.dim("  ${slot}: ${r.model} (${r.via})"))
       }
     }
+    return true
+  }
+  if (trimmed == "/local") {
+    if (!localModelsSupported()) {
+      pushMessage(color.yellow("Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp"))
+      return true
+    }
+    let items: ChoiceItem[] = []
+    for (n in listModelNames()) {
+      items.push({ key: n.name, label: n.name })
+    }
+    const choice = chooseOption("Local model", "Pick a local model (downloads on first use):", items, false, true)
+    if (choice == "" || choice == null || choice == undefined) {
+      return true
+    }
+    const before = getResolvedSlots()
+    configureLocalModel(choice)
+    configureSearch(true)
+    for (change in diffResolved(before, getResolvedSlots())) {
+      reactToSlotChange(change)
+    }
+    pushMessage("Switched to local model: ${choice}")
     return true
   }
 
@@ -949,14 +974,28 @@ node main() {
     process.exit(1)
   }
   if (localVal == "") {
-    // Bare --local: list the catalog and exit. (Guided setup added in a later step.)
-    print("--local needs a model to run. Pick one of these short names:")
-    print("(or pass an hf: URI, a .gguf path, or an alias from `agency local alias add`)")
-    print("")
-    printLocalCatalog()
-    print("")
-    print("Example: agency agent --local smollm2-135m")
-    process.exit(0)
+    // Bare --local: guided setup. Non-interactive can't prompt, so keep the
+    // print-catalog-and-exit behavior there.
+    if (!isTTY()) {
+      printLocalCatalog()
+      process.exit(0)
+    }
+    if (!localModelsSupported()) {
+      print(color.yellow("Local models need the smoltalk-llama-cpp package."))
+      print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
+      process.exit(1)
+    }
+    let items: ChoiceItem[] = []
+    for (n in listModelNames()) {
+      items.push({ key: n.name, label: n.name })
+    }
+    const choice = chooseOption("Local model", "Pick a model to download/run (downloads on first use):", items, false, true)
+    if (choice == "" || choice == null || choice == undefined) {
+      process.exit(0)
+    }
+    configureLocalModel(choice)
+    configureSearch(true)
+    // fall through into the session on the chosen local model
   } else if (localVal != undefined) {
     configureLocalModel(localVal)
     // Intentionally do NOT enable memory for a local model: the llama-cpp

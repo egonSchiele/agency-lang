@@ -460,18 +460,31 @@ Catch every remaining reference outside `stdlib/` (guide docs, examples, test fi
 - Rewrite: `tests/**`, `docs/site/guide/**`, `docs/site/**`, `examples/**` (if present), any `.agency`/`.ts`/`.md` with old paths.
 - Regenerate: integration fixtures via `make fixtures`.
 
-- [ ] **Step 1: Global leftover scan (all 15 old paths at once)**
+> **CRITICAL EXCEPTION discovered in Task 6 — `std::search` is also an effect identifier.** `std::search` is used in two different namespaces: (a) the module import path (`from "std::search"`), which MUST become `std::web/search`; and (b) an **effect/interrupt identifier** — `interrupt std::search(...)`, the `effectSet Network = <… std::search …>` member in `stdlib/capabilities.agency`, and the policy key `"std::search":` in `lib/agents/agency-agent/lib/defaultPolicy.agency`. The effect grammar (`namespaceIdentifier` in `lib/parsers/parsers.ts`) forbids `/`, and renaming the policy key would **silently break policy matching** (`lib/runtime/policy.ts` matches `policy[interrupt.effect]`). So the effect-identifier `std::search` occurrences are CORRECT and must stay. Therefore `search` is excluded from the bare-token assertions below and checked only in import-path form. (The other 14 retired module names have no effect collision — notably `browser`'s effect is `std::browserUse`, which `\bstd::browser\b` does not match.)
+
+- [ ] **Step 1: Global leftover scan (14 module-only names + search import-path form)**
 
 ```bash
-grep -rnE 'std::(threads|types|schemas|validators|layout|table|chart|cli|keyring|oauth|email|sms|imessage|search|browser)\b' \
+# (a) The 14 names with no effect collision — bare-token grep MUST be empty:
+grep -rnE 'std::(threads|types|schemas|validators|layout|table|chart|cli|keyring|oauth|email|sms|imessage|browser)\b' \
   --include=*.agency --include=*.ts --include=*.md . \
   | grep -v node_modules | grep -v '/dist/' | tee /tmp/reorg-leftovers.log
+# (b) search as a MODULE IMPORT PATH — must be empty (effect usages excluded):
+grep -rnE 'from "std::search"|`std::search`|"std::search"[^:]' \
+  --include=*.agency --include=*.ts --include=*.md . \
+  | grep -v node_modules | grep -v '/dist/' | tee -a /tmp/reorg-leftovers.log
 ```
-Expected after fixing: empty. This whole-repo (`.`) scan is the **backstop for `lib/`** — the Tasks 1–6 greps now include `lib` and should have already handled per-module strings, so anything surfacing here is a straggler (often a `lib/`-local test file or a cross-cutting comment). Rewrite each hit per the mapping table, applying the **user-facing-vs-comment rule** (throw/label strings and imports MUST update; comments SHOULD update; leave `std::syntax`, `std::wikipedia`, `std::weather`, `std::math` untouched). Watch for compiled-path forms in fixtures: `agency-lang/stdlib/table.js` → `agency-lang/stdlib/ui/table.js`, etc. — but prefer regenerating fixtures (next step) over hand-editing them.
+Expected after fixing: both empty. This whole-repo (`.`) scan is the **backstop for `lib/`** — the Tasks 1–6 greps now include `lib` and should have already handled per-module strings, so anything surfacing here is a straggler (often a `lib/`-local test file or a cross-cutting comment). Rewrite each hit per the mapping table, applying the **user-facing-vs-comment rule** (throw/label strings and imports MUST update; comments SHOULD update; leave `std::syntax`, `std::wikipedia`, `std::weather`, `std::math` untouched). Watch for compiled-path forms in fixtures: `agency-lang/stdlib/table.js` → `agency-lang/stdlib/ui/table.js`, etc. — but prefer regenerating fixtures (next step) over hand-editing them.
+
+To confirm the remaining bare `std::search` tokens are ALL legitimate effect usages (not missed module paths), eyeball them:
+```bash
+grep -rnE '\bstd::search\b' stdlib lib tests --include=*.agency --include=*.ts | grep -v node_modules
+```
+Expected: only effect-context lines — the `capabilities.agency` `Network` effectSet, `interrupt std::search(...)` in `web/search.agency`, the `defaultPolicy.agency` policy key, and generated `.js` interrupt strings. No `import`/`from` lines.
 
 Also run a `lib/`-focused view to eyeball the string-vs-comment split explicitly:
 ```bash
-grep -rnE 'std::(threads|types|schemas|validators|layout|table|chart|cli|keyring|oauth|email|sms|imessage|search|browser)\b' lib --include=*.ts | grep -v '/dist/'
+grep -rnE 'std::(threads|types|schemas|validators|layout|table|chart|cli|keyring|oauth|email|sms|imessage|browser)\b' lib --include=*.ts | grep -v '/dist/'
 ```
 Expected after Tasks 1–6: empty.
 
@@ -562,11 +575,17 @@ Expected: `templates` → `build` → `stdlib` → `agents` → `doc` all succee
 
 - [ ] **Step 2: Global leftover assertion (must be empty)**
 
+`search` is excluded from the bare-token assertion because `std::search` is a legitimate effect identifier (see the Task 7 CRITICAL EXCEPTION note); it is asserted in import-path form instead.
+
 ```bash
-grep -rnE 'std::(threads|types|schemas|validators|layout|table|chart|cli|keyring|oauth|email|sms|imessage|search|browser)\b' \
+# 14 module-only names — must be empty:
+grep -rnE 'std::(threads|types|schemas|validators|layout|table|chart|cli|keyring|oauth|email|sms|imessage|browser)\b' \
+  --include=*.agency --include=*.ts --include=*.md . | grep -v node_modules | grep -v '/dist/'
+# search as a module import path — must be empty (effect usages allowed to remain):
+grep -rnE 'from "std::search"|`std::search`|"std::search"[^:]' \
   --include=*.agency --include=*.ts --include=*.md . | grep -v node_modules | grep -v '/dist/'
 ```
-Expected: no output.
+Expected: no output from either. (Bare `std::search` effect tokens in `capabilities.agency`, `web/search.agency`, `defaultPolicy.agency`, and generated `.js` remain — that is correct.)
 
 - [ ] **Step 3: Smoke-compile a program using the new paths**
 

@@ -20,9 +20,14 @@ export type ToolCallMock = {
 };
 
 /** Multi-tool variant: simulate the LLM returning multiple tool calls in
- *  one round (used to test concurrent tool execution in `runPrompt`). */
+ *  one round (used to test concurrent tool execution in `runPrompt`).
+ *
+ *  `id` is optional: when omitted a synthetic `mock-tool-*` id is used.
+ *  Pass `id: ""` to reproduce providers (notably Google Gemini) whose
+ *  function-calling protocol returns no tool-call id — smoltalk defaults
+ *  the missing id to "". */
 export type MultiToolCallMock = {
-  toolCalls: Array<{ name: string; args?: Record<string, any> }>;
+  toolCalls: Array<{ name: string; args?: Record<string, any>; id?: string }>;
 };
 
 export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock;
@@ -151,7 +156,13 @@ export class DeterministicClient implements LLMClient {
       // mocks for tools that take no arguments can omit it cleanly.
       const calls = mock.toolCalls.map(
         (tc, i) =>
-          new ToolCall(`mock-tool-${callIndex}-${i}`, tc.name, tc.args ?? {}),
+          // `tc.id ?? ...` (nullish, not `||`) so an explicit "" survives —
+          // that's how a test simulates an id-less provider like Gemini.
+          new ToolCall(
+            tc.id ?? `mock-tool-${callIndex}-${i}`,
+            tc.name,
+            tc.args ?? {},
+          ),
       );
       return {
         success: true,

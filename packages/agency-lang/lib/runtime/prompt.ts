@@ -1,5 +1,10 @@
 import * as smoltalk from "smoltalk";
-import { PromptResult, ToolCallJSON } from "smoltalk";
+import {
+  PromptResult,
+  ToolCallJSON,
+  UserContentInput,
+  redactAttachments,
+} from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
@@ -45,6 +50,37 @@ export type RunPromptResult = {
   toolCalls: smoltalk.ToolCallJSON[];
 };
 
+/** Flatten a prompt (a string, or an array of text/attachment parts) to plain
+ *  text for consumers that require a string — e.g. memory recall and log
+ *  previews. Attachments are dropped. Statelog does NOT use this: it keeps the
+ *  structured prompt, redacted (see `redactMessagesForLog`). */
+export function promptText(p: string | UserContentInput): string {
+  if (typeof p === "string") return p;
+  return p
+    .map((x) => (typeof x === "string" ? x : x.type === "text" ? x.text : null))
+    .filter((s): s is string => s !== null)
+    .join(" ");
+}
+
+/** Deep copy of a thread's messages with attachment payloads (base64 / data
+ *  URIs) redacted, for statelog. Uses `toJSON()` — the same plain shape
+ *  `JSON.stringify` would emit — so wire consumers like
+ *  `wireAccessors.userMessageOf` keep working. Redaction only shortens base64
+ *  string values, so the result is still structurally `MessageJSON[]`. */
+export function redactMessagesForLog(
+  messages: MessageThread,
+): smoltalk.MessageJSON[] {
+  return redactAttachments(messages.toJSON().messages) as smoltalk.MessageJSON[];
+}
+
+/** A prompt with attachment payloads redacted, preserving its string-or-array
+ *  shape, for statelog / hook data. */
+export function redactPromptForLog(
+  p: string | UserContentInput,
+): string | UserContentInput {
+  return redactAttachments(p) as string | UserContentInput;
+}
+
 /** Dispatch the LLM request and extract `{completion, toolCalls}`,
  *  branching on the `stream` flag. Streaming uses `handleStreamingResponse`
  *  to accumulate chunks; non-streaming awaits the single response Promise.
@@ -57,7 +93,7 @@ async function dispatchLLMRequest({
 }: {
   ctx: RuntimeContext<GraphState>;
   promptConfig: PromptConfig;
-  prompt: string;
+  prompt: string | UserContentInput;
   stream: boolean;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
   if (stream) {
@@ -298,7 +334,7 @@ async function runWithRetry<T>(
 async function dispatchWithRetry(args: {
   ctx: RuntimeContext<GraphState>;
   promptConfig: PromptConfig;
-  prompt: string;
+  prompt: string | UserContentInput;
   stream: boolean;
   retryPolicy: RetryPolicy;
   parentSignal: AbortSignal | undefined;
@@ -366,7 +402,7 @@ async function _runPrompt({
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
   tools: Tool[];
-  prompt: string;
+  prompt: string | UserContentInput;
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolConfig>;
   /** The branch-local stack, if this _runPrompt call is running inside a
@@ -400,10 +436,10 @@ async function _runPrompt({
     ctx,
     name: "onLLMCallStart",
     data: {
-      prompt,
+      prompt: redactPromptForLog(prompt),
       tools,
       model: clientConfig.model,
-      messages: messages.toJSON().messages,
+      messages: redactMessagesForLog(messages),
     },
   });
 
@@ -482,7 +518,7 @@ async function _runPrompt({
   const modelName = completion.model || clientConfig.model || "unknown model";
 
   ctx.statelogClient.promptCompletion({
-    messages: messages.getMessages(),
+    messages: redactMessagesForLog(messages),
     completion,
     model: JSON.stringify(modelName),
     timeTaken: endTime - startTime,
@@ -571,7 +607,7 @@ async function _runPrompt({
       usage: completion.usage,
       cost: completion.cost,
       timeTaken: endTime - startTime,
-      messages: messages.toJSON().messages,
+      messages: redactMessagesForLog(messages),
     },
   });
 
@@ -580,7 +616,7 @@ async function _runPrompt({
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
 export async function runPrompt(args: {
-  prompt: string;
+  prompt: string | UserContentInput;
   messages: MessageThread;
   responseFormat?: any;
   /** Provider-shaped config (model/temperature/...). Retry fields may also
@@ -798,7 +834,9 @@ export async function runPrompt(args: {
       const recallManager = ctx.getActiveMemoryManager();
       if (memoryOption && recallManager) {
         try {
-          const facts = await recallManager.recallForInjection(prompt);
+          const facts = await recallManager.recallForInjection(
+            promptText(prompt),
+          );
           if (facts) {
             injectedFactsContent = `Relevant context from memory:\n${facts}`;
             messages.push(smoltalk.systemMessage(injectedFactsContent));

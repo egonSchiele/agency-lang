@@ -6,6 +6,30 @@ name: "thread"
 
 ## Types
 
+### AttachmentSource
+
+```ts
+export type AttachmentSource =
+  | { kind: "path"; path: string; mimeType: string
+  | null }
+  | { kind: "url"; url: string; mimeType: string
+  | null }
+  | { kind: "base64"; base64: string; mimeType: string }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L27))
+
+### Attachment
+
+```ts
+export type Attachment =
+  | { type: "image"; source: AttachmentSource }
+  | { type: "file"; source: AttachmentSource; filename: string
+  | null }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L32))
+
 ### ModelCost
 
 ```ts
@@ -17,7 +41,7 @@ export type ModelCost = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L135))
 
 ### GuardFailureData
 
@@ -31,7 +55,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L158))
 
 ## Functions
 
@@ -53,27 +77,84 @@ Add a system message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L36))
 
 ### userMessage
 
 ```ts
-userMessage(msg: string)
+userMessage(msg: string | (string | Attachment)[])
 ```
 
-Add a user message to the current thread's message history.
-  Use this when you want to seed the conversation with prior user
-  context that wasn't actually typed by the user this turn.
+Add a user message to the current thread's message history. Accepts a
+  plain string, or an array mixing text strings and image()/file()
+  attachments. Use this when you want to seed the conversation with prior
+  user context that wasn't actually typed by the user this turn.
 
-  @param msg - The user message content
+  @param msg - The user message content: a string, or an array of strings and attachments.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| msg | `string` |  |
+| msg | `string \| (string \| Attachment)[]` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L47))
+
+### image
+
+```ts
+image(source: string, mimeType: string, base64: boolean): Attachment
+```
+
+Build an image attachment for a multimodal llm() call or userMessage().
+  `source` is a local path, an http(s) URL, or a data: URI. Pass base64: true
+  to treat `source` as raw base64 data (a mimeType is then required).
+  smoltalk reads/fetches and MIME-infers the source at send time.
+
+  @param source - Path, http(s) URL, data: URI, or raw base64 (with base64: true)
+  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param base64 - When true, treat `source` as raw base64 data.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| source | `string` |  |
+| mimeType | `string` | "" |
+| base64 | `boolean` | false |
+
+**Returns:** [Attachment](#attachment)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L59))
+
+### file
+
+```ts
+file(source: string, filename: string, mimeType: string, base64: boolean): Attachment
+```
+
+Build a file (e.g. PDF) attachment for a multimodal llm() call or
+  userMessage(). `source` is a local path, an http(s) URL, or a data: URI.
+  Pass base64: true to treat `source` as raw base64 data (mimeType required).
+  `filename` defaults to the source's basename.
+
+  @param source - Path, http(s) URL, data: URI, or raw base64 (with base64: true)
+  @param filename - Name shown to the model; defaults to the source basename.
+  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param base64 - When true, treat `source` as raw base64 data.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| source | `string` |  |
+| filename | `string` | "" |
+| mimeType | `string` | "" |
+| base64 | `boolean` | false |
+
+**Returns:** [Attachment](#attachment)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L77))
 
 ### assistantMessage
 
@@ -93,7 +174,7 @@ Add an assistant message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L97))
 
 ### getCost
 
@@ -117,7 +198,7 @@ Get the cumulative cost (USD, floating point) of all LLM calls
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L108))
 
 ### getTokens
 
@@ -130,7 +211,7 @@ Get the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L127))
 
 ### getModelCosts
 
@@ -151,7 +232,7 @@ Get a per-model breakdown of cumulative LLM usage, one entry per
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L142))
 
 ### guard
 
@@ -225,4 +306,4 @@ Run a block under a cost limit, a time limit, or both. The block
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L170))

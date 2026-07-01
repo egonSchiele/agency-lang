@@ -1,0 +1,64 @@
+{
+  "data": "done",
+  "messages": {
+    "threads": {
+      "0": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "seed-user"
+              },
+              {
+                "type": "image",
+                "source": {
+                  "kind": "path",
+                  "path": "./cat.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "describe"
+              },
+              {
+                "type": "image",
+                "source": {
+                  "kind": "path",
+                  "path": "./cat.png"
+                }
+              },
+              {
+                "type": "file",
+                "source": {
+                  "kind": "path",
+                  "path": "./report.pdf"
+                },
+                "filename": "report.pdf"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": "described"
+          }
+        ],
+        "parentId": null,
+        "hidden": false,
+        "label": null,
+        "summary": null
+      }
+    },
+    "counter": 1,
+    "activeStack": [
+      "0"
+    ],
+    "sessions": {}
+  }
+}

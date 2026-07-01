@@ -49,13 +49,16 @@ export async function __internal_userMessage(
   _ctx: RuntimeContext<any>,
   _stack: StateStack,
   threads: ThreadStore,
-  msg: string,
+  msg: smoltalk.UserContentInput,
 ): Promise<void> {
   threads.getOrCreateActive().push(smoltalk.userMessage(msg));
 }
 
-/** ALS-reading replacement for `__internal_userMessage`. */
-export async function _userMessage(msg: string): Promise<void> {
+/** ALS-reading replacement for `__internal_userMessage`. Accepts a plain
+ *  string or an array of text strings and image()/file() attachments. */
+export async function _userMessage(
+  msg: smoltalk.UserContentInput,
+): Promise<void> {
   const { threads } = getRuntimeContext();
   threads.getOrCreateActive().push(smoltalk.userMessage(msg));
 }
@@ -73,6 +76,98 @@ export async function __internal_assistantMessage(
 export async function _assistantMessage(msg: string): Promise<void> {
   const { threads } = getRuntimeContext();
   threads.getOrCreateActive().push(smoltalk.assistantMessage(msg));
+}
+
+// --- Multimodal attachment builders -------------------------------------
+//
+// Backing implementations for `std::thread`'s `image()` / `file()`. They
+// return plain data objects matching smoltalk's `UserContentPart` /
+// `ImageRef` shapes, so the result flows straight into
+// `smoltalk.userMessage([...])`. smoltalk does all the I/O (reading paths,
+// fetching URLs, MIME inference, size caps) at send time — these builders
+// only describe the attachment.
+//
+// These return-type shapes must stay structurally compatible with the
+// `Attachment` / `AttachmentSource` types in stdlib/thread.agency (the single
+// source of truth that `llm()`'s typechecker signature references by name).
+// The end-to-end fixture in tests/agency-js/multimodal-attachments guards it.
+
+export type AttachmentSource =
+  | { kind: "path"; path: string; mimeType?: string }
+  | { kind: "url"; url: string; mimeType?: string }
+  | { kind: "base64"; base64: string; mimeType: string };
+
+export type ImageAttachment = { type: "image"; source: AttachmentSource };
+export type FileAttachment = {
+  type: "file";
+  source: AttachmentSource;
+  filename?: string;
+};
+
+function classifySource(
+  source: string,
+  mimeType: string,
+  base64: boolean,
+): AttachmentSource {
+  // A data: URI is authoritative regardless of the base64 flag.
+  if (source.startsWith("data:")) {
+    const marker = ";base64,";
+    const idx = source.indexOf(marker);
+    if (idx === -1) {
+      throw new Error(
+        "image()/file(): a data: URI must be base64-encoded (data:<mime>;base64,<data>)",
+      );
+    }
+    const uriMime = source.slice("data:".length, idx);
+    const data = source.slice(idx + marker.length);
+    return { kind: "base64", base64: data, mimeType: mimeType || uriMime };
+  }
+  if (base64) {
+    if (!mimeType) {
+      throw new Error(
+        "image()/file(): base64 sources require an explicit mimeType",
+      );
+    }
+    return { kind: "base64", base64: source, mimeType };
+  }
+  if (source.startsWith("http://") || source.startsWith("https://")) {
+    return mimeType
+      ? { kind: "url", url: source, mimeType }
+      : { kind: "url", url: source };
+  }
+  return mimeType
+    ? { kind: "path", path: source, mimeType }
+    : { kind: "path", path: source };
+}
+
+export function _imageAttachment(
+  source: string,
+  mimeType: string,
+  base64: boolean,
+): ImageAttachment {
+  return { type: "image", source: classifySource(source, mimeType, base64) };
+}
+
+function basename(source: string): string {
+  const clean = source.split(/[?#]/)[0];
+  const segments = clean.split("/");
+  return segments[segments.length - 1] || "";
+}
+
+export function _fileAttachment(
+  source: string,
+  filename: string,
+  mimeType: string,
+  base64: boolean,
+): FileAttachment {
+  const src = classifySource(source, mimeType, base64);
+  let name = filename;
+  if (!name && (src.kind === "path" || src.kind === "url")) {
+    name = basename(source);
+  }
+  return name
+    ? { type: "file", source: src, filename: name }
+    : { type: "file", source: src };
 }
 
 export async function __internal_getCost(

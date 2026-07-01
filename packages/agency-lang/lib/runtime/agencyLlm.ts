@@ -32,6 +32,7 @@
  * wrapped explicitly with `agency.withTestContext` in unit tests).
  */
 import type { z } from "zod";
+import type { UserContentInput } from "smoltalk";
 import { agencyStore } from "./asyncContext.js";
 import { runPrompt } from "./prompt.js";
 import type { RetryConfig } from "./llmRetry.js";
@@ -61,16 +62,25 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
 
 /** Module-private. Re-exposed only via `agency.llm`.
  *
+ *  `prompt` is a string, or an array of text strings and image()/file()
+ *  attachments (see `std::thread`), matching smoltalk's user-message content.
+ *
  *  Overloads: when `opts.schema` is provided the return type is
  *  `z.infer<S>`; otherwise it's `string`. Order matters — the
  *  schema-bearing overload must come first so TS picks it over the
  *  string-returning fallback. */
 export function llm<S extends z.ZodSchema>(
-  prompt: string,
+  prompt: string | UserContentInput,
   opts: LlmOpts<S> & { schema: S },
 ): Promise<z.infer<S>>;
-export function llm(prompt: string, opts?: LlmOpts): Promise<string>;
-export async function llm(prompt: string, opts: LlmOpts = {}): Promise<any> {
+export function llm(
+  prompt: string | UserContentInput,
+  opts?: LlmOpts,
+): Promise<string>;
+export async function llm(
+  prompt: string | UserContentInput,
+  opts: LlmOpts = {},
+): Promise<any> {
   const thread = opts.thread ?? getRuntimeContext().threads.getOrCreateActive();
   // Build clientConfig with `model` only when explicitly overridden.
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge

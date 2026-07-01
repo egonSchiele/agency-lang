@@ -110,6 +110,30 @@ const llmNamedOptions: Record<string, VariableType> = Object.assign(
   Object.fromEntries(llmOptionProperties.map((p) => [p.key, p.value])),
 );
 
+/** `llm()`'s first argument: a plain string, or an array mixing text strings
+ *  and `image()` / `file()` attachments.
+ *
+ *  The attachment element references the `Attachment` type alias defined in
+ *  `stdlib/thread.agency` (the single source of truth) rather than restating
+ *  its shape here — it resolves against the type-alias table the same way any
+ *  user type does. `image()` / `file()` return `Attachment`, so a call like
+ *  `llm(["hi", image("x")])` type-checks; `llm([42])` does not. */
+const attachmentRef: VariableType = {
+  type: "typeAliasVariable",
+  aliasName: "Attachment",
+};
+
+const llmContent: VariableType = {
+  type: "unionType",
+  types: [
+    string,
+    {
+      type: "arrayType",
+      elementType: { type: "unionType", types: [string, attachmentRef] },
+    },
+  ],
+};
+
 /**
  * Signatures for builtin / auto-imported functions that the typechecker
  * needs to know about.
@@ -163,12 +187,12 @@ export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- LLM primitive ---
   llm: {
-    params: ["any", llmOptions],
+    params: [llmContent, llmOptions],
     minParams: 1,
     returnType: string,
     acceptsNamedArgs: llmNamedOptions,
     description:
-      "Send a prompt to an LLM and return its response. The return type is inferred from the call-site annotation and compiled to a JSON schema for structured output.",
+      "Send a prompt to an LLM and return its response. The prompt is a string, or an array of text strings and image()/file() attachments. The return type is inferred from the call-site annotation and compiled to a JSON schema for structured output.",
   },
 
   // --- Result type (lib/runtime/result.ts) ---

@@ -5,7 +5,7 @@
 //   Age      — bare reference (no parens), default applies
 // All three should behave identically when the param has a default.
 
-import { min } from "std::validators"
+import { min } from "std::validation"
 
 @validate(min.partial(n: low))
 type Age(low: number = 0) = number

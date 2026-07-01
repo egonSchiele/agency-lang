@@ -9,7 +9,7 @@
 // After the fix, the alias tags are substituted before merging, so
 // the JSON schema for the `age` property contains the literal bounds.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })

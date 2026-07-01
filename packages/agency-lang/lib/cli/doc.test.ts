@@ -437,7 +437,7 @@ node main() {
 
     fs.writeFileSync(
       path.join(inputDir, "annotated.agency"),
-      `import { isEmail } from "std::validators"
+      `import { isEmail } from "std::validation"
 
 @validate(isEmail)
 @jsonSchema({ format: "email", description: "User email." })

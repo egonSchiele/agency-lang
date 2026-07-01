@@ -3,7 +3,7 @@
 // signature into the body's type annotations and validation runs at the
 // call site.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

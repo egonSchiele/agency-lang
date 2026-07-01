@@ -3,7 +3,7 @@
 // binds `n` and produces a single-argument validator the validation
 // chain invokes on each value.
 
-import { min, max, minLength, maxLength, matches } from "std::validators"
+import { min, max, minLength, maxLength, matches } from "std::validation"
 
 @validate(min.partial(n: 0), max.partial(n: 150))
 type Age = number

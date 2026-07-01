@@ -4,7 +4,7 @@
 // only at codegen), so it must inline its validators at every use site —
 // including when forwarded through another value-param alias. Pre-fix, the
 // forwarding case routed to a non-existent/unresolved factory and crashed.
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type Ranked<T>(low: number, high: number) = number

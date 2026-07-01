@@ -1,7 +1,7 @@
 // A forwarding alias wrapping an imported value-param validated alias.
 // AdultAge has no @validate of its own; it inherits NumberInRange's via its
 // body. AdultAge's factory should call NumberInRange's factory.
-import { NumberInRange } from "std::types"
+import { NumberInRange } from "std::validation"
 
 type AdultAge(high: number) = NumberInRange(18, high)
 

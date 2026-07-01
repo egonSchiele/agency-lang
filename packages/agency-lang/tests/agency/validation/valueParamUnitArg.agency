@@ -4,7 +4,7 @@
 // and `Timeout(1m)` differ only by their canonical values in the
 // schema.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: 0), max.partial(n: ms))
 @jsonSchema({ maximum: ms })

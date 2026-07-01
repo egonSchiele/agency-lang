@@ -4,7 +4,7 @@
 // at the inner reference site, which itself is substituted at the
 // outer use site.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })

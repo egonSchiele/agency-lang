@@ -1,4 +1,4 @@
-import { isEmail } from "std::validators"
+import { isEmail } from "std::validation"
 
 @validate(isEmail)
 type Email = string

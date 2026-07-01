@@ -3,7 +3,7 @@
 // picks a branch first (Email when value is a string; Age when value
 // is a number); only the matching branch's validators then run.
 
-import { isEmail, isPositive } from "std::validators"
+import { isEmail, isPositive } from "std::validation"
 
 @validate(isEmail)
 type Email = string

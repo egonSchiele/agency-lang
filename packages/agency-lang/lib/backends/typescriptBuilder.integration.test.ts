@@ -317,7 +317,7 @@ describe("mapTypeToValidationSchema", () => {
 describe("value-parameterized validator factory", () => {
   it("emits a descriptor factory for a validated value-param alias", () => {
     const out = generateWithBuilder(`
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })
@@ -342,7 +342,7 @@ node main() {
 
   it("bakes value-param defaults into the factory signature", () => {
     const out = generateWithBuilder(`
-import { min } from "std::validators"
+import { min } from "std::validation"
 
 @validate(min.partial(n: low))
 type Age(low: number = 0) = number
@@ -358,7 +358,7 @@ node main() {
 
   it("references the factory by call at a validated use site", () => {
     const out = generateWithBuilder(`
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number
@@ -374,7 +374,7 @@ node main() {
 
   it("evaluates the factory call once when use-site validators are stacked", () => {
     const out = generateWithBuilder(`
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

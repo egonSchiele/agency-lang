@@ -1,7 +1,7 @@
 // A locally-defined value-param validated alias must validate end-to-end
 // via its emitted factory. min/max are imported in THIS module, so the
 // factory (also in this module) sees them in scope.
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

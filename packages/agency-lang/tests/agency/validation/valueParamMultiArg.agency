@@ -6,7 +6,7 @@
 // exactly which assertion went wrong, instead of collapsing six checks
 // into one boolean and a single "failed" string.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

@@ -1,4 +1,4 @@
-import { Email } from "std::types"
+import { Email } from "std::validation"
 
 node main() {
   const bad: Email! = "not-email"

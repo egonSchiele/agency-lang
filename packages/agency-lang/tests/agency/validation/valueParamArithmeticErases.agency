@@ -7,7 +7,7 @@
 // propagating bounds through arithmetic without an explicit design
 // decision.
 
-import { min, max } from "std::validators"
+import { min, max } from "std::validation"
 
 @validate(min.partial(n: low), max.partial(n: high))
 type NumberInRange(low: number, high: number) = number

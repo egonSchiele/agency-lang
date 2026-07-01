@@ -18,10 +18,12 @@ import {
   _runGuarded,
  } from "agency-lang/stdlib-lib/thread.js"
 
-// KEEP IN SYNC with the structural `attachment` mirror in
-// lib/typeChecker/builtins.ts (the `llm()` first-param type) and the TS
-// `AttachmentSource` type in lib/stdlib/thread.ts. Drift is caught by
-// lib/typeChecker/attachments.test.ts.
+// The single source of truth for the attachment shape. `llm()`'s first-param
+// type in lib/typeChecker/builtins.ts references this `Attachment` alias by
+// name (no duplicated structure). The TS builders in lib/stdlib/thread.ts
+// (`_imageAttachment` / `_fileAttachment`) construct values of this shape at
+// runtime, so their return types must stay structurally compatible; the
+// end-to-end fixture in tests/agency-js/multimodal-attachments guards that.
 export type AttachmentSource =
   | { kind: "path", path: string, mimeType?: string }
   | { kind: "url", url: string, mimeType?: string }

@@ -128,8 +128,18 @@ export function variableTypeToString(
     }
     return variableType.value;
   } else if (variableType.type === "arrayType") {
-    // Recursively build array type string
-    return `${variableTypeToString(variableType.elementType, typeAliases, forFormatting)}[]`;
+    // Recursively build array type string. Parenthesize a union element so
+    // `(a | b)[]` does not render as the ambiguous `a | b[]` (which reads as
+    // `a | (b[])`).
+    const inner = variableTypeToString(
+      variableType.elementType,
+      typeAliases,
+      forFormatting,
+    );
+    if (variableType.elementType.type === "unionType") {
+      return `(${inner})[]`;
+    }
+    return `${inner}[]`;
   } else if (variableType.type === "stringLiteralType") {
     return `"${variableType.value}"`;
   } else if (variableType.type === "numberLiteralType") {

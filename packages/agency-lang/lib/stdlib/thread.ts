@@ -87,9 +87,10 @@ export async function _assistantMessage(msg: string): Promise<void> {
 // fetching URLs, MIME inference, size caps) at send time — these builders
 // only describe the attachment.
 //
-// KEEP IN SYNC with the `Attachment` / `AttachmentSource` types in
-// stdlib/thread.agency and the structural mirror in
-// lib/typeChecker/builtins.ts (guarded by lib/typeChecker/attachments.test.ts).
+// These return-type shapes must stay structurally compatible with the
+// `Attachment` / `AttachmentSource` types in stdlib/thread.agency (the single
+// source of truth that `llm()`'s typechecker signature references by name).
+// The end-to-end fixture in tests/agency-js/multimodal-attachments guards it.
 
 export type AttachmentSource =
   | { kind: "path"; path: string; mimeType?: string }

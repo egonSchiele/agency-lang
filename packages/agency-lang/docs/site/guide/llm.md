@@ -52,7 +52,8 @@ Both builders take optional arguments:
 - `mimeType` — set an explicit MIME type (overrides inference).
 - `base64: true` — treat `source` as raw base64 data. A `mimeType` is then
   required, e.g. `image(data, mimeType: "image/png", base64: true)`. This is
-  handy with `readImage()`, which returns raw base64.
+  handy when you already hold base64 in memory — for example the base64 string
+  inside the `Result` that `readImage()` returns.
 - `file(source, filename)` — the filename shown to the model; it defaults to the
   source's basename.
 

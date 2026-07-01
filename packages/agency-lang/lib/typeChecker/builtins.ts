@@ -24,9 +24,7 @@ const optional = (t: VariableType): VariableType => ({
  * forwards everything to smoltalk. `metadata` accepts arbitrary shape, so
  * we type it as optional `any` and skip structural checking.
  */
-const llmOptions: VariableType = {
-  type: "objectType",
-  properties: [
+const llmOptionProperties: { key: string; value: VariableType }[] = [
     { key: "model", value: optional(string) },
     { key: "provider", value: optional(string) },
     { key: "apiKey", value: optional(string) },
@@ -90,8 +88,22 @@ const llmOptions: VariableType = {
     },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
-  ],
+];
+
+const llmOptions: VariableType = {
+  type: "objectType",
+  properties: llmOptionProperties,
 };
+
+/**
+ * The same option fields exposed as named arguments, so callers may write
+ * `llm(prompt, model: "…", tools: [...])` instead of passing an options
+ * object. Derived from {@link llmOptionProperties} so the two forms never
+ * drift. Codegen folds these named args back into the options object.
+ */
+const llmNamedOptions: Record<string, VariableType> = Object.fromEntries(
+  llmOptionProperties.map((p) => [p.key, p.value]),
+);
 
 /**
  * Signatures for builtin / auto-imported functions that the typechecker
@@ -149,6 +161,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
     params: ["any", llmOptions],
     minParams: 1,
     returnType: string,
+    acceptsNamedArgs: llmNamedOptions,
     description:
       "Send a prompt to an LLM and return its response. The return type is inferred from the call-site annotation and compiled to a JSON schema for structured output.",
   },

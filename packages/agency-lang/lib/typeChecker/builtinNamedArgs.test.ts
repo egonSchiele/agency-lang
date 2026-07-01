@@ -87,3 +87,35 @@ describe("builtin named-arg validation (fork/race shared:)", () => {
     expect(errors.some((e) => /boolean/i.test(e.message))).toBe(true);
   });
 });
+
+describe("builtin named-arg validation (llm options)", () => {
+  it("accepts a known option as a named arg", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", model: "gpt-4o-mini")\n print(r) }`,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("accepts several known options as named args", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", model: "gpt-4o-mini", maxTokens: 50, memory: true)\n print(r) }`,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("rejects an unknown option named arg", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", modle: "gpt-4o-mini")\n print(r) }`,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => /modle/.test(e.message))).toBe(true);
+  });
+
+  it("rejects a wrongly-typed option named arg", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", maxTokens: "big")\n print(r) }`,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => /number/i.test(e.message))).toBe(true);
+  });
+});

@@ -2983,16 +2983,35 @@ export class TypeScriptBuilder {
       ? this.processCallArg(promptArg)
       : ts.raw("``");
 
-    // Config is the second argument — passed straight through to runPrompt.
-    // Tools (AgencyFunction instances, MCP tools) live in config.tools and
-    // are handled entirely by runPrompt at runtime.
-    const configArg = node.arguments[1];
+    // Everything after the prompt becomes the clientConfig, passed straight
+    // through to runPrompt. Tools (AgencyFunction instances, MCP tools) live
+    // in config.tools and are handled entirely by runPrompt at runtime.
+    const argsAfterPrompt = node.arguments.slice(1);
+    const hasNamedOptions = argsAfterPrompt.some(
+      (a) => a.type === "namedArgument",
+    );
     let clientConfig: TsNode;
-
-    if (configArg) {
-      clientConfig = this.processCallArg(configArg);
+    if (!hasNamedOptions) {
+      // Back-compat: a lone positional options object (or nothing) passes
+      // through unchanged, keeping generated output byte-identical.
+      const configArg = argsAfterPrompt[0];
+      clientConfig = configArg ? this.processCallArg(configArg) : ts.obj({});
     } else {
-      clientConfig = ts.obj({});
+      // Named option args (`llm(prompt, model: "x", tools: [t])`) fold into a
+      // single object; a positional options object, if also present, is
+      // spread in first so named args win on conflict.
+      const configEntries: TsObjectEntry[] = [];
+      for (const arg of argsAfterPrompt) {
+        if (arg.type === "namedArgument") {
+          const keyCode = arg.name.replace(/"/g, '\\"');
+          configEntries.push(
+            ts.set(`"${keyCode}"`, this.processNode(arg.value)),
+          );
+        } else {
+          configEntries.push(ts.setSpread(this.processCallArg(arg)));
+        }
+      }
+      clientConfig = ts.obj(configEntries);
     }
 
     // Thread expression — always use the shared active thread.

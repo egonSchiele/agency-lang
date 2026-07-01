@@ -13,7 +13,6 @@ import {
   captureCaptures,
   char,
   count,
-  debug,
   digit,
   fail,
   failure,
@@ -3624,7 +3623,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   keywordParser,
   effectSetDeclParser,
   effectDeclParser,
-  debug(typeAliasParser, "error in typeAliasParser"),
+  typeAliasParser,
   tagParser,
   bodyReservedModifierParser,
   // withModifierParser must be tried before returnStatementParser/

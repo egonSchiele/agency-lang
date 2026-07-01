@@ -1,7 +1,7 @@
 /**
- * TS-side helpers for `stdlib/threads.agency` — the user-facing
- * cross-thread registry module. Wraps the `agency.threads.*` primitives
- * from Task 1.
+ * TS-side helpers for the cross-thread registry portion of
+ * `stdlib/thread.agency` — the user-facing cross-thread registry
+ * module. Wraps the `agency.threads.*` primitives from Task 1.
  *
  * Post-Commit-B cleanup: there is no module-level cache here anymore.
  * `label` and `summary` live directly on the per-run `MessageThread`
@@ -16,8 +16,8 @@
  * { ... }` block triggers a one-shot LLM summarize call at close
  * time and stashes the result on the underlying `MessageThread`.
  * Lazy summarize (the on-demand path in `summaryFor()` inside
- * `stdlib/threads.agency`) still runs for threads that did NOT opt
- * in eagerly. Importing `std::threads` from Agency code triggers
+ * `stdlib/thread.agency`) still runs for threads that did NOT opt
+ * in eagerly. Importing `std::thread` from Agency code triggers
  * this module's load, which registers the hook.
  *
  * Naming follows stdlib conventions: every export is `_`-prefixed and
@@ -92,7 +92,7 @@ export function _setThreadSummary(id: string, summary: string): void {
 
 // ── Eager summarize hook ──────────────────────────────────────────
 //
-// Mirrors the Agency-side `summarize()` def in `stdlib/threads.agency`
+// Mirrors the Agency-side `summarize()` def in `stdlib/thread.agency`
 // but lives in TS so the global onThreadEnd hook can invoke it
 // directly without needing to look up an Agency function reference.
 //
@@ -100,7 +100,7 @@ export function _setThreadSummary(id: string, summary: string): void {
 // only fires when the module is the entry-point of the run (see the
 // regression test at `tests/agency-js/threads-fix-callback-propagation`).
 // A global TS hook bypasses that, so any program that imports
-// `std::threads` gets eager summarize for free.
+// `std::thread` gets eager summarize for free.
 
 const _summarySchema = z.object({ summary: z.string() });
 

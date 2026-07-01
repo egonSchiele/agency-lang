@@ -1,4 +1,4 @@
-import { currentThreadId } from "std::threads"
+import { currentThreadId } from "std::thread"
 
 node main() {
   // Each fork branch is seeded with a fresh subthread on its

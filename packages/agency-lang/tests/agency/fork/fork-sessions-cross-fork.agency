@@ -1,4 +1,4 @@
-import { currentThreadId } from "std::threads"
+import { currentThreadId } from "std::thread"
 
 node main() {
   // The "sessions are shared across all branches and all forks"

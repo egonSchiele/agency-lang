@@ -12,10 +12,10 @@ You need two things to fix this:
 1. A way to *see* the other threads in the run.
 2. A way to *resume* one when the user circles back.
 
-The `std::threads` module gives you both:
+The `std::thread` module gives you both:
 
 ```ts
-import { listThreads, getThread, currentThreadId } from "std::threads"
+import { listThreads, getThread, currentThreadId } from "std::thread"
 ```
 
 And the `thread {}` block grows five optional named arguments:
@@ -83,8 +83,7 @@ if (isSuccess(msgs)) {
 `thread(continue: id)` re-enters a previously-closed thread. New messages append to its history rather than starting fresh:
 
 ```ts
-import { getThread, currentThreadId } from "std::threads"
-import { userMessage } from "std::thread"
+import { getThread, currentThreadId, userMessage } from "std::thread"
 
 node main() {
   let codingId: string = ""
@@ -163,8 +162,7 @@ The same goes for `thread(continue: id)` — capture a thread id with `currentTh
 Putting the pieces together — here's a router that classifies each user message, then dispatches to a per-category thread that auto-resumes if the user circles back:
 
 ```ts
-import { listThreads } from "std::threads"
-import { userMessage, llm } from "std::thread"
+import { listThreads, userMessage, llm } from "std::thread"
 import { setMemoryId } from "std::memory"
 
 node routedAgent(category: string, message: string) {
@@ -211,7 +209,7 @@ thread(hidden: true) {
 }
 ```
 
-The `std::threads` module's own `summarize()` helper uses exactly this pattern when it generates the lazy thread summaries.
+The `std::thread` module's own `summarize()` helper uses exactly this pattern when it generates the lazy thread summaries.
 
 ## Cross-node persistence
 

@@ -1,4 +1,4 @@
-import { listThreads, getThread } from "std::threads"
+import { listThreads, getThread } from "std::thread"
 import { userMessage } from "std::thread"
 
 // Verifies the registry observes threads created via `thread {}`

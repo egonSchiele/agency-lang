@@ -1,4 +1,4 @@
-import { currentThreadId } from "std::threads"
+import { currentThreadId } from "std::thread"
 
 node main() {
   // Each branch's view of the parent's ThreadStore gets a fresh

@@ -1,0 +1,32 @@
+import { filterHostedModels } from "../lib/modelFilters.agency"
+import { HostedModelInfo } from "std::llm"
+
+static const CATALOG: HostedModelInfo[] = [
+  { name: "cheap-oss", provider: "openrouter", openWeights: true, inputCost: 0.1, outputCost: 0.2, contextWindow: 32000, family: "x" },
+  { name: "pricey-closed", provider: "anthropic", openWeights: false, inputCost: 15.0, outputCost: 75.0, contextWindow: 200000, family: "y" }
+]
+
+node filterByProvider(): string {
+  const out = filterHostedModels(CATALOG, { provider: "anthropic" })
+  return "${out.length}:${out[0].name}"
+}
+
+node filterMaxPrice(): string {
+  const out = filterHostedModels(CATALOG, { maxPrice: 1.0 })
+  return "${out.length}:${out[0].name}"
+}
+
+node providerAndPriceCombine(): number {
+  // anthropic model is $15 in, so provider=anthropic + maxPrice=1 yields none.
+  return filterHostedModels(CATALOG, { provider: "anthropic", maxPrice: 1.0 }).length
+}
+
+node emptyProviderPassesAll(): number {
+  // provider "" is treated as "no provider filter" (the != "" guard). If that
+  // guard regressed, nothing matches provider "" and this would be 0, not 2.
+  return filterHostedModels(CATALOG, { provider: "" }).length
+}
+
+node noFiltersPassesAll(): number {
+  return filterHostedModels(CATALOG, {}).length
+}

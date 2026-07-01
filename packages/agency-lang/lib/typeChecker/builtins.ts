@@ -101,8 +101,13 @@ const llmOptions: VariableType = {
  * object. Derived from {@link llmOptionProperties} so the two forms never
  * drift. Codegen folds these named args back into the options object.
  */
-const llmNamedOptions: Record<string, VariableType> = Object.fromEntries(
-  llmOptionProperties.map((p) => [p.key, p.value]),
+const llmNamedOptions: Record<string, VariableType> = Object.assign(
+  // Null-prototype: the checker tests membership with `in`, so a normal
+  // prototype would make user-controlled names like `__proto__` /
+  // `constructor` appear "allowed" via the prototype chain (and codegen
+  // would then emit `{ "__proto__": ... }`, mutating the object prototype).
+  Object.create(null),
+  Object.fromEntries(llmOptionProperties.map((p) => [p.key, p.value])),
 );
 
 /**

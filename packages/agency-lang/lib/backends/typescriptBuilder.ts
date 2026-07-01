@@ -3007,6 +3007,10 @@ export class TypeScriptBuilder {
           configEntries.push(
             ts.set(`"${keyCode}"`, this.processNode(arg.value)),
           );
+        } else if (arg.type === "splat") {
+          // `processCallArg` already lowers a splat to a spread node; spread
+          // the underlying expression once to avoid emitting `......expr`.
+          configEntries.push(ts.setSpread(this.processNode(arg.value)));
         } else {
           configEntries.push(ts.setSpread(this.processCallArg(arg)));
         }

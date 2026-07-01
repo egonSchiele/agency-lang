@@ -118,4 +118,20 @@ describe("builtin named-arg validation (llm options)", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => /number/i.test(e.message))).toBe(true);
   });
+
+  it("rejects prototype-chain names as options (no prototype pollution)", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", __proto__: "x")\n print(r) }`,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => /__proto__/.test(e.message))).toBe(true);
+  });
+
+  it("rejects 'constructor' as an option (no prototype-chain match)", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", constructor: "x")\n print(r) }`,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => /constructor/.test(e.message))).toBe(true);
+  });
 });

@@ -38,7 +38,23 @@ export type LlmDefaults = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L25))
+
+### HostedModelInfo
+
+```ts
+export type HostedModelInfo = {
+  name: string;
+  provider: string;
+  openWeights: boolean;
+  inputCost: number;
+  outputCost: number;
+  contextWindow: number;
+  family: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L124))
 
 ## Functions
 
@@ -59,7 +75,7 @@ Set default options for subsequent llm() calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L34))
 
 ### setModel
 
@@ -77,7 +93,7 @@ Set the default model for subsequent llm() calls.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L44))
 
 ### envVarFor
 
@@ -102,7 +118,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L53))
 
 ### pickProvider
 
@@ -125,7 +141,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L82))
 
 ### registerProviderModule
 
@@ -144,4 +160,38 @@ Load a provider module by path at runtime and register its custom provider
 |---|---|---|
 | path | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L112))
+
+### listHostedModels
+
+```ts
+listHostedModels(): HostedModelInfo[]
+```
+
+All known hosted text models (baked catalog plus any refreshed data), for
+  discovery and model pickers. Backed by smoltalk's getAllModels.
+
+**Returns:** `HostedModelInfo[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L134))
+
+### hostedModelInfo
+
+```ts
+hostedModelInfo(name: string): HostedModelInfo | null
+```
+
+Metadata for one hosted model by name, or null if the name is unknown or
+  is not a text model.
+
+  @param name - The hosted model name (e.g. "gpt-4o-mini")
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+
+**Returns:** `HostedModelInfo | null`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L142))

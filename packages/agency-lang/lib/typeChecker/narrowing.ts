@@ -12,8 +12,11 @@ import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 // Type-only import: `flow.ts` imports `Refine`/`NarrowCandidate` from here, so a
 // value import would cycle. `Reference` is the narrowed path (variable + chain).
-import { chainToSegments } from "./flow.js";
-import type { Reference } from "./flow.js";
+// Import the path-segment core from its own module (NOT flow.ts) — flow.ts
+// value-imports narrowByRefine from here, so a value import back from flow.ts
+// would form a runtime cycle. See pathSegments.ts.
+import { chainToSegments } from "./pathSegments.js";
+import type { Reference } from "./pathSegments.js";
 
 /**
  * What a candidate narrows to. Tagged so a new narrowing form slots in as one

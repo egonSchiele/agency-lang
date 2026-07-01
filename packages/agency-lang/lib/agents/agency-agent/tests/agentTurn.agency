@@ -136,6 +136,14 @@ node switchDoesNotMutatePrior(): string {
   return prior.pin
 }
 
+// An unknown slot (e.g. a typo) is rejected: the assignment is unchanged and
+// nothing is reported as changed.
+node switchRejectsUnknownSlot(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "resoning=opus", SWITCH_CTX, SWITCH_BEFORE)
+  return "${slotModel(out.resolved, "main")}|${out.changes.length}"
+}
+
 // A main-slot provider change emits the recall notice (and pauses memory).
 node reactNotifiesOnMainProviderChange(): boolean {
   const change: SlotChange = {

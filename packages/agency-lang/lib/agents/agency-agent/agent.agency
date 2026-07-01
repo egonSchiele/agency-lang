@@ -341,20 +341,34 @@ export def switchModel(
     slots: nextSlots
   }
   const parsed = parseModelFlag(spec)
+  if (parsed.slot != "" && parsed.slot != "main" && parsed.slot != "reasoning") {
+    pushMessage(
+      color.red("Unknown model slot '${parsed.slot}'. Valid slots: main, reasoning."),
+    )
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
   if (parsed.slot == "") {
     next.pin = parsed.model
   } else {
     next.slots[parsed.slot] = parsed.model
   }
 
+  // A saved provider (settings.model.provider) means a provider is established,
+  // so a unified provider/model spec should not be split during resolution.
+  const settings = getModelSettings(loadSettings())
+  const providerEstablished = settings.provider != null && settings.provider != ""
   const layers = buildLayers(
     next.pin,
     next.slots,
     "",
     {},
-    getModelSettings(loadSettings()),
+    settings,
     knownProviders(),
-    false,
+    providerEstablished,
   )
   const all = resolveAll(layers, ctx)
   if (isFailure(all)) {
@@ -419,7 +433,7 @@ def _runTurn(msg: string): boolean {
   }
   if (trimmed == "/help") {
     pushMessage(
-      "Commands: /exit, /clear, /clear-history, /cost, /search, /paste, /help",
+      "Commands: /exit, /clear, /clear-history, /cost, /model, /local, /search, /paste, /help",
     )
     return true
   }
@@ -485,8 +499,8 @@ def _runTurn(msg: string): boolean {
         "Model",
         "Type a model, or slot=model (e.g. reasoning=claude-opus-4-8). Empty to cancel.",
         noItems,
-        false,
-        true,
+        allowFreeText: true,
+        allowCancel: true,
       )
       if (choice == "" || choice == null) {
         return true
@@ -529,12 +543,12 @@ def _runTurn(msg: string): boolean {
     }
     const choice = chooseOption(
       "Local model",
-      "Pick a local model (downloads on first use):",
+      "Pick a local model, or type an hf: URI / .gguf path (downloads on first use):",
       items,
-      false,
-      true,
+      allowFreeText: true,
+      allowCancel: true,
     )
-    if (choice == "" || choice == null || choice == undefined) {
+    if (choice == "" || choice == null) {
       return true
     }
     const before = getResolvedSlots()
@@ -1074,12 +1088,12 @@ node main() {
     }
     const choice = chooseOption(
       "Local model",
-      "Pick a model to download/run (downloads on first use):",
+      "Pick a model, or type an hf: URI / .gguf path (downloads on first use):",
       items,
-      false,
-      true,
+      allowFreeText: true,
+      allowCancel: true,
     )
-    if (choice == "" || choice == null || choice == undefined) {
+    if (choice == "" || choice == null) {
       process.exit(0)
     }
     configureLocalModel(choice)
@@ -1105,6 +1119,13 @@ node main() {
         fastFlag = parsed.model
       } else if (parsed.slot == "reasoning") {
         slowFlag = parsed.model
+      } else {
+        print(
+          color.red(
+          "Unknown model slot '${parsed.slot}' in --model. Valid slots: main, reasoning.",
+        ),
+        )
+        process.exit(1)
       }
     }
     const fm = args.flags.fastmodel ?? ""

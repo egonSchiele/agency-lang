@@ -356,6 +356,27 @@ node main() {
     expect(errs.some((x) => /does not exist/i.test(x.message))).toBe(false);
   });
 
+  it("an effect named like a prototype key that is NOT an own registry entry is safe", () => {
+    // Effect names are user-controlled (bare identifiers allowed). Here `toString`
+    // is dropped from the registry (conflicting declarations), so it has no OWN
+    // entry. Without an own-property guard, `registry["toString"]` would resolve
+    // to Object.prototype.toString (a function) — crashing the raise-site check
+    // and mistyping `e.data` as that function. The guard makes `data` fall back
+    // to `any`, so field access is permitted and nothing crashes. We assert only
+    // the conflict diagnostic — no crash, no spurious "does not exist".
+    const errs = errorsFrom(`
+effect toString { a: number }
+effect toString { a: string }
+def risky() { raise toString("t", { a: 1 }) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "toString") { let x = e.data.anything }
+  }
+}`);
+    expect(errs.some((x) => /Conflicting payload types for effect 'toString'/.test(x.message))).toBe(true);
+    expect(errs.some((x) => /does not exist/i.test(x.message))).toBe(false);
+  });
+
   it("LIMITATION: a match(e) object-pattern arm does not narrow e.data inside the arm", () => {
     // Object-pattern match arms match+dispatch but do NOT narrow the scrutinee's
     // member access within the arm body, so `e.data.n` sees the full payload

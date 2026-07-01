@@ -38,11 +38,15 @@ function handlerParamType(
   kinds: string[],
   registry: Record<string, ObjectType>,
 ): VariableType {
+  // Own-property guard: effect kinds are user-controlled strings, so a reserved
+  // key ("__proto__"/"toString"/…) must not resolve a payload via Object.prototype.
+  const payloadFor = (kind: string): VariableType =>
+    Object.prototype.hasOwnProperty.call(registry, kind) ? registry[kind] : ANY_T;
   const member = (kind: string): VariableType => ({
     type: "objectType",
     properties: [
       { key: "effect", value: stringLiteral(kind) },
-      { key: "data", value: registry[kind] ?? ANY_T },
+      { key: "data", value: payloadFor(kind) },
       { key: "message", value: ANY_T },
       { key: "origin", value: ANY_T },
     ],

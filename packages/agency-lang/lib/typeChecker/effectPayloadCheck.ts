@@ -26,8 +26,10 @@ export function checkEffectPayloads(
     ctx.withScope(info.scopeKey, () => {
       for (const { node } of walkNodes(info.body)) {
         if (node.type !== "interruptStatement") continue;
+        // Own-property guard: `node.effect` is a user-controlled string, so a
+        // reserved key must not resolve a payload via Object.prototype.
+        if (!Object.prototype.hasOwnProperty.call(reg, node.effect)) continue;
         const payloadType = reg[node.effect];
-        if (!payloadType) continue;
         checkRaiseSite(node, payloadType, info, ctx);
       }
     });
@@ -44,13 +46,16 @@ type DeclEntry = { decl: EffectDeclaration; file: string };
  */
 export function buildEffectRegistry(ctx: TypeCheckerContext): Record<string, ObjectType> {
   const grouped = groupBy(collectDeclarations(ctx), (e) => e.decl.effect);
-  return Object.fromEntries(
-    Object.entries(grouped).flatMap(([effect, entries]) => {
-      reportSameFileDuplicates(effect, entries, ctx);
-      const merged = mergePayload(effect, entries, ctx);
-      return merged ? [[effect, merged] as const] : [];
-    }),
-  );
+  // Null-prototype dict: effect names are user-controlled strings (they may be
+  // bare identifiers), so a reserved key like "__proto__"/"constructor"/"toString"
+  // must not corrupt the registry on write or resolve via Object.prototype on read.
+  const registry: Record<string, ObjectType> = Object.create(null);
+  for (const [effect, entries] of Object.entries(grouped)) {
+    reportSameFileDuplicates(effect, entries, ctx);
+    const merged = mergePayload(effect, entries, ctx);
+    if (merged) registry[effect] = merged;
+  }
+  return registry;
 }
 
 /** Prefer the import closure (ambient); fall back to the current program's
@@ -71,7 +76,9 @@ function groupBy<T, K extends string>(
   items: T[],
   key: (t: T) => K,
 ): Record<K, T[]> {
-  const out = {} as Record<K, T[]>;
+  // Null-prototype accumulator: keys derive from user-controlled strings (effect
+  // names, file paths), so a reserved key must not read/write Object.prototype.
+  const out = Object.create(null) as Record<K, T[]>;
   for (const item of items) (out[key(item)] ??= []).push(item);
   return out;
 }

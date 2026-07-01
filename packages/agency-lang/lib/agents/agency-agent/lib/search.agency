@@ -4,7 +4,7 @@
   One active backend at a time:
   - `hosted` — provider-native `web_search` (OpenAI Responses / Anthropic /
     Google); free with the user's LLM key, but only on a cloud provider.
-  - `tavily` / `brave` — `std::search` client tools, keyed from
+  - `tavily` / `brave` — `std::web/search` client tools, keyed from
     `TAVILY_API_KEY` / `BRAVE_API_KEY`. Work with any model, including
     local ones.
   - `off` — no web search.
@@ -27,7 +27,7 @@
 */
 import { env, isTTY } from "std::system"
 import { select, confirm, ChoiceItem } from "std::ui"
-import { search as braveSearch, tavilySearch } from "std::search"
+import { search as braveSearch, tavilySearch } from "std::web/search"
 import { loadSettings, saveSettings } from "./settings.agency"
 
 // --- Types ---------------------------------------------------------------

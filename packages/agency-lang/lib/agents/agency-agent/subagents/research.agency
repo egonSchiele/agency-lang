@@ -121,7 +121,7 @@ underlining, and properly highlighted code fences.
 // The wikipedia tools are imported under aliases (`search as
 // wikipediaSearch`, …), but an import alias only renames the binding — the
 // tool name stays the underlying `search` / `summary` / `article`. Without
-// `.rename()`, `wikipediaSearch` collides with `std::search`'s `search` in
+// `.rename()`, `wikipediaSearch` collides with `std::web/search`'s `search` in
 // this same list (both advertise the tool name "search"), which providers
 // reject. Rename them to distinct, self-describing names.
 export static const researchTools: any[] = [

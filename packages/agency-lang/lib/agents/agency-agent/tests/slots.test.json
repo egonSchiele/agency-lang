@@ -1,0 +1,10 @@
+{
+  "sourceFile": "slots.agency",
+  "tests": [
+    { "nodeName": "aliasFastToMain", "input": "", "expectedOutput": "\"main\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknownStaysUnknown", "input": "", "expectedOutput": "false", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "knownAfterAlias", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "kindOfReasoning", "input": "", "expectedOutput": "\"slow\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "kindOfEmbedding", "input": "", "expectedOutput": "\"derived\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

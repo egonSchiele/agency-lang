@@ -5,12 +5,23 @@
  * ordering) so cases are independent. `with approve` auto-approves the
  * fs interrupts that read/write/mkdir raise — the test is the user opt-in.
  */
-import { loadSettings, saveSettings } from "../lib/settings.agency"
-import { POLICY_DIR, SETTINGS_FILE, SETTINGS_PATH } from "../lib/config.agency"
 import { remove } from "std::fs"
 
+import { POLICY_DIR, SETTINGS_FILE, SETTINGS_PATH } from "../lib/config.agency"
+import {
+  loadSettings,
+  saveSettings,
+  sanitizeModelSettings,
+  getModelSettings,
+  ModelSettings,
+ } from "../lib/settings.agency"
+
 node roundTripsTheSearchBackend(): string {
-  saveSettings({ search: { backend: "tavily" } }) with approve
+  saveSettings({
+    search: {
+      backend: "tavily"
+    }
+  }) with approve
   const loaded = loadSettings() with approve
   return loaded.search.backend
 }
@@ -34,3 +45,43 @@ node corruptFileLoadsAsEmpty(): string {
   }
   return "unexpected: ${loaded.search.backend}"
 }
+
+node dropsUnknownSlotKey(): ModelSettings {
+  return sanitizeModelSettings(
+    {
+    slots: {
+      reasoning: "opus",
+      resoning: "typo"
+    }
+  },
+  )
+}
+
+node doesNotMutateInput(): string {
+  const input: ModelSettings = {
+    slots: {
+      reasoning: "opus",
+      resoning: "typo"
+    }
+  }
+  sanitizeModelSettings(input)
+  if (input.slots["resoning"] == "typo") {
+    return "unmutated"
+  }
+  return "MUTATED"
+}
+
+node roundTripsModelSlots(): string {
+  saveSettings(
+    {
+    model: {
+      slots: {
+        reasoning: "claude-opus-4-8"
+      }
+    }
+  },
+  ) with approve
+  const loaded = loadSettings() with approve
+  return getModelSettings(loaded).slots["reasoning"]
+}
+

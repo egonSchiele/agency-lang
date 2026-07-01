@@ -3,7 +3,29 @@
  * the Responses API (both fast and slow) so hosted web_search works on the
  * agent's default models. Other providers are unchanged.
  */
-import { planModels, resolveDetected, ModelPlan } from "../lib/models.agency"
+import {
+  planModels,
+  resolveDetected,
+  ModelPlan,
+  parseModelSpec,
+  ModelSpec,
+  priceDefault,
+  Resolved,
+  parseModelFlag,
+ } from "../lib/models.agency"
+
+static const KNOWN = ["openai", "anthropic", "google", "openrouter", "litellm"]
+
+def unwrapResolved(result: Result<Resolved>): Resolved {
+  if (isFailure(result)) {
+    return {
+      model: "ERR",
+      provider: "ERR",
+      via: "ERR"
+    }
+  }
+  return result.value
+}
 
 node openaiDetectedRoutesBothToResponses(): ModelPlan {
   return planModels("", "", "", "", "openai")
@@ -33,3 +55,60 @@ node litellmWithoutModelIsError(): boolean {
   }
   return false
 }
+
+node specSplitOnKnownProvider(): ModelSpec {
+  return parseModelSpec("anthropic/claude-opus-4-8", false, KNOWN)
+}
+
+node specOpenrouterMultiSegment(): ModelSpec {
+  return parseModelSpec("openrouter/deepseek/deepseek-r1", false, KNOWN)
+}
+
+node specProviderEstablishedNoSplit(): ModelSpec {
+  return parseModelSpec("deepseek/deepseek-r1", true, KNOWN)
+}
+
+node specBareModel(): ModelSpec {
+  return parseModelSpec("gpt-5.5", false, KNOWN)
+}
+
+node specUnknownPrefixNoSplit(): ModelSpec {
+  return parseModelSpec("unknown-vendor/some-model", false, KNOWN)
+}
+
+node priceMainAnthropic(): Resolved {
+  return unwrapResolved(priceDefault("anthropic", "main", "standard"))
+}
+
+node priceReasoningAnthropic(): Resolved {
+  return unwrapResolved(priceDefault("anthropic", "reasoning", "standard"))
+}
+
+node priceMainOpenaiPromoted(): Resolved {
+  return unwrapResolved(priceDefault("openai", "main", "standard"))
+}
+
+node priceEmbeddingDerived(): Resolved {
+  return unwrapResolved(priceDefault("anthropic", "embedding", "standard"))
+}
+
+node priceUnknownProviderFails(): boolean {
+  return isFailure(priceDefault("litellm", "main", "standard"))
+}
+
+node modelFlagPerSlot(): { slot: string; model: string } {
+  return parseModelFlag("reasoning=claude-opus-4-8")
+}
+
+node modelFlagGlobal(): { slot: string; model: string } {
+  return parseModelFlag("gpt-5.5")
+}
+
+node modelFlagAliasFast(): { slot: string; model: string } {
+  return parseModelFlag("fast=gpt-4o")
+}
+
+node modelFlagUnifiedNoMissplit(): { slot: string; model: string } {
+  return parseModelFlag("anthropic/claude-opus-4-8")
+}
+

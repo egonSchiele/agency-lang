@@ -18,6 +18,9 @@
       "input": "",
       "expectedOutput": "\"empty\"",
       "evaluationCriteria": [{ "type": "exact" }]
-    }
+    },
+    { "nodeName": "dropsUnknownSlotKey", "input": "", "expectedOutput": "{\"slots\":{\"reasoning\":\"opus\"}}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "doesNotMutateInput", "input": "", "expectedOutput": "\"unmutated\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "roundTripsModelSlots", "input": "", "expectedOutput": "\"claude-opus-4-8\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

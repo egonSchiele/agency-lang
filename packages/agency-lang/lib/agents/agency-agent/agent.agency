@@ -1,10 +1,21 @@
 import { getVersion } from "std::agency"
+import {
+  printLocalCatalog,
+  localModelsSupported,
+  listModelNames,
+ } from "std::agency/local"
 import { parseArgs } from "std::args"
-import { clearMessages, pushMessage, repl, clearScreen, clearHistory } from "std::cli"
+import {
+  clearMessages,
+  pushMessage,
+  repl,
+  clearScreen,
+  clearHistory,
+ } from "std::cli"
 import { today } from "std::date"
 import { setAgentCwd } from "std::index"
 import { box, render } from "std::layout"
-import { setMemoryId } from "std::memory"
+import { setMemoryId, disableMemory } from "std::memory"
 import {
   ScopedRuleFields,
   cliPolicyHandler,
@@ -24,10 +35,31 @@ import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
+import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
+import {
+  buildLayers,
+  resolveAll,
+  diffResolved,
+  Ctx,
+  SlotChange,
+ } from "./lib/resolution.agency"
+import {
+  configureSearch,
+  setSearchBackend,
+  getSearchBackend,
+  availableBackendItems,
+ } from "./lib/search.agency"
+import { getModelSettings, loadSettings } from "./lib/settings.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { printLocalCatalog } from "std::agency/local"
-import { configureModels, configureLocalModel, enableAgentMemory } from "./shared.agency"
-import { configureSearch, setSearchBackend, getSearchBackend, availableBackendItems } from "./lib/search.agency"
+import {
+  configureModels,
+  configureLocalModel,
+  enableAgentMemory,
+  getResolvedSlots,
+  applyResolved,
+  promoteAll,
+  currentProvider,
+ } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
@@ -165,8 +197,8 @@ callback("onLLMRetry") as data {
   if (_showTraces()) {
     pushMessage(
       color.dim(
-        "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
-      ),
+      "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
+    ),
     )
   }
 }
@@ -196,7 +228,7 @@ type ToolCallData = {
 }
 
 type LLMResponse = {
-  output: string | null;
+  output?: string;
   toolCalls: ToolCallData[];
   usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
   cost: { inputCost: number; outputCost: number; cachedInputCost: number; totalCost: number; currency: string };
@@ -250,6 +282,8 @@ def builtinPalette(): Record<string, string> {
     "/clear": "Clear the conversation transcript",
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
+    "/model": "Switch the model (bare to pick, or slot=model)",
+    "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
@@ -272,6 +306,105 @@ def mergedPalette(): Record<string, string> {
     out[key] = builtins[key]
   }
   return out
+}
+
+// In-session model selection state. One mutable cell holding the current
+// Session (the pin + per-slot overrides chosen via /model this run). switchModel
+// is pure over this value — it copies, never mutates — so it stays testable.
+export type Session = {
+  pin: string;
+  slots: Record<string, string>
+}
+
+let _session: Session = {
+  pin: "",
+  slots: {}
+}
+
+/** Apply an in-session model selection. Copies `prior` (never mutates), folds in
+  the new spec (bare → pin; slot=model → per-slot), resolves, applies, and returns
+  the new session + assignment + the slots that changed (so the caller can react,
+  e.g. the cross-provider recall notice). Turn-boundary semantics: takes effect on
+  the NEXT turn; no in-flight call is mutated. */
+export def switchModel(
+  prior: Session,
+  spec: string,
+  ctx: Ctx,
+  before: Record<string, Resolved>,
+): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
+  let nextSlots: Record<string, string> = {}
+  for (key in Object.keys(prior.slots)) {
+    nextSlots[key] = prior.slots[key]
+  }
+  let next: Session = {
+    pin: prior.pin,
+    slots: nextSlots
+  }
+  const parsed = parseModelFlag(spec)
+  if (parsed.slot != "" && parsed.slot != "main" && parsed.slot != "reasoning") {
+    pushMessage(
+      color.red("Unknown model slot '${parsed.slot}'. Valid slots: main, reasoning."),
+    )
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  if (parsed.slot == "") {
+    next.pin = parsed.model
+  } else {
+    next.slots[parsed.slot] = parsed.model
+  }
+
+  // A saved provider (settings.model.provider) means a provider is established,
+  // so a unified provider/model spec should not be split during resolution.
+  const settings = getModelSettings(loadSettings())
+  const providerEstablished = settings.provider != null && settings.provider != ""
+  const layers = buildLayers(
+    next.pin,
+    next.slots,
+    "",
+    {},
+    settings,
+    knownProviders(),
+    providerEstablished,
+  )
+  const all = resolveAll(layers, ctx)
+  if (isFailure(all)) {
+    pushMessage(color.red("Could not switch model: ${all.error}"))
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  const resolved = promoteAll(all.value)
+  applyResolved(resolved)
+  return {
+    session: next,
+    resolved: resolved,
+    changes: diffResolved(before, resolved)
+  }
+}
+
+/** React to one resolved-slot change. Phase 1: a `main`-slot provider change
+  means the embedding space behind memory changed, so pause memory and warn.
+  (std::memory has no tier-2-only toggle yet -- full pause; structured recall
+  returns when a selective toggle lands.) Returns true if it emitted the notice. */
+export def reactToSlotChange(change: SlotChange): boolean {
+  if (change.slot == "main" && change.before.provider != change.after.provider) {
+    pushMessage(
+      color.dim(
+      "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
+    ),
+    )
+    // `with approve`: the agent is deliberately auto-pausing memory on a
+    // provider switch, not asking the user — so don't surface an approval prompt.
+    disableMemory() with approve
+    return true
+  }
+  return false
 }
 
 // Slash-command + user-message dispatcher invoked by `repl()` for
@@ -299,7 +432,9 @@ def _runTurn(msg: string): boolean {
     return true
   }
   if (trimmed == "/help") {
-    pushMessage("Commands: /exit, /clear, /clear-history, /cost, /search, /paste, /help")
+    pushMessage(
+      "Commands: /exit, /clear, /clear-history, /cost, /model, /local, /search, /paste, /help",
+    )
     return true
   }
   if (trimmed == "/search") {
@@ -309,7 +444,7 @@ def _runTurn(msg: string): boolean {
       "Pick how this agent searches the web. Current: ${getSearchBackend()}",
       opts,
       false,
-      true
+      true,
     )
     if (choice != "" && choice != null && choice != undefined) {
       setSearchBackend(choice)
@@ -338,11 +473,94 @@ def _runTurn(msg: string): boolean {
       pushMessage("")
       pushMessage("By model:")
       for (m in byModel) {
-        pushMessage("  ${m.model}  ↑${m.inputTokens} ↓${m.outputTokens}  $${m.cost.toFixed(4)}")
+        pushMessage(
+          "  ${m.model}  ↑${m.inputTokens} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
+        )
       }
     }
     return true
   }
+  if (trimmed == "/model" || trimmed.startsWith("/model ")) {
+    let spec = ""
+    if (trimmed != "/model") {
+      spec = trimmed.substring(7).trim()
+    }
+    if (spec == "") {
+      pushMessage("Current models:")
+      const current = getResolvedSlots()
+      for (slot in Object.keys(current)) {
+        const resolved = current[slot]
+        if (resolved != null) {
+          pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
+        }
+      }
+      let noItems: ChoiceItem[] = []
+      const choice = chooseOption(
+        "Model",
+        "Type a model, or slot=model (e.g. reasoning=claude-opus-4-8). Empty to cancel.",
+        noItems,
+        allowFreeText: true,
+        allowCancel: true,
+      )
+      if (choice == "" || choice == null) {
+        return true
+      }
+      spec = choice
+    }
+    const ctx: Ctx = {
+      provider: currentProvider(),
+      price: "standard"
+    }
+    const out = switchModel(_session, spec, ctx, getResolvedSlots())
+    _session = out.session
+    for (change in out.changes) {
+      reactToSlotChange(change)
+    }
+    pushMessage("Model set:")
+    for (slot in Object.keys(out.resolved)) {
+      const resolved = out.resolved[slot]
+      if (resolved != null) {
+        pushMessage(color.dim("  ${slot}: ${resolved.model} (${resolved.via})"))
+      }
+    }
+    return true
+  }
+  if (trimmed == "/local") {
+    if (!localModelsSupported()) {
+      pushMessage(
+        color.yellow(
+        "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
+      ),
+      )
+      return true
+    }
+    let items: ChoiceItem[] = []
+    for (modelName in listModelNames()) {
+      items.push({
+        key: modelName.name,
+        label: modelName.name
+      })
+    }
+    const choice = chooseOption(
+      "Local model",
+      "Pick a local model, or type an hf: URI / .gguf path (downloads on first use):",
+      items,
+      allowFreeText: true,
+      allowCancel: true,
+    )
+    if (choice == "" || choice == null) {
+      return true
+    }
+    const before = getResolvedSlots()
+    configureLocalModel(choice)
+    configureSearch(true)
+    for (change in diffResolved(before, getResolvedSlots())) {
+      reactToSlotChange(change)
+    }
+    pushMessage("Switched to local model: ${choice}")
+    return true
+  }
+
   // Hand the message to the agent. `agentReply` does the slash-command
   // expansion and the actual agent work; the REPL just renders the reply.
   // Wrap in `try` so a terminal LLM failure (e.g. the connection dropped and
@@ -814,10 +1032,15 @@ node main() {
         type: "string",
         description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
       },
+      local: {
+        type: "string",
+        optional: true,
+        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value for guided setup. Pins all slots to the local model; mutually exclusive with --model/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+      },
       "local-model": {
         type: "string",
         optional: true,
-        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value to list available models. Sets fast+slow to the local model and ignores --model/--provider/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+        description: "Deprecated alias for --local."
       }
     }
   },
@@ -830,37 +1053,90 @@ node main() {
     VERBOSE = true
   }
 
-  // Resolve which models to use. Explicit flags win; otherwise detect a
-  // provider from API-key env vars and use that provider's defaults. The
-  // fast model becomes the run-wide default via `setModel`; the slow
-  // model is read by the deep-reasoning subagents (oracle, explorer).
-  // `--local-model` is an optionalValue flag, giving three states:
-  //   absent  → `undefined` (compares false to both "" and null in agency)
-  //   bare    → "" (user wants to see the choices)
-  //   value   → the model name / hf: URI / .gguf path
-  // A bare flag lists the catalog and exits before any handlers/REPL start.
-  const localModel = args.flags["local-model"]
-  if (localModel == "") {
-    print("--local-model needs a model to run. Pick one of these short names:")
-    print("(or pass an hf: URI, a .gguf path, or an alias from `agency local alias add`)")
-    print("")
-    printLocalCatalog()
-    print("")
-    print("Example: agency agent --local-model smollm2-135m")
-    process.exit(0)
-  } else if (localModel) {
-    configureLocalModel(localModel)
+  // Model setup. `--local` (deprecated alias: `--local-model`) is an optional-
+  // value flag with three states: absent (null); bare empty-string for guided
+  // setup; a value for that local model. `--local` and the hosted flags
+  // (--model / --fastmodel / --slowmodel) are mutually exclusive -- local and
+  // hosted are different in kind (provider llama-cpp, no embedding endpoint).
+  const localVal = args.flags["local"] ?? args.flags["local-model"]
+  const modelArg = args.flags.model ?? ""
+  const hasModelFlags = modelArg != "" || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
+  if (localVal != null && hasModelFlags) {
+    print(
+      color.red("Pass either --model (hosted) or --local (local), not both."),
+    )
+    process.exit(1)
+  }
+  if (localVal == "") {
+    // Bare --local: guided setup. Non-interactive can't prompt, so keep the
+    // print-catalog-and-exit behavior there.
+    if (!isTTY()) {
+      printLocalCatalog()
+      process.exit(0)
+    }
+    if (!localModelsSupported()) {
+      print(color.yellow("Local models need the smoltalk-llama-cpp package."))
+      print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
+      process.exit(1)
+    }
+    let items: ChoiceItem[] = []
+    for (modelName in listModelNames()) {
+      items.push({
+        key: modelName.name,
+        label: modelName.name
+      })
+    }
+    const choice = chooseOption(
+      "Local model",
+      "Pick a model, or type an hf: URI / .gguf path (downloads on first use):",
+      items,
+      allowFreeText: true,
+      allowCancel: true,
+    )
+    if (choice == "" || choice == null) {
+      process.exit(0)
+    }
+    configureLocalModel(choice)
+    configureSearch(true)
+    // fall through into the session on the chosen local model
+  } else if (localVal != null) {
+    configureLocalModel(localVal)
     // Intentionally do NOT enable memory for a local model: the llama-cpp
     // provider has no embedding endpoint, so memory would only emit a
     // "Tier-2 disabled" notice. std::memory calls no-op while it's off.
     configureSearch(true)
   } else {
-    configureModels(
-      args.flags.model ?? "",
-      args.flags.fastmodel ?? "",
-      args.flags.slowmodel ?? "",
-      args.flags.provider ?? "",
-    )
+    // Hosted path. --model accepts `slot=model` (per-slot) or a bare model
+    // (global pin); explicit --fastmodel/--slowmodel win over a --model slot=.
+    const parsed = parseModelFlag(modelArg)
+    let modelGlobal = ""
+    let fastFlag = ""
+    let slowFlag = ""
+    if (modelArg != "") {
+      if (parsed.slot == "") {
+        modelGlobal = parsed.model
+      } else if (parsed.slot == "main") {
+        fastFlag = parsed.model
+      } else if (parsed.slot == "reasoning") {
+        slowFlag = parsed.model
+      } else {
+        print(
+          color.red(
+          "Unknown model slot '${parsed.slot}' in --model. Valid slots: main, reasoning.",
+        ),
+        )
+        process.exit(1)
+      }
+    }
+    const fm = args.flags.fastmodel ?? ""
+    const sm = args.flags.slowmodel ?? ""
+    if (fm != "") {
+      fastFlag = fm
+    }
+    if (sm != "") {
+      slowFlag = sm
+    }
+    configureModels(modelGlobal, fastFlag, slowFlag, args.flags.provider ?? "")
     // Persistent knowledge graph — enabled for hosted providers, skipped for
     // local models. (Some hosted providers, e.g. anthropic, still lack an
     // embedding endpoint and just disable Tier-2 recall with a one-time
@@ -938,3 +1214,4 @@ node main() {
   const handler = setupSession(true)
   startInteractive(handler, "", "")
 }
+

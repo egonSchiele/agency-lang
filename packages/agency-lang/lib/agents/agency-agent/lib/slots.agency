@@ -1,0 +1,34 @@
+/** @module Slot registry + dispatch table for model selection. A slot is a
+  named purpose a model fills. `SLOT_KIND` keeps slot-specific behavior keyed on
+  a CLOSED enum so consumers switch on the kind, not the raw name; adding a slot
+  whose semantics match an existing kind is a one-line data edit. Pure. */
+
+export static const SLOTS = ["main", "reasoning", "embedding"]
+export static const SLOT_ALIASES: Record<string, string> = {
+  fast: "main",
+  slow: "reasoning"
+}
+
+export type SlotKind = "fast" | "slow" | "derived"
+
+export static const SLOT_KIND: Record<string, SlotKind> = {
+  main: "fast",
+  reasoning: "slow",
+  embedding: "derived"
+}
+
+export def canonicalSlot(name: string): string {
+  if (SLOT_ALIASES[name] != null) {
+    return SLOT_ALIASES[name]
+  }
+  return name
+}
+
+export def isKnownSlot(name: string): boolean {
+  return SLOTS.includes(canonicalSlot(name))
+}
+
+export def slotKind(name: string): SlotKind {
+  return SLOT_KIND[canonicalSlot(name)]
+}
+

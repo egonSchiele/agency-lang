@@ -9,12 +9,16 @@
  * Routing + handoff used to live here; those moved to `std::agent`'s
  * `route()` / `handoff()` and the agent now consumes them directly.
  */
+import { registerLocalModel } from "std::agency/local"
 import { setLlmOptions } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
-import { registerLocalModel } from "std::agency/local"
 
-import { resolveDetected, planModels } from "./lib/models.agency"
+import { resolveDetected, knownProviders, Resolved } from "./lib/models.agency"
+import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
+import { getModelSettings, loadSettings } from "./lib/settings.agency"
+import { slotKind } from "./lib/slots.agency"
+
 
 // Per-user state directory for the agent (persistent memory + saved
 // policy). We expand `~` ourselves via `env("HOME")` because
@@ -52,7 +56,9 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // (openai → text-embedding-3-small, google → text-embedding-004,
 // ollama → nomic-embed-text). Set `embeddings.model` explicitly to override.
 export def enableAgentMemory() {
-  enableMemory({ dir: "${AGENCY_AGENT_DIR}/memory" }) with approve
+  enableMemory({
+    dir: "${AGENCY_AGENT_DIR}/memory"
+  }) with approve
 }
 
 // The slow ("deep reasoning") model + its provider, set once by
@@ -67,6 +73,81 @@ export def getSlowModel(): string {
 }
 
 export def getSlowProvider(): string {
+  return slowProvider
+}
+
+// Cache of the last applied assignment, for getResolvedSlots() (the explain
+// view + tests) and the cross-provider switch diff.
+let _resolved: Record<string, Resolved> = {}
+
+export def setSlowModel(name: string, provider: string) {
+  slowModel = name
+  slowProvider = provider
+}
+
+// The agent always uses the OpenAI Responses API (for hosted web_search), so
+// any resolved `openai` provider is promoted to `openai-responses`. The built-in
+// defaults already carry this (via planModels); this also covers the
+// --model/--provider override paths. Idempotent.
+def promoteProvider(provider: string): string {
+  if (provider == "openai") {
+    return "openai-responses"
+  }
+  return provider
+}
+
+export def promoteAll(
+  slots: Record<string, Resolved>,
+): Record<string, Resolved> {
+  let promoted: Record<string, Resolved> = {}
+  for (slot in Object.keys(slots)) {
+    const resolved = slots[slot]
+    if (resolved == null) {
+      continue
+    }
+    promoted[slot] = {
+      model: resolved.model,
+      provider: promoteProvider(resolved.provider),
+      via: resolved.via
+    }
+  }
+  return promoted
+}
+
+/** Apply a resolved assignment. Dispatch on SLOT_KIND so adding a slot is a
+  data edit, not another branch. `derived` (embedding) is a deliberate no-op —
+  memory derives its own embed model from the active provider. Caches the
+  applied slots for getResolvedSlots(). */
+export def applyResolved(slots: Record<string, Resolved>) {
+  _resolved = slots
+  for (slot in Object.keys(slots)) {
+    const resolved = slots[slot]
+    if (resolved == null) {
+      continue
+    }
+    const kind = slotKind(slot)
+    if (kind == "fast") {
+      setLlmOptions(
+        {
+        model: resolved.model,
+        provider: resolved.provider
+      },
+      )
+    } else if (kind == "slow") {
+      setSlowModel(resolved.model, resolved.provider)
+    }
+  }
+}
+
+export def getResolvedSlots(): Record<string, Resolved> {
+  return _resolved
+}
+
+export def currentProvider(): string {
+  const main = _resolved["main"]
+  if (main != null) {
+    return main.provider
+  }
   return slowProvider
 }
 
@@ -86,19 +167,57 @@ export def configureModels(
   slow: string,
   provider: string,
 ) {
-  const detected = resolveDetected(model, fast, slow, provider)
+  const settings = getModelSettings(loadSettings())
+
+  // A saved provider preference (settings.model.provider) acts like --provider
+  // (a forced provider that skips env auto-detection); an explicit --provider
+  // still wins, and env auto-detection is the fallback when neither is set.
+  let effectiveProvider = provider
+  if (effectiveProvider == "" && settings.provider != null && settings.provider != "") {
+    effectiveProvider = settings.provider
+  }
+
+  const detected = resolveDetected(model, fast, slow, effectiveProvider)
   if (isFailure(detected)) {
     print(detected.error)
     process.exit(1)
+    return
   }
 
-  const plan = planModels(model, fast, slow, provider, detected.value)
-  setLlmOptions({
-    model: plan.fastModel,
-    provider: plan.fastProvider
-  })
-  slowModel = plan.slowModel
-  slowProvider = plan.slowProvider
+  // CLI flags become layers: --model is a global pin; --fastmodel/--slowmodel
+  // are per-slot overrides. Settings (settings.json model.slots/pin) sit below
+  // CLI. The built-in price-default fills anything unset. See spec 3.3.
+  const ctx: Ctx = {
+    provider: detected.value,
+    price: "standard"
+  }
+  let cliSlots: Record<string, string> = {}
+  if (fast != "") {
+    cliSlots["main"] = fast
+  }
+  if (slow != "") {
+    cliSlots["reasoning"] = slow
+  }
+
+  // providerEstablished is true when a provider is fixed (CLI or settings) so
+  // parseModelSpec will not split a unified provider/model and override it.
+  const providerEstablished = effectiveProvider != ""
+  const layers = buildLayers(
+    "",
+    {},
+    model,
+    cliSlots,
+    settings,
+    knownProviders(),
+    providerEstablished,
+  )
+  const all = resolveAll(layers, ctx)
+  if (isFailure(all)) {
+    print(all.error)
+    process.exit(1)
+    return
+  }
+  applyResolved(promoteAll(all.value))
 }
 
 /** Apply a local model (from `--local-model`) as BOTH the fast and slow
@@ -118,9 +237,27 @@ export def configureLocalModel(value: string) {
   if (isFailure(result)) {
     print(result.error)
     process.exit(1)
+    return
   }
   const modelPath = result.value
-  setLlmOptions({ model: modelPath, provider: "llama-cpp" })
-  slowModel = modelPath
-  slowProvider = "llama-cpp"
+  // Local pins every slot to the one llama-cpp model. Route through
+  // applyResolved so getResolvedSlots() reflects it (the explain view + the
+  // /local recall diff). Embedding is empty — llama-cpp has no embed endpoint.
+  const r: Resolved = {
+    model: modelPath,
+    provider: "llama-cpp",
+    via: "local"
+  }
+  applyResolved(
+    {
+    main: r,
+    reasoning: r,
+    embedding: {
+      model: "",
+      provider: "llama-cpp",
+      via: "local"
+    }
+  },
+  )
 }
+

@@ -14,6 +14,8 @@
 import { pickProvider, envVarFor } from "std::llm"
 import { env } from "std::system"
 
+import { slotKind, canonicalSlot } from "./slots.agency"
+
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
 // extended thinking; native providers use their own. Used as fallbacks
@@ -76,7 +78,9 @@ def checkProviderEnv(provider: string): Result<string> {
   }
   const baseVar = BASE_URL_PROVIDERS[provider]
   if (baseVar != undefined && (env(baseVar) == null || env(baseVar) == "")) {
-    return failure("Provider '${provider}' needs a base URL. Set ${baseVar} (your proxy URL).")
+    return failure(
+      "Provider '${provider}' needs a base URL. Set ${baseVar} (your proxy URL).",
+    )
   }
   return success(provider)
 }
@@ -208,3 +212,126 @@ export def planModels(
     slowProvider: agentProvider(detected, slowProvider)
   }
 }
+
+// Field order { model, provider } is locked by JSON snapshot tests; do not reorder.
+export type ModelSpec = {
+  model: string;
+  provider: string
+}
+
+/** Parse a possibly-unified model spec. When a provider is already established
+  (explicit --provider/settings), never split: the whole string is the model id
+  (OpenRouter ids contain "/"). Else split on the FIRST "/" only when the prefix
+  is a recognized provider; otherwise the whole string is the model. */
+export def parseModelSpec(
+  spec: string,
+  providerEstablished: boolean,
+  knownProviders: string[],
+): ModelSpec {
+  if (providerEstablished) {
+    return {
+      model: spec,
+      provider: ""
+    }
+  }
+  const idx = spec.indexOf("/")
+  if (idx <= 0) {
+    return {
+      model: spec,
+      provider: ""
+    }
+  }
+  const prefix = spec.substring(0, idx)
+  if (knownProviders.includes(prefix)) {
+    return {
+      model: spec.substring(idx + 1),
+      provider: prefix
+    }
+  }
+  return {
+    model: spec,
+    provider: ""
+  }
+}
+
+// Field order { model, provider, via } is locked by JSON snapshot tests.
+export type Resolved = {
+  model: string;
+  provider: string;
+  via: string
+}
+
+/** Built-in default for (provider, slot, price). Phase 1 honors only "standard",
+  deriving fast/slow from `planModels` along the DETECTED-provider path (provider
+  arg empty, detected = provider) so the values are byte-identical to today's env
+  auto-detection. `derived` slots (embedding) return empty; memory derives the
+  embed model from the active provider. Providers without baked defaults return
+  failure. Dispatch on SLOT_KIND so the mapping lives in one table. */
+export def priceDefault(
+  provider: string,
+  slot: string,
+  price: string,
+): Result<Resolved> {
+  if (MODELS[provider] == null) {
+    return failure(
+      "Provider '${provider}' has no built-in defaults; pass an explicit model.",
+    )
+  }
+  const plan = planModels("", "", "", "", provider)
+  const kind = slotKind(slot)
+  if (kind == "fast") {
+    return success(
+      {
+      model: plan.fastModel,
+      provider: plan.fastProvider,
+      via: "built-in:price=${price}"
+    },
+    )
+  }
+  if (kind == "slow") {
+    return success(
+      {
+      model: plan.slowModel,
+      provider: plan.slowProvider,
+      via: "built-in:price=${price}"
+    },
+    )
+  }
+  if (kind == "derived") {
+    return success(
+      {
+      model: "",
+      provider: "",
+      via: "built-in:embedding(derived)"
+    },
+    )
+  }
+  return failure("Unknown slot '${slot}'.")
+}
+
+/** Providers Agency can actually configure: those with baked defaults plus the
+  base-URL proxy providers. Source-of-truth derived (MODELS + BASE_URL_PROVIDERS),
+  not a hand-maintained list, so it never drifts. Used by parseModelSpec. */
+export def knownProviders(): string[] {
+  return Object.keys(MODELS).concat(Object.keys(BASE_URL_PROVIDERS))
+}
+
+/** Split a --model value: `slot=model` becomes per-slot (alias-resolved); a bare
+  `model` becomes a global pin ({slot:""}). The "=" must precede any "/" so a
+  unified provider/model value (anthropic/claude) is NOT misread as a slot key.
+  Returns {slot, model} (distinct shape from parseModelSpec's {model, provider}). */
+export def parseModelFlag(value: string): { slot: string; model: string } {
+  const eq = value.indexOf("=")
+  const slash = value.indexOf("/")
+  if (eq > 0 && (slash == -1 || eq < slash)) {
+    return {
+      slot: canonicalSlot(value.substring(0, eq)),
+      model: value.substring(eq + 1)
+    }
+  }
+  return {
+    slot: "",
+    model: value
+  }
+}
+

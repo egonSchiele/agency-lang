@@ -211,7 +211,7 @@ The type checker reports (by default, a **warning**) when a `match` over a
 type Ev = { kind: "click", x: number } | { kind: "scroll", d: number }
 match (e) {
     { kind: "click" } => handleClick(e)
-    // warning: match is not exhaustive: missing `{ kind: "scroll" }`
+    // error: match is not exhaustive: missing `{ kind: "scroll" }`
 }
 ```
 
@@ -220,7 +220,7 @@ Adding the missing arm — or a `_` catch-all — clears it. A guarded arm
 `number`, arbitrary object unions) and the `match(x is …)` form are never
 required to be exhaustive. Control the severity with
 `typechecker.matchExhaustiveness` in `agency.json` (`"silent"` / `"warn"` /
-`"error"`; default `"warn"`).
+`"error"`; default `"error"`).
 
 ## Narrowing on a field-path scrutinee
 

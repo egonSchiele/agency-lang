@@ -303,7 +303,7 @@ handle {
 } with (e) {
   match (e.effect) {
     "app::confirm" => approve()
-    // warning: match is not exhaustive: missing "app::rateLimited"
+    // error: match is not exhaustive: missing "app::rateLimited"
   }
 }
 ```

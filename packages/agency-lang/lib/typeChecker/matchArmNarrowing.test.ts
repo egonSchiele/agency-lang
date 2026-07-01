@@ -113,9 +113,10 @@ node main() {
     }
   }
 }`);
-    // Missing "app::rateLimited" is a warn (default), not a hard error; this only
-    // confirms narrowing didn't suppress or crash the exhaustiveness pass.
-    expect(errs).toEqual([]);
+    // Missing "app::rateLimited" is now a hard error (matchExhaustiveness default
+    // = "error"). Confirms narrowing didn't suppress or crash the exhaustiveness
+    // pass — the missing-case diagnostic still fires.
+    expect(errs.some((m) => /not exhaustive/i.test(m) && /app::rateLimited/.test(m))).toBe(true);
   });
 });
 

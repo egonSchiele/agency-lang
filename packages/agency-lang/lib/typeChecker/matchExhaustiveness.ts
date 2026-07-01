@@ -235,14 +235,15 @@ function normalizeSite(
 /**
  * Diagnostic: a `match` over a closed value type (Result or a closed
  * literal/value union) that doesn't cover every case and has no `_` arm.
- * Opt-in via `typechecker.matchExhaustiveness` (default `silent`). Conservative:
+ * Enabled by default at `error`; configurable via
+ * `typechecker.matchExhaustiveness` (`silent` / `warn` / `error`). Conservative:
  * open types and non-discriminated object unions are never reported (B1).
  */
 export function checkMatchExhaustiveness(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
-  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "warn") as Severity;
+  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "error") as Severity;
   if (severity === "silent") {
     return;
   }

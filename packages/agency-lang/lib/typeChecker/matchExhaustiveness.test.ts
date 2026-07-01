@@ -66,7 +66,18 @@ node main() {
     expect(errs.some((e) => /not exhaustive/i.test(e) && /failure/.test(e))).toBe(true);
   });
 
-  it("silent (default): never reported", () => {
+  it("silent config: never reported", () => {
+    const errs = check(`${TRY}
+node main() {
+  let r = tryParse("ok")
+  match (r) {
+    success(v) => v
+  }
+}`, { typechecker: { matchExhaustiveness: "silent" } });
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("warn is now the DEFAULT: a missing case is reported without the knob", () => {
     const errs = check(`${TRY}
 node main() {
   let r = tryParse("ok")
@@ -74,7 +85,7 @@ node main() {
     success(v) => v
   }
 }`);
-    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /failure/.test(e))).toBe(true);
   });
 
   it("warn: emitted as a warning, not an error", () => {
@@ -268,7 +279,7 @@ def f(x: "a" | "b", y: "p" | "q"): number {
     expect(reported[0]).toMatch(/missing\b.*"q"/);
   });
 
-  it("behavior-preserving: silent default adds zero errors vs. the no-knob baseline", () => {
+  it("the no-knob default resolves to warn (same count as explicit warn, one more than silent)", () => {
     const src = `${TRY}
 node main() {
   let r = tryParse("ok")
@@ -282,7 +293,10 @@ node main() {
       const info = buildCompilationUnit(p.result, undefined, undefined, src);
       return typeCheck(p.result, config, info).errors.length;
     };
-    expect(run({})).toBe(run({ typechecker: { matchExhaustiveness: "silent" } }));
+    const silent = run({ typechecker: { matchExhaustiveness: "silent" } });
+    // No-knob default now behaves like explicit `warn` (the B2b flip).
+    expect(run({})).toBe(run({ typechecker: { matchExhaustiveness: "warn" } }));
+    expect(run({})).toBe(silent + 1);
   });
 });
 
@@ -394,11 +408,18 @@ def f(w: Wrap): number {
 }`, ERROR).some((m) => /not exhaustive/i.test(m) && /scroll/.test(m))).toBe(true);
   });
 
-  it("default silent: no diagnostic without the knob", () => {
+  it("default (warn): a missing discriminant member is reported without the knob", () => {
     expect(check(`${EV}
 def f(e: Ev): number {
   match (e) { { kind: "click" } => 1 }
-}`).some((m) => /not exhaustive/i.test(m))).toBe(false);
+}`).some((m) => /not exhaustive/i.test(m) && /scroll/.test(m))).toBe(true);
+  });
+
+  it("silent config still suppresses the discriminated-union diagnostic", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1 }
+}`, { typechecker: { matchExhaustiveness: "silent" } }).some((m) => /not exhaustive/i.test(m))).toBe(false);
   });
 });
 

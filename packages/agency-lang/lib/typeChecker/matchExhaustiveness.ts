@@ -201,7 +201,7 @@ export function checkMatchExhaustiveness(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
-  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "silent") as Severity;
+  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "warn") as Severity;
   if (severity === "silent") {
     return;
   }

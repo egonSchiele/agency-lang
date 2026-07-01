@@ -433,13 +433,34 @@ export function checkHandlerBodyInterrupts(
   }
 }
 
+/**
+ * Every interrupt effect kind an (inline handler / handle) `body` can raise,
+ * transitively — direct raises plus the propagated kinds of everything it calls
+ * (via `collectFromBody` + `interruptEffectsByFunction`). The single source of
+ * the "what can this body raise" computation, shared by handler-offender
+ * detection and handler-param typing (H1).
+ */
+export function collectRaisableEffects(
+  body: AgencyNode[],
+  info: ScopeInfo,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  ctx: TypeCheckerContext,
+): string[] {
+  const profile = collectFromBody(body, info.scope, ctx);
+  const kinds = [...profile.kinds];
+  for (const callee of profile.callees) {
+    for (const k of interruptEffectsByFunction[callee] ?? []) {
+      addUnique(kinds, k.effect);
+    }
+  }
+  return kinds;
+}
+
 /** Collect every interrupt effect a handle block's handler may raise,
  *  transitively. For a `functionRef` handler we read the already-propagated
- *  kinds directly. For an inline handler we reuse `collectFromBody` (the
- *  same walker Phase 1 uses for every scope) and then resolve its callees
- *  through `interruptEffectsByFunction`, so transitive interrupts via tool
- *  calls, function refs in args, or `goto` targets are caught with no
- *  duplicated walker logic. */
+ *  kinds directly; for an inline handler we delegate to `collectRaisableEffects`
+ *  on the handler body — so transitive interrupts via tool calls, function refs
+ *  in args, or `goto` targets are caught with no duplicated walker logic. */
 function collectHandlerOffenderKinds(
   node: { handler: { kind: string; functionName?: string; body?: any[] } },
   info: ScopeInfo,
@@ -450,14 +471,7 @@ function collectHandlerOffenderKinds(
     const ks = interruptEffectsByFunction[node.handler.functionName!] ?? [];
     return ks.map((k) => k.effect);
   }
-  const profile = collectFromBody(node.handler.body ?? [], info.scope, ctx);
-  const kinds = [...profile.kinds];
-  for (const callee of profile.callees) {
-    for (const k of interruptEffectsByFunction[callee] ?? []) {
-      addUnique(kinds, k.effect);
-    }
-  }
-  return kinds;
+  return collectRaisableEffects(node.handler.body ?? [], info, interruptEffectsByFunction, ctx);
 }
 
 /** Narrow a call-argument slot (which may be a positional Expression,

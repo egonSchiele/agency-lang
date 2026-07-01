@@ -237,3 +237,36 @@ content splits into focused pages (each owned by the PR that builds it):
 
 Until a page exists, its topic is covered above. Keep this list in sync when adding
 a page so the directory stays discoverable.
+
+## Handler param `.effect` typing (H1)
+
+`lib/typeChecker/handlerParamTyping.ts` (`refineInlineHandlerParams`) is a
+type-only pass that types an inline `handle … with (e)` param's `.effect` field
+as the literal union of effect kinds the handled body can raise, so
+`match (e.effect)` is a plain literal-union match checked by the value-track
+exhaustiveness diagnostic — no handler-specific check.
+
+Pipeline position: **after** `buildInterruptCallGraph` (the transitive raisable
+set needs the graph) and after the interrupt checks, **before**
+`checkMatchExhaustiveness` (index.ts). It re-declares the param
+(`buildScopes` declared it `any`) as a closed object
+`{ effect: <union>, message: any, data: any, origin: any }` matching the runtime
+interrupt object. The raisable set is computed by `collectRaisableEffects`
+(shared with `collectHandlerOffenderKinds`), so the exhaustiveness check and the
+unhandled-interrupt check agree on "what can be raised."
+
+Two subtleties:
+- **Memo reset.** The pass mutates scope types after the flow graph + its
+  `typeAt` memo were built, so it discards `ctx.flowEnv.memo` (the flow env's
+  documented soundness contract) — otherwise `synthType(e.effect)` returns the
+  stale pre-refinement `any`.
+- **Not a breaking change.** Field-access checking runs in `checkScopes`, before
+  this pass, so the refined object type only reaches `checkMatchExhaustiveness`;
+  no `e.<field>` read is re-checked against the closed object.
+
+Conservative fall-backs to `any` (a missed warning, never a wrong one): explicit
+annotation, `functionRef` handler, empty/unknown kinds, a param name shared by
+two inline handlers in one scope (they'd clobber the flat function scope), and a
+body containing a nested `handle` (the walker would over-count inner-caught
+effects). Per-effect payload typing on `e.data` is a follow-on (H3, via
+discriminated-union narrowing).

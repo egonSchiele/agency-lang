@@ -42,6 +42,7 @@ import {
 } from "./interruptAnalysis.js";
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
+import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { checkEffectPayloads } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
@@ -325,6 +326,13 @@ export class TypeChecker {
 
     // 6d. Check interrupt payloads against `effect` declarations.
     checkEffectPayloads(scopes, ctx);
+
+    // 6d-bis. H1: refine each eligible inline handler param's `.effect` to the
+    // literal union of effect kinds its body can raise (now that the call-graph
+    // exists), so `checkMatchExhaustiveness` sees a closed literal-union
+    // scrutinee. Type-only; runs after every interrupt check (none of which read
+    // the param type) and before exhaustiveness.
+    refineInlineHandlerParams(scopes, interruptEffectsByFunction, ctx);
 
     // 6e. Match exhaustiveness over closed value types (opt-in, default silent).
     checkMatchExhaustiveness(scopes, ctx);

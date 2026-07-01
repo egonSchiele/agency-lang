@@ -1,0 +1,13 @@
+def slowTool1(): string {
+  sleep(50)
+  return "tool1 done"
+}
+
+def slowTool2(): string {
+  sleep(50)
+  return "tool2 done"
+}
+
+node main() {
+  return llm("call both slowTool1 and slowTool2", { tools: [slowTool1, slowTool2] })
+}

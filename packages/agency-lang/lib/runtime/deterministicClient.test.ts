@@ -59,6 +59,37 @@ describe("DeterministicClient", () => {
     }
   });
 
+  it("returns multiple tool calls with synthetic ids by default", async () => {
+    const client = new DeterministicClient([
+      { toolCalls: [{ name: "a" }, { name: "b" }] },
+    ]);
+    const result = await client.text(baseConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.value.toolCalls).toHaveLength(2);
+      // Distinct, non-empty synthetic ids so branch keying never collides.
+      expect(result.value.toolCalls[0].id).toBe("mock-tool-1-0");
+      expect(result.value.toolCalls[1].id).toBe("mock-tool-1-1");
+    }
+  });
+
+  it("honors an explicit empty tool-call id (id-less provider like Gemini)", async () => {
+    // Google Gemini returns no tool-call id; smoltalk defaults the missing
+    // id to "". Reproducing that requires the mock to emit "" verbatim
+    // (nullish default, not `||`), which is what the agency-js
+    // parallel-tools-no-ids regression relies on.
+    const client = new DeterministicClient([
+      { toolCalls: [{ name: "a", id: "" }, { name: "b", id: "" }] },
+    ]);
+    const result = await client.text(baseConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.value.toolCalls).toHaveLength(2);
+      expect(result.value.toolCalls[0].id).toBe("");
+      expect(result.value.toolCalls[1].id).toBe("");
+    }
+  });
+
   it("consumes mocks in order", async () => {
     const client = new DeterministicClient([
       { return: "first" },

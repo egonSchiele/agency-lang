@@ -1,0 +1,9 @@
+[
+  {
+    "toolCalls": [
+      { "name": "slowTool1", "args": {}, "id": "" },
+      { "name": "slowTool2", "args": {}, "id": "" }
+    ]
+  },
+  { "return": "both done" }
+]

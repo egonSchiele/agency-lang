@@ -1096,17 +1096,32 @@ export async function runPrompt(args: {
         toolCalls,
         // keyFor: MUST match the branchKey the body uses below
         // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
-        // operate on the same branch.
-        (toolCall) => `tool_${toolCall.id}`,
-        async (toolCall, b) => {
+        // operate on the same branch. Keyed by the tool call's POSITION in
+        // the round, not its id: some providers (notably Google Gemini)
+        // return tool calls with no id — Gemini matches responses to calls
+        // by function name + position, so smoltalk defaults the missing id
+        // to "". Two id-less parallel calls would otherwise collide on the
+        // branch key ("tool_") and trip `runBatch: duplicate child key`.
+        // The id is folded in after the index only for readability; the
+        // index alone guarantees uniqueness within the round.
+        (toolCall, i) => `tool_${i}_${toolCall.id}`,
+        async (toolCall, b, index) => {
           if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
+
+          // Per-call slug used for the branch key, every resume-idempotency
+          // step path, and the per-tool timing key below. Position-based so
+          // it stays unique even when `toolCall.id` is "" (see keyFor). Must
+          // NOT leak into message `tool_call_id` fields — those keep the
+          // real (possibly empty) id so provider pairing / threadRepair are
+          // byte-for-byte unchanged.
+          const callSlug = `${index}_${toolCall.id}`;
 
           const handler = toolFunctions.find(
             (fn) => fn.name === toolCall.name,
           );
           if (!handler) {
             await b.step(
-              `round.${round}.tool.${toolCall.id}.unhandled`,
+              `round.${round}.tool.${callSlug}.unhandled`,
               async () => {
                 console.error(
                   `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
@@ -1124,7 +1139,7 @@ export async function runPrompt(args: {
 
           if (self.toolCallRound >= maxToolCallRounds) {
             await b.step(
-              `round.${round}.tool.${toolCall.id}.tooManyRounds`,
+              `round.${round}.tool.${callSlug}.tooManyRounds`,
               async () => {
                 messages.push(
                   smoltalk.toolMessage(
@@ -1144,7 +1159,7 @@ export async function runPrompt(args: {
           // notice toolMessage.
           if (removedTools.includes(handler.name)) {
             await b.step(
-              `round.${round}.tool.${toolCall.id}.removed`,
+              `round.${round}.tool.${callSlug}.removed`,
               async () => {
                 messages.push(
                   smoltalk.toolMessage(
@@ -1157,7 +1172,7 @@ export async function runPrompt(args: {
             return;
           }
 
-          const branchKey = `tool_${toolCall.id}`;
+          const branchKey = `tool_${callSlug}`;
           // Note: a "cached result" short-circuit used to live here for
           // resume after a sibling interrupt; idempotency is now handled
           // uniformly by completedSteps inside b.step (start/invoke/end
@@ -1166,7 +1181,7 @@ export async function runPrompt(args: {
           const namedArgs = { ...toolCall.arguments };
 
           await b.step(
-            `round.${round}.tool.${toolCall.id}.start`,
+            `round.${round}.tool.${callSlug}.start`,
             async () => {
               // Pass `branchStack` so scoped callbacks registered inside
               // the branch's frame chain are discovered by
@@ -1212,7 +1227,7 @@ export async function runPrompt(args: {
             // tool that began even when the run is killed before it
             // completes (the matching toolCall event won't fire).
             await b.step(
-              `round.${round}.tool.${toolCall.id}.logStart`,
+              `round.${round}.tool.${callSlug}.logStart`,
               async () => {
                 ctx.statelogClient.toolCallStart({
                   toolName: handler.name,
@@ -1229,7 +1244,7 @@ export async function runPrompt(args: {
             // (returns void unless interrupted) and is marked done so
             // resume skips this whole block.
             await b.step(
-              `round.${round}.tool.${toolCall.id}.invoke`,
+              `round.${round}.tool.${callSlug}.invoke`,
               async () => {
                 const outcome = await runInvokeStep({
                   handler,
@@ -1241,7 +1256,7 @@ export async function runPrompt(args: {
                 toolResult = outcome.toolResult;
                 invokeOutcome = outcome.invokeOutcome;
                 if (outcome.invokeOutcome === "success") {
-                  self.runnerState.toolTimings[toolCall.id] =
+                  self.runnerState.toolTimings[callSlug] =
                     performance.now() - toolCallStartTime;
                 }
                 return outcome.interrupts;
@@ -1262,9 +1277,9 @@ export async function runPrompt(args: {
             // statelogClient.toolCall always report the real exec time,
             // not the resume pass's overhead.
             const timeTaken: number =
-              self.runnerState.toolTimings[toolCall.id] ?? 0;
+              self.runnerState.toolTimings[callSlug] ?? 0;
             await b.step(
-              `round.${round}.tool.${toolCall.id}.end`,
+              `round.${round}.tool.${callSlug}.end`,
               async () => {
                 // Same scope-discovery rationale as the .start hook.
                 await invokeCallbacks({
@@ -1284,7 +1299,7 @@ export async function runPrompt(args: {
             // (e.g. after a later `nextLlmCall` step bails). Without this
             // guard, every re-entry would emit a duplicate toolCall event.
             await b.step(
-              `round.${round}.tool.${toolCall.id}.log`,
+              `round.${round}.tool.${callSlug}.log`,
               async () => {
                 ctx.statelogClient.toolCall({
                   toolName: handler.name,

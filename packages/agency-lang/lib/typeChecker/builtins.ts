@@ -111,6 +111,77 @@ const llmNamedOptions: Record<string, VariableType> = Object.assign(
 );
 
 /**
+ * Structural mirror of the `Attachment` / `AttachmentSource` types declared
+ * in `stdlib/thread.agency` (and the TS builders in `lib/stdlib/thread.ts`).
+ * The `llm()` first-arg type lives here in the TS type universe, so it cannot
+ * reference the `.agency` type by name — the shapes must be kept in sync by
+ * hand. Drift is caught by `lib/typeChecker/attachments.test.ts`.
+ */
+const attachmentSource: VariableType = {
+  type: "unionType",
+  types: [
+    {
+      type: "objectType",
+      properties: [
+        { key: "kind", value: { type: "stringLiteralType", value: "path" } },
+        { key: "path", value: string },
+        { key: "mimeType", value: optional(string) },
+      ],
+    },
+    {
+      type: "objectType",
+      properties: [
+        { key: "kind", value: { type: "stringLiteralType", value: "url" } },
+        { key: "url", value: string },
+        { key: "mimeType", value: optional(string) },
+      ],
+    },
+    {
+      type: "objectType",
+      properties: [
+        { key: "kind", value: { type: "stringLiteralType", value: "base64" } },
+        { key: "base64", value: string },
+        { key: "mimeType", value: string },
+      ],
+    },
+  ],
+};
+
+const attachment: VariableType = {
+  type: "unionType",
+  types: [
+    {
+      type: "objectType",
+      properties: [
+        { key: "type", value: { type: "stringLiteralType", value: "image" } },
+        { key: "source", value: attachmentSource },
+      ],
+    },
+    {
+      type: "objectType",
+      properties: [
+        { key: "type", value: { type: "stringLiteralType", value: "file" } },
+        { key: "source", value: attachmentSource },
+        { key: "filename", value: optional(string) },
+      ],
+    },
+  ],
+};
+
+/** `llm()`'s first argument: a plain string, or an array mixing text strings
+ *  and `image()` / `file()` attachments. */
+const llmContent: VariableType = {
+  type: "unionType",
+  types: [
+    string,
+    {
+      type: "arrayType",
+      elementType: { type: "unionType", types: [string, attachment] },
+    },
+  ],
+};
+
+/**
  * Signatures for builtin / auto-imported functions that the typechecker
  * needs to know about.
  *
@@ -163,12 +234,12 @@ export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- LLM primitive ---
   llm: {
-    params: ["any", llmOptions],
+    params: [llmContent, llmOptions],
     minParams: 1,
     returnType: string,
     acceptsNamedArgs: llmNamedOptions,
     description:
-      "Send a prompt to an LLM and return its response. The return type is inferred from the call-site annotation and compiled to a JSON schema for structured output.",
+      "Send a prompt to an LLM and return its response. The prompt is a string, or an array of text strings and image()/file() attachments. The return type is inferred from the call-site annotation and compiled to a JSON schema for structured output.",
   },
 
   // --- Result type (lib/runtime/result.ts) ---

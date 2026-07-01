@@ -6,6 +6,7 @@ import type {
   PromptResult,
   TokenUsage,
   ToolCallJSON,
+  UserContentInput,
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
@@ -28,7 +29,8 @@ export type CallbackMap = {
   onNodeStart: { nodeName: string };
   onNodeEnd: { nodeName: string; data: any };
   onLLMCallStart: {
-    prompt: string;
+    // A string, or an array of text/attachment parts (redacted for logging).
+    prompt: string | UserContentInput;
     tools: { name: string; description?: string; schema: any }[];
     model: ModelName | undefined;
     messages: MessageJSON[];

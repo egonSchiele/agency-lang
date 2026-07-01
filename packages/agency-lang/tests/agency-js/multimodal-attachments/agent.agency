@@ -1,0 +1,16 @@
+// Verifies multimodal attachments end-to-end: the image()/file() builders
+// from std::thread produce attachment parts that land on the active thread
+// as real message content — both when seeded via userMessage() and when
+// passed as the array first-arg to llm(). Runs under the deterministic LLM
+// provider (no real API call, no file I/O), so path-based sources are safe.
+import { image, file, userMessage } from "std::thread"
+
+node main() {
+  // A multimodal user turn seeded directly into history (before any llm()).
+  userMessage(["seed-user", image("./cat.png")])
+
+  // A multimodal llm() call: text + an image + a file, in one array.
+  let _r: string = llm(["describe", image("./cat.png"), file("./report.pdf")])
+
+  return "done"
+}

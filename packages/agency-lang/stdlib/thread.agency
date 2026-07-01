@@ -8,6 +8,8 @@ import {
   _systemMessage,
   _userMessage,
   _assistantMessage,
+  _imageAttachment,
+  _fileAttachment,
   _getCost,
   _getTokens,
   _getModelCosts,
@@ -15,6 +17,19 @@ import {
   _popGuard,
   _runGuarded,
  } from "agency-lang/stdlib-lib/thread.js"
+
+// KEEP IN SYNC with the structural `attachment` mirror in
+// lib/typeChecker/builtins.ts (the `llm()` first-param type) and the TS
+// `AttachmentSource` type in lib/stdlib/thread.ts. Drift is caught by
+// lib/typeChecker/attachments.test.ts.
+export type AttachmentSource =
+  | { kind: "path", path: string, mimeType?: string }
+  | { kind: "url", url: string, mimeType?: string }
+  | { kind: "base64", base64: string, mimeType: string }
+
+export type Attachment =
+  | { type: "image", source: AttachmentSource }
+  | { type: "file", source: AttachmentSource, filename?: string }
 
 export def systemMessage(msg: string) {
   """
@@ -27,15 +42,54 @@ export def systemMessage(msg: string) {
   _systemMessage(msg)
 }
 
-export def userMessage(msg: string) {
+export def userMessage(msg: string | (string | Attachment)[]) {
   """
-  Add a user message to the current thread's message history.
-  Use this when you want to seed the conversation with prior user
-  context that wasn't actually typed by the user this turn.
+  Add a user message to the current thread's message history. Accepts a
+  plain string, or an array mixing text strings and image()/file()
+  attachments. Use this when you want to seed the conversation with prior
+  user context that wasn't actually typed by the user this turn.
 
-  @param msg - The user message content
+  @param msg - The user message content: a string, or an array of strings and attachments.
   """
   _userMessage(msg)
+}
+
+export safe def image(
+  source: string,
+  mimeType: string = "",
+  base64: boolean = false,
+): Attachment {
+  """
+  Build an image attachment for a multimodal llm() call or userMessage().
+  `source` is a local path, an http(s) URL, or a data: URI. Pass base64: true
+  to treat `source` as raw base64 data (a mimeType is then required).
+  smoltalk reads/fetches and MIME-infers the source at send time.
+
+  @param source - Path, http(s) URL, data: URI, or raw base64 (with base64: true)
+  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param base64 - When true, treat `source` as raw base64 data.
+  """
+  return _imageAttachment(source, mimeType, base64)
+}
+
+export safe def file(
+  source: string,
+  filename: string = "",
+  mimeType: string = "",
+  base64: boolean = false,
+): Attachment {
+  """
+  Build a file (e.g. PDF) attachment for a multimodal llm() call or
+  userMessage(). `source` is a local path, an http(s) URL, or a data: URI.
+  Pass base64: true to treat `source` as raw base64 data (mimeType required).
+  `filename` defaults to the source's basename.
+
+  @param source - Path, http(s) URL, data: URI, or raw base64 (with base64: true)
+  @param filename - Name shown to the model; defaults to the source basename.
+  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param base64 - When true, treat `source` as raw base64 data.
+  """
+  return _fileAttachment(source, filename, mimeType, base64)
 }
 
 export def assistantMessage(msg: string) {

@@ -1,4 +1,11 @@
-import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
+import {
+  PromptResult,
+  Result,
+  StreamChunk,
+  ToolCallJSON,
+  UserContentInput,
+  redactAttachments,
+} from "smoltalk";
 import { builtinSleep } from "./builtins.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";
@@ -14,7 +21,7 @@ export function isGenerator(variable: any): boolean {
 export async function handleStreamingResponse(args: {
   ctx: RuntimeContext<GraphState>;
   completion: AsyncGenerator<StreamChunk>;
-  prompt: string;
+  prompt: string | UserContentInput;
 }): Promise<
   Result<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> | undefined
 > {
@@ -28,7 +35,7 @@ export async function handleStreamingResponse(args: {
     ctx.statelogClient.debug(
       "Got streaming response but no onStream callback provided, returning response synchronously",
       {
-        prompt,
+        prompt: redactAttachments(prompt),
         callbacks: Object.keys(ctx.callbacks),
       },
     );

@@ -100,6 +100,12 @@ export type FlowEnvironment = {
    * could have changed.
    */
   memo: WeakMap<FlowNode, Record<string, ScopeType>>;
+  /**
+   * The end-of-body flow node per scopeKey, populated by `buildFlowGraphs`.
+   * `exit` means every path through that scope diverges (returns). Consumed by
+   * definite-return checking. Optional: bare envs built in tests don't set it.
+   */
+  scopeTerminals?: Record<string, FlowNode>;
 };
 
 /**

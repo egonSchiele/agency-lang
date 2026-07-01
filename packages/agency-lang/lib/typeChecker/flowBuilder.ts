@@ -303,10 +303,15 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
   const flowOf: WeakMap<AgencyNode, FlowNode> = new WeakMap();
   const memo: WeakMap<FlowNode, Record<string, ScopeType>> = new WeakMap();
   const typeAliases = ctx.getTypeAliases();
+  const scopeTerminals: Record<string, FlowNode> = {};
   for (const info of scopes) {
     const env: FlowEnvironment = { scope: info.scope, flowOf, typeAliases, memo };
-    buildFlowGraph(info.body, { kind: "start", scope: info.scope }, env);
+    scopeTerminals[info.scopeKey] = buildFlowGraph(
+      info.body,
+      { kind: "start", scope: info.scope },
+      env,
+    );
   }
   const rootScope = scopes[0]?.scope ?? new Scope("global");
-  ctx.flowEnv = { scope: rootScope, flowOf, typeAliases, memo };
+  ctx.flowEnv = { scope: rootScope, flowOf, typeAliases, memo, scopeTerminals };
 }

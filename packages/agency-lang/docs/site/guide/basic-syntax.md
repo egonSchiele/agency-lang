@@ -39,7 +39,7 @@ def greet(name: string): string {
 Agency has no implicit returns: a function that declares a return type must
 `return` a value on every path. `def f(x: number): number { if (x > 0) { return 1 } }`
 is flagged because the `else` path returns nothing (see `definiteReturns` in
-[config](../../misc/config.md)).
+[config](./agency-config-file.md)).
 
 You can use if statements, while loops and for loops:
 

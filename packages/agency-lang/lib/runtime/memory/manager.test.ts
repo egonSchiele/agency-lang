@@ -730,7 +730,7 @@ describe("MemoryManager.resolveEmbedding (provider-aware embeddings)", () => {
 
   it("derives the google embedding model for a google provider", () => {
     expect(mgr({ smoltalkDefaults: { provider: "google" } }).resolveEmbedding())
-      .toEqual({ model: "text-embedding-004", provider: "google" });
+      .toEqual({ model: "gemini-embedding-001", provider: "google" });
   });
 
   it("derives the ollama embedding model for an ollama provider", () => {

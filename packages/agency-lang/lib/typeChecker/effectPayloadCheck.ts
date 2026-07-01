@@ -8,23 +8,25 @@ import { synthType } from "./synthesizer.js";
 import { isAssignable } from "./assignability.js";
 
 /**
- * Build the ambient effect→payload registry from declarations across the
- * import closure (or the current program when there's no symbol table),
- * report conflicting / duplicate declarations, then check every interrupt
- * raise site's payload against its declared type.
+ * Check every interrupt raise site's payload against its declared type. The
+ * effect→payload registry is built via `buildEffectRegistry` (reporting
+ * conflicting / duplicate declarations as a side effect). Callers that already
+ * built the registry — H3 shares ONE across passes — pass it in to avoid
+ * rebuilding it (which would double-report those conflicts).
  */
 export function checkEffectPayloads(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
+  registry?: Record<string, ObjectType>,
 ): void {
-  const registry = buildRegistry(ctx);
+  const reg = registry ?? buildEffectRegistry(ctx);
 
   for (const info of scopes) {
     if (!info.name || info.name === "top-level") continue;
     ctx.withScope(info.scopeKey, () => {
       for (const { node } of walkNodes(info.body)) {
         if (node.type !== "interruptStatement") continue;
-        const payloadType = registry[node.effect];
+        const payloadType = reg[node.effect];
         if (!payloadType) continue;
         checkRaiseSite(node, payloadType, info, ctx);
       }
@@ -40,7 +42,7 @@ type DeclEntry = { decl: EffectDeclaration; file: string };
  * Validation pushes diagnostics; merge returns the agreed type or `null` on
  * conflict (so we drop the effect from the registry — see `mergePayload`).
  */
-function buildRegistry(ctx: TypeCheckerContext): Record<string, ObjectType> {
+export function buildEffectRegistry(ctx: TypeCheckerContext): Record<string, ObjectType> {
   const grouped = groupBy(collectDeclarations(ctx), (e) => e.decl.effect);
   return Object.fromEntries(
     Object.entries(grouped).flatMap(([effect, entries]) => {

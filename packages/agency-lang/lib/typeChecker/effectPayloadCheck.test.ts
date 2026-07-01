@@ -179,7 +179,7 @@ describe("effect data checking", () => {
   });
 
   it("same-file dup with different payloads fires BOTH dup and conflict", () => {
-    // Two diagnostics from two passes in `buildRegistry`: the per-file
+    // Two diagnostics from two passes in `buildEffectRegistry`: the per-file
     // duplicate detector AND the cross-declaration conflict detector. This
     // pins that order isn't load-bearing: collapsing one into the other
     // would lose a useful error.
@@ -196,6 +196,19 @@ describe("effect data checking", () => {
     );
     expect(dup).toBeDefined();
     expect(conflict).toBeDefined();
+  });
+
+  it("reports a payload conflict exactly once (shared-registry guard)", () => {
+    // H3 shares ONE registry across refineInlineHandlerParams AND
+    // checkEffectPayloads. A rebuilt-twice registry would double-report this
+    // conflict. The handler exercises both registry consumers.
+    const errs = typecheckSource(
+      "effect dup::e { a: number }\n" +
+        "effect dup::e { a: string }\n" +
+        "def risky() { raise dup::e(\"m\", { a: 1 }) }\n" +
+        "node main() { handle { risky() } with (e) { match (e.effect) { \"dup::e\" => 1 } } }",
+    ).filter((x) => /Conflicting payload types for effect 'dup::e'/.test(x.message));
+    expect(errs).toHaveLength(1);
   });
 });
 

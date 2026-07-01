@@ -311,6 +311,37 @@ handle {
 Add the missing arm — or a `_` catch-all — to clear it. The check is
 conservative: if the raisable set can't be determined precisely (an explicitly
 annotated param, a `functionRef` handler, or a nested `handle` inside the body),
-the parameter stays untyped and no check is required. The other fields
-(`message`, `data`, `origin`) are untyped for now; per-effect payload typing on
-`e.data` is a later addition.
+the parameter stays untyped and no check is required.
+
+## Payload typing on `e.data`
+
+The parameter is typed as a discriminated union — one member per raisable
+effect kind — so `e.data` carries **that effect's declared payload** once you
+narrow on `e.effect`. Guard with `if (e.effect == "...")` (a member-path guard)
+and the payload becomes concrete inside the branch:
+
+```ts
+effect app::confirm { question: string }
+effect app::rateLimited { retryAfter: number }
+
+handle {
+  doRiskyThings()
+} with (e) {
+  if (e.effect == "app::confirm") {
+    ask(e.data.question)          // e.data.question : string
+  }
+  if (e.effect == "app::rateLimited") {
+    waitFor(e.data.retryAfter)    // e.data.retryAfter : number
+    // ask(e.data.question)       // error: `question` is not on this effect's payload
+  }
+}
+```
+
+An effect declared with no payload (`effect ping { }`) gives `e.data` an empty
+object, so reading a field off it is an error. An effect with no declaration, or
+one dropped because its declarations conflict, leaves `e.data` untyped (`any`).
+
+The `if (e.effect == "...")` member-path guard is the supported idiom for
+per-effect payload access. A `match (e) { { effect: "..." } => ... }` object-pattern
+arm still drives exhaustiveness, but does **not** narrow `e.data` inside the arm
+body — use the member-path guard when you need the payload.

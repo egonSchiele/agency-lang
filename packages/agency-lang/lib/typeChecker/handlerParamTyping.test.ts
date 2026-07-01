@@ -294,3 +294,88 @@ node main() {
     expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /h3::b/.test(w.message))).toBe(true);
   });
 });
+
+describe("handler param payload typing (H3) — edge cases", () => {
+  it("member-path narrowing gives each branch its own payload", () => {
+    const errs = hardErrorsFrom(`
+effect h3i::a { n: number }
+effect h3i::b { s: string }
+def takesNum(n: number): number { return n }
+def takesStr(s: string): string { return s }
+def risky() { raise h3i::a("a", { n: 1 })\n raise h3i::b("b", { s: "x" }) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "h3i::a") { takesNum(e.data.n) }
+    if (e.effect == "h3i::b") { takesStr(e.data.s) }
+  }
+}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("does not leak the narrowed payload into the else branch", () => {
+    // After `if (e.effect == "h3e::a")`, reading a's field in the else must error
+    // (whether e narrows to the remaining member or stays the union, a's field is
+    // absent from at least one member).
+    const errs = hardErrorsFrom(`
+effect h3e::a { n: number }
+effect h3e::b { s: string }
+def takesNum(n: number): number { return n }
+def risky() { raise h3e::a("a", { n: 1 })\n raise h3e::b("b", { s: "x" }) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "h3e::a") { takesNum(e.data.n) } else { takesNum(e.data.n) }
+  }
+}`);
+    expect(errs.length).toBeGreaterThan(0);
+  });
+
+  it("errors accessing a field on an empty-payload effect's data", () => {
+    const errs = hardErrorsFrom(`
+effect h3p::ping { }
+def risky() { raise h3p::ping("p", {}) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "h3p::ping") { let x = e.data.nope }
+  }
+}`);
+    expect(errs.some((x) => /does not exist/i.test(x.message))).toBe(true);
+  });
+
+  it("falls back to any for an effect dropped as conflicting", () => {
+    // Conflicting declarations drop the effect from the registry → data: any →
+    // field access is permitted (no derivative "does not exist").
+    const errs = errorsFrom(`
+effect h3c::e { a: number }
+effect h3c::e { a: string }
+def risky() { raise h3c::e("c", { a: 1 }) }
+node main() {
+  handle { risky() } with (e) {
+    if (e.effect == "h3c::e") { let x = e.data.anything }
+  }
+}`);
+    expect(errs.some((x) => /does not exist/i.test(x.message))).toBe(false);
+  });
+
+  it("LIMITATION: a match(e) object-pattern arm does not narrow e.data inside the arm", () => {
+    // Object-pattern match arms match+dispatch but do NOT narrow the scrutinee's
+    // member access within the arm body, so `e.data.n` sees the full payload
+    // union and errors. The supported idiom for per-effect payload access is the
+    // member-path guard `if (e.effect == "...")` (see the tests above). Pinned so
+    // a future reader sees this is a known boundary, not a regression.
+    const errs = hardErrorsFrom(`
+effect h3m::a { n: number }
+effect h3m::b { s: string }
+def takesNum(x: number): number { return x }
+def takesStr(x: string): string { return x }
+def risky() { raise h3m::a("a", { n: 1 })\n raise h3m::b("b", { s: "x" }) }
+node main() {
+  handle { risky() } with (e) {
+    match (e) {
+      { effect: "h3m::a" } => takesNum(e.data.n)
+      { effect: "h3m::b" } => takesStr(e.data.s)
+    }
+  }
+}`);
+    expect(errs.some((x) => /not available on every member/i.test(x.message))).toBe(true);
+  });
+});

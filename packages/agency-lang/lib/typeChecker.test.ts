@@ -5,6 +5,13 @@ import { buildCompilationUnit } from "./compilationUnit.js";
 import type { CompilationUnit } from "./compilationUnit.js";
 import { SymbolTable } from "./symbolTable.js";
 
+// Several Result-synthesis tests below build minimal stub programs — typed
+// functions with empty placeholder bodies — to exercise `try`/pipe type
+// synthesis. Those bodies never return, which definite-return checking (a
+// separate, later feature) correctly flags. This suite doesn't test definite
+// returns, so those specific calls silence it.
+const DR_SILENT = { typechecker: { definiteReturns: "silent" as const } };
+
 function withImports(
   program: AgencyProgram,
   importedFunctions: CompilationUnit["importedFunctions"],
@@ -3677,7 +3684,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("try on a Result-returning function passes through", () => {
@@ -3711,7 +3718,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("`Result<T> catch T` unwraps to T", () => {
@@ -3801,7 +3808,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("pipe whose right-hand returns a Result does not double-wrap", () => {
@@ -3844,7 +3851,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("pipe with a valueAccess RHS (.partial()) resolves to its return type", () => {
@@ -3898,7 +3905,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("function with branched success/failure returns infers as Result<T, E>", () => {
@@ -4321,7 +4328,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("Result<any, any> 'narrows' to Result<number, string> (any goes both ways)", () => {
@@ -4343,7 +4350,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("Result<number, string> is not assignable to plain number", () => {
@@ -4442,7 +4449,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
     it("try on a void-returning function wraps as Result<void, any>", () => {

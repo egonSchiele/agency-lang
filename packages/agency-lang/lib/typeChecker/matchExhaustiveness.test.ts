@@ -196,14 +196,14 @@ def f(u: U): number {
     expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
   });
 
-  it("error config: match over a plain boolean is open (not enumerated as true|false)", () => {
+  it("error config: match over a plain boolean IS checked (B2 enumerates true|false)", () => {
     const errs = check(`
 def f(x: boolean): number {
   match (x) {
     true => 1
   }
 }`, ERROR);
-    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /false/.test(e))).toBe(true);
   });
 });
 

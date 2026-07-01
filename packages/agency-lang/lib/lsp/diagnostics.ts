@@ -21,7 +21,7 @@ import { resolveAgencyImportPath } from "../importPaths.js";
 // with lib/templates/backends/agency/template.mustache.
 const STDLIB_AUTO_IMPORTS: string[] = [
   "print", "printJSON", "parseJSON", "input", "sleep", "round",
-  "read", "write", "readImage", "notify", "range",
+  "read", "write", "readBinary", "notify", "range",
   "mostCommon", "keys", "values", "entries", "emit",
 ];
 

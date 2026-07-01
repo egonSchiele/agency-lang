@@ -41,7 +41,7 @@ Read-only filesystem access: reading files and listing/searching paths.
 
 ```ts
 /** Read-only filesystem access: reading files and listing/searching paths. */
-export effectSet FileRead = <std::read, std::readImage, std::ls, std::glob, std::grep>
+export effectSet FileRead = <std::read, std::readBinary, std::ls, std::glob, std::grep>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L33))

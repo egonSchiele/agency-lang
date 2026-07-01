@@ -179,7 +179,7 @@ export async function _write(
   return true;
 }
 
-export async function _readImage(dir: string, filename: string): Promise<string> {
+export async function _readBinary(dir: string, filename: string): Promise<string> {
   const filePath = await resolvePath(dir, filename);
   const data = await readFile(filePath);
   return data.toString("base64");

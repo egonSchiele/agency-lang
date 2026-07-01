@@ -1,0 +1,26 @@
+// Regression coverage for the readImage -> readBinary rename:
+//  - readBinaryApproved: the def exists under the new name, reads a file, and
+//    its std::readBinary interrupt is approvable.
+//  - readBinaryUnderEffectSet: `reader` propagates std::readBinary and declares
+//    `raises <FileRead>`, so this only type-checks if std::readBinary is a member
+//    of the FileRead effectSet — catching a stale `std::readImage` entry in
+//    stdlib/capabilities.agency.
+// Each node writes its own probe file first so it is independent of the test's
+// working directory.
+import { FileRead } from "std::capabilities"
+
+node readBinaryApproved(): boolean {
+  const w = write("rb-probe.txt", "hello") with approve
+  const r = readBinary("rb-probe.txt") with approve
+  return isSuccess(r)
+}
+
+node readBinaryUnderEffectSet(): boolean {
+  const w = write("rb-probe2.txt", "hello") with approve
+  return reader() with approve
+}
+
+def reader(): boolean raises <FileRead> {
+  const r = readBinary("rb-probe2.txt")
+  return isSuccess(r)
+}

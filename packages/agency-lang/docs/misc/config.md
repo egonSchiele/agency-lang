@@ -46,7 +46,7 @@ This lets you prevent specific built-in functions from being generated in the ou
 - `print` - Console logging
 - `input` - User input
 - `read` - File reading
-- `readImage` - Image file reading
+- `readBinary` - Image file reading
 - `write` - File writing
 - `fetch` - HTTP fetch
 - `fetchJSON` / `fetchJson` - JSON fetch

@@ -30,7 +30,7 @@
 */
 
 /** Read-only filesystem access: reading files and listing/searching paths. */
-export effectSet FileRead = <std::read, std::readImage, std::ls, std::glob, std::grep>
+export effectSet FileRead = <std::read, std::readBinary, std::ls, std::glob, std::grep>
 
 /** Filesystem mutation: creating, editing, moving, copying, and deleting. */
 export effectSet FileWrite = <std::write, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove>

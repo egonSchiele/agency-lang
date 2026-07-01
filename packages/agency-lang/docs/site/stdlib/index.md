@@ -243,15 +243,17 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L180))
 
-### readImage
+### readBinary
 
 ```ts
-readImage(filename: string, dir: string, useAgentCwd: boolean): Result
+readBinary(filename: string, dir: string, useAgentCwd: boolean): Result
 ```
 
-A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
+Read a file and return its contents as a Base64-encoded string. Works for any
+  binary file (images, audio, video, PDFs). The filename is resolved relative to
+  dir. Pair with writeBinary() to round-trip binary data.
 
-  @param filename - The image file to read
+  @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
 
@@ -265,7 +267,7 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Returns:** `Result`
 
-**Throws:** `std::readImage`
+**Throws:** `std::readBinary`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L213))
 
@@ -288,7 +290,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L235))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L237))
 
 ### range
 
@@ -307,7 +309,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L246))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L248))
 
 ### mostCommon
 
@@ -325,7 +327,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L256))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L258))
 
 ### keys
 
@@ -343,7 +345,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L263))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L265))
 
 ### values
 
@@ -361,7 +363,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L270))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L272))
 
 ### entries
 
@@ -379,7 +381,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L277))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L279))
 
 ### emit
 
@@ -395,7 +397,7 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L286))
 
 ### callback
 
@@ -417,4 +419,4 @@ Register a scoped callback for the dynamic extent of the calling function or nod
 | name | `string` |  |
 | fn | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L291))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L293))

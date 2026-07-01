@@ -28,7 +28,7 @@ import {
   _round,
   _read,
   _write,
-  _readImage,
+  _readBinary,
   _notify,
   _range,
   _mostCommon,
@@ -210,26 +210,28 @@ export def write(
   return try _write(dir, filename, content, mode)
 }
 
-export safe def readImage(
+export safe def readBinary(
   filename: string,
   dir: string = ".",
   useAgentCwd: boolean = false,
 ): Result {
   """
-  A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
+  Read a file and return its contents as a Base64-encoded string. Works for any
+  binary file (images, audio, video, PDFs). The filename is resolved relative to
+  dir. Pair with writeBinary() to round-trip binary data.
 
-  @param filename - The image file to read
+  @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  return interrupt std::readImage("Are you sure you want to read this image file?", {
+  return interrupt std::readBinary("Are you sure you want to read this file?", {
     dir: dir,
     filename: filename
   })
-  return try _readImage(dir, filename)
+  return try _readBinary(dir, filename)
 }
 
 export def notify(title: string, message: string): boolean {

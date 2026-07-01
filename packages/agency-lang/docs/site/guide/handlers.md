@@ -341,7 +341,20 @@ An effect declared with no payload (`effect ping { }`) gives `e.data` an empty
 object, so reading a field off it is an error. An effect with no declaration, or
 one dropped because its declarations conflict, leaves `e.data` untyped (`any`).
 
-The `if (e.effect == "...")` member-path guard is the supported idiom for
-per-effect payload access. A `match (e) { { effect: "..." } => ... }` object-pattern
-arm still drives exhaustiveness, but does **not** narrow `e.data` inside the arm
-body — use the member-path guard when you need the payload.
+Two idioms narrow `e.data` per effect. Both are equivalent:
+
+```ts
+// member-path guard
+if (e.effect == "app::confirm") { ask(e.data.question) }
+
+// match on the effect field
+match (e.effect) {
+  "app::confirm"     => ask(e.data.question)      // e.data is the confirm payload
+  "app::rateLimited" => waitFor(e.data.retryAfter)
+}
+```
+
+Only the **object-pattern** form does not narrow the payload: a
+`match (e) { { effect: "..." } => ... }` arm still drives exhaustiveness, but does
+**not** narrow `e.data` inside the arm body. Use `if (e.effect == "...")` or
+`match (e.effect)` when you need the payload.

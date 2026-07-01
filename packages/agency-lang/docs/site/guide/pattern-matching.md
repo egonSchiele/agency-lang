@@ -221,3 +221,26 @@ Adding the missing arm — or a `_` catch-all — clears it. A guarded arm
 required to be exhaustive. Control the severity with
 `typechecker.matchExhaustiveness` in `agency.json` (`"silent"` / `"warn"` /
 `"error"`; default `"warn"`).
+
+## Narrowing on a field-path scrutinee
+
+When the scrutinee is a stable field path like `e.effect`, each literal arm
+narrows the path's receiver inside that arm — exactly as the equivalent
+`if (e.effect == "...")` guard would. So a discriminated union's other fields
+narrow too:
+
+```agency
+type Ev = { kind: "confirm", question: string }
+        | { kind: "wait",    seconds: number }
+
+match (ev.kind) {
+    "confirm" => ask(ev.question)      // ev is the confirm member here
+    "wait"    => sleep(ev.seconds)     // ev is the wait member here
+}
+```
+
+This applies to a stable field-path scrutinee (`ev.kind`, `a.b.c`). A
+bare-variable scrutinee (`match (x)`) does not narrow the variable itself, and an
+object-pattern arm (`match (e) { { kind: "..." } => ... }`) does not narrow the
+scrutinee inside the arm — use the field-path form or an `if` guard when you need
+that narrowing.

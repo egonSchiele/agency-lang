@@ -1,0 +1,17 @@
+// Each tool raises an interrupt, which a surrounding `with approve` handler
+// resolves in place. When the LLM calls this tool many times in ONE round,
+// all of those handler dispatches are in flight concurrently. They must NOT
+// be mistaken for recursive handler nesting (the false HandlerRecursionError
+// this test guards against).
+def readFile(name: string): string {
+  interrupt myapp::read(name, {})
+  return name
+}
+
+node main(): string {
+  let result = ""
+  handle {
+    result = llm("read every file in parallel", { tools: [readFile] })
+  } with approve
+  return result
+}

@@ -354,7 +354,7 @@ describe("agency.interrupt — recursive-handler guard", () => {
     }
   });
 
-  it("leaves _handlerChainDepth back at 0 after the throw", async () => {
+  it("a recursion throw does not leak depth into the next legitimate dispatch", async () => {
     const ctx = makeMockCtx();
     const selfRecursingHandler = async () => {
       await agency.interrupt({
@@ -376,10 +376,69 @@ describe("agency.interrupt — recursive-handler guard", () => {
         }),
       ),
     ).rejects.toThrow(/Handler chain dispatch nested/);
-    // The finally in runHandlerChain decrements on every exit (normal OR
-    // throw). The throw site itself decrements before throwing. So the
-    // counter must be back at 0 — otherwise the next legitimate dispatch
-    // would trip the limit prematurely.
-    expect(ctx._handlerChainDepth).toBe(0);
+    // Depth lives in AsyncLocalStorage, so the failed dispatch's scope has
+    // fully unwound — a fresh, non-recursive dispatch must start from depth 0
+    // and resolve normally rather than inheriting a stale count and tripping
+    // the limit prematurely.
+    let result: any;
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "after-throw" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(
+            // eslint-disable-next-line @typescript-eslint/require-await
+            async () => approve("fresh"),
+            async () => {
+              result = await agency.interrupt({
+                effect: "normal",
+                message: "y",
+                data: {},
+              });
+            },
+          );
+        });
+        return "done";
+      }),
+    );
+    expect(isApproved(result)).toBe(true);
+    expect(result.value).toBe("fresh");
+  });
+
+  // Regression for the false positive where many CONCURRENT handler
+  // dispatches (e.g. an LLM firing 15 tool calls in one round, each
+  // interrupting) were mistaken for recursive nesting. The guard must
+  // measure recursion DEPTH along one async lineage, not concurrent
+  // BREADTH — none of these dispatches nests inside another, so no
+  // HandlerRecursionError should be thrown however wide the fan-out.
+  it("does not trip the recursion guard for many concurrent (non-nested) dispatches", async () => {
+    const ctx = makeMockCtx();
+    // Auto-approve handler that yields, so the concurrent dispatches
+    // interleave with each other while all are still in flight — exactly
+    // the shape of parallel tool calls sharing one ctx.
+    const approveHandler = async () => {
+      await Promise.resolve();
+      return approve("ok");
+    };
+    const N = 15; // > MAX_HANDLER_CHAIN_DEPTH (10) — old code trips here
+    let results: any[] = [];
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "parallel" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(approveHandler, async () => {
+            results = await Promise.all(
+              Array.from({ length: N }, (_, i) =>
+                agency.interrupt({
+                  effect: "read-file",
+                  message: `read file ${i}`,
+                  data: { i },
+                }),
+              ),
+            );
+          });
+        });
+        return "done";
+      }),
+    );
+    expect(results).toHaveLength(N);
+    for (const r of results) expect(isApproved(r)).toBe(true);
   });
 });

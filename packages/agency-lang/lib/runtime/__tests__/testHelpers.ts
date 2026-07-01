@@ -31,7 +31,6 @@ export function makeMockCtx(opts: {
     callbacks: {},
     _skipNextCheckpoint: false,
     _toolCallDepth: 0,
-    _handlerChainDepth: 0,
     runId: null,
     traceConfig: {},
     pushHandler(fn: any) { this.handlers.push(fn); },

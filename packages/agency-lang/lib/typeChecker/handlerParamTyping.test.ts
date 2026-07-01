@@ -182,3 +182,34 @@ node main() {
     expect(warnings.some((w) => /not exhaustive/i.test(w.message))).toBe(false);
   });
 });
+
+describe("handler effect exhaustiveness (H2)", () => {
+  it("no double-report: the handle catches everything; only the inner match warns", () => {
+    const warnings = warningsFrom(`
+effect mytest::alpha { }
+effect mytest::beta { }
+def risky() { raise mytest::alpha("a", {})\n raise mytest::beta("b", {}) }
+node main() {
+  handle { risky() } with (e) {
+    match (e.effect) { "mytest::alpha" => 1 }
+  }
+}`);
+    // Exactly one warning — the exhaustiveness one. The handle block is a
+    // catch-all, so the unhandled-interrupt check is satisfied (no extra warning).
+    expect(warnings.filter((w) => /not exhaustive/i.test(w.message))).toHaveLength(1);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("a `_` arm in match(e.effect) clears the diagnostic", () => {
+    const warnings = warningsFrom(`
+effect mytest::alpha { }
+effect mytest::beta { }
+def risky() { raise mytest::alpha("a", {})\n raise mytest::beta("b", {}) }
+node main() {
+  handle { risky() } with (e) {
+    match (e.effect) { "mytest::alpha" => 1  _ => 0 }
+  }
+}`);
+    expect(warnings.some((w) => /not exhaustive/i.test(w.message))).toBe(false);
+  });
+});

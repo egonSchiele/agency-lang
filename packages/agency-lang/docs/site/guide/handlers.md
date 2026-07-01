@@ -290,3 +290,27 @@ node main() {
 ```
 
 This shorthand can make code more readable. It still follows the rules of handlers, so you can still wrap this code in a handler and reject the interrupt.
+## Matching on the effect (exhaustiveness)
+
+An inline handler's parameter carries the interrupt that fired:
+`{ effect, message, data, origin }`. Its `effect` field is typed as the union
+of the effect kinds the handled body can actually raise, so you can branch on it
+with `match` and get an exhaustiveness check:
+
+```ts
+handle {
+  doRiskyThings()                 // can raise app::confirm or app::rateLimited
+} with (e) {
+  match (e.effect) {
+    "app::confirm" => approve()
+    // warning: match is not exhaustive: missing "app::rateLimited"
+  }
+}
+```
+
+Add the missing arm — or a `_` catch-all — to clear it. The check is
+conservative: if the raisable set can't be determined precisely (an explicitly
+annotated param, a `functionRef` handler, or a nested `handle` inside the body),
+the parameter stays untyped and no check is required. The other fields
+(`message`, `data`, `origin`) are untyped for now; per-effect payload typing on
+`e.data` is a later addition.

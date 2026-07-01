@@ -1,6 +1,17 @@
 import { getVersion } from "std::agency"
+import {
+  printLocalCatalog,
+  localModelsSupported,
+  listModelNames,
+ } from "std::agency/local"
 import { parseArgs } from "std::args"
-import { clearMessages, pushMessage, repl, clearScreen, clearHistory } from "std::cli"
+import {
+  clearMessages,
+  pushMessage,
+  repl,
+  clearScreen,
+  clearHistory,
+ } from "std::cli"
 import { today } from "std::date"
 import { setAgentCwd } from "std::index"
 import { box, render } from "std::layout"
@@ -24,13 +35,31 @@ import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
  } from "./lib/defaultPolicy.agency"
-import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
-import { printLocalCatalog, localModelsSupported, listModelNames } from "std::agency/local"
-import { configureModels, configureLocalModel, enableAgentMemory, getResolvedSlots, applyResolved, promoteAll, currentProvider } from "./shared.agency"
 import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
-import { buildLayers, resolveAll, diffResolved, Ctx, SlotChange } from "./lib/resolution.agency"
+import {
+  buildLayers,
+  resolveAll,
+  diffResolved,
+  Ctx,
+  SlotChange,
+ } from "./lib/resolution.agency"
+import {
+  configureSearch,
+  setSearchBackend,
+  getSearchBackend,
+  availableBackendItems,
+ } from "./lib/search.agency"
 import { getModelSettings, loadSettings } from "./lib/settings.agency"
-import { configureSearch, setSearchBackend, getSearchBackend, availableBackendItems } from "./lib/search.agency"
+import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
+import {
+  configureModels,
+  configureLocalModel,
+  enableAgentMemory,
+  getResolvedSlots,
+  applyResolved,
+  promoteAll,
+  currentProvider,
+ } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
@@ -168,8 +197,8 @@ callback("onLLMRetry") as data {
   if (_showTraces()) {
     pushMessage(
       color.dim(
-        "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
-      ),
+      "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
+    ),
     )
   }
 }
@@ -199,7 +228,7 @@ type ToolCallData = {
 }
 
 type LLMResponse = {
-  output: string | null;
+  output?: string;
   toolCalls: ToolCallData[];
   usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
   cost: { inputCost: number; outputCost: number; cachedInputCost: number; totalCost: number; currency: string };
@@ -287,7 +316,10 @@ export type Session = {
   slots: Record<string, string>
 }
 
-let _session: Session = { pin: "", slots: {} }
+let _session: Session = {
+  pin: "",
+  slots: {}
+}
 
 /** Apply an in-session model selection. Copies `prior` (never mutates), folds in
   the new spec (bare → pin; slot=model → per-slot), resolves, applies, and returns
@@ -295,13 +327,19 @@ let _session: Session = { pin: "", slots: {} }
   e.g. the cross-provider recall notice). Turn-boundary semantics: takes effect on
   the NEXT turn; no in-flight call is mutated. */
 export def switchModel(
-  prior: Session, spec: string, ctx: Ctx, before: Record<string, Resolved>,
+  prior: Session,
+  spec: string,
+  ctx: Ctx,
+  before: Record<string, Resolved>,
 ): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
   let nextSlots: Record<string, string> = {}
-  for (k in prior.slots) {
-    nextSlots[k] = prior.slots[k]
+  for (key in Object.keys(prior.slots)) {
+    nextSlots[key] = prior.slots[key]
   }
-  let next: Session = { pin: prior.pin, slots: nextSlots }
+  let next: Session = {
+    pin: prior.pin,
+    slots: nextSlots
+  }
   const parsed = parseModelFlag(spec)
   if (parsed.slot == "") {
     next.pin = parsed.model
@@ -309,24 +347,44 @@ export def switchModel(
     next.slots[parsed.slot] = parsed.model
   }
 
-  const layers = buildLayers(next.pin, next.slots, "", {}, getModelSettings(loadSettings()), knownProviders(), false)
+  const layers = buildLayers(
+    next.pin,
+    next.slots,
+    "",
+    {},
+    getModelSettings(loadSettings()),
+    knownProviders(),
+    false,
+  )
   const all = resolveAll(layers, ctx)
   if (isFailure(all)) {
     pushMessage(color.red("Could not switch model: ${all.error}"))
-    return { session: prior, resolved: before, changes: [] }
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
   }
   const resolved = promoteAll(all.value)
   applyResolved(resolved)
-  return { session: next, resolved: resolved, changes: diffResolved(before, resolved) }
+  return {
+    session: next,
+    resolved: resolved,
+    changes: diffResolved(before, resolved)
+  }
 }
 
 /** React to one resolved-slot change. Phase 1: a `main`-slot provider change
   means the embedding space behind memory changed, so pause memory and warn.
-  (std::memory has no tier-2-only toggle yet — full pause; structured recall
-  returns when a selective toggle lands.) Returns true iff it emitted the notice. */
+  (std::memory has no tier-2-only toggle yet -- full pause; structured recall
+  returns when a selective toggle lands.) Returns true if it emitted the notice. */
 export def reactToSlotChange(change: SlotChange): boolean {
   if (change.slot == "main" && change.before.provider != change.after.provider) {
-    pushMessage(color.dim("⚠ Provider changed — memory is paused until restart (recall would be unreliable)."))
+    pushMessage(
+      color.dim(
+      "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
+    ),
+    )
     // `with approve`: the agent is deliberately auto-pausing memory on a
     // provider switch, not asking the user — so don't surface an approval prompt.
     disableMemory() with approve
@@ -360,7 +418,9 @@ def _runTurn(msg: string): boolean {
     return true
   }
   if (trimmed == "/help") {
-    pushMessage("Commands: /exit, /clear, /clear-history, /cost, /search, /paste, /help")
+    pushMessage(
+      "Commands: /exit, /clear, /clear-history, /cost, /search, /paste, /help",
+    )
     return true
   }
   if (trimmed == "/search") {
@@ -370,7 +430,7 @@ def _runTurn(msg: string): boolean {
       "Pick how this agent searches the web. Current: ${getSearchBackend()}",
       opts,
       false,
-      true
+      true,
     )
     if (choice != "" && choice != null && choice != undefined) {
       setSearchBackend(choice)
@@ -399,7 +459,9 @@ def _runTurn(msg: string): boolean {
       pushMessage("")
       pushMessage("By model:")
       for (m in byModel) {
-        pushMessage("  ${m.model}  ↑${m.inputTokens} ↓${m.outputTokens}  $${m.cost.toFixed(4)}")
+        pushMessage(
+          "  ${m.model}  ↑${m.inputTokens} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
+        )
       }
     }
     return true
@@ -411,11 +473,11 @@ def _runTurn(msg: string): boolean {
     }
     if (spec == "") {
       pushMessage("Current models:")
-      const cur = getResolvedSlots()
-      for (slot in Object.keys(cur)) {
-        const r = cur[slot]
-        if (r != undefined) {
-          pushMessage("  ${slot}: ${r.model} (${r.via})")
+      const current = getResolvedSlots()
+      for (slot in Object.keys(current)) {
+        const resolved = current[slot]
+        if (resolved != null) {
+          pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
         }
       }
       let noItems: ChoiceItem[] = []
@@ -426,12 +488,15 @@ def _runTurn(msg: string): boolean {
         false,
         true,
       )
-      if (choice == "" || choice == null || choice == undefined) {
+      if (choice == "" || choice == null) {
         return true
       }
       spec = choice
     }
-    const ctx: Ctx = { provider: currentProvider(), price: "standard" }
+    const ctx: Ctx = {
+      provider: currentProvider(),
+      price: "standard"
+    }
     const out = switchModel(_session, spec, ctx, getResolvedSlots())
     _session = out.session
     for (change in out.changes) {
@@ -439,23 +504,36 @@ def _runTurn(msg: string): boolean {
     }
     pushMessage("Model set:")
     for (slot in Object.keys(out.resolved)) {
-      const r = out.resolved[slot]
-      if (r != undefined) {
-        pushMessage(color.dim("  ${slot}: ${r.model} (${r.via})"))
+      const resolved = out.resolved[slot]
+      if (resolved != null) {
+        pushMessage(color.dim("  ${slot}: ${resolved.model} (${resolved.via})"))
       }
     }
     return true
   }
   if (trimmed == "/local") {
     if (!localModelsSupported()) {
-      pushMessage(color.yellow("Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp"))
+      pushMessage(
+        color.yellow(
+        "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
+      ),
+      )
       return true
     }
     let items: ChoiceItem[] = []
-    for (n in listModelNames()) {
-      items.push({ key: n.name, label: n.name })
+    for (modelName in listModelNames()) {
+      items.push({
+        key: modelName.name,
+        label: modelName.name
+      })
     }
-    const choice = chooseOption("Local model", "Pick a local model (downloads on first use):", items, false, true)
+    const choice = chooseOption(
+      "Local model",
+      "Pick a local model (downloads on first use):",
+      items,
+      false,
+      true,
+    )
     if (choice == "" || choice == null || choice == undefined) {
       return true
     }
@@ -962,15 +1040,17 @@ node main() {
   }
 
   // Model setup. `--local` (deprecated alias: `--local-model`) is an optional-
-  // value flag with three states: absent → undefined; bare "" → guided setup;
-  // value → that local model. `--local` and the hosted flags (--model /
-  // --fastmodel / --slowmodel) are mutually exclusive — local and hosted are
-  // different in kind (provider llama-cpp, no embedding endpoint).
+  // value flag with three states: absent (null); bare empty-string for guided
+  // setup; a value for that local model. `--local` and the hosted flags
+  // (--model / --fastmodel / --slowmodel) are mutually exclusive -- local and
+  // hosted are different in kind (provider llama-cpp, no embedding endpoint).
   const localVal = args.flags["local"] ?? args.flags["local-model"]
   const modelArg = args.flags.model ?? ""
   const hasModelFlags = modelArg != "" || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
-  if (localVal != undefined && hasModelFlags) {
-    print(color.red("Pass either --model (hosted) or --local (local), not both."))
+  if (localVal != null && hasModelFlags) {
+    print(
+      color.red("Pass either --model (hosted) or --local (local), not both."),
+    )
     process.exit(1)
   }
   if (localVal == "") {
@@ -986,17 +1066,26 @@ node main() {
       process.exit(1)
     }
     let items: ChoiceItem[] = []
-    for (n in listModelNames()) {
-      items.push({ key: n.name, label: n.name })
+    for (modelName in listModelNames()) {
+      items.push({
+        key: modelName.name,
+        label: modelName.name
+      })
     }
-    const choice = chooseOption("Local model", "Pick a model to download/run (downloads on first use):", items, false, true)
+    const choice = chooseOption(
+      "Local model",
+      "Pick a model to download/run (downloads on first use):",
+      items,
+      false,
+      true,
+    )
     if (choice == "" || choice == null || choice == undefined) {
       process.exit(0)
     }
     configureLocalModel(choice)
     configureSearch(true)
     // fall through into the session on the chosen local model
-  } else if (localVal != undefined) {
+  } else if (localVal != null) {
     configureLocalModel(localVal)
     // Intentionally do NOT enable memory for a local model: the llama-cpp
     // provider has no embedding endpoint, so memory would only emit a
@@ -1104,3 +1193,4 @@ node main() {
   const handler = setupSession(true)
   startInteractive(handler, "", "")
 }
+

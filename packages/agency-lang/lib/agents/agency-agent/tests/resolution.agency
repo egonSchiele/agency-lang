@@ -1,65 +1,184 @@
-import { resolveSlot, resolveAll, buildLayers, Layer, Ctx } from "../lib/resolution.agency"
 import { Resolved } from "../lib/models.agency"
+import {
+  resolveSlot,
+  resolveAll,
+  buildLayers,
+  Layer,
+  Ctx,
+ } from "../lib/resolution.agency"
 
-static const CTX: Ctx = { provider: "anthropic", price: "standard" }
-def empty(name: string): Layer { return { name: name, perSlot: {}, pin: null } }
+static const CTX: Ctx = {
+  provider: "anthropic",
+  price: "standard"
+}
 
-// Unwrap a Result<Resolved> for assertion; the sentinel won't match any
-// expected output, so an unexpected failure fails the test loudly.
-def okR(r: Result<Resolved>): Resolved {
-  if (isFailure(r)) {
-    return { model: "ERR", provider: "ERR", via: "ERR" }
+def emptyLayer(name: string): Layer {
+  return {
+    name: name,
+    perSlot: {},
+    pin: null
   }
-  return r.value
+}
+
+// Unwrap a Result<Resolved> for assertion; the sentinel will not match any
+// expected output, so an unexpected failure fails the test loudly.
+def unwrapResolved(result: Result<Resolved>): Resolved {
+  if (isFailure(result)) {
+    return {
+      model: "ERR",
+      provider: "ERR",
+      via: "ERR"
+    }
+  }
+  return result.value
 }
 
 // immediacy-outer: CLI global-pin beats settings per-slot (the flipped item-1 case).
 node cliPinBeatsSettingsSlot(): Resolved {
-  let cli = empty("cli"); cli.pin = { model: "gpt-5.5", provider: "" }
-  let set = empty("settings"); set.perSlot = { reasoning: { model: "opus", provider: "" } }
-  return okR(resolveSlot("reasoning", [empty("in-session"), cli, set], CTX))
+  let cliLayer = emptyLayer("cli")
+  cliLayer.pin = {
+    model: "gpt-5.5",
+    provider: ""
+  }
+  let settingsLayer = emptyLayer("settings")
+  settingsLayer.perSlot = {
+    reasoning: {
+      model: "opus",
+      provider: ""
+    }
+  }
+  return unwrapResolved(
+    resolveSlot(
+    "reasoning",
+    [emptyLayer("in-session"), cliLayer, settingsLayer],
+    CTX,
+  ),
+  )
 }
+
 // in-session per-slot beats CLI per-slot (immediacy).
 node inSessionPerSlotBeatsCli(): Resolved {
-  let s = empty("in-session"); s.perSlot = { main: { model: "a", provider: "anthropic" } }
-  let cli = empty("cli"); cli.perSlot = { main: { model: "b", provider: "anthropic" } }
-  return okR(resolveSlot("main", [s, cli], CTX))
+  let inSessionLayer = emptyLayer("in-session")
+  inSessionLayer.perSlot = {
+    main: {
+      model: "a-model",
+      provider: "anthropic"
+    }
+  }
+  let cliLayer = emptyLayer("cli")
+  cliLayer.perSlot = {
+    main: {
+      model: "b-model",
+      provider: "anthropic"
+    }
+  }
+  return unwrapResolved(resolveSlot("main", [inSessionLayer, cliLayer], CTX))
 }
+
 // in-session pin beats CLI pin.
 node inSessionPinBeatsCliPin(): Resolved {
-  let s = empty("in-session"); s.pin = { model: "a", provider: "anthropic" }
-  let cli = empty("cli"); cli.pin = { model: "b", provider: "anthropic" }
-  return okR(resolveSlot("main", [s, cli], CTX))
+  let inSessionLayer = emptyLayer("in-session")
+  inSessionLayer.pin = {
+    model: "a-model",
+    provider: "anthropic"
+  }
+  let cliLayer = emptyLayer("cli")
+  cliLayer.pin = {
+    model: "b-model",
+    provider: "anthropic"
+  }
+  return unwrapResolved(resolveSlot("main", [inSessionLayer, cliLayer], CTX))
 }
+
 // within settings: per-slot beats pin.
 node settingsPerSlotBeatsSettingsPin(): Resolved {
-  let set = empty("settings"); set.pin = { model: "pin", provider: "anthropic" }
-  set.perSlot = { main: { model: "slot", provider: "anthropic" } }
-  return okR(resolveSlot("main", [empty("in-session"), empty("cli"), set], CTX))
+  let settingsLayer = emptyLayer("settings")
+  settingsLayer.pin = {
+    model: "pin-model",
+    provider: "anthropic"
+  }
+  settingsLayer.perSlot = {
+    main: {
+      model: "slot-model",
+      provider: "anthropic"
+    }
+  }
+  return unwrapResolved(
+    resolveSlot(
+    "main",
+    [emptyLayer("in-session"), emptyLayer("cli"), settingsLayer],
+    CTX,
+  ),
+  )
 }
-// no layer → built-in default; empty provider inherits ctx.
+
+// no layer set: built-in default; empty provider inherits ctx.
 node fallsToBuiltinDefault(): Resolved {
-  return okR(resolveSlot("main", [empty("in-session"), empty("cli"), empty("settings")], CTX))
+  return unwrapResolved(
+    resolveSlot(
+    "main",
+    [emptyLayer("in-session"), emptyLayer("cli"), emptyLayer("settings")],
+    CTX,
+  ),
+  )
 }
+
 // resolveAll propagates failure for a default-less provider with no override.
 node resolveAllPropagatesFailure(): boolean {
-  const ctx: Ctx = { provider: "litellm", price: "standard" }
-  return isFailure(resolveAll([empty("in-session"), empty("cli"), empty("settings")], ctx))
+  const ctx: Ctx = {
+    provider: "litellm",
+    price: "standard"
+  }
+  return isFailure(
+    resolveAll(
+    [emptyLayer("in-session"), emptyLayer("cli"), emptyLayer("settings")],
+    ctx,
+  ),
+  )
 }
+
 // back-compat parity: built-in default equals planModels for anthropic main.
 node parityMainAnthropic(): Resolved {
-  return okR(resolveSlot("main", [empty("in-session"), empty("cli"), empty("settings")], CTX))
+  return unwrapResolved(
+    resolveSlot(
+    "main",
+    [emptyLayer("in-session"), emptyLayer("cli"), emptyLayer("settings")],
+    CTX,
+  ),
+  )
 }
-// buildLayers: CLI --model gpt-5.5 over settings slots.reasoning=opus → gpt-5.5.
+
+// buildLayers: CLI --model gpt-5.5 over settings slots.reasoning=opus gives gpt-5.5.
 node buildLayersImmediacyOuter(): Resolved {
-  const layers = buildLayers("", {}, "gpt-5.5", {}, { slots: { reasoning: "opus" } }, ["anthropic", "openai"], false)
+  const layers = buildLayers(
+    "",
+    {},
+    "gpt-5.5",
+    {},
+    {
+    slots: {
+      reasoning: "opus"
+    }
+  },
+    ["anthropic", "openai"],
+    false,
+  )
   const all = resolveAll(layers, CTX)
   if (isFailure(all)) {
-    return { model: "ERR", provider: "ERR", via: "ERR" }
+    return {
+      model: "ERR",
+      provider: "ERR",
+      via: "ERR"
+    }
   }
-  const m = all.value["reasoning"]
-  if (m == undefined) {
-    return { model: "ERR", provider: "ERR", via: "ERR" }
+  const reasoning = all.value["reasoning"]
+  if (reasoning == null) {
+    return {
+      model: "ERR",
+      provider: "ERR",
+      via: "ERR"
+    }
   }
-  return m
+  return reasoning
 }
+

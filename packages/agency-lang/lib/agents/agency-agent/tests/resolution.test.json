@@ -1,13 +1,13 @@
 {
   "sourceFile": "resolution.agency",
   "tests": [
-    { "nodeName": "cliPinBeatsSettingsSlot", "input": "", "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"anthropic\",\"via\":\"cli·global-pin\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "inSessionPerSlotBeatsCli", "input": "", "expectedOutput": "{\"model\":\"a\",\"provider\":\"anthropic\",\"via\":\"in-session·per-slot\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "inSessionPinBeatsCliPin", "input": "", "expectedOutput": "{\"model\":\"a\",\"provider\":\"anthropic\",\"via\":\"in-session·global-pin\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "settingsPerSlotBeatsSettingsPin", "input": "", "expectedOutput": "{\"model\":\"slot\",\"provider\":\"anthropic\",\"via\":\"settings·per-slot\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "fallsToBuiltinDefault", "input": "", "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"anthropic\",\"via\":\"built-in·price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "cliPinBeatsSettingsSlot", "input": "", "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"anthropic\",\"via\":\"cli:global-pin\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "inSessionPerSlotBeatsCli", "input": "", "expectedOutput": "{\"model\":\"a-model\",\"provider\":\"anthropic\",\"via\":\"in-session:per-slot\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "inSessionPinBeatsCliPin", "input": "", "expectedOutput": "{\"model\":\"a-model\",\"provider\":\"anthropic\",\"via\":\"in-session:global-pin\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "settingsPerSlotBeatsSettingsPin", "input": "", "expectedOutput": "{\"model\":\"slot-model\",\"provider\":\"anthropic\",\"via\":\"settings:per-slot\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "fallsToBuiltinDefault", "input": "", "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "resolveAllPropagatesFailure", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "parityMainAnthropic", "input": "", "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"anthropic\",\"via\":\"built-in·price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "buildLayersImmediacyOuter", "input": "", "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"anthropic\",\"via\":\"cli·global-pin\"}", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "parityMainAnthropic", "input": "", "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "buildLayersImmediacyOuter", "input": "", "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"anthropic\",\"via\":\"cli:global-pin\"}", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

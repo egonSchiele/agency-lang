@@ -17,15 +17,16 @@
   saveSettings(s)
   ```
 */
+import { mkdir } from "std::fs"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
-import { mkdir } from "std::fs"
 
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
 import { isKnownSlot, canonicalSlot } from "./slots.agency"
 
+
 export type SearchSettings = {
-  backend?: string;
+  backend?: string
 }
 
 export type ModelSettings = {
@@ -43,29 +44,34 @@ export type Settings = {
 
 /** Return a NEW ModelSettings with unknown slot keys dropped (warned). Does NOT
   mutate the input. Pure except the warning print. */
-export def sanitizeModelSettings(m: ModelSettings): ModelSettings {
+export def sanitizeModelSettings(settings: ModelSettings): ModelSettings {
   // Bind to a local so the null-guard narrows for the loop (member-path
-  // narrowing of `m.slots` does not survive across statements).
-  const slots = m.slots
+  // narrowing of `settings.slots` does not survive across statements).
+  const slots = settings.slots
   if (slots == null) {
-    return m
+    return settings
   }
   let kept: Record<string, string> = {}
-  for (key in slots) {
+  for (key in Object.keys(slots)) {
     if (isKnownSlot(key)) {
       kept[canonicalSlot(key)] = slots[key]
     } else {
-      print("Warning: settings.json model.slots has unknown slot '${key}'; ignoring it.")
+      print(
+        "Warning: settings.json model.slots has unknown slot '${key}'; ignoring it.",
+      )
     }
   }
-  return { ...m, slots: kept }
+  return {
+    ...settings,
+    slots: kept
+  }
 }
 
-export def getModelSettings(s: Settings): ModelSettings {
-  if (s.model == null) {
+export def getModelSettings(settings: Settings): ModelSettings {
+  if (settings.model == null) {
     return {}
   }
-  return s.model
+  return settings.model
 }
 
 /*
@@ -130,6 +136,9 @@ export def saveSettings(settings: Settings) {
   const content = JSON.stringify(settings)
   const result = write(SETTINGS_FILE, content, POLICY_DIR) with approve
   if (isFailure(result)) {
-    print("Warning: could not save settings to ${SETTINGS_PATH}: ${result.error}")
+    print(
+      "Warning: could not save settings to ${SETTINGS_PATH}: ${result.error}",
+    )
   }
 }
+

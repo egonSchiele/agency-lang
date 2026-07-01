@@ -7,64 +7,105 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
-import { agentReply, switchModel, reactToSlotChange, Session } from "../agent.agency"
-import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
-import { resolveAll, buildLayers, Ctx, SlotChange } from "../lib/resolution.agency"
+import {
+  agentReply,
+  switchModel,
+  reactToSlotChange,
+  Session,
+ } from "../agent.agency"
 import { knownProviders, Resolved } from "../lib/models.agency"
+import {
+  resolveAll,
+  buildLayers,
+  Ctx,
+  SlotChange,
+ } from "../lib/resolution.agency"
 import { saveSettings } from "../lib/settings.agency"
+import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
 
 node respondsToAMessage(): boolean {
   const reply = agentReply("hello")
   return reply == "Hi from the agent!"
 }
 
-// End-to-end of the wired apply→read path (env-independent — empty settings, no
+// End-to-end of the wired apply/read path (env-independent: empty settings, no
 // resolveDetected). Proves applyResolved/getResolvedSlots match the built-in
 // (planModels) defaults for anthropic. Back-compat guard (review #4).
 node applyResolvedSetsSlots(): string {
-  const ctx: Ctx = { provider: "anthropic", price: "standard" }
+  const ctx: Ctx = {
+    provider: "anthropic",
+    price: "standard"
+  }
   const layers = buildLayers("", {}, "", {}, {}, knownProviders(), false)
   const all = resolveAll(layers, ctx)
   if (isFailure(all)) {
     return "FAIL"
   }
   applyResolved(promoteAll(all.value))
-  const s = getResolvedSlots()
-  const main = s["main"]
-  const reasoning = s["reasoning"]
-  if (main == undefined || reasoning == undefined) {
+  const slots = getResolvedSlots()
+  const main = slots["main"]
+  const reasoning = slots["reasoning"]
+  if (main == null || reasoning == null) {
     return "MISSING"
   }
   return "${main.model}|${reasoning.model}|${reasoning.provider}"
 }
 
-// The agent promotes openai → openai-responses on the override path too.
+// The agent promotes openai to openai-responses on the override path too.
 node promotesOpenaiProvider(): string {
-  const slots: Record<string, Resolved> = { main: { model: "gpt-4o", provider: "openai", via: "x" } }
-  const out = promoteAll(slots)
-  const m = out["main"]
-  if (m == undefined) {
+  const slots: Record<string, Resolved> = {
+    main: {
+      model: "gpt-4o",
+      provider: "openai",
+      via: "x"
+    }
+  }
+  const promoted = promoteAll(slots)
+  const mainSlot = promoted["main"]
+  if (mainSlot == null) {
     return "MISSING"
   }
-  return m.provider
+  return mainSlot.provider
 }
 
-static const SWITCH_CTX: Ctx = { provider: "anthropic", price: "standard" }
+static const SWITCH_CTX: Ctx = {
+  provider: "anthropic",
+  price: "standard"
+}
 static const SWITCH_BEFORE: Record<string, Resolved> = {
-  main: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
-  reasoning: { model: "claude-opus-4-8", provider: "anthropic", via: "x" },
-  embedding: { model: "", provider: "anthropic", via: "x" }
-}
-def freshSession(): Session { return { pin: "", slots: {} } }
-def slotModel(r: Record<string, Resolved>, slot: string): string {
-  const v = r[slot]
-  if (v == undefined) {
-    return "MISSING"
+  main: {
+    model: "claude-sonnet-4-6",
+    provider: "anthropic",
+    via: "x"
+  },
+  reasoning: {
+    model: "claude-opus-4-8",
+    provider: "anthropic",
+    via: "x"
+  },
+  embedding: {
+    model: "",
+    provider: "anthropic",
+    via: "x"
   }
-  return v.model
 }
 
-// A bare /model spec sets the in-session global pin → all slots become gpt-5.5
+def freshSession(): Session {
+  return {
+    pin: "",
+    slots: {}
+  }
+}
+
+def slotModel(slots: Record<string, Resolved>, slot: string): string {
+  const value = slots[slot]
+  if (value == null) {
+    return "MISSING"
+  }
+  return value.model
+}
+
+// A bare /model spec sets the in-session global pin, so all slots become gpt-5.5
 // (pin wins over any on-disk settings, so no clear needed).
 node switchPinsAllSlots(): string {
   const out = switchModel(freshSession(), "gpt-5.5", SWITCH_CTX, SWITCH_BEFORE)
@@ -74,7 +115,12 @@ node switchPinsAllSlots(): string {
 // default (doesn't collapse routing). Clear settings for determinism.
 node switchPerSlotOnly(): string {
   saveSettings({}) with approve
-  const out = switchModel(freshSession(), "reasoning=claude-opus-4-8", SWITCH_CTX, SWITCH_BEFORE)
+  const out = switchModel(
+    freshSession(),
+    "reasoning=claude-opus-4-8",
+    SWITCH_CTX,
+    SWITCH_BEFORE,
+  )
   return "${slotModel(out.resolved, "reasoning")}|${slotModel(out.resolved, "main")}"
 }
 // Only the changed slot is reported in `changes`.
@@ -94,17 +140,34 @@ node switchDoesNotMutatePrior(): string {
 node reactNotifiesOnMainProviderChange(): boolean {
   const change: SlotChange = {
     slot: "main",
-    before: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
-    after: { model: "gpt-5.5", provider: "openai-responses", via: "y" }
+    before: {
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      via: "x"
+    },
+    after: {
+      model: "gpt-5.5",
+      provider: "openai-responses",
+      via: "y"
+    }
   }
   return reactToSlotChange(change)
 }
-// A same-provider change does not — recall is unaffected.
+// A same-provider change does not; recall is unaffected.
 node reactSilentOnSameProvider(): boolean {
   const change: SlotChange = {
     slot: "main",
-    before: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
-    after: { model: "claude-opus-4-8", provider: "anthropic", via: "y" }
+    before: {
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      via: "x"
+    },
+    after: {
+      model: "claude-opus-4-8",
+      provider: "anthropic",
+      via: "y"
+    }
   }
   return reactToSlotChange(change)
 }
+

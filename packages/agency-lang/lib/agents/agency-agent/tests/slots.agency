@@ -1,7 +1,22 @@
 import { canonicalSlot, isKnownSlot, slotKind } from "../lib/slots.agency"
 
-node aliasFastToMain(): string { return canonicalSlot("fast") }
-node unknownStaysUnknown(): boolean { return isKnownSlot("resoning") }
-node knownAfterAlias(): boolean { return isKnownSlot("slow") }
-node kindOfReasoning(): string { return slotKind("slow") }
-node kindOfEmbedding(): string { return slotKind("embedding") }
+node aliasFastToMain(): string {
+  return canonicalSlot("fast")
+}
+
+node unknownStaysUnknown(): boolean {
+  return isKnownSlot("resoning")
+}
+
+node knownAfterAlias(): boolean {
+  return isKnownSlot("slow")
+}
+
+node kindOfReasoning(): string {
+  return slotKind("slow")
+}
+
+node kindOfEmbedding(): string {
+  return slotKind("embedding")
+}
+

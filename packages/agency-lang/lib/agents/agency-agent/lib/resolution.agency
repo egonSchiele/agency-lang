@@ -1,104 +1,190 @@
-/** @module Resolution matrix. Immutable layers (most-immediate first) ×
-  specificity (per-slot › global-pin), first non-empty cell wins; built-in falls
-  to `priceDefault`. Pure — layers are read-only inputs. See spec §3.2/§3.3. */
+/** @module Resolution matrix. Immutable layers (most-immediate first) times
+  specificity (per-slot then global-pin), first non-empty cell wins; built-in
+  falls to `priceDefault`. Pure: layers are read-only inputs. See spec 3.2/3.3. */
 import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
-import { canonicalSlot } from "./slots.agency"
 import { ModelSettings } from "./settings.agency"
+import { canonicalSlot, SLOTS } from "./slots.agency"
 
-export type SlotValue = { model: string; provider: string }
-export type Layer = { name: string; perSlot: Record<string, SlotValue>; pin: SlotValue | null }
-export type Ctx = { provider: string; price: string }
-export type SlotChange = { slot: string; before: Resolved; after: Resolved }
+export type SlotValue = {
+  model: string;
+  provider: string
+}
 
-def finalProvider(v: SlotValue, ctx: Ctx): string {
-  if (v.provider == "") {
+export type Layer = {
+  name: string;
+  perSlot: Record<string, SlotValue>;
+  pin?: SlotValue
+}
+
+export type Ctx = {
+  provider: string;
+  price: string
+}
+
+export type SlotChange = {
+  slot: string;
+  before: Resolved;
+  after: Resolved
+}
+
+def finalProvider(value: SlotValue, ctx: Ctx): string {
+  if (value.provider == "") {
     return ctx.provider
   }
-  return v.provider
+  return value.provider
 }
 
-export def resolveSlot(slot: string, layers: Layer[], ctx: Ctx): Result<Resolved> {
+export def resolveSlot(
+  slot: string,
+  layers: Layer[],
+  ctx: Ctx,
+): Result<Resolved> {
   for (layer in layers) {
-    const ps = layer.perSlot[slot]
-    if (ps != undefined) {
-      return success({ model: ps.model, provider: finalProvider(ps, ctx), via: "${layer.name}·per-slot" })
+    const perSlotValue = layer.perSlot[slot]
+    if (perSlotValue != null) {
+      return success(
+        {
+        model: perSlotValue.model,
+        provider: finalProvider(perSlotValue, ctx),
+        via: "${layer.name}:per-slot"
+      },
+      )
     }
     if (layer.pin != null) {
-      return success({ model: layer.pin.model, provider: finalProvider(layer.pin, ctx), via: "${layer.name}·global-pin" })
+      return success(
+        {
+        model: layer.pin.model,
+        provider: finalProvider(layer.pin, ctx),
+        via: "${layer.name}:global-pin"
+      },
+      )
     }
   }
-  const def = priceDefault(ctx.provider, slot, ctx.price)
-  if (isFailure(def)) {
-    return def
+  const builtin = priceDefault(ctx.provider, slot, ctx.price)
+  if (isFailure(builtin)) {
+    return builtin
   }
-  let r = def.value
-  if (r.provider == "") {
-    r.provider = ctx.provider
+  const resolved = builtin.value
+  if (resolved.provider == "") {
+    // Return a new object rather than mutating priceDefault's result, so this
+    // stays pure and cannot alias a reused default.
+    return success(
+      {
+      model: resolved.model,
+      provider: ctx.provider,
+      via: resolved.via
+    },
+    )
   }
-  return success(r)
+  return success(resolved)
 }
 
-export def resolveAll(layers: Layer[], ctx: Ctx): Result<Record<string, Resolved>> {
-  let out: Record<string, Resolved> = {}
-  for (slot in ["main", "reasoning", "embedding"]) {
-    const r = resolveSlot(slot, layers, ctx)
-    if (isFailure(r)) {
-      return r
+export def resolveAll(
+  layers: Layer[],
+  ctx: Ctx,
+): Result<Record<string, Resolved>> {
+  let output: Record<string, Resolved> = {}
+  for (slot in SLOTS) {
+    const resolved = resolveSlot(slot, layers, ctx)
+    if (isFailure(resolved)) {
+      return resolved
     }
-    out[slot] = r.value
+    output[slot] = resolved.value
   }
-  return success(out)
+  return success(output)
 }
 
-def toValue(raw: string, kp: string[], est: boolean): SlotValue {
-  const spec = parseModelSpec(raw, est, kp)
-  return { model: spec.model, provider: spec.provider }
-}
-def slotsToValues(slots: Record<string, string>, kp: string[], est: boolean): Record<string, SlotValue> {
-  let out: Record<string, SlotValue> = {}
-  for (key in slots) {
-    out[canonicalSlot(key)] = toValue(slots[key], kp, est)
+def parseSlotValue(
+  raw: string,
+  providers: string[],
+  providerEstablished: boolean,
+): SlotValue {
+  const spec = parseModelSpec(raw, providerEstablished, providers)
+  return {
+    model: spec.model,
+    provider: spec.provider
   }
-  return out
+}
+
+def slotMapToValues(
+  slots: Record<string, string>,
+  providers: string[],
+  providerEstablished: boolean,
+): Record<string, SlotValue> {
+  let output: Record<string, SlotValue> = {}
+  for (key in Object.keys(slots)) {
+    output[canonicalSlot(key)] = parseSlotValue(slots[key], providers, providerEstablished)
+  }
+  return output
 }
 
 /** Build the ordered [in-session, cli, settings] layer list (built-in fallback
   is implicit via priceDefault). Each raw value is parsed so a unified
   provider/model carries its own provider. */
 export def buildLayers(
-  sessionPin: string, sessionSlots: Record<string, string>,
-  cliModel: string, cliSlots: Record<string, string>,
-  settings: ModelSettings, knownProviders: string[], providerEstablished: boolean,
+  sessionPin: string,
+  sessionSlots: Record<string, string>,
+  cliModel: string,
+  cliSlots: Record<string, string>,
+  settings: ModelSettings,
+  providers: string[],
+  providerEstablished: boolean,
 ): Layer[] {
-  let inSession: Layer = { name: "in-session", perSlot: slotsToValues(sessionSlots, knownProviders, providerEstablished), pin: null }
+  let inSessionLayer: Layer = {
+    name: "in-session",
+    perSlot: slotMapToValues(sessionSlots, providers, providerEstablished),
+    pin: null
+  }
   if (sessionPin != "") {
-    inSession.pin = toValue(sessionPin, knownProviders, providerEstablished)
+    inSessionLayer.pin = parseSlotValue(sessionPin, providers, providerEstablished)
   }
-  let cli: Layer = { name: "cli", perSlot: slotsToValues(cliSlots, knownProviders, providerEstablished), pin: null }
+  let cliLayer: Layer = {
+    name: "cli",
+    perSlot: slotMapToValues(cliSlots, providers, providerEstablished),
+    pin: null
+  }
   if (cliModel != "") {
-    cli.pin = toValue(cliModel, knownProviders, providerEstablished)
+    cliLayer.pin = parseSlotValue(cliModel, providers, providerEstablished)
   }
-  let set: Layer = { name: "settings", perSlot: {}, pin: null }
+  let settingsLayer: Layer = {
+    name: "settings",
+    perSlot: {},
+    pin: null
+  }
   if (settings.slots != null) {
-    set.perSlot = slotsToValues(settings.slots, knownProviders, providerEstablished)
+    settingsLayer.perSlot = slotMapToValues(settings.slots, providers, providerEstablished)
   }
   if (settings.pin != null && settings.pin != "") {
-    set.pin = toValue(settings.pin, knownProviders, providerEstablished)
+    settingsLayer.pin = parseSlotValue(settings.pin, providers, providerEstablished)
   }
-  return [inSession, cli, set]
+  return [inSessionLayer, cliLayer, settingsLayer]
 }
 
 /** Slots whose (model, provider) changed between two assignments. */
-export def diffResolved(before: Record<string, Resolved>, after: Record<string, Resolved>): SlotChange[] {
-  let out: SlotChange[] = []
+export def diffResolved(
+  before: Record<string, Resolved>,
+  after: Record<string, Resolved>,
+): SlotChange[] {
+  let changes: SlotChange[] = []
   for (slot in Object.keys(after)) {
-    const b = before[slot]
-    if (b == undefined) {
+    const beforeValue = before[slot]
+    if (beforeValue == null) {
       continue
     }
-    if (b.model != after[slot].model || b.provider != after[slot].provider) {
-      out.push({ slot: slot, before: b, after: after[slot] })
+    const afterValue = after[slot]
+    if (afterValue == null) {
+      continue
+    }
+    if (beforeValue.model != afterValue.model || beforeValue.provider != afterValue.provider) {
+      changes.push(
+        {
+        slot: slot,
+        before: beforeValue,
+        after: afterValue
+      },
+      )
     }
   }
-  return out
+  return changes
 }
+

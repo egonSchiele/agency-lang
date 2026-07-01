@@ -303,7 +303,10 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
   const flowOf: WeakMap<AgencyNode, FlowNode> = new WeakMap();
   const memo: WeakMap<FlowNode, Record<string, ScopeType>> = new WeakMap();
   const typeAliases = ctx.getTypeAliases();
-  const scopeTerminals: Record<string, FlowNode> = {};
+  // Null-prototype: scopeKeys derive from user-controlled function/node names, so
+  // a reserved key ("__proto__"/"toString"/…) must not collide with
+  // Object.prototype on write or read (mirrors the flow memo dicts in flow.ts).
+  const scopeTerminals: Record<string, FlowNode> = Object.create(null);
   for (const info of scopes) {
     const env: FlowEnvironment = { scope: info.scope, flowOf, typeAliases, memo };
     scopeTerminals[info.scopeKey] = buildFlowGraph(

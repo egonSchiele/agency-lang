@@ -193,8 +193,8 @@ for ({ name, age } in users) {
 Destructuring relies on the underlying JavaScript runtime: reading a
 property of `null` or `undefined` (e.g. `let { name } = null`) throws a
 `TypeError`, which Agency captures and surfaces as a `failure` Result.
-At runtime, a match without a `_` arm that matches no other arm does
-nothing and returns `null`.
+At runtime, a match without a `_` arm that matches no other arm is a
+no-op — no branch runs.
 
 ## Exhaustiveness checking
 

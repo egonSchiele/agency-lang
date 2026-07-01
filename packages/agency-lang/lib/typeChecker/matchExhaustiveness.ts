@@ -81,10 +81,30 @@ function coveredCases(arms: NormalizedArm[]): TypeCase[] {
   return covered;
 }
 
+type LiteralValue = string | number | boolean;
+
+// Case identity keys. A value is tagged with its `typeof` so a numeric `1` and a
+// string "1" never collide. An arm and a decomposed case are the "same case"
+// iff their keys are equal.
+function literalKey(value: LiteralValue): string {
+  return `literal:${typeof value}:${String(value)}`;
+}
+function discriminatedMemberKey(prop: string, value: LiteralValue): string {
+  return `member:${prop}:${typeof value}:${String(value)}`;
+}
+
 function caseKey(c: TypeCase): string {
-  if (c.kind === "literal") return `literal:${typeof c.value}:${String(c.value)}`;
-  if (c.kind === "member" && c.disc) return `member:${c.disc.prop}:${typeof c.disc.value}:${String(c.disc.value)}`;
-  return c.kind; // resultSuccess/resultFailure, or an opaque member (no disc)
+  switch (c.kind) {
+    case "resultSuccess":
+    case "resultFailure":
+      return c.kind;
+    case "literal":
+      return literalKey(c.value);
+    case "member":
+      // A discriminated member keys on its tag; an opaque member has no key an
+      // arm can match (its coverage is never computed — the union bails).
+      return c.disc ? discriminatedMemberKey(c.disc.prop, c.disc.value) : "member";
+  }
 }
 
 function describeCase(c: TypeCase): string {
@@ -104,15 +124,53 @@ function describeCase(c: TypeCase): string {
 }
 
 /**
+ * The single discriminant property shared by every member case, or null if the
+ * members aren't a uniformly-discriminated set (an object union with no common
+ * tag → un-checkable, B1 behavior).
+ */
+function sharedDiscriminant(memberCases: TypeCase[]): string | null {
+  const first = memberCases[0];
+  const prop = first.kind === "member" ? first.disc?.prop : undefined;
+  if (prop === undefined) return null;
+  const everyMemberSharesIt = memberCases.every(
+    (c) => c.kind === "member" && c.disc?.prop === prop,
+  );
+  return everyMemberSharesIt ? prop : null;
+}
+
+/**
+ * True if some un-guarded arm is an objectPattern that does NOT pin the
+ * discriminant to a literal (e.g. `{ x }`, shorthand `{ kind }`, interpolated
+ * `{ kind: "x${y}" }`). Such an arm could match several members, so we can't
+ * prove any member is uncovered → the whole match must bail.
+ */
+function hasArmWithUnpinnedDiscriminant(arms: NormalizedArm[], prop: string): boolean {
+  return arms.some(
+    (arm) =>
+      !arm.guarded &&
+      !isCatchAll(arm) &&
+      arm.caseValue !== "_" &&
+      arm.caseValue.type === "objectPattern" &&
+      objectPatternDiscriminantValue(arm.caseValue, prop) === null,
+  );
+}
+
+/** The member keys covered by the un-guarded objectPattern arms (a guarded arm
+ *  may not run, so it never counts toward coverage). */
+function coveredMemberKeys(arms: NormalizedArm[], prop: string): Set<string> {
+  const covered = new Set<string>();
+  for (const arm of arms) {
+    if (arm.guarded) continue;
+    const pinnedValue = objectPatternDiscriminantValue(arm.caseValue, prop);
+    if (pinnedValue !== null) covered.add(discriminatedMemberKey(prop, pinnedValue));
+  }
+  return covered;
+}
+
+/**
  * The cases a closed-type match leaves uncovered, or [] when no requirement
- * applies (open type, non-discriminated object union, or a catch-all arm).
- *
- * Object-union path (B2): if every `member` case carries the SAME discriminant
- * prop, an un-guarded `objectPattern` arm that pins that prop to a literal
- * covers the matching member. Bail (no diagnostic) if the union isn't
- * discriminated, or if any un-guarded, non-catch-all arm is an `objectPattern`
- * that does NOT pin the discriminant (it could match several members → we can't
- * prove non-coverage). Guarded arms never cover.
+ * applies (open type or a catch-all arm). Object unions take the discriminated
+ * path; Result / literal / boolean take the B1 path.
  */
 function missingCases(arms: NormalizedArm[], caseSet: CaseSet): TypeCase[] {
   if (!caseSet.closed) return [];
@@ -120,27 +178,10 @@ function missingCases(arms: NormalizedArm[], caseSet: CaseSet): TypeCase[] {
 
   const memberCases = caseSet.cases.filter((c) => c.kind === "member");
   if (memberCases.length > 0) {
-    const disc = memberCases[0].kind === "member" ? memberCases[0].disc : undefined;
-    const allDisc =
-      disc !== undefined &&
-      memberCases.every((c) => c.kind === "member" && c.disc !== undefined && c.disc.prop === disc.prop);
-    if (!allDisc) return []; // non-discriminated object union → un-checkable (B1)
-    const ambiguous = arms.some(
-      (a) =>
-        !a.guarded &&
-        !isCatchAll(a) &&
-        a.caseValue !== "_" &&
-        a.caseValue.type === "objectPattern" &&
-        objectPatternDiscriminantValue(a.caseValue, disc.prop) === null,
-    );
-    if (ambiguous) return [];
-    const covered = new Set(
-      arms
-        .filter((a) => !a.guarded)
-        .map((a) => objectPatternDiscriminantValue(a.caseValue, disc.prop))
-        .filter((v): v is string | number | boolean => v !== null)
-        .map((v) => `member:${disc.prop}:${typeof v}:${String(v)}`),
-    );
+    const discriminant = sharedDiscriminant(memberCases);
+    if (discriminant === null) return []; // non-discriminated object union
+    if (hasArmWithUnpinnedDiscriminant(arms, discriminant)) return [];
+    const covered = coveredMemberKeys(arms, discriminant);
     return caseSet.cases.filter((c) => !covered.has(caseKey(c)));
   }
 

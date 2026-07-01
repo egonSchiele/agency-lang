@@ -45,25 +45,49 @@ function findDiscriminant(
   members: VariableType[],
   aliases: Record<string, TypeAliasEntry>,
 ): Discriminant | null {
-  const first = safeResolveType(members[0], aliases);
-  if (first.type !== "objectType") return null;
-  for (const cand of first.properties) {
-    if (literalValue(safeResolveType(cand.value, aliases)) === null) continue;
-    const values: (string | number | boolean)[] = [];
-    let ok = true;
-    for (const m of members) {
-      const rm = safeResolveType(m, aliases);
-      if (rm.type !== "objectType") { ok = false; break; }
-      const pv = rm.properties.find((p) => p.key === cand.key)?.value;
-      const lv = pv ? literalValue(safeResolveType(pv, aliases)) : null;
-      if (lv === null) { ok = false; break; }
-      values.push(lv);
-    }
-    if (ok && new Set(values.map((v) => `${typeof v}:${String(v)}`)).size === members.length) {
-      return { prop: cand.key, values };
+  const firstMember = safeResolveType(members[0], aliases);
+  if (firstMember.type !== "objectType") return null;
+
+  // Only properties that are literal-typed on the first member could be a tag.
+  const candidateProps = firstMember.properties
+    .filter((p) => literalValue(safeResolveType(p.value, aliases)) !== null)
+    .map((p) => p.key);
+
+  for (const prop of candidateProps) {
+    const values = memberLiteralValues(members, prop, aliases);
+    if (values !== null && allDistinct(values)) {
+      return { prop, values };
     }
   }
   return null;
+}
+
+/**
+ * Each member's literal value for property `prop`, in member order — or null if
+ * ANY member is not an object, lacks `prop`, or types it as a non-literal (so
+ * `prop` can't be a discriminant).
+ */
+function memberLiteralValues(
+  members: VariableType[],
+  prop: string,
+  aliases: Record<string, TypeAliasEntry>,
+): (string | number | boolean)[] | null {
+  const values: (string | number | boolean)[] = [];
+  for (const member of members) {
+    const resolved = safeResolveType(member, aliases);
+    if (resolved.type !== "objectType") return null;
+    const propType = resolved.properties.find((p) => p.key === prop)?.value;
+    const value = propType ? literalValue(safeResolveType(propType, aliases)) : null;
+    if (value === null) return null;
+    values.push(value);
+  }
+  return values;
+}
+
+/** True if every value is distinct (type-aware, so `1` and "1" don't collide). */
+function allDistinct(values: (string | number | boolean)[]): boolean {
+  const keys = values.map((v) => `${typeof v}:${String(v)}`);
+  return new Set(keys).size === keys.length;
 }
 
 /**

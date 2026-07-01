@@ -306,3 +306,25 @@ for (let i = 0; i < MAX_ITERATIONS; i++) {
 
 }
 ```
+
+### Single character variable names
+
+**Why:** Single character variable names can be unclear and make the code harder to read. Use descriptive names that convey the purpose of the variable.
+
+**Bad:**
+```ts
+const a = getUserData();
+
+function f(a) {
+  return a;
+}
+```
+
+**Good:**
+```ts
+const userData = getUserData();
+
+function processUserData(userData) {
+  return userData;
+}
+```

@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import {
@@ -158,15 +159,32 @@ type HandlerChainOutcome =
   | { kind: "propagated" }
   | { kind: "noResponse" };
 
-/** Maximum nested-dispatch depth for `runHandlerChain`. Each entry increments
- *  `ctx._handlerChainDepth`; exceeding this limit throws `HandlerRecursionError`.
- *  Picked to be well above any plausible legitimate nesting (a handler that calls
- *  one nested handler-aware operation, that itself calls another, etc.) but
- *  small enough that a runaway recursion is caught immediately rather than after
- *  hundreds of leaked handlers. See the case study in
- *  https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c where the
- *  unguarded recursion grew to ~500 handlers before the user noticed the freeze. */
+/** Maximum nested-dispatch depth for `runHandlerChain`. Each dispatch descends
+ *  one level in `handlerChainDepthALS`; exceeding this limit throws
+ *  `HandlerRecursionError`. Picked to be well above any plausible legitimate
+ *  nesting (a handler that calls one nested handler-aware operation, that itself
+ *  calls another, etc.) but small enough that a runaway recursion is caught
+ *  immediately rather than after hundreds of leaked handlers. See the case study
+ *  in https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c where
+ *  the unguarded recursion grew to ~500 handlers before the user noticed the
+ *  freeze. */
 const MAX_HANDLER_CHAIN_DEPTH = 10;
+
+/** Current handler-chain nesting depth for the *active async lineage*.
+ *
+ *  Recursion depth is a property of the async call tree, NOT a global count.
+ *  Storing it in AsyncLocalStorage (rather than a single counter on `ctx`) means
+ *  concurrent dispatches — e.g. an LLM firing 15 tool calls in one round, each of
+ *  which interrupts while its siblings are still in flight — each inherit the
+ *  SAME parent depth and independently descend one level. Their breadth never
+ *  accumulates, so a wide fan-out is no longer mistaken for recursion. Only a
+ *  handler whose own body raises another interrupt runs INSIDE this scope, so
+ *  genuine self-re-entry still climbs the depth until it trips the guard.
+ *
+ *  ALS is never serialized, so there is nothing to reset across checkpoints or
+ *  resumes — each scope unwinds automatically when its dispatch returns or
+ *  throws. */
+const handlerChainDepthALS = new AsyncLocalStorage<number>();
 
 /** Run all registered handlers for an interrupt (top of the stack first).
  * Emits handlerDecision/interruptResolved events along the way and returns
@@ -177,76 +195,73 @@ async function runHandlerChain(
   interruptId: string,
   interruptObj: { effect: string; message: string; data: any; origin: string },
 ): Promise<HandlerChainOutcome> {
-  let approvedValue: any = undefined;
-  let hasApproval = false;
-  let hasPropagation = false;
-  // Increment BEFORE the limit check so a handler that calls into another
-  // dispatch sees one extra level on entry; decrement in finally so even an
-  // early throw (e.g. cancellation) leaves the counter clean.
-  ctx._handlerChainDepth = (ctx._handlerChainDepth ?? 0) + 1;
-  if (ctx._handlerChainDepth > MAX_HANDLER_CHAIN_DEPTH) {
-    // Decrement before throwing so the counter reflects what's actually on
-    // the stack — otherwise a caller that catches this error would see a
-    // stale +1 and trip the limit on the next legitimate dispatch.
-    ctx._handlerChainDepth -= 1;
+  // Descend one level in the CURRENT async lineage (see
+  // `handlerChainDepthALS`). Concurrent sibling dispatches each read the same
+  // inherited parent depth, so fan-out breadth never accumulates; only a
+  // handler whose body re-enters the chain nests inside the `run(...)` scope
+  // below and climbs the depth.
+  const depth = (handlerChainDepthALS.getStore() ?? 0) + 1;
+  if (depth > MAX_HANDLER_CHAIN_DEPTH) {
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
-  const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
-  try {
-    for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
-      if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
-      // Treat handler execution as atomic for the debugger — same as LLM tool calls.
-      ctx.enterToolCall();
-      let result: any;
-      try {
-        result = await ctx.handlers[i](interruptObj);
-      } finally {
-        ctx.exitToolCall();
+  return handlerChainDepthALS.run(depth, async () => {
+    let approvedValue: any = undefined;
+    let hasApproval = false;
+    let hasPropagation = false;
+    const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
+    try {
+      for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
+        if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
+        // Treat handler execution as atomic for the debugger — same as LLM tool calls.
+        ctx.enterToolCall();
+        let result: any;
+        try {
+          result = await ctx.handlers[i](interruptObj);
+        } finally {
+          ctx.exitToolCall();
+        }
+        // Pre-bind the interrupt summary once so all handlerDecision /
+        // interruptResolved events from this dispatch carry the same
+        // {effect, message, data} payload — lets log readers see *what*
+        // is being approved/rejected without needing a separate
+        // interruptThrown event (which doesn't fire for synchronously-
+        // resolved interrupts like `with approve`).
+        const interruptSummary = {
+          effect: interruptObj.effect,
+          message: interruptObj.message,
+          data: interruptObj.data,
+        };
+        if (result === undefined) {
+          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none", interrupt: interruptSummary });
+          continue;
+        }
+        if (result.type === "reject") {
+          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value, interrupt: interruptSummary });
+          ctx.statelogClient.interruptResolved({ interruptId, outcome: "rejected", resolvedBy: "handler", interrupt: interruptSummary });
+          return { kind: "rejected", value: result.value };
+        }
+        if (result.type === "propagate") {
+          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "propagate", interrupt: interruptSummary });
+          hasPropagation = true;
+          continue;
+        }
+        if (result.type === "approve") {
+          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value, interrupt: interruptSummary });
+          hasApproval = true;
+          approvedValue = result.value;
+          continue;
+        }
+        throw new Error(
+          `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
+        );
       }
-      // Pre-bind the interrupt summary once so all handlerDecision /
-      // interruptResolved events from this dispatch carry the same
-      // {effect, message, data} payload — lets log readers see *what*
-      // is being approved/rejected without needing a separate
-      // interruptThrown event (which doesn't fire for synchronously-
-      // resolved interrupts like `with approve`).
-      const interruptSummary = {
-        effect: interruptObj.effect,
-        message: interruptObj.message,
-        data: interruptObj.data,
-      };
-      if (result === undefined) {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none", interrupt: interruptSummary });
-        continue;
-      }
-      if (result.type === "reject") {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value, interrupt: interruptSummary });
-        ctx.statelogClient.interruptResolved({ interruptId, outcome: "rejected", resolvedBy: "handler", interrupt: interruptSummary });
-        return { kind: "rejected", value: result.value };
-      }
-      if (result.type === "propagate") {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "propagate", interrupt: interruptSummary });
-        hasPropagation = true;
-        continue;
-      }
-      if (result.type === "approve") {
-        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value, interrupt: interruptSummary });
-        hasApproval = true;
-        approvedValue = result.value;
-        continue;
-      }
-      throw new Error(
-        `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
-      );
+    } finally {
+      ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
     }
-  } finally {
-    ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
-    // Always decrement, even on throw/cancel, so the counter mirrors the
-    // actual nesting on the stack. Paired with the increment above.
-    ctx._handlerChainDepth -= 1;
-  }
-  if (hasPropagation) return { kind: "propagated" };
-  if (hasApproval) return { kind: "approved", value: approvedValue };
-  return { kind: "noResponse" };
+    if (hasPropagation) return { kind: "propagated" };
+    if (hasApproval) return { kind: "approved", value: approvedValue };
+    return { kind: "noResponse" };
+  });
 }
 
 export async function interruptWithHandlers<T = any>(

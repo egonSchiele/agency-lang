@@ -415,12 +415,11 @@ export def reactToSlotChange(change: SlotChange): boolean {
 export def modelChoiceItems(filters: ModelFilters): ChoiceItem[] {
   let items: ChoiceItem[] = []
   for (model in filterHostedModels(listHostedModels(), filters)) {
-    items.push(
-      {
+    const label = "${model.name}  (${model.provider}, $${model.inputCost}/1M in)"
+    items.push({
       key: model.name,
-      label: "${model.name}  (${model.provider}, $${model.inputCost}/1M in)"
-    },
-    )
+      label: label
+    })
   }
   return items
 }

@@ -193,5 +193,31 @@ for ({ name, age } in users) {
 Destructuring relies on the underlying JavaScript runtime: reading a
 property of `null` or `undefined` (e.g. `let { name } = null`) throws a
 `TypeError`, which Agency captures and surfaces as a `failure` Result.
-No exhaustiveness check is performed on match blocks — a match without
-a `_` arm that matches no other arm silently does nothing.
+At runtime, a match without a `_` arm that matches no other arm is a
+no-op — no branch runs.
+
+## Exhaustiveness checking
+
+The type checker reports (by default, a **warning**) when a `match` over a
+*closed* type doesn't cover every case and has no `_` arm:
+
+- a **Result** (`success` / `failure`),
+- a **closed literal or value union** (`"a" | "b"`, `1 | 2`),
+- a **discriminated object union** (`{ kind: "a" } | { kind: "b" }` — a common
+  property typed as a distinct literal in each member),
+- a bare **`boolean`** (`true` / `false`).
+
+```agency
+type Ev = { kind: "click", x: number } | { kind: "scroll", d: number }
+match (e) {
+    { kind: "click" } => handleClick(e)
+    // warning: match is not exhaustive: missing `{ kind: "scroll" }`
+}
+```
+
+Adding the missing arm — or a `_` catch-all — clears it. A guarded arm
+(`… if (…) => …`) never counts toward coverage. Open types (`string`,
+`number`, arbitrary object unions) and the `match(x is …)` form are never
+required to be exhaustive. Control the severity with
+`typechecker.matchExhaustiveness` in `agency.json` (`"silent"` / `"warn"` /
+`"error"`; default `"warn"`).

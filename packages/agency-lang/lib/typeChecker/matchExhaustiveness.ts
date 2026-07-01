@@ -17,15 +17,38 @@ type MatchSite = {
   loc: SourceLocation | undefined;
 };
 
-/** A literal match arm's static value, or null if the arm isn't a static literal. */
-function armLiteral(cv: CaseValue): string | number | boolean | null {
-  if (cv === "_") return null;
-  if (cv.type === "number") return Number(cv.value);
-  if (cv.type === "boolean") return cv.value;
-  if (cv.type === "string") {
-    const segs = cv.segments;
+/**
+ * A static literal value from a pattern's `Literal` node, or null (interpolated
+ * string, or a non-value literal / binding / nested pattern). THE single
+ * expression-side literal extractor — used by both `armLiteral` and
+ * `objectPatternDiscriminantValue`.
+ */
+function asStaticLiteral(v: Exclude<CaseValue, "_">): string | number | boolean | null {
+  if (v.type === "number") return Number(v.value);
+  if (v.type === "boolean") return v.value;
+  if (v.type === "string") {
+    const segs = v.segments;
     if (segs.length === 1 && segs[0].type === "text") return segs[0].value;
     return null; // interpolated → not a static literal case
+  }
+  return null;
+}
+
+/** A literal match arm's static value, or null if the arm isn't a static literal. */
+function armLiteral(cv: CaseValue): string | number | boolean | null {
+  return cv === "_" ? null : asStaticLiteral(cv);
+}
+
+/** The literal value an objectPattern arm pins property `prop` to, or null. */
+function objectPatternDiscriminantValue(
+  cv: CaseValue,
+  prop: string,
+): string | number | boolean | null {
+  if (cv === "_" || cv.type !== "objectPattern") return null;
+  for (const p of cv.properties) {
+    if (p.type !== "objectPatternProperty" || p.key !== prop) continue;
+    // value is BindingPattern | Literal | ResultPattern; only a Literal pins it.
+    return asStaticLiteral(p.value);
   }
   return null;
 }
@@ -58,8 +81,30 @@ function coveredCases(arms: NormalizedArm[]): TypeCase[] {
   return covered;
 }
 
+type LiteralValue = string | number | boolean;
+
+// Case identity keys. A value is tagged with its `typeof` so a numeric `1` and a
+// string "1" never collide. An arm and a decomposed case are the "same case"
+// iff their keys are equal.
+function literalKey(value: LiteralValue): string {
+  return `literal:${typeof value}:${String(value)}`;
+}
+function discriminatedMemberKey(prop: string, value: LiteralValue): string {
+  return `member:${prop}:${typeof value}:${String(value)}`;
+}
+
 function caseKey(c: TypeCase): string {
-  return c.kind === "literal" ? `literal:${typeof c.value}:${String(c.value)}` : c.kind;
+  switch (c.kind) {
+    case "resultSuccess":
+    case "resultFailure":
+      return c.kind;
+    case "literal":
+      return literalKey(c.value);
+    case "member":
+      // A discriminated member keys on its tag; an opaque member has no key an
+      // arm can match (its coverage is never computed — the union bails).
+      return c.disc ? discriminatedMemberKey(c.disc.prop, c.disc.value) : "member";
+  }
 }
 
 function describeCase(c: TypeCase): string {
@@ -69,7 +114,7 @@ function describeCase(c: TypeCase): string {
     case "resultFailure":
       return "`failure`";
     case "member":
-      return "an object case";
+      return c.disc ? `\`{ ${c.disc.prop}: ${JSON.stringify(c.disc.value)} }\`` : "an object case";
     case "literal":
       // JSON-encode so a string value renders quoted-and-escaped (a newline/quote
       // can't make the diagnostic multi-line or ambiguous); numbers/booleans print
@@ -79,14 +124,67 @@ function describeCase(c: TypeCase): string {
 }
 
 /**
+ * The single discriminant property shared by every member case, or null if the
+ * members aren't a uniformly-discriminated set (an object union with no common
+ * tag → un-checkable, B1 behavior).
+ */
+function sharedDiscriminant(memberCases: TypeCase[]): string | null {
+  const first = memberCases[0];
+  const prop = first.kind === "member" ? first.disc?.prop : undefined;
+  if (prop === undefined) return null;
+  const everyMemberSharesIt = memberCases.every(
+    (c) => c.kind === "member" && c.disc?.prop === prop,
+  );
+  return everyMemberSharesIt ? prop : null;
+}
+
+/**
+ * True if some un-guarded arm is an objectPattern that does NOT pin the
+ * discriminant to a literal (e.g. `{ x }`, shorthand `{ kind }`, interpolated
+ * `{ kind: "x${y}" }`). Such an arm could match several members, so we can't
+ * prove any member is uncovered → the whole match must bail.
+ */
+function hasArmWithUnpinnedDiscriminant(arms: NormalizedArm[], prop: string): boolean {
+  return arms.some(
+    (arm) =>
+      !arm.guarded &&
+      !isCatchAll(arm) &&
+      arm.caseValue !== "_" &&
+      arm.caseValue.type === "objectPattern" &&
+      objectPatternDiscriminantValue(arm.caseValue, prop) === null,
+  );
+}
+
+/** The member keys covered by the un-guarded objectPattern arms (a guarded arm
+ *  may not run, so it never counts toward coverage). */
+function coveredMemberKeys(arms: NormalizedArm[], prop: string): Set<string> {
+  const covered = new Set<string>();
+  for (const arm of arms) {
+    if (arm.guarded) continue;
+    const pinnedValue = objectPatternDiscriminantValue(arm.caseValue, prop);
+    if (pinnedValue !== null) covered.add(discriminatedMemberKey(prop, pinnedValue));
+  }
+  return covered;
+}
+
+/**
  * The cases a closed-type match leaves uncovered, or [] when no requirement
- * applies: an open type, a union with any `member` case (B2 territory — no
- * covering-arm rule yet), or a catch-all arm all yield [].
+ * applies (open type or a catch-all arm). Object unions take the discriminated
+ * path; Result / literal / boolean take the B1 path.
  */
 function missingCases(arms: NormalizedArm[], caseSet: CaseSet): TypeCase[] {
   if (!caseSet.closed) return [];
-  if (caseSet.cases.some((c) => c.kind === "member")) return [];
   if (arms.some(isCatchAll)) return [];
+
+  const memberCases = caseSet.cases.filter((c) => c.kind === "member");
+  if (memberCases.length > 0) {
+    const discriminant = sharedDiscriminant(memberCases);
+    if (discriminant === null) return []; // non-discriminated object union
+    if (hasArmWithUnpinnedDiscriminant(arms, discriminant)) return [];
+    const covered = coveredMemberKeys(arms, discriminant);
+    return caseSet.cases.filter((c) => !covered.has(caseKey(c)));
+  }
+
   const covered = new Set(coveredCases(arms).map(caseKey));
   return caseSet.cases.filter((c) => !covered.has(caseKey(c)));
 }
@@ -144,7 +242,7 @@ export function checkMatchExhaustiveness(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
-  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "silent") as Severity;
+  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "warn") as Severity;
   if (severity === "silent") {
     return;
   }

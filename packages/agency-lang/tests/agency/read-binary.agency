@@ -10,17 +10,17 @@
 import { FileRead } from "std::capabilities"
 
 node readBinaryApproved(): boolean {
-  const w = write("rb-probe.txt", "hello") with approve
-  const r = readBinary("rb-probe.txt") with approve
+  const w = write("rb-probe.txt", "hello", "/tmp") with approve
+  const r = readBinary("rb-probe.txt", "/tmp") with approve
   return isSuccess(r)
 }
 
 node readBinaryUnderEffectSet(): boolean {
-  const w = write("rb-probe2.txt", "hello") with approve
+  const w = write("rb-probe2.txt", "hello", "/tmp") with approve
   return reader() with approve
 }
 
 def reader(): boolean raises <FileRead> {
-  const r = readBinary("rb-probe2.txt")
+  const r = readBinary("rb-probe2.txt", "/tmp")
   return isSuccess(r)
 }

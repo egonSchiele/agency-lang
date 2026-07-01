@@ -1,4 +1,4 @@
-// std::layout — node-type dispatcher + top-level render entry.
+// std::ui/layout — node-type dispatcher + top-level render entry.
 //
 // `renderNode` is the single recursion point: every container helper
 // (axis / box / table) calls back into it to render children, so the
@@ -29,7 +29,7 @@ const DEFAULT_VIEWPORT: Viewport = { cols: 80, rows: 24 };
 function handlerFor(type: NodeType): NodeHandler {
   const handler = HANDLERS[type];
   if (!handler) {
-    throw new Error(`std::layout: unknown node type "${type}"`);
+    throw new Error(`std::ui/layout: unknown node type "${type}"`);
   }
   return handler;
 }

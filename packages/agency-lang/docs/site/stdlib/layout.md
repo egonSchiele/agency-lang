@@ -4,7 +4,7 @@ name: "layout"
 
 # layout
 
-## Module: std::layout
+## Module: std::ui/layout
 
   Declarative text layout for terminal output. Build a tree of
   containers and leaves; call `render` to get an ANSI-styled
@@ -15,7 +15,7 @@ name: "layout"
   - **Trailing block** (ergonomic for Agency authors):
 
     ```ts
-    import { box, render } from "std::layout"
+    import { box, render } from "std::ui/layout"
 
     const panel = box(title: "Hello", padding: 1) as b {
       b.text("Welcome!", bold: true)
@@ -28,7 +28,7 @@ name: "layout"
     construction):
 
     ```ts
-    import { box, text, render } from "std::layout"
+    import { box, text, render } from "std::ui/layout"
 
     const panel = box(
       title: "Hello",
@@ -52,7 +52,7 @@ name: "layout"
   - `width: 80` sets a target column count.
   - `width: "50%"` takes 50% of the parent's available width.
 
-  Tables moved to their own module — see `std::table`.
+  Tables moved to their own module — see `std::ui/table`.
 
   Text inside a width-constrained container or column automatically
   wraps at word boundaries. Long single words are broken at the column
@@ -67,7 +67,7 @@ name: "layout"
 
   `std::ui` exports `box`, `row`, `column` for interactive TUI
   widgets. The names overlap; import one or the other (or both with
-  aliases). `std::layout` is for static text output — splash screens,
+  aliases). `std::ui/layout` is for static text output — splash screens,
   summary panels, side-by-side columns. `std::ui` is for live
   redrawing UIs with input handling.
 **********

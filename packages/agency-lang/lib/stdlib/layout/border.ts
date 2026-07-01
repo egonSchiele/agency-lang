@@ -1,4 +1,4 @@
-// std::layout — border framing.
+// std::ui/layout — border framing.
 //
 // Wraps a Block with corner / edge characters from a `BorderStyle`,
 // optionally embedding a title in the top edge (Claude-Code style:
@@ -45,7 +45,7 @@ export function resolveBorderStyle(s: string | undefined): BorderStyle {
   if (!warnedUnknownStyles.has(s)) {
     warnedUnknownStyles.add(s);
     console.warn(
-      `std::layout: unknown borderStyle "${s}"; falling back to "light"`,
+      `std::ui/layout: unknown borderStyle "${s}"; falling back to "light"`,
     );
   }
   return "light";

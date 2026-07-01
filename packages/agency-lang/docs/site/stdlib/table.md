@@ -4,18 +4,18 @@ name: "table"
 
 # table
 
-## Module: std::table
+## Module: std::ui/table
 
   Tabular layout for terminal output. Columns line up across header /
   body / footer; the outer frame uses the same `BorderStyle` enum as
-  `std::layout`'s `box`. Two construction styles, same result:
+  `std::ui/layout`'s `box`. Two construction styles, same result:
 
   - **Data form (LLM-callable, JSON-friendly):** pass `header`, `body`,
     `footer` as nested arrays of strings or `LayoutNode`s.
 
     ```ts
-    import { table } from "std::table"
-    import { render } from "std::layout"
+    import { table } from "std::ui/table"
+    import { render } from "std::ui/layout"
 
     const t = table(
       title: "Employees",
@@ -39,8 +39,8 @@ name: "table"
     }
     ```
 
-  Render a table with `render`, imported from `std::layout`:
-  `import { render } from "std::layout"`.
+  Render a table with `render`, imported from `std::ui/layout`:
+  `import { render } from "std::ui/layout"`.
 
 ## Types
 

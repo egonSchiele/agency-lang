@@ -6,7 +6,7 @@ import {
  } from "agency-lang/stdlib-lib/cli.js"
 
 /*
-  ## Module: std::cli (line-mode REPL)
+  ## Module: std::ui/cli (line-mode REPL)
 
   Line-mode sibling of `std::ui`. Provides `repl`, `pushMessage`, and
   `clearMessages` — driven by Node's `readline` instead of the
@@ -30,7 +30,7 @@ import {
   import { repl } from "std::ui"
 
   // Line mode
-  import { repl } from "std::cli"
+  import { repl } from "std::ui/cli"
   ```
 
   `pushMessage` and `clearMessages` are re-exported directly from
@@ -42,7 +42,7 @@ import {
   on the `export` statement below). Consumers that need it — notably
   `std::policy` — should `import { chooseOption } from "std::ui"`
   directly. Its own `_activeRepl == null` fallback is the line-mode
-  behavior, so it works seamlessly with `std::cli`'s `repl()`.
+  behavior, so it works seamlessly with `std::ui/cli`'s `repl()`.
 */
 
 // Re-export the line-mode-compatible parts of `std::ui`. The line

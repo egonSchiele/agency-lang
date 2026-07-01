@@ -1,4 +1,4 @@
-import { table } from "std::table"
+import { table } from "std::ui/table"
 
 // Regression: `table(body: rows) as t { t.row(...) }` used to push
 // the block-added rows onto the caller's `rows` array, mutating it

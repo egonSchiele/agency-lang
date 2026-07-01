@@ -1,4 +1,4 @@
-import { box, text, render } from "std::layout"
+import { box, text, render } from "std::ui/layout"
 
 // Build a styled tree once, render with color: true and color: false,
 // then assert structural properties that prove `false` strips styling

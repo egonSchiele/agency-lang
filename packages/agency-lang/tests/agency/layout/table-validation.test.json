@@ -3,25 +3,25 @@
     {
       "nodeName": "testAllSectionsMissing",
       "input": "",
-      "expectedOutput": "\"std::layout.table: at least one of header / body / footer must be set\"",
+      "expectedOutput": "\"std::ui/layout.table: at least one of header / body / footer must be set\"",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "testBodyRowColumnCountMismatch",
       "input": "",
-      "expectedOutput": "\"std::layout.table: body row 0 has 2 cells, expected 3\"",
+      "expectedOutput": "\"std::ui/layout.table: body row 0 has 2 cells, expected 3\"",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "testColumnsDisagreesWithHeader",
       "input": "",
-      "expectedOutput": "\"std::layout.table: header has 3 cells, expected 2\"",
+      "expectedOutput": "\"std::ui/layout.table: header has 3 cells, expected 2\"",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "testNonCellThrows",
       "input": "",
-      "expectedOutput": "\"std::layout.table: cell must be string or LayoutNode, got number\"",
+      "expectedOutput": "\"std::ui/layout.table: cell must be string or LayoutNode, got number\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

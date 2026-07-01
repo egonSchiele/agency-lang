@@ -1,9 +1,9 @@
 import { withLock } from "std::concurrency"
-import { render, text } from "std::layout"
+import { render, text } from "std::ui/layout"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { highlight, diff } from "std::syntax"
-import { table } from "std::table"
+import { table } from "std::ui/table"
 import { chooseOption, ChoiceItem } from "std::ui"
 
 import {

@@ -1,4 +1,4 @@
-// Test helper: run `render(node)` from std::layout and catch any
+// Test helper: run `render(node)` from std::ui/layout and catch any
 // thrown Error. Returns the error message (string) on failure or
 // `null` if rendering succeeded — agency-side tests can compare the
 // message against an exact expected substring to lock down validation

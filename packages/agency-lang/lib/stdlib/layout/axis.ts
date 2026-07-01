@@ -1,4 +1,4 @@
-// std::layout — axis composition (row + column).
+// std::ui/layout — axis composition (row + column).
 //
 // `row` and `column` are symmetric: each lays its children out along
 // a "main axis" (left-to-right / top-to-bottom) and aligns short

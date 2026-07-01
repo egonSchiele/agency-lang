@@ -1,4 +1,4 @@
-// std::layout — table renderer.
+// std::ui/layout — table renderer.
 //
 // Pipeline:
 //   1. _validateTable          — structural check + cell coercion
@@ -34,7 +34,7 @@ export { Cell, ColumnSpec };
 // Without the `attrs` check a malformed object-with-a-type passed by
 // an LLM tool call would surface inside a leaf renderer as a generic
 // "cannot read property 'content' of undefined" instead of throwing a
-// clear `std::layout.table` boundary error.
+// clear `std::ui/layout.table` boundary error.
 function _looksLikeLayoutNode(cell: object): boolean {
   if (!Object.hasOwn(cell, "type") || !Object.hasOwn(cell, "attrs") || !Object.hasOwn(cell, "children")) {
     return false;
@@ -55,7 +55,7 @@ export function _coerceCell(cell: unknown): LayoutNode {
     return cell as LayoutNode;
   }
   throw new Error(
-    `std::layout.table: cell must be string or LayoutNode, got ${
+    `std::ui/layout.table: cell must be string or LayoutNode, got ${
       cell === null ? "null" : typeof cell
     }`,
   );
@@ -86,19 +86,19 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
 
   if (rawHeader != null && !Array.isArray(rawHeader)) {
     throw new Error(
-      `std::layout.table: header must be an array of cells, got ${typeof rawHeader}`,
+      `std::ui/layout.table: header must be an array of cells, got ${typeof rawHeader}`,
     );
   }
   const checkSection = (val: unknown, name: string): unknown[][] => {
     if (!Array.isArray(val)) {
       throw new Error(
-        `std::layout.table: ${name} must be an array of rows, got ${typeof val}`,
+        `std::ui/layout.table: ${name} must be an array of rows, got ${typeof val}`,
       );
     }
     val.forEach((row, i) => {
       if (!Array.isArray(row)) {
         throw new Error(
-          `std::layout.table: ${name} row ${i} must be an array of cells, got ${typeof row}`,
+          `std::ui/layout.table: ${name} row ${i} must be an array of cells, got ${typeof row}`,
         );
       }
     });
@@ -110,14 +110,14 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
 
   if (!header && body.length === 0 && footer.length === 0) {
     throw new Error(
-      "std::layout.table: at least one of header / body / footer must be set",
+      "std::ui/layout.table: at least one of header / body / footer must be set",
     );
   }
 
   const rawColumns = attrs.columns;
   if (rawColumns != null && !Array.isArray(rawColumns)) {
     throw new Error(
-      `std::layout.table: columns must be an array, got ${typeof rawColumns}`,
+      `std::ui/layout.table: columns must be an array, got ${typeof rawColumns}`,
     );
   }
   const columns = rawColumns as ColumnSpec[] | null | undefined;
@@ -129,14 +129,14 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
 
   if (columnCount === 0) {
     throw new Error(
-      "std::layout.table: at least one column is required (header / body / footer / columns must have length > 0)",
+      "std::ui/layout.table: at least one column is required (header / body / footer / columns must have length > 0)",
     );
   }
 
   const checkRow = (row: unknown[], label: string) => {
     if (row.length !== columnCount) {
       throw new Error(
-        `std::layout.table: ${label} has ${row.length} cells, expected ${columnCount}`,
+        `std::ui/layout.table: ${label} has ${row.length} cells, expected ${columnCount}`,
       );
     }
   };
@@ -304,7 +304,7 @@ function assertPercentsHaveBasis(plan: ColumnPlan[], available: number | undefin
   const percentCol = plan.find((col) => isPercentLike(col.parsed));
   if (percentCol === undefined) return;
   throw new Error(
-    `std::layout: column[${percentCol.index}] uses a percentage width ` +
+    `std::ui/layout: column[${percentCol.index}] uses a percentage width ` +
     `but the table has no resolved width to take a percentage of. ` +
     `Set width: on the table or one of its ancestors.`,
   );

@@ -1,4 +1,4 @@
-// std::layout — shared width-resolution helpers + handler type used by
+// std::ui/layout — shared width-resolution helpers + handler type used by
 // every node type's `size` half. Extracted from render.ts so per-concern
 // handler files can import them without depending on the whole dispatcher.
 //
@@ -36,7 +36,7 @@ export function resolveOwnWidth(node: LayoutNode, ctx: SizingContext): number | 
   const pct = width.kind === "full" ? 100 : width.value;
   if (ctx.percentBasis === undefined) {
     throw new Error(
-      `std::layout: width "${node.attrs.width}" on this ${node.type} ` +
+      `std::ui/layout: width "${node.attrs.width}" on this ${node.type} ` +
       `requires a sized ancestor (set an explicit width on the parent ` +
       `or one of its ancestors).`,
     );

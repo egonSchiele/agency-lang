@@ -1,6 +1,6 @@
-// std::layout — ANSI / SGR primitives.
+// std::ui/layout — ANSI / SGR primitives.
 //
-// All ANSI awareness in std::layout lives here. The Block / border /
+// All ANSI awareness in std::ui/layout lives here. The Block / border /
 // table layers below treat strings as opaque, measure them with
 // `visualWidth`, and only emit escape sequences via `sgr` (or by
 // asking `stripAnsi` to remove them).

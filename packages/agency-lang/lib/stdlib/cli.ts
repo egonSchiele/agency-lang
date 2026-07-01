@@ -18,7 +18,7 @@ import { isAbortError, makeAbortCause } from "../runtime/errors.js";
 import type { AbortCause } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
-// TS bridge for `std::cli` — the line-mode REPL.
+// TS bridge for `std::ui/cli` — the line-mode REPL.
 //
 // Counterpart to `lib/stdlib/ui.ts` but builds on Node's `readline`
 // instead of the alt-screen TUI engine. The user-facing tradeoff is
@@ -28,7 +28,7 @@ import { normalizeModelUsage } from "../runtime/utils.js";
 // in exchange for native terminal scrollback / search / copy-paste /
 // link-clicking.
 //
-// `std::cli.repl()` calls `_runLineRepl(...)` here.  Everything else
+// `std::ui/cli.repl()` calls `_runLineRepl(...)` here.  Everything else
 // the agent uses (`chooseOption`, `pushMessage`, `clearMessages`) is
 // re-exported from `std::ui` whose existing `_activeRepl == null`
 // fallback paths already do the line-mode thing (print + input loop,

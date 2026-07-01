@@ -219,6 +219,12 @@ export interface AgencyConfig {
      * required to be exhaustive; only a `_` arm satisfies them.
      */
     matchExhaustiveness?: "silent" | "warn" | "error";
+    /**
+     * What to do when a function that declares a non-void return type can reach
+     * the end of its body without `return`ing a value (Agency has no implicit
+     * returns). Default `"warn"`.
+     */
+    definiteReturns?: "silent" | "warn" | "error";
   };
 
   /** Enable debugger mode — auto-inserts breakpoints before every step */
@@ -447,6 +453,7 @@ export const AgencyConfigSchema = z
         undefinedVariables: z.enum(["silent", "warn", "error"]),
         strictMemberAccess: z.enum(["silent", "warn", "error"]),
         matchExhaustiveness: z.enum(["silent", "warn", "error"]),
+        definiteReturns: z.enum(["silent", "warn", "error"]),
       })
       .partial(),
     debugger: z.boolean(),

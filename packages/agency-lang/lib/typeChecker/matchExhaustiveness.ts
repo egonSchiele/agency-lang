@@ -17,15 +17,38 @@ type MatchSite = {
   loc: SourceLocation | undefined;
 };
 
-/** A literal match arm's static value, or null if the arm isn't a static literal. */
-function armLiteral(cv: CaseValue): string | number | boolean | null {
-  if (cv === "_") return null;
-  if (cv.type === "number") return Number(cv.value);
-  if (cv.type === "boolean") return cv.value;
-  if (cv.type === "string") {
-    const segs = cv.segments;
+/**
+ * A static literal value from a pattern's `Literal` node, or null (interpolated
+ * string, or a non-value literal / binding / nested pattern). THE single
+ * expression-side literal extractor — used by both `armLiteral` and
+ * `objectPatternDiscriminantValue`.
+ */
+function asStaticLiteral(v: Exclude<CaseValue, "_">): string | number | boolean | null {
+  if (v.type === "number") return Number(v.value);
+  if (v.type === "boolean") return v.value;
+  if (v.type === "string") {
+    const segs = v.segments;
     if (segs.length === 1 && segs[0].type === "text") return segs[0].value;
     return null; // interpolated → not a static literal case
+  }
+  return null;
+}
+
+/** A literal match arm's static value, or null if the arm isn't a static literal. */
+function armLiteral(cv: CaseValue): string | number | boolean | null {
+  return cv === "_" ? null : asStaticLiteral(cv);
+}
+
+/** The literal value an objectPattern arm pins property `prop` to, or null. */
+function objectPatternDiscriminantValue(
+  cv: CaseValue,
+  prop: string,
+): string | number | boolean | null {
+  if (cv === "_" || cv.type !== "objectPattern") return null;
+  for (const p of cv.properties) {
+    if (p.type !== "objectPatternProperty" || p.key !== prop) continue;
+    // value is BindingPattern | Literal | ResultPattern; only a Literal pins it.
+    return asStaticLiteral(p.value);
   }
   return null;
 }
@@ -59,7 +82,9 @@ function coveredCases(arms: NormalizedArm[]): TypeCase[] {
 }
 
 function caseKey(c: TypeCase): string {
-  return c.kind === "literal" ? `literal:${typeof c.value}:${String(c.value)}` : c.kind;
+  if (c.kind === "literal") return `literal:${typeof c.value}:${String(c.value)}`;
+  if (c.kind === "member" && c.disc) return `member:${c.disc.prop}:${typeof c.disc.value}:${String(c.disc.value)}`;
+  return c.kind; // resultSuccess/resultFailure, or an opaque member (no disc)
 }
 
 function describeCase(c: TypeCase): string {
@@ -69,7 +94,7 @@ function describeCase(c: TypeCase): string {
     case "resultFailure":
       return "`failure`";
     case "member":
-      return "an object case";
+      return c.disc ? `\`{ ${c.disc.prop}: ${JSON.stringify(c.disc.value)} }\`` : "an object case";
     case "literal":
       // JSON-encode so a string value renders quoted-and-escaped (a newline/quote
       // can't make the diagnostic multi-line or ambiguous); numbers/booleans print
@@ -80,13 +105,45 @@ function describeCase(c: TypeCase): string {
 
 /**
  * The cases a closed-type match leaves uncovered, or [] when no requirement
- * applies: an open type, a union with any `member` case (B2 territory — no
- * covering-arm rule yet), or a catch-all arm all yield [].
+ * applies (open type, non-discriminated object union, or a catch-all arm).
+ *
+ * Object-union path (B2): if every `member` case carries the SAME discriminant
+ * prop, an un-guarded `objectPattern` arm that pins that prop to a literal
+ * covers the matching member. Bail (no diagnostic) if the union isn't
+ * discriminated, or if any un-guarded, non-catch-all arm is an `objectPattern`
+ * that does NOT pin the discriminant (it could match several members → we can't
+ * prove non-coverage). Guarded arms never cover.
  */
 function missingCases(arms: NormalizedArm[], caseSet: CaseSet): TypeCase[] {
   if (!caseSet.closed) return [];
-  if (caseSet.cases.some((c) => c.kind === "member")) return [];
   if (arms.some(isCatchAll)) return [];
+
+  const memberCases = caseSet.cases.filter((c) => c.kind === "member");
+  if (memberCases.length > 0) {
+    const disc = memberCases[0].kind === "member" ? memberCases[0].disc : undefined;
+    const allDisc =
+      disc !== undefined &&
+      memberCases.every((c) => c.kind === "member" && c.disc !== undefined && c.disc.prop === disc.prop);
+    if (!allDisc) return []; // non-discriminated object union → un-checkable (B1)
+    const ambiguous = arms.some(
+      (a) =>
+        !a.guarded &&
+        !isCatchAll(a) &&
+        a.caseValue !== "_" &&
+        a.caseValue.type === "objectPattern" &&
+        objectPatternDiscriminantValue(a.caseValue, disc.prop) === null,
+    );
+    if (ambiguous) return [];
+    const covered = new Set(
+      arms
+        .filter((a) => !a.guarded)
+        .map((a) => objectPatternDiscriminantValue(a.caseValue, disc.prop))
+        .filter((v): v is string | number | boolean => v !== null)
+        .map((v) => `member:${disc.prop}:${typeof v}:${String(v)}`),
+    );
+    return caseSet.cases.filter((c) => !covered.has(caseKey(c)));
+  }
+
   const covered = new Set(coveredCases(arms).map(caseKey));
   return caseSet.cases.filter((c) => !covered.has(caseKey(c)));
 }

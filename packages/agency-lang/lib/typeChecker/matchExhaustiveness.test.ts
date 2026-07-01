@@ -285,3 +285,140 @@ node main() {
     expect(run({})).toBe(run({ typechecker: { matchExhaustiveness: "silent" } }));
   });
 });
+
+const EV = `type Ev = { kind: "click", x: number } | { kind: "scroll", d: number }`;
+
+describe("match exhaustiveness — discriminated object union (B2)", () => {
+  it("missing a discriminant member is non-exhaustive", () => {
+    const errs = check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1 }
+}`, ERROR);
+    expect(errs.some((m) => /not exhaustive/i.test(m) && /scroll/.test(m))).toBe(true);
+  });
+
+  it("all members covered → clean", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1  { kind: "scroll" } => 2 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("a `_` arm clears it", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1  _ => 0 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("a guarded arm does not count as coverage", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1  { kind: "scroll" } if (e.d > 0) => 2 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m) && /scroll/.test(m))).toBe(true);
+  });
+
+  it("an ambiguous objectPattern arm (no discriminant literal) → no diagnostic (bail)", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { x } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("a non-discriminated object union is not checked", () => {
+    expect(check(`
+type U = { a: number } | { b: string }
+def f(u: U): number {
+  match (u) { { a } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("number discriminant works", () => {
+    expect(check(`
+type T = { tag: 1, x: number } | { tag: 2, y: number }
+def f(t: T): number {
+  match (t) { { tag: 1 } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(true);
+  });
+
+  it("boolean discriminant works", () => {
+    expect(check(`
+type T = { open: true, x: number } | { open: false, y: number }
+def f(t: T): number {
+  match (t) { { open: true } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(true);
+  });
+
+  it("multiple missing members are all named", () => {
+    const errs = check(`
+type T = { kind: "a" } | { kind: "b" } | { kind: "c" }
+def f(t: T): number {
+  match (t) { { kind: "a" } => 1 }
+}`, ERROR);
+    expect(errs.some((m) => /not exhaustive/i.test(m) && /b/.test(m) && /c/.test(m))).toBe(true);
+  });
+
+  it("a rest binding still covers the member", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click", ...rest } => 1  { kind: "scroll" } => 2 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("a shorthand discriminant property (`{ kind }`) does not pin → bail", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("an interpolated-string discriminant does not pin → bail", () => {
+    expect(check(`${EV}
+def f(e: Ev, s: string): number {
+  match (e) { { kind: "cl${"$"}{s}" } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("a guarded arm alongside `_` is clean", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1  { kind: "scroll" } if (e.d > 0) => 2  _ => 0 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+
+  it("discriminates through a type alias of the union", () => {
+    expect(check(`${EV}
+type Wrap = Ev
+def f(w: Wrap): number {
+  match (w) { { kind: "click" } => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m) && /scroll/.test(m))).toBe(true);
+  });
+
+  it("default silent: no diagnostic without the knob", () => {
+    expect(check(`${EV}
+def f(e: Ev): number {
+  match (e) { { kind: "click" } => 1 }
+}`).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+});
+
+describe("match exhaustiveness — boolean scrutinee (B2)", () => {
+  it("both true and false arms → exhaustive", () => {
+    expect(check(`
+def f(b: boolean): number {
+  match (b) { true => 1  false => 0 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+  it("missing the false arm is non-exhaustive", () => {
+    expect(check(`
+def f(b: boolean): number {
+  match (b) { true => 1 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m) && /false/.test(m))).toBe(true);
+  });
+  it("a `_` arm clears it", () => {
+    expect(check(`
+def f(b: boolean): number {
+  match (b) { true => 1  _ => 0 }
+}`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
+  });
+});

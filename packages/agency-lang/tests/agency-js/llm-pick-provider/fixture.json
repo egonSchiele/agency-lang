@@ -2,5 +2,5 @@
   "defaultOrder": "google",
   "openaiFirst": "openai",
   "noneAvailable": "FAIL:No LLM API key found. Set one of: ANTHROPIC_API_KEY",
-  "emptyOrder": "FAIL:pickProvider: no recognized providers given (expected anthropic, google, or openai)"
+  "emptyOrder": "FAIL:pickProvider: no recognized providers given (expected one of anthropic, google, openai, openrouter, litellm)"
 }

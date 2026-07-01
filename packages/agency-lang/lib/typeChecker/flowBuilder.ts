@@ -1,4 +1,4 @@
-import type { AgencyNode } from "../types.js";
+import type { AgencyNode, Expression } from "../types.js";
 import type { AccessChainElement } from "../types/access.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { expressionChildren, walkNodes } from "../utils/node.js";
@@ -201,17 +201,39 @@ const statementRules: StatementRuleTable = {
     return afterBody;
   },
 
-  // Match arms are conservative: the scrutinee's refs attach to the current
-  // flow, each arm builds from it, and the post-match flow is unchanged
-  // (match-arm narrowing is a separate track). `c.body` is a single node
-  // (matchBlock.ts:12), wrapped in `[]` to reuse buildFlowGraph — same shape as
-  // walkScopeBody (scopes.ts:470).
+  // Match arms narrow by the scrutinee condition. For each literal arm we build
+  // the flow as if guarded by `scrutinee == <arm literal>` and feed that through
+  // the SAME analyzeCondition/wrapFacts path an `if` uses — so a member-path
+  // scrutinee like `e.effect` narrows its receiver `e` (D1 discriminant), making
+  // `e.data` the matching member's payload inside the arm. Only POSITIVE (.then)
+  // facts, each from the base flow (arms are independent — no cross-arm/negative
+  // narrowing). Non-literal / `_` arms get the base flow unchanged. Post-match
+  // flow is unchanged. `c.body` is a single node (matchBlock.ts:12), wrapped in
+  // `[]` to reuse buildFlowGraph — same shape as walkScopeBody (scopes.ts:470).
   matchBlock: (node, flow, env) => {
     attachExpressionsToFlow(node.expression as AgencyNode, flow, env);
+    const scrutinee = node.expression as Expression;
     for (const c of node.cases) {
-      if (c.type !== "comment" && c.type !== "newLine") {
-        buildFlowGraph([c.body], flow, env);
+      if (c.type === "comment" || c.type === "newLine") continue;
+      let armFlow = flow;
+      // Narrow only plain literal arms. `_` is the default (no fact); a guarded
+      // arm can't reach here today (guards force lowering to a temp+if-chain —
+      // patternLowering.ts:256-265), but gate on `c.guard === undefined` so a
+      // future lowering change can't silently feed a guarded arm through.
+      if (c.caseValue !== "_" && c.guard === undefined) {
+        // SYNTHETIC condition `scrutinee == <arm literal>`, never produced by the
+        // parser. Safe because analyzeCondition is a pure structural read of only
+        // `.operator`/`.left`/`.right` (no `loc`/parent pointers). It returns no
+        // facts for a non-literal RHS or a non-path scrutinee → safe no-op there.
+        const cond: Expression = {
+          type: "binOpExpression",
+          operator: "==",
+          left: scrutinee,
+          right: c.caseValue as Expression,
+        };
+        armFlow = wrapFacts(flow, analyzeCondition(cond).then);
       }
+      buildFlowGraph([c.body], armFlow, env);
     }
     return flow;
   },

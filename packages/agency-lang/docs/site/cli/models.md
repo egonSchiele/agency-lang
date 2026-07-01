@@ -15,6 +15,20 @@ agency models list --min-context 200000  # context window >= 200k tokens
 
 Columns: name, provider, open-weights, input $/1M, output $/1M, context window.
 
+To preview a saved (or hand-edited) model-data file merged with the built-in
+catalog, pass one or more files as positional arguments — handy for checking a
+file before a program loads it with `loadModelData`:
+
+```bash
+agency models refresh > my-models.json          # save + hand-edit
+agency models list my-models.json               # built-in catalog + your file
+agency models list a.json b.json --provider acme  # multiple files accumulate; filters still apply
+```
+
+Files are merged in order (later files win on provider+name collisions, like
+`loadModelData`). If a file can't be loaded, `list` prints the error and exits
+non-zero instead of showing a baked-only list.
+
 ## `agency models refresh`
 
 Fetch the latest model data and **print it as JSON to stdout**. It does not

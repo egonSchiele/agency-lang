@@ -7,14 +7,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../stdlib/llm.js", () => ({
   _listHostedModels: () => [],
   _fetchModelData: vi.fn(),
+  _loadModelData: vi.fn(),
 }));
 
 import {
   selectHostedModels,
   formatHostedCatalog,
   modelsRefresh,
+  modelsList,
 } from "./hostedModels.js";
-import { _fetchModelData } from "../stdlib/llm.js";
+import { _fetchModelData, _loadModelData } from "../stdlib/llm.js";
 import type { HostedModelInfo } from "../stdlib/llm.js";
 
 const catalog: HostedModelInfo[] = [
@@ -41,6 +43,45 @@ describe("agency models selection", () => {
     expect(out).toContain("yes"); // open-weights shown as a column
     expect(out).toContain("0.1");
     expect(out).toContain("32000");
+  });
+});
+
+describe("agency models list with files", () => {
+  beforeEach(() => {
+    process.exitCode = 0;
+    vi.mocked(_loadModelData).mockReset();
+    vi.mocked(_loadModelData).mockReturnValue({ ok: true, count: 1, error: "" });
+  });
+  afterEach(() => {
+    process.exitCode = 0;
+  });
+
+  it("loads each positional file (in order) before listing", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await modelsList({}, ["a.json", "b.json"]);
+    expect(vi.mocked(_loadModelData).mock.calls.map((c) => c[0])).toEqual(["a.json", "b.json"]);
+    expect(log).toHaveBeenCalled(); // the table is printed after loading
+    log.mockRestore();
+  });
+
+  it("errors and exits non-zero WITHOUT listing if a file fails to load", async () => {
+    vi.mocked(_loadModelData).mockReturnValue({ ok: false, count: 0, error: "bad file" });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await modelsList({}, ["nope.json"]);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("bad file"));
+    expect(process.exitCode).toBe(1);
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+    err.mockRestore();
+  });
+
+  it("lists normally when no files are passed", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await modelsList({});
+    expect(_loadModelData).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });
 

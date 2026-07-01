@@ -1,6 +1,7 @@
 import {
   _listHostedModels,
   _fetchModelData,
+  _loadModelData,
   type HostedModelInfo,
 } from "../stdlib/llm.js";
 
@@ -50,7 +51,20 @@ export function formatHostedCatalog(models: HostedModelInfo[]): string {
   return [header, ...rows].join("\n");
 }
 
-export async function modelsList(opts: ModelsListOpts): Promise<void> {
+// Optional `files` are model-data JSON files (as printed by `agency models
+// refresh`) to load into this process before listing, so the table previews
+// the baked catalog merged with those files (later files win, like
+// std::llm.loadModelData). A load failure aborts before printing so the user
+// doesn't mistake a baked-only list for the merged one.
+export async function modelsList(opts: ModelsListOpts, files: string[] = []): Promise<void> {
+  for (const file of files) {
+    const res = _loadModelData(file);
+    if (!res.ok) {
+      console.error(`Cannot load ${file}: ${res.error}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
   console.log(formatHostedCatalog(selectHostedModels(_listHostedModels(), opts)));
 }
 

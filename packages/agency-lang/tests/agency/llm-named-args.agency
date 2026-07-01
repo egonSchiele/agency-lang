@@ -1,0 +1,4 @@
+node main(): number {
+  const result: number = llm("What is 2 + 2? Return just the number.", model: "gpt-4o-mini", maxTokens: 50)
+  return result
+}

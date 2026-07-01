@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "4",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        { "return": 4 }
+      ]
+    }
+  ]
+}

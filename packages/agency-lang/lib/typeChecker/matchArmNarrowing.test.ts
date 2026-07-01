@@ -1,27 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { writeFileSync, unlinkSync } from "fs";
-import path from "path";
-import os from "os";
-import { parseAgency } from "../parser.js";
-import { SymbolTable } from "../symbolTable.js";
-import { buildCompilationUnit } from "../compilationUnit.js";
-import { typeCheck } from "./index.js";
+import { typecheckSource } from "./testUtils.js";
 
+// Hard errors (severity "error", or no explicit severity — which renders as an
+// error, e.g. type-mismatch diagnostics), as message strings.
 function hardErrors(source: string): string[] {
-  const file = path.join(os.tmpdir(), `tc-marm-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
-  writeFileSync(file, source);
-  try {
-    const absPath = path.resolve(file);
-    const symbolTable = SymbolTable.build(absPath);
-    const parseResult = parseAgency(source, {});
-    if (!parseResult.success) throw new Error("Parse failed");
-    const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, source);
-    return typeCheck(parseResult.result, {}, info).errors
-      .filter((e) => (e.severity ?? "error") === "error")
-      .map((e) => e.message);
-  } finally {
-    unlinkSync(file);
-  }
+  return typecheckSource(source)
+    .filter((e) => (e.severity ?? "error") === "error")
+    .map((e) => e.message);
 }
 
 const HEAD = `

@@ -25,10 +25,15 @@ function allErrors(source: string): TypeCheckError[] {
 
 const warningsFrom = (source: string) => allErrors(source).filter((e) => e.severity === "warning");
 const errorsFrom = (source: string) => allErrors(source);
+// A non-exhaustive `match` is a hard error by default now
+// (typechecker.matchExhaustiveness default = "error"). These tests assert the
+// missing case is DETECTED, independent of severity, so they match the message.
+const exhaustivenessDiagsFrom = (source: string) =>
+  allErrors(source).filter((e) => /not exhaustive/i.test(e.message));
 
 describe("handler param .effect typing (H1)", () => {
-  it("types e.effect so a non-exhaustive match(e.effect) warns", () => {
-    const warnings = warningsFrom(`
+  it("types e.effect so a non-exhaustive match(e.effect) is flagged", () => {
+    const diags = exhaustivenessDiagsFrom(`
 effect mytest::alpha { }
 effect mytest::beta { }
 def risky() {
@@ -44,7 +49,7 @@ node main() {
     }
   }
 }`);
-    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /beta/.test(w.message))).toBe(true);
+    expect(diags.some((d) => /beta/.test(d.message))).toBe(true);
   });
 
   it("an explicit param annotation is not overridden", () => {
@@ -158,7 +163,7 @@ node main() {
   });
 
   it("transitive raise (effect raised inside a called function) reaches the match", () => {
-    const warnings = warningsFrom(`
+    const diags = exhaustivenessDiagsFrom(`
 effect mytest::alpha { }
 effect mytest::beta { }
 def inner() { raise mytest::beta("b", {}) }
@@ -168,11 +173,11 @@ node main() {
     match (e.effect) { "mytest::alpha" => 1 }
   }
 }`);
-    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /beta/.test(w.message))).toBe(true);
+    expect(diags.some((d) => /beta/.test(d.message))).toBe(true);
   });
 
   it("effect name with :: is handled verbatim as the literal", () => {
-    const warnings = warningsFrom(`
+    const diags = exhaustivenessDiagsFrom(`
 effect ns::sub::alpha { }
 effect ns::sub::beta { }
 def risky() { raise ns::sub::alpha("a", {})\n raise ns::sub::beta("b", {}) }
@@ -181,7 +186,7 @@ node main() {
     match (e.effect) { "ns::sub::alpha" => 1 }
   }
 }`);
-    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /beta/.test(w.message))).toBe(true);
+    expect(diags.some((d) => /beta/.test(d.message))).toBe(true);
   });
 
   it("SOUNDNESS: an outer handle with a NESTED handle is not typed (no false positive)", () => {
@@ -203,8 +208,8 @@ node main() {
 });
 
 describe("handler effect exhaustiveness (H2)", () => {
-  it("no double-report: the handle catches everything; only the inner match warns", () => {
-    const warnings = warningsFrom(`
+  it("no double-report: the handle catches everything; only the inner match is flagged", () => {
+    const diags = allErrors(`
 effect mytest::alpha { }
 effect mytest::beta { }
 def risky() { raise mytest::alpha("a", {})\n raise mytest::beta("b", {}) }
@@ -213,10 +218,10 @@ node main() {
     match (e.effect) { "mytest::alpha" => 1 }
   }
 }`);
-    // Exactly one warning — the exhaustiveness one. The handle block is a
-    // catch-all, so the unhandled-interrupt check is satisfied (no extra warning).
-    expect(warnings.filter((w) => /not exhaustive/i.test(w.message))).toHaveLength(1);
-    expect(warnings).toHaveLength(1);
+    // Exactly one diagnostic — the exhaustiveness one. The handle block is a
+    // catch-all, so the unhandled-interrupt check is satisfied (no extra diagnostic).
+    expect(diags).toHaveLength(1);
+    expect(/not exhaustive/i.test(diags[0].message)).toBe(true);
   });
 
   it("a `_` arm in match(e.effect) clears the diagnostic", () => {
@@ -240,7 +245,7 @@ const hardErrorsFrom = (source: string) =>
 
 describe("handler param payload typing (H3)", () => {
   it("types e as a discriminated union so match(e) checks B2 exhaustiveness", () => {
-    const warnings = warningsFrom(`
+    const diags = exhaustivenessDiagsFrom(`
 effect payl::a { x: number }
 effect payl::b { y: string }
 def risky() { raise payl::a("a", { x: 1 })\n raise payl::b("b", { y: "s" }) }
@@ -252,7 +257,7 @@ node main() {
   }
 }`);
     // match(e) over the 2-member discriminated union is non-exhaustive: missing payl::b.
-    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /payl::b/.test(w.message))).toBe(true);
+    expect(diags.some((d) => /payl::b/.test(d.message))).toBe(true);
   });
 
   it("errors on a payload-shape mismatch after narrowing on e.effect", () => {
@@ -282,7 +287,7 @@ node main() {
   });
 
   it("still refines e.effect for exhaustiveness (H1 regression)", () => {
-    const warnings = warningsFrom(`
+    const diags = exhaustivenessDiagsFrom(`
 effect h3::a { }
 effect h3::b { }
 def risky() { raise h3::a("a", {})\n raise h3::b("b", {}) }
@@ -291,7 +296,7 @@ node main() {
     match (e.effect) { "h3::a" => 1 }
   }
 }`);
-    expect(warnings.some((w) => /not exhaustive/i.test(w.message) && /h3::b/.test(w.message))).toBe(true);
+    expect(diags.some((d) => /h3::b/.test(d.message))).toBe(true);
   });
 });
 

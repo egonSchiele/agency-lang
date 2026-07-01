@@ -69,7 +69,7 @@ branch a compiler-enforced guarantee rather than a convention.
 A `match` over a **closed** value type — a `Result`, or a closed literal/value
 union (`"a" | "b"`) — that doesn't cover every case and has no `_` arm is a
 diagnostic, governed by `typechecker.matchExhaustiveness: "silent" | "warn" |
-"error"` (default `"silent"`; see [config](../../../misc/config.md)).
+"error"` (default `"error"`; see [config](../../../misc/config.md)).
 
 - A shared `decomposeCases(type)` (`typeCases.ts`) enumerates a value type's
   cases; `checkMatchExhaustiveness` (`matchExhaustiveness.ts`) reports the cases

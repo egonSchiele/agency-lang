@@ -71,7 +71,7 @@ This lets you prevent specific built-in functions from being generated in the ou
   - **`matchExhaustiveness`** (`"silent" | "warn" | "error"`): What to do when a
     `match` over a closed value type (a `Result`, or a closed literal/value union
     like `"a" | "b"`) doesn't cover every case and has no `_` arm. Default:
-    `"silent"`. Conservative: open types (`string`/`number`/`any`, effect sets)
+    `"error"`. Conservative: open types (`string`/`number`/`any`, effect sets)
     are never required to be exhaustive; a guarded arm doesn't count toward
     coverage; a `_` arm always satisfies it.
 

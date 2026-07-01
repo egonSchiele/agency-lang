@@ -2,7 +2,7 @@
 
 **Status:** Design (approved to spec)
 **Date:** 2026-07-01
-**Supersedes:** the Phase-2 (PR #379) behavior of `agency models refresh`, which registered the fetched blob into smoltalk's in-memory catalog and printed a count — a documented no-op across CLI processes. This design replaces that with an explicit, opt-in refresh→save→load flow.
+**Supersedes:** the Phase-2 (PR #379) behavior of `agency models refresh`, which registered the fetched blob into smoltalk's in-memory catalog and printed a count — which is a documented no-op across CLI processes because the registration does not persist. This design replaces that with an explicit, opt-in refresh→save→load flow.
 
 ## Motivation
 
@@ -96,22 +96,38 @@ export function _loadModelData(
     return { ok: false, count: 0, error: `${path} is not model data (missing "models" array)` };
   }
   const prior = getRegisteredModelData();
+  // Refuse to stitch models of a different schema version onto the prior blob —
+  // a cross-version merge could mix incompatible field shapes. Fail loudly
+  // instead of silently producing a corrupt blob. (Same-version accumulation is
+  // the normal path; this only trips if two files from different smoltalk
+  // versions are loaded in one process.)
+  if (prior && blob.schemaVersion != null && prior.schemaVersion != null && blob.schemaVersion !== prior.schemaVersion) {
+    return {
+      ok: false,
+      count: 0,
+      error: `${path} has schemaVersion ${blob.schemaVersion} but ${prior.schemaVersion} is already loaded; load only matching-version data`,
+    };
+  }
   const merged = prior
     ? {
         schemaVersion: blob.schemaVersion ?? prior.schemaVersion,
         generatedAt: blob.generatedAt ?? prior.generatedAt,
-        models: mergeModelData(prior.models, blob.models), // overlay (new file) wins
+        // Overlay (this file) wins on the `provider:modelName` key and
+        // deep-merges fields, so a partial hand-edited entry augments the prior
+        // one rather than clobbering unlisted fields.
+        models: mergeModelData(prior.models, blob.models),
         hostedTools: mergeHostedTools(prior.hostedTools ?? [], blob.hostedTools ?? []),
       }
     : blob;
+  // registerModelData REPLACES smoltalk's single registered slot (verified:
+  // `registeredModelData = blob` in smoltalk/dist/models.js), so `merged` must
+  // carry everything — hence the pre-merge above. No double-apply.
   registerModelData(merged);
   return { ok: true, count: blob.models.length, error: "" };
 }
 ```
 
-Smoltalk helpers used (all already exported by smoltalk 0.7.0): `refreshModels`, `registerModelData`, `getRegisteredModelData`, `mergeModelData`, `mergeHostedTools`.
-
-> The try/catch blocks are not swallowing errors — each returns the error text in the status object, which the Agency wrapper turns into a `failure(...)`.
+Smoltalk helpers used (all already exported by smoltalk 0.7.0, verified in `dist/models.js` / `dist/modelData.js`): `refreshModels`, `registerModelData` (pure replace), `getRegisteredModelData`, `mergeModelData` (overlay-wins on `provider:modelName`, deep-merges fields), `mergeHostedTools`. The `catch` blocks return the error text in the status object (the Agency wrapper turns it into `failure(...)`) — they do not swallow it.
 
 ### Agency wrapper — `stdlib/llm.agency`
 
@@ -121,12 +137,15 @@ Extend the native import with `_loadModelData` (the Agency layer does not need `
 export def loadModelData(path: string): Result<number, string> {
   """
   Load additional model data from a JSON file (the shape printed by
-  `agency models refresh`) and register it for this program. The data is
-  layered over any previously loaded data and over the built-in catalog, with
-  this file winning on name collisions. Affects llm() model resolution and
-  cost accounting as well as listHostedModels() / hostedModelInfo(). Returns
-  the number of models loaded, or a failure describing why the file could not
-  be read.
+  `agency models refresh`) and register it for this program. Both the file's
+  `models` and its (optional) `hostedTools` are layered over any previously
+  loaded data and over the built-in catalog, with this file winning on
+  provider+name collisions; unlisted fields on an existing entry are preserved.
+  Affects llm() model resolution and cost accounting as well as
+  listHostedModels() / hostedModelInfo().
+
+  Returns the number of models in THIS file (not the running total registered),
+  or a failure describing why the file could not be loaded.
 
   @param path - Path to a model-data JSON file (relative to the working
     directory, or absolute)
@@ -158,7 +177,7 @@ export async function modelsRefresh(url?: string): Promise<void> {
 ```
 
 Update the `models refresh` subcommand description in `scripts/agency.ts` to:
-> "Fetch the latest model data and print it as JSON (redirect to a file, then load it with `std::llm` `loadModelData`)."
+> "Fetch the latest model data and print it as JSON (redirect to a file, then load it with `std::llm.loadModelData`)."
 
 `selectHostedModels` / `formatHostedCatalog` / `modelsList` are unchanged.
 
@@ -170,14 +189,19 @@ After N `loadModelData` calls: **latest-loaded file > earlier-loaded files > smo
 
 - **refresh:** network / parse failure → `Refresh failed: <error>` on stderr, `process.exitCode = 1`, nothing on stdout. Caveat: the shell truncates the redirect target before the command runs, so a failed `agency models refresh > f.json` leaves `f.json` empty; the user re-runs. We do not try to work around shell redirection.
 - **loadModelData:** missing file, invalid JSON, or a payload with no `models` array → `failure("<reason>")`. The `models` array is the only structural requirement; individual malformed model entries are smoltalk's concern at use time, not validated here.
+- **loadModelData schema-version guard:** if a file's `schemaVersion` is present and differs from the version already registered by a prior load, the call returns a `failure` rather than stitching different-shape models together. Same-version accumulation is the normal path; this only trips when two files produced by different smoltalk versions are loaded in one process. (A first load, or a file without `schemaVersion`, is never blocked.)
 
 ## Testing
 
-- **CLI (`lib/cli/hostedModels.test.ts`)** — mock the native: `modelsRefresh` on success writes a single `console.log` whose argument is valid JSON parseable back into an object with a `models` array; on failure writes to `console.error` and sets `process.exitCode = 1` with nothing on `console.log`.
+- **CLI (`lib/cli/hostedModels.test.ts`)** — mock the native:
+  - `modelsRefresh` on success writes a single `console.log` whose argument is valid JSON parseable back into an object with a `models` array — **and writes nothing to `console.error`** (a script parsing stdout must not get stderr contamination on the happy path).
+  - on failure writes to `console.error`, sets `process.exitCode = 1`, and writes nothing to `console.log`.
 - **`_loadModelData` (`lib/stdlib/llm.test.ts`)** — using temp fixture files (or a mocked `fs` + real smoltalk merge):
-  - loading file A then file B → `getAllModels()` (or `_listHostedModels`) contains models from both; on a name collision, B's version wins (accumulate + overlay-wins).
-  - returns `{ ok: true, count }` equal to the file's `models` length.
+  - loading file A then file B → `getAllModels()` (or `_listHostedModels`) contains models from both; on a `provider:modelName` collision, B's version wins and B's fields deep-merge over A's (accumulate + overlay-wins).
+  - **`hostedTools` accumulation:** file A carries `hostedTools`, file B carries only `models` → after both loads, A's hosted tools survive and B's models are present (the models-only overlay doesn't wipe prior hosted tools); and two files each carrying a hosted tool → both present.
+  - returns `{ ok: true, count }` equal to **the file's** `models` length (not the running total).
   - missing file / invalid JSON / no `models` array → `{ ok: false, error }` (non-empty message), and the registered data is unchanged.
+  - schema-version mismatch: load a v1 file, then a v2 file → second call returns `{ ok: false }` and leaves the v1 registration intact.
 - **Agency (`tests/` under stdlib or agency-agent)** — `loadModelData(fixture)` returns `success(n)`, and a subsequent `listHostedModels()` includes the fixture's model; `loadModelData("nope.json")` returns a `failure`.
 
 ## Migration notes
@@ -185,3 +209,4 @@ After N `loadModelData` calls: **latest-loaded file > earlier-loaded files > smo
 - `_refreshHostedCatalog` is removed; `_fetchModelData` replaces it. Update `lib/cli/hostedModels.test.ts` (the current success/failure refresh tests assert a printed count; they change to assert printed JSON).
 - Remove the "KNOWN LIMITATION — refresh does not persist" note from the Phase-2 plan/code; this design resolves it by making persistence explicit.
 - The `std::llm` stdlib docs regenerate (`make`) to include `loadModelData`.
+- **CLI docs:** the `agency models` command currently has **no** doc page (only `docs/site/cli/local.md` exists). Add `docs/site/cli/models.md` documenting `models list` (with filters) and the new `models refresh` → stdout + `loadModelData` workflow, including an `agency models refresh > my-models.json` example.

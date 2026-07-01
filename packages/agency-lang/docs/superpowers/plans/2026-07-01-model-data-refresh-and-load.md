@@ -187,7 +187,7 @@ export function _loadModelData(
     return {
       ok: false,
       count: 0,
-      error: `${path} has schemaVersion ${blob.schemaVersion} but ${prior.schemaVersion} is already loaded; load only matching-version data`,
+      error: `${path} has schemaVersion ${blob.schemaVersion} but ${prior.schemaVersion} is already loaded; re-run "agency models refresh" to regenerate the file at the current schema version`,
     };
   }
   const merged = prior
@@ -197,6 +197,9 @@ export function _loadModelData(
         // Overlay (this file) wins on provider:modelName and deep-merges, so a
         // partial hand-edited entry augments the prior one.
         models: mergeModelData(prior.models, blob.models),
+        // `?? []` on the overlay means "no new tools" (base preserved), NOT
+        // "clear" — mergeHostedTools merges overlay into base, so prior tools
+        // survive a models-only file. Do not change to pass undefined.
         hostedTools: mergeHostedTools(prior.hostedTools ?? [], blob.hostedTools ?? []),
       }
     : blob;
@@ -232,29 +235,50 @@ git commit -m "feat(stdlib): _loadModelData native (accumulate model data over s
 
 - [ ] **Step 1: Write the failing agency-js test** — create the three files under `tests/agency-js/llm-load-model-data/`.
 
+> **Note:** `env(name)` returns `string | null`, and `loadModelData(path: string)` requires a non-null `string` — passing `env(...)` directly is a hard type error (verified). The program narrows with `if (p != null)` before calling, mirroring `pickProvider` in `stdlib/llm.agency`. The test loads TWO files and checks both custom models are visible, so accumulation is proven end-to-end through the Agency layer (not just the TS native).
+
 `agent.agency`:
 ```agency
 import { loadModelData, hostedModelInfo } from "std::llm"
 import { env } from "std::system"
 
-// test.js writes a model-data file to a temp path and passes it via
-// MODELS_FIXTURE, then asserts: the load succeeds with a count, the custom
-// model becomes visible through hostedModelInfo, and a bad path fails.
+// test.js writes two model-data files to temp paths and passes them via
+// MODELS_FIXTURE_A / MODELS_FIXTURE_B. Asserts: each load succeeds with a
+// count, BOTH custom models are visible after loading both (accumulation
+// survives the Agency layer), and a bad path fails.
 node main(): any {
-  let loadedCount = -1
-  const good = loadModelData(env("MODELS_FIXTURE"))
-  if (good is success(n)) {
-    loadedCount = n
+  let countA = -1
+  const pa = env("MODELS_FIXTURE_A")
+  if (pa != null) {
+    const ra = loadModelData(pa)
+    if (ra is success(n)) {
+      countA = n
+    }
   }
-  let seen = "no"
-  const info = hostedModelInfo("custom-load-test")
-  if (info != null) {
-    seen = info.provider
+  let countB = -1
+  const pb = env("MODELS_FIXTURE_B")
+  if (pb != null) {
+    const rb = loadModelData(pb)
+    if (rb is success(n)) {
+      countB = n
+    }
+  }
+  let seenA = "no"
+  const ia = hostedModelInfo("custom-load-a")
+  if (ia != null) {
+    seenA = ia.provider
+  }
+  let seenB = "no"
+  const ib = hostedModelInfo("custom-load-b")
+  if (ib != null) {
+    seenB = ib.provider
   }
   const bad = loadModelData("/no/such/models-file.json")
   return {
-    loadedCount: loadedCount,
-    seen: seen,
+    countA: countA,
+    countB: countB,
+    seenA: seenA,
+    seenB: seenB,
     badFailed: isFailure(bad)
   }
 }
@@ -267,21 +291,25 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// Write the model-data file to a temp path (not the test dir) and hand the
+// Write each model-data file to a temp path (not the test dir) and hand the
 // absolute path to the agency program via env — no cwd assumptions.
-const fixturePath = join(tmpdir(), `agency-models-load-${process.pid}.json`);
-writeFileSync(
-  fixturePath,
-  JSON.stringify({
-    schemaVersion: 1,
-    generatedAt: "test",
-    models: [
-      { type: "text", modelName: "custom-load-test", provider: "acme", inputTokenCost: 1, outputTokenCost: 2, maxInputTokens: 4096, family: "acme" },
-    ],
-    hostedTools: [],
-  }),
-);
-process.env.MODELS_FIXTURE = fixturePath;
+function writeModelFile(suffix, modelName) {
+  const p = join(tmpdir(), `agency-models-load-${process.pid}-${suffix}.json`);
+  writeFileSync(
+    p,
+    JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: "test",
+      models: [
+        { type: "text", modelName, provider: "acme", inputTokenCost: 1, outputTokenCost: 2, maxInputTokens: 4096, family: "acme" },
+      ],
+      hostedTools: [],
+    }),
+  );
+  return p;
+}
+process.env.MODELS_FIXTURE_A = writeModelFile("a", "custom-load-a");
+process.env.MODELS_FIXTURE_B = writeModelFile("b", "custom-load-b");
 
 const result = await main({});
 writeFileSync(
@@ -293,16 +321,15 @@ writeFileSync(
 `fixture.json`:
 ```json
 {
-  "loadedCount": 1,
-  "seen": "acme",
+  "countA": 1,
+  "countB": 1,
+  "seenA": "acme",
+  "seenB": "acme",
   "badFailed": true
 }
 ```
 
-- [ ] **Step 2: Build + run, verify it fails** — `make && node ./dist/scripts/agency.js test js tests/agency-js/llm-load-model-data`
-Expected: FAIL — `loadModelData` is not exported from `std::llm` (compile/import error).
-
-- [ ] **Step 3: Add the wrapper** — in `stdlib/llm.agency`, extend the native import (currently `_setLlmOptions`, `_registerProviderModule`, `_listHostedModels`, `_hostedModelInfo`) with `_loadModelData`:
+- [ ] **Step 2: Add the wrapper** — in `stdlib/llm.agency`, extend the native import (currently `_setLlmOptions`, `_registerProviderModule`, `_listHostedModels`, `_hostedModelInfo`) with `_loadModelData`:
 
 ```agency
 import {
@@ -341,18 +368,20 @@ export def loadModelData(path: string): Result<number, string> {
 }
 ```
 
-- [ ] **Step 4: Build + run, verify it passes** — `make && node ./dist/scripts/agency.js test js tests/agency-js/llm-load-model-data`
-Expected: PASS (`__result.json` matches `fixture.json`).
-
-- [ ] **Step 5: parse + typecheck the touched Agency file** — 
+- [ ] **Step 3: parse + typecheck the touched Agency file FIRST** (faster than a full `make` for catching type errors like the `env` narrowing above) — 
 ```bash
 node ./dist/scripts/agency.js parse stdlib/llm.agency && node ./dist/scripts/agency.js typecheck stdlib/llm.agency
 ```
-Expected: parses; `No type errors found`. (Do NOT whole-file `fmt` — see Global Constraints; just confirm the new lines match the surrounding indentation.)
+Expected: parses; `No type errors found`. (Do NOT whole-file `fmt` — see Global Constraints; just confirm the new lines match the surrounding indentation.) The test's `agent.agency` is typechecked as part of the `make`/run in the next steps.
 
-- [ ] **Step 6: Commit** *(only if asked)*
+- [ ] **Step 4: Build + run, verify it PASSES** — `make && node ./dist/scripts/agency.js test js tests/agency-js/llm-load-model-data`
+Expected: PASS (`__result.json` matches `fixture.json`). `make` also regenerates `docs/site/stdlib/llm.md` from the new `loadModelData` docstring — include that regenerated file in this task's commit (the Task 4 CLI doc links to it).
+
+> If you want to see the red state first: before Step 2, run `make && node ./dist/scripts/agency.js test js tests/agency-js/llm-load-model-data` — it FAILS because `loadModelData` isn't exported from `std::llm` yet.
+
+- [ ] **Step 5: Commit** *(only if asked)*
 ```bash
-git add stdlib/llm.agency tests/agency-js/llm-load-model-data
+git add stdlib/llm.agency tests/agency-js/llm-load-model-data docs/site/stdlib/llm.md
 git commit -m "feat(stdlib): std::llm.loadModelData opt-in model-data loader"
 ```
 
@@ -383,9 +412,22 @@ Change the import `import { _refreshHostedCatalog } from "../stdlib/llm.js";` to
 ```ts
 import { _fetchModelData } from "../stdlib/llm.js";
 ```
+Also add `beforeEach`, `afterEach` to the vitest import at the top of the file (currently `import { describe, it, expect, vi } from "vitest";`):
+```ts
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+```
 Replace the entire `describe("agency models refresh", …)` block with:
 ```ts
 describe("agency models refresh", () => {
+  beforeEach(() => {
+    process.exitCode = 0;
+    vi.mocked(_fetchModelData).mockReset();
+  });
+  // The failure test sets exitCode = 1; clear it so it doesn't fail the run.
+  afterEach(() => {
+    process.exitCode = 0;
+  });
+
   it("prints the fetched JSON to stdout and nothing to stderr on success", async () => {
     const blob = { schemaVersion: 1, models: [{ modelName: "x" }] };
     vi.mocked(_fetchModelData).mockResolvedValue({ ok: true, json: JSON.stringify(blob, null, 2), error: "" });
@@ -402,12 +444,10 @@ describe("agency models refresh", () => {
     vi.mocked(_fetchModelData).mockResolvedValue({ ok: false, json: "", error: "network down" });
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    process.exitCode = 0;
     await modelsRefresh();
     expect(err).toHaveBeenCalledWith(expect.stringContaining("network down"));
     expect(process.exitCode).toBe(1);
     expect(log).not.toHaveBeenCalled();
-    process.exitCode = 0; // reset so a real later failure isn't masked
     log.mockRestore();
     err.mockRestore();
   });
@@ -461,15 +501,15 @@ Expected: PASS (selection + format + both refresh tests).
 - [ ] **Step 6: Update the subcommand description** — in `scripts/agency.ts`, change the `models refresh` description line (currently `"Refresh the hosted model catalog from the remote source"`) to:
 ```ts
   modelsCmd.command("refresh").description("Fetch the latest model data and print it as JSON (redirect to a file, then load with std::llm loadModelData)")
-    .argument("[url]", "Override the catalog URL").action((url?: string) => modelsRefresh(url));
+    .argument("[url]", "Optional URL to fetch model data from (defaults to the built-in source)").action((url?: string) => modelsRefresh(url));
 ```
 
 - [ ] **Step 7: Typecheck + build + smoke** — 
 ```bash
 npx tsc --noEmit -p tsconfig.json && make
-node ./dist/scripts/agency.js models refresh 2>/dev/null | head -3
+node ./dist/scripts/agency.js models refresh > /tmp/mr.json 2>/dev/null && [ -s /tmp/mr.json ] && head -3 /tmp/mr.json && node -e "JSON.parse(require('fs').readFileSync('/tmp/mr.json','utf8')); console.log('valid JSON')" || echo "refresh failed or offline — rely on the unit test"
 ```
-Expected: tsc/build clean; the smoke prints the start of a JSON object (`{` … `"models"` …) to stdout. (Requires network; if offline, skip the smoke and rely on the unit test.)
+Expected: tsc/build clean; the smoke writes JSON to `/tmp/mr.json`, prints its first lines and `valid JSON`. The `-s` check + `JSON.parse` mean an empty/failed fetch does NOT silently look like success (it prints the offline message instead). Network-dependent; the unit test is the authoritative check.
 
 - [ ] **Step 8: Commit** *(only if asked)*
 ```bash
@@ -541,11 +581,23 @@ provider+name collisions. Loaded data affects `llm()` model resolution and cost
 accounting as well as `listHostedModels()` / `hostedModelInfo()`.
 ````
 
-- [ ] **Step 2: Verify it renders as valid Markdown** — `node ./dist/scripts/agency.js --help >/dev/null 2>&1; echo "doc is static markdown, no build step"` (the `stdlib/llm.md` page regenerates from the Agency docstring via `make`, already run in Task 2; `models.md` is hand-authored like `local.md`).
+- [ ] **Step 2: Register the page in the VitePress sidebar** — in `docs/site/.vitepress/config.mts`, add a `models` entry to the `"/cli/"` sidebar `items` array, alphabetically between `lsp / mcp` and `optimize`:
+```ts
+            { text: "lsp / mcp", link: "/cli/editor-integration" },
+            { text: "models", link: "/cli/models" },
+            { text: "optimize", link: "/cli/optimize" },
+```
+(Without this the page ships unreachable. Note: `cli/local` is also absent from this sidebar — a pre-existing gap left out of scope here; we only add `models`.)
 
-- [ ] **Step 3: Commit** *(only if asked)*
+- [ ] **Step 3: Verify the cross-link target exists** — `models.md` links `../stdlib/llm.md`. Confirm it's present and carries the new function:
 ```bash
-git add docs/site/cli/models.md
+grep -q "loadModelData" docs/site/stdlib/llm.md && echo "stdlib/llm.md has loadModelData (regenerated by make in Task 2)"
+```
+Expected: prints the confirmation. (If missing, re-run `make` — it regenerates `docs/site/stdlib/llm.md` from the `loadModelData` docstring.)
+
+- [ ] **Step 4: Commit** *(only if asked)*
+```bash
+git add docs/site/cli/models.md docs/site/.vitepress/config.mts
 git commit -m "docs(cli): document agency models list + refresh + loadModelData"
 ```
 
@@ -562,7 +614,7 @@ git commit -m "docs(cli): document agency models list + refresh + loadModelData"
 - count = this file's models → Task 1 (`blob.models.length` + explicit test + docstring). ✓
 - Errors returned not thrown, mapped to Result → Task 1 (status object) + Task 2 (`success`/`failure`). ✓
 - Tests: stderr-clean-on-success (Task 3), hostedTools accumulation + schema mismatch (Task 1), Agency wrapper end-to-end (Task 2). ✓
-- Migration: remove `_refreshHostedCatalog` (Task 3 removes it and its "does not persist" note); CLI docs `models.md` (Task 4); stdlib doc regen for `loadModelData` (`make` in Task 2). ✓
+- Migration: remove `_refreshHostedCatalog` (Task 3 removes it and its "does not persist" note); CLI docs `models.md` + VitePress sidebar entry so it's reachable (Task 4); stdlib doc regen for `loadModelData` — `make` in Task 2 Step 4 regenerates `docs/site/stdlib/llm.md` and that file is committed in Task 2 (so Task 4's `../stdlib/llm.md` cross-link resolves). ✓
 
 **Placeholder scan:** none — every step has concrete code or an exact command.
 

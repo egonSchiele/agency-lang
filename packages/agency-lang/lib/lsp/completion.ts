@@ -9,7 +9,7 @@ import type { ScopeInfo } from "../typeChecker/types.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
 import { findContainingScope } from "./scopeResolution.js";
 import { offsetOfLine } from "./util.js";
-import { getStdlibFiles } from "../importPaths.js";
+import { getStdlibFiles, stdlibModuleName } from "../importPaths.js";
 import { docStringText } from "../utils/docStringText.js";
 import { AgencyGenerator } from "../backends/agencyGenerator.js";
 
@@ -232,7 +232,7 @@ let stdlibModules: string[] | null = null;
 
 function getStdlibModules(): string[] {
   if (stdlibModules) return stdlibModules;
-  stdlibModules = getStdlibFiles().map((f) => "std::" + path.basename(f, ".agency"));
+  stdlibModules = getStdlibFiles().map((f) => stdlibModuleName(f));
   return stdlibModules;
 }
 

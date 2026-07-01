@@ -61,7 +61,7 @@ export type BarKey = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L48))
 
 ### Bar
 
@@ -75,7 +75,7 @@ export type Bar = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L55))
 
 ### BarMode
 
@@ -83,7 +83,7 @@ export type Bar = {
 export type BarMode = "stacked" | "grouped"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L60))
 
 ### ChartBuilder
 
@@ -97,7 +97,7 @@ export type ChartBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L63))
 
 ## Functions
 
@@ -139,4 +139,4 @@ Render a horizontal bar chart as a layout node. When calling this as
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/chart.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L92))

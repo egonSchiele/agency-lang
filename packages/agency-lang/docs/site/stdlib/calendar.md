@@ -12,7 +12,7 @@ name: "calendar"
 
   node main() {
     // One-time: opens browser for Google OAuth consent.
-    // This uses std::oauth under the hood — tokens are encrypted and
+    // This uses std::auth/oauth under the hood — tokens are encrypted and
     // stored locally, and refreshed automatically on future runs.
     if (!isCalendarAuthorized()) {
       authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
@@ -57,11 +57,11 @@ name: "calendar"
   }
   ```
 
-  You can also use `std::oauth` directly for more control over the
+  You can also use `std::auth/oauth` directly for more control over the
   authorization flow (e.g. custom scopes, port, or extra params):
 
   ```ts
-  import { authorize, isAuthorized } from "std::oauth"
+  import { authorize, isAuthorized } from "std::auth/oauth"
   import { env } from "std::system"
   import { listEvents } from "std::calendar"
 
@@ -93,7 +93,7 @@ name: "calendar"
   6. Run your agent — it will open a browser for consent on first use
 
   ## Authentication
-  `authorizeCalendar` is a convenience wrapper around `std::oauth`. It handles
+  `authorizeCalendar` is a convenience wrapper around `std::auth/oauth`. It handles
   the OAuth 2.0 authorization code flow with PKCE, stores tokens in
   `~/.agency/oauth/google-calendar.json`, and automatically refreshes expired
   tokens. Tokens are encrypted at rest if a system keyring (macOS Keychain /

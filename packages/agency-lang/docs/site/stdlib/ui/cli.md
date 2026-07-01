@@ -62,7 +62,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L70))
 
 ### clearScreen
 
@@ -70,7 +70,7 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L131))
 
 ### clearHistory
 
@@ -85,7 +85,7 @@ Clear the input history of the **currently running** `repl()` session —
   live up-arrow recall is wiped via the active REPL. A no-op when called
   outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L135))
 
 ### termWidth
 
@@ -95,7 +95,7 @@ termWidth(): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L145))
 
 ### hline
 
@@ -112,4 +112,4 @@ hline(char: string, width: number): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/cli.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L149))

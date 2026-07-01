@@ -7,7 +7,7 @@ name: "sms"
 ## Usage
 
   ```ts
-  import { sendSms } from "std::sms"
+  import { sendSms } from "std::messaging/sms"
 
   node main() {
     const result = sendSms("+15551234567", "Hello from my agent!")
@@ -56,4 +56,4 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
 
 **Throws:** `std::sendSms`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/sms.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L26))

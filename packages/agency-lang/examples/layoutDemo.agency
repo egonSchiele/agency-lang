@@ -1,13 +1,13 @@
-import { box, row, column, text, hline, vline, render } from "std::layout"
-import { table } from "std::table"
+import { box, row, column, text, hline, vline, render } from "std::ui/layout"
+import { table } from "std::ui/table"
 
-// Showcases the std::layout module on a single splash-style panel.
+// Showcases the std::ui/layout module on a single splash-style panel.
 // Run with: pnpm run agency examples/layoutDemo.agency
 
 node main() {
   // 1) Plain bordered box with a title.
   const greeting = box(title: "Welcome", titleColor: "orange") as b {
-    b.text("Hello from std::layout!", bold: true)
+    b.text("Hello from std::ui/layout!", bold: true)
   }
   print(render(greeting))
   print("")

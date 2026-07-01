@@ -7,7 +7,7 @@ name: "browser"
 Usage from Agency code:
 
   ```ts
-  import { browserUse } from "std::browser"
+  import { browserUse } from "std::web/browser"
 
   node main() {
     const result = browserUse("Find the top 3 trending repos on GitHub today")
@@ -55,4 +55,4 @@ Run a browser automation task using natural language via the Browser Use cloud A
 
 **Throws:** `std::browserUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/browser.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L23))

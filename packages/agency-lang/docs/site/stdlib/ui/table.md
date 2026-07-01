@@ -59,7 +59,7 @@ name: "table"
 export type Cell = string | LayoutNode
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L48))
 
 ### CellRow
 
@@ -67,7 +67,7 @@ export type Cell = string | LayoutNode
 export type CellRow = Cell[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L53))
 
 ### ColumnSpec
 
@@ -103,7 +103,7 @@ export type ColumnSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L67))
 
 ### TableBuilder
 
@@ -126,7 +126,7 @@ export type TableBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L79))
 
 ## Functions
 
@@ -174,4 +174,4 @@ Render data as a bordered table layout node. When calling this as an
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/table.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L122))

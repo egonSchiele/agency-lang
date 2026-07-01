@@ -3,6 +3,7 @@ import {
   _registerProviderModule,
   _listHostedModels,
   _hostedModelInfo,
+  _loadModelData,
 } from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
 
@@ -147,4 +148,27 @@ export def hostedModelInfo(name: string): HostedModelInfo | null {
   @param name - The hosted model name (e.g. "gpt-4o-mini")
   """
   return _hostedModelInfo(name)
+}
+
+export def loadModelData(path: string): Result<number, string> {
+  """
+  Load additional model data from a JSON file (the shape printed by
+  `agency models refresh`) and register it for this program. Both the file's
+  `models` and its optional `hostedTools` are layered over any previously
+  loaded data and over the built-in catalog, with this file winning on
+  provider+name collisions; unlisted fields on an existing entry are preserved.
+  Affects llm() model resolution and cost accounting as well as
+  listHostedModels() / hostedModelInfo().
+
+  Returns the number of models in THIS file (not the running total registered),
+  or a failure describing why the file could not be loaded.
+
+  @param path - Path to a model-data JSON file (relative to the working
+    directory, or absolute)
+  """
+  const res = _loadModelData(path)
+  if (res.ok) {
+    return success(res.count)
+  }
+  return failure(res.error)
 }

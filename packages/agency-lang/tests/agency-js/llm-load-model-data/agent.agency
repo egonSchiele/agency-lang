@@ -1,0 +1,43 @@
+import { loadModelData, hostedModelInfo } from "std::llm"
+import { env } from "std::system"
+
+// test.js writes two model-data files to temp paths and passes them via
+// MODELS_FIXTURE_A / MODELS_FIXTURE_B. Asserts: each load succeeds with a
+// count, BOTH custom models are visible after loading both (accumulation
+// survives the Agency layer), and a bad path fails.
+node main(): any {
+  let countA = -1
+  const pa = env("MODELS_FIXTURE_A")
+  if (pa != null) {
+    const ra = loadModelData(pa)
+    if (ra is success(n)) {
+      countA = n
+    }
+  }
+  let countB = -1
+  const pb = env("MODELS_FIXTURE_B")
+  if (pb != null) {
+    const rb = loadModelData(pb)
+    if (rb is success(n)) {
+      countB = n
+    }
+  }
+  let seenA = "no"
+  const ia = hostedModelInfo("custom-load-a")
+  if (ia != null) {
+    seenA = ia.provider
+  }
+  let seenB = "no"
+  const ib = hostedModelInfo("custom-load-b")
+  if (ib != null) {
+    seenB = ib.provider
+  }
+  const bad = loadModelData("/no/such/models-file.json")
+  return {
+    countA: countA,
+    countB: countB,
+    seenA: seenA,
+    seenB: seenB,
+    badFailed: isFailure(bad)
+  }
+}

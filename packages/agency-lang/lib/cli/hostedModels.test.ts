@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock the native shim so modelsRefresh's success/failure branches are
 // exercised without a real network fetch. The pure functions under test
@@ -6,15 +6,17 @@ import { describe, it, expect, vi } from "vitest";
 // the mocked natives, so this mock doesn't affect them.
 vi.mock("../stdlib/llm.js", () => ({
   _listHostedModels: () => [],
-  _refreshHostedCatalog: vi.fn(),
+  _fetchModelData: vi.fn(),
+  _loadModelData: vi.fn(),
 }));
 
 import {
   selectHostedModels,
   formatHostedCatalog,
   modelsRefresh,
+  modelsList,
 } from "./hostedModels.js";
-import { _refreshHostedCatalog } from "../stdlib/llm.js";
+import { _fetchModelData, _loadModelData } from "../stdlib/llm.js";
 import type { HostedModelInfo } from "../stdlib/llm.js";
 
 const catalog: HostedModelInfo[] = [
@@ -44,22 +46,76 @@ describe("agency models selection", () => {
   });
 });
 
-describe("agency models refresh", () => {
-  it("prints the model count on success", async () => {
-    vi.mocked(_refreshHostedCatalog).mockResolvedValue({ ok: true, count: 42, error: "" });
+describe("agency models list with files", () => {
+  beforeEach(() => {
+    process.exitCode = 0;
+    vi.mocked(_loadModelData).mockReset();
+    vi.mocked(_loadModelData).mockReturnValue({ ok: true, count: 1, error: "" });
+  });
+  afterEach(() => {
+    process.exitCode = 0;
+  });
+
+  it("loads each positional file (in order) before listing", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    await modelsRefresh();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("42"));
+    await modelsList({}, ["a.json", "b.json"]);
+    expect(vi.mocked(_loadModelData).mock.calls.map((c) => c[0])).toEqual(["a.json", "b.json"]);
+    expect(log).toHaveBeenCalled(); // the table is printed after loading
     log.mockRestore();
   });
-  it("reports the error and sets a non-zero exit code on failure", async () => {
-    vi.mocked(_refreshHostedCatalog).mockResolvedValue({ ok: false, count: 0, error: "network down" });
-    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
-    process.exitCode = 0;
-    await modelsRefresh();
-    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining("network down"));
+
+  it("errors and exits non-zero WITHOUT listing if a file fails to load", async () => {
+    vi.mocked(_loadModelData).mockReturnValue({ ok: false, count: 0, error: "bad file" });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await modelsList({}, ["nope.json"]);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("bad file"));
     expect(process.exitCode).toBe(1);
-    process.exitCode = 0; // reset so a real later failure isn't masked
-    errorLog.mockRestore();
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+    err.mockRestore();
+  });
+
+  it("lists normally when no files are passed", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await modelsList({});
+    expect(_loadModelData).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+});
+
+describe("agency models refresh", () => {
+  beforeEach(() => {
+    process.exitCode = 0;
+    vi.mocked(_fetchModelData).mockReset();
+  });
+  // The failure test sets exitCode = 1; clear it so it doesn't fail the run.
+  afterEach(() => {
+    process.exitCode = 0;
+  });
+
+  it("prints the fetched JSON to stdout and nothing to stderr on success", async () => {
+    const blob = { schemaVersion: 1, models: [{ modelName: "x" }] };
+    vi.mocked(_fetchModelData).mockResolvedValue({ ok: true, json: JSON.stringify(blob, null, 2), error: "" });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await modelsRefresh();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(log.mock.calls[0][0] as string)).toHaveProperty("models");
+    expect(err).not.toHaveBeenCalled();
+    log.mockRestore();
+    err.mockRestore();
+  });
+  it("reports the error on stderr, exits non-zero, and prints nothing to stdout on failure", async () => {
+    vi.mocked(_fetchModelData).mockResolvedValue({ ok: false, json: "", error: "network down" });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await modelsRefresh();
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("network down"));
+    expect(process.exitCode).toBe(1);
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+    err.mockRestore();
   });
 });

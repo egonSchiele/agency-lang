@@ -890,12 +890,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   const modelsCmd = program.command("models").description("Browse the hosted model catalog");
   modelsCmd.command("list").description("List hosted models (filterable)")
+    .argument("[files...]", "Model-data JSON files to also load and include (as printed by `agency models refresh`)")
     .option("--provider <name>", "Only this provider")
     .option("--max-price <usd>", "Max input $/1M tokens", parseFloat)
     .option("--min-context <tokens>", "Min context window", parseInt)
-    .action((opts: { provider?: string; maxPrice?: number; minContext?: number }) => modelsList(opts));
-  modelsCmd.command("refresh").description("Refresh the hosted model catalog from the remote source")
-    .argument("[url]", "Override the catalog URL").action((url?: string) => modelsRefresh(url));
+    .action((files: string[], opts: { provider?: string; maxPrice?: number; minContext?: number }) => modelsList(opts, files));
+  modelsCmd.command("refresh").description("Fetch the latest model data and print it as JSON (redirect to a file, then load with std::llm.loadModelData)")
+    .argument("[url]", "Optional URL to fetch model data from (defaults to the built-in source)").action((url?: string) => modelsRefresh(url));
 
   program
     .command("agent")

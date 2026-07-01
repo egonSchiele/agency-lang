@@ -185,6 +185,7 @@ export default defineConfig({
             { text: "doc", link: "/cli/doc" },
             { text: "format", link: "/cli/format" },
             { text: "lsp / mcp", link: "/cli/editor-integration" },
+            { text: "models", link: "/cli/models" },
             { text: "optimize", link: "/cli/optimize" },
             { text: "pack", link: "/cli/pack" },
             { text: "preprocess / ast", link: "/cli/preprocess-and-ast" },

@@ -4,7 +4,7 @@ import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "agen
   ## Usage
 
   ```ts
-  import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::keyring"
+  import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::auth/keyring"
 
   node main() {
     if (isKeyringAvailable()) {

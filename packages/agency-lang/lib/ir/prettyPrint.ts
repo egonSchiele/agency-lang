@@ -144,15 +144,18 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "templateLit": {
-      // Escape only the two sequences that would terminate the template or
-      // start an unintended interpolation:
+      // Part text is RAW runtime characters — the Agency parser has already
+      // interpreted `\n` / `\\` etc. into real chars, so real newlines/tabs
+      // pass straight through (valid inside a template literal). Three
+      // sequences must be escaped or they corrupt the emitted template:
+      //   `\`     → `\\`  (a raw backslash would escape whatever follows —
+      //                    a lone `\` before the closing backtick yields an
+      //                    unterminated template; must run FIRST so it
+      //                    doesn't double the escapes added below)
       //   `` ` `` → `\``  (otherwise closes the template)
       //   `${`    → `\${` (otherwise starts an interpolation)
-      // We deliberately do NOT escape `\` — agency strings pass backslash
-      // sequences through to the JS template literal so `\n`, `\t`, etc.
-      // get interpreted as escape sequences at runtime.
       const escapeForTemplate = (text: string): string =>
-        text.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+        text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
       let s = "`";
       for (const part of node.parts) {
         s += escapeForTemplate(part.text);

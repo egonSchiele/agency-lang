@@ -3909,7 +3909,9 @@ export class TypeScriptBuilder {
               ts.consoleError(
                 ts.template([
                   {
-                    text: "\\nAgent crashed: ",
+                    // Real newline char: template part text is raw runtime
+                    // characters; the printer escapes, not the caller.
+                    text: "\nAgent crashed: ",
                     expr: $(ts.id("__error")).prop("message").done(),
                   },
                 ]),

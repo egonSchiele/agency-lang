@@ -238,7 +238,7 @@ the scrutinee type is open.
   synthesizes a function-level `failure(...)` return on head mismatch,
   which has no coherent meaning as a match-expression value.
 - **A `return` inside an arm cannot cross a concurrency boundary.** A
-  `return` inside a `parallel`/`fork`/`race`/`thread` block nested in an
+  `return` inside a `parallel`/`seq`/`fork`/`race`/`thread` block nested in an
   arm is a compile error — those run in separate execution contexts that
   the match-yield unwind cannot cross.
 - **Module-level `const x = match(...)` initializers are a compile

@@ -23,7 +23,7 @@ import { RuntimeContext } from "../runtime/state/context.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { MessageThread } from "../runtime/state/messageThread.js";
 import { runPrompt } from "../runtime/prompt.js";
-import { _eagerSummarizeIfNeeded } from "./threads.js";
+import { _eagerSummarizeIfNeeded, _contentToString } from "./threads.js";
 
 function makeCtx(): RuntimeContext<any> {
   return new RuntimeContext({
@@ -236,5 +236,51 @@ describe("_eagerSummarizeIfNeeded", () => {
 
     expect(spy).toHaveBeenCalledTimes(1);
     expect(threads.threads["custom-id"].summary).toBe("spy-summary");
+  });
+});
+
+describe("_contentToString", () => {
+  it("passes plain strings through", () => {
+    expect(_contentToString("hello")).toBe("hello");
+  });
+
+  it("renders text parts and attachment placeholders", () => {
+    const content = [
+      { type: "text", text: "look at this" },
+      { type: "image", source: { kind: "base64", base64: "AAAA", mimeType: "image/png" } },
+      { type: "file", filename: "report.pdf", source: { kind: "base64", base64: "BBBB", mimeType: "application/pdf" } },
+    ];
+    expect(_contentToString(content as any)).toBe(
+      "look at this [image attachment] [file attachment: report.pdf]",
+    );
+  });
+
+  it("never leaks base64 payloads into the transcript", () => {
+    const content = [
+      { type: "image", source: { kind: "base64", base64: "SECRETPAYLOAD", mimeType: "image/png" } },
+    ];
+    expect(_contentToString(content as any)).not.toContain("SECRETPAYLOAD");
+  });
+
+  it("handles null content and empty part arrays", () => {
+    expect(_contentToString(null as any)).toBe("");
+    expect(_contentToString([] as any)).toBe("");
+  });
+
+  it("renders a file part without filename generically", () => {
+    const content = [{ type: "file", source: { kind: "base64", base64: "CCCC", mimeType: "application/pdf" } }];
+    expect(_contentToString(content as any)).toBe("[file attachment]");
+  });
+
+  it("renders a text part with a missing text field as empty", () => {
+    expect(_contentToString([{ type: "text" }] as any)).toBe("");
+  });
+
+  it("falls back to JSON for unknown part types", () => {
+    expect(_contentToString([{ type: "mystery", x: 1 }] as any)).toBe('{"type":"mystery","x":1}');
+  });
+
+  it("keeps JSON fallback for unknown non-string content", () => {
+    expect(_contentToString({ weird: true } as any)).toBe('{"weird":true}');
   });
 });

@@ -21,7 +21,8 @@ import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { checkMatchExprYields } from "./matchExprTypes.js";
-import { NUMBER_T } from "./primitives.js";
+import { NUMBER_T, STRING_T } from "./primitives.js";
+import { unionTypes } from "./inference.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { expressionChildren } from "../utils/node.js";
 
@@ -380,26 +381,52 @@ export function walkScopeBody(
         break;
       case "forLoop": {
         const iterableType = synthType(node.iterable, scope, ctx);
+        // `for (item, second in x)` binds two variables. `itemType` is the
+        // first (element for arrays, key for records/objects); `secondType`
+        // is the second (numeric index for arrays, VALUE for records/objects),
+        // mirroring how the runtime `Runner.loop` passes callback arguments.
+        let itemType: VariableType | "any";
+        let secondType: VariableType | "any";
         if (iterableType === "any") {
-          scope.declare(node.itemVar as string, "any");
+          itemType = "any";
+          // Iterable kind is unknown, so the second var could be either an
+          // index or a value — leave it as `any` rather than assume a number.
+          secondType = "any";
         } else if (iterableType.type === "arrayType") {
-          scope.declare(node.itemVar as string, iterableType.elementType);
+          itemType = iterableType.elementType;
+          secondType = NUMBER_T;
         } else if (
           iterableType.type === "genericType" &&
           iterableType.name === "Record"
         ) {
-          // for (k in record): iteration variable is the key type.
-          scope.declare(node.itemVar as string, iterableType.typeArgs[0]);
+          // for (k, v in record): key is Record's key type, value is its
+          // value type.
+          itemType = iterableType.typeArgs[0];
+          secondType = iterableType.typeArgs[1];
+        } else if (iterableType.type === "objectType") {
+          // for (k, v in obj): an object literal iterates by its (string)
+          // keys, with the value being the property value at that key. Object
+          // literals synthesize to a structural `objectType`, not a `Record`
+          // generic, so they need their own branch here or iteration is
+          // wrongly rejected. The value type is the union of all property
+          // value types.
+          itemType = STRING_T;
+          secondType =
+            iterableType.properties.length === 0
+              ? "any"
+              : unionTypes(iterableType.properties.map((p) => p.value));
         } else {
-          scope.declare(node.itemVar as string, "any");
+          itemType = "any";
+          secondType = "any";
           ctx.errors.push({
             message: `For-loop iterable must be an array or Record, got '${formatTypeHint(iterableType)}'.`,
             actualType: formatTypeHint(iterableType),
             loc: node.iterable.loc,
           });
         }
+        scope.declare(node.itemVar as string, itemType);
         if (node.indexVar) {
-          scope.declare(node.indexVar, NUMBER_T);
+          scope.declare(node.indexVar, secondType);
         }
         walkScopeBody(node.body, scope, ctx);
         break;

@@ -1997,6 +1997,245 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toMatch(/For-loop iterable must be an array/);
     });
+
+    it("should accept an object literal (objectType) as iterable and type the key as string", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "a", value: { type: "number", value: "1" } },
+                { key: "b", value: { type: "number", value: "2" } },
+              ],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "key",
+            iterable: { type: "variableName", value: "obj" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectStr",
+                arguments: [{ type: "variableName", value: "key" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should error when an object-literal key is used as a number", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            value: {
+              type: "agencyObject",
+              entries: [{ key: "a", value: { type: "number", value: "1" } }],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "key",
+            iterable: { type: "variableName", value: "obj" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectNum",
+                arguments: [{ type: "variableName", value: "key" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+
+    it("types the second loop variable as the property value for an object literal", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "a", value: { type: "number", value: "1" } },
+                { key: "b", value: { type: "number", value: "2" } },
+              ],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "key",
+            indexVar: "value",
+            iterable: { type: "variableName", value: "obj" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectNum",
+                // `value` is number here, so this is fine...
+                arguments: [{ type: "variableName", value: "value" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("errors when an object-literal value is used at the wrong type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            value: {
+              type: "agencyObject",
+              entries: [{ key: "a", value: { type: "number", value: "1" } }],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "key",
+            indexVar: "value",
+            iterable: { type: "variableName", value: "obj" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectStr",
+                // `value` is number, expected string -> error.
+                arguments: [{ type: "variableName", value: "value" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
+
+    it("still types the second loop variable as the index for arrays", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "arr",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [
+                { type: "string", segments: [{ type: "text", value: "x" }] },
+              ],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "item",
+            indexVar: "i",
+            iterable: { type: "variableName", value: "arr" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectStr",
+                // `i` is the numeric index, expected string -> error.
+                arguments: [{ type: "variableName", value: "i" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
   });
 
   describe("inferred variable used correctly", () => {

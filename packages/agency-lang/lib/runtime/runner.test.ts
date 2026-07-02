@@ -809,6 +809,199 @@ describe("Runner", () => {
   });
 });
 
+describe("match exit propagation", () => {
+  let frame: State;
+  let runner: Runner;
+
+  beforeEach(() => {
+    frame = makeFrame();
+    runner = new Runner(makeMockCtx(), frame);
+  });
+
+  const frameLocals = () => frame.locals;
+
+  it("exitMatch stores the value and skips to the owning ifElse", async () => {
+    const ran: string[] = [];
+    await runner.ifElse(
+      0,
+      [
+        {
+          condition: async () => true,
+          body: async (r) => {
+            ran.push("before");
+            r.exitMatch(7, "yielded");
+            ran.push("unreachable"); // exitMatch does not throw; codegen adds `return;`
+          },
+        },
+      ],
+      undefined,
+      { matchId: 7 },
+    );
+    await runner.step(1, async () => {
+      ran.push("after-match");
+    });
+    expect(ran).toContain("after-match"); // flag cleared by owner
+    expect(frameLocals()["__matchval_7"]).toBe("yielded"); // value stored by runner
+  });
+
+  it("a non-owning inner ifElse neither runs nor clears an outer exit", async () => {
+    runner.exitMatch(1, "outer");
+    const ran: string[] = [];
+    await runner.ifElse(
+      2,
+      [{ condition: async () => true, body: async () => { ran.push("inner"); } }],
+      undefined,
+      { matchId: 2 },
+    );
+    await runner.step(3, async () => {
+      ran.push("after");
+    });
+    expect(ran).toEqual([]); // inner skipped, flag still set, step skipped
+  });
+
+  it("nested matches: inner ifElse does not clear the outer id; outer does", async () => {
+    const ran: string[] = [];
+    await runner.ifElse(
+      0,
+      [
+        {
+          condition: async () => true,
+          body: async (r) => {
+            await r.ifElse(
+              0,
+              [
+                {
+                  condition: async () => true,
+                  body: async (r2) => {
+                    r2.exitMatch(10, "from-inner-arm-of-OUTER");
+                  },
+                },
+              ],
+              undefined,
+              { matchId: 11 }, // inner match id 11 ≠ 10
+            );
+            // A post-yield statement in the outer arm is its own substep and
+            // must be SKIPPED while exit 10 is pending.
+            await r.step(1, async () => {
+              ran.push("outer-arm-after-inner");
+            });
+          },
+        },
+      ],
+      undefined,
+      { matchId: 10 },
+    );
+    await runner.step(2, async () => {
+      ran.push("after-outer");
+    });
+    expect(ran).toEqual(["after-outer"]);
+  });
+
+  it("exitMatch propagates through a nested non-match ifElse", async () => {
+    const ran: string[] = [];
+    await runner.ifElse(
+      0,
+      [
+        {
+          condition: async () => true,
+          body: async (r) => {
+            await r.ifElse(0, [
+              {
+                condition: async () => true,
+                body: async (r2) => {
+                  r2.exitMatch(5, 1);
+                },
+              },
+            ]); // plain if, no matchId
+            await r.step(1, async () => {
+              ran.push("skipped");
+            });
+          },
+        },
+      ],
+      undefined,
+      { matchId: 5 },
+    );
+    await runner.step(2, async () => {
+      ran.push("after");
+    });
+    expect(ran).toEqual(["after"]);
+  });
+
+  it("stops loop AND whileLoop iterations when a match exit is pending", async () => {
+    // loop(): exitMatch inside iteration 0 → iteration 1 must never run, and
+    // the loop must NOT clear the flag (a following step stays skipped).
+    {
+      const f = makeFrame();
+      const r = new Runner(makeMockCtx(), f);
+      const seen: number[] = [];
+      await r.loop(0, [0, 1, 2], async (item, _i, rr) => {
+        seen.push(item);
+        if (item === 0) rr.exitMatch(20, "x");
+      });
+      expect(seen).toEqual([0]); // iteration 1 never ran
+      const ran: string[] = [];
+      await r.step(1, async () => {
+        ran.push("after");
+      });
+      expect(ran).toEqual([]); // loop did not clear the flag
+    }
+    // whileLoop(): same contract.
+    {
+      const f = makeFrame();
+      const r = new Runner(makeMockCtx(), f);
+      const seen: number[] = [];
+      let n = 0;
+      await r.whileLoop(
+        0,
+        () => n < 3,
+        async (rr) => {
+          seen.push(n);
+          n++;
+          if (n === 1) rr.exitMatch(21, "y");
+        },
+      );
+      expect(seen).toEqual([0]); // iteration 1 never ran
+      const ran: string[] = [];
+      await r.step(1, async () => {
+        ran.push("after");
+      });
+      expect(ran).toEqual([]); // whileLoop did not clear the flag
+    }
+  });
+
+  it("clears the flag even when the branch body throws", async () => {
+    await expect(
+      runner.ifElse(
+        0,
+        [
+          {
+            condition: async () => true,
+            body: async (r) => {
+              r.exitMatch(9, "x");
+              throw new Error("boom");
+            },
+          },
+        ],
+        undefined,
+        { matchId: 9 },
+      ),
+    ).rejects.toThrow("boom");
+    const ran: string[] = [];
+    await runner.step(1, async () => {
+      ran.push("after");
+    });
+    expect(ran).toEqual(["after"]); // try/finally cleared the flag
+  });
+
+  it("_matchExit is not part of serialized checkpoint state", () => {
+    runner.exitMatch(3, "v");
+    const snapshot = JSON.stringify(frame.toJSON());
+    expect(snapshot).not.toContain("_matchExit");
+    expect(snapshot).toContain("__matchval_3"); // the VALUE does serialize (it is a frame local)
+  });
+});
+
 describe("stripSlug", () => {
   it("strips the leading t from canonical slugs", () => {
     expect(stripSlug("t1")).toBe("1");

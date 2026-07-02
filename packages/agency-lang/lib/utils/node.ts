@@ -54,6 +54,7 @@ export function expressionChildren(node: AgencyNode): AgencyNode[] {
     case "assignment":
       return [node.value, ...accessChainExpressions(node.accessChain)];
     case "returnStatement":
+    case "matchYield":
       return node.value ? [node.value] : [];
     case "ifElse":
       return [node.condition];
@@ -341,7 +342,7 @@ export function* getAllVariablesInBody(
           yield* getAllVariablesInBody([seg.expression as AgencyNode]);
         }
       }
-    } else if (node.type === "returnStatement") {
+    } else if (node.type === "returnStatement" || node.type === "matchYield") {
       if (node.value) yield* getAllVariablesInBody([node.value]);
     } else if (node.type === "gotoStatement") {
       yield* getAllVariablesInBody([node.nodeCall]);
@@ -445,7 +446,7 @@ export function* walkNodes(
       }
     } else if (node.type === "withModifier") {
       yield* walkNodes([node.statement], [...ancestors, node], scopes);
-    } else if (node.type === "returnStatement") {
+    } else if (node.type === "returnStatement" || node.type === "matchYield") {
       if (node.value) yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "gotoStatement") {
       yield* walkNodes([node.nodeCall], [...ancestors, node], scopes);

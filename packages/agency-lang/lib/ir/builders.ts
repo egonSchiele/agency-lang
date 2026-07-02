@@ -43,6 +43,7 @@ import type {
   TsRunnerHandle,
   TsRunnerHookStep,
   TsRunnerIfElse,
+  TsRunnerExitMatch,
   TsRunnerLoop,
   TsRunnerWhileLoop,
   TsRunnerBranchStep,
@@ -471,8 +472,12 @@ export const ts = {
     return { kind: "withHandler", handler, body };
   },
 
-  runnerIfElse(opts: { id: number; branches: { condition: TsNode; body: TsNode[] }[]; elseBranch?: TsNode[] }): TsRunnerIfElse {
+  runnerIfElse(opts: { id: number; branches: { condition: TsNode; body: TsNode[] }[]; elseBranch?: TsNode[]; matchId?: number }): TsRunnerIfElse {
     return { kind: "runnerIfElse", ...opts };
+  },
+
+  runnerExitMatch(opts: { matchId: number; value: TsNode }): TsRunnerExitMatch {
+    return { kind: "runnerExitMatch", ...opts };
   },
 
   runnerLoop(opts: { id: number; items: TsNode; itemVar: string; body: TsNode[]; indexVar?: string }): TsRunnerLoop {

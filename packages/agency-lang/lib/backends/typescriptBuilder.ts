@@ -73,6 +73,7 @@ import {
   ImportStatement,
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
+import { MatchYield } from "../types/matchYield.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
@@ -537,6 +538,8 @@ export class TypeScriptBuilder {
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
+      case "matchYield":
+        return this.processMatchYield(node);
       case "gotoStatement":
         return this.processGotoStatement(node);
       case "agencyArray":
@@ -1211,7 +1214,7 @@ export class TypeScriptBuilder {
       elseBranch = this.processBodyAsParts(remainingElse, nextStartId);
     }
 
-    return ts.runnerIfElse({ id, branches, elseBranch });
+    return ts.runnerIfElse({ id, branches, elseBranch, matchId: node.matchExprId });
   }
 
   private processForLoopWithSteps(node: ForLoop): TsNode {
@@ -1312,7 +1315,17 @@ export class TypeScriptBuilder {
       }
     }
 
-    return ts.runnerIfElse({ id, branches, elseBranch });
+    return ts.runnerIfElse({ id, branches, elseBranch, matchId: node.matchExprId });
+  }
+
+  /** Lowered `return` inside a match arm used as an expression. Same
+   *  halt+return shape as `processReturnStatement`, but the value is stored as
+   *  the match result via `runner.exitMatch` and control unwinds to the owning
+   *  ifElse rather than the enclosing function. Never produced by the parser —
+   *  only by pattern lowering (Task 6). */
+  private processMatchYield(node: MatchYield): TsNode {
+    const value = node.value ? this.processNode(node.value) : ts.id("undefined");
+    return ts.runnerExitMatch({ matchId: node.matchId, value });
   }
 
   private processImportStatement(node: ImportStatement): TsNode {

@@ -18,6 +18,7 @@ import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
 import { Literal, RawCode, RegexLiteral } from "./types/literals.js";
 import { MatchArmMeta, MatchBlock } from "./types/matchBlock.js";
+import { MatchYield } from "./types/matchYield.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { GotoStatement } from "./types/gotoStatement.js";
@@ -57,6 +58,7 @@ export * from "./types/importStatement.js";
 export * from "./types/exportFromStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
+export * from "./types/matchYield.js";
 export * from "./types/returnStatement.js";
 export * from "./types/gotoStatement.js";
 export * from "./types/typeHints.js";
@@ -239,6 +241,7 @@ export type AgencyNode =
   | Literal
   | FunctionCall
   | MatchBlock
+  | MatchYield
   | ReturnStatement
   | GotoStatement
   | ValueAccess

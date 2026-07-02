@@ -861,17 +861,6 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
-        // Synthetic match-expression result temps (`__matchval_<id>`) are
-        // written by `runner.exitMatch(id, value)` into
-        // `runner.frame.locals.__matchval_<id>` (i.e. `__stack.locals`), but
-        // pattern lowering emits the *read* as a plain `variableName` with no
-        // declaration, so scope resolution leaves it `imported` and it would
-        // otherwise compile to a bare, undeclared JS identifier. Resolve it to
-        // the same frame-local accessor `exitMatch` writes to so the consumer
-        // (`const x = match(...)` / `return match(...)`) sees the value.
-        if (/^__matchval_\d+$/.test(literal.value)) {
-          return ts.scopedVar(literal.value, "local", this.moduleId);
-        }
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
@@ -910,6 +899,26 @@ export class TypeScriptBuilder {
               ts.str(literal.value),
               ts.str(sourceModuleId),
             ]);
+          }
+          // Synthetic match-expression result temps (`__matchval_<id>`) are
+          // written by `runner.exitMatch(id, value)` into
+          // `runner.frame.locals.__matchval_<id>` (i.e. `__stack.locals`), but
+          // pattern lowering emits the *read* as a plain `variableName` with
+          // no declaration, so scope resolution leaves it unresolved and it
+          // would otherwise compile to a bare, undeclared JS identifier.
+          // Resolve it to the same frame-local accessor `exitMatch` writes to
+          // so the consumer (`const x = match(...)` / `return match(...)`)
+          // sees the value. Applies ONLY here, in the unresolved-scope branch:
+          // a USER variable that happens to be named `__matchval_<n>` arrives
+          // with a resolved scope (local/block/blockArgs/...) or as a loop
+          // var / builtin / agency import, and must resolve through the
+          // normal paths untouched.
+          if (
+            !isBuiltinVar &&
+            !isLoopVar &&
+            /^__matchval_\d+$/.test(literal.value)
+          ) {
+            return ts.scopedVar(literal.value, "local", this.moduleId);
           }
           return ts.id(literal.value);
         }

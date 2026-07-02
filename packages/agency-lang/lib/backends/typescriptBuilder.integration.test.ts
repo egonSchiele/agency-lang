@@ -102,6 +102,44 @@ describe("match-expression result temp resolution", () => {
     const withoutAccessor = out.replaceAll("__stack.locals.__matchval_1", "");
     expect(withoutAccessor).not.toMatch(/__matchval_\d+/);
   });
+
+  // The special case must fire ONLY for the synthetic temp (which always
+  // arrives with unresolved scope). A USER variable that happens to be named
+  // `__matchval_<n>` must resolve through the normal scope machinery.
+  it("leaves a user loop variable named __matchval_<n> as a bare loop identifier", () => {
+    const source = `node main() {
+  let total = 0
+  for (__matchval_7 in [1, 2, 3]) {
+    total = total + __matchval_7
+  }
+  return total
+}
+`;
+    const out = generateWithBuilder(source, "matchvalLoopVar.agency");
+    // Loop vars are bound as bare closure params of `runner.loop(...)` and
+    // read back as bare JS identifiers; forcing the frame-local accessor
+    // would read undefined every iteration. (Before this fix was scoped to
+    // the unresolved branch, the read compiled to
+    // `__stack.locals.__matchval_7`.)
+    expect(out).not.toContain("__stack.locals.__matchval_7");
+    expect(out).toMatch(/async \(__matchval_7, /);
+    expect(out).toContain("+ __matchval_7");
+  });
+
+  it("resolves a user-declared local named __matchval_<n> through normal declaration machinery", () => {
+    const source = `node main() {
+  let __matchval_9 = 5
+  return __matchval_9
+}
+`;
+    const out = generateWithBuilder(source, "matchvalUserLocal.agency");
+    // Declared via `let`, so scope resolution marks it local: it must be
+    // WRITTEN to the accessor (declaration machinery ran) and read back
+    // from the same place — never emitted as a bare undeclared identifier.
+    expect(out).toContain("__stack.locals.__matchval_9 = 5");
+    const withoutAccessor = out.replaceAll("__stack.locals.__matchval_9", "");
+    expect(withoutAccessor).not.toMatch(/__matchval_\d+/);
+  });
 });
 
 describe("Named argument validation", () => {

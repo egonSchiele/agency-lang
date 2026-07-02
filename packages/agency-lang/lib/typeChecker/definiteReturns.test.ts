@@ -195,9 +195,35 @@ def g(x: number): number { if (x > 0) { return 2 } }`;
     expect(drDiags(src).length).toBe(2);
   });
 
-  // --- documented limitations, pinned ---
-  it("LIMITATION: an infinite loop is flagged (flow model has no exit for while(true))", () => {
-    expect(misses(`def f(): number { while (true) { let x = 1 } }`)).toBe(true);
+  // --- while(true) divergence (§5b) ---
+  it("accepts an infinite loop — while(true) with no break never falls through", () => {
+    expect(misses(`def f(): number { while (true) { let x = 1 } }`)).toBe(false);
+  });
+
+  it("flags while(true) containing a reachable break", () => {
+    expect(misses(`def f(x: bool): number { while (true) { if (x) { break } } }`)).toBe(true);
+  });
+
+  it("a break bound to a nested loop does not escape while(true)", () => {
+    expect(misses(`def f(x: bool): number { while (true) { while (x) { break } } }`)).toBe(false);
+  });
+
+  it("flags a non-literal-true loop even if its body returns", () => {
+    expect(misses(`def f(x: bool): number { while (x) { return 1 } }`)).toBe(true);
+  });
+
+  it("counts a break inside a handle body as reachable", () => {
+    // Pins hasReachableBreak's traversal: walkNodes descends into
+    // handleBlock.body (node.ts walkNodes handleBlock case), so this break is
+    // seen and the loop is escapable → the function can fall through.
+    expect(
+      misses(`effect e::x { }
+def f(x: bool): number {
+  while (true) {
+    handle { if (x) { break } } with (e) { let z = 1 }
+  }
+}`),
+    ).toBe(true);
   });
 
   // --- config knob ---

@@ -114,6 +114,36 @@ export function assignedNames(body: AgencyNode[]): string[] {
   return names;
 }
 
+/** The literal condition `true` — no constant folding (`1 == 1` doesn't count). */
+function isLiteralTrue(cond: AgencyNode): boolean {
+  return cond.type === "boolean" && cond.value === true;
+}
+
+/** A `break` that can exit the loop whose body this is: found anywhere in the
+ *  body except inside a nested loop (break binds to the nearest loop) or a
+ *  nested function/node definition (same ancestor filter as assignedNames).
+ *  Conservative toward the loop being escapable: a break inside e.g. a handle
+ *  block still counts as reachable. Traversal note (verified): walkNodes
+ *  descends into every statement-bearing construct that could carry a
+ *  loop-bound break — ifElse, loops, handleBlock body + inline handler body,
+ *  thread/parallel/seq blocks, match arm bodies, withModifier — the only
+ *  non-descended wrapper is staticStatement, which cannot meaningfully
+ *  contain a break. */
+function hasReachableBreak(body: AgencyNode[]): boolean {
+  for (const { node, ancestors } of walkNodes(body)) {
+    if (node.type !== "keyword" || node.value !== "break") continue;
+    const bindsElsewhere = ancestors.some(
+      (a) =>
+        a.type === "whileLoop" ||
+        a.type === "forLoop" ||
+        a.type === "function" ||
+        a.type === "graphNode",
+    );
+    if (!bindsElsewhere) return true;
+  }
+  return false;
+}
+
 /** statement kind → its flow transformation. The "what". */
 type StatementRuleTable = {
   [K in AgencyNode["type"]]?: (
@@ -185,6 +215,19 @@ const statementRules: StatementRuleTable = {
     attachExpressionsToFlow(node.condition as AgencyNode, flow, env);
     const facts = analyzeCondition(node.condition);
     const bodyEnd = buildFlowGraph(node.body, wrapFacts(flow, facts.then), env);
+    // `while (true)` with no break that can exit THIS loop never falls
+    // through: the post-loop flow is unreachable, so the loop diverges like a
+    // `return` (definite-return §5b; also makes trailing statements dead code
+    // to downstream consumers). The body was still built above so its refs
+    // keep their flowOf entries; skipping widenAtLoopBackEdge here is
+    // deliberate — widening only shapes the POST-loop flow, which does not
+    // exist for a diverging loop (do not "restore" it). Scope note: only the
+    // literal-true condition counts; `while (cond) { raise ... }` is out of
+    // scope (raise is passThrough / may resume — same convention as
+    // alwaysExits).
+    if (isLiteralTrue(node.condition as AgencyNode) && !hasReachableBreak(node.body)) {
+      return { kind: "exit" };
+    }
     return wrapFacts(
       widenAtLoopBackEdge(flow, bodyEnd, assignedNames(node.body), env),
       facts.else,

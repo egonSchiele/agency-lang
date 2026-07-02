@@ -6,18 +6,9 @@ name: "skills"
 
 ## Types
 
-## Functions
+## Effects
 
-### skillsDir
-
-```ts
-skillsDir(dir: string, layout: "flat" | "standard")
-```
-
-Build a skills tool for an LLM over a directory of skills.
-
-  @param dir - Directory containing the skills.
-  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
+### std::skills::skillsDir
 
 * Build a tool that lets an LLM read skill files in `dir`. Supports two
  * layouts:
@@ -31,6 +22,51 @@ Build a skills tool for an LLM over a directory of skills.
  * description lists every available skill so the LLM knows which
  * `location` to pass back as `filename`.
 
+```ts
+/**
+ * Build a tool that lets an LLM read skill files in `dir`. Supports two
+ * layouts:
+ *   - "standard" (default): each subdirectory of `dir` is one skill
+ *     with a `SKILL.md` entrypoint. Frontmatter `name` / `description`
+ *     are read; `name` defaults to the subdirectory name.
+ *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
+ *     skill. Frontmatter `name` (or `title`) and `description` are read.
+ *
+ * The returned tool is `read` partially applied with `dir: dir`. Its
+ * description lists every available skill so the LLM knows which
+ * `location` to pass back as `filename`.
+ */
+effect std::skills::skillsDir {
+  dir: string;
+  layout: "flat" | "standard"
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L136))
+
+### std::skills::commandsDir
+
+```ts
+effect std::skills::commandsDir {
+  dir: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L137))
+
+## Functions
+
+### skillsDir
+
+```ts
+skillsDir(dir: string, layout: "flat" | "standard")
+```
+
+Build a skills tool for an LLM over a directory of skills.
+
+  @param dir - Directory containing the skills.
+  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -40,7 +76,7 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L139))
 
 ### commandsDir
 
@@ -93,7 +129,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L240))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L243))
 
 ### expandSlash
 
@@ -133,4 +169,4 @@ Expand a /command in `msg` using a `commandsDir(...)` result.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L300))

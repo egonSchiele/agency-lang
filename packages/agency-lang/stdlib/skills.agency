@@ -133,6 +133,9 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
  * description lists every available skill so the LLM knows which
  * `location` to pass back as `filename`.
  */
+effect std::skills::skillsDir { dir: string, layout: "flat" | "standard" }
+effect std::skills::commandsDir { dir: string }
+
 export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   """
   Build a skills tool for an LLM over a directory of skills.

@@ -4,6 +4,36 @@ name: "speech"
 
 # speech
 
+## Effects
+
+### std::speak
+
+```ts
+effect std::speak {
+  textLength: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L14))
+
+### std::record
+
+```ts
+effect std::record {}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L15))
+
+### std::transcribe
+
+```ts
+effect std::transcribe {
+  filepath: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L16))
+
 ## Functions
 
 ### speak
@@ -34,7 +64,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 
 **Throws:** `std::speak`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L18))
 
 ### record
 
@@ -70,7 +100,7 @@ Record audio from the microphone. Stops when the user presses Enter,
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L37))
 
 ### transcribe
 
@@ -98,4 +128,4 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L60))

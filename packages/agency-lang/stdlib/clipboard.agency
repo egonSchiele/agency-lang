@@ -1,5 +1,8 @@
 import { _copy, _paste } from "agency-lang/stdlib-lib/clipboard.js"
 
+effect std::clipboardCopy {}
+effect std::clipboardPaste {}
+
 export def copy(text: string) {
   """
   A tool for copying text to the system clipboard.

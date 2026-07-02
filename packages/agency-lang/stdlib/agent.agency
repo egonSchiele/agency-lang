@@ -86,6 +86,8 @@ type Todo = {
 
 let _todos: Todo[] = []
 
+effect std::question { prompt: string }
+
 export safe def todoWrite(todos: Todo[]): Todo[] {
   """
   Replace the current todo list. Each todo has an id, text, and status (one of 'pending', 'in_progress', 'completed'). Use this to track multi-step work as you go: mark a todo 'in_progress' before starting it and 'completed' when done. Returns the new list.

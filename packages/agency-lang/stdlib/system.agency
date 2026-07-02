@@ -12,6 +12,11 @@ import {
   _setTitle,
  } from "agency-lang/stdlib-lib/system.js"
 
+effect std::screenshot { filepath: string }
+effect std::exit { code: number }
+effect std::setEnv { name: string, value: string }
+effect std::openUrl { url: string }
+
 export def screenshot(
   filepath: string,
   x: number = -1,

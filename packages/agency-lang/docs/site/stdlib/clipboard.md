@@ -4,6 +4,24 @@ name: "clipboard"
 
 # clipboard
 
+## Effects
+
+### std::clipboardCopy
+
+```ts
+effect std::clipboardCopy {}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L3))
+
+### std::clipboardPaste
+
+```ts
+effect std::clipboardPaste {}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L4))
+
 ## Functions
 
 ### copy
@@ -22,7 +40,7 @@ A tool for copying text to the system clipboard.
 
 **Throws:** `std::clipboardCopy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L6))
 
 ### paste
 
@@ -36,4 +54,4 @@ A tool for reading text from the system clipboard.
 
 **Throws:** `std::clipboardPaste`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L15))

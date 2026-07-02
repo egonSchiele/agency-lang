@@ -6,6 +6,9 @@ type SearchResult = {
   description: string
 }
 
+effect std::search { query: string, count: number, country: string, searchLang: string, safesearch: string, freshness: string }
+effect std::tavilySearch { query: string, count: number, searchDepth: string, topic: string }
+
 /*
   Usage from Agency code:
   import { search } from "std::web/search"
@@ -72,7 +75,7 @@ export safe def tavilySearch(
   @param searchDepth - Depth of the search ("basic" for fast results, "advanced" for deeper retrieval)
   @param topic - Category of the search ("general" or "news")
   """
-  return interrupt std::search("Are you sure you want to perform this web search?", {
+  return interrupt std::tavilySearch("Are you sure you want to perform this web search?", {
     query: query,
     count: count,
     searchDepth: searchDepth,

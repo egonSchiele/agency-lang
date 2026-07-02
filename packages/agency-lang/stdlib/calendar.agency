@@ -114,6 +114,12 @@ type CalendarEvent = {
   htmlLink: string
 }
 
+effect std::authorizeCalendar { clientId: string }
+effect std::listEvents { maxResults: number, calendarId: string, query: string }
+effect std::createEvent { summary: string, start: string, end: string, description: string, location: string }
+effect std::updateEvent { eventId: string, summary: string, start: string, end: string }
+effect std::deleteEvent { eventId: string, calendarId: string }
+
 export def authorizeCalendar(clientId: string, clientSecret: string): Result {
   """
   Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once — tokens are stored locally and refreshed automatically.

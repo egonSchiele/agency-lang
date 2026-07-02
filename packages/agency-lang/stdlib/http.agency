@@ -9,6 +9,10 @@ import {
   _fetchMarkdown,
 } from "agency-lang/stdlib-lib/http.js"
 
+effect std::http::fetch { baseUrl: string, path: string }
+effect std::http::fetchJSON { baseUrl: string, path: string }
+effect std::http::fetchMarkdown { baseUrl: string, path: string }
+
 export safe def fetch(
   baseUrl: string,
   path: string = "",

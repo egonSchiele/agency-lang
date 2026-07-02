@@ -80,6 +80,9 @@ export static const recommendedAutoApprovePolicy = {
   "std::search": [{
     action: "approve"
   }],
+  "std::tavilySearch": [{
+    action: "approve"
+  }],
   "std::skills::skillsDir": [{
     action: "approve"
   }],

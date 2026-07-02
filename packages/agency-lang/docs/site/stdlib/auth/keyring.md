@@ -28,6 +28,41 @@ name: "keyring"
   Pass a custom `service` parameter to use a different namespace.
   No external dependencies required.
 
+## Effects
+
+### std::setSecret
+
+```ts
+effect std::setSecret {
+  key: string;
+  service: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L29))
+
+### std::getSecret
+
+```ts
+effect std::getSecret {
+  key: string;
+  service: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L30))
+
+### std::deleteSecret
+
+```ts
+effect std::deleteSecret {
+  key: string;
+  service: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L31))
+
 ## Functions
 
 ### setSecret
@@ -54,7 +89,7 @@ Store a secret in the system keyring (macOS Keychain or Linux Secret Service). T
 
 **Throws:** `std::setSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L33))
 
 ### getSecret
 
@@ -78,7 +113,7 @@ Retrieve a secret from the system keyring by key. Returns the secret value as a 
 
 **Throws:** `std::getSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L49))
 
 ### deleteSecret
 
@@ -102,7 +137,7 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 
 **Throws:** `std::deleteSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L64))
 
 ### isKeyringAvailable
 
@@ -114,4 +149,4 @@ Check if the system keyring is available on this platform. Returns true on macOS
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L79))

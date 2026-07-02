@@ -6,6 +6,39 @@ name: "wikipedia"
 
 ## Types
 
+## Effects
+
+### std::wikipedia::search
+
+```ts
+effect std::wikipedia::search {
+  query: string;
+  limit: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L22))
+
+### std::wikipedia::summary
+
+```ts
+effect std::wikipedia::summary {
+  title: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L23))
+
+### std::wikipedia::article
+
+```ts
+effect std::wikipedia::article {
+  title: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L24))
+
 ## Functions
 
 ### search
@@ -27,7 +60,7 @@ Search Wikipedia for articles matching the given query. Returns up to limit resu
 
 **Throws:** `std::wikipedia::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L26))
 
 ### summary
 
@@ -47,7 +80,7 @@ Get a summary of a Wikipedia article by its title. Returns the title, descriptio
 
 **Throws:** `std::wikipedia::summary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L38))
 
 ### article
 
@@ -67,4 +100,4 @@ Get the full text of a Wikipedia article by its title. Returns the title, full p
 
 **Throws:** `std::wikipedia::article`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L49))

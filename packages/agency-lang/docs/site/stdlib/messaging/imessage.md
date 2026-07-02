@@ -22,6 +22,18 @@ name: "imessage"
 
 ## Types
 
+## Effects
+
+### std::sendIMessage
+
+```ts
+effect std::sendIMessage {
+  to: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L25))
+
 ## Functions
 
 ### sendIMessage
@@ -50,4 +62,4 @@ Send an iMessage via the macOS Messages app. Only works on macOS with Messages.a
 
 **Throws:** `std::sendIMessage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L27))

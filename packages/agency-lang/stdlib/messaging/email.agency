@@ -41,6 +41,8 @@ type EmailResult = {
   provider: string
 }
 
+effect std::sendEmail { from: string, to: string, subject: string }
+
 /** Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly. */
 export def sendWithResend(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """

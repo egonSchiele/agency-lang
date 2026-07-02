@@ -14,6 +14,13 @@ type EditResult = {
   edits: number
 }
 
+effect std::edit { dir: string, filename: string, edits: Edit[], before: string, after: string }
+effect std::applyPatch { patch: string }
+effect std::mkdir { dir: string }
+effect std::copy { src: string, dest: string }
+effect std::move { src: string, dest: string }
+effect std::remove { target: string }
+
 export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd: boolean = false): Result {
   """
   Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.

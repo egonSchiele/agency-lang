@@ -42,7 +42,7 @@ export effectSet FileSystem = <FileRead, FileWrite>
 export effectSet Shell = <std::bash, std::exec, std::run>
 
 /** Anything that talks to the outside world over the network. */
-export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary>
+export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary>
 
 /** Sending messages to people: email, SMS, and iMessage. */
 export effectSet Messaging = <std::sendEmail, std::sendSms, std::sendIMessage>

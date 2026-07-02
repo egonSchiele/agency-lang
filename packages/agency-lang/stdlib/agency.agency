@@ -13,6 +13,20 @@ import {
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
+// `std::read`/`std::write` are the shared file-access effects (also raised by
+// `std::read`/`std::write` in `std::index`), so their reads/writes here stay
+// governed by the same file policy; the canonical payload is `{ dir, filename }`.
+effect std::read { dir: string, filename: string }
+effect std::write { dir: string, filename: string }
+effect std::run {
+  moduleId: string,
+  node: string,
+  args: Record<string, any>,
+  limits: { wallClock: number, memory: number, ipcPayload: number, stdout: number },
+  cwd: string,
+  logFile: string,
+}
+
 export type CompiledProgram = {
   moduleId: string
 }

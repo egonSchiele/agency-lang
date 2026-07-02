@@ -136,7 +136,7 @@ import {
   NamespaceImport,
 } from "../types/importStatement.js";
 import { ExportFromStatement } from "../types/exportFromStatement.js";
-import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
+import { DefaultCase, MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
@@ -2674,7 +2674,7 @@ export const returnStatementParser: Parser<ReturnStatement> = label("a return st
     captureCaptures(
       seqC(
         optionalSpaces,
-        capture(exprParser, "value"),
+        capture(or(lazy(() => matchBlockExprParser), exprParser), "value"),
       ),
     ),
   ),
@@ -3070,7 +3070,8 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
-export const matchBlockParser = label("a match block", withLoc(seqC(
+// Core form, no trailing statement whitespace — used at expression sites.
+export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   set("type", "matchBlock"),
   str("match"),
   optionalSpaces,
@@ -3088,9 +3089,16 @@ export const matchBlockParser = label("a match block", withLoc(seqC(
       char("}"),
     ),
   ),
-  optionalSemicolon,
-  optionalSpacesOrNewline,
 )));
+
+export const matchBlockParser: Parser<MatchBlock> = label("a match block", map(
+  seqC(
+    capture(matchBlockExprParser, "block"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
+  ),
+  (r: { block: MatchBlock }) => r.block,
+));
 
 // =============================================================================
 // importStatement.ts
@@ -3385,7 +3393,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(or(lazy(() => messageThreadParser), exprParser), "value"),
+      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), exprParser), "value"),
       optionalSemicolon,
       optionalSpacesOrNewline,
     ),

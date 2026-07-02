@@ -3,6 +3,9 @@ import {
   matchBlockParser,
   matchBlockParserCase,
   defaultCaseParser,
+  assignmentParser,
+  returnStatementParser,
+  bodyParser,
 } from "./parsers.js";
 
 describe("defaultCaseParser", () => {
@@ -753,6 +756,82 @@ describe("block arm bodies", () => {
     if (result.success) {
       const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
       expect(JSON.stringify(cases[0].body[0])).toContain("label");
+    }
+  });
+});
+
+describe("match as expression (assignment RHS and return only)", () => {
+  it("parses match as assignment RHS", () => {
+    const result = assignmentParser(`const val = match(r) {
+  "a" => 1
+  _ => 2
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.declKind).toBe("const");
+      expect((result.result.value as any).type).toBe("matchBlock");
+    }
+  });
+
+  it("parses return match(...)", () => {
+    const result = returnStatementParser(`return match(r) {
+  "a" => 1
+  _ => 2
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.result.value as any).type).toBe("matchBlock");
+    }
+  });
+
+  it("still parses a call to a function named match", () => {
+    const result = assignmentParser(`const y = match(r)`);
+    expect(result.success).toBe(true);
+    if (result.success) expect((result.result.value as any).type).not.toBe("matchBlock");
+  });
+
+  it("backtracks past the closing paren: match(r) + 1 is a binop over a call", () => {
+    const result = assignmentParser(`const y = match(r) + 1`);
+    expect(result.success).toBe(true);
+    if (result.success) expect((result.result.value as any).type).toBe("binOpExpression");
+  });
+
+  // These combinator parsers match a prefix of the input and never require
+  // full consumption (see e.g. access.test.ts:170, blockArgument.test.ts:135),
+  // so `assignmentParser` on a string with a disallowed match position still
+  // reports `success: true` — it just stops short of consuming the match
+  // block, since `matchBlockExprParser` isn't wired into call arguments or
+  // binop operands. The v1 restriction shows up as leftover, unconsumed
+  // input (the `{ ... }` case body) rather than an outright parse failure.
+  it("match block as a function argument does not parse (v1 restriction)", () => {
+    const result = assignmentParser(`const y = f(match(r) { "a" => 1; _ => 2 })`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.result.value as any).type).not.toBe("matchBlock");
+      expect(result.rest).toContain('{ "a" => 1; _ => 2 }');
+    }
+  });
+
+  it("match block as a binop operand does not parse (v1 restriction)", () => {
+    const result = assignmentParser(`const y = 1 + match(r) { "a" => 1; _ => 2 }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.result.value as any).type).not.toBe("matchBlock");
+      expect(result.rest).toContain('{ "a" => 1; _ => 2 }');
+    }
+  });
+
+  it("no trailing over-consumption: next statement still parses", () => {
+    const result = bodyParser(`const a = match(x) {
+  "a" => 1
+  _ => 2
+}
+const b = 2
+`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const assigns = result.result.filter((n: any) => n.type === "assignment");
+      expect(assigns.length).toBe(2);
     }
   });
 });

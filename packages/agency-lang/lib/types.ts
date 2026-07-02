@@ -91,7 +91,8 @@ export type Expression =
   | SchemaExpression
   | InterruptStatement
   | BlockArgument
-  | IsExpression;
+  | IsExpression
+  | MatchBlock;
 
 /**
  * Scope types for variable resolution.

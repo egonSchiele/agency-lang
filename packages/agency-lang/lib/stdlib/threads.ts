@@ -61,6 +61,13 @@ export function _contentToString(content: smoltalk.MessageJSON["content"]): stri
         if (typedPart.type === "file") {
           return typedPart.filename ? `[file attachment: ${typedPart.filename}]` : "[file attachment]";
         }
+        // Defense in depth: a part kind this function doesn't know yet
+        // (a future smoltalk modality) but that carries a `source` field
+        // is payload-bearing — JSON.stringify would dump its base64 into
+        // the summarizer prompt, the exact leak this function prevents.
+        if ("source" in part) {
+          return `[${typedPart.type} attachment]`;
+        }
       }
       return JSON.stringify(part);
     });

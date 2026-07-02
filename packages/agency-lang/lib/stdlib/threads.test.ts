@@ -276,8 +276,18 @@ describe("_contentToString", () => {
     expect(_contentToString([{ type: "text" }] as any)).toBe("");
   });
 
-  it("falls back to JSON for unknown part types", () => {
+  it("falls back to JSON for unknown payload-free part types", () => {
     expect(_contentToString([{ type: "mystery", x: 1 }] as any)).toBe('{"type":"mystery","x":1}');
+  });
+
+  it("renders unknown source-carrying parts as placeholders (never dumps payloads)", () => {
+    // A future smoltalk part kind (e.g. audio/video) must not regress
+    // into base64-in-the-summarizer via the JSON fallback.
+    const content = [
+      { type: "video", source: { kind: "base64", base64: "FUTUREPAYLOAD", mimeType: "video/mp4" } },
+    ];
+    expect(_contentToString(content as any)).toBe("[video attachment]");
+    expect(_contentToString(content as any)).not.toContain("FUTUREPAYLOAD");
   });
 
   it("keeps JSON fallback for unknown non-string content", () => {

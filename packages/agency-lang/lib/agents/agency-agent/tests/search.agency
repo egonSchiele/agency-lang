@@ -8,6 +8,16 @@
  */
 import { planSearchSetup, withWebSearch, setActiveBackend } from "../lib/search.agency"
 
+// `tools` is optional on the opts returned by withWebSearch, so reading
+// `.length` directly trips the checker (`any[] | null`). Narrow it here;
+// withWebSearch always sets tools in these tests, so the null branch is
+// defensive and never taken.
+def toolCount(opts: { tools?: any[] }): number {
+  const t = opts.tools
+  if (t == null) { return 0 }
+  return t.length
+}
+
 def ctx(isLocal: boolean, isTty: boolean, tav: boolean, brave: boolean, saved: string): any {
   return { isLocal: isLocal, isTty: isTty, hasTavily: tav, hasBrave: brave, savedBackend: saved }
 }
@@ -66,21 +76,21 @@ node hostedBackendSetsHostedToolsAndLeavesTools(): string {
   setActiveBackend("hosted", false)
   const opts = withWebSearch({ memory: true, tools: [] })
   // Pipe-delimited: "<first hostedTool>|<tools length>"
-  return "${opts.hostedTools[0]}|${opts.tools.length}"
+  return "${opts.hostedTools[0]}|${toolCount(opts)}"
 }
 
 node tavilyBackendAppendsOneSearchTool(): string {
   setActiveBackend("tavily", false)
   const opts = withWebSearch({ memory: true, tools: [] })
   const hostedSet = opts.hostedTools != null && opts.hostedTools != undefined
-  return "${opts.tools.length}|${hostedSet}"
+  return "${toolCount(opts)}|${hostedSet}"
 }
 
 node offBackendLeavesOptsUnchanged(): string {
   setActiveBackend("off", false)
   const opts = withWebSearch({ memory: true, tools: [] })
   const hostedSet = opts.hostedTools != null && opts.hostedTools != undefined
-  return "${opts.tools.length}|${hostedSet}"
+  return "${toolCount(opts)}|${hostedSet}"
 }
 
 node tavilyDoesNotMutateTheCallersSharedToolsArray(): string {

@@ -242,7 +242,7 @@ def renderLLMCallResponse(data: LLMResponse): string {
   if (data.output != "" && data.output != null && data.output != undefined) {
     response.push(data.output)
   }
-  if (data.toolCalls && data.toolCalls.length > 0) {
+  if (data.toolCalls.length > 0) {
     for (toolCall in data.toolCalls) {
       response.push(`${toolCall.name}(${formatArgs(toolCall.arguments)})`)
     }
@@ -814,7 +814,7 @@ def mainAgent(prompt: string): string {
       // `_context` carries the per-run grounding (date, cwd, AGENTS.md),
       // set by `setupSession`. Appending it to the system prompt is what
       // actually gets that context to the LLM.
-      systemMessage(mainAgentSystemPrompt + _context)
+      systemMessage("${mainAgentSystemPrompt}${_context}")
       first = false
     }
     const result = llm(prompt, {

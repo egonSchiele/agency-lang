@@ -111,6 +111,145 @@ The scrutinee is evaluated exactly once, the binders (`user`, `role`)
 are extracted exactly once, and each arm's left-hand side is treated as
 a boolean guard expression.
 
+## Match expressions
+
+`match` can be used as a statement (arms run for effect, as in every
+example above) or as an **expression**, in exactly two positions:
+
+- The right-hand side of an assignment: `const x = match(...) { ... }`.
+- The operand of a `return`: `return match(...) { ... }`.
+
+Anywhere else — a function argument, a binop operand, an object literal
+field — is a parse error. Agency has no general subexpression-hoisting
+pass, so these two capture sites are all v1 supports.
+
+### Arm bodies: implicit yield vs. block
+
+A single-expression arm yields its value implicitly:
+
+```agency
+const points = match(grade) {
+    "A" => 100
+    "B" => 80
+    _   => 0
+}
+```
+
+An arm can also be a **block** of statements. Block arms must yield via an
+explicit `return`, on every code path:
+
+```agency
+const val = match(result) {
+    success(v) => {
+        print(v)
+        return v * 2
+    }
+    failure(e) => e.message
+}
+```
+
+A block arm that falls off the end without returning a value, or that
+contains a bare `return` (no value), is a compile error. Loops never count
+as yielding on all paths — a `return` inside a `for`/`while` loop that is
+the arm's *only* return does not satisfy the check, since the loop might
+not execute.
+
+### `return` yields to the match, not the function
+
+Inside a match arm, `return expr` produces the arm's value **for the
+match** — it does not return from the enclosing function. This applies
+even when the `return` is nested inside an `if`/`while`/`for` within the
+arm; the arm is the nearest value scope. A nested match's arms yield to
+that inner match.
+
+To return from the enclosing function based on a match, put the match in
+expression position and return it directly:
+
+```agency
+def classify(r: Result<number>): string {
+    return match(r) {
+        success(v) => "got ${v}"
+        failure(e) => "err: ${e}"
+    }
+}
+```
+
+**This is a breaking change** from match's old statement-only behavior,
+where `return` inside an arm exited the enclosing function. To make the
+change loud instead of silently altering behavior, a `return` anywhere
+inside a **statement-position** match arm is now a compile error:
+
+```
+`return` inside a match arm yields the match's value, but this match's
+value is unused — did you mean `return match(...)`?
+```
+
+Migrate old code — where each arm used to end in a `return` that exited
+the function — by hoisting a single `return` in front of the match
+instead, so it returns the match's value:
+
+```agency
+return match(r) {
+    success(v) => "got ${v}"
+    failure(e) => "err"
+}
+```
+
+Matches that mix function-exit arms with effect-only arms can't be
+mechanically hoisted this way and need to be restructured by hand (e.g.
+assign an optional result and return conditionally after the match).
+
+### Yielding an object literal
+
+`=> {` always begins a block — never an object literal — mirroring the
+JS arrow-function rule. To yield an object literal from a
+single-expression arm, parenthesize it, or use a block with an explicit
+`return`:
+
+```agency
+kind => ({ label: kind })            // parenthesized object literal
+kind => { return { label: kind } }   // block form
+```
+
+### Typing and exhaustiveness
+
+In checked position (e.g. `const val: string = match(...) { ... }`), each
+arm's yielded value is checked against the expected type. In synthesis
+position, the match's type is the union of every arm's yielded type;
+narrowing (Result patterns, object patterns, field-path narrowing) applies
+inside block arms exactly as it does today.
+
+**Exhaustiveness is a hard error in expression position**, regardless of
+`typechecker.matchExhaustiveness` in `agency.json`. A match used as an
+expression must produce a value, so `"silent"`/`"warn"` don't apply — a
+match over a closed scrutinee type (Result, a closed literal/value union,
+a discriminated object union, `boolean`) needs a `_` arm or full coverage.
+
+For an *open* scrutinee type (e.g. a bare `string`), the checker cannot
+enumerate every case, so it can't flag missing arms. If no arm matches at
+runtime, the match expression yields `undefined` — add a `_` arm whenever
+the scrutinee type is open.
+
+### v1 restrictions
+
+- **Expression position is limited to assignment RHS and `return`
+  operands** (see above) — no generic expression-hoisting exists yet.
+- **`match(x is pattern)` stays statement-only.** Its `is`-form lowering
+  synthesizes a function-level `failure(...)` return on head mismatch,
+  which has no coherent meaning as a match-expression value.
+- **A `return` inside an arm cannot cross a concurrency boundary.** A
+  `return` inside a `parallel`/`fork`/`race`/`thread` block nested in an
+  arm is a compile error — those run in separate execution contexts that
+  the match-yield unwind cannot cross.
+- **Module-level `const x = match(...)` initializers are a compile
+  error.** Module-level initializers are planned one expression per
+  variable by the init-topsort machinery; a lowered match region is
+  multiple statements. Use a `def` that returns the match and call it
+  from the initializer instead.
+- **A match-expression arm cannot yield a graph-node call.** A node call
+  compiles to a control-flow transition (goto/halt), not a value; use an
+  `if`/`else` chain for node dispatch instead of a match expression.
+
 ## Result patterns
 
 The `success` and `failure` keywords work as patterns for ergonomic
@@ -198,7 +337,7 @@ no-op — no branch runs.
 
 ## Exhaustiveness checking
 
-The type checker reports (by default, a **warning**) when a `match` over a
+The type checker reports (by default, an **error**) when a `match` over a
 *closed* type doesn't cover every case and has no `_` arm:
 
 - a **Result** (`success` / `failure`),

@@ -3,6 +3,23 @@
 ### Language / Typechecker
 - Discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch; `match` arms narrow bound fields via the lowered scrutinee. Composes with `!`/`&&`/`||`/early-return/`while`.
   - **Migration (typechecker-enabled projects only):** inside such a guard, accessing a property that exists on a *different* member is now an error — previously union property access was lenient. This is the intended behavior; update the access or guard accordingly.
+- `match` is now an expression, usable as an assignment RHS (`const x = match(...) { ... }`) or a `return` operand (`return match(...) { ... }`), and match arms may be a braced block of statements (not just a single statement/expression) that yields via an explicit `return`.
+  - **Breaking:** `return` inside a match arm now yields the arm's value **to the match**, not the enclosing function. A `return` anywhere inside a *statement-position* match arm (where the match's value would otherwise be discarded) is now a compile error, so the break is loud rather than a silent behavior change. Hoist the `return` in front of the match instead:
+    ```agency
+    // before (old behavior: each `return` exited the function)
+    match(r) {
+        success(v) => return "got ${v}"
+        failure(e) => return "err"
+    }
+
+    // after
+    return match(r) {
+        success(v) => "got ${v}"
+        failure(e) => "err"
+    }
+    ```
+    Matches that mix function-exit arms with effect-only arms can't be mechanically hoisted this way and need restructuring by hand. A match-expression arm also can't dispatch to a graph node (a node call is control flow, not a value) — use an `if`/`else` chain for node dispatch instead.
+  - Exhaustiveness is a hard error in expression position regardless of `typechecker.matchExhaustiveness`; statement-position matches still honor that config. See the [pattern matching guide](docs/site/guide/pattern-matching.md#match-expressions) for the full v1 restrictions (expression position is limited to those two capture sites, `match(x is pattern)` stays statement-only, module-level `const x = match(...)` initializers aren't supported, and returns can't cross a concurrency boundary inside an arm).
 
 ### Standard Library
 - Reorganized the standard library into capability-grouped modules. Generic-named modules now live under a domain prefix, and two coupled pairs/trios were merged. Distinctive names (`std::syntax`, `std::markdown`, `std::http`, `std::wikipedia`, `std::weather`, `std::math`, and the agent core) stay flat.

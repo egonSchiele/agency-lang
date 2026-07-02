@@ -19,8 +19,12 @@ import type {
   IfElse,
   MatchBlock,
   MatchBlockCase,
+  ReturnStatement,
   WhileLoop,
 } from "../types.js";
+import { isExpressionNode } from "../types.js";
+import type { MatchYield } from "../types/matchYield.js";
+import { LoweringError } from "./loweringError.js";
 import type { BinOpExpression, Operator } from "../types/binop.js";
 import type { AgencyArray } from "../types/dataStructures.js";
 import type {
@@ -52,12 +56,30 @@ export function lowerPatterns(nodes: AgencyNode[]): AgencyNode[] {
 class PatternLowerer {
   private counter = 0;
 
+  /** True while lowering the top-level (module) node list; flipped to false by
+   *  `lowerBody` when descending into any body-bearing container (function /
+   *  node / if / loop / match arm / block). Used to reject `match` expressions
+   *  in module-level initializers, which have no execution frame to unwind. */
+  private atModuleLevel = true;
+
   private freshName(prefix: string): string {
     return `__${prefix}_${++this.counter}`;
   }
 
   lower(nodes: AgencyNode[]): AgencyNode[] {
     return nodes.flatMap((n) => this.lowerNode(n));
+  }
+
+  /** Lower a nested body (not the module top level): temporarily clears the
+   *  `atModuleLevel` flag for the duration of the recursion. */
+  private lowerBody(nodes: AgencyNode[]): AgencyNode[] {
+    const prev = this.atModuleLevel;
+    this.atModuleLevel = false;
+    try {
+      return this.lower(nodes);
+    } finally {
+      this.atModuleLevel = prev;
+    }
   }
 
   private lowerNode(node: AgencyNode): AgencyNode[] {
@@ -73,7 +95,13 @@ class PatternLowerer {
       case "forLoop":
         return [this.lowerForLoop(node)];
       case "returnStatement": {
-        const ret = node as { type: "returnStatement"; value?: Expression; loc?: SourceLocation };
+        const ret = node as ReturnStatement;
+        // Expression-position match: `return match(E) { ... }`. Hoist the match
+        // region and return the temp it produces.
+        if (ret.value !== undefined && (ret.value as AgencyNode).type === "matchBlock") {
+          const region = this.lowerMatchExpressionCore(ret.value as MatchBlock, ret.loc);
+          return [...region.statements, { ...ret, value: region.valueRef }];
+        }
         return [
           {
             ...(ret as object),
@@ -81,13 +109,24 @@ class PatternLowerer {
           } as AgencyNode,
         ];
       }
+      case "matchYield": {
+        // Produced by our own arm-rewriting; re-lowered when the enclosing match
+        // block's arm bodies are recursively lowered. Lower the yielded value.
+        const my = node as MatchYield;
+        return [
+          {
+            ...my,
+            value: my.value !== undefined ? this.lowerExpression(my.value) : undefined,
+          },
+        ];
+      }
       default: {
         // Recurse into every body field on body-bearing nodes (function /
         // graphNode / handleBlock / parallelBlock / seqBlock / blockArgument /
         // functionCall.block / …). For nodes that are also Expressions,
         // additionally walk the expression tree so nested `isExpression` is
-        // lowered.
-        const withRecursedBodies = mapBodies(node, (b) => this.lower(b));
+        // lowered. Bodies are nested, so clear the module-level flag.
+        const withRecursedBodies = mapBodies(node, (b) => this.lowerBody(b));
         if (isExpr(withRecursedBodies as unknown)) {
           return [this.lowerExpression(withRecursedBodies as unknown as Expression) as unknown as AgencyNode];
         }
@@ -117,7 +156,7 @@ class PatternLowerer {
     }
     if (expr.type === "functionCall") {
       const block = expr.block
-        ? { ...expr.block, body: this.lower(expr.block.body) }
+        ? { ...expr.block, body: this.lowerBody(expr.block.body) }
         : expr.block;
       return {
         ...expr,
@@ -173,6 +212,24 @@ class PatternLowerer {
   // -------------------------------------------------------------------------
 
   private lowerAssignment(node: Assignment): AgencyNode[] {
+    // Expression-position match: `const x = match(E) { ... }`. Hoist the match
+    // region above and rewrite the assignment value to the temp the region
+    // produces. Module-level initializers have no execution frame to unwind, so
+    // they are rejected.
+    if (node.value && (node.value as AgencyNode).type === "matchBlock") {
+      if (this.atModuleLevel) {
+        throw new LoweringError(
+          "match expressions are not supported in module-level initializers",
+          node.loc,
+        );
+      }
+      const region = this.lowerMatchExpressionCore(node.value as MatchBlock, node.loc);
+      return [
+        ...region.statements,
+        { ...node, value: region.valueRef, matchExprSource: { matchId: region.matchId } },
+      ];
+    }
+
     // node.value can be Expression | MessageThread; only walk Expression cases.
     const loweredValue = isExpr(node.value)
       ? this.lowerExpression(node.value as Expression)
@@ -214,15 +271,15 @@ class PatternLowerer {
       return {
         ...node,
         condition,
-        thenBody: [...bindings, ...this.lower(node.thenBody)],
-        elseBody: node.elseBody ? this.lower(node.elseBody) : undefined,
+        thenBody: [...bindings, ...this.lowerBody(node.thenBody)],
+        elseBody: node.elseBody ? this.lowerBody(node.elseBody) : undefined,
       };
     }
     return {
       ...node,
       condition: this.lowerExpression(node.condition),
-      thenBody: this.lower(node.thenBody),
-      elseBody: node.elseBody ? this.lower(node.elseBody) : undefined,
+      thenBody: this.lowerBody(node.thenBody),
+      elseBody: node.elseBody ? this.lowerBody(node.elseBody) : undefined,
     };
   }
 
@@ -234,13 +291,13 @@ class PatternLowerer {
       return {
         ...node,
         condition,
-        body: [...bindings, ...this.lower(node.body)],
+        body: [...bindings, ...this.lowerBody(node.body)],
       };
     }
     return {
       ...node,
       condition: this.lowerExpression(node.condition),
-      body: this.lower(node.body),
+      body: this.lowerBody(node.body),
     };
   }
 
@@ -248,9 +305,9 @@ class PatternLowerer {
   // Match block
   // -------------------------------------------------------------------------
 
-  private lowerMatchBlock(node: MatchBlock): AgencyNode[] {
+  private lowerMatchBlock(node: MatchBlock, matchExprId?: number): AgencyNode[] {
     if (node.expression.type === "isExpression") {
-      return this.lowerMatchIsForm(node);
+      return this.lowerMatchIsForm(node, matchExprId);
     }
 
     // Check if any arm uses patterns or has a guard.
@@ -265,11 +322,13 @@ class PatternLowerer {
     );
 
     if (!hasPatternArms) {
-      // Pure literal/identifier match — pass through, but still recurse into arm bodies.
+      // Pure literal/identifier match — pass through, but still recurse into arm
+      // bodies. Tag with matchExprId (at construction) when used as an expression.
       return [
         {
           ...node,
           cases: node.cases.map((c) => (c.type === "matchBlockCase" ? this.lowerMatchCase(c) : c)),
+          ...(matchExprId !== undefined ? { matchExprId } : {}),
         },
       ];
     }
@@ -295,14 +354,159 @@ class PatternLowerer {
           .filter((c): c is MatchBlockCase => c.type === "matchBlockCase")
           .map((c) => ({ caseValue: c.caseValue, guard: c.guard })),
       ),
+      // When used as an expression, tag the scrutinee binding so the type
+      // checker can find the owning match for exhaustiveness / union typing.
+      ...(matchExprId !== undefined ? { matchExprId } : {}),
     };
     const scrutineeRef = varRef(scrutineeName, node.loc);
 
     const ifChain = this.buildIfChainFromArms(node.cases, scrutineeRef, node.loc);
-    return ifChain ? [scrutineeAssign, ifChain] : [scrutineeAssign];
+    if (!ifChain) return [scrutineeAssign];
+    // Tag the root of the lowered if-chain: it is the node that OWNS the
+    // matchExprId (yields unwind to it). Attached at construction.
+    const taggedChain: IfElse =
+      matchExprId !== undefined ? { ...ifChain, matchExprId } : ifChain;
+    return [scrutineeAssign, taggedChain];
   }
 
-  private lowerMatchIsForm(node: MatchBlock): AgencyNode[] {
+  /**
+   * Lower an expression-position `match`: allocate a match id, rewrite each
+   * arm's returns into `matchYield` nodes (enforcing the all-paths-yield rule),
+   * lower the resulting match block tagged with the id, and hand back the
+   * hoisted statements plus a reference to the `__matchval_<id>` temp the
+   * region unwinds into.
+   */
+  private lowerMatchExpressionCore(
+    match: MatchBlock,
+    loc: SourceLocation | undefined,
+  ): { statements: AgencyNode[]; valueRef: Expression; matchId: number } {
+    if (match.expression.type === "isExpression") {
+      throw new LoweringError(
+        "match(x is pattern) cannot be used as an expression; use it as a statement",
+        match.loc,
+      );
+    }
+    const matchId = ++this.counter;
+    const cases = match.cases.map((c) =>
+      c.type === "matchBlockCase"
+        ? { ...c, body: this.rewriteArmForYield(c.body, matchId, c) }
+        : c,
+    );
+    const statements = this.lowerMatchBlock({ ...match, cases }, matchId);
+    return { statements, valueRef: varRef(`__matchval_${matchId}`, loc), matchId };
+  }
+
+  /**
+   * Rewrite a single match arm's body so every path yields a value into the
+   * owning match (`matchYield`). Throws a `LoweringError` if any path can fall
+   * off the end without yielding.
+   */
+  private rewriteArmForYield(
+    body: AgencyNode[],
+    matchId: number,
+    arm: MatchBlockCase,
+  ): AgencyNode[] {
+    if (body.length === 1 && isExpressionNode(body[0])) {
+      return [{ type: "matchYield", matchId, value: body[0] as Expression, loc: body[0].loc }];
+    }
+    const rewritten = this.rewriteReturnsToYields(body, matchId);
+    if (!this.alwaysYields(rewritten)) {
+      const loc =
+        body[0]?.loc ??
+        (arm.caseValue === "_" ? undefined : (arm.caseValue as AgencyNode).loc);
+      throw new LoweringError(
+        "match arm must return a value on every path when the match is used as an expression",
+        loc,
+      );
+    }
+    return rewritten;
+  }
+
+  /**
+   * Recursively rewrite `return <expr>` into `matchYield { matchId, <expr> }`
+   * within a match arm body. Descends into if/else and loop bodies. Nested
+   * `matchBlock` statements own their own arm returns and are left untouched.
+   * `return match(...)` lowers the inner match first, then yields its temp.
+   */
+  private rewriteReturnsToYields(body: AgencyNode[], matchId: number): AgencyNode[] {
+    const out: AgencyNode[] = [];
+    for (const stmt of body) {
+      switch (stmt.type) {
+        case "returnStatement": {
+          if (!stmt.value) {
+            throw new LoweringError(
+              "match arm must return a value on every path when the match is used as an expression",
+              stmt.loc,
+            );
+          }
+          if ((stmt.value as AgencyNode).type === "matchBlock") {
+            // nested return match(...): lower inner first, yield its temp
+            const inner = this.lowerMatchExpressionCore(stmt.value as MatchBlock, stmt.loc);
+            out.push(...inner.statements);
+            out.push({ type: "matchYield", matchId, value: inner.valueRef, loc: stmt.loc });
+          } else {
+            out.push({ type: "matchYield", matchId, value: stmt.value, loc: stmt.loc });
+          }
+          break;
+        }
+        case "ifElse":
+          out.push({
+            ...stmt,
+            thenBody: this.rewriteReturnsToYields(stmt.thenBody, matchId),
+            elseBody: stmt.elseBody
+              ? this.rewriteReturnsToYields(stmt.elseBody, matchId)
+              : undefined,
+          });
+          break;
+        case "forLoop":
+        case "whileLoop":
+          out.push({ ...stmt, body: this.rewriteReturnsToYields(stmt.body, matchId) });
+          break;
+        case "matchBlock":
+          out.push(stmt); // inner match owns its arm returns
+          break;
+        default: {
+          if (isConcurrencyBlock(stmt) && containsReturn([stmt])) {
+            throw new LoweringError(
+              "cannot return from a match arm inside a parallel, fork, race, seq, or thread block",
+              stmt.loc,
+            );
+          }
+          out.push(stmt);
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Syntactic all-paths-yield check (spec v1): a body yields on every path iff
+   * it contains a top-level `matchYield`, or an `if`/`else` where BOTH branches
+   * always yield. Loops never count (their body may not execute).
+   */
+  private alwaysYields(body: AgencyNode[]): boolean {
+    for (const stmt of body) {
+      if (stmt.type === "matchYield") return true;
+      if (
+        stmt.type === "ifElse" &&
+        stmt.elseBody &&
+        this.alwaysYields(stmt.thenBody) &&
+        this.alwaysYields(stmt.elseBody)
+      ) {
+        return true;
+      }
+      // loops never count (syntactic all-paths rule, spec v1 restrictions #4)
+    }
+    return false;
+  }
+
+  private lowerMatchIsForm(node: MatchBlock, matchExprId?: number): AgencyNode[] {
+    if (matchExprId !== undefined) {
+      throw new LoweringError(
+        "match(x is pattern) cannot be used as an expression; use it as a statement",
+        node.loc,
+      );
+    }
     const isExpr = node.expression as IsExpression;
     const scrutineeName = this.freshName("scrutinee");
     const scrutineeAssign: Assignment = {
@@ -353,7 +557,7 @@ class PatternLowerer {
 
   /** Recurse into the body of a single match arm (without lowering the arm itself). */
   private lowerMatchCase(c: MatchBlockCase): MatchBlockCase {
-    const body = this.lower(c.body);
+    const body = this.lowerBody(c.body);
     return { ...c, body };
   }
 
@@ -393,7 +597,7 @@ class PatternLowerer {
     let result: IfElse | undefined;
     for (let i = arms.length - 1; i >= 0; i--) {
       const arm = arms[i];
-      const armBody = this.lower(arm.body);
+      const armBody = this.lowerBody(arm.body);
 
       if (arm.caseValue === "_") {
         // Default case: becomes an else-body. If we already have an `if`, attach as elseBody.
@@ -478,7 +682,7 @@ class PatternLowerer {
 
   private lowerForLoop(node: ForLoop): ForLoop {
     if (typeof node.itemVar === "string") {
-      return { ...node, body: this.lower(node.body) };
+      return { ...node, body: this.lowerBody(node.body) };
     }
     const tempItem = this.freshName("item");
     const tempRef = varRef(tempItem, node.loc);
@@ -486,7 +690,7 @@ class PatternLowerer {
     return {
       ...node,
       itemVar: tempItem,
-      body: [...bindings, ...this.lower(node.body)],
+      body: [...bindings, ...this.lowerBody(node.body)],
     };
   }
 
@@ -701,6 +905,35 @@ function isExpr(v: unknown): v is Expression {
   // in some fields (e.g. Assignment.value is `Expression | MessageThread`).
   const t = (v as { type: string }).type;
   return t !== "messageThread";
+}
+
+/** True when `node` is a concurrency/sequencing block whose body runs in a
+ *  separate frame, so a `return` inside it cannot legally yield to an enclosing
+ *  expression match. `parallel`/`seq` are desugared to `fork` calls later; the
+ *  fork/race/thread forms in the error message are the surface concepts. */
+function isConcurrencyBlock(node: AgencyNode): boolean {
+  return node.type === "parallelBlock" || node.type === "seqBlock";
+}
+
+/**
+ * True when any node in `nodes` (recursively) is a `returnStatement`, WITHOUT
+ * descending into nested `matchBlock` arm bodies — an inner match owns its own
+ * arm returns (same boundary as `rewriteReturnsToYields`). The generic AST
+ * walker (`utils/node.ts` `n(...)`) descends into every body uniformly and so
+ * cannot express this skip-subtree boundary; hence this small hand-rolled walk.
+ */
+function containsReturn(nodes: AgencyNode[]): boolean {
+  for (const node of nodes) {
+    if (node.type === "returnStatement") return true;
+    if (node.type === "matchBlock") continue; // inner match owns its returns
+    let found = false;
+    mapBodies(node, (body) => {
+      if (containsReturn(body)) found = true;
+      return body;
+    });
+    if (found) return true;
+  }
+  return false;
 }
 
 function varRef(name: string, loc: SourceLocation | undefined): VariableNameLiteral {

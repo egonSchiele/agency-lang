@@ -95,6 +95,44 @@ export type Expression =
   | MatchBlock;
 
 /**
+ * Runtime set of every `type` string in the `Expression` union above. Kept
+ * co-located with the union so the two never drift. Used by the pattern
+ * lowerer (`isExpressionNode`) to decide whether a single-statement match arm
+ * is a bare expression (yield the value) versus a statement block (rewrite
+ * returns). Keep in sync with the `Expression` union.
+ */
+export const EXPRESSION_NODE_TYPES: readonly string[] = [
+  // ValueAccess
+  "valueAccess",
+  // Literal
+  "number",
+  "unitLiteral",
+  "multiLineString",
+  "string",
+  "variableName",
+  "boolean",
+  "null",
+  // remaining Expression members
+  "functionCall",
+  "binOpExpression",
+  "agencyArray",
+  "agencyObject",
+  "tryExpression",
+  "newExpression",
+  "regex",
+  "schemaExpression",
+  "interruptStatement",
+  "blockArgument",
+  "isExpression",
+  "matchBlock",
+];
+
+/** True when `node` is an `Expression` (per `EXPRESSION_NODE_TYPES`). */
+export function isExpressionNode(node: { type: string }): node is Expression {
+  return EXPRESSION_NODE_TYPES.includes(node.type);
+}
+
+/**
  * Scope types for variable resolution.
  * Before discussing scope, here's an important fact to know.
 You can import agency nodes into TypeScript files and call them as functions. Each call of an agency node
@@ -203,6 +241,13 @@ export type Assignment = BaseNode & {
    *  as a `matchBlock` node (read directly), and the `is`-form match is
    *  guard-based. A consumer must recognize all three deliberately. */
   matchSource?: MatchArmMeta[];
+  /** Set by pattern lowering when this assignment consumes an expression-position
+   *  `match`: `const x = match(E) { ... }`. The lowered form hoists the match
+   *  region above and rewrites `value` to a reference to the `__matchval_<id>`
+   *  temp; this field records the owning match id so later passes (typechecker
+   *  union typing) can find the region that produces the value. Ignored by
+   *  codegen (the value is a plain variable reference by then). */
+  matchExprSource?: { matchId: number };
 };
 
 export function globalScope(): Scope {

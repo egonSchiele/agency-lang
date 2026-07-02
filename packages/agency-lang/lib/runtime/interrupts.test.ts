@@ -3,7 +3,46 @@ import {
   interrupt,
   hasInterrupts,
   reportUnhandledInterrupts,
+  mergeChainOutcomes,
 } from "./interrupts.js";
+
+describe("mergeChainOutcomes", () => {
+  const approvedA = { kind: "approved", value: "a" } as const;
+  const approvedB = { kind: "approved", value: "b" } as const;
+  const approvedNoValue = { kind: "approved", value: undefined } as const;
+  const rejected = { kind: "rejected", value: "no" } as const;
+  const propagated = { kind: "propagated" } as const;
+  const silent = { kind: "noResponse" } as const;
+
+  it("outer reject wins over inner approve", () => {
+    expect(mergeChainOutcomes(approvedA, rejected)).toEqual(rejected);
+  });
+
+  it("inner reject wins regardless of outer", () => {
+    expect(mergeChainOutcomes(rejected, approvedA)).toEqual(rejected);
+  });
+
+  it("any propagate beats approve", () => {
+    expect(mergeChainOutcomes(propagated, approvedA)).toEqual(propagated);
+    expect(mergeChainOutcomes(approvedA, propagated)).toEqual(propagated);
+  });
+
+  it("inner approve + outer silence = approve (the regression fix)", () => {
+    expect(mergeChainOutcomes(approvedA, silent)).toEqual(approvedA);
+  });
+
+  it("outer approved value wins; falls back to inner value", () => {
+    expect(mergeChainOutcomes(approvedA, approvedB)).toEqual(approvedB);
+    expect(mergeChainOutcomes(approvedA, approvedNoValue)).toEqual({
+      kind: "approved",
+      value: "a",
+    });
+  });
+
+  it("total silence stays noResponse for the caller to map to propagate", () => {
+    expect(mergeChainOutcomes(silent, silent)).toEqual(silent);
+  });
+});
 
 describe("hasInterrupts", () => {
   it("returns true for an array of interrupts", () => {

@@ -153,7 +153,7 @@ export function isApproved(obj: any): obj is Approved {
   return obj && obj.type === "approve";
 }
 
-type HandlerChainOutcome =
+export type HandlerChainOutcome =
   | { kind: "rejected"; value: any }
   | { kind: "approved"; value: any }
   | { kind: "propagated" }
@@ -264,6 +264,100 @@ async function runHandlerChain(
   });
 }
 
+/** Merge two chain-segment outcomes with single-process precedence:
+ * reject > propagate > approve > noResponse. `inner` is the segment closer
+ * to the interrupt (e.g. the child process), `outer` the segment farther
+ * from it (e.g. the parent). On double-approve the OUTER value wins,
+ * falling back to the inner value — matching how a single-process chain
+ * overwrites approvedValue as it walks outward. */
+export function mergeChainOutcomes(
+  inner: HandlerChainOutcome,
+  outer: HandlerChainOutcome,
+): HandlerChainOutcome {
+  if (inner.kind === "rejected") return inner;
+  if (outer.kind === "rejected") return outer;
+  if (inner.kind === "propagated" || outer.kind === "propagated") {
+    return { kind: "propagated" };
+  }
+  if (outer.kind === "approved") {
+    const innerValue = inner.kind === "approved" ? inner.value : undefined;
+    return { kind: "approved", value: outer.value ?? innerValue };
+  }
+  if (inner.kind === "approved") return inner;
+  return { kind: "noResponse" };
+}
+
+/** The distributed handler chain, evaluated from this process outward:
+ * run the local chain; local reject is final (fail-fast, matching the
+ * single-process short-circuit); otherwise, if this process is itself a
+ * subprocess, consult the parent and merge. Nested subprocesses recurse
+ * through this same function on each hop.
+ *
+ * `interruptId`: when relaying a child's interrupt, pass the CHILD's id so
+ * this process's handlerDecision/interruptResolved statelog events
+ * correlate with the originating interrupt (ids are preserved verbatim
+ * end-to-end). Minted fresh only for direct local dispatches. */
+export async function gatherChainOutcome(
+  interruptObj: { effect: string; message: string; data: any; origin: string },
+  ctx: RuntimeContext<any>,
+  stack?: StateStack,
+  interruptId: string = nanoid(),
+): Promise<HandlerChainOutcome> {
+  const local = await runHandlerChain(ctx, stack, interruptId, interruptObj);
+  if (local.kind === "rejected") return local;
+  if (isIpcMode()) {
+    const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
+    return mergeChainOutcomes(local, parentOutcome);
+  }
+  return local;
+}
+
+/** Render a merged chain outcome into the shape `interruptWithHandlers`
+ * returns, emitting the matching statelog event: approved/rejected resolve
+ * in place; propagated/noResponse surface to the user as an Interrupt[].
+ * Shared by the IPC and non-IPC decision paths so verdict rendering and
+ * statelog dispatch live in exactly one place. */
+function renderVerdict(
+  merged: HandlerChainOutcome,
+  ctx: RuntimeContext<any>,
+  interruptId: string,
+  interruptObj: { effect: string; message: string; data: any; origin: string },
+  resolvedBy: "ipc" | "handler",
+): Interrupt[] | Approved | Rejected {
+  const { effect, message, data, origin } = interruptObj;
+  const interruptSummary = { effect, message, data };
+  if (merged.kind === "rejected") {
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "rejected",
+      resolvedBy,
+      interrupt: interruptSummary,
+    });
+    return { type: "reject", value: merged.value };
+  }
+  if (merged.kind === "approved") {
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "approved",
+      resolvedBy,
+      interrupt: interruptSummary,
+    });
+    return { type: "approve", value: merged.value };
+  }
+  // propagated or noResponse — surface to the user.
+  // Note: checkpointCreated for these interrupts is emitted by the generated
+  // interrupt template code, not here. This is a known gap — non-tool
+  // interrupts will have interruptThrown but no matching checkpointCreated
+  // from the runtime. A future improvement could add checkpoint events to
+  // the generated templates.
+  const intr = interrupt({ effect, message, data, origin, runId: ctx.getRunId(), interruptId });
+  ctx.statelogClient.interruptThrown({
+    interruptId: intr.interruptId,
+    interruptData: data,
+  });
+  return [intr];
+}
+
 export async function interruptWithHandlers<T = any>(
   effect: string,
   message: string,
@@ -274,69 +368,34 @@ export async function interruptWithHandlers<T = any>(
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { effect, message, data, origin };
   const interruptId = nanoid();
-  const outcome = await runHandlerChain(ctx, stack, interruptId, interruptObj);
+  const local = await runHandlerChain(ctx, stack, interruptId, interruptObj);
 
-  if (outcome.kind === "rejected") {
-    return { type: "reject", value: outcome.value };
+  if (local.kind === "rejected") {
+    return { type: "reject", value: local.value };
   }
-  const hasPropagation = outcome.kind === "propagated";
-  const hasApproval = outcome.kind === "approved";
-  const approvedValue = hasApproval ? outcome.value : undefined;
-  // IPC mode: always consult parent (unless local handler rejected — that already returned above)
+
+  // IPC mode: consult the parent segment of the distributed chain (unless a
+  // local handler rejected — that already returned above), merge outcomes,
+  // and render the verdict LOCALLY. The parent reports; the child decides.
+  // The child's interruptId travels with the message so both processes'
+  // statelog events correlate to the same interrupt.
   if (isIpcMode()) {
-    const parentDecision = await sendInterruptToParent(
-      { effect, message, data, origin },
-      { propagated: hasPropagation },
-    );
-    const interruptSummary = { effect, message, data };
-    if (parentDecision.type === "approve") {
-      ctx.statelogClient.interruptResolved({
-        interruptId,
-        outcome: "approved",
-        resolvedBy: "ipc",
-        interrupt: interruptSummary,
-      });
-      return { type: "approve", value: parentDecision.value ?? approvedValue };
+    const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
+    const merged = mergeChainOutcomes(local, parentOutcome);
+    // TEMPORARY (removed by the subprocess pause path): renderVerdict maps
+    // propagated/noResponse to the interrupt-array return; until the child
+    // can checkpoint itself, convert that case to a reject.
+    const verdict = renderVerdict(merged, ctx, interruptId, interruptObj, "ipc");
+    if (hasInterrupts(verdict)) {
+      return {
+        type: "reject",
+        value: "Interrupt propagated to user (subprocess slow-path not yet supported)",
+      };
     }
-    ctx.statelogClient.interruptResolved({
-      interruptId,
-      outcome: "rejected",
-      resolvedBy: "ipc",
-      interrupt: interruptSummary,
-    });
-    return { type: "reject", value: parentDecision.value };
+    return verdict;
   }
 
-  // Normal mode (non-IPC)
-  // Note: checkpointCreated for these interrupts is emitted by the generated
-  // interrupt template code, not here. This is a known gap — non-tool
-  // interrupts will have interruptThrown but no matching checkpointCreated
-  // from the runtime. A future improvement could add checkpoint events to
-  // the generated templates.
-  if (hasPropagation) {
-    const intr = interrupt({ effect, message, data, origin, runId: ctx.getRunId(), interruptId });
-    ctx.statelogClient.interruptThrown({
-      interruptId: intr.interruptId,
-      interruptData: data,
-    });
-    return [intr];
-  }
-  if (hasApproval) {
-    ctx.statelogClient.interruptResolved({
-      interruptId,
-      outcome: "approved",
-      resolvedBy: "handler",
-      interrupt: { effect, message, data },
-    });
-    return { type: "approve", value: approvedValue };
-  }
-  // No handler responded — propagate to user
-  const intr = interrupt({ effect, message, data, origin, runId: ctx.getRunId(), interruptId });
-  ctx.statelogClient.interruptThrown({
-    interruptId: intr.interruptId,
-    interruptData: data,
-  });
-  return [intr];
+  return renderVerdict(local, ctx, interruptId, interruptObj, "handler");
 }
 
 /** Build the ID-keyed response map for `respondToInterrupts`. Extracted

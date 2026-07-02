@@ -1,0 +1,34 @@
+import { compile, run } from "std::agency"
+
+// Child handler REJECTS bash; the parent would approve it. Child reject is
+// final (fail-fast — the parent segment cannot override a reject), so the
+// bash call must fail inside the child.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  handle {
+    let r = bash("echo should-not-run")
+    if (isFailure(r)) {
+      return "rejected-locally"
+    }
+    return "leaked-upward"
+  } with (e) {
+    return reject()
+  }
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    return approve()
+  }
+}

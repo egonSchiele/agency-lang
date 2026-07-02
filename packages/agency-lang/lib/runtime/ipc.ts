@@ -13,7 +13,7 @@ import { rmSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext } from "./asyncContext.js";
-import { interruptWithHandlers, isApproved, hasInterrupts } from "./interrupts.js";
+import { gatherChainOutcome, type HandlerChainOutcome } from "./interrupts.js";
 import {
   acquireLocalLock,
   lockReleaserKey,
@@ -138,7 +138,7 @@ export function ipcLog(direction: "send" | "recv", msg: any): void {
   const type = msg?.type ?? "unknown";
   let detail: string;
   if (type === "interrupt") detail = `effect=${msg.interrupt?.effect}`;
-  else if (type === "decision") detail = `approved=${msg.approved}`;
+  else if (type === "decision") detail = `outcome=${msg.outcome?.kind}`;
   else if (type === "result") detail = `data=${truncate(msg.value?.data)}`;
   else if (type === "error") detail = `error=${truncate(msg.error)}`;
   else if (type === "run") detail = `node=${msg.node} script=${msg.scriptPath}`;
@@ -146,12 +146,11 @@ export function ipcLog(direction: "send" | "recv", msg: any): void {
   process.stderr.write(`[ipc:${role}] ${ts} ${direction} ${type} ${detail}\n`);
 }
 
-export type SubprocessVotes = {
-  propagated: boolean;
-};
-
 export type IpcInterruptMessage = {
   type: "interrupt";
+  /** The child's interrupt-level id, preserved verbatim end-to-end: it keys
+   * the decision reply and both processes' statelog events, and — when the
+   * interrupt ultimately surfaces to the user — the resume response. */
   interruptId: string;
   interrupt: {
     effect: string;
@@ -159,7 +158,6 @@ export type IpcInterruptMessage = {
     data: any;
     origin: string;
   };
-  subprocessVotes: SubprocessVotes;
 };
 
 export type IpcResultMessage = {
@@ -172,11 +170,13 @@ export type IpcErrorMessage = {
   error: string;
 };
 
+/** The parent's reply to a relayed interrupt: its handler chain OUTCOME,
+ * not a verdict. The child merges this with its own local outcome and
+ * decides (see `mergeChainOutcomes` in interrupts.ts). */
 export type IpcDecisionMessage = {
   type: "decision";
   interruptId: string;
-  approved: boolean;
-  value: any;
+  outcome: HandlerChainOutcome;
 };
 
 export type IpcLockAcquireMessage = {
@@ -254,8 +254,11 @@ export function cleanupSessionLocks(
 }
 
 /**
- * Send an interrupt to the parent process and await the decision.
- * The parent always sends back a final approve or reject — never propagate.
+ * Send an interrupt to the parent process and await the parent's handler
+ * chain OUTCOME (not a verdict — the child merges and decides). The parent
+ * always replies explicitly; the child never infers from silence.
+ * `interruptId` is the child's interrupt-level id, used verbatim as the
+ * message id so decision routing and statelog correlation share one key.
  */
 export async function sendInterruptToParent(
   interruptData: {
@@ -264,8 +267,8 @@ export async function sendInterruptToParent(
     data: any;
     origin: string;
   },
-  votes: SubprocessVotes,
-): Promise<{ type: "approve"; value?: any } | { type: "reject"; value?: any }> {
+  interruptId: string,
+): Promise<HandlerChainOutcome> {
   if (typeof process.send !== "function") {
     throw new Error(
       "sendInterruptToParent called without an IPC channel. This function can only be used inside a forked subprocess (AGENCY_IPC=1).",
@@ -273,15 +276,14 @@ export async function sendInterruptToParent(
   }
   const outMsg = {
     type: "interrupt",
-    interruptId: nanoid(),
+    interruptId,
     interrupt: interruptData,
-    subprocessVotes: votes,
   } satisfies IpcInterruptMessage;
   const serialized = serializedByteLength(outMsg);
   if (!serialized.ok) {
     const value = `Failed to serialize interrupt payload: ${serialized.error}`;
     process.send!({ type: "error", error: value } satisfies IpcErrorMessage);
-    return { type: "reject", value };
+    return { kind: "rejected", value };
   }
   if (serialized.byteLength > subprocessIpcPayloadLimit) {
     const errorMsg = buildIpcPayloadLimitError(
@@ -290,19 +292,15 @@ export async function sendInterruptToParent(
       serialized.serialized.slice(0, 1024),
     );
     process.send!(errorMsg);
-    return { type: "reject", value: errorMsg.error };
+    return { kind: "rejected", value: errorMsg.error };
   }
   ipcLog("send", outMsg);
   return new Promise((resolve) => {
     const handler = (msg: any) => {
-      if (msg.type === "decision" && msg.interruptId === outMsg.interruptId) {
+      if (msg.type === "decision" && msg.interruptId === interruptId) {
         process.removeListener("message", handler);
         ipcLog("recv", msg);
-        if (msg.approved) {
-          resolve({ type: "approve", value: msg.value });
-        } else {
-          resolve({ type: "reject", value: msg.value });
-        }
+        resolve(msg.outcome as HandlerChainOutcome);
       }
     };
     process.on("message", handler);
@@ -541,23 +539,31 @@ function attachStdoutForwarder(
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
   const { effect, message, data, origin } = msg.interrupt;
   try {
-    const handlerResult = await interruptWithHandlers(effect, message, data, origin, s.ctx, s.stateStack);
-    let decision: any;
-    if (isApproved(handlerResult)) {
-      decision = { type: "decision", interruptId: msg.interruptId, approved: true, value: (handlerResult as any).value };
-    } else if (hasInterrupts(handlerResult)) {
-      decision = { type: "decision", interruptId: msg.interruptId, approved: false, value: "Interrupt propagated to user (subprocess slow-path not yet supported)" };
-    } else {
-      decision = { type: "decision", interruptId: msg.interruptId, approved: false, value: (handlerResult as any).value };
-    }
-    trySendDecision(s, decision);
+    // Report this process's chain OUTCOME; the child merges and decides.
+    // The child's interruptId is relayed into the chain walk so this
+    // process's statelog events correlate with the originating interrupt.
+    // (gatherChainOutcome itself recurses to OUR parent when this process
+    // is also a subprocess — that is what makes nesting compose.)
+    const outcome = await gatherChainOutcome(
+      { effect, message, data, origin },
+      s.ctx,
+      s.stateStack,
+      msg.interruptId,
+    );
+    trySendDecision(s, {
+      type: "decision",
+      interruptId: msg.interruptId,
+      outcome,
+    } satisfies IpcDecisionMessage);
   } catch (err) {
     trySendDecision(s, {
       type: "decision",
       interruptId: msg.interruptId,
-      approved: false,
-      value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
-    });
+      outcome: {
+        kind: "rejected",
+        value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    } satisfies IpcDecisionMessage);
   }
 }
 

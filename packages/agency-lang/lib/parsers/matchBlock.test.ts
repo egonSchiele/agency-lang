@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchBlockParser,
+  matchBlockExprParser,
   matchBlockParserCase,
   defaultCaseParser,
   assignmentParser,
@@ -832,6 +833,37 @@ const b = 2
     if (result.success) {
       const assigns = result.result.filter((n: any) => n.type === "assignment");
       expect(assigns.length).toBe(2);
+    }
+  });
+});
+
+describe("match parser loc spans (statement vs expression form)", () => {
+  // When a parser is invoked standalone, tarsec's span offsets are relative
+  // to the END of the input: `loc.start === -input.length` at position 0 and
+  // `loc.end === -rest.length`, so `loc.end - loc.start` is the number of
+  // characters the parser consumed for the node.
+  const input = `match(x) { "a" => 1\n_ => 2 }\n\n`;
+
+  it("statement form: loc.end covers trailing semicolon/whitespace consumption (pre-refactor behavior)", () => {
+    const result = matchBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Consumes the whole input, including the two trailing newlines.
+      expect(result.rest).toBe("");
+      const loc = result.result.loc!;
+      expect(loc.end).toBe(0);
+      expect(loc.end - loc.start).toBe(input.length);
+    }
+  });
+
+  it("expression form: loc.end stops at the closing brace", () => {
+    const result = matchBlockExprParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Leaves the trailing newlines unconsumed; span ends at `}`.
+      expect(result.rest).toBe("\n\n");
+      expect(result.result.loc.end).toBe(-result.rest.length); // === -2
+      expect(result.result.loc.end - result.result.loc.start).toBe(input.length - 2);
     }
   });
 });

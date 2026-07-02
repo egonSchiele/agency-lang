@@ -3091,14 +3091,18 @@ export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   ),
 )));
 
-export const matchBlockParser: Parser<MatchBlock> = label("a match block", map(
+// Statement form. The outer `withLoc` overwrites the inner loc so that the
+// span covers the trailing semicolon/whitespace consumption, exactly as the
+// original single-withLoc parser did (source maps record statement locs, so
+// the statement form's span must stay byte-identical to the old behavior).
+export const matchBlockParser: Parser<MatchBlock> = label("a match block", withLoc(map(
   seqC(
     capture(matchBlockExprParser, "block"),
     optionalSemicolon,
     optionalSpacesOrNewline,
   ),
   (r: { block: MatchBlock }) => r.block,
-));
+)));
 
 // =============================================================================
 // importStatement.ts

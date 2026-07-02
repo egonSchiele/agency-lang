@@ -15,24 +15,23 @@ vi.mock("smoltalk", () => ({
 }));
 
 import {
-  queueReplyAttachment,
   harvestReplyAttachments,
   buildReplyUserMessage,
   appendReplyMarker,
-  MAX_REPLY_ATTACHMENTS_PER_CALL,
   type HarvestedReplyAttachment,
   type ReplyAttachmentPart,
 } from "./replyAttachments.js";
+import { MAX_REPLY_ATTACHMENTS_PER_CALL } from "../config.js";
 
 function imagePart(p: string): ReplyAttachmentPart {
   return { type: "image", source: { kind: "path", path: p } };
 }
 
-describe("queueReplyAttachment + harvestReplyAttachments", () => {
+describe("harvestReplyAttachments", () => {
   it("returns empty marker and touches nothing when the queue is empty", () => {
     const runnerState: Record<string, any> = {};
     const marker = harvestReplyAttachments({
-      branchOther: {},
+      queued: [],
       runnerState,
       model: "vision-model",
       toolName: "showChart",
@@ -41,15 +40,12 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
     expect(runnerState.replyAttachments).toBeUndefined();
   });
 
-  it("harvests a queued attachment: id, marker, buffer entry, queue drained", () => {
-    const branchOther: Record<string, any> = {};
+  it("harvests a queued attachment: id, marker, buffer entry", () => {
     const runnerState: Record<string, any> = {};
-    queueReplyAttachment(branchOther, imagePart("/tmp/chart.png"));
-
     // The gate stats the file, so it must exist.
     fs.writeFileSync("/tmp/chart.png", Buffer.from([1]));
     const marker = harvestReplyAttachments({
-      branchOther,
+      queued: [imagePart("/tmp/chart.png")],
       runnerState,
       model: "vision-model",
       toolName: "showChart",
@@ -58,7 +54,6 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
     expect(marker).toBe(
       "\n\n[attached img_1 — delivered in the user message following these tool results]",
     );
-    expect(branchOther.pendingReplyAttachments).toBeUndefined();
     const harvested = runnerState.replyAttachments as HarvestedReplyAttachment[];
     expect(harvested).toHaveLength(1);
     expect(harvested[0]).toMatchObject({ id: "img_1", toolName: "showChart" });
@@ -69,14 +64,8 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
     fs.writeFileSync("/tmp/tra-b.png", Buffer.from([1]));
     fs.writeFileSync("/tmp/tra-c.png", Buffer.from([1]));
     const runnerState: Record<string, any> = {};
-    const queueA: Record<string, any> = {};
-    const queueB: Record<string, any> = {};
-    queueReplyAttachment(queueA, imagePart("/tmp/tra-a.png"));
-    queueReplyAttachment(queueB, imagePart("/tmp/tra-b.png"));
-    queueReplyAttachment(queueB, imagePart("/tmp/tra-c.png"));
-
-    const markerA = harvestReplyAttachments({ branchOther: queueA, runnerState, model: "m", toolName: "toolA" });
-    const markerB = harvestReplyAttachments({ branchOther: queueB, runnerState, model: "m", toolName: "toolB" });
+    const markerA = harvestReplyAttachments({ queued: [imagePart("/tmp/tra-a.png")], runnerState, model: "m", toolName: "toolA" });
+    const markerB = harvestReplyAttachments({ queued: [imagePart("/tmp/tra-b.png"), imagePart("/tmp/tra-c.png")], runnerState, model: "m", toolName: "toolB" });
 
     expect(markerA).toContain("img_1");
     expect(markerB).toContain("img_2");
@@ -96,12 +85,8 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
     fs.writeFileSync("/tmp/tra-b.png", Buffer.from([1]));
     const runnerStateLeft: Record<string, any> = {};
     const runnerStateRight: Record<string, any> = {};
-    const queueLeft: Record<string, any> = {};
-    const queueRight: Record<string, any> = {};
-    queueReplyAttachment(queueLeft, imagePart("/tmp/tra-a.png"));
-    queueReplyAttachment(queueRight, imagePart("/tmp/tra-b.png"));
-    harvestReplyAttachments({ branchOther: queueLeft, runnerState: runnerStateLeft, model: "m", toolName: "t" });
-    harvestReplyAttachments({ branchOther: queueRight, runnerState: runnerStateRight, model: "m", toolName: "t" });
+    harvestReplyAttachments({ queued: [imagePart("/tmp/tra-a.png")], runnerState: runnerStateLeft, model: "m", toolName: "t" });
+    harvestReplyAttachments({ queued: [imagePart("/tmp/tra-b.png")], runnerState: runnerStateRight, model: "m", toolName: "t" });
     expect((runnerStateLeft.replyAttachments as HarvestedReplyAttachment[])[0].id).toBe("img_1");
     expect((runnerStateRight.replyAttachments as HarvestedReplyAttachment[])[0].id).toBe("img_1");
     expect(runnerStateLeft.replyAttachments).toHaveLength(1);
@@ -109,11 +94,9 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
   });
 
   it("drops attachments with a skip marker when the model has no image input", () => {
-    const branchOther: Record<string, any> = {};
     const runnerState: Record<string, any> = {};
-    queueReplyAttachment(branchOther, imagePart("/tmp/tra-a.png"));
     const marker = harvestReplyAttachments({
-      branchOther,
+      queued: [imagePart("/tmp/tra-a.png")],
       runnerState,
       model: "text-only-model",
       toolName: "showChart",
@@ -126,11 +109,9 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
 
   it("attaches optimistically when modality support is unknown (tri-state)", () => {
     fs.writeFileSync("/tmp/tra-a.png", Buffer.from([1]));
-    const branchOther: Record<string, any> = {};
     const runnerState: Record<string, any> = {};
-    queueReplyAttachment(branchOther, imagePart("/tmp/tra-a.png"));
     const marker = harvestReplyAttachments({
-      branchOther,
+      queued: [imagePart("/tmp/tra-a.png")],
       runnerState,
       model: "unknown-model",
       toolName: "t",
@@ -140,15 +121,15 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
   });
 
   it("skips oversized base64 attachments at harvest", () => {
-    const branchOther: Record<string, any> = {};
     const runnerState: Record<string, any> = {};
     // ~21 MB decoded → over the 20 MB cap. Base64 length ≈ bytes * 4/3.
     const big = "A".repeat(Math.ceil((21 * 1024 * 1024 * 4) / 3));
-    queueReplyAttachment(branchOther, {
-      type: "image",
-      source: { kind: "base64", base64: big, mimeType: "image/png" },
+    const marker = harvestReplyAttachments({
+      queued: [{ type: "image", source: { kind: "base64", base64: big, mimeType: "image/png" } }],
+      runnerState,
+      model: "m",
+      toolName: "t",
     });
-    const marker = harvestReplyAttachments({ branchOther, runnerState, model: "m", toolName: "t" });
     expect(marker).toBe("\n\n[attachment img_1 skipped: too large to attach (over 20 MB)]");
     expect(runnerState.replyAttachments).toEqual([]);
   });
@@ -157,22 +138,20 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tra-"));
     const bigFile = path.join(dir, "big.png");
     fs.writeFileSync(bigFile, Buffer.alloc(21 * 1024 * 1024));
-    const branchOther: Record<string, any> = {};
     const runnerState: Record<string, any> = {};
-    queueReplyAttachment(branchOther, imagePart(bigFile));
-    const marker = harvestReplyAttachments({ branchOther, runnerState, model: "m", toolName: "t" });
+    const marker = harvestReplyAttachments({ queued: [imagePart(bigFile)], runnerState, model: "m", toolName: "t" });
     expect(marker).toContain("skipped: too large to attach");
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it("caps the per-call total with a visible skip marker", () => {
     const runnerState: Record<string, any> = {};
-    const branchOther: Record<string, any> = {};
+    const queued: ReplyAttachmentPart[] = [];
     for (let i = 0; i < MAX_REPLY_ATTACHMENTS_PER_CALL + 1; i++) {
       fs.writeFileSync(`/tmp/tra-cap-${i}.png`, Buffer.from([1]));
-      queueReplyAttachment(branchOther, imagePart(`/tmp/tra-cap-${i}.png`));
+      queued.push(imagePart(`/tmp/tra-cap-${i}.png`));
     }
-    const marker = harvestReplyAttachments({ branchOther, runnerState, model: "m", toolName: "t" });
+    const marker = harvestReplyAttachments({ queued, runnerState, model: "m", toolName: "t" });
     expect(runnerState.replyAttachments).toHaveLength(MAX_REPLY_ATTACHMENTS_PER_CALL);
     expect(marker).toContain(
       "[attachment img_11 skipped: too many attachments for this llm() call (limit 10)]",
@@ -180,10 +159,8 @@ describe("queueReplyAttachment + harvestReplyAttachments", () => {
   });
 
   it("skips a missing path file at harvest with an honest marker", () => {
-    const branchOther: Record<string, any> = {};
     const runnerState: Record<string, any> = {};
-    queueReplyAttachment(branchOther, imagePart("/nonexistent-tra/missing.png"));
-    const marker = harvestReplyAttachments({ branchOther, runnerState, model: "m", toolName: "t" });
+    const marker = harvestReplyAttachments({ queued: [imagePart("/nonexistent-tra/missing.png")], runnerState, model: "m", toolName: "t" });
     expect(marker).toBe("\n\n[attachment img_1 skipped: file not found]");
     expect(runnerState.replyAttachments).toEqual([]);
   });

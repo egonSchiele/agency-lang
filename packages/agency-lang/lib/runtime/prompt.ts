@@ -1093,7 +1093,7 @@ export async function runPrompt(args: {
     }): void => {
       const { toolResult, toolCall, handler, branchStack } = args;
       const replyMarker = harvestReplyAttachments({
-        branchOther: branchStack.other as Record<string, any>,
+        queued: branchStack.drainPendingReplyAttachments(),
         runnerState: self.runnerState,
         model: clientConfig.model,
         toolName: handler.name,

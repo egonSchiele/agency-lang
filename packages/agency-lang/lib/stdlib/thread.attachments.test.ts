@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { _imageAttachment, _fileAttachment, _attachToReply } from "./thread.js";
 import { agencyStore } from "../runtime/asyncContext.js";
+import { StateStack } from "../runtime/state/stateStack.js";
 
 describe("_imageAttachment", () => {
   it("classifies a plain path", () => {
@@ -93,7 +94,7 @@ describe("_fileAttachment", () => {
 
 describe("_attachToReply", () => {
   function frameWith(toolDepth: number) {
-    const stack = { other: {} as Record<string, any> };
+    const stack = new StateStack();
     const ctx = {
       isInsideToolCall: () => toolDepth > 0,
       statelogClient: { error: vi.fn() },
@@ -106,8 +107,11 @@ describe("_attachToReply", () => {
     agencyStore.run(frame, () => {
       _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
     });
-    expect(frame.stack.other.pendingReplyAttachments).toHaveLength(1);
-    expect(frame.stack.other.pendingReplyAttachments[0].source.path).toBe("/tmp/x.png");
+    const queued = frame.stack.drainPendingReplyAttachments();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].source.path).toBe("/tmp/x.png");
+    // Drain clears: a second drain is empty.
+    expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
   });
 
   it("drops with a statelog error outside a tool call (never throws)", () => {
@@ -115,7 +119,7 @@ describe("_attachToReply", () => {
     agencyStore.run(frame, () => {
       _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
     });
-    expect(frame.stack.other.pendingReplyAttachments).toBeUndefined();
+    expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
     expect(frame.ctx.statelogClient.error).toHaveBeenCalledTimes(1);
   });
 

@@ -41,7 +41,7 @@ export safe def attachToReply(attachment: Attachment) {
   as a tool inside an llm() call: the tool's text result is delivered
   as usual, and the queued attachments follow it as a single user
   message the model can see. Outside a tool invocation, the attachment
-  is dropped with a statelog warning.
+  is dropped with a statelog error.
 
   @param attachment - The attachment to show the model (from image() / file())
   """
@@ -125,7 +125,7 @@ The model's next turn sees the tool result (`Saved image to … [attached img_1 
 - `viewAttachment` / `listAttachments` and the attachment store — separate track; they become the second consumer of `attachToReply` unchanged.
 - Native Anthropic `tool_result` image blocks — revisit only if providers converge; the agency-side channel is forward-compatible (swap the injection for native parts without touching `attachToReply` or its callers).
 - Refinement prompting (teaching the agent to critique-and-regenerate).
-- Attachments from handler bodies or non-tool contexts (dropped with a statelog warning).
+- Attachments from handler bodies or non-tool contexts (dropped with a statelog error).
 
 ## Testing
 

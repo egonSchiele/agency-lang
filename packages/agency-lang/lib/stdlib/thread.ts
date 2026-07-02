@@ -1,9 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
-import {
-  queueReplyAttachment,
-  type ReplyAttachmentPart,
-} from "../runtime/replyAttachments.js";
+import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
@@ -196,10 +193,7 @@ export function _attachToReply(attachment: unknown): void {
     });
     return;
   }
-  queueReplyAttachment(
-    frame.stack.other as Record<string, any>,
-    attachment as ReplyAttachmentPart,
-  );
+  frame.stack.queueReplyAttachment(attachment as ReplyAttachmentPart);
 }
 
 export async function __internal_getCost(

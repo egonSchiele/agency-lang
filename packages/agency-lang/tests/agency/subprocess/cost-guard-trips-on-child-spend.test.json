@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parent cost guard trips on subprocess spend and kills the child",
+      "input": "",
+      "expectedOutput": "\"tripped:guardFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    }
+  ]
+}

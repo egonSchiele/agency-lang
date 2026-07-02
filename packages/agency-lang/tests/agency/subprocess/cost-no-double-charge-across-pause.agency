@@ -1,0 +1,33 @@
+import { compile, run } from "std::agency"
+import { getCost } from "std::thread"
+
+// One paid call before the pause, one after the resume; the parent's
+// total must be EXACTLY two calls' worth (a replay that re-emitted the
+// first call's telemetry would make it three). 0.000002 + 0.000002 =
+// 0.000004 is exact in floating point (x + x), so equality is safe.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  const a = llm("Reply with: one")
+  let r = bash("echo pause-here")
+  const b = llm("Reply with: two")
+  return b
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isFailure(result)) {
+      return "run failed"
+    }
+    return "exactlyTwoCalls:${getCost() == 0.000004}"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

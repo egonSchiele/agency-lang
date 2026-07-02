@@ -1,0 +1,59 @@
+import { compile, run } from "std::agency"
+import { guard } from "std::thread"
+
+// The grandchild spends; only the ROOT holds a guard. The mid-tier has no
+// guards of its own and must relay the grandchild's telemetry upward (its
+// handler's chargeGuards re-emits because that process is in IPC mode).
+// The trip kills the MID process; the grandchild is reaped by the
+// disconnect watchdog.
+node main() {
+  const grandSource = """
+node main() {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  const c = llm("Reply with: three")
+  return c
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = guard(cost: 0.000003) as {
+      return run(
+        compiled: compileResult.value,
+        node: "main",
+        args: { grandSource: grandSource },
+      )
+    }
+    if (isFailure(result)) {
+      return "tripped:${result.error.type}"
+    }
+    return "did not trip"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

@@ -1,0 +1,34 @@
+import { compile, run } from "std::agency"
+import { guard } from "std::thread"
+
+// The child makes 3 mocked llm() calls at 0.000002 each. The parent guard
+// caps at 0.000003: the second call's telemetry pushes spent to 0.000004,
+// the guard trips, the child is killed, and the trip surfaces as the
+// standard cost-limit Failure at this guard boundary.
+node main() {
+  const source = """
+node main() {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  const c = llm("Reply with: three")
+  return c
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = guard(cost: 0.000003) as {
+      return run(compiled: compileResult.value, node: "main")
+    }
+    if (isFailure(result)) {
+      return "tripped:${result.error.type}"
+    }
+    return "did not trip"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A pause/resume cycle does not re-emit telemetry for completed paid calls",
+      "input": "",
+      "expectedOutput": "\"exactlyTwoCalls:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

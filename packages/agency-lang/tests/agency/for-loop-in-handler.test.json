@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "twoVarOverRecord",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "oneVarOverRecord",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "twoVarOverArray",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

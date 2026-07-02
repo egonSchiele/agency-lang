@@ -1,0 +1,80 @@
+// For-loops inside handler bodies compile through plain-mode codegen. They must
+// iterate records by (key, value) and arrays by (element, index), matching
+// `Runner.loop` (stepped mode) and the type checker. A handler is a natural
+// place to loop over interrupt data.
+
+def guarded(): number {
+  const check = interrupt("confirm?")
+  return 42
+}
+
+// two-variable form over a record: second var is the VALUE.
+node twoVarOverRecord() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    const scores = {
+      alice: 10,
+      bob: 20,
+      carol: 30
+    }
+    let total = 0
+    for (name, score in scores) {
+      total = total + score
+    }
+    // 10 + 20 + 30 = 60. A broken loop (zero iterations) leaves total at 0.
+    if (total == 60) {
+      return approve()
+    }
+    return reject()
+  }
+}
+
+// one-variable form over a record: iterate keys.
+node oneVarOverRecord() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    const scores = {
+      alice: 10,
+      bob: 20
+    }
+    let names = ""
+    for (name in scores) {
+      names = names + name
+    }
+    if (names == "alicebob") {
+      return approve()
+    }
+    return reject()
+  }
+}
+
+// arrays still bind the index as the second variable.
+node twoVarOverArray() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    const items = ["a", "b", "c"]
+    let out = ""
+    for (item, i in items) {
+      out = out + item + i
+    }
+    if (out == "a0b1c2") {
+      return approve()
+    }
+    return reject()
+  }
+}

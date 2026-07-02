@@ -1,0 +1,14 @@
+node main() {
+  const scores = {
+    alice: 10,
+    bob: 20,
+    carol: 30
+  }
+  // for (key, value in record): the second variable is the VALUE, not the
+  // numeric index. Arrays still bind the index as their second variable.
+  let out = ""
+  for (name, score in scores) {
+    out = out + name + "=" + score + ";"
+  }
+  return out
+}

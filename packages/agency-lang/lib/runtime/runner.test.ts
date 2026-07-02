@@ -423,6 +423,42 @@ describe("Runner", () => {
       expect(collected.sort()).toEqual(["alice", "bob"]);
     });
 
+    it("passes the value as the second callback arg when iterating a Record", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame);
+      const pairs: [string, unknown][] = [];
+
+      await runner.loop(
+        0,
+        { a: 1, b: 2, c: 3 },
+        async (key, value) => {
+          pairs.push([key, value]);
+        },
+      );
+
+      expect(pairs).toEqual([
+        ["a", 1],
+        ["b", 2],
+        ["c", 3],
+      ]);
+    });
+
+    it("passes the numeric index as the second callback arg when iterating an array", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame);
+      const pairs: [unknown, unknown][] = [];
+
+      await runner.loop(0, ["x", "y", "z"], async (item, index) => {
+        pairs.push([item, index]);
+      });
+
+      expect(pairs).toEqual([
+        ["x", 0],
+        ["y", 1],
+        ["z", 2],
+      ]);
+    });
+
     it("does nothing when iterating an empty Record", async () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);

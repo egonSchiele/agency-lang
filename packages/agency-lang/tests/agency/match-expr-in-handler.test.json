@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "nodeName": "approvesOnMatch",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejectsOnNoMatch",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "assignsFromMatch",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "approvesOnPatternArm",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "blockArmShortCircuits",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

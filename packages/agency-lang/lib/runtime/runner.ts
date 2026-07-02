@@ -17,6 +17,7 @@ import {
 } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
+import { matchValName } from "../matchVal.js";
 
 /** Options bag for the new `Runner.thread(id, method, opts, callback)`
  *  signature. All fields are optional; emitter passes only the ones
@@ -259,7 +260,7 @@ export class Runner {
   /** Yield `value` from a match arm: store it as the match result and skip
    *  everything until the owning ifElse (matchId) consumes the flag. */
   exitMatch(matchId: number, value: unknown): void {
-    this.frame.locals[`__matchval_${matchId}`] = value;
+    this.frame.locals[matchValName(matchId)] = value;
     this._matchExit = matchId;
   }
 
@@ -815,7 +816,8 @@ export class Runner {
   async loop(
     id: number,
     items: any[] | Record<string, any>,
-    callback: (item: any, index: number, runner: Runner) => Promise<void>,
+    // Second arg is the numeric index for arrays, or the value for records.
+    callback: (item: any, second: any, runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
@@ -836,10 +838,12 @@ export class Runner {
     // iterable, matching how a JS `for...of` over a non-iterable would
     // simply do nothing rather than crash mid-flow.
     let iterable: any[];
+    let isRecord = false;
     if (Array.isArray(items)) {
       iterable = items;
     } else if (items != null && typeof items === "object") {
       iterable = Object.keys(items);
+      isRecord = true;
     } else {
       iterable = [];
     }
@@ -854,7 +858,12 @@ export class Runner {
       this._continue = false;
       this.path.push(id);
       try {
-        await this.runInScope(() => callback(iterable[i], i, this));
+        // `for (item, second in x)`: for arrays the second variable is the
+        // numeric index; for records it is the value at the current key. The
+        // first callback arg is the element (array) or the key (record).
+        const item = iterable[i];
+        const second = isRecord ? (items as Record<string, any>)[item] : i;
+        await this.runInScope(() => callback(item, second, this));
       } finally {
         this.path.pop();
       }

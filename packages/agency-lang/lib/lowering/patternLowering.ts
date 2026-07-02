@@ -26,6 +26,7 @@ import type {
 import { isExpressionNode } from "../types.js";
 import type { MatchYield } from "../types/matchYield.js";
 import { LoweringError } from "./loweringError.js";
+import { matchValName } from "../matchVal.js";
 import type { BinOpExpression, Operator } from "../types/binop.js";
 import type { AgencyArray } from "../types/dataStructures.js";
 import type {
@@ -59,19 +60,10 @@ class PatternLowerer {
 
   /** True while lowering the top-level (module) node list; flipped to false by
    *  `lowerBody` when descending into any body-bearing container (function /
-   *  node / if / loop / match arm / block). Used to reject `match` expressions
-   *  in module-level initializers, which have no execution frame to unwind. */
+   *  node / if / loop / match arm / block / handler). Used to reject `match`
+   *  expressions in module-level initializers, which have no execution frame
+   *  to unwind. */
   private atModuleLevel = true;
-
-  /** True while lowering, in the SAME execution frame, the body of a `with`
-   *  handler. Handler bodies compile through `processBlockPlain` (no owning
-   *  `runner.ifElse` to clear `_matchExit`), so an expression `match` there
-   *  would emit `exitMatch(...); return;` that exits the handler and leaves
-   *  `_matchExit` set — silently skipping every later construct in the node.
-   *  Expression matches are rejected while this is set. Reset at frame
-   *  boundaries (nested functions/nodes/blocks/concurrency) by
-   *  `lowerNewFrameBody`, since those compile in their own frames. */
-  private insideHandlerBody = false;
 
   private freshName(prefix: string): string {
     return `__${prefix}_${++this.counter}`;
@@ -81,9 +73,11 @@ class PatternLowerer {
     return nodes.flatMap((n) => this.lowerNode(n));
   }
 
-  /** Lower a nested body in the SAME execution frame (if/else, loop, match arm,
-   *  guarded `handle` body): temporarily clears the `atModuleLevel` flag but
-   *  PRESERVES `insideHandlerBody`, since these run in the enclosing frame. */
+  /** Lower a nested body (any body-bearing container): temporarily clears the
+   *  `atModuleLevel` flag so `match` expressions inside are allowed. Match
+   *  expressions inside a handler body are fine — the builder compiles them to
+   *  a self-contained async IIFE in the handler's plain-mode codegen, so they
+   *  never touch the runner's `_matchExit` unwind flag. */
   private lowerBody(nodes: AgencyNode[]): AgencyNode[] {
     const prev = this.atModuleLevel;
     this.atModuleLevel = false;
@@ -91,38 +85,6 @@ class PatternLowerer {
       return this.lower(nodes);
     } finally {
       this.atModuleLevel = prev;
-    }
-  }
-
-  /** Lower the body of a construct that runs in its OWN execution frame
-   *  (nested function / node / block argument / concurrency block / function
-   *  call block). Clears `atModuleLevel` AND `insideHandlerBody`: a `match`
-   *  inside such a body compiles against its own frame, not the handler's. */
-  private lowerNewFrameBody(nodes: AgencyNode[]): AgencyNode[] {
-    const prevModule = this.atModuleLevel;
-    const prevHandler = this.insideHandlerBody;
-    this.atModuleLevel = false;
-    this.insideHandlerBody = false;
-    try {
-      return this.lower(nodes);
-    } finally {
-      this.atModuleLevel = prevModule;
-      this.insideHandlerBody = prevHandler;
-    }
-  }
-
-  /** Lower an inline `with` handler body, marking `insideHandlerBody` so that
-   *  expression matches within it (same frame) are rejected. */
-  private lowerHandlerBody(nodes: AgencyNode[]): AgencyNode[] {
-    const prevModule = this.atModuleLevel;
-    const prevHandler = this.insideHandlerBody;
-    this.atModuleLevel = false;
-    this.insideHandlerBody = true;
-    try {
-      return this.lower(nodes);
-    } finally {
-      this.atModuleLevel = prevModule;
-      this.insideHandlerBody = prevHandler;
     }
   }
 
@@ -139,28 +101,24 @@ class PatternLowerer {
       case "forLoop":
         return [this.lowerForLoop(node)];
       case "handleBlock": {
-        // Descend the guarded body in the SAME frame, but mark the inline
-        // handler body so expression matches within it are rejected (see
-        // `insideHandlerBody`). Non-inline handlers have no body to descend.
+        // Descend both the guarded body and the inline handler body. Non-inline
+        // handlers have no body to descend.
         const hb = node as HandleBlock;
         const body = this.lowerBody(hb.body);
         const handler =
           hb.handler.kind === "inline"
-            ? { ...hb.handler, body: this.lowerHandlerBody(hb.handler.body) }
+            ? { ...hb.handler, body: this.lowerBody(hb.handler.body) }
             : hb.handler;
         return [{ ...hb, body, handler }];
       }
       case "returnStatement": {
         const ret = node as ReturnStatement;
         // Expression-position match: `return match(E) { ... }`. Hoist the match
-        // region and return the temp it produces.
+        // region and return the temp it produces. This is allowed inside handler
+        // bodies too: the builder compiles the hoisted region to a self-contained
+        // async IIFE there (plain mode), so it never sets the runner's
+        // `_matchExit` unwind flag that a handler has no `runner.ifElse` to clear.
         if (ret.value !== undefined && (ret.value as AgencyNode).type === "matchBlock") {
-          if (this.insideHandlerBody) {
-            throw new LoweringError(
-              "match expressions are not supported inside handler bodies",
-              ret.loc,
-            );
-          }
           const region = this.lowerMatchExpressionCore(ret.value as MatchBlock, ret.loc);
           return [...region.statements, { ...ret, value: region.valueRef }];
         }
@@ -187,10 +145,8 @@ class PatternLowerer {
         // graphNode / parallelBlock / seqBlock / blockArgument /
         // functionCall.block / …; `handleBlock` is handled explicitly above).
         // For nodes that are also Expressions, additionally walk the expression
-        // tree so nested `isExpression` is lowered. Each of these bodies runs in
-        // its own execution frame, so clear both module-level AND handler-body
-        // flags via `lowerNewFrameBody`.
-        const withRecursedBodies = mapBodies(node, (b) => this.lowerNewFrameBody(b));
+        // tree so nested `isExpression` is lowered.
+        const withRecursedBodies = mapBodies(node, (b) => this.lowerBody(b));
         if (isExpr(withRecursedBodies as unknown)) {
           return [this.lowerExpression(withRecursedBodies as unknown as Expression) as unknown as AgencyNode];
         }
@@ -220,7 +176,7 @@ class PatternLowerer {
     }
     if (expr.type === "functionCall") {
       const block = expr.block
-        ? { ...expr.block, body: this.lowerNewFrameBody(expr.block.body) }
+        ? { ...expr.block, body: this.lowerBody(expr.block.body) }
         : expr.block;
       return {
         ...expr,
@@ -279,17 +235,13 @@ class PatternLowerer {
     // Expression-position match: `const x = match(E) { ... }`. Hoist the match
     // region above and rewrite the assignment value to the temp the region
     // produces. Module-level initializers have no execution frame to unwind, so
-    // they are rejected.
+    // they are rejected. Handler bodies ARE allowed: the builder compiles the
+    // hoisted region to a self-contained async IIFE there (plain mode), which
+    // never sets the runner's `_matchExit` flag.
     if (node.value && (node.value as AgencyNode).type === "matchBlock") {
       if (this.atModuleLevel) {
         throw new LoweringError(
           "match expressions are not supported in module-level initializers",
-          node.loc,
-        );
-      }
-      if (this.insideHandlerBody) {
-        throw new LoweringError(
-          "match expressions are not supported inside handler bodies",
           node.loc,
         );
       }
@@ -473,7 +425,7 @@ class PatternLowerer {
         : c,
     );
     const statements = this.lowerMatchBlock({ ...match, cases }, matchId);
-    return { statements, valueRef: varRef(`__matchval_${matchId}`, loc), matchId };
+    return { statements, valueRef: varRef(matchValName(matchId), loc), matchId };
   }
 
   /**

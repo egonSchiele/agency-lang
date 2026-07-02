@@ -36,15 +36,15 @@ node main() { return foo(42) }
     // typechecker diagnostic that gets ignored. This covers the wiring
     // from \`checkEffectPayloads\` → \`ctx.errors\` → compile failure.
     const source = `
-effect std::read { dir: string }
-node main() { raise std::read("m", { dir: 5 }) }
+effect app::read { dir: string }
+node main() { raise app::read("m", { dir: 5 }) }
 `;
     const result = compileSource(source, { typechecker: { enabled: true } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(
         result.errors.some((e) =>
-          /Effect 'std::read' data field 'dir' has the wrong type/.test(e),
+          /Effect 'app::read' data field 'dir' has the wrong type/.test(e),
         ),
       ).toBe(true);
     }
@@ -54,8 +54,8 @@ node main() { raise std::read("m", { dir: 5 }) }
     // Companion to the previous test — proves the typecheck wiring isn't
     // simply broken-on (rejecting everything).
     const source = `
-effect std::read { dir: string }
-node main() { raise std::read("m", { dir: "/tmp" }) }
+effect app::read { dir: string }
+node main() { raise app::read("m", { dir: "/tmp" }) }
 `;
     const result = compileSource(source, { typechecker: { enabled: true } });
     expect(result.success).toBe(true);

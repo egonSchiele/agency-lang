@@ -155,7 +155,7 @@ describe("checkHandlerBodyInterrupts", () => {
     // The built-in approve/reject handlers don't run user code.
     const errors = errorsFrom(`
       def needsApproval() {
-        interrupt std::read("ignored")
+        interrupt app::read("ignored")
       }
       node main() {
         needsApproval() with approve

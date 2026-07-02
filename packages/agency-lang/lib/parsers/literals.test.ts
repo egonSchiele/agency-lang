@@ -583,6 +583,21 @@ describe("literals parsers", () => {
       { input: '"\\0"', value: "\0" },
       { input: '"line1\\nline2"', value: "line1\nline2" },
 
+      // Hex and unicode escapes are interpreted into real characters (the
+      // parser owns escape semantics rather than leaning on the JS template
+      // literal the code compiles to). `\u0000` must yield a real NUL, not
+      // the literal six characters, so runtime guards keying on NUL fire.
+      { input: '"\\x41"', value: "A" },
+      { input: '"\\u0041"', value: "A" },
+      { input: '"\\u0000"', value: "\0" },
+      { input: '"BAD\\u0000NAME"', value: "BAD\0NAME" },
+      { input: '"\\u{1F600}"', value: "\u{1F600}" },
+      // Invalid hex/unicode forms are preserved verbatim (as unknown escapes)
+      // so existing strings that merely contain `\x`/`\u` don't change meaning.
+      { input: '"C:\\users"', value: "C:\\users" }, // \u not followed by 4 hex
+      { input: '"\\x4"', value: "\\x4" },            // \x needs two hex digits
+      { input: '"\\uABCG"', value: "\\uABCG" },      // 4th char not hex
+
       // Escaping the interpolation start so `${...}` appears literally.
       // Only the full `\${` sequence is an escape; a bare `\$` not
       // followed by `{` is preserved verbatim so existing strings with

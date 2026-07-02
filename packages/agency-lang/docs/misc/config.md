@@ -77,11 +77,15 @@ This lets you prevent specific built-in functions from being generated in the ou
   - **`definiteReturns`** (`"silent" | "warn" | "error"`): What to do when a
     function that declares a non-void return type can reach the end of its body
     without `return`ing a value (Agency has no implicit returns). Default:
-    `"warn"`. Exempt: functions with no return type, or a `void`/`never` return
-    type, and graph nodes. This first release also **skips any function that uses
-    a `match`** — whether a match-ending function returns on every path depends on
-    match exhaustiveness, which will be integrated in a follow-up; until then such
-    functions are never flagged (no false positives).
+    `"warn"`; set `"error"` to make it a compile failure (the same
+    promote-when-baked path `matchExhaustiveness` took). Exempt: functions with
+    no return type, or a `void`/`never` return type, and graph nodes.
+    Match-containing functions are fully checked: since match expressions, an
+    arm cannot return from the enclosing function (a statement-position arm
+    `return` is a compile error; an expression-arm `return` yields to the
+    match), so what matters is the code around the match — use
+    `return match(...)` to return a match's value. `while (true)` with no
+    `break` counts as never falling through.
 
 **Example:**
 ```json

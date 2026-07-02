@@ -248,6 +248,13 @@ export type Assignment = BaseNode & {
    *  union typing) can find the region that produces the value. Ignored by
    *  codegen (the value is a plain variable reference by then). */
   matchExprSource?: { matchId: number };
+  /** Set by pattern lowering on the synthetic scrutinee binding of a lowered
+   *  expression-position `match` with pattern arms. Marks that this assignment's
+   *  `matchSource` describes an EXPRESSION match, so the exhaustiveness pass
+   *  treats it as a hard error regardless of config. The paired if-chain root
+   *  and the `MatchBlock` passthrough carry the same tag (see ifElse.ts /
+   *  matchBlock.ts). Ignored by codegen. */
+  matchExprId?: number;
 };
 
 export function globalScope(): Scope {

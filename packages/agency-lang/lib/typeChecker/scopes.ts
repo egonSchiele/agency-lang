@@ -19,7 +19,7 @@ import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { checkType, getBlockSlot } from "./utils.js";
+import { checkType, emitAssignabilityError, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { expressionChildren } from "../utils/node.js";
@@ -190,6 +190,23 @@ export function checkAssignmentValue(
   ctx: TypeCheckerContext,
 ): void {
   if (node.type !== "assignment") {
+    return;
+  }
+  // Expression-position match consumer (`const x = match(E) { ... }`): the value
+  // is a `__matchval_<id>` ref, whose type is the match's computed union (not a
+  // plain synth of the temp). Check the annotation against that union directly
+  // and skip the generic checkType path (which would re-synth the temp).
+  if (node.matchExprSource) {
+    if (node.typeHint) {
+      const actual = ctx.matchExprTypes[node.matchExprSource.matchId] ?? "any";
+      emitAssignabilityError(
+        actual,
+        node.typeHint,
+        node.loc,
+        `assignment to '${node.variableName}'`,
+        ctx,
+      );
+    }
     return;
   }
   const newType = node.typeHint;

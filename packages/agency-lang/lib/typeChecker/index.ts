@@ -42,6 +42,7 @@ import {
 } from "./interruptAnalysis.js";
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
+import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
@@ -125,6 +126,7 @@ export class TypeChecker {
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,
+      matchExprTypes: {},
       config: this.config,
       getTypeAliases: () => this.typeAliases,
       withScope: <T>(key: string, fn: () => T): T => this.withScope(key, fn),
@@ -313,6 +315,14 @@ export class TypeChecker {
 
     // 3d. Build the flow graph AFTER the param retype, so its `typeAt` oracle is
     // seeded with the refined `e` (no stale-memo reset needed).
+    // 3e. Compute the value type of every expression-position `match` (union of
+    // its matchYield types) and patch the consumer variables' scope types BEFORE
+    // buildFlowGraphs, so the flow graph captures each `const x = match(...)`
+    // binding at its real (union) type — a downstream `const y = x` then narrows
+    // through typeAt correctly. Also populates the `__matchval_<id>` synth hook
+    // and the `matchExprSource` assignment check consumed in checkScopes.
+    computeMatchExprTypes(scopes, ctx);
+
     buildFlowGraphs(scopes, ctx);
 
     // 4. Check function calls, return types, and expressions. `e.data` is now

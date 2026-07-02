@@ -15,6 +15,10 @@ type MatchSite = {
   scrutineeType: VariableType | "any";
   arms: NormalizedArm[];
   loc: SourceLocation | undefined;
+  /** True when the match is used in expression position (`const x = match(...)`).
+   *  Expression matches must be exhaustive regardless of config — a missing case
+   *  means the produced value is undefined at runtime, which is unsound. */
+  isExpression: boolean;
 };
 
 /**
@@ -189,7 +193,14 @@ function missingCases(arms: NormalizedArm[], caseSet: CaseSet): TypeCase[] {
   return caseSet.cases.filter((c) => !covered.has(caseKey(c)));
 }
 
-function checkSite(site: MatchSite, severity: Severity, ctx: TypeCheckerContext): void {
+function checkSite(site: MatchSite, configured: Severity, ctx: TypeCheckerContext): void {
+  // Expression matches are ALWAYS a hard error — a non-exhaustive expression
+  // match yields `undefined` at runtime, which is unsound; config only tunes the
+  // statement-match diagnostic.
+  const severity: Severity = site.isExpression ? "error" : configured;
+  if (severity === "silent") {
+    return;
+  }
   const caseSet = decomposeCases(site.scrutineeType, ctx.getTypeAliases());
   const missing = missingCases(site.arms, caseSet);
   if (missing.length === 0) {
@@ -219,7 +230,7 @@ function normalizeSite(
       caseValue: a.caseValue,
       guarded: a.guard !== undefined,
     }));
-    return { scrutineeType, arms, loc: node.loc };
+    return { scrutineeType, arms, loc: node.loc, isExpression: node.matchExprId !== undefined };
   }
   // Literal/identifier passthrough: a surviving `matchBlock` node.
   if (node.type === "matchBlock") {
@@ -227,7 +238,7 @@ function normalizeSite(
     const arms = node.cases
       .filter((c): c is MatchBlockCase => c.type === "matchBlockCase")
       .map((c) => ({ caseValue: c.caseValue, guarded: c.guard !== undefined }));
-    return { scrutineeType, arms, loc: node.loc };
+    return { scrutineeType, arms, loc: node.loc, isExpression: node.matchExprId !== undefined };
   }
   return null;
 }
@@ -243,10 +254,10 @@ export function checkMatchExhaustiveness(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
-  const severity = (ctx.config.typechecker?.matchExhaustiveness ?? "error") as Severity;
-  if (severity === "silent") {
-    return;
-  }
+  // Do NOT early-return on `silent`: expression matches are still hard-checked
+  // per-site (checkSite decides the effective severity). Only statement sites
+  // honor the configured value.
+  const configured = (ctx.config.typechecker?.matchExhaustiveness ?? "error") as Severity;
   for (const info of scopes) {
     ctx.withScope(info.scopeKey, () => {
       for (const { node, scopes: nodeScopes } of walkNodes(info.body)) {
@@ -255,7 +266,7 @@ export function checkMatchExhaustiveness(
         }
         const site = normalizeSite(node, info.scope, ctx);
         if (site) {
-          checkSite(site, severity, ctx);
+          checkSite(site, configured, ctx);
         }
       }
     });

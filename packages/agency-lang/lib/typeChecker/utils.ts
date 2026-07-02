@@ -1,4 +1,5 @@
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
+import type { SourceLocation } from "../types/base.js";
 import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import {
@@ -130,18 +131,34 @@ export function checkType(
   const actualType = synthType(expr, scope, ctx);
   if (actualType === "any") return;
 
-  const typeAliases = ctx.getTypeAliases();
-  if (!isAssignable(actualType, expectedType, typeAliases)) {
-    ctx.errors.push({
-      message: `Type '${formatTypeHint(actualType)}' is not assignable to type '${formatTypeHint(expectedType)}' (${context}).`,
-      expectedType: formatTypeHint(expectedType),
-      actualType: formatTypeHint(actualType),
-      loc: expr.loc,
-    });
-  }
+  emitAssignabilityError(actualType, expectedType, expr.loc, context, ctx);
   if (expr.type === "agencyObject") {
     checkExcessObjectProperties(expr, expectedType, context, ctx);
   }
+}
+
+/**
+ * The single "X is not assignable to Y" diagnostic construction site. No-op
+ * when `actual` is `any` or already assignable to `expected`; otherwise pushes
+ * the standard assignability error. Shared by `checkType` (assignment / return
+ * checking) and the expression-match `matchExprSource` check in scopes.ts so
+ * neither hand-rolls the message.
+ */
+export function emitAssignabilityError(
+  actual: VariableType | "any",
+  expected: VariableType,
+  loc: SourceLocation | undefined,
+  context: string,
+  ctx: TypeCheckerContext,
+): void {
+  if (actual === "any") return;
+  if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
+  ctx.errors.push({
+    message: `Type '${formatTypeHint(actual)}' is not assignable to type '${formatTypeHint(expected)}' (${context}).`,
+    expectedType: formatTypeHint(expected),
+    actualType: formatTypeHint(actual),
+    loc,
+  });
 }
 
 /**

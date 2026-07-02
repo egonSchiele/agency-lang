@@ -84,6 +84,12 @@ export type TypeCheckerContext = {
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;
+  /** The value type of each expression-position `match`, keyed by its match id.
+   *  Populated by `computeMatchExprTypes` (runs after buildFlowGraphs, before
+   *  checkScopes): the widened union of the match's `matchYield` value types, or
+   *  "any" if any yield is "any". Consumed by the `__matchval_<id>` synth hook
+   *  and the `matchExprSource` assignment check. */
+  matchExprTypes: Record<number, VariableType | "any">;
   config: AgencyConfig;
   /** Optional symbol table threaded through from `buildCompilationUnit`.
    *  Used by the interrupt call-graph analysis to resolve cross-file

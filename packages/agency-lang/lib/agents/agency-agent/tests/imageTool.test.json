@@ -1,0 +1,10 @@
+{
+  "tests": [
+    { "nodeName": "savesToAgentCwd", "input": "", "expectedOutput": "\"Saved image to it-gencwd.png|true|true\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true },
+    { "nodeName": "savesToAbsolutePath", "input": "", "expectedOutput": "\"Saved image to /tmp/it-abs.png|true\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true },
+    { "nodeName": "reportsWriteFailure", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true },
+    { "nodeName": "editInputsResolveAgainstAgentCwd", "input": "", "expectedOutput": "\"/tmp/a.png|/abs/b.png\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true },
+    { "nodeName": "editInputsPassThrough", "input": "", "expectedOutput": "\"Saved image to it-edit.png\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true },
+    { "nodeName": "costRecordedForGeneration", "input": "", "expectedOutput": "\"0.04\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true }
+  ]
+}

@@ -13,6 +13,20 @@
           "resolvedValue": "yes"
         }
       ]
+    },
+    {
+      "nodeName": "mainCatch",
+      "description": "Interrupts bubble out of an assignment-position try-catch expression too",
+      "input": "",
+      "expectedOutput": "\"got: resumed: yes\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "expectedMessage": "Approve this?",
+          "resolvedValue": "yes"
+        }
+      ]
     }
   ]
 }

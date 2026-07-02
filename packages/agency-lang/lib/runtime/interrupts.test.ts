@@ -5,6 +5,7 @@ import {
   reportUnhandledInterrupts,
   mergeChainOutcomes,
   interruptWithHandlers,
+  gatherChainOutcome,
 } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 
@@ -70,6 +71,39 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "approved", resolvedBy: "ipc" }),
     );
+  });
+
+  it("a local reject emits exactly ONE terminal event and never consults the parent", async () => {
+    process.env.AGENCY_IPC = "1";
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    const ctx = makeCtx([async () => ({ type: "reject", value: "no" })]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "reject", value: "no" });
+    expect(send).not.toHaveBeenCalled();
+    expect(resolved).toHaveBeenCalledTimes(1);
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "rejected", resolvedBy: "handler" }),
+    );
+  });
+
+  it("a relay hop (gatherChainOutcome) emits NO terminal event on reject", async () => {
+    // The parent process evaluating a child's relayed interrupt: only
+    // handlerDecision events belong to the hop — the terminal
+    // interruptResolved is emitted once, at the origin.
+    const ctx = makeCtx([async () => ({ type: "reject", value: "no" })]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const { outcome } = await gatherChainOutcome(
+      { effect: "std::bash", message: "m", data: {}, origin: "o" },
+      ctx,
+      undefined,
+      "child-intr-1",
+    );
+    expect(outcome).toEqual({ kind: "rejected", value: "no" });
+    expect(resolved).not.toHaveBeenCalled();
   });
 });
 

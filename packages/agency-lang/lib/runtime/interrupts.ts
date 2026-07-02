@@ -236,8 +236,12 @@ async function runHandlerChain(
           continue;
         }
         if (result.type === "reject") {
+          // Only the per-handler decision event here. The terminal
+          // interruptResolved is emitted exactly once, by the ORIGIN
+          // dispatch's renderVerdict — a relay hop (a parent process
+          // rejecting a child's interrupt via gatherChainOutcome) must not
+          // emit a second terminal event into the shared trace.
           ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value, interrupt: interruptSummary });
-          ctx.statelogClient.interruptResolved({ interruptId, outcome: "rejected", resolvedBy: "handler", interrupt: interruptSummary });
           return { kind: "rejected", value: result.value };
         }
         if (result.type === "propagate") {
@@ -302,31 +306,33 @@ export function mergeChainOutcomes(
  * handlerDecision/interruptResolved statelog events correlate with the
  * originating interrupt (ids are preserved verbatim end-to-end).
  *
- * The extra flags let the origin caller (`interruptWithHandlers`) render
- * the verdict correctly: `localRejected` means `runHandlerChain` already
- * emitted the terminal statelog event (do not emit again), and
- * `parentDecided` distinguishes a verdict the parent hop actually
+ * `parentDecided` lets the origin caller (`interruptWithHandlers`)
+ * attribute the verdict: it distinguishes a verdict the parent hop actually
  * participated in from one settled purely by local handlers (the
- * `resolvedBy: "ipc" | "handler"` attribution). */
+ * `resolvedBy: "ipc" | "handler"` tag). Neither this function nor
+ * `runHandlerChain` emits terminal statelog events — the origin's
+ * `renderVerdict` is the sole emitter, so relay hops (a parent process
+ * evaluating a child's interrupt) contribute only handlerDecision events
+ * to the shared trace. */
 export async function gatherChainOutcome(
   interruptObj: { effect: string; message: string; data: any; origin: string },
   ctx: RuntimeContext<any>,
   stack: StateStack | undefined,
   interruptId: string,
-): Promise<{ outcome: HandlerChainOutcome; parentDecided: boolean; localRejected: boolean }> {
+): Promise<{ outcome: HandlerChainOutcome; parentDecided: boolean }> {
   const local = await runHandlerChain(ctx, stack, interruptId, interruptObj);
   if (local.kind === "rejected") {
-    return { outcome: local, parentDecided: false, localRejected: true };
+    // Local reject is final — fail-fast, the parent is never consulted.
+    return { outcome: local, parentDecided: false };
   }
   if (isIpcMode()) {
     const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
     return {
       outcome: mergeChainOutcomes(local, parentOutcome),
       parentDecided: parentOutcome.kind !== "noResponse",
-      localRejected: false,
     };
   }
-  return { outcome: local, parentDecided: false, localRejected: false };
+  return { outcome: local, parentDecided: false };
 }
 
 /** Render a merged chain outcome into the shape `interruptWithHandlers`
@@ -393,16 +399,12 @@ export async function interruptWithHandlers<T = any>(
   // subprocess that is the pause path (the batch bubbles through the normal
   // propagate machinery and the bootstrap converts it into an `interrupted`
   // terminal message).
-  const { outcome, parentDecided, localRejected } = await gatherChainOutcome(
+  const { outcome, parentDecided } = await gatherChainOutcome(
     interruptObj,
     ctx,
     stack,
     interruptId,
   );
-  if (localRejected && outcome.kind === "rejected") {
-    // runHandlerChain already emitted the terminal interruptResolved event.
-    return { type: "reject", value: outcome.value };
-  }
   return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }
 

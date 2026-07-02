@@ -395,23 +395,18 @@ export async function sendLockAcquireToParent(
     ...(opts.warnAfterMs !== undefined ? { warnAfterMs: opts.warnAfterMs } : {}),
   } satisfies IpcLockAcquireMessage;
   ipcLog("send", outMsg);
+  // No per-call `disconnect` handling: the bootstrap's watchdog
+  // (subprocess-bootstrap.ts) is the single disconnect authority — it
+  // registers at module load, fires first, and exits the process, so a
+  // later-registered handler here could never run anyway. Same contract
+  // as sendInterruptToParent.
   return new Promise((resolve, reject) => {
     let settled = false;
-    const cleanup = () => {
-      process.removeListener("message", handler);
-      process.removeListener("disconnect", onDisconnect);
-    };
-    const fail = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(err);
-    };
     const handler = (msg: any) => {
       if (msg.type === "lockGranted" && msg.requestId === outMsg.requestId) {
         if (settled) return;
         settled = true;
-        cleanup();
+        process.removeListener("message", handler);
         ipcLog("recv", msg);
         if (msg.error) {
           reject(new Error(msg.error));
@@ -434,11 +429,7 @@ export async function sendLockAcquireToParent(
         });
       }
     };
-    const onDisconnect = () => {
-      fail(new Error(`IPC channel closed while waiting for lock '${name}'`));
-    };
     process.on("message", handler);
-    process.once("disconnect", onDisconnect);
     process.send!(outMsg);
   });
 }

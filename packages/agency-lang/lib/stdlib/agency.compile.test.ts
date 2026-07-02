@@ -21,13 +21,23 @@ describe("_subprocessDepth", () => {
 
 describe("_compile", () => {
   it("returns code text and writes nothing to disk", () => {
-    const tmpRoot = join(process.cwd(), ".agency-tmp");
-    const before = existsSync(tmpRoot) ? readdirSync(tmpRoot) : [];
     const result = _compile("node main() { return 42 }");
-    const after = existsSync(tmpRoot) ? readdirSync(tmpRoot) : [];
     expect(typeof result.moduleId).toBe("string");
     expect(result.code).toContain("main"); // transpiled JS text
     expect((result as any).path).toBeUndefined(); // no file reference
-    expect(after).toEqual(before); // no temp-dir writes at compile time
+    // No module-specific artifact under .agency-tmp. Deliberately NOT a
+    // whole-directory before/after comparison: other tests write their own
+    // temp dirs there concurrently, which would make that flaky.
+    const tmpRoot = join(process.cwd(), ".agency-tmp");
+    const entries = existsSync(tmpRoot) ? readdirSync(tmpRoot) : [];
+    const mentionsModule = entries.filter((entry) => {
+      const dir = join(tmpRoot, entry);
+      try {
+        return readdirSync(dir).some((f) => f.includes(result.moduleId));
+      } catch {
+        return entry.includes(result.moduleId);
+      }
+    });
+    expect(mentionsModule).toEqual([]);
   });
 });

@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "After a pause/resume, the child re-registers its own handlers before the next interrupt site",
+      "input": "",
+      "expectedOutput": "\"unhandled-one\\nhandled-two\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

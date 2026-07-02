@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting a surfaced subprocess interrupt resumes the child with a failure, not an abort",
+      "input": "",
+      "expectedOutput": "\"rejected-as-expected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

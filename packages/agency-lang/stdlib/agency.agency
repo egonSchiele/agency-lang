@@ -10,6 +10,7 @@ import {
   _walkAST,
   _getNodesOfType,
   _filterImports,
+  _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
@@ -25,6 +26,7 @@ effect std::run {
   limits: { wallClock: number, memory: number, ipcPayload: number, stdout: number },
   cwd: string,
   logFile: string,
+  depth: number,
 }
 
 export type CompiledProgram = {
@@ -70,11 +72,12 @@ export def run(
   stdout: number = 1mb,
   logFile: string = "",
   cwd: string = "",
+  maxDepth: number = 5,
 ): Result {
   """
-  Execute a compiled Agency program in a subprocess. The parent's handler chain extends to the subprocess — subprocess interrupts must be approved by both subprocess and parent handlers. Returns the subprocess node's result on success.
+  Execute a compiled Agency program in a subprocess. The parent's handler chain extends to the subprocess — subprocess interrupts run through both the subprocess's and the parent's handlers, and any interrupt no handler resolves surfaces to the user; responding resumes the subprocess exactly where it paused. Returns the subprocess node's result on success.
 
-  Resource limits clamp the subprocess: it is killed and a limit_exceeded failure is returned if it exceeds wallClock, memory, ipcPayload, or stdout.
+  Resource limits clamp the subprocess: it is killed and a limit_exceeded failure is returned if it exceeds wallClock, memory, ipcPayload, or stdout (each budget applies per execution segment). Subprocesses may themselves call run() — nesting is gated by the std::run interrupt at every level (its data includes the prospective depth) and hard-capped by maxDepth.
 
   @param compiled - A CompiledProgram from compile()
   @param node - Which exported node to run
@@ -85,6 +88,7 @@ export def run(
   @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
+  @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10); tighter ancestor caps always win
   """
   let configOverrides = null
   if (logFile != "") {
@@ -106,10 +110,11 @@ export def run(
       stdout: stdout
     },
     cwd: cwd,
-    logFile: logFile
+    logFile: logFile,
+    depth: _subprocessDepth() + 1
   })
 
-  return try _run(compiled, node, args, wallClock, memory, ipcPayload, stdout, configOverrides, cwd)
+  return try _run(compiled, node, args, wallClock, memory, ipcPayload, stdout, configOverrides, cwd, maxDepth)
 }
 
 export def runFile(

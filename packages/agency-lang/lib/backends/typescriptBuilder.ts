@@ -2136,44 +2136,17 @@ export class TypeScriptBuilder {
         );
       }
 
-      // Sync calls: check for interrupt result
-      if (this.insideHandlerBody) {
-        // Unique name per call — handler-body statements share one scope.
-        const tempVar = `__funcResult_${this.handlerFuncResultCounter++}`;
-        return ts.statements([
-          ts.constDecl(tempVar, callNode),
-          ts.if(
-            this.interruptCheckRaw(tempVar),
-            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
-          ),
-        ]);
-      }
-      const tempVar = "__funcResult";
-      const nodeContext = scope.type === "node";
-      // In node context, wrap with state for the driver.
-      // In function context, halt with the interrupt array directly so the
-      // caller's hasInterrupts check can detect it.
-      const haltValue = nodeContext
-        ? ts.obj([
-          ts.setSpread(ts.runtime.state),
-          ts.set("data", ts.id(tempVar)),
-        ])
-        : ts.id(tempVar);
+      // Sync calls: bind the result to a temp and emit the shared interrupt
+      // guard (assignmentInterruptGuard owns the handler-body-throw vs
+      // halt dispatch and the node-vs-function halt shape). Handler-body
+      // statements share one scope, so those get a unique temp name.
+      const tempVar = this.insideHandlerBody
+        ? `__funcResult_${this.handlerFuncResultCounter++}`
+        : "__funcResult";
+      const guard = this.assignmentInterruptGuard(ts.id(tempVar));
       return ts.statements([
         ts.constDecl(tempVar, callNode),
-        ts.if(
-          this.interruptCheck(ts.id(tempVar)),
-          ts.statements([
-            ts.awaitMethodCall(
-              // Strict accessor — immediate deref of `pendingPromises`
-              // inside a step body under the withAlsFrame wrap.
-              ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
-              "awaitAll",
-            ),
-            ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-            ts.return(),
-          ]),
-        ),
+        ...(guard ? [guard] : []),
       ]);
     }
 
@@ -2889,6 +2862,58 @@ export class TypeScriptBuilder {
     return result;
   }
 
+  /** True when an assignment RHS can evaluate to a bubbled Interrupt[]
+   * without any halt check of its own: a tryExpression anywhere in a binOp
+   * tree. `__tryCall` and `__catchResult` both forward a non-Result value
+   * unchanged, and `||`/`??` pass a (truthy, non-null) array through — so
+   * `try f()`, `try f() catch v`, and `try f() || x` all deliver the raw
+   * batch to the assignment. Plain functionCall RHS is handled by its own
+   * richer branch (async fork setup etc.), not this predicate. */
+  private rhsMayBubbleInterrupts(value: AgencyNode): boolean {
+    if (value.type === "tryExpression") return true;
+    if (value.type === "binOpExpression") {
+      return (
+        this.rhsMayBubbleInterrupts(value.left as AgencyNode) ||
+        this.rhsMayBubbleInterrupts(value.right as AgencyNode)
+      );
+    }
+    return false;
+  }
+
+  /** The interrupt guard emitted after a sync assignment whose RHS may
+   * bubble an Interrupt[]: halt the scope (awaitAll first) so the batch
+   * propagates to the caller, or — inside a handler body — throw, since
+   * handlers must not raise interrupts. Returns null at global scope,
+   * where there is no runner to halt. */
+  private assignmentInterruptGuard(varRef: TsNode): TsNode | null {
+    if (this.scopes.current().type === "global") return null;
+    if (this.insideHandlerBody) {
+      return ts.if(
+        this.interruptCheckRaw(this.str(varRef)),
+        ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+      );
+    }
+    // Sync: interrupt check with awaitAll before halt.
+    // In function context, halt with the interrupt array directly so
+    // the caller's hasInterrupts check can detect it.
+    const haltValue =
+      this.scopes.current().type === "node"
+        ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
+        : varRef;
+    return ts.if(
+      this.interruptCheck(varRef),
+      ts.statements([
+        ts.awaitMethodCall(
+          // Strict accessor — immediate deref inside step body.
+          ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
+          "awaitAll",
+        ),
+        ts.methodCall(ts.id("runner"), "halt", [haltValue]),
+        ts.return(),
+      ]),
+    );
+  }
+
   private _processAssignmentInner(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
@@ -2964,38 +2989,37 @@ export class TypeScriptBuilder {
             ),
           ),
         );
-      } else if (this.scopes.current().type !== "global") {
-        if (this.insideHandlerBody) {
-          stmts.push(
-            ts.if(
-              this.interruptCheckRaw(this.str(varRef)),
-              ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
-            ),
-          );
-        } else {
-          // Sync: interrupt check with awaitAll before halt.
-          // In function context, halt with the interrupt array directly so
-          // the caller's hasInterrupts check can detect it.
-          const haltValue =
-            this.scopes.current().type === "node"
-              ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
-              : varRef;
-          stmts.push(
-            ts.if(
-              this.interruptCheck(varRef),
-              ts.statements([
-                ts.awaitMethodCall(
-                  // Strict accessor — immediate deref inside step body.
-                  ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
-                  "awaitAll",
-                ),
-                ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-                ts.return(),
-              ]),
-            ),
-          );
-        }
+      } else {
+        const guard = this.assignmentInterruptGuard(varRef);
+        if (guard) stmts.push(guard);
       }
+      return ts.statements(stmts);
+    } else if (this.rhsMayBubbleInterrupts(value)) {
+      // `try` catches FAILURES, not interrupts — an Interrupt[] bubbling out
+      // of the callee passes through __tryCall (and __catchResult, and `||`)
+      // untouched and must halt this scope exactly like a plain
+      // function-call assignment. Without this guard the raw interrupt
+      // array is assigned to the variable (isSuccess and isFailure both
+      // false) and the paused state is stranded. The predicate walks binOp
+      // trees so `try f() catch v` and `try f() || x` are covered, not just
+      // a bare top-level tryExpression.
+      const varRef = this.assigns.lhs(
+        node.scope!,
+        variableName,
+        node.accessChain,
+        node.blockDepth ?? 0,
+      );
+      const stmts: TsNode[] = [
+        this.assigns.scopedAssign(
+          node.scope!,
+          variableName,
+          this.processNode(value),
+          node.accessChain,
+          node.blockDepth ?? 0,
+        ),
+      ];
+      const guard = this.assignmentInterruptGuard(varRef);
+      if (guard) stmts.push(guard);
       return ts.statements(stmts);
     } else if (value.type === "messageThread") {
       return this.processMessageThread(value, node);

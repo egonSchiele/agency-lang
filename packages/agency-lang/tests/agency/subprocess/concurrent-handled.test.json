@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork in subprocess: all three concurrent interrupts resolve via parent handler round-trips",
+      "input": "",
+      "expectedOutput": "[\"branch-a\\n\",\"branch-b\\n\",\"branch-c\\n\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

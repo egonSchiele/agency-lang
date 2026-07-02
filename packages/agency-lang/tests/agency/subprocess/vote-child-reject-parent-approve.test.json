@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Child-local reject is final even when the parent chain would approve",
+      "input": "",
+      "expectedOutput": "\"rejected-locally\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

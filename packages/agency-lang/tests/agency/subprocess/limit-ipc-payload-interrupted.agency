@@ -1,0 +1,38 @@
+import { compile, run } from "std::agency"
+
+// The interrupted terminal message carries the child checkpoint, so a huge
+// live local inflates it past ipcPayload. The run must FAIL LOUDLY with the
+// structured limit failure — never pause un-resumably. (The ordinary
+// per-interrupt round-trip message is tiny and still fits.)
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  // Build a ~5mb string by doubling; it stays live across the interrupt.
+  let big = "x"
+  for (i in range(0, 23)) {
+    big = big + big
+  }
+  let r = bash("echo never")
+  return r.stdout + big
+}
+"""
+  const c = compile(source)
+  if (isFailure(c)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main", ipcPayload: 1mb)
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "ipc_payload") {
+        return "ipc_payload limit hit on pause"
+      }
+      return "wrong failure"
+    }
+    return "unexpected success"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

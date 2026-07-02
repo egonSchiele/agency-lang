@@ -199,6 +199,12 @@ Matches that mix function-exit arms with effect-only arms can't be
 mechanically hoisted this way and need to be restructured by hand (e.g.
 assign an optional result and return conditionally after the match).
 
+One exemption: a `return` inside a `handle { ... }` block's handler body
+keeps its usual handler meaning (e.g. `return approve()`) even when the
+`handle` statement sits inside a match arm — handler bodies are their own
+return scope, so those returns neither trigger this error nor count as
+the arm's yield.
+
 ### Yielding an object literal
 
 `=> {` always begins a block — never an object literal — mirroring the

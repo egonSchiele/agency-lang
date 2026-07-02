@@ -233,6 +233,11 @@ export class TypeScriptBuilder {
   // checks. This counter gives each one a unique name.
   private handlerFuncResultCounter: number = 0;
   private insideGlobalInit: boolean = false;
+  // Set while emitting the body of a plain-mode (handler) match EXPRESSION,
+  // whose arms are wrapped in an async IIFE. Inside it, a `matchYield` compiles
+  // to a real `return <value>` (exiting the IIFE) instead of the stepped
+  // `runner.exitMatch`, so the handler never touches the `_matchExit` flag.
+  private insidePlainMatchExpr: boolean = false;
 
   /*
   We break up every function and node body into steps,
@@ -526,7 +531,9 @@ export class TypeScriptBuilder {
         return ts.empty();
       case "matchBlock":
         return this.insideHandlerBody
-          ? this.processBlockPlain(node)
+          ? node.matchExprId !== undefined
+            ? this.processMatchExpressionPlain(node)
+            : this.processBlockPlain(node)
           : this.processMatchBlockWithSteps(node);
       case "number":
       case "unitLiteral":
@@ -564,7 +571,9 @@ export class TypeScriptBuilder {
           : this.processWhileLoopWithSteps(node);
       case "ifElse":
         return this.insideHandlerBody
-          ? this.processBlockPlain(node)
+          ? node.matchExprId !== undefined
+            ? this.processMatchExpressionPlain(node)
+            : this.processBlockPlain(node)
           : this.processIfElseWithSteps(node);
       case "newLine":
         return ts.empty();
@@ -1360,7 +1369,43 @@ export class TypeScriptBuilder {
       );
     }
     const value = node.value ? this.processNode(node.value) : ts.id("undefined");
+    // Plain-mode (handler) match expressions wrap their arms in an async IIFE
+    // (see processMatchExpressionPlain): a yield is a real `return` out of that
+    // IIFE, not the stepped `runner.exitMatch` unwind — so the handler never
+    // sets the `_matchExit` flag that it has no `runner.ifElse` to clear.
+    if (this.insidePlainMatchExpr) {
+      return ts.return(value);
+    }
     return ts.runnerExitMatch({ matchId: node.matchId, value });
+  }
+
+  /**
+   * Compile an expression-position `match` inside a handler body (plain mode).
+   *
+   * Stepped code unwinds a match arm's value via `runner.exitMatch` + the owning
+   * `runner.ifElse` clearing `_matchExit`. A handler body compiles to plain JS
+   * with no owning `runner.ifElse`, so that protocol would leak the flag and
+   * silently skip the rest of the enclosing node. Instead we emit the arm
+   * dispatch as an async IIFE whose arms `return` their value, and store the
+   * result in the `__matchval_<id>` frame local the consumer reads:
+   *
+   *   __stack.locals.__matchval_<id> = await (async () => { <if-chain> })();
+   *
+   * `node` is either the pass-through `matchBlock` (literal arms) or the lowered
+   * `ifElse` chain (pattern arms) — both carry `matchExprId`. `processBlockPlain`
+   * builds the plain if/else for either; `insidePlainMatchExpr` makes the arms'
+   * `matchYield` nodes emit real returns out of the IIFE.
+   */
+  private processMatchExpressionPlain(node: MatchBlock | IfElse): TsNode {
+    const matchId = node.matchExprId!;
+    const prev = this.insidePlainMatchExpr;
+    this.insidePlainMatchExpr = true;
+    const ifChain = this.processBlockPlain(node);
+    this.insidePlainMatchExpr = prev;
+    return ts.assign(
+      ts.scopedVar(`__matchval_${matchId}`, "local", this.moduleId),
+      ts.await(ts.iife({ async: true, body: [ifChain] })),
+    );
   }
 
   private processImportStatement(node: ImportStatement): TsNode {

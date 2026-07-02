@@ -362,15 +362,22 @@ describe("statement-position return-in-arm errors", () => {
 }`, /return match\(/));
 });
 
-describe("expression match inside a handler body is rejected", () => {
-  function expectError(src: string, re: RegExp) {
+describe("expression match inside a handler body lowers like anywhere else", () => {
+  // The builder compiles these to a self-contained async IIFE in the handler's
+  // plain-mode codegen (never touching the runner's `_matchExit` flag), so
+  // lowering treats them exactly as it would in a normal body.
+  function handlerBody(src: string): any[] {
     const parsed = parseAgency(src);
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) expect(parsed.message).toMatch(re);
+    if (!parsed.success) throw new Error(parsed.message);
+    const main: any = parsed.result.nodes.find(
+      (n: any) => n.type === "graphNode" || n.type === "function",
+    );
+    const handle: any = main.body.find((n: any) => n.type === "handleBlock");
+    return handle.handler.body;
   }
 
-  it("`const x = match(...)` inside a `with` handler body is a lowering error", () =>
-    expectError(`node main() {
+  it("`const x = match(...)` inside a `with` handler body lowers to temp + consumer", () => {
+    const body = handlerBody(`node main() {
   handle {
     interrupt("check")
   } with (data) {
@@ -381,10 +388,20 @@ describe("expression match inside a handler body is rejected", () => {
     return approve()
   }
   return "ok"
-}`, /match expressions are not supported inside handler bodies/));
+}`);
+    const matchStmt = body.find((n: any) => n.type === "matchBlock");
+    expect(matchStmt.matchExprId).toBeTypeOf("number");
+    const arm = matchStmt.cases.find((c: any) => c.type === "matchBlockCase");
+    expect(arm.body[0].type).toBe("matchYield");
+    const assign = body.find(
+      (n: any) => n.type === "assignment" && n.variableName === "x",
+    );
+    expect(assign.value.value).toBe(`__matchval_${matchStmt.matchExprId}`);
+    expect(body.indexOf(matchStmt)).toBeLessThan(body.indexOf(assign));
+  });
 
-  it("`return match(...)` inside a `with` handler body is a lowering error", () =>
-    expectError(`node main() {
+  it("`return match(...)` inside a `with` handler body lowers to temp + return", () => {
+    const body = handlerBody(`node main() {
   handle {
     interrupt("check")
   } with (data) {
@@ -394,7 +411,13 @@ describe("expression match inside a handler body is rejected", () => {
     }
   }
   return "ok"
-}`, /match expressions are not supported inside handler bodies/));
+}`);
+    const matchStmt = body.find((n: any) => n.type === "matchBlock");
+    expect(matchStmt.matchExprId).toBeTypeOf("number");
+    const ret = body.find((n: any) => n.type === "returnStatement");
+    expect(ret.value.value).toBe(`__matchval_${matchStmt.matchExprId}`);
+    expect(body.indexOf(matchStmt)).toBeLessThan(body.indexOf(ret));
+  });
 
   it("a `match` in the guarded `handle` body (not the handler) is still allowed", () => {
     const parsed = parseAgency(`node main() {

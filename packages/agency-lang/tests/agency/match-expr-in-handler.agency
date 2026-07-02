@@ -1,0 +1,99 @@
+// Match expressions (`return match(...)` / `const x = match(...)`) inside a
+// handler body. These used to be rejected by pattern lowering; they now
+// compile to a self-contained async IIFE in the handler's plain-mode codegen,
+// so they never touch the runner's `_matchExit` unwind flag.
+
+def guarded(): number {
+  const check = interrupt("confirm?")
+  return 42
+}
+
+// return-position match: approves because the effect matches.
+node approvesOnMatch() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return match(data.effect) {
+      "unknown" => approve()
+      _ => reject()
+    }
+  }
+}
+
+// return-position match: rejects because no arm matches the effect.
+node rejectsOnNoMatch() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return match(data.effect) {
+      "std::run" => approve()
+      _ => reject()
+    }
+  }
+}
+
+// assignment-position match: `const x = match(...)`.
+node assignsFromMatch() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    const decision = match(data.effect) {
+      "unknown" => approve()
+      _ => reject()
+    }
+    return decision
+  }
+}
+
+// pattern arm: an object-pattern arm lowers to a hoisted scrutinee temp plus a
+// tagged `ifElse` chain (a different codegen path than literal arms). It must
+// also compile to the plain-mode IIFE inside a handler.
+node approvesOnPatternArm() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return match(data) {
+      { effect: "unknown" } => approve()
+      _ => reject()
+    }
+  }
+}
+
+// multi-path block arm: the arm has two return paths. The IIFE's real `return`
+// must short-circuit so the FIRST matching path wins (a naive plain-assignment
+// lowering would fall through and let the later path overwrite the value).
+node blockArmShortCircuits() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return match(data.effect) {
+      "unknown" => {
+        if (data.message == "confirm?") {
+          return approve()
+        }
+        return reject()
+      }
+      _ => reject()
+    }
+  }
+}

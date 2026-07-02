@@ -106,6 +106,16 @@ export type FlowEnvironment = {
    * definite-return checking. Optional: bare envs built in tests don't set it.
    */
   scopeTerminals?: Record<string, FlowNode>;
+  /**
+   * The `assign` flow node created for each expression-match consumer
+   * assignment (`const x = match(...)`, tagged `matchExprSource`). Populated by
+   * the flow builder's assignment rule; consumed by `computeMatchExprTypes`,
+   * which runs AFTER `buildFlowGraphs` (so yield synthesis sees narrowing) and
+   * therefore must patch the eagerly-snapshotted `type` on this node with the
+   * computed union — otherwise downstream reads of `x` resolve through typeAt
+   * to the stale "any" recorded at build time. Optional: bare envs in tests.
+   */
+  matchConsumerAssignFlows?: WeakMap<AgencyNode, FlowNode>;
 };
 
 /**

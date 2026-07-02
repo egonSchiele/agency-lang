@@ -16,7 +16,7 @@ agency lsp
 Starts the Agency Language Server over stdio. Most editor extensions launch this for you, so you usually don't need to call it directly.
 
 
-The Agency [VSCode extension](/appendix/vscode-extension) uses this to provide syntax highlighting, typechecking, and other editor features.
+The Agency [VSCode extension](/guide/vscode-extension) uses this to provide syntax highlighting, typechecking, and other editor features.
 
 ### Coding agent integration
 If you'd like to use Agency with a coding agent, you can scaffold the right configuration with:

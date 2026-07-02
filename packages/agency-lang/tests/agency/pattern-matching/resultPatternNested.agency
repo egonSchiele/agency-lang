@@ -1,10 +1,9 @@
 def describe(arr: any): string {
-  match (arr) {
-    [success(v), _] => return "head ok: ${v}"
-    [failure(e), _] => return "head err: ${e}"
-    _ => return "other"
+  return match (arr) {
+    [success(v), _] => "head ok: ${v}"
+    [failure(e), _] => "head err: ${e}"
+    _ => "other"
   }
-  return "unreachable"
 }
 
 node main() {

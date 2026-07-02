@@ -1,10 +1,12 @@
 node classify(message: string) {
   const category: "greeting" | "farewell" = llm("Classify as 'greeting' or 'farewell': '${message}'")
-  match(category) {
-    "greeting" => return respondGreeting()
-    "farewell" => return respondFarewell()
-    _ => return "unknown"
+  if (category == "greeting") {
+    return respondGreeting()
   }
+  if (category == "farewell") {
+    return respondFarewell()
+  }
+  return "unknown"
 }
 
 node respondGreeting() {

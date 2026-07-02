@@ -239,6 +239,13 @@ export class Runner {
   private _break = false;
   private _continue = false;
 
+  /** Pending match-expression exit: the matchId whose owning ifElse will clear
+   *  this. Mirrors _break/_continue unwind. NEVER serialized (transient unwind
+   *  state; interrupts cannot fire while skipping). Must never be set from a
+   *  parallel/fork child — the lowering forbids returns across concurrency
+   *  boundaries; this scalar would race. */
+  private _matchExit: number | null = null;
+
   /** Signal the current loop to break after this iteration */
   breakLoop(): void {
     this._break = true;
@@ -247,6 +254,13 @@ export class Runner {
   /** Signal the current loop to continue to the next iteration */
   continueLoop(): void {
     this._continue = true;
+  }
+
+  /** Yield `value` from a match arm: store it as the match result and skip
+   *  everything until the owning ifElse (matchId) consumes the flag. */
+  exitMatch(matchId: number, value: unknown): void {
+    this.frame.locals[`__matchval_${matchId}`] = value;
+    this._matchExit = matchId;
   }
 
   /** Check if execution should skip (halted, breaking, or continuing).
@@ -277,7 +291,12 @@ export class Runner {
       // Fall through so cleanup runs. See the abort-taxonomy spec.
       const cause = readCause(this.stack.abortSignal);
       if (cause?.kind === "guardTrip" && cause.delivered) {
-        return this.halted || this._break || this._continue;
+        return (
+          this.halted ||
+          this._break ||
+          this._continue ||
+          this._matchExit !== null
+        );
       }
       // Walk innermost-first so the deepest guard reports its trip
       // first. Mirrors the order in prompt.ts's cost-check loop.
@@ -290,7 +309,9 @@ export class Runner {
         this.halt(undefined);
       }
     }
-    return this.halted || this._break || this._continue;
+    return (
+      this.halted || this._break || this._continue || this._matchExit !== null
+    );
   }
 
   // ── Debug hook ──
@@ -724,54 +745,69 @@ export class Runner {
       body: (runner: Runner) => Promise<void>;
     }[],
     elseBranch?: (runner: Runner) => Promise<void>,
+    // When this ifElse is the lowered form of a match expression, `matchId`
+    // is the id it OWNS: a pending `_matchExit === matchId` unwind is consumed
+    // (cleared) here in the finally so post-match code resumes. An ifElse that
+    // does not own the pending id leaves the flag set (propagation continues).
+    opts?: { matchId?: number },
   ): Promise<void> {
+    // The top skip stays OUTSIDE the try: when we skip here an OUTER construct
+    // owns the pending flag, so we must not clear it.
     if (this.shouldSkip()) return;
-    if (this.getCounter() > id) return;
-
-    if (await this.maybeDebugHook(id)) return;
-
-    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
-
-    // Derive condbranch key from current path
-    const condKey =
-      this.path.length === 0
-        ? `__condbranch_${id}`
-        : `__condbranch_${this.key()}.${id}`;
-
-    // Evaluate condition only once (not on resume). Conditions may call
-    // stdlib helpers that read `getRuntimeContext()`, so evaluate inside
-    // the scope frame.
-    if (this.frame.locals[condKey] === undefined) {
-      let branchIndex = -1;
-      await this.runInScope(async () => {
-        for (let i = 0; i < branches.length; i++) {
-          if (await branches[i].condition()) {
-            branchIndex = i;
-            break;
-          }
-        }
-      });
-      this.frame.locals[condKey] = branchIndex;
-    }
-
-    const branchIndex = this.frame.locals[condKey];
-
-    this.path.push(id);
     try {
-      await this.runInScope(async () => {
-        if (branchIndex >= 0 && branchIndex < branches.length) {
-          await branches[branchIndex].body(this);
-        } else if (elseBranch) {
-          await elseBranch(this);
-        }
-      });
-    } finally {
-      this.path.pop();
-    }
+      if (this.getCounter() > id) return;
 
-    if (this.halted) return;
-    this.clearDebugFlag(id);
-    this.setCounter(id + 1);
+      if (await this.maybeDebugHook(id)) return;
+
+      this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
+      // Derive condbranch key from current path
+      const condKey =
+        this.path.length === 0
+          ? `__condbranch_${id}`
+          : `__condbranch_${this.key()}.${id}`;
+
+      // Evaluate condition only once (not on resume). Conditions may call
+      // stdlib helpers that read `getRuntimeContext()`, so evaluate inside
+      // the scope frame.
+      if (this.frame.locals[condKey] === undefined) {
+        let branchIndex = -1;
+        await this.runInScope(async () => {
+          for (let i = 0; i < branches.length; i++) {
+            if (await branches[i].condition()) {
+              branchIndex = i;
+              break;
+            }
+          }
+        });
+        this.frame.locals[condKey] = branchIndex;
+      }
+
+      const branchIndex = this.frame.locals[condKey];
+
+      this.path.push(id);
+      try {
+        await this.runInScope(async () => {
+          if (branchIndex >= 0 && branchIndex < branches.length) {
+            await branches[branchIndex].body(this);
+          } else if (elseBranch) {
+            await elseBranch(this);
+          }
+        });
+      } finally {
+        this.path.pop();
+      }
+
+      if (this.halted) return;
+      this.clearDebugFlag(id);
+      this.setCounter(id + 1);
+    } finally {
+      // The owning ifElse consumes the pending match exit — even when the
+      // branch body threw — so subsequent steps resume normally.
+      if (opts?.matchId !== undefined && this._matchExit === opts.matchId) {
+        this._matchExit = null;
+      }
+    }
   }
 
   // ── Specialized: loop (for) ──
@@ -836,6 +872,9 @@ export class Runner {
       this.frame.locals[iterKey] = i + 1;
 
       if (this._break) break;
+      // A pending match exit unwinds through the loop. Do NOT clear it here —
+      // only the owning ifElse consumes it (a following step stays skipped).
+      if (this._matchExit !== null) break;
       // _continue: just let the for loop naturally continue
     }
 
@@ -900,6 +939,9 @@ export class Runner {
       currentIter++;
 
       if (this._break) break;
+      // A pending match exit unwinds through the loop. Do NOT clear it here —
+      // only the owning ifElse consumes it (a following step stays skipped).
+      if (this._matchExit !== null) break;
       // _continue: just let the while loop naturally continue
     }
 

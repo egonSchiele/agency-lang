@@ -203,38 +203,78 @@ __stack.locals.action = `start`;
   {
     condition: async () => __stack.locals.action === `start`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Starting...`]
-            })
+await runner.step(0, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Starting...`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.action === `stop`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Stopping...`]
-            })
+await runner.step(1, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Stopping...`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.action === `restart`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Restarting...`]
-            })
+await runner.step(2, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Restarting...`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
 ], async (runner) => {
-await __call(print, {
-            type: "positional",
-            args: [`Unknown action`]
-          })
+await runner.step(3, async (runner) => {
+const __funcResult = await __call(print, {
+              type: "positional",
+              args: [`Unknown action`]
+            });
+if (hasInterrupts(__funcResult)) {
+              await getRuntimeContext().ctx.pendingPromises.awaitAll()
+              runner.halt({
+                ...__state,
+                data: __funcResult
+              })
+              return;
+            }
+          });
 });
       await runner.step(4, async (runner) => {
 //  Match with number literals
@@ -247,38 +287,78 @@ __stack.locals.statusCode = 200;
   {
     condition: async () => __stack.locals.statusCode === 200,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`OK`]
-            })
+await runner.step(0, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`OK`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.statusCode === 404,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Not Found`]
-            })
+await runner.step(1, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Not Found`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.statusCode === 500,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Internal Server Error`]
-            })
+await runner.step(2, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Internal Server Error`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
 ], async (runner) => {
-await __call(print, {
-            type: "positional",
-            args: [`Unknown status`]
-          })
+await runner.step(3, async (runner) => {
+const __funcResult = await __call(print, {
+              type: "positional",
+              args: [`Unknown status`]
+            });
+if (hasInterrupts(__funcResult)) {
+              await getRuntimeContext().ctx.pendingPromises.awaitAll()
+              runner.halt({
+                ...__state,
+                data: __funcResult
+              })
+              return;
+            }
+          });
 });
       await runner.step(7, async (runner) => {
 //  Match with variable assignment in body
@@ -294,33 +374,43 @@ __stack.locals.points = 0;
   {
     condition: async () => __stack.locals.grade === `A`,
     body: async (runner) => {
+await runner.step(0, async (runner) => {
 __stack.locals.a = 100;
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.grade === `B`,
     body: async (runner) => {
+await runner.step(1, async (runner) => {
 __stack.locals.b = 85;
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.grade === `C`,
     body: async (runner) => {
+await runner.step(2, async (runner) => {
 __stack.locals.c = 70;
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.grade === `D`,
     body: async (runner) => {
+await runner.step(3, async (runner) => {
 __stack.locals.d = 55;
+            });
     },
   },
 
 ], async (runner) => {
+await runner.step(4, async (runner) => {
 __stack.locals.e = 0;
+          });
 });
       await runner.step(11, async (runner) => {
 //  Match with function calls in body
@@ -333,40 +423,80 @@ __stack.locals.level = `debug`;
   {
     condition: async () => __stack.locals.level === `debug`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Debug mode enabled`]
-            })
+await runner.step(0, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Debug mode enabled`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.level === `info`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Info level logging`]
-            })
+await runner.step(1, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Info level logging`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.level === `warn`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Warning level`]
-            })
+await runner.step(2, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Warning level`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.level === `error`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Error level`]
-            })
+await runner.step(3, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Error level`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
@@ -382,22 +512,28 @@ __stack.locals.resultType = `array`;
   {
     condition: async () => __stack.locals.resultType === `array`,
     body: async (runner) => {
+await runner.step(0, async (runner) => {
 __stack.locals.data1 = [1, 2, 3];
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.resultType === `object`,
     body: async (runner) => {
+await runner.step(1, async (runner) => {
 __stack.locals.data2 = {
-              "x": 1,
-              "y": 2
-            };
+                "x": 1,
+                "y": 2
+              };
+            });
     },
   },
 
 ], async (runner) => {
+await runner.step(2, async (runner) => {
 __stack.locals.data3 = [];
+          });
 });
       await runner.step(17, async (runner) => {
 //  Match with object results
@@ -410,38 +546,46 @@ __stack.locals.format = `json`;
   {
     condition: async () => __stack.locals.format === `xml`,
     body: async (runner) => {
+await runner.step(0, async (runner) => {
 __stack.locals.output1 = {
-              "type": `xml`,
-              "ext": `.xml`
-            };
+                "type": `xml`,
+                "ext": `.xml`
+              };
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.format === `json`,
     body: async (runner) => {
+await runner.step(1, async (runner) => {
 __stack.locals.output2 = {
-              "type": `json`,
-              "ext": `.json`
-            };
+                "type": `json`,
+                "ext": `.json`
+              };
+            });
     },
   },
 
   {
     condition: async () => __stack.locals.format === `csv`,
     body: async (runner) => {
+await runner.step(2, async (runner) => {
 __stack.locals.output3 = {
-              "type": `csv`,
-              "ext": `.csv`
-            };
+                "type": `csv`,
+                "ext": `.csv`
+              };
+            });
     },
   },
 
 ], async (runner) => {
+await runner.step(3, async (runner) => {
 __stack.locals.output4 = {
-            "type": `unknown`,
-            "ext": ``
-          };
+              "type": `unknown`,
+              "ext": ``
+            };
+          });
 });
     })
     if (runner.halted) return runner.haltResult;
@@ -510,4 +654,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"matchBlock.agency:main":{"2":{"line":4,"col":2},"3":{"line":5,"col":2},"5":{"line":13,"col":2},"6":{"line":14,"col":2},"8":{"line":22,"col":2},"9":{"line":23,"col":2},"10":{"line":24,"col":2},"12":{"line":33,"col":2},"13":{"line":34,"col":2},"15":{"line":42,"col":2},"16":{"line":43,"col":2},"18":{"line":53,"col":2},"19":{"line":54,"col":2}}};
+export const __sourceMap = {"matchBlock.agency:main":{"2":{"line":4,"col":2},"3":{"line":5,"col":2},"5":{"line":13,"col":2},"6":{"line":14,"col":2},"8":{"line":22,"col":2},"9":{"line":23,"col":2},"10":{"line":24,"col":2},"12":{"line":33,"col":2},"13":{"line":34,"col":2},"15":{"line":42,"col":2},"16":{"line":43,"col":2},"18":{"line":53,"col":2},"19":{"line":54,"col":2},"3.0":{"line":6,"col":15},"3.1":{"line":7,"col":14},"3.2":{"line":8,"col":17},"3.3":{"line":9,"col":9},"6.0":{"line":15,"col":11},"6.1":{"line":16,"col":11},"6.2":{"line":17,"col":11},"6.3":{"line":18,"col":9},"10.0":{"line":25,"col":11},"10.1":{"line":26,"col":11},"10.2":{"line":27,"col":11},"10.3":{"line":28,"col":11},"10.4":{"line":29,"col":9},"13.0":{"line":35,"col":15},"13.1":{"line":36,"col":14},"13.2":{"line":37,"col":14},"13.3":{"line":38,"col":15},"16.0":{"line":44,"col":15},"16.1":{"line":45,"col":16},"16.2":{"line":49,"col":9},"19.0":{"line":55,"col":13},"19.1":{"line":59,"col":14},"19.2":{"line":63,"col":13},"19.3":{"line":67,"col":9}}};

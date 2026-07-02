@@ -250,6 +250,14 @@ export function synthType(
 ): VariableType | "any" {
   switch (expr.type) {
     case "variableName": {
+      // Expression-match temp: `__matchval_<id>` is the synthetic ref the
+      // lowerer leaves as an expression-match's value. It is never declared in
+      // scope; resolve it directly to the match's computed value type so an
+      // outer yield that reads an inner match's temp gets the inner union.
+      const matchvalMatch = /^__matchval_(\d+)$/.exec(expr.value);
+      if (matchvalMatch) {
+        return ctx.matchExprTypes[Number(matchvalMatch[1])] ?? "any";
+      }
       const scopeType = scope.lookup(expr.value);
       if (scopeType) {
         // Flow-sensitive narrowing: when a flow node is attached to this exact

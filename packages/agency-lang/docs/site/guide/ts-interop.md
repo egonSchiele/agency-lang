@@ -129,9 +129,9 @@ return agency.withResumableScope({ name: "processOrder" }, async (s) => {
 });
 ```
 
-Each `s.step(...)` is journaled against a serialized frame; on resume completed steps are skipped, the in-flight step re-runs from scratch. **Read the [determinism contract](/appendix/ts-helpers#determinism-contract) before using this** — step bodies must be pure, and step ordering must be stable across resumes.
+Each `s.step(...)` is journaled against a serialized frame; on resume completed steps are skipped, the in-flight step re-runs from scratch. **Read the [determinism contract](/guide/ts-helpers#determinism-contract) before using this** — step bodies must be pure, and step ordering must be stable across resumes.
 
-For the full reference of every `agency.*` method, the `LlmOpts` shape, the `ResumableScope` API, testing patterns, and anti-patterns, see [TypeScript helpers — the `agency.*` namespace](/appendix/ts-helpers).
+For the full reference of every `agency.*` method, the `LlmOpts` shape, the `ResumableScope` API, testing patterns, and anti-patterns, see [TypeScript helpers — the `agency.*` namespace](/guide/ts-helpers).
 
 ## Cancelling an in-progress agent
 

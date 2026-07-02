@@ -377,10 +377,20 @@ __stack.locals.status = `active`;
   {
     condition: async () => __stack.locals.status === `inactive`,
     body: async (runner) => {
-await __call(print, {
-              type: "positional",
-              args: [`Stopped`]
-            })
+await runner.step(0, async (runner) => {
+const __funcResult = await __call(print, {
+                type: "positional",
+                args: [`Stopped`]
+              });
+if (hasInterrupts(__funcResult)) {
+                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  ...__state,
+                  data: __funcResult
+                })
+                return;
+              }
+            });
     },
   },
 
@@ -455,4 +465,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"2":{"line":13,"col":2},"3":{"line":15,"col":2}},"comments.agency:main":{"2":{"line":20,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2},"5":{"line":27,"col":2},"6":{"line":28,"col":2}}};
+export const __sourceMap = {"comments.agency:greet":{"2":{"line":13,"col":2},"3":{"line":15,"col":2}},"comments.agency:main":{"2":{"line":20,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2},"5":{"line":27,"col":2},"6":{"line":28,"col":2},"6.0":{"line":30,"col":18}}};

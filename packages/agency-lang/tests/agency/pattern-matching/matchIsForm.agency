@@ -7,9 +7,10 @@ node main() {
 }
 
 def describe(obj: any): string {
+  let out = "fallthrough"
   match (obj is { v, label }) {
-    v > 5 => return "big " + label
-    _ => return "small " + label
+    v > 5 => out = "big " + label
+    _ => out = "small " + label
   }
-  return "fallthrough"
+  return out
 }

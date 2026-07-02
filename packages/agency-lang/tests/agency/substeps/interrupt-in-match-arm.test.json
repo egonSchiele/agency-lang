@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt mid-arm resumes at the next statement; earlier statements do not re-run; other arms never fire",
+      "input": "\"go\"",
+      "expectedOutput": "\"start,arm1,arm2,\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "confirm" }]
+    },
+    {
+      "nodeName": "main",
+      "description": "Interrupt as the FIRST arm statement (substep 0) resumes into the rest of the arm",
+      "input": "\"first\"",
+      "expectedOutput": "\"start,after-early,\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "early" }]
+    },
+    {
+      "nodeName": "main",
+      "description": "Interrupt as the LAST arm statement completes the arm cleanly without re-running earlier statements",
+      "input": "\"last\"",
+      "expectedOutput": "\"start,pre,\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "tail" }]
+    },
+    {
+      "nodeName": "main",
+      "description": "Two interrupts in one arm advance substeps across both pauses",
+      "input": "\"twice\"",
+      "expectedOutput": "\"start,mid,end,\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "one" },
+        { "action": "approve", "expectedMessage": "two" }
+      ]
+    }
+  ]
+}

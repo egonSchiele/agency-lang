@@ -134,8 +134,7 @@ function walkNode(
   } else if (node.type === "matchBlock") {
     for (const caseItem of node.cases) {
       if (caseItem.type === "comment" || caseItem.type === "newLine") continue;
-      // Match case bodies are themselves nodes; treat as a 1-node body.
-      walkNode(caseItem.body, enclosingReturnType, lookup);
+      walkBody(caseItem.body, enclosingReturnType, lookup);
     }
   } else if (node.type === "handleBlock") {
     walkBody(node.body, enclosingReturnType, lookup);

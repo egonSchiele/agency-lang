@@ -56,20 +56,46 @@ describe("definite-return checking", () => {
 
   // SAFE SUBSET: functions that use a `match` are skipped for now (whether they
   // return on all paths depends on match exhaustiveness — deferred to a follow-up).
-  it("skips a match-containing function even if every arm returns", () => {
-    expect(misses(`def f(x: string): number { match (x) { "a" => return 1  _ => return 0 } }`)).toBe(false);
+  it("skips a match-containing function (surviving statement matchBlock)", () => {
+    // Originally this arm-returned on every path; `return` in a statement-
+    // position arm is now a compile error (Task 10), so the nearest equivalent
+    // is a statement match that assigns on every arm. The trailing return is
+    // CONDITIONAL, so the flow graph sees a fall-through path with no return —
+    // only the containsMatch skip (hitting the surviving pure-literal
+    // `matchBlock` node) suppresses the diagnostic.
+    expect(
+      misses(`def f(x: string): number {
+  let out = 0
+  match (x) {
+    "a" => out = 1
+    _ => out = 2
+  }
+  if (x == "a") { return out }
+}`),
+    ).toBe(false);
   });
 
-  it("skips a match-containing function even if an arm falls through (no false positive)", () => {
-    expect(misses(`def f(x: string): number { match (x) { "a" => return 1  _ => 0 } }`)).toBe(false);
+  it("skips a match-containing function that does not return on all paths (no false positive)", () => {
+    // A statement match with no trailing return: the function misses a return,
+    // but is skipped because it contains a match.
+    expect(misses(`def f(x: string): number { match (x) { "a" => print("hi")  _ => print("no") } }`)).toBe(false);
   });
 
   it("skips a function with a pattern match (idiomatic Result match, no `_`)", () => {
     // The false-positive case that drove the safe-subset decision: an exhaustive
-    // Result match with no `_`. Must NOT be flagged.
+    // Result match with no `_`. Arm returns are now illegal (Task 10), so the
+    // idiomatic form is an expression match; this shape exercises the LOWERED
+    // detection path (the scrutinee `assignment` carrying `matchSource`, since
+    // pattern arms are lowered to an if-chain). The trailing return is
+    // conditional so the flow graph sees a fall-through; only the containsMatch
+    // skip suppresses the diagnostic.
     expect(
       misses(`def mk(): Result<number, string> { return success(1) }
-def f(): number { let r = mk()\n match (r) { success(v) => return v  failure(e) => return 0 } }`),
+def f(): number {
+  let r = mk()
+  let out = match (r) { success(v) => v  failure(e) => 0 }
+  if (out > 0) { return out }
+}`),
     ).toBe(false);
   });
 
@@ -106,9 +132,19 @@ def g(x: number): number { if (x > 0) { return 2 } }`;
   });
 
   it("skips a `_`-less match (safe subset — no false positive on exhaustive matches)", () => {
-    // A boolean match over true/false is exhaustive and returns on all paths, but
-    // the safe subset simply skips any match-containing function, so no diagnostic.
-    expect(misses(`def f(x: bool): number { match (x) { true => return 1  false => return 0 } }`)).toBe(false);
+    // A boolean match over true/false is exhaustive, but the safe subset simply
+    // skips any match-containing function rather than reasoning about
+    // exhaustiveness. (Arms can no longer `return` — Task 10 — so the value
+    // flows out via a `_`-less expression match instead.) The conditional
+    // trailing return leaves a fall-through path, so without the containsMatch
+    // skip this exhaustive match WOULD be flagged — the exact false positive
+    // the safe subset exists to avoid.
+    expect(
+      misses(`def f(x: bool): number {
+  const out = match (x) { true => 1  false => 2 }
+  if (x) { return out }
+}`),
+    ).toBe(false);
   });
 
   // --- config knob ---

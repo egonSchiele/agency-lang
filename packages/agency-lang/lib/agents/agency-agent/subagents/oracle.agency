@@ -2,8 +2,9 @@ import { typecheck } from "std::agency"
 import { ls, glob, grep } from "std::shell"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
-import { getSlowModel, getSlowProvider } from "../shared.agency"
+
 import { withWebSearch } from "../lib/search.agency"
+import { getSlowModel, getSlowProvider } from "../shared.agency"
 
 // Oracle gets a read-only view of the project via the raw read tools.
 // Relative paths resolve against the agent working directory (set by
@@ -11,7 +12,6 @@ import { withWebSearch } from "../lib/search.agency"
 
 static const docSkill = skillsDir("../docs/guide", "flat") with approve
 static const cliSkill = skillsDir("../docs/cli", "flat") with approve
-static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
 
 export static const oracleSysPrompt = """
 You are the **oracle** — a senior reviewer called by other agents
@@ -76,7 +76,6 @@ export static const oracleTools: any[] = [
   typecheck,
   docSkill,
   cliSkill,
-  appendixSkill,
 ]
 
 // only add system message the first time
@@ -113,15 +112,17 @@ export def oracleAgent(userMsg: string, allowHandoff: boolean): string {
     }
     reply = llm(
       userMsg,
-      withWebSearch({
-        tools: oracleTools,
-        model: getSlowModel(),
-        provider: getSlowProvider(),
-        reasoningEffort: "high",
-        thinking: {
-          enabled: true
-        }
-      }),
+      withWebSearch(
+      {
+      tools: oracleTools,
+      model: getSlowModel(),
+      provider: getSlowProvider(),
+      reasoningEffort: "high",
+      thinking: {
+        enabled: true
+      }
+    },
+    ),
     )
   }
   return reply

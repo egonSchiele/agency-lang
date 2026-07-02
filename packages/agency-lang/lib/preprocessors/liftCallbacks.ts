@@ -193,7 +193,7 @@ function transformStatement(
       for (const c of node.cases) {
         if (c.type === "comment") continue;
         if (c.type === "newLine") continue;
-        c.body = transformBody([c.body as any], scopeName, lifted, nextName)[0] as any;
+        c.body = transformBody(c.body, scopeName, lifted, nextName);
       }
       return node;
     case "withModifier":

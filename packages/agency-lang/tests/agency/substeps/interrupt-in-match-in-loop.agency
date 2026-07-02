@@ -1,0 +1,21 @@
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+// A stale-`__matchval` failure mode cannot occur by construction here:
+// every arm (both `1` and `_`) yields a value on every iteration, so the
+// consumer read after the match always follows a fresh write in the same
+// pass — there's no path where an old iteration's `__matchval_N` could
+// leak into a later iteration's read.
+node main() {
+  setMutable("log", "")
+  for (i in range(3)) {
+    const label = match(i) {
+      1 => {
+        interrupt("at one")
+        return "ONE"
+      }
+      _ => "n${i}"
+    }
+    setMutable("log", getMutable("log", "") + label + ",")
+  }
+  return getMutable("log", "")
+}

@@ -79,7 +79,39 @@ The IR node for this is `TsIfSteps` (defined in `lib/ir/tsIR.ts`), with code gen
 
 ## Match blocks
 
-Match blocks reuse `TsIfSteps`. Each match case becomes a branch with an `===` equality condition against the match expression. The default case (`_`) becomes the else branch. Since match cases have a single body statement, there's typically only one substep per branch.
+Match blocks reuse `TsIfSteps`, exactly like if/else: `processMatchBlockWithSteps` (`lib/backends/typescriptBuilder.ts`) turns each match case into a branch with an `===` equality condition against the scrutinee, and the `_` case (if present) becomes the else branch. Arm bodies are processed through `processBodyAsParts`, the same helper if/else uses, so each statement in an arm gets its own `__substep_K` guard — a multi-statement block arm resumes mid-arm exactly like a multi-statement if/else branch resumes mid-branch. The `__condbranch_K` cache means the winning arm is decided once and re-dispatched to (not re-matched) on resume, even if the scrutinee or a guard has side effects.
+
+Code generation goes through the same `runnerIfElse.mustache` template used for if/else (there is no separate match-specific template).
+
+### Match *expressions*
+
+When a match is used as an expression (`const x = match(...) { ... }` or `return match(...) { ... }`), the lowered `TsIfSteps`/`runner.ifElse(...)` call additionally carries a `matchId`, and each arm's yielding `return expr` lowers to a `matchYield` node that compiles to:
+
+```typescript
+runner.exitMatch(<matchId>, <value>);
+return;
+```
+
+`Runner.exitMatch(matchId, value)` (`lib/runtime/runner.ts`) does two things: it writes `value` into the frame local `__matchval_<matchId>` (so it lives in `__stack.locals`, not a bare `let`, and survives interrupt serialization), and it sets a private `_matchExit = matchId` flag. That flag is checked by `shouldSkip()` right alongside `_break`/`_continue` — while it's set, every subsequent runner construct (steps, nested `ifElse`, loop iterations) short-circuits, exactly like an in-flight `breakLoop()`. This unwinds through the rest of the arm and out to the match's own `runner.ifElse(...)` call, which is the only site that owns the id: its `finally` block clears `_matchExit` (`if (opts.matchId !== undefined && this._matchExit === opts.matchId) this._matchExit = null`), so code after the match resumes normally. An `ifElse` that doesn't own the pending id (an outer if/else or loop the match is nested in) leaves the flag set and keeps propagating.
+
+`_matchExit`, like `_break`/`_continue`, is transient in-process unwind state and is **never serialized** — an interrupt cannot fire while a match-exit unwind is in flight, only in between statements.
+
+The consuming statement (the `const x = ...` or `return ...` around the match) reads `__matchval_<matchId>` back out of `__stack.locals`. **No end-of-iteration reset is needed for `__matchval_<matchId>`**, unlike `__condbranch_`/`__substep_`/`__iteration_`: the all-paths-yield check (enforced at lowering time — every code path through an expression-position arm must `return` a value) guarantees the local is freshly written before it's ever read in the same pass through the match, so a stale value from a previous loop iteration can never leak through unread. (Loop-iteration resets for `__condbranch_`/`__substep_`/`__iteration_` themselves are implemented directly in `lib/runtime/runner.ts` — in `loop()` and `whileLoop()`, via `this.frame.clearLocalsWithPrefix(...)` calls after each iteration — not in a Mustache template; `runnerIfElse.mustache` is the only template involved in match/if-else codegen.)
+
+Interrupt walkthrough for an expression-position match:
+
+```agency
+const val = match(r) {
+    success(v) => {
+        print(v)                     // substep 0
+        const ok = interrupt("ok?")  // substep 1 — pauses here
+        return "${v}:${ok}"          // substep 2 — calls runner.exitMatch
+    }
+    failure(e) => e.message
+}
+```
+
+Pausing at the `interrupt` serializes `__stack.step`, `__condbranch_K = 0` (the `success` arm), `__substep_K = 1`, and locals. On resume: outer guards skip completed statements; the cached condbranch re-enters the `success` arm without re-matching `r`; the substep guard skips `print`; the interrupt statement completes with the response; the `return` statement calls `runner.exitMatch(matchId, ...)`, writing `__matchval_<matchId>` and setting `_matchExit`; the owning `ifElse` call's `finally` clears the flag; the outer `const val = __matchval_<matchId>` statement reads the value. Checkpoint/`restore()` behave identically to if/else since all of this tracking lives on `__stack`.
 
 ## Thread blocks
 

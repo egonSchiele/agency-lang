@@ -391,12 +391,30 @@ export function printTs(node: TsNode, indent = 0): string {
       const elseBranch = node.elseBranch
         ? node.elseBranch.map((n) => printTs(n, indent + 2)).join("\n")
         : "";
+      // Precompute the trailing opts arg as a single string. Typestache's
+      // inverted sections don't nest reliably, and this keeps the template
+      // fully inert when `matchId` is undefined (byte-identical output).
+      const matchOpts =
+        node.matchId === undefined
+          ? ""
+          : node.elseBranch
+            ? `, { matchId: ${node.matchId} }`
+            : `, undefined, { matchId: ${node.matchId} }`;
       return renderRunnerIfElse({
         id: node.id,
         branches,
         hasElse: !!node.elseBranch,
         elseBranch,
+        matchOpts,
       });
+    }
+
+    case "runnerExitMatch": {
+      // Same halt+return shape as `functionReturn`: the leading indent for
+      // the first line is supplied by the caller (printBody); continuation
+      // lines are un-indented, matching the runnerHalt/functionReturn case.
+      const value = printTs(node.value, indent);
+      return `runner.exitMatch(${node.matchId}, ${value});\nreturn;`;
     }
 
     case "runnerLoop": {

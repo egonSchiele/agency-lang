@@ -14,13 +14,9 @@ build:
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 	mkdir -p dist/lib/stdlib/providers
 	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
-	# Bundle the user-facing Agency documentation alongside the shipped
-	# agents so `skillsDir(...)` can build a tool that lets an LLM read
-	# any guide / CLI / appendix page on demand.
 	mkdir -p dist/lib/agents/docs
 	cp -r docs/site/guide dist/lib/agents/docs/guide
 	cp -r docs/site/cli dist/lib/agents/docs/cli
-	cp -r docs/site/appendix dist/lib/agents/docs/appendix
 
 stdlib:
 	pnpm run agency compile stdlib/
@@ -35,7 +31,6 @@ agents:
 	mkdir -p dist/lib/agents/docs
 	cp -r docs/site/guide dist/lib/agents/docs/guide
 	cp -r docs/site/cli dist/lib/agents/docs/cli
-	cp -r docs/site/appendix dist/lib/agents/docs/appendix
 
 test:
 	pnpm run test

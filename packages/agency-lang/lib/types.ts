@@ -18,6 +18,7 @@ import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
 import { Literal, RawCode, RegexLiteral } from "./types/literals.js";
 import { MatchArmMeta, MatchBlock } from "./types/matchBlock.js";
+import { MatchYield } from "./types/matchYield.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { GotoStatement } from "./types/gotoStatement.js";
@@ -57,6 +58,7 @@ export * from "./types/importStatement.js";
 export * from "./types/exportFromStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
+export * from "./types/matchYield.js";
 export * from "./types/returnStatement.js";
 export * from "./types/gotoStatement.js";
 export * from "./types/typeHints.js";
@@ -89,7 +91,46 @@ export type Expression =
   | SchemaExpression
   | InterruptStatement
   | BlockArgument
-  | IsExpression;
+  | IsExpression
+  | MatchBlock;
+
+/**
+ * Runtime set of every `type` string in the `Expression` union above. Kept
+ * co-located with the union so the two never drift. Used by the pattern
+ * lowerer (`isExpressionNode`) to decide whether a single-statement match arm
+ * is a bare expression (yield the value) versus a statement block (rewrite
+ * returns). Keep in sync with the `Expression` union.
+ */
+export const EXPRESSION_NODE_TYPES: readonly string[] = [
+  // ValueAccess
+  "valueAccess",
+  // Literal
+  "number",
+  "unitLiteral",
+  "multiLineString",
+  "string",
+  "variableName",
+  "boolean",
+  "null",
+  // remaining Expression members
+  "functionCall",
+  "binOpExpression",
+  "agencyArray",
+  "agencyObject",
+  "tryExpression",
+  "newExpression",
+  "regex",
+  "schemaExpression",
+  "interruptStatement",
+  "blockArgument",
+  "isExpression",
+  "matchBlock",
+];
+
+/** True when `node` is an `Expression` (per `EXPRESSION_NODE_TYPES`). */
+export function isExpressionNode(node: { type: string }): node is Expression {
+  return EXPRESSION_NODE_TYPES.includes(node.type);
+}
 
 /**
  * Scope types for variable resolution.
@@ -200,6 +241,20 @@ export type Assignment = BaseNode & {
    *  as a `matchBlock` node (read directly), and the `is`-form match is
    *  guard-based. A consumer must recognize all three deliberately. */
   matchSource?: MatchArmMeta[];
+  /** Set by pattern lowering when this assignment consumes an expression-position
+   *  `match`: `const x = match(E) { ... }`. The lowered form hoists the match
+   *  region above and rewrites `value` to a reference to the `__matchval_<id>`
+   *  temp; this field records the owning match id so later passes (typechecker
+   *  union typing) can find the region that produces the value. Ignored by
+   *  codegen (the value is a plain variable reference by then). */
+  matchExprSource?: { matchId: number };
+  /** Set by pattern lowering on the synthetic scrutinee binding of a lowered
+   *  expression-position `match` with pattern arms. Marks that this assignment's
+   *  `matchSource` describes an EXPRESSION match, so the exhaustiveness pass
+   *  treats it as a hard error regardless of config. The paired if-chain root
+   *  and the `MatchBlock` passthrough carry the same tag (see ifElse.ts /
+   *  matchBlock.ts). Ignored by codegen. */
+  matchExprId?: number;
 };
 
 export function globalScope(): Scope {
@@ -239,6 +294,7 @@ export type AgencyNode =
   | Literal
   | FunctionCall
   | MatchBlock
+  | MatchYield
   | ReturnStatement
   | GotoStatement
   | ValueAccess

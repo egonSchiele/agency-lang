@@ -49,7 +49,7 @@ export function mapBodies(node: AgencyNode, fn: BodyTransform): AgencyNode {
         ...n,
         cases: n.cases.map((c) =>
           c.type === "matchBlockCase"
-            ? ({ ...c, body: fn([c.body])[0] } as MatchBlockCase)
+            ? ({ ...c, body: fn(c.body) } as MatchBlockCase)
             : c,
         ),
       };

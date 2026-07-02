@@ -73,6 +73,7 @@ import {
   ImportStatement,
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
+import { MatchYield } from "../types/matchYield.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
@@ -537,6 +538,8 @@ export class TypeScriptBuilder {
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
+      case "matchYield":
+        return this.processMatchYield(node);
       case "gotoStatement":
         return this.processGotoStatement(node);
       case "agencyArray":
@@ -897,6 +900,26 @@ export class TypeScriptBuilder {
               ts.str(sourceModuleId),
             ]);
           }
+          // Synthetic match-expression result temps (`__matchval_<id>`) are
+          // written by `runner.exitMatch(id, value)` into
+          // `runner.frame.locals.__matchval_<id>` (i.e. `__stack.locals`), but
+          // pattern lowering emits the *read* as a plain `variableName` with
+          // no declaration, so scope resolution leaves it unresolved and it
+          // would otherwise compile to a bare, undeclared JS identifier.
+          // Resolve it to the same frame-local accessor `exitMatch` writes to
+          // so the consumer (`const x = match(...)` / `return match(...)`)
+          // sees the value. Applies ONLY here, in the unresolved-scope branch:
+          // a USER variable that happens to be named `__matchval_<n>` arrives
+          // with a resolved scope (local/block/blockArgs/...) or as a loop
+          // var / builtin / agency import, and must resolve through the
+          // normal paths untouched.
+          if (
+            !isBuiltinVar &&
+            !isLoopVar &&
+            /^__matchval_\d+$/.test(literal.value)
+          ) {
+            return ts.scopedVar(literal.value, "local", this.moduleId);
+          }
           return ts.id(literal.value);
         }
         const blockFrameVar =
@@ -1211,7 +1234,7 @@ export class TypeScriptBuilder {
       elseBranch = this.processBodyAsParts(remainingElse, nextStartId);
     }
 
-    return ts.runnerIfElse({ id, branches, elseBranch });
+    return ts.runnerIfElse({ id, branches, elseBranch, matchId: node.matchExprId });
   }
 
   private processForLoopWithSteps(node: ForLoop): TsNode {
@@ -1287,16 +1310,21 @@ export class TypeScriptBuilder {
     const id = this.steps.currentId();
     const expression = this.processNode(node.expression);
 
+    // MatchBlock.cases may also carry comment/newLine entries; keep only real
+    // arms (type-narrowing filter, not a cast).
     const filteredCases = node.cases.filter(
-      (c) => c.type !== "comment",
-    ) as MatchBlockCase[];
+      (c): c is MatchBlockCase => c.type === "matchBlockCase",
+    );
 
     const branches: { condition: TsNode; body: TsNode[] }[] = [];
     let elseBranch: TsNode[] | undefined;
+    let nextStartId = 0;
 
     for (const caseItem of filteredCases) {
+      const body = this.processBodyAsParts(caseItem.body, nextStartId);
+      nextStartId += body.length;
       if (caseItem.caseValue === "_") {
-        elseBranch = [this.processNode(caseItem.body)];
+        elseBranch = body;
       } else {
         branches.push({
           condition: ts.binOp(
@@ -1304,12 +1332,35 @@ export class TypeScriptBuilder {
             "===",
             this.processNode(caseItem.caseValue as AgencyNode),
           ),
-          body: [this.processNode(caseItem.body)],
+          body,
         });
       }
     }
 
-    return ts.runnerIfElse({ id, branches, elseBranch });
+    return ts.runnerIfElse({ id, branches, elseBranch, matchId: node.matchExprId });
+  }
+
+  /** Lowered `return` inside a match arm used as an expression. Same
+   *  halt+return shape as `processReturnStatement`, but the value is stored as
+   *  the match result via `runner.exitMatch` and control unwinds to the owning
+   *  ifElse rather than the enclosing function. Never produced by the parser —
+   *  only by pattern lowering (Task 6). */
+  private processMatchYield(node: MatchYield): TsNode {
+    // A graph-node call compiles to a goto/halt transition statement (see
+    // generateNodeCallExpression), which is control flow — it cannot serve as
+    // the value argument of `runner.exitMatch(id, <value>)`. Reject it with a
+    // clear compile error rather than emitting invalid TypeScript.
+    if (
+      node.value?.type === "functionCall" &&
+      this.names.isGraphNode(node.value.functionName)
+    ) {
+      throw new Error(
+        "a match arm cannot return a graph node transition; a node call is " +
+          "control flow, not a value — use if/else statements for node dispatch",
+      );
+    }
+    const value = node.value ? this.processNode(node.value) : ts.id("undefined");
+    return ts.runnerExitMatch({ matchId: node.matchId, value });
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
@@ -3221,16 +3272,17 @@ export class TypeScriptBuilder {
       return ts.while(this.processNode(node.condition), processBody(node.body));
     }
     if (node.type === "matchBlock") {
-      // Match compiles to if/else chain
+      // Match compiles to if/else chain. Cases may also carry comment/newLine
+      // entries; keep only real arms (type-narrowing filter, not a cast).
       const expression = this.processNode(node.expression);
       const filteredCases = node.cases.filter(
-        (c) => c.type !== "comment",
-      ) as MatchBlockCase[];
+        (c): c is MatchBlockCase => c.type === "matchBlockCase",
+      );
       let result: TsNode | undefined;
       let elseBody: TsNode | undefined;
       for (const caseItem of filteredCases) {
         if (caseItem.caseValue === "_") {
-          elseBody = this.processNode(caseItem.body);
+          elseBody = processBody(caseItem.body);
         }
       }
       const nonDefault = filteredCases.filter((c) => c.caseValue !== "_");
@@ -3243,7 +3295,7 @@ export class TypeScriptBuilder {
           "===",
           this.processNode(c.caseValue as AgencyNode),
         ),
-        body: this.processNode(c.body),
+        body: processBody(c.body),
       }));
       return ts.if(
         ts.binOp(
@@ -3251,7 +3303,7 @@ export class TypeScriptBuilder {
           "===",
           this.processNode(nonDefault[0].caseValue as AgencyNode),
         ),
-        this.processNode(nonDefault[0].body),
+        processBody(nonDefault[0].body),
         { elseIfs, elseBody },
       );
     }

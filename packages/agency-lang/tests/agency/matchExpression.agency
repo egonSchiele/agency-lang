@@ -1,0 +1,75 @@
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
+
+def classify(x: number): string {
+  return match(x) {
+    0 => "zero"
+    _ => {
+      if (x > 100) {
+        return "big"
+      }
+      return "small"
+    }
+  }
+}
+
+def onceScrutinee(): string {
+  setMutable("scrutcount", getMutable("scrutcount", 0) + 1)
+  return "hit"
+}
+
+node classifyAll() {
+  return [classify(0), classify(500), classify(5)]
+}
+
+node blockArmSideEffect() {
+  setMutable("log", "")
+  const d = match("zero") {
+    "zero" => {
+      setMutable("log", "checking,")
+      return "was zero"
+    }
+    _ => "not zero"
+  }
+  return getMutable("log", "") + d
+}
+
+node scrutineeOnce() {
+  setMutable("scrutcount", 0)
+  const r = match(onceScrutinee()) {
+    "hit" => {
+      let pad = 1
+      return "matched"
+    }
+    _ => "no"
+  }
+  return [r, getMutable("scrutcount", 0)]
+}
+
+node nestedMatch(x: string) {
+  return match(x) {
+    "outer" => {
+      return match("inner") {
+        "inner" => "both"
+        _ => "half"
+      }
+    }
+    _ => "neither"
+  }
+}
+
+node returnMatchInLoop() {
+  setMutable("log", "")
+  for (i in range(3)) {
+    const tag = match(i) {
+      0 => "z"
+      _ => {
+        if (i == 2) {
+          return "two"
+        }
+        return "other"
+      }
+    }
+    setMutable("log", getMutable("log", "") + tag + ",")
+  }
+  return getMutable("log", "")
+}

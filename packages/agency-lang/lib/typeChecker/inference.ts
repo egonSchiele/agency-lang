@@ -156,7 +156,7 @@ function mergeResultParam(types: VariableType[]): VariableType {
  * the stringified shape). Returns the lone type when there's only one unique
  * entry, avoiding wrapping single types in a one-element union.
  */
-function unionTypes(types: VariableType[]): VariableType {
+export function unionTypes(types: VariableType[]): VariableType {
   const seen = new Map<string, VariableType>();
   for (const t of types) {
     const key = JSON.stringify(t);

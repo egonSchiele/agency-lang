@@ -504,4 +504,57 @@ describe("prettyPrint", () => {
     });
   });
 
+  describe("runnerIfElse match opts arg", () => {
+    const noElseNoMatch = () =>
+      ts.runnerIfElse({
+        id: 3,
+        branches: [{ condition: ts.bool(true), body: [ts.raw("x();")] }],
+      });
+
+    it("(a) no else, no matchId: no opts arg is emitted (inert)", () => {
+      const out = printTs(noElseNoMatch());
+      // The template change MUST be inert when matchId is undefined: no
+      // trailing `undefined` placeholder and no `matchId` key leak in.
+      expect(out).not.toContain("undefined");
+      expect(out).not.toContain("matchId");
+      // Ends with the bare close, exactly as before this task.
+      expect(out.endsWith("]);")).toBe(true);
+    });
+
+    it("(b) matchId without else: appends `, undefined, { matchId: N }`", () => {
+      const out = printTs(
+        ts.runnerIfElse({
+          id: 3,
+          branches: [{ condition: ts.bool(true), body: [ts.raw("x();")] }],
+          matchId: 5,
+        }),
+      );
+      expect(out.endsWith("], undefined, { matchId: 5 });")).toBe(true);
+    });
+
+    it("(c) matchId with else: appends `, { matchId: N }` after the else arm", () => {
+      const out = printTs(
+        ts.runnerIfElse({
+          id: 3,
+          branches: [{ condition: ts.bool(true), body: [ts.raw("x();")] }],
+          elseBranch: [ts.raw("y();")],
+          matchId: 5,
+        }),
+      );
+      expect(out.endsWith("}, { matchId: 5 });")).toBe(true);
+      // The else arm must still be present (no `undefined` placeholder).
+      expect(out).toContain("async (runner) => {");
+      expect(out).not.toContain(", undefined, { matchId");
+    });
+  });
+
+  describe("runnerExitMatch", () => {
+    it("emits the exitMatch call and a bare return", () => {
+      const out = printTs(
+        ts.runnerExitMatch({ matchId: 7, value: ts.str("hi") }),
+      );
+      expect(out).toBe('runner.exitMatch(7, "hi");\nreturn;');
+    });
+  });
+
 });

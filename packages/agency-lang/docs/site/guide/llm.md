@@ -241,4 +241,4 @@ llm("Summarize this", {
 
 Set defaults for a whole branch with `setLlmOptions({ retries, timeout, backoff })` (per-call options still win). Classification is provider-neutral — it reads HTTP status from the LLM client adapter, so a custom (non-smoltalk) client works too, falling back to message matching.
 
-To be notified of retries/timeouts (for a status line, logging, etc.), use the [`onLLMRetry` and `onLLMTimeout` callbacks](../appendix/callbacks.md).
+To be notified of retries/timeouts (for a status line, logging, etc.), use the [`onLLMRetry` and `onLLMTimeout` callbacks](../guide/callbacks.md).

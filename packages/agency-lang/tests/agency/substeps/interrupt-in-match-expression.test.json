@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Yielded value survives pause/resume; earlier arm statements do not re-run",
+      "input": "\"go\"",
+      "expectedOutput": "\"start,before,after,approved\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "proceed?" }]
+    }
+  ]
+}

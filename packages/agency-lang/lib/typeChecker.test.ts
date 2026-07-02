@@ -3542,11 +3542,13 @@ describe("TypeChecker", () => {
               {
                 type: "matchBlockCase",
                 caseValue: { type: "number", value: "1" },
-                body: {
-                  type: "functionCall",
-                  functionName: "expectStr",
-                  arguments: [{ type: "variableName", value: "n" }],
-                },
+                body: [
+                  {
+                    type: "functionCall",
+                    functionName: "expectStr",
+                    arguments: [{ type: "variableName", value: "n" }],
+                  },
+                ],
               },
             ],
           },

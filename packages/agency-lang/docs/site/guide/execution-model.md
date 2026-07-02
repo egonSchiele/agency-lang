@@ -127,4 +127,4 @@ node main(name:string) {
 }
 ```
 
-If you want to create global variables in TypeScript that get the same kind of state isolation, [Agency exports some helpers you can use](/appendix/ts-helpers).
+If you want to create global variables in TypeScript that get the same kind of state isolation, [Agency exports some helpers you can use](/guide/ts-helpers).

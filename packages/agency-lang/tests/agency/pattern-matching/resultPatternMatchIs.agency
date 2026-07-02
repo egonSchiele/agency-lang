@@ -7,11 +7,12 @@ def tryParse(input: string): Result {
 
 def classify(input: string): any {
   let r = tryParse(input)
+  let out = "unreachable"
   match (r is success(v)) {
-    v > 10 => return "big"
-    _ => return "small"
+    v > 10 => out = "big"
+    _ => out = "small"
   }
-  return "unreachable"
+  return out
 }
 
 node main() {

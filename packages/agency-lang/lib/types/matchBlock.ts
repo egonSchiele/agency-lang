@@ -1,7 +1,6 @@
-import { Assignment, AgencyComment, Expression, NewLine } from "../types.js";
+import { AgencyComment, AgencyNode, Expression, NewLine } from "../types.js";
 import { BaseNode } from "./base.js";
 import { IsExpression, MatchPattern } from "./pattern.js";
-import { ReturnStatement } from "./returnStatement.js";
 
 export type DefaultCase = "_";
 
@@ -9,13 +8,17 @@ export type MatchBlockCase = {
   type: "matchBlockCase";
   caseValue: MatchPattern | DefaultCase;
   guard?: Expression;
-  body: Expression | Assignment | ReturnStatement;
+  body: AgencyNode[];
 };
 
 export type MatchBlock = BaseNode & {
   type: "matchBlock";
   expression: Expression | IsExpression;
   cases: (MatchBlockCase | AgencyComment | NewLine)[];
+  /** Set by pattern lowering when this match is used as an expression: the id
+   *  the lowered `runner.ifElse` OWNS, so `matchYield` unwinds are consumed
+   *  here. Undefined for statement-position matches (no drift in codegen). */
+  matchExprId?: number;
 };
 
 /** Slim, lowering-preserved metadata for a single match arm: just the matcher

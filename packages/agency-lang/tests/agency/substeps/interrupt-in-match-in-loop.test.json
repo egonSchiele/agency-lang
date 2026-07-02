@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Iteration 0 takes the _ arm, iteration 1 interrupts inside the 1 arm and resumes into it, iteration 2 re-matches the _ arm cleanly (condbranch reset across iterations)",
+      "input": "",
+      "expectedOutput": "\"n0,ONE,n2,\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "at one" }]
+    }
+  ]
+}

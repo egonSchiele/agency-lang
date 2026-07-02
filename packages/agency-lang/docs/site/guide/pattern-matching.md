@@ -249,6 +249,12 @@ the scrutinee type is open.
 - **A match-expression arm cannot yield a graph-node call.** A node call
   compiles to a control-flow transition (goto/halt), not a value; use an
   `if`/`else` chain for node dispatch instead of a match expression.
+- **A `match` expression cannot appear inside a `with` handler body.** A
+  `const x = match(...)` or `return match(...)` inside a handler (the
+  `with (data) { ... }` block) is a compile error, because a handler body
+  compiles without an owning frame to unwind the match into — the match
+  exit would escape the handler and silently skip the rest of the node.
+  The guarded `handle { ... }` body is unaffected.
 
 ## Result patterns
 

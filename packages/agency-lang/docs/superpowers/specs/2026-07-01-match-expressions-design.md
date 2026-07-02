@@ -208,6 +208,7 @@ No LLM calls are needed for any of these.
 - **The `match(x is pattern)` form stays statement-only.** Its lowering synthesizes a `failure(...)` function return on head mismatch, which has no coherent meaning in expression position.
 - **`return`-to-match may not cross a concurrency boundary.** A `return` inside a `parallel`/`fork`/`race`/`thread` block within an arm is a compile error — those branches are separate execution contexts the `_matchExit` unwind cannot cross.
 - **The all-paths-yield check is syntactic** (a statement either is a yield, or is an `if`/`else` whose branches both always yield), performed during pattern lowering, rather than reusing the flow-graph `checkDefiniteReturns` pass (which runs post-lowering, deliberately skips match-containing bodies, and has no per-arm view). Loops never count as yielding on all paths.
+- **Expression matches are a compile error inside a `with` handler body.** Handler bodies compile through `processBlockPlain` (no owning `runner.ifElse` to clear `_matchExit`), so a `const x = match(...)`/`return match(...)` there would emit an `exitMatch(...); return;` that exits the handler and leaves `_matchExit` set, silently skipping every later construct in the node. Rejected at lowering time (`insideHandlerBody`). The guarded `handle { ... }` body is unaffected.
 
 ## Out of scope
 

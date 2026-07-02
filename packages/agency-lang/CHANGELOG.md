@@ -19,7 +19,7 @@
     }
     ```
     Matches that mix function-exit arms with effect-only arms can't be mechanically hoisted this way and need restructuring by hand. A match-expression arm also can't dispatch to a graph node (a node call is control flow, not a value) — use an `if`/`else` chain for node dispatch instead.
-  - Exhaustiveness is a hard error in expression position regardless of `typechecker.matchExhaustiveness`; statement-position matches still honor that config. See the [pattern matching guide](docs/site/guide/pattern-matching.md#match-expressions) for the full v1 restrictions (expression position is limited to those two capture sites, `match(x is pattern)` stays statement-only, module-level `const x = match(...)` initializers aren't supported, and returns can't cross a concurrency boundary inside an arm).
+  - Exhaustiveness is a hard error in expression position regardless of `typechecker.matchExhaustiveness`; statement-position matches still honor that config. See the [pattern matching guide](docs/site/guide/pattern-matching.md#match-expressions) for the full v1 restrictions (expression position is limited to those two capture sites, `match(x is pattern)` stays statement-only, module-level `const x = match(...)` initializers aren't supported, match expressions can't appear inside a `with` handler body, and returns can't cross a concurrency boundary inside an arm).
 
 ### Standard Library
 - Reorganized the standard library into capability-grouped modules. Generic-named modules now live under a domain prefix, and two coupled pairs/trios were merged. Distinctive names (`std::syntax`, `std::markdown`, `std::http`, `std::wikipedia`, `std::weather`, `std::math`, and the agent core) stay flat.

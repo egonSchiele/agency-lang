@@ -1,0 +1,23 @@
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+// Checkpoint taken BEFORE an expression match with a block arm; a `restore`
+// AFTER the match (gated on a condition that is true exactly once) rewinds
+// across the whole expression-match region. The mutable `log` persists across
+// the rewind (it is not part of checkpoint state), so the second pass appends
+// again, proving the match region — block arm, yield, and consumer — replays.
+node main(action: string) {
+  const cp = checkpoint()
+  setMutable("log", getMutable("log", "") + "before,")
+  const tag = match(action) {
+    "go" => {
+      setMutable("log", getMutable("log", "") + "go,")
+      return "went"
+    }
+    _ => "other"
+  }
+  setMutable("log", getMutable("log", "") + tag + ",")
+  if (getMutable("log") == "before,go,went,") {
+    restore(cp, {})
+  }
+  return getMutable("log", "")
+}

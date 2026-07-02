@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Checkpoint before an expression match with a block arm; restore after it replays the whole match region (block arm + yield + consumer)",
+      "input": "\"go\"",
+      "expectedOutput": "\"before,go,went,before,go,went,\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

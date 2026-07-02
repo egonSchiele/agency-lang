@@ -212,10 +212,10 @@ def g(x: number): number { if (x > 0) { return 2 } }`;
     expect(misses(`def f(x: bool): number { while (x) { return 1 } }`)).toBe(true);
   });
 
-  it("counts a break inside a handle body as reachable", () => {
-    // Pins hasReachableBreak's traversal: walkNodes descends into
-    // handleBlock.body (node.ts walkNodes handleBlock case), so this break is
-    // seen and the loop is escapable → the function can fall through.
+  it("counts a break inside a guarded handle body as reachable", () => {
+    // Pins hasReachableBreak's traversal: the guarded `handle { ... }` body
+    // runs in the loop's frame (break compiles to runner.breakLoop()), so this
+    // break is seen and the loop is escapable → the function can fall through.
     expect(
       misses(`effect e::x { }
 def f(x: bool): number {
@@ -224,6 +224,20 @@ def f(x: bool): number {
   }
 }`),
     ).toBe(true);
+  });
+
+  it("a break inside an inline HANDLER body cannot escape the loop", () => {
+    // Handler bodies codegen as separate arrow functions (insideHandlerBody →
+    // bare `break`, typescriptBuilder.ts processKeyword), so this break can
+    // never reach the enclosing while(true): the loop still diverges.
+    expect(
+      misses(`effect e::x { }
+def f(x: bool): number {
+  while (true) {
+    handle { let y = 1 } with (ev) { if (x) { break } }
+  }
+}`),
+    ).toBe(false);
   });
 
   // --- config knob ---

@@ -120,18 +120,36 @@ function isLiteralTrue(cond: AgencyNode): boolean {
 }
 
 /** A `break` that can exit the loop whose body this is: found anywhere in the
- *  body except inside a nested loop (break binds to the nearest loop) or a
- *  nested function/node definition (same ancestor filter as assignedNames).
- *  Conservative toward the loop being escapable: a break inside e.g. a handle
- *  block still counts as reachable. Traversal note (verified): walkNodes
- *  descends into every statement-bearing construct that could carry a
- *  loop-bound break — ifElse, loops, handleBlock body + inline handler body,
+ *  body except (a) inside a nested loop — break binds to the nearest loop,
+ *  (b) inside a nested function/node definition (same ancestor filter as
+ *  assignedNames), or (c) inside an INLINE HANDLER body — handler bodies are
+ *  codegen'd as separate arrow functions (`insideHandlerBody`;
+ *  typescriptBuilder.ts processKeyword emits a bare `break` there), so a
+ *  break in a `with (e) { ... }` body can never reach the enclosing Agency
+ *  loop. Everything else counts, conservative toward the loop being
+ *  escapable — a break in the guarded `handle { ... }` body or in a callback
+ *  block compiles to runner.breakLoop(), which genuinely breaks the loop when
+ *  it runs during an iteration. Traversal note (verified): walkNodes descends
+ *  into every statement-bearing construct that could carry a loop-bound
+ *  break — ifElse, loops, handleBlock body + inline handler body,
  *  thread/parallel/seq blocks, match arm bodies, withModifier — the only
  *  non-descended wrapper is staticStatement, which cannot meaningfully
  *  contain a break. */
 function hasReachableBreak(body: AgencyNode[]): boolean {
+  // Breaks under inline handler bodies can't escape the loop (see (c) above).
+  // Collected by node identity so the main walk can skip exactly those.
+  const handlerBodyBreaks: AgencyNode[] = [];
+  for (const { node } of walkNodes(body)) {
+    if (node.type !== "handleBlock" || node.handler.kind !== "inline") continue;
+    for (const { node: inner } of walkNodes(node.handler.body)) {
+      if (inner.type === "keyword" && inner.value === "break") {
+        handlerBodyBreaks.push(inner);
+      }
+    }
+  }
   for (const { node, ancestors } of walkNodes(body)) {
     if (node.type !== "keyword" || node.value !== "break") continue;
+    if (handlerBodyBreaks.includes(node)) continue;
     const bindsElsewhere = ancestors.some(
       (a) =>
         a.type === "whileLoop" ||

@@ -16,6 +16,7 @@ import type {
   Expression,
   ForLoop,
   FunctionCall,
+  HandleBlock,
   IfElse,
   MatchBlock,
   MatchBlockCase,
@@ -62,6 +63,16 @@ class PatternLowerer {
    *  in module-level initializers, which have no execution frame to unwind. */
   private atModuleLevel = true;
 
+  /** True while lowering, in the SAME execution frame, the body of a `with`
+   *  handler. Handler bodies compile through `processBlockPlain` (no owning
+   *  `runner.ifElse` to clear `_matchExit`), so an expression `match` there
+   *  would emit `exitMatch(...); return;` that exits the handler and leaves
+   *  `_matchExit` set — silently skipping every later construct in the node.
+   *  Expression matches are rejected while this is set. Reset at frame
+   *  boundaries (nested functions/nodes/blocks/concurrency) by
+   *  `lowerNewFrameBody`, since those compile in their own frames. */
+  private insideHandlerBody = false;
+
   private freshName(prefix: string): string {
     return `__${prefix}_${++this.counter}`;
   }
@@ -70,8 +81,9 @@ class PatternLowerer {
     return nodes.flatMap((n) => this.lowerNode(n));
   }
 
-  /** Lower a nested body (not the module top level): temporarily clears the
-   *  `atModuleLevel` flag for the duration of the recursion. */
+  /** Lower a nested body in the SAME execution frame (if/else, loop, match arm,
+   *  guarded `handle` body): temporarily clears the `atModuleLevel` flag but
+   *  PRESERVES `insideHandlerBody`, since these run in the enclosing frame. */
   private lowerBody(nodes: AgencyNode[]): AgencyNode[] {
     const prev = this.atModuleLevel;
     this.atModuleLevel = false;
@@ -79,6 +91,38 @@ class PatternLowerer {
       return this.lower(nodes);
     } finally {
       this.atModuleLevel = prev;
+    }
+  }
+
+  /** Lower the body of a construct that runs in its OWN execution frame
+   *  (nested function / node / block argument / concurrency block / function
+   *  call block). Clears `atModuleLevel` AND `insideHandlerBody`: a `match`
+   *  inside such a body compiles against its own frame, not the handler's. */
+  private lowerNewFrameBody(nodes: AgencyNode[]): AgencyNode[] {
+    const prevModule = this.atModuleLevel;
+    const prevHandler = this.insideHandlerBody;
+    this.atModuleLevel = false;
+    this.insideHandlerBody = false;
+    try {
+      return this.lower(nodes);
+    } finally {
+      this.atModuleLevel = prevModule;
+      this.insideHandlerBody = prevHandler;
+    }
+  }
+
+  /** Lower an inline `with` handler body, marking `insideHandlerBody` so that
+   *  expression matches within it (same frame) are rejected. */
+  private lowerHandlerBody(nodes: AgencyNode[]): AgencyNode[] {
+    const prevModule = this.atModuleLevel;
+    const prevHandler = this.insideHandlerBody;
+    this.atModuleLevel = false;
+    this.insideHandlerBody = true;
+    try {
+      return this.lower(nodes);
+    } finally {
+      this.atModuleLevel = prevModule;
+      this.insideHandlerBody = prevHandler;
     }
   }
 
@@ -94,11 +138,29 @@ class PatternLowerer {
         return this.lowerMatchBlock(node);
       case "forLoop":
         return [this.lowerForLoop(node)];
+      case "handleBlock": {
+        // Descend the guarded body in the SAME frame, but mark the inline
+        // handler body so expression matches within it are rejected (see
+        // `insideHandlerBody`). Non-inline handlers have no body to descend.
+        const hb = node as HandleBlock;
+        const body = this.lowerBody(hb.body);
+        const handler =
+          hb.handler.kind === "inline"
+            ? { ...hb.handler, body: this.lowerHandlerBody(hb.handler.body) }
+            : hb.handler;
+        return [{ ...hb, body, handler }];
+      }
       case "returnStatement": {
         const ret = node as ReturnStatement;
         // Expression-position match: `return match(E) { ... }`. Hoist the match
         // region and return the temp it produces.
         if (ret.value !== undefined && (ret.value as AgencyNode).type === "matchBlock") {
+          if (this.insideHandlerBody) {
+            throw new LoweringError(
+              "match expressions are not supported inside handler bodies",
+              ret.loc,
+            );
+          }
           const region = this.lowerMatchExpressionCore(ret.value as MatchBlock, ret.loc);
           return [...region.statements, { ...ret, value: region.valueRef }];
         }
@@ -122,11 +184,13 @@ class PatternLowerer {
       }
       default: {
         // Recurse into every body field on body-bearing nodes (function /
-        // graphNode / handleBlock / parallelBlock / seqBlock / blockArgument /
-        // functionCall.block / …). For nodes that are also Expressions,
-        // additionally walk the expression tree so nested `isExpression` is
-        // lowered. Bodies are nested, so clear the module-level flag.
-        const withRecursedBodies = mapBodies(node, (b) => this.lowerBody(b));
+        // graphNode / parallelBlock / seqBlock / blockArgument /
+        // functionCall.block / …; `handleBlock` is handled explicitly above).
+        // For nodes that are also Expressions, additionally walk the expression
+        // tree so nested `isExpression` is lowered. Each of these bodies runs in
+        // its own execution frame, so clear both module-level AND handler-body
+        // flags via `lowerNewFrameBody`.
+        const withRecursedBodies = mapBodies(node, (b) => this.lowerNewFrameBody(b));
         if (isExpr(withRecursedBodies as unknown)) {
           return [this.lowerExpression(withRecursedBodies as unknown as Expression) as unknown as AgencyNode];
         }
@@ -156,7 +220,7 @@ class PatternLowerer {
     }
     if (expr.type === "functionCall") {
       const block = expr.block
-        ? { ...expr.block, body: this.lowerBody(expr.block.body) }
+        ? { ...expr.block, body: this.lowerNewFrameBody(expr.block.body) }
         : expr.block;
       return {
         ...expr,
@@ -220,6 +284,12 @@ class PatternLowerer {
       if (this.atModuleLevel) {
         throw new LoweringError(
           "match expressions are not supported in module-level initializers",
+          node.loc,
+        );
+      }
+      if (this.insideHandlerBody) {
+        throw new LoweringError(
+          "match expressions are not supported inside handler bodies",
           node.loc,
         );
       }
@@ -434,57 +504,51 @@ class PatternLowerer {
 
   /**
    * Recursively rewrite `return <expr>` into `matchYield { matchId, <expr> }`
-   * within a match arm body. Descends into if/else and loop bodies. Nested
-   * `matchBlock` statements own their own arm returns and are left untouched.
+   * within a match arm body. Descends ONLY into the return-flow-transparent
+   * bodies defined by the shared `returnFlowBodies` boundary (if/else + loop
+   * bodies) — the SAME boundary `containsReturn`/`firstReturnLoc` use, so they
+   * can never disagree. Every other body-bearing node (nested `matchBlock`
+   * arms, `handleBlock` bodies, `blockArgument`/callback bodies, concurrency
+   * blocks) is opaque: a `return` inside it does not flow to this arm.
    * `return match(...)` lowers the inner match first, then yields its temp.
    */
   private rewriteReturnsToYields(body: AgencyNode[], matchId: number): AgencyNode[] {
     const out: AgencyNode[] = [];
     for (const stmt of body) {
-      switch (stmt.type) {
-        case "returnStatement": {
-          if (!stmt.value) {
-            throw new LoweringError(
-              "match arm must return a value on every path when the match is used as an expression",
-              stmt.loc,
-            );
-          }
-          if ((stmt.value as AgencyNode).type === "matchBlock") {
-            // nested return match(...): lower inner first, yield its temp
-            const inner = this.lowerMatchExpressionCore(stmt.value as MatchBlock, stmt.loc);
-            out.push(...inner.statements);
-            out.push({ type: "matchYield", matchId, value: inner.valueRef, loc: stmt.loc });
-          } else {
-            out.push({ type: "matchYield", matchId, value: stmt.value, loc: stmt.loc });
-          }
-          break;
+      if (stmt.type === "returnStatement") {
+        if (!stmt.value) {
+          throw new LoweringError(
+            "match arm must return a value on every path when the match is used as an expression",
+            stmt.loc,
+          );
         }
-        case "ifElse":
-          out.push({
-            ...stmt,
-            thenBody: this.rewriteReturnsToYields(stmt.thenBody, matchId),
-            elseBody: stmt.elseBody
-              ? this.rewriteReturnsToYields(stmt.elseBody, matchId)
-              : undefined,
-          });
-          break;
-        case "forLoop":
-        case "whileLoop":
-          out.push({ ...stmt, body: this.rewriteReturnsToYields(stmt.body, matchId) });
-          break;
-        case "matchBlock":
-          out.push(stmt); // inner match owns its arm returns
-          break;
-        default: {
-          if (isConcurrencyBlock(stmt) && containsReturn([stmt])) {
-            throw new LoweringError(
-              "cannot return from a match arm inside a parallel, fork, race, seq, or thread block",
-              stmt.loc,
-            );
-          }
-          out.push(stmt);
+        if ((stmt.value as AgencyNode).type === "matchBlock") {
+          // nested return match(...): lower inner first, yield its temp
+          const inner = this.lowerMatchExpressionCore(stmt.value as MatchBlock, stmt.loc);
+          out.push(...inner.statements);
+          out.push({ type: "matchYield", matchId, value: inner.valueRef, loc: stmt.loc });
+        } else {
+          out.push({ type: "matchYield", matchId, value: stmt.value, loc: stmt.loc });
         }
+        continue;
       }
+      // Return-flow-transparent (if/else, for, while): rewrite its return-flow
+      // bodies. `mapBodies` over these node types maps EXACTLY those bodies (they
+      // carry no other body fields), so it agrees with `returnFlowBodies`.
+      if (returnFlowBodies(stmt).length > 0) {
+        out.push(mapBodies(stmt, (b) => this.rewriteReturnsToYields(b, matchId)));
+        continue;
+      }
+      // Opaque node. A `return` inside a concurrency block would otherwise
+      // survive as a raw function return the `_matchExit` unwind can't reach, so
+      // reject it explicitly.
+      if (isConcurrencyBlock(stmt) && containsReturn(concurrencyBlockBody(stmt))) {
+        throw new LoweringError(
+          "cannot return from a match arm inside a parallel, fork, race, seq, or thread block",
+          stmt.loc,
+        );
+      }
+      out.push(stmt);
     }
     return out;
   }
@@ -947,42 +1011,60 @@ function isConcurrencyBlock(node: AgencyNode): boolean {
   return node.type === "parallelBlock" || node.type === "seqBlock";
 }
 
+/** The guarded body of a concurrency/sequencing block (`parallel`/`seq`). */
+function concurrencyBlockBody(node: AgencyNode): AgencyNode[] {
+  return (node as { body: AgencyNode[] }).body;
+}
+
 /**
- * True when any node in `nodes` (recursively) is a `returnStatement`, WITHOUT
- * descending into nested `matchBlock` arm bodies — an inner match owns its own
- * arm returns (same boundary as `rewriteReturnsToYields`). The generic AST
- * walker (`utils/node.ts` `n(...)`) descends into every body uniformly and so
- * cannot express this skip-subtree boundary; hence this small hand-rolled walk.
+ * THE single source of truth for the match-arm return-flow descent boundary.
+ * Returns the child bodies of `node` that a `return` flows through to reach the
+ * enclosing arm: the `if`/`else` branches and `for`/`while` loop bodies ONLY.
+ * Every other body-bearing node is opaque — a `return` inside a nested
+ * `matchBlock` arm, a `handleBlock` (guarded body OR `with` handler),
+ * `blockArgument`/callback body, or concurrency block does NOT flow to this arm
+ * (it belongs to that inner construct / a separate frame). Shared by
+ * `rewriteReturnsToYields`, `containsReturn`, and `firstReturnLoc` so their
+ * boundaries can never diverge again.
+ */
+function returnFlowBodies(node: AgencyNode): AgencyNode[][] {
+  if (node.type === "ifElse") {
+    return node.elseBody ? [node.thenBody, node.elseBody] : [node.thenBody];
+  }
+  if (node.type === "forLoop" || node.type === "whileLoop") {
+    return [node.body];
+  }
+  return [];
+}
+
+/**
+ * True when any node in `nodes` is a `returnStatement` reachable within the
+ * arm's own return-flow, using the shared `returnFlowBodies` boundary (does not
+ * descend into nested match arms, handler bodies, block args, or concurrency
+ * blocks).
  */
 function containsReturn(nodes: AgencyNode[]): boolean {
   for (const node of nodes) {
     if (node.type === "returnStatement") return true;
-    if (node.type === "matchBlock") continue; // inner match owns its returns
-    let found = false;
-    mapBodies(node, (body) => {
-      if (containsReturn(body)) found = true;
-      return body;
-    });
-    if (found) return true;
+    for (const body of returnFlowBodies(node)) {
+      if (containsReturn(body)) return true;
+    }
   }
   return false;
 }
 
 /**
  * Location of the first `returnStatement` in `nodes` using the same
- * skip-nested-`matchBlock` boundary as `containsReturn`. Used to anchor the
+ * `returnFlowBodies` boundary as `containsReturn`. Used to anchor the
  * statement-position return diagnostic on the offending `return`.
  */
 function firstReturnLoc(nodes: AgencyNode[]): SourceLocation | undefined {
   for (const node of nodes) {
     if (node.type === "returnStatement") return node.loc;
-    if (node.type === "matchBlock") continue; // inner match owns its returns
-    let found: SourceLocation | undefined;
-    mapBodies(node, (body) => {
-      found ??= firstReturnLoc(body);
-      return body;
-    });
-    if (found) return found;
+    for (const body of returnFlowBodies(node)) {
+      const found = firstReturnLoc(body);
+      if (found) return found;
+    }
   }
   return undefined;
 }

@@ -278,4 +278,88 @@ describe("statement-position return-in-arm errors", () => {
   }
   return val
 }`, /return match\(/));
+
+  it("boundary: a `return` inside a `with` handler body of a statement-arm handle parses (handler bodies are opaque)", () => {
+    const parsed = parseAgency(`node main() {
+  match("go") {
+    "go" => {
+      handle {
+        interrupt("check")
+      } with (data) {
+        return approve()
+      }
+    }
+    _ => {}
+  }
+  return "ok"
+}`);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("boundary: a `return` directly in a statement arm (outside the handler) still errors", () =>
+    expectError(`node main() {
+  match("go") {
+    "go" => {
+      handle {
+        interrupt("check")
+      } with (data) {
+        return approve()
+      }
+      return "escapes"
+    }
+    _ => {}
+  }
+  return "ok"
+}`, /return match\(/));
+});
+
+describe("expression match inside a handler body is rejected", () => {
+  function expectError(src: string, re: RegExp) {
+    const parsed = parseAgency(src);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(re);
+  }
+
+  it("`const x = match(...)` inside a `with` handler body is a lowering error", () =>
+    expectError(`node main() {
+  handle {
+    interrupt("check")
+  } with (data) {
+    const x = match("a") {
+      "a" => 1
+      _ => 2
+    }
+    return approve()
+  }
+  return "ok"
+}`, /match expressions are not supported inside handler bodies/));
+
+  it("`return match(...)` inside a `with` handler body is a lowering error", () =>
+    expectError(`node main() {
+  handle {
+    interrupt("check")
+  } with (data) {
+    return match("a") {
+      "a" => approve()
+      _ => propagate()
+    }
+  }
+  return "ok"
+}`, /match expressions are not supported inside handler bodies/));
+
+  it("a `match` in the guarded `handle` body (not the handler) is still allowed", () => {
+    const parsed = parseAgency(`node main() {
+  handle {
+    const x = match("a") {
+      "a" => 1
+      _ => 2
+    }
+    print(x)
+  } with (data) {
+    return approve()
+  }
+  return "ok"
+}`);
+    expect(parsed.success).toBe(true);
+  });
 });

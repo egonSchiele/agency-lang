@@ -146,6 +146,7 @@ export function ipcLog(direction: "send" | "recv", msg: any): void {
   else if (type === "interrupted") detail = `count=${msg.interrupts?.length}`;
   else if (type === "error") detail = `error=${truncate(msg.error)}`;
   else if (type === "run") detail = `node=${msg.node} script=${msg.scriptPath}`;
+  else if (type === "resume") detail = `node=${msg.node} responses=${msg.responses?.length}`;
   else detail = truncate(msg);
   process.stderr.write(`[ipc:${role}] ${ts} ${direction} ${type} ${detail}\n`);
 }
@@ -503,6 +504,57 @@ export function buildRunInstruction(args: {
   };
 }
 
+/** Startup instruction for resuming a previously-paused subprocess: the
+ * child restores the checkpoint, pairs `interrupts` with `responses`
+ * positionally (via the compiled module's own respondToInterrupts export),
+ * and continues from exactly where it left off. */
+export type ResumeInstruction = {
+  type: "resume";
+  scriptPath: string;
+  node: string;
+  checkpoint: any;
+  interrupts: SerializedInterrupt[];
+  responses: any[];
+  ipcPayload?: number;
+  configOverrides?: Partial<AgencyConfig>;
+};
+
+export function buildResumeInstruction(args: {
+  scriptPath: string;
+  saved: SubprocessResumePayload;
+  responses: any[];
+  limits: RunLimits;
+  configOverrides?: Partial<AgencyConfig>;
+}): ResumeInstruction {
+  return {
+    type: "resume",
+    scriptPath: args.scriptPath,
+    node: args.saved.node,
+    checkpoint: args.saved.childCheckpoint,
+    interrupts: args.saved.interrupts,
+    responses: args.responses,
+    ipcPayload: args.limits.ipcPayload,
+    ...(args.configOverrides ? { configOverrides: args.configOverrides } : {}),
+  };
+}
+
+/** Pull the user's responses for this subprocess's pending interrupts, in
+ * the exact order of the saved interrupts array (the child pairs them
+ * positionally). Note: `ctx.getInterruptResponse` returns the response
+ * ALREADY UNWRAPPED (context.ts does `?.response` internally). */
+export function collectSubprocessResponses(ctx: any, saved: SubprocessResumePayload): any[] {
+  return saved.interrupts.map((intr) => {
+    const response = ctx.getInterruptResponse(intr.interruptId);
+    if (response === undefined) {
+      throw new Error(
+        `Missing user response for subprocess interrupt ${intr.interruptId} (${intr.effect}). ` +
+        `All surfaced interrupts must be answered via respondToInterrupts before the subprocess can resume.`,
+      );
+    }
+    return response;
+  });
+}
+
 export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): ForkOptions {
   const memoryMb = Math.max(1, Math.floor(args.limits.memory / (1024 * 1024)));
   return {
@@ -767,7 +819,7 @@ function handleChildClose(s: RunSession, code: number | null, signal: NodeJS.Sig
  * Wire up all event handlers on the child process and kick off execution by
  * sending the (prebuilt) startup instruction over IPC.
  */
-function attachSessionHandlers(s: RunSession, instruction: RunInstruction): void {
+function attachSessionHandlers(s: RunSession, instruction: RunInstruction | ResumeInstruction): void {
   attachStdoutForwarder(s, s.child.stdout, process.stdout);
   attachStdoutForwarder(s, s.child.stderr, process.stderr);
 
@@ -793,7 +845,7 @@ function attachSessionHandlers(s: RunSession, instruction: RunInstruction): void
 async function runSubprocessSession(opts: {
   ctx: any;
   stateStack: any;
-  instruction: RunInstruction;
+  instruction: RunInstruction | ResumeInstruction;
   limits: RunLimits;
   cwd?: string;
   abortSignal?: AbortSignal;
@@ -838,7 +890,7 @@ async function runSubprocessSession(opts: {
 }
 
 /** Pick run-vs-resume declaratively from the presence of a saved pause
- * payload. The resume arm lands with the resume instruction support. */
+ * payload. */
 function resolveInstruction(args: {
   ctx: any;
   saved: SubprocessResumePayload | undefined;
@@ -847,9 +899,15 @@ function resolveInstruction(args: {
   nodeArgs: Record<string, any>;
   limits: RunLimits;
   configOverrides?: Partial<AgencyConfig>;
-}): RunInstruction {
+}): RunInstruction | ResumeInstruction {
   if (args.saved) {
-    throw new Error("subprocess resume lands in the next commit");
+    return buildResumeInstruction({
+      scriptPath: args.scriptPath,
+      saved: args.saved,
+      responses: collectSubprocessResponses(args.ctx, args.saved),
+      limits: args.limits,
+      configOverrides: args.configOverrides,
+    });
   }
   return buildRunInstruction({
     scriptPath: args.scriptPath,

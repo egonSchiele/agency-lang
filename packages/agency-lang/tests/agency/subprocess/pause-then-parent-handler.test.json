@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "After resume, the replayed parent chain catches the child second interrupt",
+      "input": "",
+      "expectedOutput": "\"phase-one\\nphase-two\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

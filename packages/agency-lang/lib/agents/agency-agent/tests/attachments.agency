@@ -1,0 +1,135 @@
+import { detectAttachments } from "../lib/attachments.agency"
+import { setAgentCwd } from "std::index"
+import { exec } from "std::shell"
+import { setEnv } from "std::system"
+
+// 1x1 PNG, 89 bytes decoded. Content is irrelevant to detection (the
+// gate is extension + stat), but a real PNG keeps fixtures honest.
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+node detectsPngPath(): string {
+  writeBinary("da-a.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("look at /tmp/da-a.png please") with approve
+  if (detected.attached.length != 1) {
+    return "count=${detected.attached.length}"
+  }
+  const item = detected.attached[0]
+  return "1|${item.label}|${item.attachment.type}|${item.attachment.source.kind}"
+}
+
+node detectsPdfPath(): string {
+  writeBinary("da-doc.pdf", "JVBERi0xLjQK", "/tmp") with approve
+  const detected = detectAttachments("summarize /tmp/da-doc.pdf") with approve
+  if (detected.attached.length != 1) {
+    return "count=${detected.attached.length}"
+  }
+  return "1|${detected.attached[0].label}|${detected.attached[0].attachment.type}"
+}
+
+node quotedPathWithSpaces(): string {
+  writeBinary("da b.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see '/tmp/da b.png' now") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
+}
+
+node doubleQuotedPath(): string {
+  writeBinary("da b.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see \"/tmp/da b.png\" now") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
+}
+
+node escapedSpacePath(): string {
+  writeBinary("da b.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da\\ b.png now") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
+}
+
+node tildeExpansion(): string {
+  writeBinary("da-tilde.png", PNG, "/tmp") with approve
+  setEnv("HOME", "/tmp") with approve
+  const detected = detectAttachments("see ~/da-tilde.png") with approve
+  return "${detected.attached.length}"
+}
+
+node trailingPunctuation(): string {
+  writeBinary("da-p.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("is it /tmp/da-p.png?") with approve
+  return "${detected.attached.length}"
+}
+
+node nonexistentIgnored(): string {
+  const detected = detectAttachments("see /tmp/da-not-there-xyz.png") with approve
+  return "${detected.attached.length}"
+}
+
+node codePathIgnored(): string {
+  writeBinary("da-code.ts", "AQID", "/tmp") with approve
+  const detected = detectAttachments("read /tmp/da-code.ts") with approve
+  return "${detected.attached.length}"
+}
+
+node directoryIgnored(): string {
+  exec("rm", ["-rf", "/tmp/da-dir.png"]) with approve
+  exec("mkdir", ["-p", "/tmp/da-dir.png"]) with approve
+  const detected = detectAttachments("see /tmp/da-dir.png") with approve
+  return "${detected.attached.length}"
+}
+
+node overLimitSkipped(): string {
+  writeBinary("da-big.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da-big.png", maxBytes: 4) with approve
+  return "${detected.attached.length}|${detected.skipped[0].label}|${detected.skipped[0].reason}"
+}
+
+node dedupes(): string {
+  writeBinary("da-dup.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("/tmp/da-dup.png and again /tmp/da-dup.png") with approve
+  return "${detected.attached.length}"
+}
+
+node capsAtTen(): number {
+  let msg = "look at"
+  for (i in range(11)) {
+    writeBinary("da-cap-${i}.png", PNG, "/tmp") with approve
+    msg = msg + " /tmp/da-cap-${i}.png"
+  }
+  const detected = detectAttachments(msg) with approve
+  return detected.attached.length
+}
+
+node allImageExtensions(): number {
+  writeBinary("da-e1.jpg", PNG, "/tmp") with approve
+  writeBinary("da-e2.jpeg", PNG, "/tmp") with approve
+  writeBinary("da-e3.gif", PNG, "/tmp") with approve
+  writeBinary("da-e4.webp", PNG, "/tmp") with approve
+  writeBinary("da-e5.PNG", PNG, "/tmp") with approve
+  const detected = detectAttachments("/tmp/da-e1.jpg /tmp/da-e2.jpeg /tmp/da-e3.gif /tmp/da-e4.webp /tmp/da-e5.PNG") with approve
+  return detected.attached.length
+}
+
+node mixedTypesPreserveOrder(): string {
+  writeBinary("da-m1.png", PNG, "/tmp") with approve
+  writeBinary("da-m2.pdf", "JVBERi0xLjQK", "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da-m1.png then /tmp/da-m2.pdf") with approve
+  if (detected.attached.length != 2) {
+    return "count=${detected.attached.length}"
+  }
+  return "2|${detected.attached[0].label}|${detected.attached[0].attachment.type}|${detected.attached[1].label}|${detected.attached[1].attachment.type}"
+}
+
+node relativeResolvesAgainstAgentCwd(): string {
+  writeBinary("da-rel.png", PNG, "/tmp") with approve
+  setAgentCwd("/tmp")
+  const detected = detectAttachments("see da-rel.png") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
+}
+
+node bareTextNoAttachments(): string {
+  const detected = detectAttachments("please draw me a diagram") with approve
+  return "${detected.attached.length}|${detected.text}"
+}
+
+node emptyMessage(): string {
+  const detected = detectAttachments("") with approve
+  return "${detected.attached.length}|${detected.skipped.length}|${detected.text}"
+}

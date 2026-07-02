@@ -1,0 +1,155 @@
+import { applyAgentCwd } from "std::index"
+import { stat } from "std::shell"
+import { env } from "std::system"
+import { basename, extname, dirname, isAbsolute } from "std::path"
+import { Attachment, image, file } from "std::thread"
+
+// Detects image/PDF file paths in a user message (terminal drag-drop
+// inserts a quoted/escaped path; typed mentions are plain tokens) and
+// returns them as inline-base64 attachments for the coordinator turn.
+// Media-only by design: code/text paths stay with the read tool.
+
+export type DetectedAttachment = { attachment: Attachment, label: string }
+export type SkippedFile = { label: string, reason: string }
+
+export type DetectedContent = {
+  text: string,
+  attached: DetectedAttachment[],
+  skipped: SkippedFile[]
+}
+
+// A token that survived the pure (no-I/O) gates: normalized, media
+// extension, resolved to an absolute path.
+type Candidate = { abs: string, mime: string }
+
+// extension (lowercase, with dot) -> MIME type. Media-only by design.
+static const MIME_TYPES: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".pdf": "application/pdf"
+}
+
+static const MAX_ATTACHMENTS = 10
+
+// Split msg into candidate tokens. Shell-quoted spans ('…' / "…")
+// become single tokens (drag-drop quotes paths with spaces), and a
+// backslash-escaped space is unescaped into the current token.
+// Hand-written scanner — order-dependent state is fine here (parsers
+// are exempt per docs/dev/anti-patterns.md).
+def tokenize(msg: string): string[] {
+  let tokens: string[] = []
+  let current = ""
+  let quote = ""
+  let index = 0
+  while (index < msg.length) {
+    const ch = msg.slice(index, index + 1)
+    if (quote != "") {
+      if (ch == quote) {
+        quote = ""
+      } else {
+        current = current + ch
+      }
+    } else if (ch == "'" || ch == "\"") {
+      quote = ch
+    } else if (ch == "\\" && index + 1 < msg.length && msg.slice(index + 1, index + 2) == " ") {
+      current = current + " "
+      index = index + 1
+    } else if (ch == " " || ch == "\t" || ch == "\n") {
+      if (current != "") {
+        tokens.push(current)
+        current = ""
+      }
+    } else {
+      current = current + ch
+    }
+    index = index + 1
+  }
+  if (current != "") {
+    tokens.push(current)
+  }
+  return tokens
+}
+
+// Trim trailing punctuation typed after a path, and expand a leading ~/
+// (drag-drop inserts absolute paths, but typed mentions are often ~/…).
+def normalizeToken(token: string): string {
+  let normalized = token
+  while (normalized.length > 0 && (normalized.endsWith(",") || normalized.endsWith(".") || normalized.endsWith("?") || normalized.endsWith(":"))) {
+    normalized = normalized.slice(0, normalized.length - 1)
+  }
+  if (normalized.startsWith("~/")) {
+    const home = env("HOME")
+    if (home != null && home != "") {
+      normalized = home + normalized.slice(1)
+    }
+  }
+  return normalized
+}
+
+// Pure stage (spec steps 2-3 + extension gate): normalize, keep only
+// media extensions, resolve to an absolute path. Returns null for
+// tokens that are not candidate media paths. No filesystem access.
+def tokenToCandidate(token: string): Candidate | null {
+  const normalized = normalizeToken(token)
+  const ext = extname(normalized).toLowerCase()
+  const mime = MIME_TYPES[ext]
+  if (mime == null) {
+    return null
+  }
+  if (isAbsolute(normalized)) {
+    return { abs: normalized, mime: mime }
+  }
+  return { abs: applyAgentCwd(normalized), mime: mime }
+}
+
+export def detectAttachments(msg: string, maxBytes: number = 20971520): DetectedContent {
+  """
+  Scan a user message for image/PDF file paths and return them as
+  inline-base64 attachments with display labels. Non-existent paths,
+  directories, non-media extensions, unreadable files, and files over
+  maxBytes (default 20971520 = smoltalk's 20 MB per-file cap) are not
+  attached; size/read skips are reported in `skipped`. Caps at 10
+  attachments per message.
+  """
+  let attached: DetectedAttachment[] = []
+  let skipped: SkippedFile[] = []
+  let seen: string[] = []
+  // Positive `if` nesting rather than `continue` guards: flow narrowing
+  // (candidate != null, isSuccess) is only tracked into guarded blocks.
+  for (token in tokenize(msg)) {
+    const candidate = tokenToCandidate(token)
+    if (candidate != null) {
+      if (attached.length < MAX_ATTACHMENTS && !seen.includes(candidate.abs)) {
+        seen.push(candidate.abs)
+        const info = stat(candidate.abs)
+        if (info.type == "file") {
+          const label = basename(candidate.abs)
+          if (info.size > maxBytes) {
+            skipped.push({ label: label, reason: "too large to attach" })
+          } else {
+            // readBinary rejects an absolute filename when dir is set, so
+            // pass the (basename, dirname) split. Inlining the bytes here
+            // (instead of letting smoltalk read the path at every send)
+            // keeps the persistent thread immune to later file deletion or
+            // edits and keeps the read inside the std::readBinary policy
+            // gate.
+            const bytes = readBinary(label, dirname(candidate.abs))
+            if (isSuccess(bytes)) {
+              if (candidate.mime == "application/pdf") {
+                attached.push({ attachment: file(bytes.value, filename: label, mimeType: candidate.mime, base64: true), label: label })
+              } else {
+                attached.push({ attachment: image(bytes.value, candidate.mime, base64: true), label: label })
+              }
+            } else {
+              skipped.push({ label: label, reason: "could not read" })
+            }
+          }
+        }
+      }
+    }
+  }
+  return { text: msg, attached: attached, skipped: skipped }
+}

@@ -1,0 +1,22 @@
+{
+  "tests": [
+    { "nodeName": "detectsPngPath", "input": "", "expectedOutput": "\"1|da-a.png|image|base64\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "detectsPdfPath", "input": "", "expectedOutput": "\"1|da-doc.pdf|file\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "quotedPathWithSpaces", "input": "", "expectedOutput": "\"1|da b.png\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "doubleQuotedPath", "input": "", "expectedOutput": "\"1|da b.png\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "escapedSpacePath", "input": "", "expectedOutput": "\"1|da b.png\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "tildeExpansion", "input": "", "expectedOutput": "\"1\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "trailingPunctuation", "input": "", "expectedOutput": "\"1\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nonexistentIgnored", "input": "", "expectedOutput": "\"0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "codePathIgnored", "input": "", "expectedOutput": "\"0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "directoryIgnored", "input": "", "expectedOutput": "\"0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "overLimitSkipped", "input": "", "expectedOutput": "\"0|da-big.png|too large to attach\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "dedupes", "input": "", "expectedOutput": "\"1\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "capsAtTen", "input": "", "expectedOutput": "10", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "allImageExtensions", "input": "", "expectedOutput": "5", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "mixedTypesPreserveOrder", "input": "", "expectedOutput": "\"2|da-m1.png|image|da-m2.pdf|file\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "relativeResolvesAgainstAgentCwd", "input": "", "expectedOutput": "\"1|da-rel.png\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "bareTextNoAttachments", "input": "", "expectedOutput": "\"0|please draw me a diagram\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "emptyMessage", "input": "", "expectedOutput": "\"0|0|\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

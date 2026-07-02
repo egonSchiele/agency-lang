@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handled branch completes pre-pause and is cached across resume (runs exactly once); unhandled branches surface",
+      "input": "",
+      "expectedOutput": "{\"results\":[\"branch-a\\n\",\"branch-b\\n\",\"branch-c\\n\"],\"branchARuns\":\"1\\n\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

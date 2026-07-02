@@ -1,0 +1,32 @@
+import { compile, run } from "std::agency"
+
+// Three concurrent child branches interrupt; nothing handles std::bash
+// anywhere. All three batch into ONE child checkpoint, surface as ONE
+// Interrupt[] to the user, and one respond resumes all three branches.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  const results = fork(["a", "b", "c"]) as item {
+    let r = bash("echo branch-" + item)
+    return r.stdout
+  }
+  return results
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

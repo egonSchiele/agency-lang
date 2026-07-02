@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "All three child branches pause into ONE surfaced batch; one respond resumes all",
+      "input": "",
+      "expectedOutput": "[\"branch-a\\n\",\"branch-b\\n\",\"branch-c\\n\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

@@ -4,7 +4,74 @@ import {
   hasInterrupts,
   reportUnhandledInterrupts,
   mergeChainOutcomes,
+  interruptWithHandlers,
 } from "./interrupts.js";
+import { RuntimeContext } from "./state/context.js";
+
+describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
+  const originalSend = process.send;
+  const originalIpc = process.env.AGENCY_IPC;
+
+  afterEach(() => {
+    process.send = originalSend;
+    if (originalIpc === undefined) delete process.env.AGENCY_IPC;
+    else process.env.AGENCY_IPC = originalIpc;
+    vi.restoreAllMocks();
+  });
+
+  const makeCtx = (handlers: any[]): RuntimeContext<any> => {
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    ctx.handlers = handlers;
+    return ctx;
+  };
+
+  /** Wire process.send to reply to the interrupt consult with the given
+   * parent chain outcome. */
+  const parentReplies = (outcome: any) => {
+    process.send = vi.fn((msg: any) => {
+      if (msg.type === "interrupt") {
+        setImmediate(() => {
+          process.emit("message" as any, {
+            type: "decision",
+            interruptId: msg.interruptId,
+            outcome,
+          } as any);
+        });
+      }
+      return true;
+    }) as any;
+  };
+
+  it("a verdict settled purely by local handlers is resolvedBy handler", async () => {
+    process.env.AGENCY_IPC = "1";
+    parentReplies({ kind: "noResponse" });
+    const ctx = makeCtx([async () => ({ type: "approve", value: "ok" })]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "approve", value: "ok" });
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "approved", resolvedBy: "handler" }),
+    );
+  });
+
+  it("a verdict the parent participated in is resolvedBy ipc", async () => {
+    process.env.AGENCY_IPC = "1";
+    parentReplies({ kind: "approved", value: "parent-ok" });
+    const ctx = makeCtx([]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "approve", value: "parent-ok" });
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "approved", resolvedBy: "ipc" }),
+    );
+  });
+});
 
 describe("mergeChainOutcomes", () => {
   const approvedA = { kind: "approved", value: "a" } as const;

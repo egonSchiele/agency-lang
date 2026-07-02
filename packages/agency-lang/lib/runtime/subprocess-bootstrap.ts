@@ -19,6 +19,19 @@ import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
 
 let ipcPayloadLimit = Infinity;
 
+// Parent-death watchdog. If the parent process dies (SIGKILL on a limit,
+// crash, anything), our IPC channel disconnects — exit immediately instead
+// of running on outside every limit. This also reaps nested trees: when a
+// mid-tier process dies this way, its own children's channels disconnect
+// in turn, so the whole subtree tears itself down without process-group
+// plumbing. It equally covers a child parked in sendInterruptToParent
+// awaiting a decision that will never come. Registered before anything
+// else so no window exists where the parent can die unobserved.
+process.on("disconnect", () => {
+  process.stderr.write("[bootstrap] parent disconnected — exiting\n");
+  process.exit(1);
+});
+
 /**
  * Send an IPC message and wait for the channel to flush before resolving.
  * Callers that follow with `process.exit(...)` MUST `await` this — otherwise

@@ -268,8 +268,12 @@ async function runHandlerChain(
  * reject > propagate > approve > noResponse. `inner` is the segment closer
  * to the interrupt (e.g. the child process), `outer` the segment farther
  * from it (e.g. the parent). On double-approve the OUTER value wins,
- * falling back to the inner value — matching how a single-process chain
- * overwrites approvedValue as it walks outward. */
+ * falling back to the inner value via `??`. Note this is deliberately
+ * WEAKER than the in-process chain (which overwrites unconditionally, so
+ * an outer approve-with-no-value clears an inner injected value): the
+ * outcome travels as JSON, which cannot distinguish an absent value from
+ * an explicit undefined, so a valueless outer approve defers to the
+ * inner value instead. */
 export function mergeChainOutcomes(
   inner: HandlerChainOutcome,
   outer: HandlerChainOutcome,
@@ -293,23 +297,36 @@ export function mergeChainOutcomes(
  * subprocess, consult the parent and merge. Nested subprocesses recurse
  * through this same function on each hop.
  *
- * `interruptId`: when relaying a child's interrupt, pass the CHILD's id so
- * this process's handlerDecision/interruptResolved statelog events
- * correlate with the originating interrupt (ids are preserved verbatim
- * end-to-end). Minted fresh only for direct local dispatches. */
+ * `interruptId`: the interrupt's id — the CHILD's id when relaying, or the
+ * freshly-minted one at the origin dispatch — so every process's
+ * handlerDecision/interruptResolved statelog events correlate with the
+ * originating interrupt (ids are preserved verbatim end-to-end).
+ *
+ * The extra flags let the origin caller (`interruptWithHandlers`) render
+ * the verdict correctly: `localRejected` means `runHandlerChain` already
+ * emitted the terminal statelog event (do not emit again), and
+ * `parentDecided` distinguishes a verdict the parent hop actually
+ * participated in from one settled purely by local handlers (the
+ * `resolvedBy: "ipc" | "handler"` attribution). */
 export async function gatherChainOutcome(
   interruptObj: { effect: string; message: string; data: any; origin: string },
   ctx: RuntimeContext<any>,
-  stack?: StateStack,
-  interruptId: string = nanoid(),
-): Promise<HandlerChainOutcome> {
+  stack: StateStack | undefined,
+  interruptId: string,
+): Promise<{ outcome: HandlerChainOutcome; parentDecided: boolean; localRejected: boolean }> {
   const local = await runHandlerChain(ctx, stack, interruptId, interruptObj);
-  if (local.kind === "rejected") return local;
+  if (local.kind === "rejected") {
+    return { outcome: local, parentDecided: false, localRejected: true };
+  }
   if (isIpcMode()) {
     const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
-    return mergeChainOutcomes(local, parentOutcome);
+    return {
+      outcome: mergeChainOutcomes(local, parentOutcome),
+      parentDecided: parentOutcome.kind !== "noResponse",
+      localRejected: false,
+    };
   }
-  return local;
+  return { outcome: local, parentDecided: false, localRejected: false };
 }
 
 /** Render a merged chain outcome into the shape `interruptWithHandlers`
@@ -368,29 +385,25 @@ export async function interruptWithHandlers<T = any>(
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { effect, message, data, origin };
   const interruptId = nanoid();
-  const local = await runHandlerChain(ctx, stack, interruptId, interruptObj);
-
-  if (local.kind === "rejected") {
-    return { type: "reject", value: local.value };
+  // The origin dispatch of the distributed chain: gatherChainOutcome walks
+  // the local segment and — in IPC mode — consults the parent and merges
+  // (the same walk every relay hop performs in handleInterruptMessage).
+  // The verdict is rendered LOCALLY: the parent reports, this process
+  // decides. A propagated/noResponse merge renders as an Interrupt[] — in a
+  // subprocess that is the pause path (the batch bubbles through the normal
+  // propagate machinery and the bootstrap converts it into an `interrupted`
+  // terminal message).
+  const { outcome, parentDecided, localRejected } = await gatherChainOutcome(
+    interruptObj,
+    ctx,
+    stack,
+    interruptId,
+  );
+  if (localRejected && outcome.kind === "rejected") {
+    // runHandlerChain already emitted the terminal interruptResolved event.
+    return { type: "reject", value: outcome.value };
   }
-
-  // IPC mode: consult the parent segment of the distributed chain (unless a
-  // local handler rejected — that already returned above), merge outcomes,
-  // and render the verdict LOCALLY. The parent reports; the child decides.
-  // The child's interruptId travels with the message so both processes'
-  // statelog events correlate to the same interrupt.
-  if (isIpcMode()) {
-    const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
-    const merged = mergeChainOutcomes(local, parentOutcome);
-    // A propagated/noResponse merge renders as an Interrupt[] — the child
-    // pauses itself through its NORMAL propagate path (batching with
-    // concurrent siblings, stamping the shared checkpoint), and the
-    // bootstrap converts the final Interrupt[] into an `interrupted`
-    // terminal message for the parent to surface to the user.
-    return renderVerdict(merged, ctx, interruptId, interruptObj, "ipc");
-  }
-
-  return renderVerdict(local, ctx, interruptId, interruptObj, "handler");
+  return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }
 
 /** Build the ID-keyed response map for `respondToInterrupts`. Extracted
@@ -530,17 +543,23 @@ export async function respondToInterrupts(args: {
   });
   // Each user response resolves a previously-thrown interrupt. Emit the
   // lifecycle event so dashboards can pair every interruptThrown with a
-  // terminal interruptResolved.
-  for (let i = 0; i < interrupts.length; i++) {
-    const intr = interrupts[i];
-    const resp = responses[i];
-    const outcome =
-      resp.type === "approve" ? "approved" : ("rejected" as const);
-    execCtx.statelogClient.interruptResolved({
-      interruptId: intr.interruptId,
-      outcome,
-      resolvedBy: "user",
-    });
+  // terminal interruptResolved. Suppressed in IPC mode: a resumed
+  // subprocess segment re-enters respondToInterrupts with the SAME
+  // preserved interrupt ids in the same inherited trace, and the root
+  // process already emitted the user resolution — a second (or, nested,
+  // N+1th) emission would break thrown↔resolved pairing for consumers.
+  if (!isIpcMode()) {
+    for (let i = 0; i < interrupts.length; i++) {
+      const intr = interrupts[i];
+      const resp = responses[i];
+      const outcome =
+        resp.type === "approve" ? "approved" : ("rejected" as const);
+      execCtx.statelogClient.interruptResolved({
+        interruptId: intr.interruptId,
+        outcome,
+        resolvedBy: "user",
+      });
+    }
   }
   // Re-register top-level callbacks BEFORE restoreState so the
   // `_callbackImpl` routing check (`stateStack.isGlobalContext()`)

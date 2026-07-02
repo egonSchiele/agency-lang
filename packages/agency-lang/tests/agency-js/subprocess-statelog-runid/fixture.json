@@ -1,5 +1,6 @@
 {
   "finalData": "resumed-ok\n",
   "oneTraceId": true,
-  "traceMatchesInterruptRunId": true
+  "traceMatchesInterruptRunId": true,
+  "noDuplicateUserResolutions": true
 }

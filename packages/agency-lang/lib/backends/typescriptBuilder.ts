@@ -2889,6 +2889,40 @@ export class TypeScriptBuilder {
     return result;
   }
 
+  /** The interrupt guard emitted after a sync assignment whose RHS may
+   * bubble an Interrupt[]: halt the scope (awaitAll first) so the batch
+   * propagates to the caller, or — inside a handler body — throw, since
+   * handlers must not raise interrupts. Returns null at global scope,
+   * where there is no runner to halt. */
+  private assignmentInterruptGuard(varRef: TsNode): TsNode | null {
+    if (this.scopes.current().type === "global") return null;
+    if (this.insideHandlerBody) {
+      return ts.if(
+        this.interruptCheckRaw(this.str(varRef)),
+        ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+      );
+    }
+    // Sync: interrupt check with awaitAll before halt.
+    // In function context, halt with the interrupt array directly so
+    // the caller's hasInterrupts check can detect it.
+    const haltValue =
+      this.scopes.current().type === "node"
+        ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
+        : varRef;
+    return ts.if(
+      this.interruptCheck(varRef),
+      ts.statements([
+        ts.awaitMethodCall(
+          // Strict accessor — immediate deref inside step body.
+          ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
+          "awaitAll",
+        ),
+        ts.methodCall(ts.id("runner"), "halt", [haltValue]),
+        ts.return(),
+      ]),
+    );
+  }
+
   private _processAssignmentInner(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
@@ -2964,38 +2998,34 @@ export class TypeScriptBuilder {
             ),
           ),
         );
-      } else if (this.scopes.current().type !== "global") {
-        if (this.insideHandlerBody) {
-          stmts.push(
-            ts.if(
-              this.interruptCheckRaw(this.str(varRef)),
-              ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
-            ),
-          );
-        } else {
-          // Sync: interrupt check with awaitAll before halt.
-          // In function context, halt with the interrupt array directly so
-          // the caller's hasInterrupts check can detect it.
-          const haltValue =
-            this.scopes.current().type === "node"
-              ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
-              : varRef;
-          stmts.push(
-            ts.if(
-              this.interruptCheck(varRef),
-              ts.statements([
-                ts.awaitMethodCall(
-                  // Strict accessor — immediate deref inside step body.
-                  ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
-                  "awaitAll",
-                ),
-                ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-                ts.return(),
-              ]),
-            ),
-          );
-        }
+      } else {
+        const guard = this.assignmentInterruptGuard(varRef);
+        if (guard) stmts.push(guard);
       }
+      return ts.statements(stmts);
+    } else if (value.type === "tryExpression") {
+      // `try` catches FAILURES, not interrupts — an Interrupt[] bubbling out
+      // of the callee passes through __tryCall untouched and must halt this
+      // scope exactly like a plain function-call assignment. Without this
+      // guard the raw interrupt array is assigned to the variable (isSuccess
+      // and isFailure both false) and the paused state is stranded.
+      const varRef = this.assigns.lhs(
+        node.scope!,
+        variableName,
+        node.accessChain,
+        node.blockDepth ?? 0,
+      );
+      const stmts: TsNode[] = [
+        this.assigns.scopedAssign(
+          node.scope!,
+          variableName,
+          this.processNode(value),
+          node.accessChain,
+          node.blockDepth ?? 0,
+        ),
+      ];
+      const guard = this.assignmentInterruptGuard(varRef);
+      if (guard) stmts.push(guard);
       return ts.statements(stmts);
     } else if (value.type === "messageThread") {
       return this.processMessageThread(value, node);

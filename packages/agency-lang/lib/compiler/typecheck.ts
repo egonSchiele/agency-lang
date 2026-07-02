@@ -54,8 +54,8 @@ function withSourcePath<T>(
   fn: (syntheticPath: string) => T,
 ): T {
   if (sourcePath) return fn(sourcePath);
-  // Place the tempdir under cwd's .agency-tmp/ (same pattern as
-  // compileAndPersist) so safeDeleteDirectory's project-containment check
+  // Place the tempdir under cwd's .agency-tmp/ (same location _run's
+  // materializeCompiledScript uses) so safeDeleteDirectory's project-containment check
   // accepts it on cleanup. os.tmpdir() would be outside the project.
   const moduleId = `agency_${nanoid()}`;
   const tempDir = path.join(process.cwd(), ".agency-tmp", `typecheck-${nanoid()}`);

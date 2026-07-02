@@ -1,0 +1,17 @@
+def mightPause(): string {
+  const name = interrupt("Approve this?")
+  return "resumed: ${name}"
+}
+
+// Regression: an assignment-position `try` must still propagate an
+// Interrupt[] bubbling out of the callee. Without the halt check on
+// tryExpression assignments, the raw interrupt array is assigned to `r`
+// (isSuccess and isFailure both false), the interrupts never surface,
+// and the paused state is stranded.
+node main() {
+  const r = try mightPause()
+  if (isFailure(r)) {
+    return "failed"
+  }
+  return r.value
+}

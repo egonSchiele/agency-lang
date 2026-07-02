@@ -461,6 +461,12 @@ type RunSession = {
   wallClockTimer: NodeJS.Timeout | null;
   stdoutBytes: number;
   stoppedForwarding: boolean;
+  /** Detaches the abort listener from the (possibly long-lived) parent
+   * signal. Run at settle: a composed AbortSignal pins its unremoved
+   * listeners — and everything they close over (session, ctx, child) —
+   * for the lifetime of the parent signal, leaking once per execution
+   * segment under fork/race or a TimeGuard. */
+  detachAbortListener: (() => void) | null;
 };
 
 /** How one subprocess execution segment ended: a value (including limit
@@ -609,6 +615,16 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
  * and return the script path. Called at every fork — initial run and resume
  * alike — and paired with cleanupTempDir when the session settles. */
 export function materializeCompiledScript(compiled: { moduleId: string; code: string }): string {
+  // The user-facing CompiledProgram type only declares moduleId, so a
+  // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
+  // persisted before code-in-value) typechecks and reaches here. Fail with
+  // a pointed message instead of an opaque fs "data argument" error.
+  if (typeof compiled?.code !== "string" || compiled.code.length === 0) {
+    throw new Error(
+      "CompiledProgram has no code; obtain it from compile() (or compileFile()). " +
+      "Values from older Agency versions carried a file path instead and must be recompiled.",
+    );
+  }
   const tempDir = path.join(process.cwd(), ".agency-tmp", nanoid());
   mkdirSync(tempDir, { recursive: true });
   const scriptPath = path.join(tempDir, `${compiled.moduleId}.js`);
@@ -655,6 +671,10 @@ function settle(s: RunSession, fn: (v: any) => void, value: any): void {
   if (s.settled) return;
   s.settled = true;
   clearTimer(s);
+  if (s.detachAbortListener) {
+    s.detachAbortListener();
+    s.detachAbortListener = null;
+  }
   cleanupSessionLocks(s.ctx, s.sessionId);
   fn(value);
 }
@@ -738,7 +758,7 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // handler chain here; without a branch-local span stack their
     // handlerChain span pushes/pops would interleave on the shared stack
     // (same discipline runBatch applies to its children).
-    const outcome = await s.ctx.statelogClient.runInBranchContext(
+    const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
       () => gatherChainOutcome(
         { effect, message, data, origin },
@@ -922,8 +942,10 @@ async function runSubprocessSession(opts: {
       wallClockTimer: null,
       stdoutBytes: 0,
       stoppedForwarding: false,
+      detachAbortListener: null,
     };
     if (opts.abortSignal) {
+      const signal = opts.abortSignal;
       const onAbort = () => {
         try {
           child.kill("SIGKILL");
@@ -932,11 +954,12 @@ async function runSubprocessSession(opts: {
         }
         settle(session, rejectPromise, new AgencyCancelledError());
       };
-      if (opts.abortSignal.aborted) {
+      if (signal.aborted) {
         onAbort();
         return;
       }
-      opts.abortSignal.addEventListener("abort", onAbort, { once: true });
+      signal.addEventListener("abort", onAbort, { once: true });
+      session.detachAbortListener = () => signal.removeEventListener("abort", onAbort);
     }
     attachSessionHandlers(session, opts.instruction);
   });

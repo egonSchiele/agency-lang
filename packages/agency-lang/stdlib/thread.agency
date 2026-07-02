@@ -46,6 +46,7 @@ import {
   _assistantMessage,
   _imageAttachment,
   _fileAttachment,
+  _attachToReply,
   _getCost,
   _getTokens,
   _getModelCosts,
@@ -135,6 +136,22 @@ export safe def file(
   @param base64 - When true, treat `source` as raw base64 data.
   """
   return _fileAttachment(source, filename, mimeType, base64)
+}
+
+export safe def attachToReply(attachment: Attachment) {
+  """
+  Queue an attachment (from image() / file()) to be shown to the model
+  after the current tool call completes. Only meaningful while running
+  as a tool inside an llm() call: the tool's text result is delivered
+  as usual with a marker naming the attachment, and the attachment
+  follows as a user message the model can see. Prefer path sources
+  (e.g. image("/abs/chart.png")) — the bytes are inlined when the
+  message is built. Outside a tool invocation the attachment is
+  dropped with a statelog error.
+
+  @param attachment - The attachment to show the model (from image() / file())
+  """
+  _attachToReply(attachment)
 }
 
 export def assistantMessage(msg: string) {

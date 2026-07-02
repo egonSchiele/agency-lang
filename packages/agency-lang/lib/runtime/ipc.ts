@@ -9,7 +9,7 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import type { ForkOptions } from "child_process";
-import { rmSync } from "fs";
+import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext } from "./asyncContext.js";
@@ -433,6 +433,18 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
   };
 }
 
+/** Write the compiled JS to a fresh .agency-tmp/<nanoid>/ dir (under cwd so
+ * Node resolves agency-lang package imports via the project's node_modules)
+ * and return the script path. Called at every fork — initial run and resume
+ * alike — and paired with cleanupTempDir when the session settles. */
+export function materializeCompiledScript(compiled: { moduleId: string; code: string }): string {
+  const tempDir = path.join(process.cwd(), ".agency-tmp", nanoid());
+  mkdirSync(tempDir, { recursive: true });
+  const scriptPath = path.join(tempDir, `${compiled.moduleId}.js`);
+  writeFileSync(scriptPath, compiled.code, "utf-8");
+  return scriptPath;
+}
+
 /**
  * Best-effort delete of the per-run compile output directory.
  *
@@ -694,7 +706,7 @@ function attachSessionHandlers(s: RunSession, node: string, args: Record<string,
  * Relays subprocess interrupts through the parent's handler chain via interruptWithHandlers.
  */
 export async function _run(
-  compiled: { path: string; moduleId: string },
+  compiled: { moduleId: string; code: string },
   node: string,
   args: Record<string, any>,
   wallClock: number,
@@ -726,6 +738,8 @@ export async function _run(
     ctx.providerModules,
   );
 
+  const compiledPath = materializeCompiledScript(compiled);
+
   // stdio fds 1/2 piped (was inherit) so we can byte-count and truncate
   // when stdout limit is exceeded; we still forward bytes through to the
   // parent's own stdout/stderr until the limit hits.
@@ -738,7 +752,7 @@ export async function _run(
       limits,
       ctx,
       stateStack,
-      compiledPath: compiled.path,
+      compiledPath,
       resolvePromise,
       rejectPromise,
       settled: false,

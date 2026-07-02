@@ -121,9 +121,39 @@
       ]
     },
     {
-      "nodeName": "capsAtTen",
+      "nodeName": "capsAtTenWithVisibleSkip",
       "input": "",
-      "expectedOutput": "10",
+      "expectedOutput": "\"10|da-cap-10.png|too many attachments (limit 10)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "apostropheInProse",
+      "input": "",
+      "expectedOutput": "\"1|da-apos.png\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "apostropheThenQuotedPath",
+      "input": "",
+      "expectedOutput": "\"1|da b.png\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "symlinkFollowed",
+      "input": "",
+      "expectedOutput": "\"1|da-link.png\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -163,7 +193,7 @@
     {
       "nodeName": "bareTextNoAttachments",
       "input": "",
-      "expectedOutput": "\"0|please draw me a diagram\"",
+      "expectedOutput": "\"0|0\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -173,7 +203,7 @@
     {
       "nodeName": "emptyMessage",
       "input": "",
-      "expectedOutput": "\"0|0|\"",
+      "expectedOutput": "\"0|0\"",
       "evaluationCriteria": [
         {
           "type": "exact"

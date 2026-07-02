@@ -88,14 +88,34 @@ node dedupes(): string {
   return "${detected.attached.length}"
 }
 
-node capsAtTen(): number {
+node capsAtTenWithVisibleSkip(): string {
   let msg = "look at"
   for (i in range(11)) {
     writeBinary("da-cap-${i}.png", PNG, "/tmp") with approve
     msg = msg + " /tmp/da-cap-${i}.png"
   }
   const detected = detectAttachments(msg) with approve
-  return detected.attached.length
+  return "${detected.attached.length}|${detected.skipped[0].label}|${detected.skipped[0].reason}"
+}
+
+node apostropheInProse(): string {
+  writeBinary("da-apos.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("here's /tmp/da-apos.png") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
+}
+
+node apostropheThenQuotedPath(): string {
+  writeBinary("da b.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("here's '/tmp/da b.png'") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
+}
+
+node symlinkFollowed(): string {
+  writeBinary("da-target.png", PNG, "/tmp") with approve
+  exec("rm", ["-f", "/tmp/da-link.png"]) with approve
+  exec("ln", ["-s", "/tmp/da-target.png", "/tmp/da-link.png"]) with approve
+  const detected = detectAttachments("see /tmp/da-link.png") with approve
+  return "${detected.attached.length}|${detected.attached[0].label}"
 }
 
 node allImageExtensions(): number {
@@ -127,12 +147,12 @@ node relativeResolvesAgainstAgentCwd(): string {
 
 node bareTextNoAttachments(): string {
   const detected = detectAttachments("please draw me a diagram") with approve
-  return "${detected.attached.length}|${detected.text}"
+  return "${detected.attached.length}|${detected.skipped.length}"
 }
 
 node emptyMessage(): string {
   const detected = detectAttachments("") with approve
-  return "${detected.attached.length}|${detected.skipped.length}|${detected.text}"
+  return "${detected.attached.length}|${detected.skipped.length}"
 }
 
 node modalityFilterPassthroughWhenNoSlots(): string {

@@ -500,10 +500,13 @@ export async function _stat(
   filename: string,
   dir: string = "",
   allowedPaths?: string[],
+  followSymlinks: boolean = false,
 ): Promise<StatInfo> {
   const full = await resolveProbePath(dir, filename, allowedPaths ?? []);
   try {
-    const st = await fs.lstat(full);
+    // With followSymlinks, fs.stat reports the TARGET's type and size
+    // (a broken link throws → "missing", same as a nonexistent path).
+    const st = followSymlinks ? await fs.stat(full) : await fs.lstat(full);
     let type: StatInfo["type"] = "other";
     if (st.isSymbolicLink()) type = "symlink";
     else if (st.isDirectory()) type = "dir";

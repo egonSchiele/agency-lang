@@ -91,7 +91,7 @@ import { Attachment } from "std::thread"
 // parallel arrays); skipped files carry the reason for the visible 📎 line.
 type DetectedAttachment = { attachment: Attachment, label: string }
 type SkippedFile = { label: string, reason: string }
-type DetectedContent = { text: string, attached: DetectedAttachment[], skipped: SkippedFile[] }
+type DetectedContent = { attached: DetectedAttachment[], skipped: SkippedFile[] }
 
 def detectAttachments(msg: string): DetectedContent
 ```
@@ -109,7 +109,7 @@ def detectAttachments(msg: string): DetectedContent
 6. **Skip over-limit files** (`size` > smoltalk's 20 MB per-file limit) with their own visible line (`📎 skipped huge.png (too large to attach)`). An over-limit attachment must never reach the `llm()` call: smoltalk turns it into a Failure of the **whole turn**, not a skipped attachment, so relying on the send-time limit would make merely *mentioning* a 25 MB PNG fail the user's message.
 7. **Inline the bytes at attach time**: `readBinary(basename(absPath), dirname(absPath))` (a read — auto-approved by the default policy; the basename/dirname split is required because `readBinary` rejects an absolute filename when `dir` is set) and build the attachment as `image(b64, mimeType, base64: true)` or `file(b64, filename: basename(absPath), mimeType: mime, base64: true)`, mapping extension → MIME type. A failed read skips the file. See "Attachment lifetime" below for why we inline instead of passing the path.
 8. Cap at **10** attachments per message (avoid accidental floods).
-9. Return `{ text: msg (unchanged — the path stays for model context), attached: [{ attachment, label: "diagram.png" }, …], skipped: [{ label, reason }, …] }`.
+9. Return `{ attached: [{ attachment, label: "diagram.png" }, …], skipped: [{ label, reason }, …] }` (the message text itself is not threaded through — the caller already has it). Post-review revisions: the lexical stage (steps 1–2 + the extension gate) lives in TS (`lib/stdlib/mediaPathScan.ts`) for speed and quote-robustness (apostrophes in prose must not open quote spans); the stat uses `followSymlinks: true` so links to media attach; and files dropped by the 10-cap get a visible `skipped` entry like size/read failures.
 
 ### Attachment lifetime in the persistent thread (why step 7 inlines)
 

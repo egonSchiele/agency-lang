@@ -248,7 +248,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxRe
 ### stat
 
 ```ts
-stat(filename: string, dir: string, allowedPaths: string[], useAgentCwd: boolean): StatInfo
+stat(filename: string, dir: string, allowedPaths: string[], useAgentCwd: boolean, followSymlinks: boolean): StatInfo
 ```
 
 Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms. Set allowedPaths to restrict which paths may be stat-ed.
@@ -259,6 +259,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
   @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
   @param useAgentCwd - When true, resolve a relative filename against the agent working directory (see setAgentCwd) if one is set. Absolute filenames are unaffected. Defaults to false.
+  @param followSymlinks - When true, report the symlink TARGET's type and size (a broken link reports "missing"). Defaults to false: the link itself is reported with type "symlink".
 
 **Parameters:**
 
@@ -268,6 +269,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 | dir | `string` | "" |
 | allowedPaths | `string[]` | [] |
 | useAgentCwd | `boolean` | false |
+| followSymlinks | `boolean` | false |
 
 **Returns:** [StatInfo](#statinfo)
 
@@ -299,7 +301,7 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L262))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L264))
 
 ### which
 
@@ -317,4 +319,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L286))

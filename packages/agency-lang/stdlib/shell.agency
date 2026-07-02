@@ -242,6 +242,7 @@ export safe def stat(
   dir: string = "",
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
+  followSymlinks: boolean = false,
 ): StatInfo {
   """
   Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms. Set allowedPaths to restrict which paths may be stat-ed.
@@ -252,11 +253,12 @@ export safe def stat(
   @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
   @param useAgentCwd - When true, resolve a relative filename against the agent working directory (see setAgentCwd) if one is set. Absolute filenames are unaffected. Defaults to false.
+  @param followSymlinks - When true, report the symlink TARGET's type and size (a broken link reports "missing"). Defaults to false: the link itself is reported with type "symlink".
   """
   if (useAgentCwd && !isAbsolute(filename)) {
     dir = applyAgentCwd(dir)
   }
-  return _stat(filename, dir, allowedPaths)
+  return _stat(filename, dir, allowedPaths, followSymlinks)
 }
 
 export safe def exists(

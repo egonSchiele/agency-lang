@@ -14,6 +14,7 @@ import {
   char,
   count,
   digit,
+  exactly,
   fail,
   failure,
   istr,
@@ -356,71 +357,68 @@ export function unescapeStringChar(next: string): string {
   }
 }
 
-/** Read a single backslash escape beginning at `raw[i]` (which must be `\`).
- *  Returns the unescaped text and how many source characters were consumed
- *  (including the backslash). Handles `\${`, `\xHH`, `\uHHHH`, `\u{H…}`, and
- *  the single-char escapes in `unescapeStringChar`. Invalid hex/unicode forms
- *  and unknown escapes are preserved verbatim so strings that merely contain
- *  a backslash keep their meaning. The parser interprets these itself rather
- *  than leaning on the JS template literal the code compiles to — the printer
- *  escapes backslashes, so an uninterpreted `\u0000` would reach runtime as
- *  six literal characters instead of a NUL. */
-export function readStringEscape(
-  raw: string,
-  i: number,
-): { value: string; length: number } {
-  const next = raw[i + 1];
-  if (next === undefined) return { value: "\\", length: 1 };
-  // `\${` → `${` (the only `\$` escape; bare `\$` falls through to verbatim).
-  if (next === "$" && raw[i + 2] === "{") return { value: "${", length: 3 };
-  // `\xHH` — exactly two hex digits.
-  if (next === "x") {
-    const hex = raw.slice(i + 2, i + 4);
-    if (/^[0-9a-fA-F]{2}$/.test(hex)) {
-      return { value: String.fromCharCode(parseInt(hex, 16)), length: 4 };
-    }
-  }
-  // `\u{H…}` — 1-6 hex digits naming a code point.
-  if (next === "u" && raw[i + 2] === "{") {
-    const end = raw.indexOf("}", i + 3);
-    if (end !== -1) {
-      const hex = raw.slice(i + 3, end);
-      if (/^[0-9a-fA-F]{1,6}$/.test(hex) && parseInt(hex, 16) <= 0x10ffff) {
-        return {
-          value: String.fromCodePoint(parseInt(hex, 16)),
-          length: end - i + 1,
-        };
-      }
-    }
-  }
-  // `\uHHHH` — exactly four hex digits.
-  if (next === "u") {
-    const hex = raw.slice(i + 2, i + 6);
-    if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-      return { value: String.fromCharCode(parseInt(hex, 16)), length: 6 };
-    }
-  }
-  return { value: unescapeStringChar(next), length: 2 };
-}
+// One backslash escape, decoded to the character(s) it stands for. The parser
+// interprets these itself rather than leaning on the JS template literal the
+// code compiles to: the printer escapes backslashes, so an uninterpreted
+// `\u0000` would reach runtime as six literal characters instead of a NUL.
+const hexDigit = oneOf("0123456789abcdefABCDEF");
+const codeUnitFrom = (digits: string[]): string =>
+  String.fromCharCode(parseInt(digits.join(""), 16));
+
+// `\${` -> `${` (the only `\$` escape; bare `\$` is preserved verbatim below).
+const dollarBraceEscape: Parser<string> = map(str("\\${"), () => "${");
+// `\xHH` / `\uHHHH` -- a fixed run of hex digits naming one UTF-16 code unit.
+const hexByteEscape: Parser<string> = map(
+  seqC(str("\\x"), capture(exactly(2, hexDigit), "d")),
+  (c) => codeUnitFrom(c.d),
+);
+const unicodeEscape: Parser<string> = map(
+  seqC(str("\\u"), capture(exactly(4, hexDigit), "d")),
+  (c) => codeUnitFrom(c.d),
+);
+// `\u{H...}` -- 1-6 hex digits in braces naming a code point. Fails when the
+// value is not a legal code point so the single-char arm preserves `\u`
+// verbatim, matching how unknown escapes are handled.
+const codePointEscape: Parser<string> = (input) => {
+  const shape = seqC(
+    str("\\u{"),
+    capture(many1WithJoin(hexDigit), "hex"),
+    char("}"),
+  )(input);
+  if (!shape.success) return failure("expected \\u{...}", input);
+  const code = parseInt(shape.result.hex, 16);
+  if (shape.result.hex.length > 6 || code > 0x10ffff)
+    return failure("code point out of range", input);
+  return success(String.fromCodePoint(code), shape.rest);
+};
+// Single-char escapes (`\\`, `\n`, `\t`, `\0`, `\"`, ...) plus the catch-all:
+// an unknown escape like `\z` decodes to `\z` (the backslash is preserved).
+const singleCharEscape: Parser<string> = map(
+  seqC(char("\\"), capture(anyChar, "c")),
+  (c) => unescapeStringChar(c.c),
+);
+
+/** Parse one backslash escape and yield its decoded text. Ordered most-specific
+ *  first; `singleCharEscape` is the catch-all (and preserves unknown escapes
+ *  verbatim). Shared by the string-body parser and `unescapeStringLiteralValue`
+ *  so both interpret escapes identically. */
+export const escapeSequence: Parser<string> = or(
+  dollarBraceEscape,
+  hexByteEscape,
+  codePointEscape,
+  unicodeEscape,
+  singleCharEscape,
+);
 
 /** Unescape a raw string-literal body using the same escape table the string
  *  expression parser applies. A string in *type* position (e.g. a discriminant
  *  tag `{ kind: "a\tb" }`) is captured raw, while the same literal in
- *  *expression* position is unescaped — normalize the raw form through this to
- *  compare them. Mirrors `stringTextSegmentParserFor` (`\${` → `${`; unknown
+ *  *expression* position is unescaped -- normalize the raw form through this to
+ *  compare them. Mirrors `stringTextSegmentParserFor` (`\${` -> `${`; unknown
  *  escapes preserved). */
 export function unescapeStringLiteralValue(raw: string): string {
-  let out = "";
-  for (let i = 0; i < raw.length; i++) {
-    if (raw[i] === "\\" && i + 1 < raw.length) {
-      const { value, length } = readStringEscape(raw, i);
-      out += value;
-      i += length - 1;
-      continue;
-    }
-    out += raw[i];
-  }
-  return out;
+  const result = manyWithJoin(or(escapeSequence, anyChar))(raw);
+  return result.success ? result.result : raw;
 }
 
 const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment> =>
@@ -432,14 +430,18 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
       if (c === delim) break;
       if (c === "$" && input[i + 1] === "{") break;
       if (c === "\\" && i + 1 < input.length) {
-        // Delegates to the shared escape reader so `\${`, `\xHH`, `\uHHHH`,
-        // `\u{H…}`, and single-char escapes are handled identically here and
-        // in `unescapeStringLiteralValue`. Bare `\$` (not `\${`) and unknown
-        // escapes are preserved verbatim so regex source keeps working.
-        const esc = readStringEscape(input, i);
-        value += esc.value;
-        i += esc.length;
-        continue;
+        // Decode the escape declaratively. Only a small window is sliced: the
+        // longest escape is a braced code point (10 chars), so 12 always holds
+        // a full escape — slicing the whole tail here would be O(n^2) on
+        // escape-heavy strings. `escapeSequence` always succeeds because a
+        // character follows the backslash (its single-char arm is a catch-all).
+        const window = input.slice(i, i + 12);
+        const esc = escapeSequence(window);
+        if (esc.success) {
+          value += esc.result;
+          i += window.length - esc.rest.length;
+          continue;
+        }
       }
       value += c;
       i++;

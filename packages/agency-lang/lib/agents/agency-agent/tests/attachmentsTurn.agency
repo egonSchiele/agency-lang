@@ -56,3 +56,10 @@ node subagentRouteIgnoresImagePath(): string {
   const reply = agentReplyVia("code", "look at /tmp/at-z.png") with approve
   return "${reply != null}|${threadHasImagePlaceholder()}"
 }
+
+node generatedImageIsShownToModel(): string {
+  // The coordinator LLM calls generateImageFile; after the tool round
+  // the generated image must be injected so the model can see it.
+  const reply = agentReply("draw me a bicycle") with approve
+  return "${reply}|${threadHasImagePlaceholder()}"
+}

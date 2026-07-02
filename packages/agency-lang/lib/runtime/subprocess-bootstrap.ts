@@ -15,6 +15,7 @@ import type { IpcResultMessage, IpcErrorMessage, IpcInterruptedMessage, RunInstr
 import { ipcLog, setSubprocessIpcPayloadLimit, serializeInterruptsForIpc } from "./ipc.js";
 import { hasInterrupts } from "./interrupts.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
+import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
 
 let ipcPayloadLimit = Infinity;
 
@@ -142,6 +143,14 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
   }
   setSubprocessIpcPayloadLimit(ipcPayloadLimit);
   setRuntimeConfigOverrides(msg.configOverrides);
+  // Adopt the parent's statelog identity BEFORE importing the compiled
+  // module, so every context this process creates inherits it.
+  setSubprocessRunInfo({
+    runId: msg.runId,
+    subprocessSessionId: msg.subprocessSessionId,
+    parentSpanId: msg.spanContext,
+    depth: 0,
+  });
 
   try {
     const scriptUrl = pathToFileURL(msg.scriptPath).href;

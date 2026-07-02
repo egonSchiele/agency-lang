@@ -389,6 +389,20 @@ describe("StatelogClient", () => {
       expect(events[0].parent_span_id).toBeNull();
       expect(events[0].span_id).toBeTruthy();
     });
+
+    it("adoptExternalParentSpan roots every subsequent span under the external id", async () => {
+      // The subprocess arrangement: the child adopts the parent process's
+      // subprocessRun span id so its whole span tree nests under it.
+      const file = newLogFile("adopt-external");
+      const client = fileClient(file);
+      client.adoptExternalParentSpan("parent-span-ext");
+      const id = client.startSpan("agentRun")!;
+      await client.debug("hi", {});
+      client.endSpan(id);
+      const events = readEvents(file);
+      expect(events[0].span_id).toBe(id);
+      expect(events[0].parent_span_id).toBe("parent-span-ext");
+    });
   });
 
   describe("branch span isolation (AsyncLocalStorage)", () => {

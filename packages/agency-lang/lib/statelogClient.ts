@@ -34,7 +34,11 @@ export type SpanType =
   | "memoryRemember"
   | "memoryRecall"
   | "memoryForget"
-  | "memoryCompaction";
+  | "memoryCompaction"
+  // One subprocess execution segment (std::agency run()). On the parent
+  // side it wraps the whole session; in the child it is the synthetic
+  // root frame adopted from the parent so child spans nest under it.
+  | "subprocessRun";
 
 export type SpanContext = {
   spanId: string;
@@ -242,6 +246,21 @@ export class StatelogClient {
       startTime: performance.now(),
     });
     return spanId;
+  }
+
+  // Adopt a span owned by ANOTHER process (the parent's `subprocessRun`
+  // span) as this client's root: a synthetic frame pushed at the bottom of
+  // the root stack, never popped, never emitted — it exists purely so every
+  // span this process starts carries a parentSpanId chain rooted at the
+  // parent's span tree. Used by subprocess bootstrap seeding.
+  adoptExternalParentSpan(spanId: string): void {
+    if (!this.enabled) return;
+    this.rootStack.unshift({
+      spanId,
+      parentSpanId: null,
+      spanType: "subprocessRun",
+      startTime: performance.now(),
+    });
   }
 
   // Pop the span identified by `spanId` from the active stack. The id

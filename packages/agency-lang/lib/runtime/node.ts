@@ -16,6 +16,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered } from "./crossModuleInitRegistry.js";
 import { loadProviderModules } from "./providerModules.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
+import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
@@ -324,7 +325,10 @@ export async function runNode({
   // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
   abortSignal?: AbortSignal;
 }): Promise<RunNodeResult<any>> {
-  const runId = nanoid();
+  // Subprocesses INHERIT the parent's runId (seeded by the bootstrap from
+  // the run instruction) so child statelog events land in the same trace —
+  // runIds persist across pause/resume cycles, in-process and out.
+  const runId = getSubprocessRunInfo().runId ?? nanoid();
 
   // runNode is the entry point for a fresh agent run (resumes go through
   // respondToInterrupts instead). If trace output is enabled, truncate the

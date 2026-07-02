@@ -17,6 +17,9 @@ import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./
 import { runBatch } from "./runBatch.js";
 import { AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
+import { getSubprocessRunInfo, setSubprocessRunInfo, type SubprocessRunInfo } from "./subprocessRunInfo.js";
+
+export { getSubprocessRunInfo, setSubprocessRunInfo, type SubprocessRunInfo };
 import {
   acquireLocalLock,
   lockReleaserKey,
@@ -206,7 +209,7 @@ export function serializeInterruptsForIpc(interrupts: any[]): IpcInterruptedMess
     type: "interrupted",
     interrupts: serialized,
     checkpoint,
-    subprocessSessionId: "", // wired to the run instruction's session id in the statelog task
+    subprocessSessionId: getSubprocessRunInfo().subprocessSessionId ?? "",
   };
 }
 
@@ -478,7 +481,17 @@ function clearSubprocessPayload(frame: State): void {
   delete frame.locals[SUBPROCESS_PAYLOAD_KEY];
 }
 
-export type RunInstruction = {
+/** Statelog identity the child adopts, carried on both startup
+ * instructions: the parent's runId (one trace across processes and
+ * pause/resume cycles), a stable per-logical-child session id, and the
+ * parent's subprocessRun span id for span nesting. */
+type SubprocessIdentity = {
+  runId?: string;
+  subprocessSessionId?: string;
+  spanContext?: string;
+};
+
+export type RunInstruction = SubprocessIdentity & {
   type: "run";
   scriptPath: string;
   node: string;
@@ -493,6 +506,7 @@ export function buildRunInstruction(args: {
   args: Record<string, any>;
   limits: RunLimits;
   configOverrides?: Partial<AgencyConfig>;
+  identity?: SubprocessIdentity;
 }): RunInstruction {
   return {
     type: "run",
@@ -501,6 +515,7 @@ export function buildRunInstruction(args: {
     args: args.args,
     ipcPayload: args.limits.ipcPayload,
     ...(args.configOverrides ? { configOverrides: args.configOverrides } : {}),
+    ...(args.identity ?? {}),
   };
 }
 
@@ -508,7 +523,7 @@ export function buildRunInstruction(args: {
  * child restores the checkpoint, pairs `interrupts` with `responses`
  * positionally (via the compiled module's own respondToInterrupts export),
  * and continues from exactly where it left off. */
-export type ResumeInstruction = {
+export type ResumeInstruction = SubprocessIdentity & {
   type: "resume";
   scriptPath: string;
   node: string;
@@ -525,6 +540,7 @@ export function buildResumeInstruction(args: {
   responses: any[];
   limits: RunLimits;
   configOverrides?: Partial<AgencyConfig>;
+  identity?: SubprocessIdentity;
 }): ResumeInstruction {
   return {
     type: "resume",
@@ -535,6 +551,7 @@ export function buildResumeInstruction(args: {
     responses: args.responses,
     ipcPayload: args.limits.ipcPayload,
     ...(args.configOverrides ? { configOverrides: args.configOverrides } : {}),
+    ...(args.identity ?? {}),
   };
 }
 
@@ -694,11 +711,19 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // process's statelog events correlate with the originating interrupt.
     // (gatherChainOutcome itself recurses to OUR parent when this process
     // is also a subprocess — that is what makes nesting compose.)
-    const outcome = await gatherChainOutcome(
-      { effect, message, data, origin },
-      s.ctx,
-      s.stateStack,
-      msg.interruptId,
+    //
+    // Span isolation: concurrent child interrupts each run their own
+    // handler chain here; without a branch-local span stack their
+    // handlerChain span pushes/pops would interleave on the shared stack
+    // (same discipline runBatch applies to its children).
+    const outcome = await s.ctx.statelogClient.runInBranchContext(
+      s.ctx.statelogClient.snapshotStack(),
+      () => gatherChainOutcome(
+        { effect, message, data, origin },
+        s.ctx,
+        s.stateStack,
+        msg.interruptId,
+      ),
     );
     trySendDecision(s, {
       type: "decision",
@@ -899,6 +924,7 @@ function resolveInstruction(args: {
   nodeArgs: Record<string, any>;
   limits: RunLimits;
   configOverrides?: Partial<AgencyConfig>;
+  identity?: SubprocessIdentity;
 }): RunInstruction | ResumeInstruction {
   if (args.saved) {
     return buildResumeInstruction({
@@ -907,6 +933,7 @@ function resolveInstruction(args: {
       responses: collectSubprocessResponses(args.ctx, args.saved),
       limits: args.limits,
       configOverrides: args.configOverrides,
+      identity: args.identity,
     });
   }
   return buildRunInstruction({
@@ -915,6 +942,7 @@ function resolveInstruction(args: {
     args: args.nodeArgs,
     limits: args.limits,
     configOverrides: args.configOverrides,
+    identity: args.identity,
   });
 }
 
@@ -934,10 +962,14 @@ async function invokeSubprocess(args: {
   configOverrides?: Partial<AgencyConfig>;
   cwd?: string;
   abortSignal?: AbortSignal;
+  spanId?: string;
 }): Promise<any> {
   const scriptPath = materializeCompiledScript(args.compiled);
   try {
     const saved = loadSubprocessPayload(args.parentFrame);
+    // One stable session id per logical child run: minted at first fork,
+    // reused from the payload on every resume segment.
+    const subprocessSessionId = saved?.subprocessSessionId || nanoid();
     const instruction = resolveInstruction({
       ctx: args.ctx,
       saved,
@@ -946,6 +978,11 @@ async function invokeSubprocess(args: {
       nodeArgs: args.nodeArgs,
       limits: args.limits,
       configOverrides: args.configOverrides,
+      identity: {
+        runId: args.ctx.getRunId(),
+        subprocessSessionId,
+        ...(args.spanId ? { spanContext: args.spanId } : {}),
+      },
     });
     const outcome = await runSubprocessSession({
       ctx: args.ctx,
@@ -1019,34 +1056,43 @@ export async function _run(
 
   const parentFrame = stateStack.lastFrame();
 
-  const batchResult = await runBatch<any>({
-    ctx,
-    parentStack: stateStack, // the local slice from ALS — slice rule
-    parentFrame,
-    // `store.callsite` is set by Runner.runInScope for every generated
-    // step; it is undefined only in bootstrap-frame contexts, where the
-    // fallback keeps checkpoint metadata attributable.
-    checkpointLocation: store.callsite ?? { moduleId: "", scopeName: "_run", stepPath: "subprocess" },
-    mode: "all",
-    children: [{
-      key: "subprocess_0",
-      invoke: (_childStack: StateStack, abortSignal: AbortSignal) =>
-        invokeSubprocess({
-          ctx,
-          stateStack,
-          parentFrame,
-          compiled,
-          node,
-          nodeArgs: args,
-          limits,
-          configOverrides: mergedConfigOverrides,
-          cwd,
-          abortSignal,
-        }),
-    }],
-  });
-  if (batchResult.kind === "interrupts") return batchResult.interrupts;
-  return batchResult.values[0];
+  // The parent-side umbrella span for this subprocess segment. Its id is
+  // handed to the child (spanContext), whose statelog client adopts it as
+  // an external root — child spans nest under this one in the shared trace.
+  const spanId = ctx.statelogClient.startSpan("subprocessRun");
+  try {
+    const batchResult = await runBatch<any>({
+      ctx,
+      parentStack: stateStack, // the local slice from ALS — slice rule
+      parentFrame,
+      // `store.callsite` is set by Runner.runInScope for every generated
+      // step; it is undefined only in bootstrap-frame contexts, where the
+      // fallback keeps checkpoint metadata attributable.
+      checkpointLocation: store.callsite ?? { moduleId: "", scopeName: "_run", stepPath: "subprocess" },
+      mode: "all",
+      children: [{
+        key: "subprocess_0",
+        invoke: (_childStack: StateStack, abortSignal: AbortSignal) =>
+          invokeSubprocess({
+            ctx,
+            stateStack,
+            parentFrame,
+            compiled,
+            node,
+            nodeArgs: args,
+            limits,
+            configOverrides: mergedConfigOverrides,
+            cwd,
+            abortSignal,
+            spanId,
+          }),
+      }],
+    });
+    if (batchResult.kind === "interrupts") return batchResult.interrupts;
+    return batchResult.values[0];
+  } finally {
+    ctx.statelogClient.endSpan(spanId);
+  }
 }
 
 /**

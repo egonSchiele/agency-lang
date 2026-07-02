@@ -1,5 +1,26 @@
-import { describe, it, expect } from "vitest";
-import { clampLimits, serializeInterruptsForIpc } from "./ipc.js";
+import { describe, it, expect, afterEach } from "vitest";
+import { clampLimits, serializeInterruptsForIpc, setSubprocessRunInfo, getSubprocessRunInfo } from "./ipc.js";
+
+describe("subprocess run info", () => {
+  // Module-scoped per-PROCESS state (one run per subprocess). Tests share
+  // the module instance, so isolate via afterEach instead of relying on
+  // in-test reset ordering.
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+
+  it("defaults to depth 0 and round-trips", () => {
+    expect(getSubprocessRunInfo()).toEqual({ depth: 0 });
+    setSubprocessRunInfo({ runId: "r1", subprocessSessionId: "s1", parentSpanId: "sp1", depth: 1 });
+    expect(getSubprocessRunInfo()).toEqual({ runId: "r1", subprocessSessionId: "s1", parentSpanId: "sp1", depth: 1 });
+  });
+
+  it("serializeInterruptsForIpc echoes the seeded session id", () => {
+    setSubprocessRunInfo({ runId: "r1", subprocessSessionId: "sess-42", depth: 1 });
+    const msg = serializeInterruptsForIpc([
+      { type: "interrupt", interruptId: "i1", runId: "r1", effect: "e", message: "m", data: {}, origin: "o" } as any,
+    ]);
+    expect(msg.subprocessSessionId).toBe("sess-42");
+  });
+});
 
 describe("serializeInterruptsForIpc", () => {
   it("strips per-interrupt checkpoints and hoists the shared one", () => {

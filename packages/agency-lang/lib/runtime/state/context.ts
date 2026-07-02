@@ -9,6 +9,7 @@ import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
 import { agencyStore } from "../asyncContext.js";
+import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
@@ -304,6 +305,14 @@ export class RuntimeContext<T> {
       ...this.statelogConfig,
       traceId: runId,
     });
+    // Subprocess: nest this process's spans under the parent's
+    // `subprocessRun` span (seeded by the bootstrap from the run/resume
+    // instruction). The runId itself was already inherited by the caller
+    // (runNode / respondToInterrupts via interrupt.runId).
+    const parentSpanId = getSubprocessRunInfo().parentSpanId;
+    if (parentSpanId) {
+      execCtx.statelogClient.adoptExternalParentSpan(parentSpanId);
+    }
     execCtx.coverageCollector = this.coverageCollector;
 
     // Memory layer: per-execCtx state.

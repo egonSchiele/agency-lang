@@ -13,7 +13,10 @@ import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext } from "./asyncContext.js";
-import { gatherChainOutcome, type HandlerChainOutcome } from "./interrupts.js";
+import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
+import { runBatch } from "./runBatch.js";
+import { AgencyCancelledError } from "./errors.js";
+import type { State, StateStack } from "./state/stateStack.js";
 import {
   acquireLocalLock,
   lockReleaserKey,
@@ -428,16 +431,51 @@ type RunSession = {
   limits: RunLimits;
   ctx: any;
   stateStack: any;
-  compiledPath: string;
-  resolvePromise: (v: any) => void;
+  resolvePromise: (v: SessionOutcome) => void;
   rejectPromise: (v: any) => void;
   settled: boolean;
   startedAt: number;
   wallClockTimer: NodeJS.Timeout | null;
   stdoutBytes: number;
   stoppedForwarding: boolean;
-  configOverrides?: Partial<AgencyConfig>;
 };
+
+/** How one subprocess execution segment ended: a value (including limit
+ * failures, which are ordinary Result failures), or a self-checkpointed
+ * pause. Session errors reject instead. */
+type SessionOutcome =
+  | { type: "result"; value: any }
+  | { type: "interrupted"; msg: IpcInterruptedMessage };
+
+/** Everything `_run` persists across a pause so the replayed call can
+ * re-fork and resume: the child's checkpoint (OPAQUE — its frames belong
+ * to another process and must never be spliced into the parent's replay),
+ * the surfaced interrupts in order (their ids key the user's responses),
+ * and the node to resume. */
+export type SubprocessResumePayload = {
+  childCheckpoint: any;
+  interrupts: SerializedInterrupt[];
+  node: string;
+  subprocessSessionId: string;
+};
+
+// The payload lives in a frame local under this private constant key. A
+// constant is collision-safe: run() is an Agency function, so every
+// concurrent call has its own frame on its own branch stack. Callers go
+// through the accessors so frame internals stay encapsulated.
+const SUBPROCESS_PAYLOAD_KEY = "__subprocess_state_0";
+
+function saveSubprocessPayload(frame: State, payload: SubprocessResumePayload): void {
+  frame.locals[SUBPROCESS_PAYLOAD_KEY] = payload;
+}
+
+export function loadSubprocessPayload(frame: State): SubprocessResumePayload | undefined {
+  return frame.locals[SUBPROCESS_PAYLOAD_KEY] as SubprocessResumePayload | undefined;
+}
+
+function clearSubprocessPayload(frame: State): void {
+  delete frame.locals[SUBPROCESS_PAYLOAD_KEY];
+}
 
 export type RunInstruction = {
   type: "run";
@@ -527,7 +565,6 @@ function settle(s: RunSession, fn: (v: any) => void, value: any): void {
   s.settled = true;
   clearTimer(s);
   cleanupSessionLocks(s.ctx, s.sessionId);
-  cleanupTempDir(s.compiledPath);
   fn(value);
 }
 
@@ -545,8 +582,15 @@ function settleWithLimitFailure(
   extras: Record<string, any> = {},
 ): void {
   if (s.settled) return;
-  try { s.child.kill("SIGKILL"); } catch (_) { /* already gone */ }
-  settle(s, s.resolvePromise, makeLimitFailure(limit, threshold, value, extras));
+  try {
+    s.child.kill("SIGKILL");
+  } catch (err) {
+    ipcLog("send", { type: "kill_failed", detail: err instanceof Error ? err.message : String(err) });
+  }
+  settle(s, s.resolvePromise, {
+    type: "result",
+    value: makeLimitFailure(limit, threshold, value, extras),
+  } satisfies SessionOutcome);
 }
 
 function trySendDecision(s: RunSession, msg: any): void {
@@ -657,12 +701,15 @@ function handleErrorMessage(s: RunSession, msg: any): void {
   let parsed: any = null;
   try { parsed = JSON.parse(msg.error); } catch (_) { /* not JSON */ }
   if (parsed?.reason === "limit_exceeded") {
-    settle(s, s.resolvePromise, makeLimitFailure(
-      parsed.limit,
-      parsed.threshold,
-      parsed.value,
-      parsed.samplePrefix !== undefined ? { samplePrefix: parsed.samplePrefix } : {},
-    ));
+    settle(s, s.resolvePromise, {
+      type: "result",
+      value: makeLimitFailure(
+        parsed.limit,
+        parsed.threshold,
+        parsed.value,
+        parsed.samplePrefix !== undefined ? { samplePrefix: parsed.samplePrefix } : {},
+      ),
+    } satisfies SessionOutcome);
   } else {
     settle(s, s.rejectPromise, new Error(msg.error));
   }
@@ -689,7 +736,9 @@ async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   if (msg.type === "interrupt") {
     await handleInterruptMessage(s, msg);
   } else if (msg.type === "result") {
-    settle(s, s.resolvePromise, msg.value);
+    settle(s, s.resolvePromise, { type: "result", value: msg.value } satisfies SessionOutcome);
+  } else if (msg.type === "interrupted") {
+    settle(s, s.resolvePromise, { type: "interrupted", msg } satisfies SessionOutcome);
   } else if (msg.type === "error") {
     handleErrorMessage(s, msg);
   } else if (msg.type === "lockAcquire") {
@@ -716,9 +765,9 @@ function handleChildClose(s: RunSession, code: number | null, signal: NodeJS.Sig
 
 /**
  * Wire up all event handlers on the child process and kick off execution by
- * sending the initial `run` instruction over IPC.
+ * sending the (prebuilt) startup instruction over IPC.
  */
-function attachSessionHandlers(s: RunSession, node: string, args: Record<string, any>): void {
+function attachSessionHandlers(s: RunSession, instruction: RunInstruction): void {
   attachStdoutForwarder(s, s.child.stdout, process.stdout);
   attachStdoutForwarder(s, s.child.stderr, process.stderr);
 
@@ -732,20 +781,149 @@ function attachSessionHandlers(s: RunSession, node: string, args: Record<string,
   s.child.on("close", (code, signal) => handleChildClose(s, code, signal));
   s.child.on("error", (err: Error) => settle(s, s.rejectPromise, new Error(`Subprocess error: ${err.message}`)));
 
-  const runMsg = buildRunInstruction({
-    scriptPath: s.compiledPath,
-    node,
-    args,
-    limits: s.limits,
-    configOverrides: s.configOverrides,
+  ipcLog("send", instruction);
+  s.child.send(instruction);
+}
+
+/** Fork the bootstrap and run one subprocess execution segment to its
+ * terminal message. Owns the whole session lifecycle the old `_run`
+ * promise owned: limits, stdout forwarding, lock brokering, the
+ * per-interrupt chain bridge, and teardown. An aborted `abortSignal`
+ * (parent cancellation, race loss, time guard) kills the child. */
+async function runSubprocessSession(opts: {
+  ctx: any;
+  stateStack: any;
+  instruction: RunInstruction;
+  limits: RunLimits;
+  cwd?: string;
+  abortSignal?: AbortSignal;
+}): Promise<SessionOutcome> {
+  // stdio fds 1/2 piped (not inherit) so we can byte-count and truncate
+  // when the stdout limit is exceeded; bytes still forward through to the
+  // parent's own stdout/stderr until the limit hits.
+  const child = fork(subprocessBootstrapPath, [], buildForkOptions({ limits: opts.limits, cwd: opts.cwd }));
+
+  return new Promise((resolvePromise, rejectPromise) => {
+    const session: RunSession = {
+      sessionId: nanoid(),
+      child,
+      limits: opts.limits,
+      ctx: opts.ctx,
+      stateStack: opts.stateStack,
+      resolvePromise,
+      rejectPromise,
+      settled: false,
+      startedAt: Date.now(),
+      wallClockTimer: null,
+      stdoutBytes: 0,
+      stoppedForwarding: false,
+    };
+    if (opts.abortSignal) {
+      const onAbort = () => {
+        try {
+          child.kill("SIGKILL");
+        } catch (err) {
+          ipcLog("send", { type: "kill_failed", detail: err instanceof Error ? err.message : String(err) });
+        }
+        settle(session, rejectPromise, new AgencyCancelledError());
+      };
+      if (opts.abortSignal.aborted) {
+        onAbort();
+        return;
+      }
+      opts.abortSignal.addEventListener("abort", onAbort, { once: true });
+    }
+    attachSessionHandlers(session, opts.instruction);
   });
-  ipcLog("send", runMsg);
-  s.child.send(runMsg);
+}
+
+/** Pick run-vs-resume declaratively from the presence of a saved pause
+ * payload. The resume arm lands with the resume instruction support. */
+function resolveInstruction(args: {
+  ctx: any;
+  saved: SubprocessResumePayload | undefined;
+  scriptPath: string;
+  node: string;
+  nodeArgs: Record<string, any>;
+  limits: RunLimits;
+  configOverrides?: Partial<AgencyConfig>;
+}): RunInstruction {
+  if (args.saved) {
+    throw new Error("subprocess resume lands in the next commit");
+  }
+  return buildRunInstruction({
+    scriptPath: args.scriptPath,
+    node: args.node,
+    args: args.nodeArgs,
+    limits: args.limits,
+    configOverrides: args.configOverrides,
+  });
+}
+
+/** One subprocess execution segment: materialize code, pick run-vs-resume
+ * from the saved payload, run the session, and translate the outcome —
+ * `interrupted` saves the payload and returns rehydrated interrupts (which
+ * runBatch stamps with the parent-side shared checkpoint); `result` clears
+ * the payload and returns the value. */
+async function invokeSubprocess(args: {
+  ctx: any;
+  stateStack: any;
+  parentFrame: State;
+  compiled: { moduleId: string; code: string };
+  node: string;
+  nodeArgs: Record<string, any>;
+  limits: RunLimits;
+  configOverrides?: Partial<AgencyConfig>;
+  cwd?: string;
+  abortSignal?: AbortSignal;
+}): Promise<any> {
+  const scriptPath = materializeCompiledScript(args.compiled);
+  try {
+    const saved = loadSubprocessPayload(args.parentFrame);
+    const instruction = resolveInstruction({
+      ctx: args.ctx,
+      saved,
+      scriptPath,
+      node: args.node,
+      nodeArgs: args.nodeArgs,
+      limits: args.limits,
+      configOverrides: args.configOverrides,
+    });
+    const outcome = await runSubprocessSession({
+      ctx: args.ctx,
+      stateStack: args.stateStack,
+      instruction,
+      limits: args.limits,
+      cwd: args.cwd,
+      abortSignal: args.abortSignal,
+    });
+    if (outcome.type === "interrupted") {
+      // Opaque payload: serialized with the parent frame; NEVER walked by
+      // State.toJSON — the child checkpoint belongs to another process and
+      // must not be spliced into the parent replay.
+      saveSubprocessPayload(args.parentFrame, {
+        childCheckpoint: outcome.msg.checkpoint,
+        interrupts: outcome.msg.interrupts,
+        node: args.node,
+        subprocessSessionId: outcome.msg.subprocessSessionId,
+      });
+      // Rehydrate WITHOUT checkpoints; runBatch stamps the parent-side
+      // shared checkpoint and overwrites intr.checkpoint on each.
+      return outcome.msg.interrupts.map((intr) => ({ ...intr })) as Interrupt[];
+    }
+    clearSubprocessPayload(args.parentFrame);
+    return outcome.value;
+  } finally {
+    cleanupTempDir(scriptPath);
+  }
 }
 
 /**
  * Fork a compiled Agency program as a subprocess and manage the IPC protocol.
- * Relays subprocess interrupts through the parent's handler chain via interruptWithHandlers.
+ * A runBatch adopter with a single child: relays subprocess interrupts
+ * through the parent's handler chain, and — when the child pauses itself —
+ * surfaces the child's interrupts to this process's caller with a
+ * parent-side shared checkpoint stamped by runBatch.
  */
 export async function _run(
   compiled: { moduleId: string; code: string },
@@ -764,7 +942,8 @@ export async function _run(
   // Post-ALS: read `ctx` and the per-scope `stateStack` from the active
   // `agencyStore` frame. The trailing `__state` positional that AgencyFunction
   // .invoke() still passes is now harmlessly ignored.
-  const { ctx, stack: stateStack } = getRuntimeContext();
+  const store = getRuntimeContext();
+  const { ctx, stack: stateStack } = store;
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
   // Forward the parent's configured provider modules to the subprocess. The
@@ -780,32 +959,36 @@ export async function _run(
     ctx.providerModules,
   );
 
-  const compiledPath = materializeCompiledScript(compiled);
+  const parentFrame = stateStack.lastFrame();
 
-  // stdio fds 1/2 piped (was inherit) so we can byte-count and truncate
-  // when stdout limit is exceeded; we still forward bytes through to the
-  // parent's own stdout/stderr until the limit hits.
-  const child = fork(subprocessBootstrapPath, [], buildForkOptions({ limits, cwd }));
-
-  return new Promise((resolvePromise, rejectPromise) => {
-    const session: RunSession = {
-      sessionId: nanoid(),
-      child,
-      limits,
-      ctx,
-      stateStack,
-      compiledPath,
-      resolvePromise,
-      rejectPromise,
-      settled: false,
-      startedAt: Date.now(),
-      wallClockTimer: null,
-      stdoutBytes: 0,
-      stoppedForwarding: false,
-      configOverrides: mergedConfigOverrides,
-    };
-    attachSessionHandlers(session, node, args);
+  const batchResult = await runBatch<any>({
+    ctx,
+    parentStack: stateStack, // the local slice from ALS — slice rule
+    parentFrame,
+    // `store.callsite` is set by Runner.runInScope for every generated
+    // step; it is undefined only in bootstrap-frame contexts, where the
+    // fallback keeps checkpoint metadata attributable.
+    checkpointLocation: store.callsite ?? { moduleId: "", scopeName: "_run", stepPath: "subprocess" },
+    mode: "all",
+    children: [{
+      key: "subprocess_0",
+      invoke: (_childStack: StateStack, abortSignal: AbortSignal) =>
+        invokeSubprocess({
+          ctx,
+          stateStack,
+          parentFrame,
+          compiled,
+          node,
+          nodeArgs: args,
+          limits,
+          configOverrides: mergedConfigOverrides,
+          cwd,
+          abortSignal,
+        }),
+    }],
   });
+  if (batchResult.kind === "interrupts") return batchResult.interrupts;
+  return batchResult.values[0];
 }
 
 /**

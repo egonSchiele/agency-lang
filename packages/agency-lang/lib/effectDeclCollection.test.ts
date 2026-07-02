@@ -23,6 +23,10 @@ describe("SymbolTable.allEffectDeclarations", () => {
       const st = SymbolTable.build(path.join(dir, "main.agency"));
       const effects = st
         .allEffectDeclarations()
+        // Exclude ambient stdlib effects (std::read/write/... declared in the
+        // auto-imported std::index barrel) so the assertion pins only what the
+        // file under test declares.
+        .filter((d) => d.file.startsWith(dir))
         .map((d) => d.decl.effect);
       // Exact length too — guards against a deep-walk regression that
       // double-visits the same node (`toContain` alone would let that pass).
@@ -48,6 +52,9 @@ describe("SymbolTable.allEffectDeclarations", () => {
       const st = SymbolTable.build(path.join(dir, "main.agency"));
       const effects = st
         .allEffectDeclarations()
+        // Exclude ambient stdlib effects from the auto-imported std::index
+        // barrel; keep only what this closure's own files declare.
+        .filter((d) => d.file.startsWith(dir))
         .map((d) => d.decl.effect)
         .sort();
       expect(effects).toEqual(["deploy", "std::read"]);

@@ -356,6 +356,53 @@ export function unescapeStringChar(next: string): string {
   }
 }
 
+/** Read a single backslash escape beginning at `raw[i]` (which must be `\`).
+ *  Returns the unescaped text and how many source characters were consumed
+ *  (including the backslash). Handles `\${`, `\xHH`, `\uHHHH`, `\u{H…}`, and
+ *  the single-char escapes in `unescapeStringChar`. Invalid hex/unicode forms
+ *  and unknown escapes are preserved verbatim so strings that merely contain
+ *  a backslash keep their meaning. The parser interprets these itself rather
+ *  than leaning on the JS template literal the code compiles to — the printer
+ *  escapes backslashes, so an uninterpreted `\u0000` would reach runtime as
+ *  six literal characters instead of a NUL. */
+export function readStringEscape(
+  raw: string,
+  i: number,
+): { value: string; length: number } {
+  const next = raw[i + 1];
+  if (next === undefined) return { value: "\\", length: 1 };
+  // `\${` → `${` (the only `\$` escape; bare `\$` falls through to verbatim).
+  if (next === "$" && raw[i + 2] === "{") return { value: "${", length: 3 };
+  // `\xHH` — exactly two hex digits.
+  if (next === "x") {
+    const hex = raw.slice(i + 2, i + 4);
+    if (/^[0-9a-fA-F]{2}$/.test(hex)) {
+      return { value: String.fromCharCode(parseInt(hex, 16)), length: 4 };
+    }
+  }
+  // `\u{H…}` — 1-6 hex digits naming a code point.
+  if (next === "u" && raw[i + 2] === "{") {
+    const end = raw.indexOf("}", i + 3);
+    if (end !== -1) {
+      const hex = raw.slice(i + 3, end);
+      if (/^[0-9a-fA-F]{1,6}$/.test(hex) && parseInt(hex, 16) <= 0x10ffff) {
+        return {
+          value: String.fromCodePoint(parseInt(hex, 16)),
+          length: end - i + 1,
+        };
+      }
+    }
+  }
+  // `\uHHHH` — exactly four hex digits.
+  if (next === "u") {
+    const hex = raw.slice(i + 2, i + 6);
+    if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+      return { value: String.fromCharCode(parseInt(hex, 16)), length: 6 };
+    }
+  }
+  return { value: unescapeStringChar(next), length: 2 };
+}
+
 /** Unescape a raw string-literal body using the same escape table the string
  *  expression parser applies. A string in *type* position (e.g. a discriminant
  *  tag `{ kind: "a\tb" }`) is captured raw, while the same literal in
@@ -366,13 +413,9 @@ export function unescapeStringLiteralValue(raw: string): string {
   let out = "";
   for (let i = 0; i < raw.length; i++) {
     if (raw[i] === "\\" && i + 1 < raw.length) {
-      if (raw[i + 1] === "$" && raw[i + 2] === "{") {
-        out += "${";
-        i += 2;
-        continue;
-      }
-      out += unescapeStringChar(raw[i + 1]);
-      i += 1;
+      const { value, length } = readStringEscape(raw, i);
+      out += value;
+      i += length - 1;
       continue;
     }
     out += raw[i];
@@ -389,17 +432,13 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
       if (c === delim) break;
       if (c === "$" && input[i + 1] === "{") break;
       if (c === "\\" && i + 1 < input.length) {
-        const next = input[i + 1];
-        // `\${` is the only `\$` escape we recognize; bare `\$` falls
-        // through to "unknown escape → preserved verbatim" so existing
-        // strings with literal `\$` (e.g. regex source) keep working.
-        if (next === "$" && input[i + 2] === "{") {
-          value += "${";
-          i += 3;
-          continue;
-        }
-        value += unescapeStringChar(next);
-        i += 2;
+        // Delegates to the shared escape reader so `\${`, `\xHH`, `\uHHHH`,
+        // `\u{H…}`, and single-char escapes are handled identically here and
+        // in `unescapeStringLiteralValue`. Bare `\$` (not `\${`) and unknown
+        // escapes are preserved verbatim so regex source keeps working.
+        const esc = readStringEscape(input, i);
+        value += esc.value;
+        i += esc.length;
         continue;
       }
       value += c;

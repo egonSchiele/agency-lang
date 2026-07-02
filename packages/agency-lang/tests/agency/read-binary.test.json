@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "readBinaryApproved", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "readBinaryUnderEffectSet", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

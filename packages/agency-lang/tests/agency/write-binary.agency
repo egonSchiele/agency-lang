@@ -1,0 +1,25 @@
+// writeBinary: round-trips bytes through the filesystem, and its
+// std::writeBinary interrupt actually gates the write.
+
+node writeBinaryRoundtrip(): boolean {
+  const payload = "AQIDBA=="   // bytes 1,2,3,4
+  const w = writeBinary("wb-rt.bin", payload, "/tmp") with approve
+  const back = readBinary("wb-rt.bin", "/tmp") with approve
+  if (isFailure(back)) {
+    return false
+  }
+  return back.value == payload
+}
+
+node writeBinaryRejectedDoesNotWrite(): boolean {
+  // Establish a known sentinel, then attempt to overwrite it but REJECT the
+  // interrupt. If the gate works, the rejected write never runs and the file
+  // still holds the sentinel.
+  const seed = writeBinary("wb-rej.bin", "c2VudGluZWw=", "/tmp") with approve  // "sentinel"
+  const blocked = writeBinary("wb-rej.bin", "b3ZlcndyaXRl", "/tmp") with reject // "overwrite"
+  const back = readBinary("wb-rej.bin", "/tmp") with approve
+  if (isFailure(back)) {
+    return false
+  }
+  return back.value == "c2VudGluZWw="
+}

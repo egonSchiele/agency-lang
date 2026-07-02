@@ -7,7 +7,7 @@ import type {
 } from "smoltalk";
 import * as smoltalk from "smoltalk";
 import type { ZodType } from "zod";
-import { DEFAULT_EMBEDDING_MODEL } from "../constants.js";
+import { DEFAULT_EMBEDDING_MODEL, DEFAULT_IMAGE_MODEL } from "../constants.js";
 
 export type ToolDefinition = {
   name: string;
@@ -63,6 +63,13 @@ export type PromptConfig = {
  */
 export type EmbedConfig = smoltalk.EmbedConfig;
 export type EmbedResult = smoltalk.EmbedResult;
+
+// The single image type surface — custom-client authors and the std::image
+// helper import these from here rather than reaching into smoltalk directly.
+export type ImageConfig = smoltalk.ImageConfig;
+export type ImageGenResult = smoltalk.ImageGenResult;
+export type ImageInput = smoltalk.ImageInput;
+export type ImageRef = smoltalk.ImageRef;
 
 /**
  * Provider-neutral view of an error thrown by an `LLMClient`. Lets agency's
@@ -122,6 +129,12 @@ export type LLMClient = {
     input: string | string[],
     config?: Partial<EmbedConfig>,
   ): Promise<Result<EmbedResult>>;
+  /** Generate an image. Optional — clients that don't support it omit the
+   *  method; callers (std::image) surface a failure Result. */
+  image?(
+    input: ImageInput,
+    config?: Partial<ImageConfig>,
+  ): Promise<Result<ImageGenResult>>;
   /** Translate an error this client threw into provider-neutral fields for
    *  agency's retry classifier. Optional — agency falls back to `{ message }`
    *  when omitted, which still works (message-pattern matching) but loses
@@ -148,6 +161,17 @@ export class SmoltalkClient implements LLMClient {
       model: DEFAULT_EMBEDDING_MODEL,
       ...config,
     });
+  }
+
+  async image(
+    input: ImageInput,
+    config?: Partial<ImageConfig>,
+  ): Promise<Result<ImageGenResult>> {
+    // `model` first so an explicit config.model overrides the default.
+    return smoltalk.image(input, {
+      model: DEFAULT_IMAGE_MODEL,
+      ...config,
+    } as ImageConfig);
   }
 
   normalizeError(err: unknown): NormalizedLLMError {

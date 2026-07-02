@@ -28,7 +28,8 @@ import {
   _round,
   _read,
   _write,
-  _readImage,
+  _writeBinary,
+  _readBinary,
   _notify,
   _range,
   _mostCommon,
@@ -220,26 +221,62 @@ export def write(
   return try _write(dir, filename, content, mode)
 }
 
-export safe def readImage(
+export def writeBinary(
+  filename: string,
+  base64: string,
+  dir: string = ".",
+  mode: string = "overwrite",
+  useAgentCwd: boolean = false,
+): Result {
+  """
+  Write base64-encoded binary data to a file (images, audio, video, PDFs, any
+  binary). Decodes the base64 and writes raw bytes — unlike write(), which
+  writes UTF-8 text. The filename is resolved relative to dir.
+
+  The `mode` parameter controls how an existing file is handled:
+  - "overwrite" (default): replace the file if it exists, create it if not
+  - "append": append to the file if it exists, create it if not
+  - "create-only": fail if the file already exists
+
+  @param filename - The file to write
+  @param base64 - The binary content, base64-encoded (e.g. from generateImage() or readBinary())
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  """
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
+  return interrupt std::writeBinary("Are you sure you want to write this file?", {
+    dir: dir,
+    filename: filename,
+    mode: mode
+  })
+  return try _writeBinary(dir, filename, base64, mode)
+}
+
+export safe def readBinary(
   filename: string,
   dir: string = ".",
   useAgentCwd: boolean = false,
 ): Result {
   """
-  A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
+  Read a file and return its contents as a Base64-encoded string. Works for any
+  binary file (images, audio, video, PDFs). The filename is resolved relative to
+  dir. Pair with writeBinary() to round-trip binary data.
 
-  @param filename - The image file to read
+  @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  return interrupt std::readImage("Are you sure you want to read this image file?", {
+  return interrupt std::readBinary("Are you sure you want to read this file?", {
     dir: dir,
     filename: filename
   })
-  return try _readImage(dir, filename)
+  return try _readBinary(dir, filename)
 }
 
 export def notify(title: string, message: string): boolean {

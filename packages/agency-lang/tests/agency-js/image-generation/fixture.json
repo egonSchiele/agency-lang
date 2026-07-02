@@ -1,0 +1,47 @@
+{
+  "data": {
+    "ok": true,
+    "spent": 0.04,
+    "persisted": true,
+    "tripped": true,
+    "described": "a red bicycle"
+  },
+  "messages": {
+    "threads": {
+      "0": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "describe"
+              },
+              {
+                "type": "image",
+                "source": {
+                  "kind": "base64",
+                  "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+                  "mimeType": "image/png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": "a red bicycle"
+          }
+        ],
+        "parentId": null,
+        "hidden": false,
+        "label": null,
+        "summary": null
+      }
+    },
+    "counter": 1,
+    "activeStack": [
+      "0"
+    ],
+    "sessions": {}
+  }
+}

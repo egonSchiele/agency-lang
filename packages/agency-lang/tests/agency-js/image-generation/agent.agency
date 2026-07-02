@@ -1,0 +1,36 @@
+// End-to-end: generateImage (deterministic provider) -> persist via writeBinary
+// -> cost accrues to the branch and a tiny guard trips -> the base64 composes
+// into a multimodal llm() call. No real API is used.
+import { generateImage } from "std::image"
+import { image, getCost, guard } from "std::thread"
+
+node main() {
+  const r = generateImage("a red bicycle")
+  if (isFailure(r)) {
+    return { ok: false, spent: 0.0, persisted: false, tripped: false, described: "" }
+  }
+
+  writeBinary("out.png", r.value.base64, "/tmp") with approve
+  const back = readBinary("out.png", "/tmp") with approve
+  let persisted = false
+  if (isSuccess(back)) {
+    persisted = back.value == r.value.base64
+  }
+
+  // Cost from the first generation (deterministic $0.04), captured before the
+  // guarded second call so it is deterministic.
+  const spent = getCost()
+
+  // Second generation under a tiny budget -> should trip.
+  const guarded = guard(cost: $0.01) as {
+    generateImage("another one")
+    return "did-not-trip"
+  }
+  const tripped = isFailure(guarded)
+
+  // Compose the generated image into a (mocked) llm() call. The image lands on
+  // the thread as an attachment part (asserted via messages in the fixture).
+  const described = llm(["describe", image(r.value.base64, r.value.mimeType, base64: true)])
+
+  return { ok: true, spent: spent, persisted: persisted, tripped: tripped, described: described }
+}

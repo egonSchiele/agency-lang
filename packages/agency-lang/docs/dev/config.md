@@ -20,7 +20,7 @@ For basic usage examples, see `docs/config.md`.
 | Option | Type | Description |
 |--------|------|-------------|
 | `excludeNodeTypes` | `string[]` | AST node types to skip during code generation (e.g., `"comment"`, `"typeHint"`) |
-| `excludeBuiltinFunctions` | `string[]` | Built-in functions to exclude from generated code. Available: `print`, `printJSON`, `input`, `read`, `readImage`, `write`, `fetch`, `fetchJSON`, `fetchJson`, `sleep`, `round` |
+| `excludeBuiltinFunctions` | `string[]` | Built-in functions to exclude from generated code. Available: `print`, `printJSON`, `input`, `read`, `readBinary`, `write`, `fetch`, `fetchJSON`, `fetchJson`, `sleep`, `round` |
 
 ### Fetch security
 

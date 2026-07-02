@@ -164,7 +164,7 @@ nodes.
 |----------|-----------|-------------|
 | `print`, `printJSON` | `(any...)` | `void` |
 | `input` | `(string)` | `string` |
-| `read`, `readImage` | `(string)` | `string` |
+| `read`, `readBinary` | `(string)` | `string` |
 | `write` | `(string, string)` | `void` |
 | `fetch` | `(string)` | `string` |
 | `fetchJSON` | `(string)` | `any` |

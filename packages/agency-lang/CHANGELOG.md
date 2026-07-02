@@ -5,6 +5,24 @@
   - **Migration (typechecker-enabled projects only):** inside such a guard, accessing a property that exists on a *different* member is now an error — previously union property access was lenient. This is the intended behavior; update the access or guard accordingly.
 
 ### Standard Library
+- **Image generation** — new `std::image` module: `generateImage(prompt, ...opts)`
+  returns a `Result<{ base64, mimeType }>` from a hosted provider (OpenAI, Google,
+  or an open-source model via LiteLLM / Together). Supports edits/variations via
+  `images:`. Cost participates in `getCost()` / `guard(cost:)` and is traced via a
+  new `imageGeneration` statelog event. Compose with `std::thread`'s
+  `image(base64, mimeType, base64: true)` to feed a generated image back into an
+  `llm()` call.
+- **`writeBinary(filename, base64, dir?, mode?, useAgentCwd?)`** — new auto-imported
+  primitive that decodes base64 and writes raw bytes (images, audio, video, PDFs),
+  unlike `write()` which writes UTF-8 text. Interrupt-gated via a new
+  **`std::writeBinary`** effect (a member of the `FileWrite` effectSet); like
+  `std::write`, it is not auto-approved by default.
+- **Breaking — `readImage` renamed to `readBinary`.** The function is a generic
+  `file → base64` reader (it never had image-specific behavior), so the name now
+  reflects that it works for any binary file (images, audio, video, PDFs). The
+  interrupt effect `std::readImage` is likewise renamed to `std::readBinary` —
+  update any `handle`/effectSet/policy that referenced the old effect name
+  (`std::readBinary` is a member of the `FileRead` effectSet). No compatibility shim.
 - Reorganized the standard library into capability-grouped modules. Generic-named modules now live under a domain prefix, and two coupled pairs/trios were merged. Distinctive names (`std::syntax`, `std::markdown`, `std::http`, `std::wikipedia`, `std::weather`, `std::math`, and the agent core) stay flat.
   - **Breaking — update your imports:**
     - `std::threads` → `std::thread` (merged; the current-thread and cross-thread APIs now live in one module)

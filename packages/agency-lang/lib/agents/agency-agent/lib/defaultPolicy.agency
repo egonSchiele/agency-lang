@@ -53,7 +53,7 @@ export static const recommendedAutoApprovePolicy = {
   "std::read": [{
     action: "approve"
   }],
-  "std::readImage": [{
+  "std::readBinary": [{
     action: "approve"
   }],
   "std::ls": [{

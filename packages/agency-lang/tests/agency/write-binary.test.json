@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "writeBinaryRoundtrip", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "writeBinaryRejectedDoesNotWrite", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

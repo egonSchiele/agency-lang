@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, parseJSON, input, sleep, round, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
+import { print, printJSON, parseJSON, input, sleep, round, read, write, readBinary, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -164,7 +164,7 @@ __registerTool(sleep);
 __registerTool(round);
 __registerTool(read);
 __registerTool(write);
-__registerTool(readImage);
+__registerTool(readBinary);
 __registerTool(notify);
 __registerTool(range);
 __registerTool(mostCommon);

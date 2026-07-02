@@ -1155,15 +1155,29 @@ export class AgencyGenerator {
       const guardCode = caseNode.guard
         ? ` if (${this.processNode(caseNode.guard).trim()})`
         : "";
-      // Minimal compile fix: single-statement arms print inline; multi-statement
-      // arms print as an unindented `{ ... }` one-liner. Task 2 replaces this
-      // with properly indented block printing.
-      const bodyCode =
-        caseNode.body.length === 1
-          ? this.processNode(caseNode.body[0]).trim()
-          : `{ ${caseNode.body.map((b) => this.processNode(b).trim()).join("\n")} }`;
 
-      result += this.indentStr(`${pattern}${guardCode} => ${bodyCode}\n`);
+      // A one-statement body prints inline UNLESS the statement is itself a
+      // matchBlock: the single-statement arm grammar only accepts
+      // return/assignment/expression, so a nested match statement must print
+      // in block form to re-parse.
+      if (caseNode.body.length === 1 && caseNode.body[0].type !== "matchBlock") {
+        const stmt = caseNode.body[0];
+        let stmtCode = this.processNode(stmt).trim();
+        // `=> { ... }` is always parsed as a block, never an object literal
+        // (JS-arrow rule — see matchArmBlockParser). An inline arm whose
+        // sole statement is an object literal must therefore stay
+        // parenthesized so it round-trips as an expression, not a block.
+        if (stmt.type === "agencyObject") {
+          stmtCode = `(${stmtCode})`;
+        }
+        result += this.indentStr(`${pattern}${guardCode} => ${stmtCode}\n`);
+      } else {
+        result += this.indentStr(`${pattern}${guardCode} => {\n`);
+        this.increaseIndent();
+        result += this.renderBody(caseNode.body);
+        this.decreaseIndent();
+        result += this.indentStr("}\n");
+      }
     }
 
     this.decreaseIndent();

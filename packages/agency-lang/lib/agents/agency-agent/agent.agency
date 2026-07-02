@@ -30,10 +30,11 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost, getModelCosts, systemMessage } from "std::thread"
+import { Attachment, getCost, getModelCosts, systemMessage } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 
 import { figs, title } from "./images/images.agency"
+import { detectAttachments, modalityFilter } from "./lib/attachments.agency"
 import { POLICY_PATH, HISTORY_PATH, ALWAYS_FIELDS } from "./lib/config.agency"
 import {
   minimalAutoApprovePolicy,
@@ -867,7 +868,7 @@ static const mainAgentTools = [
   generateImageFile,
 ]
 
-def mainAgent(prompt: string): string {
+def mainAgent(prompt: string | (string | Attachment)[]): string {
   thread(label: "main", summarize: true, session: "main") {
     setMemoryId("main")
     if (first) {
@@ -907,7 +908,28 @@ export def agentReplyVia(target: string, userMsg: string): string {
   if (target == "review") {
     return reviewAgent(expanded, false)
   }
-  return mainAgent(expanded)
+  // Auto-attach image/PDF files the user referenced (drag-drop or typed
+  // path), filtered to what the resolved model accepts. Never silent:
+  // every attach and every skip prints a visible line.
+  const detected = modalityFilter(detectAttachments(expanded))
+  for (skippedFile in detected.skipped) {
+    pushMessage(color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"))
+  }
+  if (detected.attached.length == 0) {
+    // Deliberate special case: a text-only turn stays a bare string. A
+    // one-element array is API-equivalent, but the stored thread message
+    // shape (string vs parts array) — and with it every serialized
+    // session and message fixture — would change for EVERY turn.
+    return mainAgent(expanded)
+  }
+  for (item in detected.attached) {
+    pushMessage(color.dim("📎 attached ${item.label}"))
+  }
+  const attachments = map(detected.attached) as item {
+    return item.attachment
+  }
+  const parts: (string | Attachment)[] = [expanded, ...attachments]
+  return mainAgent(parts)
 }
 
 // The agent's core turn, decoupled from the terminal: expand any project

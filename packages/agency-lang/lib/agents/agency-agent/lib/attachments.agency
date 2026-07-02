@@ -1,8 +1,11 @@
 import { applyAgentCwd } from "std::index"
+import { modelSupportsInput } from "std::llm"
 import { stat } from "std::shell"
 import { env } from "std::system"
 import { basename, extname, dirname, isAbsolute } from "std::path"
 import { Attachment, image, file } from "std::thread"
+
+import { getResolvedSlots } from "../shared.agency"
 
 // Detects image/PDF file paths in a user message (terminal drag-drop
 // inserts a quoted/escaped path; typed mentions are plain tokens) and
@@ -152,4 +155,35 @@ export def detectAttachments(msg: string, maxBytes: number = 20971520): Detected
     }
   }
   return { text: msg, attached: attached, skipped: skipped }
+}
+
+// Drop attachments the resolved main model explicitly cannot accept.
+// Tri-state on purpose: only a catalog `false` drops a part. Unknown
+// models (null) attach optimistically — smoltalk's send-time gate does
+// not fire for them either, so this can never be stricter than send.
+export def modalityFilter(detected: DetectedContent): DetectedContent {
+  const slots = getResolvedSlots()
+  const main = slots["main"]
+  if (main == null) {
+    return detected
+  }
+  const imageOk = modelSupportsInput(main.model, "image")
+  const pdfOk = modelSupportsInput(main.model, "pdf")
+  let attached: DetectedAttachment[] = []
+  let skipped: SkippedFile[] = [...detected.skipped]
+  for (item in detected.attached) {
+    const noImageInput = item.attachment.type == "image" && imageOk == false
+    const noPdfInput = item.attachment.type == "file" && pdfOk == false
+    const drop = noImageInput || noPdfInput
+    if (drop) {
+      let modality = "image"
+      if (item.attachment.type == "file") {
+        modality = "PDF"
+      }
+      skipped.push({ label: item.label, reason: "model ${main.model} has no ${modality} input" })
+    } else {
+      attached.push(item)
+    }
+  }
+  return { text: detected.text, attached: attached, skipped: skipped }
 }

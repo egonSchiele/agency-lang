@@ -1,0 +1,83 @@
+{
+  "tests": [
+    {
+      "nodeName": "attachesImageToTurn",
+      "input": "",
+      "expectedOutput": "\"I see it!|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "I see it!"
+        }
+      ]
+    },
+    {
+      "nodeName": "plainMessageStaysString",
+      "input": "",
+      "expectedOutput": "\"Hi!|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "Hi!"
+        }
+      ]
+    },
+    {
+      "nodeName": "modalitySkipsTextOnlyModel",
+      "input": "",
+      "expectedOutput": "\"ok|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "ok"
+        }
+      ]
+    },
+    {
+      "nodeName": "subagentRouteIgnoresImagePath",
+      "input": "",
+      "expectedOutput": "\"true|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "code reply"
+        },
+        {
+          "return": "code reply"
+        },
+        {
+          "return": "code reply"
+        },
+        {
+          "return": "code reply"
+        },
+        {
+          "return": "code reply"
+        },
+        {
+          "return": "code reply"
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-import { detectAttachments } from "../lib/attachments.agency"
+import { detectAttachments, modalityFilter } from "../lib/attachments.agency"
+import { applyResolved } from "../shared.agency"
 import { setAgentCwd } from "std::index"
 import { exec } from "std::shell"
 import { setEnv } from "std::system"
@@ -132,4 +133,35 @@ node bareTextNoAttachments(): string {
 node emptyMessage(): string {
   const detected = detectAttachments("") with approve
   return "${detected.attached.length}|${detected.skipped.length}|${detected.text}"
+}
+
+node modalityFilterPassthroughWhenNoSlots(): string {
+  writeBinary("da-mf.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da-mf.png") with approve
+  const filtered = modalityFilter(detected)
+  return "${filtered.attached.length}"
+}
+
+node modalityFilterDropsForTextOnlyModel(): string {
+  applyResolved({ main: { model: "gpt-3.5-turbo", provider: "openai", via: "test" } })
+  writeBinary("da-mf2.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da-mf2.png") with approve
+  const filtered = modalityFilter(detected)
+  return "${filtered.attached.length}|${filtered.skipped[0].label}|${filtered.skipped[0].reason}"
+}
+
+node modalityFilterDropsPdfForNoPdfModel(): string {
+  applyResolved({ main: { model: "gpt-3.5-turbo", provider: "openai", via: "test" } })
+  writeBinary("da-mfp.pdf", "JVBERi0xLjQK", "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da-mfp.pdf") with approve
+  const filtered = modalityFilter(detected)
+  return "${filtered.attached.length}|${filtered.skipped[0].label}|${filtered.skipped[0].reason}"
+}
+
+node modalityFilterKeepsForVisionModel(): string {
+  applyResolved({ main: { model: "gpt-4o", provider: "openai", via: "test" } })
+  writeBinary("da-mf3.png", PNG, "/tmp") with approve
+  const detected = detectAttachments("see /tmp/da-mf3.png") with approve
+  const filtered = modalityFilter(detected)
+  return "${filtered.attached.length}"
 }

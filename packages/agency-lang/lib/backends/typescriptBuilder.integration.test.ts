@@ -468,3 +468,22 @@ node main() {
     expect(calls.length).toBe(1);
   });
 });
+
+describe("match arm yielding a graph-node transition is a compile error", () => {
+  it("rejects a match-expression arm whose value is a graph-node call", () => {
+    const source = `node target() {
+  return "done"
+}
+
+node main(x: string) {
+  const val = match(x) {
+    "a" => target()
+    _ => "other"
+  }
+  return val
+}`;
+    expect(() => generateWithBuilder(source, "matchNodeYield.agency")).toThrow(
+      /match arm cannot return a graph node transition/i,
+    );
+  });
+});

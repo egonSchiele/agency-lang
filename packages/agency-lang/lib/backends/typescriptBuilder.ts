@@ -1344,6 +1344,19 @@ export class TypeScriptBuilder {
    *  ifElse rather than the enclosing function. Never produced by the parser —
    *  only by pattern lowering (Task 6). */
   private processMatchYield(node: MatchYield): TsNode {
+    // A graph-node call compiles to a goto/halt transition statement (see
+    // generateNodeCallExpression), which is control flow — it cannot serve as
+    // the value argument of `runner.exitMatch(id, <value>)`. Reject it with a
+    // clear compile error rather than emitting invalid TypeScript.
+    if (
+      node.value?.type === "functionCall" &&
+      this.names.isGraphNode(node.value.functionName)
+    ) {
+      throw new Error(
+        "a match arm cannot return a graph node transition; a node call is " +
+          "control flow, not a value — use if/else statements for node dispatch",
+      );
+    }
     const value = node.value ? this.processNode(node.value) : ts.id("undefined");
     return ts.runnerExitMatch({ matchId: node.matchId, value });
   }

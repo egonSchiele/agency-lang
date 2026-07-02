@@ -310,6 +310,16 @@ class PatternLowerer {
       return this.lowerMatchIsForm(node, matchExprId);
     }
 
+    // Statement position (matchExprId === undefined): a `return` inside an arm
+    // would silently return from the enclosing function while the match's value
+    // goes unused. Reject it and point at `return match(...)`. Expression matches
+    // never reach here with a raw return — Task 6 rewrote theirs to `matchYield`
+    // before calling us; any surviving `returnStatement` belongs to an inner
+    // statement match, checked on its own recursion.
+    if (matchExprId === undefined) {
+      this.assertNoStatementArmReturns(node);
+    }
+
     // Check if any arm uses patterns or has a guard.
     const hasPatternArms = node.cases.some(
       (c) =>
@@ -507,6 +517,8 @@ class PatternLowerer {
         node.loc,
       );
     }
+    // is-form is statement-only, so arm returns are always the unused-value bug.
+    this.assertNoStatementArmReturns(node);
     const isExpr = node.expression as IsExpression;
     const scrutineeName = this.freshName("scrutinee");
     const scrutineeAssign: Assignment = {
@@ -553,6 +565,26 @@ class PatternLowerer {
     }
 
     return [scrutineeAssign, ...inside];
+  }
+
+  /**
+   * Reject any `return` in a statement-position match arm's ORIGINAL body. In a
+   * statement match the arm value is discarded, so a `return` silently exits the
+   * enclosing function instead — almost always a mistake. Uses the Task 6
+   * `containsReturn` boundary (nested `matchBlock` arms are their own concern;
+   * bare `return` counts) and points the user at `return match(...)`.
+   */
+  private assertNoStatementArmReturns(node: MatchBlock): void {
+    for (const c of node.cases) {
+      if (c.type !== "matchBlockCase") continue;
+      if (containsReturn(c.body)) {
+        throw new LoweringError(
+          "`return` inside a match arm yields the match's value, but this match's " +
+            "value is unused — did you mean `return match(...)`?",
+          firstReturnLoc(c.body) ?? c.body[0]?.loc,
+        );
+      }
+    }
   }
 
   /** Recurse into the body of a single match arm (without lowering the arm itself). */
@@ -934,6 +966,25 @@ function containsReturn(nodes: AgencyNode[]): boolean {
     if (found) return true;
   }
   return false;
+}
+
+/**
+ * Location of the first `returnStatement` in `nodes` using the same
+ * skip-nested-`matchBlock` boundary as `containsReturn`. Used to anchor the
+ * statement-position return diagnostic on the offending `return`.
+ */
+function firstReturnLoc(nodes: AgencyNode[]): SourceLocation | undefined {
+  for (const node of nodes) {
+    if (node.type === "returnStatement") return node.loc;
+    if (node.type === "matchBlock") continue; // inner match owns its returns
+    let found: SourceLocation | undefined;
+    mapBodies(node, (body) => {
+      found ??= firstReturnLoc(body);
+      return body;
+    });
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function varRef(name: string, loc: SourceLocation | undefined): VariableNameLiteral {

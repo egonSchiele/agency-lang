@@ -56,12 +56,14 @@ describe("definite-return checking", () => {
 
   // SAFE SUBSET: functions that use a `match` are skipped for now (whether they
   // return on all paths depends on match exhaustiveness — deferred to a follow-up).
-  it("skips a match-containing function even if every arm returns", () => {
-    expect(misses(`def f(x: string): number { match (x) { "a" => return 1  _ => return 0 } }`)).toBe(false);
+  it("skips a match-containing function that returns via a match expression", () => {
+    expect(misses(`def f(x: string): number { return match (x) { "a" => 1  _ => 0 } }`)).toBe(false);
   });
 
-  it("skips a match-containing function even if an arm falls through (no false positive)", () => {
-    expect(misses(`def f(x: string): number { match (x) { "a" => return 1  _ => 0 } }`)).toBe(false);
+  it("skips a match-containing function that does not return on all paths (no false positive)", () => {
+    // A statement match with no trailing return: the function misses a return,
+    // but is skipped because it contains a match.
+    expect(misses(`def f(x: string): number { match (x) { "a" => print("hi")  _ => print("no") } }`)).toBe(false);
   });
 
   it("skips a function with a pattern match (idiomatic Result match, no `_`)", () => {
@@ -69,7 +71,7 @@ describe("definite-return checking", () => {
     // Result match with no `_`. Must NOT be flagged.
     expect(
       misses(`def mk(): Result<number, string> { return success(1) }
-def f(): number { let r = mk()\n match (r) { success(v) => return v  failure(e) => return 0 } }`),
+def f(): number { let r = mk()\n return match (r) { success(v) => v  failure(e) => 0 } }`),
     ).toBe(false);
   });
 
@@ -108,7 +110,7 @@ def g(x: number): number { if (x > 0) { return 2 } }`;
   it("skips a `_`-less match (safe subset — no false positive on exhaustive matches)", () => {
     // A boolean match over true/false is exhaustive and returns on all paths, but
     // the safe subset simply skips any match-containing function, so no diagnostic.
-    expect(misses(`def f(x: bool): number { match (x) { true => return 1  false => return 0 } }`)).toBe(false);
+    expect(misses(`def f(x: bool): number { return match (x) { true => 1  false => 0 } }`)).toBe(false);
   });
 
   // --- config knob ---

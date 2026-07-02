@@ -185,3 +185,97 @@ describe("expression match lowering errors", () => {
   it("module-level match expression errors", () =>
     expectError(`const g = match("a") {\n  "a" => 1\n  _ => 2\n}\nnode main() { return g }`, /module-level|top-level/i));
 });
+
+describe("statement-position return-in-arm errors", () => {
+  function expectError(src: string, re: RegExp) {
+    const parsed = parseAgency(src);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(re);
+  }
+
+  it("single-statement return arm errors with the fixit", () =>
+    expectError(`def f(x: string): string {
+  match(x) {
+    "a" => return "yes"
+    _ => print("no")
+  }
+  return "no"
+}`, /return match\(/));
+
+  it("return nested in an if inside a block arm errors", () =>
+    expectError(`def f(x: string): string {
+  match(x) {
+    "a" => {
+      if (true) { return "yes" }
+      print("hm")
+    }
+    _ => print("no")
+  }
+  return "no"
+}`, /return match\(/));
+
+  it("bare return in a statement arm errors", () =>
+    expectError(`def f(x: string): string {
+  match(x) {
+    "a" => { return }
+    _ => print("no")
+  }
+  return "no"
+}`, /return match\(/));
+
+  it("return inside a for loop inside a statement arm errors", () =>
+    expectError(`def f(xs: any): string {
+  match("k") {
+    "k" => {
+      for (x in xs) { return "found" }
+    }
+    _ => print("no")
+  }
+  return "no"
+}`, /return match\(/));
+
+  it("return-free statement arms still parse", () => {
+    const parsed = parseAgency(`def f(x: string): string {
+  match(x) {
+    "a" => print("fine")
+    _ => print("also fine")
+  }
+  return "ok"
+}`);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("boundary: inner EXPRESSION match returns are legal inside an outer statement match arm", () => {
+    const parsed = parseAgency(`def f(x: string): string {
+  match(x) {
+    "a" => {
+      const v = match(x) {
+        "a" => {
+          return "inner-yield"
+        }
+        _ => "other"
+      }
+      print(v)
+    }
+    _ => print("no")
+  }
+  return "ok"
+}`);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("boundary: statement match nested inside an expression-match arm still errors on ITS arm returns", () =>
+    expectError(`node main(x: string) {
+  const val = match(x) {
+    "a" => {
+      match(x) {
+        "b" => return "illegal"
+        _ => print("ok")
+      }
+      return "yield"
+    }
+    _ => "other"
+  }
+  return val
+}`, /return match\(/));
+});

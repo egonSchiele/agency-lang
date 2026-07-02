@@ -35,6 +35,7 @@ import {
   withPushedHandler,
   type CallsiteLocation,
 } from "./asyncContext.js";
+import { addCost, addTokens } from "./cost.js";
 import {
   interrupt,
   type InterruptOpts,
@@ -377,13 +378,10 @@ function lockOwnerIdForActiveStack(): string {
  *  call site and want the cost to participate in `agency.getCost()` /
  *  `agency.withCostGuard()` tracking the same way the built-in `llm()`
  *  primitive does. The built-in path in `lib/runtime/prompt.ts` does
- *  exactly this sequence after every completion. */
-const addCost = (amount: number): void => {
-  const stack = getRuntimeContext().stack;
-  stack.localCost += amount;
-  stack.chargeGuards(amount);
-  stack.enforceGuards();
-};
+ *  exactly this sequence after every completion.
+ *
+ *  Implementation lives in `lib/runtime/cost.ts` (shared with std::image); it
+ *  is re-exported on the `agency` namespace below for back-compat. */
 
 // ---- Memory subnamespace ---------------------------------------------
 
@@ -465,6 +463,7 @@ export const agency = {
   withTimeGuard,
   withLock,
   addCost,
+  addTokens,
 
   withResumableScope: _withResumableScope,
 

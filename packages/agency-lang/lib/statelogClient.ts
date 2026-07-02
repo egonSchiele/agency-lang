@@ -9,6 +9,10 @@ import { JSONEdge } from "./types.js";
 // to notice. The viewer rejects files with a higher version.
 export const STATELOG_FORMAT_VERSION = 1;
 
+/** Max chars of a prompt/input kept in a statelog preview field, so a
+ *  transcript-with-PII never ends up in a remote sink. */
+export const PROMPT_PREVIEW_MAX = 200;
+
 // === Span model ===
 
 export type SpanType =
@@ -502,6 +506,38 @@ export class StatelogClient {
       usage,
       cost,
       phase,
+    });
+  }
+
+  /**
+   * Emit an `imageGeneration` event. Mirrors `embedCompletion`. `promptPreview`
+   * is a short slice of the prompt so a transcript-with-PII never ends up in a
+   * remote sink; the generated image bytes are NEVER logged.
+   */
+  async imageGeneration({
+    promptPreview,
+    model,
+    timeTaken,
+    usage,
+    cost,
+  }: {
+    /** First ~200 chars of the prompt, for human-readable tracing. */
+    promptPreview: string;
+    /** Image model name (e.g. "gpt-image-1"). */
+    model?: string;
+    /** Wall-clock latency in ms (caller measures via `performance.now`). */
+    timeTaken?: number;
+    /** Optional provider-reported usage. */
+    usage?: TokenUsage;
+    cost?: TokenCost;
+  }): Promise<void> {
+    await this.post({
+      type: "imageGeneration",
+      promptPreview,
+      model,
+      timeTaken,
+      usage,
+      cost,
     });
   }
 

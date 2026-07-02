@@ -104,7 +104,7 @@ export type FileAttachment = {
   filename?: string;
 };
 
-function classifySource(
+export function classifySource(
   source: string,
   mimeType: string,
   base64: boolean,

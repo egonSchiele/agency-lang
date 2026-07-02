@@ -21,6 +21,19 @@ Usage from Agency code:
 
 ## Types
 
+## Effects
+
+### std::browserUse
+
+```ts
+effect std::browserUse {
+  task: string;
+  model: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L23))
+
 ## Functions
 
 ### browserUse
@@ -55,4 +68,4 @@ Run a browser automation task using natural language via the Browser Use cloud A
 
 **Throws:** `std::browserUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L25))

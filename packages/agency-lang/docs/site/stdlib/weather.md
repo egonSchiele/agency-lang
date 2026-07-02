@@ -6,6 +6,19 @@ name: "weather"
 
 ## Types
 
+## Effects
+
+### std::weather
+
+```ts
+effect std::weather {
+  location: string;
+  units: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L3))
+
 ## Functions
 
 ### weather
@@ -30,7 +43,7 @@ Get current weather for a city name or zip code. Returns temperature, feels-like
 
 **Throws:** `std::weather`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L30))
 
 ### celsiusToFahrenheit
 
@@ -46,7 +59,7 @@ celsiusToFahrenheit(celsius: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L45))
 
 ### fahrenheitToCelsius
 
@@ -62,4 +75,4 @@ fahrenheitToCelsius(fahrenheit: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L49))

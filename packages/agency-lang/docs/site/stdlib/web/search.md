@@ -6,6 +6,36 @@ name: "search"
 
 ## Types
 
+## Effects
+
+### std::search
+
+```ts
+effect std::search {
+  query: string;
+  count: number;
+  country: string;
+  searchLang: string;
+  safesearch: string;
+  freshness: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L9))
+
+### std::tavilySearch
+
+```ts
+effect std::tavilySearch {
+  query: string;
+  count: number;
+  searchDepth: string;
+  topic: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L10))
+
 ## Functions
 
 ### search
@@ -40,7 +70,7 @@ Search the web. Returns a list of results with title, url, and description. Set 
 
 **Throws:** `std::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L21))
 
 ### tavilySearch
 
@@ -68,6 +98,6 @@ Search the web with Tavily, a search API built for AI agents. Returns a list of 
 
 **Returns:** `SearchResult[]`
 
-**Throws:** `std::search`
+**Throws:** `std::tavilySearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L62))

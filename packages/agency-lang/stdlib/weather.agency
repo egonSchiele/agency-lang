@@ -1,4 +1,7 @@
 import { _weather } from "agency-lang/stdlib-lib/weather.js"
+
+effect std::weather { location: string, units: string }
+
 type WeatherResult = {
   location: string;
   country: string;

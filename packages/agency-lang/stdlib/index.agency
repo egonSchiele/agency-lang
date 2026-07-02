@@ -43,6 +43,16 @@ import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
 
+// Payload types for the interrupt effects raised by this module.
+// `std::read`/`std::write` are shared file-access effects (also raised by
+// `std::agency`); their canonical payload is the file identity a policy
+// keys on — `{ dir, filename }` — while per-call extras (content, mode,
+// offset, ...) are permitted at individual raise sites.
+effect std::read { dir: string, filename: string }
+effect std::write { dir: string, filename: string }
+effect std::readImage { dir: string, filename: string }
+effect std::notify { title: string, body: string }
+
 export safe def print(...messages) {
   """
   A tool for printing a message to the console.

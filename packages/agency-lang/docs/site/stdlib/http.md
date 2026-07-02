@@ -4,6 +4,41 @@ name: "http"
 
 # http
 
+## Effects
+
+### std::http::fetch
+
+```ts
+effect std::http::fetch {
+  baseUrl: string;
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L12))
+
+### std::http::fetchJSON
+
+```ts
+effect std::http::fetchJSON {
+  baseUrl: string;
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L13))
+
+### std::http::fetchMarkdown
+
+```ts
+effect std::http::fetchMarkdown {
+  baseUrl: string;
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L14))
+
 ## Functions
 
 ### fetch
@@ -34,7 +69,7 @@ A tool for fetching a URL and returning the response as text. Provide baseUrl an
 
 **Throws:** `std::http::fetch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L16))
 
 ### fetchJSON
 
@@ -64,7 +99,7 @@ A tool for fetching a URL and returning the response as parsed JSON. Provide bas
 
 **Throws:** `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L39))
 
 ### fetchMarkdown
 
@@ -94,4 +129,4 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
 
 **Throws:** `std::http::fetchMarkdown`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L62))

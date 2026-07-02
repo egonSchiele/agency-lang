@@ -47,6 +47,40 @@ name: "oauth"
   2. System keyring (macOS Keychain / Linux Secret Service) — key is auto-generated on first use
   3. If neither is available, tokens are stored unencrypted
 
+## Effects
+
+### std::authorize
+
+```ts
+effect std::authorize {
+  name: string;
+  authUrl: string;
+  scopes: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L49))
+
+### std::getAccessToken
+
+```ts
+effect std::getAccessToken {
+  name: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L50))
+
+### std::revokeAuth
+
+```ts
+effect std::revokeAuth {
+  name: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L51))
+
 ## Functions
 
 ### authorize
@@ -83,7 +117,7 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Throws:** `std::authorize`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L53))
 
 ### getAccessToken
 
@@ -105,7 +139,7 @@ Get a valid OAuth access token for a previously authorized provider. Automatical
 
 **Throws:** `std::getAccessToken`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L83))
 
 ### isAuthorized
 
@@ -123,7 +157,7 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L96))
 
 ### revokeAuth
 
@@ -143,4 +177,4 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L103))

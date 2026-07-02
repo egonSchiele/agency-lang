@@ -45,6 +45,12 @@ export type MemoryConfig = {
   embeddings?: { model: string | undefined }
 }
 
+effect std::memory::enableMemory { dir: string }
+effect std::memory::disableMemory {}
+effect std::memory::remember { contentLength: number }
+effect std::memory::recall { query: string }
+effect std::memory::forget { query: string }
+
 export safe def isMemoryActive(): boolean {
   """
   Return `true` iff there is an active memory frame on the current

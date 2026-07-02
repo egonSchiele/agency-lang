@@ -11,6 +11,10 @@ import {
   _transcribe,
 } from "agency-lang/stdlib-lib/speech.js"
 
+effect std::speak { textLength: number }
+effect std::record {}
+effect std::transcribe { filepath: string }
+
 export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "", allowedPaths: string[] = []) {
   """
   A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it. Set allowedPaths to restrict where the output file may be written.

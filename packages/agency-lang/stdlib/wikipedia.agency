@@ -19,6 +19,10 @@ type WikiArticle = {
   url: string
 }
 
+effect std::wikipedia::search { query: string, limit: number }
+effect std::wikipedia::summary { title: string }
+effect std::wikipedia::article { title: string }
+
 export safe def search(query: string, limit: number = 5): WikiSearchResult[] {
   """
   Search Wikipedia for articles matching the given query. Returns up to limit results (default 5).

@@ -26,6 +26,10 @@ import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "agen
   No external dependencies required.
 */
 
+effect std::setSecret { key: string, service: string }
+effect std::getSecret { key: string, service: string }
+effect std::deleteSecret { key: string, service: string }
+
 export def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
   """
   Store a secret in the system keyring (macOS Keychain or Linux Secret Service). The secret is stored under the given service name (default "agency-lang") with the given key. Overwrites any existing value for the same key.

@@ -22,6 +22,18 @@ name: "sms"
 
 ## Types
 
+## Effects
+
+### std::sendSms
+
+```ts
+effect std::sendSms {
+  to: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L26))
+
 ## Functions
 
 ### sendSms
@@ -56,4 +68,4 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
 
 **Throws:** `std::sendSms`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L28))

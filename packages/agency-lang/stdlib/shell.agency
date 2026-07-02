@@ -17,6 +17,12 @@ type ExecResult = {
   exitCode: number
 }
 
+effect std::exec { command: string, args: string[], subcommand: string, cwd: string, timeout: number, stdin: string }
+effect std::bash { command: string, cwd: string, timeout: number, stdin: string }
+effect std::ls { dir: string, recursive: boolean, maxResults: number }
+effect std::grep { pattern: string, dir: string, flags: string, maxResults: number }
+effect std::glob { pattern: string, dir: string, maxResults: number }
+
 export def exec(
   command: string,
   args: string[] = [],

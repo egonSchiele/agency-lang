@@ -28,6 +28,14 @@ node editInputsResolveAgainstAgentCwd(): string {
   return "${resolved[0]}|${resolved[1]}"
 }
 
+node editInputsPassUrlsThrough(): string {
+  // generateImage accepts URLs and data URIs; agent-cwd resolution must
+  // not mangle them into local paths.
+  setAgentCwd("/tmp")
+  const resolved = resolveEditInputs(["https://example.com/cat.png", "data:image/png;base64,AAAA", "http://example.com/dog.png"])
+  return "${resolved[0]}|${resolved[1]}|${resolved[2]}"
+}
+
 node editInputsPassThrough(): string {
   setAgentCwd("/tmp")
   generateImageFile("seed", "it-seed.png") with approve

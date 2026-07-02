@@ -16,7 +16,7 @@ import {
 import { today } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
-import { basename, dirname, isAbsolute } from "std::path"
+import { basename, dirname } from "std::path"
 import { box, render } from "std::ui/layout"
 import { listHostedModels, hostedModelInfo } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
@@ -810,9 +810,15 @@ with them — don't sprint to implementation.
 
 // Exported for tests: agent-cwd resolution of edit inputs is a spec
 // invariant with no other observable (the deterministic image client
-// ignores its images argument).
+// ignores its images argument). generateImage accepts path / URL /
+// data-URI strings, so only local paths get agent-cwd resolution —
+// running a URL through applyAgentCwd would mangle it into
+// "<agentCwd>/https:/…".
 export def resolveEditInputs(images: string[]): string[] {
   return map(images) as inputPath {
+    if (inputPath.startsWith("http://") || inputPath.startsWith("https://") || inputPath.startsWith("data:")) {
+      return inputPath
+    }
     return applyAgentCwd(inputPath)
   }
 }
@@ -847,12 +853,9 @@ export def generateImageFile(
     return "Image generation failed: ${generated.error}"
   }
   // writeBinary rejects an absolute filename when dir is set, so split
-  // path into (dir, name) and resolve the dir against the agent cwd.
-  let dir = dirname(path)
-  if (!isAbsolute(dir)) {
-    dir = applyAgentCwd(dir)
-  }
-  const written = writeBinary(basename(path), generated.value.base64, dir)
+  // path into (dir, name); useAgentCwd resolves a relative dir against
+  // the agent cwd (absolute dirs pass through untouched).
+  const written = writeBinary(basename(path), generated.value.base64, dirname(path), useAgentCwd: true)
   if (isFailure(written)) {
     return "Generated the image, but saving to ${path} failed: ${written.error}"
   }

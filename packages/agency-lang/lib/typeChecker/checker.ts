@@ -26,6 +26,7 @@ import {
 } from "./utils.js";
 import { Scope } from "./scope.js";
 import { checkAssignmentValue } from "./scopes.js";
+import { checkMatchExprYields } from "./matchExprTypes.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
@@ -765,6 +766,23 @@ function checkReturnTypesInScope(
     // Returns inside a block belong to the block, not the enclosing function;
     // they're checked against the slot's return type by checkExpressionsInScope.
     if (isInsideBlock(ancestors)) continue;
+    // `return match(...)` lowers to `return __matchval_<id>`. Check each arm's
+    // yield against the declared return type using its UNWIDENED type (per
+    // `checkMatchExprYields`), so a literal-union return type accepts a literal
+    // yield and errors anchor on the offending arm — mirroring the annotated
+    // assignment path. The widened union that `checkType`/`synthType` would use
+    // for the `__matchval_` ref would falsely reject such returns.
+    const matchId = matchvalRefId(node.value);
+    if (matchId !== undefined) {
+      checkMatchExprYields(
+        matchId,
+        info.returnType,
+        `return in '${info.name}'`,
+        ctx,
+        node.loc,
+      );
+      continue;
+    }
     checkType(
       node.value,
       info.returnType,
@@ -773,6 +791,14 @@ function checkReturnTypesInScope(
       ctx,
     );
   }
+}
+
+/** The match id `N` when `expr` is the lowered `__matchval_N` temp reference a
+ *  `return match(...)` produces, else undefined. */
+function matchvalRefId(expr: AgencyNode): number | undefined {
+  if (expr.type !== "variableName") return undefined;
+  const m = /^__matchval_(\d+)$/.exec(expr.value);
+  return m ? Number(m[1]) : undefined;
 }
 
 /**

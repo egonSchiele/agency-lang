@@ -57,7 +57,7 @@ function walkBody(
       for (const caseItem of node.cases) {
         if (caseItem.type === "comment") continue;
         if (caseItem.type === "newLine") continue;
-        caseItem.body = walkBody([caseItem.body], fn)[0] as any;
+        caseItem.body = walkBody(caseItem.body, fn);
       }
     } else if (node.type === "handleBlock") {
       node.body = walkBody(node.body, fn);
@@ -965,8 +965,8 @@ export class TypescriptPreprocessor {
         if (!filtered) continue;
         node.statement = filtered;
       } else if (node.type === "matchBlock") {
-        // Filter case bodies - Note: match block bodies are single nodes, not arrays
-        // We don't filter them here as they're of a specific type
+        // Case bodies are arrays of nodes, but this filter (filterNodesByType)
+        // isn't wired up for match arms yet — mirrors pre-existing behavior.
       } else if (node.type === "assignment") {
         node.value = (this.filterNodesByType(
           [node.value as AgencyNode],
@@ -1077,11 +1077,8 @@ export class TypescriptPreprocessor {
           }
           return {
             ...caseItem,
-            body: this.filterBuiltinFunctionCalls(
-              [caseItem.body],
-              excludeSet,
-            )[0],
-          } as any;
+            body: this.filterBuiltinFunctionCalls(caseItem.body, excludeSet),
+          };
         });
       } else if (node.type === "functionCall") {
         // Filter arguments that are function calls

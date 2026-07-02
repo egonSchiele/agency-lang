@@ -14,7 +14,7 @@ export const template = `await runner.ifElse({{{id}}}, [
 {{/branches}}
 ]{{#hasElse}}, async (runner) => {
 {{{elseBranch}}}
-}{{/hasElse}});`;
+}{{/hasElse}}{{{matchOpts}}});`;
 
 export type TemplateType = {
   id: string | boolean | number;
@@ -24,6 +24,7 @@ export type TemplateType = {
   }[];
   hasElse: boolean;
   elseBranch: string | boolean | number;
+  matchOpts: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

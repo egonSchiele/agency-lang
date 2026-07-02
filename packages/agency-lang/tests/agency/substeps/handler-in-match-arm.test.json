@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "nodeName": "normalPath",
+      "description": "handle registered as a match-arm statement fires on the handled interrupt raised later in the same arm",
+      "input": "",
+      "expectedOutput": "[\"before\",\"handler-fired\",\"after-interrupt\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "resumePath",
+      "description": "An interrupt the handler propagates (approved externally, pausing/resuming the node) sits between handle registration and the handled interrupt; the handler still fires after resume",
+      "input": "",
+      "expectedOutput": "[\"before\",\"resumed\",\"handler-fired\",\"after-interrupt\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "unrelated" }]
+    },
+    {
+      "nodeName": "skippedOnEarlyReturn",
+      "description": "A mid-arm return inside an if yields the match before the handle statement is reached, so the handler never registers and never fires",
+      "input": "true",
+      "expectedOutput": "[\"early\",[]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "skippedOnEarlyReturn",
+      "description": "Control: when the early-return branch is not taken, the handle statement IS reached and the handler fires normally",
+      "input": "false",
+      "expectedOutput": "[\"late\",[\"handler-fired\",\"handler-body\"]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

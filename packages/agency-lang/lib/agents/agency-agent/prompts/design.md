@@ -96,18 +96,24 @@ node markTodoDone() {
 }
 ```
 
-Then use a `match` statement to direct the user to the correct node based on category:
+Then use an `if`/`else` chain to direct the user to the correct node based on category. (A node call is control flow, not a value, so it can't be dispatched from a `match` expression — use an `if`/`else` chain for node dispatch.)
 
 ```agency
-match (category) {
-  "add-todo" => return addTodo()
-  "delete-todo" => return deleteTodo()
-  "edit-todo" => return editTodo()
-  "mark-todo-done" => return markTodoDone()
+if (category == "add-todo") {
+  return addTodo()
+}
+if (category == "delete-todo") {
+  return deleteTodo()
+}
+if (category == "edit-todo") {
+  return editTodo()
+}
+if (category == "mark-todo-done") {
+  return markTodoDone()
 }
 ```
 
-Put the match statement in the `categorize` node right after you get the category from the LLM call.
+Put this dispatch in the `categorize` node right after you get the category from the LLM call.
 
 ## Step 4: User feedback and iteration
 After you have built out the nodes for each category, show the code to the user and ask for their feedback.

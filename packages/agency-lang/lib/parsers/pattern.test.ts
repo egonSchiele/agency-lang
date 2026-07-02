@@ -463,10 +463,10 @@ describe("matchBlockParserCase with patterns and guards", () => {
           { type: "objectPatternShorthand", name: "v" },
         ],
       },
-      body: {
+      body: [{
         type: "functionCall",
         functionName: "f",
-      },
+      }],
     });
   });
 
@@ -489,10 +489,10 @@ describe("matchBlockParserCase with patterns and guards", () => {
         left: { type: "variableName", value: "s" },
         right: { type: "number", value: "5" },
       },
-      body: {
+      body: [{
         type: "functionCall",
         functionName: "f",
-      },
+      }],
     });
   });
 
@@ -503,7 +503,7 @@ describe("matchBlockParserCase with patterns and guards", () => {
     expect(result.result).toMatchObject({
       type: "matchBlockCase",
       caseValue: "_",
-      body: { type: "functionCall", functionName: "g" },
+      body: [{ type: "functionCall", functionName: "g" }],
     });
     expect((result.result as any).guard).toBeUndefined();
   });
@@ -515,7 +515,7 @@ describe("matchBlockParserCase with patterns and guards", () => {
     expect(result.result).toMatchObject({
       type: "matchBlockCase",
       caseValue: { type: "string", segments: [{ type: "text", value: "a" }] },
-      body: { type: "number", value: "1" },
+      body: [{ type: "number", value: "1" }],
     });
   });
 });

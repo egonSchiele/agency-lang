@@ -18,10 +18,14 @@ node categorize(userMsg: string) {
   """
   category: Category = llm("${categorizePrompt}")
 
-  match(category) {
-    "scrape-recipe" => return scrapeRecipe()
-    "create-ingredients" => return createIngredients()
-    "create-meals" => return createMeals()
+  if (category == "scrape-recipe") {
+    return scrapeRecipe()
+  }
+  if (category == "create-ingredients") {
+    return createIngredients()
+  }
+  if (category == "create-meals") {
+    return createMeals()
   }
 }
 

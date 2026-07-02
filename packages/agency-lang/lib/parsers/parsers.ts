@@ -136,7 +136,7 @@ import {
   NamespaceImport,
 } from "../types/importStatement.js";
 import { ExportFromStatement } from "../types/exportFromStatement.js";
-import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
+import { DefaultCase, MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
@@ -2674,7 +2674,7 @@ export const returnStatementParser: Parser<ReturnStatement> = label("a return st
     captureCaptures(
       seqC(
         optionalSpaces,
-        capture(exprParser, "value"),
+        capture(or(lazy(() => matchBlockExprParser), exprParser), "value"),
       ),
     ),
   ),
@@ -3000,6 +3000,21 @@ const caseLhsParser: Parser<unknown> = (input: string) => {
   return exprParser(input);
 };
 
+// `{ ... }` after `=>` is always a block, never an object literal (JS-arrow
+// rule) — this must be tried before `exprParser`'s object-literal path so
+// `=> { label: "hi" }` is parsed as a (failing) statement block rather than
+// an object literal expression.
+const matchArmBlockParser: Parser<AgencyNode[]> = map(
+  seqC(
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(lazy(() => bodyParser), "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+  ),
+  (result: { body: AgencyNode[] }) => result.body,
+);
+
 export const matchBlockParserCase: Parser<MatchBlockCase> = (
   input: string,
 ): ParserResult<MatchBlockCase> => {
@@ -3026,7 +3041,27 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     optionalSpaces,
     str("=>"),
     optionalSpaces,
-    capture(or(returnStatementParser, lazy(() => assignmentParser), exprParser), "body"),
+    capture(
+      or(
+        matchArmBlockParser,
+        // `not(char("{"))` prevents falling through to `exprParser`'s
+        // object-literal path when `matchArmBlockParser` fails to parse the
+        // brace's contents as statements — otherwise `=> { label: "hi" }`
+        // would silently reinterpret the block as an object literal instead
+        // of surfacing the statement-parse failure.
+        map(
+          seqC(
+            not(char("{")),
+            capture(
+              or(returnStatementParser, lazy(() => assignmentParser), exprParser),
+              "n",
+            ),
+          ),
+          (r: { n: AgencyNode }) => [r.n],
+        ),
+      ),
+      "body",
+    ),
     optionalSemicolon,
     optionalSpacesOrNewline,
   );
@@ -3035,7 +3070,8 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
-export const matchBlockParser = label("a match block", withLoc(seqC(
+// Core form, no trailing statement whitespace — used at expression sites.
+export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   set("type", "matchBlock"),
   str("match"),
   optionalSpaces,
@@ -3053,8 +3089,19 @@ export const matchBlockParser = label("a match block", withLoc(seqC(
       char("}"),
     ),
   ),
-  optionalSemicolon,
-  optionalSpacesOrNewline,
+)));
+
+// Statement form. The outer `withLoc` overwrites the inner loc so that the
+// span covers the trailing semicolon/whitespace consumption, exactly as the
+// original single-withLoc parser did (source maps record statement locs, so
+// the statement form's span must stay byte-identical to the old behavior).
+export const matchBlockParser: Parser<MatchBlock> = label("a match block", withLoc(map(
+  seqC(
+    capture(matchBlockExprParser, "block"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
+  ),
+  (r: { block: MatchBlock }) => r.block,
 )));
 
 // =============================================================================
@@ -3350,7 +3397,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(or(lazy(() => messageThreadParser), exprParser), "value"),
+      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), exprParser), "value"),
       optionalSemicolon,
       optionalSpacesOrNewline,
     ),

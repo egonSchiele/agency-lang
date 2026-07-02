@@ -742,31 +742,31 @@ def askUser(intr: any): AskUserResult {
   const answer = withLock("std::tty") as {
     return chooseOption(title, body, items, allowFreeText: true, allowCancel: true)
   }
-  match(answer) {
-    "a" => return {
+  return match(answer) {
+    "a" => ({
       action: "approve",
       reason: null
-    }
-    "r" => return {
+    })
+    "r" => ({
       action: "reject",
       reason: null
-    }
-    "aa" => return {
+    })
+    "aa" => ({
       action: "approve-always",
       reason: null
-    }
-    "ap" => return {
+    })
+    "ap" => ({
       action: "approve-always-here",
       reason: null
-    }
-    "rr" => return {
+    })
+    "rr" => ({
       action: "reject-always",
       reason: null
-    }
-    _ => return {
+    })
+    _ => ({
       action: "reject",
       reason: answer
-    }
+    })
   }
 }
 

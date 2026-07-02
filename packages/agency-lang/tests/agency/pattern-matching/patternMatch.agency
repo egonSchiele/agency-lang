@@ -11,10 +11,9 @@ node main() {
 }
 
 def describe(e: any): string {
-  match (e) {
-    { type: "click", x, y } => return "click"
-    { type: "scroll", delta } => return "scroll"
-    _ => return "other"
+  return match (e) {
+    { type: "click", x, y } => "click"
+    { type: "scroll", delta } => "scroll"
+    _ => "other"
   }
-  return "fallthrough"
 }

@@ -37,6 +37,7 @@ export type TsNode =
   | TsRunnerHandle
   | TsRunnerHookStep
   | TsRunnerIfElse
+  | TsRunnerExitMatch
   | TsRunnerLoop
   | TsRunnerWhileLoop
   | TsRunnerBranchStep
@@ -361,12 +362,23 @@ export interface TsRunnerHookStep {
   body: TsNode[];
 }
 
-/** runner.ifElse(id, branches, elseBranch?) */
+/** runner.ifElse(id, branches, elseBranch?, opts?) */
 export interface TsRunnerIfElse {
   kind: "runnerIfElse";
   id: number;
   branches: { condition: TsNode; body: TsNode[] }[];
   elseBranch?: TsNode[];
+  /** When set, this ifElse is the lowered form of a match expression and
+   *  emits a `{ matchId }` opts arg so the runner consumes matching
+   *  `matchYield` unwinds here. Undefined for ordinary if/else. */
+  matchId?: number;
+}
+
+/** runner.exitMatch(matchId, value); return; */
+export interface TsRunnerExitMatch {
+  kind: "runnerExitMatch";
+  matchId: number;
+  value: TsNode;
 }
 
 /** runner.loop(id, items, async (item, index, runner) => { body }) */

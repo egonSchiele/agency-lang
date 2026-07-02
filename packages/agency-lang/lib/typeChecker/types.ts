@@ -84,6 +84,24 @@ export type TypeCheckerContext = {
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;
+  /** The value type of each expression-position `match`, keyed by its match id.
+   *  Populated by `computeMatchExprTypes` (runs after buildFlowGraphs, before
+   *  checkScopes): the widened union of the match's `matchYield` value types, or
+   *  "any" if any yield is "any". Consumed by the `__matchval_<id>` synth hook
+   *  and the `matchExprSource` assignment check. */
+  matchExprTypes: Record<number, VariableType | "any">;
+  /** The UNWIDENED value type + source loc of every `matchYield` of each
+   *  expression-position `match`, keyed by match id. Populated alongside
+   *  `matchExprTypes` by `computeMatchExprTypes`. In a CHECKED position (the
+   *  consumer has an annotation / declared return type), each yield is checked
+   *  against the expected type individually against ITS unwidened type — a
+   *  literal-union annotation (`type C = "a" | "b"`) accepts `"a" => "a"`, and
+   *  the error anchors on the offending arm's value. The widened union in
+   *  `matchExprTypes` is used only for synthesis (unannotated) positions. */
+  matchExprYieldTypes: Record<
+    number,
+    { type: VariableType | "any"; loc: SourceLocation | undefined }[]
+  >;
   config: AgencyConfig;
   /** Optional symbol table threaded through from `buildCompilationUnit`.
    *  Used by the interrupt call-graph analysis to resolve cross-file

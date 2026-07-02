@@ -20,6 +20,7 @@ import { Scope } from "./scope.js";
 import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
+import { checkMatchExprYields } from "./matchExprTypes.js";
 import { NUMBER_T } from "./primitives.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { expressionChildren } from "../utils/node.js";
@@ -190,6 +191,26 @@ export function checkAssignmentValue(
   ctx: TypeCheckerContext,
 ): void {
   if (node.type !== "assignment") {
+    return;
+  }
+  // Expression-position match consumer (`const x = match(E) { ... }`): the value
+  // is a `__matchval_<id>` ref, whose type is the match's computed union (not a
+  // plain synth of the temp). Check the annotation against that union directly
+  // and skip the generic checkType path (which would re-synth the temp).
+  if (node.matchExprSource) {
+    if (node.typeHint) {
+      // Checked position: check each arm's yield against the annotation using
+      // its UNWIDENED type, so a literal-union annotation accepts a literal
+      // yield (`const c: Category = match(x) { "go" => "a"; ... }`) and errors
+      // point at the offending arm's value. See `checkMatchExprYields`.
+      checkMatchExprYields(
+        node.matchExprSource.matchId,
+        node.typeHint,
+        `assignment to '${node.variableName}'`,
+        ctx,
+        node.loc,
+      );
+    }
     return;
   }
   const newType = node.typeHint;
@@ -426,7 +447,7 @@ export function walkScopeBody(
         for (const caseItem of node.cases) {
           if (caseItem.type === "comment") continue;
           if (caseItem.type === "newLine") continue;
-          walkScopeBody([caseItem.body], scope, ctx);
+          walkScopeBody(caseItem.body, scope, ctx);
         }
         break;
       case "handleBlock":

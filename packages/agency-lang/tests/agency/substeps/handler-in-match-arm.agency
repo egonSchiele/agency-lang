@@ -1,0 +1,75 @@
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+// Scenario 1: normal path — a `handle` registered as an arm statement, and
+// the handled interrupt raised later in the same arm, fires the handler.
+node normalPath() {
+  let log: string[] = []
+  match("go") {
+    "go" => {
+      handle {
+        log.push("before")
+        interrupt("check")
+        log.push("after-interrupt")
+      } with (data) {
+        log.push("handler-fired")
+        return approve()
+      }
+    }
+    _ => {}
+  }
+  return log
+}
+
+// Scenario 2: resume path — an interrupt that the handler propagates (so it
+// must be approved externally, pausing/resuming the whole node) sits between
+// the `handle` registration and the later handled interrupt. The handler
+// must still fire on the second interrupt after resume, proving the handler
+// stays registered across the pause.
+node resumePath() {
+  let log: string[] = []
+  match("go") {
+    "go" => {
+      handle {
+        log.push("before")
+        interrupt("unrelated")
+        log.push("resumed")
+        interrupt("check")
+        log.push("after-interrupt")
+      } with (data) {
+        if (data.message == "check") {
+          log.push("handler-fired")
+          return approve()
+        }
+        return propagate()
+      }
+    }
+    _ => {}
+  }
+  return log
+}
+
+// Scenario 3 (negative): a `handle` placed textually after a mid-arm
+// `return` (inside an `if` that yields the match) must NOT fire when that
+// yield path is taken — the arm unwound (yielding the match's value) before
+// the handle statement was ever reached, mirroring function-return
+// semantics.
+node skippedOnEarlyReturn(early: boolean) {
+  let log: string[] = []
+  const tag = match("go") {
+    "go" => {
+      if (early) {
+        return "early"
+      }
+      handle {
+        interrupt("check")
+        log.push("handler-body")
+      } with (data) {
+        log.push("handler-fired")
+        return approve()
+      }
+      return "late"
+    }
+    _ => "other"
+  }
+  return [tag, log]
+}

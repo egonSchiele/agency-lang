@@ -1,0 +1,15 @@
+node main(x: string) {
+  let out = ""
+  match(x) {
+    "a" => {
+      print("first")
+      out = "was a"
+    }
+    "b" => out = "was b"
+    _ => {
+      print("default")
+      out = "other"
+    }
+  }
+  return out
+}

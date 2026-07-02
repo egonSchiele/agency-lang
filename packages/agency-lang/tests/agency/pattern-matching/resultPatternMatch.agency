@@ -7,11 +7,10 @@ def tryParse(input: string): Result {
 
 def describe(input: string): string {
   let r = tryParse(input)
-  match(r) {
-    success(v) => return "got ${v}"
-    failure(e) => return "err: ${e}"
+  return match(r) {
+    success(v) => "got ${v}"
+    failure(e) => "err: ${e}"
   }
-  return "unreachable"
 }
 
 node main() {

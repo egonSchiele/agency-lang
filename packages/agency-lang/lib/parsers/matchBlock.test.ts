@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   matchBlockParser,
+  matchBlockExprParser,
   matchBlockParserCase,
   defaultCaseParser,
+  assignmentParser,
+  returnStatementParser,
+  bodyParser,
 } from "./parsers.js";
 
 describe("defaultCaseParser", () => {
@@ -51,7 +55,7 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "number", value: "1" },
-          body: { type: "number", value: "2" },
+          body: [{ type: "number", value: "2" }],
         },
       },
     },
@@ -62,7 +66,7 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: { type: "variableName", value: "y" },
+          body: [{ type: "variableName", value: "y" }],
         },
       },
     },
@@ -73,7 +77,7 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "string", segments: [{ type: "text", value: "hello" }] },
-          body: { type: "string", segments: [{ type: "text", value: "world" }] },
+          body: [{ type: "string", segments: [{ type: "text", value: "world" }] }],
         },
       },
     },
@@ -84,7 +88,7 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: "_",
-          body: { type: "number", value: "42" },
+          body: [{ type: "number", value: "42" }],
         },
       },
     },
@@ -95,7 +99,7 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: { type: "variableName", value: "y" },
+          body: [{ type: "variableName", value: "y" }],
         },
       },
     },
@@ -106,11 +110,11 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: {
+          body: [{
             type: "assignment",
             variableName: "result",
             value: { type: "number", value: "5" },
-          },
+          }],
         },
       },
     },
@@ -121,11 +125,11 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: {
+          body: [{
             type: "functionCall",
             functionName: "print",
             arguments: [{ type: "variableName", value: "y" }],
-          },
+          }],
         },
       },
     },
@@ -177,7 +181,7 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
           ],
         },
@@ -198,12 +202,12 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
-              body: { type: "number", value: "2" },
+              body: [{ type: "number", value: "2" }],
             },
           ],
         },
@@ -224,12 +228,12 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
             {
               type: "matchBlockCase",
               caseValue: "_",
-              body: { type: "number", value: "2" },
+              body: [{ type: "number", value: "2" }],
             },
           ],
         },
@@ -249,17 +253,17 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
-              body: { type: "number", value: "2" },
+              body: [{ type: "number", value: "2" }],
             },
             {
               type: "matchBlockCase",
               caseValue: "_",
-              body: { type: "number", value: "3" },
+              body: [{ type: "number", value: "3" }],
             },
           ],
         },
@@ -280,12 +284,12 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "active" }] },
-              body: { type: "string", segments: [{ type: "text", value: "running" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "running" }] }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "inactive" }] },
-              body: { type: "string", segments: [{ type: "text", value: "stopped" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "stopped" }] }],
             },
           ],
         },
@@ -307,17 +311,17 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "200" },
-              body: { type: "string", segments: [{ type: "text", value: "OK" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "OK" }] }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "404" },
-              body: { type: "string", segments: [{ type: "text", value: "Not Found" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "Not Found" }] }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "500" },
-              body: { type: "string", segments: [{ type: "text", value: "Error" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "Error" }] }],
             },
           ],
         },
@@ -338,20 +342,20 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "1" },
-              body: {
+              body: [{
                 type: "assignment",
                 variableName: "result",
                 value: { type: "number", value: "10" },
-              },
+              }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "2" },
-              body: {
+              body: [{
                 type: "assignment",
                 variableName: "result",
                 value: { type: "number", value: "20" },
-              },
+              }],
             },
           ],
         },
@@ -372,20 +376,20 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "start" }] },
-              body: {
+              body: [{
                 type: "functionCall",
                 functionName: "print",
                 arguments: [{ type: "string", segments: [{ type: "text", value: "Starting" }] }],
-              },
+              }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "stop" }] },
-              body: {
+              body: [{
                 type: "functionCall",
                 functionName: "print",
                 arguments: [{ type: "string", segments: [{ type: "text", value: "Stopping" }] }],
-              },
+              }],
             },
           ],
         },
@@ -403,7 +407,7 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
           ],
         },
@@ -423,7 +427,7 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "42" },
-              body: { type: "string", segments: [{ type: "text", value: "found" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "found" }] }],
             },
           ],
         },
@@ -443,7 +447,7 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "test" }] },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
           ],
         },
@@ -481,12 +485,12 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "active" }] },
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
             {
               type: "matchBlockCase",
               caseValue: "_",
-              body: { type: "number", value: "0" },
+              body: [{ type: "number", value: "0" }],
             },
           ],
         },
@@ -510,7 +514,7 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "1" },
-              body: { type: "string", segments: [{ type: "text", value: "first" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "first" }] }],
             },
           ],
         },
@@ -531,12 +535,12 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "1" },
-              body: { type: "string", segments: [{ type: "text", value: "first" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "first" }] }],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "1" },
-              body: { type: "string", segments: [{ type: "text", value: "second" }] },
+              body: [{ type: "string", segments: [{ type: "text", value: "second" }] }],
             },
           ],
         },
@@ -557,12 +561,12 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: "_",
-              body: { type: "number", value: "1" },
+              body: [{ type: "number", value: "1" }],
             },
             {
               type: "matchBlockCase",
               caseValue: "_",
-              body: { type: "number", value: "2" },
+              body: [{ type: "number", value: "2" }],
             },
           ],
         },
@@ -619,6 +623,247 @@ describe("matchBlockParser", () => {
         const result = matchBlockParser(input);
         expect(result.success).toBe(false);
       });
+    }
+  });
+});
+
+describe("block arm bodies", () => {
+  it("parses a multi-statement block arm with correct contents", () => {
+    const result = matchBlockParser(`match(x) {
+  "a" => {
+    print("hi")
+    let y = 1
+  }
+  _ => 0
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].body.length).toBe(2);
+      // exact type strings verified in Step 2; also assert CONTENT so a
+      // dropped/mangled statement cannot pass on length alone:
+      expect(cases[0].body[0].type).toBe("functionCall");
+      expect(JSON.stringify(cases[0].body[0])).toContain("hi");
+      expect(cases[0].body[1].type).toBe("assignment");
+      expect(cases[0].body[1].variableName).toBe("y");
+      expect(cases[1].body.length).toBe(1);
+    }
+  });
+
+  it("parses single-expression arm as one-element body", () => {
+    const result = matchBlockParser(`match(x) { "a" => 1; _ => 2 }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].body).toEqual([expect.objectContaining({ type: "number", value: "1" })]);
+    }
+  });
+
+  it("parses a block arm ending in a return statement", () => {
+    const result = matchBlockParser(`match(x) {
+  "a" => {
+    print("hi")
+    return 1
+  }
+  _ => 0
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].body[cases[0].body.length - 1].type).toBe("returnStatement");
+    }
+  });
+
+  it("parses mixed single-expression and block arms", () => {
+    const result = matchBlockParser(`match(x) {
+  "a" => {
+    print("a")
+  }
+  "b" => 2
+  _ => {
+    print("d")
+  }
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases.map((c: any) => c.body.length)).toEqual([1, 1, 1]);
+    }
+  });
+
+  it("parses semicolon-separated statements inside a block arm", () => {
+    const result = matchBlockParser(`match(x) { "a" => { print("p"); let y = 1 } _ => 0 }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].body.length).toBe(2);
+    }
+  });
+
+  it("parses an empty block arm as body: []", () => {
+    const result = matchBlockParser(`match(x) { "a" => { } _ => 0 }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].body).toEqual([]);
+    }
+  });
+
+  it("treats brace after arrow as a block: object-literal-looking content fails as statements", () => {
+    // `label: "hi"` isn't valid as a statement (or sequence of statements),
+    // so the block fails to parse. As with other malformed-arm cases (see
+    // "missing closing brace" above), the surrounding `parseError` in
+    // `matchBlockParser` promotes that into a hard (throwing) failure rather
+    // than a recoverable `success: false` — it is not reinterpreted as an
+    // object-literal expression.
+    expect(() =>
+      matchBlockParser(`match(x) {
+  "a" => { label: "hi" }
+  _ => 0
+}`),
+    ).toThrow();
+  });
+
+  it("positive twin: block form with an object literal return parses", () => {
+    const result = matchBlockParser(`match(x) {
+  "a" => { return { label: "hi" } }
+  _ => 0
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("parses a block arm with a guard, capturing both", () => {
+    const result = matchBlockParser(`match(x) {
+  y if (y > 2) => {
+    print(y)
+  }
+  _ => 0
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(cases[0].guard).toBeDefined();
+      expect(cases[0].body.length).toBe(1);
+    }
+  });
+
+  it("parses a parenthesized object literal single-expression arm", () => {
+    const result = matchBlockParser(`match(x) { _ => ({ label: "hi" }) }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const cases = result.result.cases.filter((c: any) => c.type === "matchBlockCase") as any[];
+      expect(JSON.stringify(cases[0].body[0])).toContain("label");
+    }
+  });
+});
+
+describe("match as expression (assignment RHS and return only)", () => {
+  it("parses match as assignment RHS", () => {
+    const result = assignmentParser(`const val = match(r) {
+  "a" => 1
+  _ => 2
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.declKind).toBe("const");
+      expect((result.result.value as any).type).toBe("matchBlock");
+    }
+  });
+
+  it("parses return match(...)", () => {
+    const result = returnStatementParser(`return match(r) {
+  "a" => 1
+  _ => 2
+}`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.result.value as any).type).toBe("matchBlock");
+    }
+  });
+
+  it("still parses a call to a function named match", () => {
+    const result = assignmentParser(`const y = match(r)`);
+    expect(result.success).toBe(true);
+    if (result.success) expect((result.result.value as any).type).not.toBe("matchBlock");
+  });
+
+  it("backtracks past the closing paren: match(r) + 1 is a binop over a call", () => {
+    const result = assignmentParser(`const y = match(r) + 1`);
+    expect(result.success).toBe(true);
+    if (result.success) expect((result.result.value as any).type).toBe("binOpExpression");
+  });
+
+  // These combinator parsers match a prefix of the input and never require
+  // full consumption (see e.g. access.test.ts:170, blockArgument.test.ts:135),
+  // so `assignmentParser` on a string with a disallowed match position still
+  // reports `success: true` — it just stops short of consuming the match
+  // block, since `matchBlockExprParser` isn't wired into call arguments or
+  // binop operands. The v1 restriction shows up as leftover, unconsumed
+  // input (the `{ ... }` case body) rather than an outright parse failure.
+  it("match block as a function argument does not parse (v1 restriction)", () => {
+    const result = assignmentParser(`const y = f(match(r) { "a" => 1; _ => 2 })`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.result.value as any).type).not.toBe("matchBlock");
+      expect(result.rest).toContain('{ "a" => 1; _ => 2 }');
+    }
+  });
+
+  it("match block as a binop operand does not parse (v1 restriction)", () => {
+    const result = assignmentParser(`const y = 1 + match(r) { "a" => 1; _ => 2 }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.result.value as any).type).not.toBe("matchBlock");
+      expect(result.rest).toContain('{ "a" => 1; _ => 2 }');
+    }
+  });
+
+  it("no trailing over-consumption: next statement still parses", () => {
+    const result = bodyParser(`const a = match(x) {
+  "a" => 1
+  _ => 2
+}
+const b = 2
+`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const assigns = result.result.filter((n: any) => n.type === "assignment");
+      expect(assigns.length).toBe(2);
+    }
+  });
+});
+
+describe("match parser loc spans (statement vs expression form)", () => {
+  // When a parser is invoked standalone, tarsec's span offsets are relative
+  // to the END of the input: `loc.start === -input.length` at position 0 and
+  // `loc.end === -rest.length`, so `loc.end - loc.start` is the number of
+  // characters the parser consumed for the node.
+  const input = `match(x) { "a" => 1\n_ => 2 }\n\n`;
+
+  it("statement form: loc.end covers trailing semicolon/whitespace consumption (pre-refactor behavior)", () => {
+    const result = matchBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Consumes the whole input, including the two trailing newlines.
+      expect(result.rest).toBe("");
+      const loc = result.result.loc!;
+      expect(loc.end).toBe(0);
+      expect(loc.end - loc.start).toBe(input.length);
+    }
+  });
+
+  it("expression form: loc.end stops at the closing brace", () => {
+    const result = matchBlockExprParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Leaves the trailing newlines unconsumed; span ends at `}`.
+      expect(result.rest).toBe("\n\n");
+      expect(result.result.loc.end).toBe(-result.rest.length); // === -2
+      expect(result.result.loc.end - result.result.loc.start).toBe(input.length - 2);
     }
   });
 });

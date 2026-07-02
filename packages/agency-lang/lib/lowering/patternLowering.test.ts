@@ -327,20 +327,24 @@ describe("match block lowering", () => {
             left: { type: "variableName", value: "s" },
             right: { type: "number", value: "5" },
           } as never,
-          body: {
-            type: "functionCall",
-            functionName: "print",
-            arguments: [{ type: "variableName", value: "b" }],
-          } as never,
+          body: [
+            {
+              type: "functionCall",
+              functionName: "print",
+              arguments: [{ type: "variableName", value: "b" }],
+            },
+          ] as never,
         },
         {
           type: "matchBlockCase",
           caseValue: "_",
-          body: {
-            type: "functionCall",
-            functionName: "print",
-            arguments: [{ type: "number", value: "0" }],
-          } as never,
+          body: [
+            {
+              type: "functionCall",
+              functionName: "print",
+              arguments: [{ type: "number", value: "0" }],
+            },
+          ] as never,
         },
       ],
     } as MatchBlock;

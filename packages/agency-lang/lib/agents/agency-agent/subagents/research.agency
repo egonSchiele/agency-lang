@@ -39,7 +39,6 @@ static const docSkill = skillsDir("../docs/guide", "flat") with approve
 // advanced types). Each becomes its own tool so the LLM can pick
 // the right corpus instead of grepping a giant blob of docs.
 static const cliSkill = skillsDir("../docs/cli", "flat") with approve
-static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
 
 export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language
@@ -64,10 +63,10 @@ When you need information:
 - For **Agency language** questions, call the bundled docs tools
   first — they're authoritative:
     * `docSkill`      — language guide (syntax, control flow,
-                        types, error handling, etc.)
+                        types, error handling, etc.),
+                        built-ins, callbacks, advanced types
     * `cliSkill`      — CLI reference (`agency run`, `agency test`,
                         `agency compile`, ...)
-    * `appendixSkill` — built-ins, callbacks, advanced types
   Pick whichever matches the question rather than guessing.
 
 - For **general knowledge**, prefer the lighter tools first:
@@ -127,7 +126,6 @@ underlining, and properly highlighted code fences.
 export static const researchTools: any[] = [
   docSkill,
   cliSkill,
-  appendixSkill,
   wikipediaSearch.rename("wikipedia_search"),
   wikipediaSummary.rename("wikipedia_summary"),
   wikipediaArticle.rename("wikipedia_article"),

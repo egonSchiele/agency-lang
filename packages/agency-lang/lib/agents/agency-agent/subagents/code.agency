@@ -15,9 +15,9 @@ import { handoff } from "std::agent"
 import { todoWrite, todoList } from "std::agent"
 import { filter } from "std::array"
 import { edit } from "std::fs"
-import { exec, ls, glob, grep, bash } from "std::shell"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
+import { exec, ls, glob, grep, bash } from "std::shell"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
@@ -43,7 +43,6 @@ import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
 static const docSkill = skillsDir("../docs/guide", "flat") with approve
 static const cliSkill = skillsDir("../docs/cli", "flat") with approve
-static const appendixSkill = skillsDir("../docs/appendix", "flat") with approve
 
 export def agencyCli(args: string[]): any {
   """
@@ -75,10 +74,10 @@ do one of the following:
 - If the research involves Agency features of syntax:
    - call the bundled docs tools first — they're authoritative:
      * `docSkill`      — language guide (syntax, control flow,
-                         types, error handling, etc.)
+                         types, error handling, etc.),
+                         built-ins, callbacks, advanced types
      * `cliSkill`      — CLI reference (`agency run`, `agency test`,
                          `agency compile`, ...)
-     * `appendixSkill` — built-ins, callbacks, advanced types
    Pick whichever matches the question rather than guessing.
 
 - If the research involves something else (a research question,
@@ -326,7 +325,6 @@ export static const codeTools: any[] = [
   superpowersSkill,
   docSkill,
   cliSkill,
-  appendixSkill,
   todoWrite,
   todoList,
   oracleAgent.partial(allowHandoff: false),
@@ -373,10 +371,13 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
         systemMessage(codeSysPrompt)
         _first = false
       }
-      reply = llm(userMsg, withWebSearch({
+      reply = llm(
+        userMsg,
+        withWebSearch({
         memory: true,
         tools: tools
-      }))
+      }),
+      )
 
       const feedback = review(reply)
       if (feedbackHasErrors(feedback)) {

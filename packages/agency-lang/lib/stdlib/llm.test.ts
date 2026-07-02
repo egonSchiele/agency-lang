@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { _setLlmOptions, _listHostedModels, _hostedModelInfo } from "./llm.js";
+import { _setLlmOptions, _listHostedModels, _hostedModelInfo, _modelSupportsInput } from "./llm.js";
 import { agencyStore } from "../runtime/asyncContext.js";
 
 // Deterministic smoltalk catalog so the shim's mapping/filtering is tested
@@ -19,6 +19,18 @@ vi.mock("smoltalk", () => ({
   getModel: (name: string) => FIXTURE_MODELS.find((model) => model.modelName === name),
   refreshModels: vi.fn(),
   registerModelData: vi.fn(),
+  // Fixture modality data. Deliberately answers for ANY modality string so
+  // the bridge's image/pdf safelist is what the safelist test exercises —
+  // if the safelist were removed, "audio" would return true, not null.
+  modelSupportsInputModality: (name: string, _modality: string) => {
+    if (name === "fixture-vision") {
+      return true;
+    }
+    if (name === "fixture-text") {
+      return false;
+    }
+    return undefined;
+  },
 }));
 
 // _setLlmOptions writes the ACTIVE stack's `other.llmDefaults`. A bare
@@ -96,5 +108,34 @@ describe("hosted catalog accessor (over a fixture)", () => {
     // Non-text name → null (the `&& model.type === "text"` guard). Drop the
     // guard and this returns a malformed HostedModelInfo instead of null:
     expect(_hostedModelInfo("fixture-embed")).toBeNull();
+  });
+});
+
+describe("_modelSupportsInput", () => {
+  // Real-catalog values (gpt-4o image/pdf true, gpt-3.5-turbo image/pdf
+  // false) are pinned by the agent modalityFilter execution tests, which go
+  // through the unmocked catalog; here the smoltalk mock isolates the
+  // bridge's safelist + null-coercion semantics.
+  it("passes through true for a vision model", () => {
+    expect(_modelSupportsInput("fixture-vision", "image")).toBe(true);
+  });
+
+  it("passes through false for a text-only model", () => {
+    expect(_modelSupportsInput("fixture-text", "image")).toBe(false);
+  });
+
+  it("passes the pdf modality through", () => {
+    expect(_modelSupportsInput("fixture-vision", "pdf")).toBe(true);
+    expect(_modelSupportsInput("fixture-text", "pdf")).toBe(false);
+  });
+
+  it("returns null for an unknown model", () => {
+    expect(_modelSupportsInput("no-such-model-xyz", "image")).toBe(null);
+  });
+
+  it("returns null for a modality outside the image/pdf safelist", () => {
+    // The mock would answer true for fixture-vision with ANY modality, so
+    // this only passes if the bridge's safelist short-circuits first.
+    expect(_modelSupportsInput("fixture-vision", "audio")).toBe(null);
   });
 });

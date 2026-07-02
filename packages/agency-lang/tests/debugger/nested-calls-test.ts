@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, parseJSON, input, sleep, round, read, write, readBinary, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
+import { print, printJSON, parseJSON, input, sleep, round, read, write, writeBinary, readBinary, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -164,6 +164,7 @@ __registerTool(sleep);
 __registerTool(round);
 __registerTool(read);
 __registerTool(write);
+__registerTool(writeBinary);
 __registerTool(readBinary);
 __registerTool(notify);
 __registerTool(range);
@@ -603,7 +604,8 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
     const __result = await main(initialState);
     reportUnhandledInterrupts(__result)
   } catch (__error: any) {
-    console.error(`\nAgent crashed: ${__error.message}`)
+    console.error(`
+Agent crashed: ${__error.message}`)
     throw __error
   }
 }

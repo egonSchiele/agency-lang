@@ -1,0 +1,51 @@
+import { generateImageFile, resolveEditInputs } from "../agent.agency"
+import { setAgentCwd } from "std::index"
+import { cwd } from "std::system"
+import { getCost } from "std::thread"
+
+node savesToAgentCwd(): string {
+  setAgentCwd("/tmp")
+  const msg = generateImageFile("a red bicycle", "it-gencwd.png") with approve
+  const inAgentCwd = readBinary("it-gencwd.png", "/tmp") with approve
+  const inProcessCwd = readBinary("it-gencwd.png", cwd()) with approve
+  return "${msg}|${isSuccess(inAgentCwd)}|${isFailure(inProcessCwd)}"
+}
+
+node savesToAbsolutePath(): string {
+  const msg = generateImageFile("a red bicycle", "/tmp/it-abs.png") with approve
+  const back = readBinary("it-abs.png", "/tmp") with approve
+  return "${msg}|${isSuccess(back)}"
+}
+
+node reportsWriteFailure(): boolean {
+  const msg = generateImageFile("x", "/nonexistent-dir-e51b/x.png") with approve
+  return msg.startsWith("Generated the image, but saving to /nonexistent-dir-e51b/x.png failed")
+}
+
+node editInputsResolveAgainstAgentCwd(): string {
+  setAgentCwd("/tmp")
+  const resolved = resolveEditInputs(["a.png", "/abs/b.png"])
+  return "${resolved[0]}|${resolved[1]}"
+}
+
+node editInputsPassUrlsThrough(): string {
+  // generateImage accepts URLs and data URIs; agent-cwd resolution must
+  // not mangle them into local paths.
+  setAgentCwd("/tmp")
+  const resolved = resolveEditInputs(["https://example.com/cat.png", "data:image/png;base64,AAAA", "http://example.com/dog.png"])
+  return "${resolved[0]}|${resolved[1]}|${resolved[2]}"
+}
+
+node editInputsPassThrough(): string {
+  setAgentCwd("/tmp")
+  generateImageFile("seed", "it-seed.png") with approve
+  return generateImageFile("restyle it", "it-edit.png", images: ["it-seed.png"]) with approve
+}
+
+node costRecordedForGeneration(): string {
+  setAgentCwd("/tmp")
+  const before = getCost()
+  generateImageFile("a red bicycle", "it-cost.png") with approve
+  const after = getCost()
+  return "${(after - before).toFixed(2)}"
+}

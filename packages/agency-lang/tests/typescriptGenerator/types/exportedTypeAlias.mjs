@@ -292,7 +292,8 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
     const __result = await main(initialState);
     reportUnhandledInterrupts(__result)
   } catch (__error: any) {
-    console.error(`\nAgent crashed: ${__error.message}`)
+    console.error(`
+Agent crashed: ${__error.message}`)
     throw __error
   }
 }

@@ -4,6 +4,7 @@ import {
   _listHostedModels,
   _hostedModelInfo,
   _loadModelData,
+  _modelSupportsInput,
 } from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
 
@@ -148,6 +149,19 @@ export def hostedModelInfo(name: string): HostedModelInfo | null {
   @param name - The hosted model name (e.g. "gpt-4o-mini")
   """
   return _hostedModelInfo(name)
+}
+
+export safe def modelSupportsInput(model: string, modality: string): boolean | null {
+  """
+  Whether a model accepts a given input modality ("image" or "pdf").
+  Tri-state: true / false when the model catalog says so, null when the
+  model or its modality data is unknown. Treat null as "do not gate" —
+  that is the same rule llm() applies at send time.
+
+  @param model - The model name (e.g. "gpt-4o-mini")
+  @param modality - "image" or "pdf"
+  """
+  return _modelSupportsInput(model, modality)
 }
 
 // Accumulation details (kept out of the docstring, which is also the LLM tool

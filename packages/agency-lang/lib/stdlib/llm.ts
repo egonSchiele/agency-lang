@@ -10,6 +10,7 @@ import {
   getRegisteredModelData,
   mergeModelData,
   mergeHostedTools,
+  modelSupportsInputModality,
 } from "smoltalk";
 
 /**
@@ -108,6 +109,17 @@ export function _listHostedModels(): HostedModelInfo[] {
 export function _hostedModelInfo(name: string): HostedModelInfo | null {
   const model = getModel(name as any);
   return model && model.type === "text" ? toHostedInfo(model) : null;
+}
+
+/** Tri-state modality probe backing `std::llm.modelSupportsInput`. Returns
+ *  null (not undefined — Agency has no undefined) when the model is unknown
+ *  or carries no modality data; that matches smoltalk's send-time gate,
+ *  which only blocks on an explicit false. */
+export function _modelSupportsInput(model: string, modality: string): boolean | null {
+  if (modality !== "image" && modality !== "pdf") {
+    return null;
+  }
+  return modelSupportsInputModality(model, modality) ?? null;
 }
 
 /** Fetch the latest model-data blob and return it pre-serialized. No

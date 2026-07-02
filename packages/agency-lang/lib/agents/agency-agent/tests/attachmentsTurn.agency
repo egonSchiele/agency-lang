@@ -1,0 +1,58 @@
+import { agentReply, agentReplyVia } from "../agent.agency"
+import { applyResolved } from "../shared.agency"
+import { getThread, listThreads } from "std::thread"
+
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+// The thread reader renders attachment parts as "[image attachment]"
+// (see _contentToString), so finding that placeholder in a user message
+// proves the multimodal array reached the llm() turn. listThreads with
+// lazySummarize: false enumerates real thread ids without triggering
+// the on-demand LLM summarization of closed threads (which would burn
+// mocks). currentThreadId() would NOT work here: after agentReply
+// returns, the active thread is the node root, not the main thread.
+def threadHasImagePlaceholder(): boolean {
+  const threads = listThreads(lazySummarize: false)
+  if (isFailure(threads)) {
+    return false
+  }
+  for (info in threads.value) {
+    const messages = getThread(info.id, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        if (message.role == "user" && message.content.includes("[image attachment]")) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+node attachesImageToTurn(): string {
+  writeBinary("at-x.png", PNG, "/tmp") with approve
+  const reply = agentReply("look at /tmp/at-x.png") with approve
+  return "${reply}|${threadHasImagePlaceholder()}"
+}
+
+node plainMessageStaysString(): string {
+  const reply = agentReply("hello there") with approve
+  return "${reply}|${threadHasImagePlaceholder()}"
+}
+
+node modalitySkipsTextOnlyModel(): string {
+  applyResolved({ main: { model: "gpt-3.5-turbo", provider: "openai", via: "test" } })
+  writeBinary("at-y.png", PNG, "/tmp") with approve
+  const reply = agentReply("look at /tmp/at-y.png") with approve
+  return "${reply}|${threadHasImagePlaceholder()}"
+}
+
+node subagentRouteIgnoresImagePath(): string {
+  // Pins spec decision 3: direct-to-subagent routes stay text-only. The
+  // code agent's reply shape is its own business (multi-llm choreography
+  // under sequential mocks) — this test only asserts the turn completed
+  // and no image part reached any thread.
+  writeBinary("at-z.png", PNG, "/tmp") with approve
+  const reply = agentReplyVia("code", "look at /tmp/at-z.png") with approve
+  return "${reply != null}|${threadHasImagePlaceholder()}"
+}

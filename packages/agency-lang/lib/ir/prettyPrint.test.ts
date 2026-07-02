@@ -274,14 +274,39 @@ describe("prettyPrint", () => {
     expect(printTs(node)).toBe("`price: \\${5}`");
   });
 
-  it("TsTemplateLit passes backslash escape sequences through unmodified", () => {
-    // Agency relies on JS template-literal escape interpretation at runtime,
-    // so `\n`, `\t`, etc. must reach the output verbatim (NOT be re-escaped
-    // to `\\n`, which would print a literal backslash + n).
+  it("TsTemplateLit escapes backslashes (part text is raw, not pre-escaped)", () => {
+    // Part text carries the RAW runtime characters (the Agency parser has
+    // already interpreted `\n` / `\\` etc. into real chars). A raw
+    // backslash must therefore be escaped, or it swallows whatever
+    // follows it in the emitted template (a lone `\` before the closing
+    // backtick produces an unterminated template literal).
     const node = ts.template([{ text: "line1\\nline2" }]);
-    // The JS string literal `"line1\\nline2"` is the 12 chars
-    // `l i n e 1 \ n l i n e 2`. The template printer should emit them as-is.
-    expect(printTs(node)).toBe("`line1\\nline2`");
+    // The JS string literal `"line1\\nline2"` is the 12 raw chars
+    // `l i n e 1 \ n l i n e 2` — a literal backslash then the letter n.
+    // The printer must emit `line1\\nline2` so runtime evaluation yields
+    // the original backslash + n, not a newline.
+    expect(printTs(node)).toBe("`line1\\\\nline2`");
+  });
+
+  it("TsTemplateLit round-trips a lone backslash", () => {
+    const node = ts.template([{ text: "a\\" }]);
+    expect(printTs(node)).toBe("`a\\\\`");
+    // eslint-disable-next-line no-eval
+    expect(eval(printTs(node))).toBe("a\\");
+  });
+
+  it("TsTemplateLit keeps real newlines/tabs untouched", () => {
+    // Parser-interpreted escapes arrive as real characters — they need no
+    // escaping inside a template literal.
+    const node = ts.template([{ text: "a\n\tb" }]);
+    expect(printTs(node)).toBe("`a\n\tb`");
+  });
+
+  it("TsTemplateLit escapes carriage returns (template source normalizes raw CR to LF)", () => {
+    const node = ts.template([{ text: "a\rb" }]);
+    expect(printTs(node)).toBe("`a\\rb`");
+    // eslint-disable-next-line no-eval
+    expect(eval(printTs(node))).toBe("a\rb");
   });
 
   it("TsComment line", () => {

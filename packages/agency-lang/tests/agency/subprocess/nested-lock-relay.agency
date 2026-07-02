@@ -10,10 +10,14 @@ import { bash } from "std::shell"
 // Coordination is a marker-file HANDSHAKE, not durations: branch 1 does not
 // spawn until the lock is actually held (heldMarker), and branch 0 does not
 // release until the grandchild's attempt has actually completed
-// (doneMarker). The previous version held for a fixed 2s, which raced the
-// two nested subprocess spawns + in-child compile on slow CI runners — the
-// hold expired before the attempt, the lock map was legitimately empty, and
-// the grandchild acquired instantly ("acquired-unexpectedly").
+// (doneMarker). A duration-based hold races the two nested subprocess
+// spawns + in-child compile on slow CI runners — the hold expires before
+// the attempt, the lock map is legitimately empty, and the grandchild
+// acquires instantly ("acquired-unexpectedly").
+//
+// Markers live in a per-run mktemp dir (removed at the end) so concurrent
+// runs of this test cannot interfere with each other; the doneMarker path
+// travels to the grandchild as a node arg.
 
 def waitForMarker(path: string): boolean {
   let i = 0
@@ -29,13 +33,11 @@ def waitForMarker(path: string): boolean {
 }
 
 node main() {
-  const heldMarker = "/tmp/agency-nested-lock-relay-held.txt"
-  const doneMarker = "/tmp/agency-nested-lock-relay-done.txt"
   const grandSource = """
 import { withLock } from "std::concurrency"
 import { bash } from "std::shell"
 
-node main() {
+node main(doneMarker: string) {
   const r = withLock("resource", 300) as {
     sleep(1ms)
   }
@@ -43,19 +45,19 @@ node main() {
   if (isFailure(r)) {
     outcome = "lock-timed-out"
   }
-  let done = bash("touch /tmp/agency-nested-lock-relay-done.txt")
+  let done = bash("touch " + doneMarker)
   return outcome
 }
 """
   const childSource = """
 import { compile, run } from "std::agency"
-node main(grandSource: string) {
+node main(grandSource: string, doneMarker: string) {
   const c = compile(grandSource)
   if (isFailure(c)) {
     return "inner compile failed"
   }
   handle {
-    const result = run(compiled: c.value, node: "main")
+    const result = run(compiled: c.value, node: "main", args: { doneMarker: doneMarker })
     if (isSuccess(result)) {
       return result.value.data
     }
@@ -73,7 +75,10 @@ node main(grandSource: string) {
   }
   const compiled = compileResult.value
   handle {
-    let cleanup = bash("rm -f " + heldMarker + " " + doneMarker)
+    const tmp = bash("printf %s $(mktemp -d)")
+    const tmpDir = tmp.stdout
+    const heldMarker = tmpDir + "/held.txt"
+    const doneMarker = tmpDir + "/done.txt"
     const results = fork([0, 1], shared: true) as branch {
       if (branch == 0) {
         withLock("resource") as {
@@ -93,14 +98,14 @@ node main(grandSource: string) {
       const result = run(
         compiled: compiled,
         node: "main",
-        args: { grandSource: grandSource },
+        args: { grandSource: grandSource, doneMarker: doneMarker },
       )
       if (isSuccess(result)) {
         return result.value.data
       }
       return "run failed"
     }
-    let cleanup2 = bash("rm -f " + heldMarker + " " + doneMarker)
+    let cleanup = bash("rm -rf " + tmpDir)
     return results
   } with (e) {
     return approve()

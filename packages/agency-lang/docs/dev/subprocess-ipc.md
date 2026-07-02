@@ -94,6 +94,7 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 { type: "interrupted", interrupts: SerializedInterrupt[], checkpoint, subprocessSessionId }
 { type: "error", error: string }
 { type: "lockAcquire" | "lockRelease", ... }
+{ type: "telemetry", costUsd }   // fire-and-forget, one per paid call
 ```
 
 **Parent → Subprocess:**
@@ -134,6 +135,22 @@ Token stats live in the child's per-execution `GlobalStore` (`__tokenStats`), wh
 
 Locks brokered through the parent are released at segment settle, and lock-acquisition steps are completed steps that replay skips — **locks do not survive a pause**, which is already the in-process checkpoint semantic (releasers are not serialized there either).
 
+**Cost guards** meter subprocess spend live: every paid call in a child
+fire-and-forgets `{ type: "telemetry", costUsd }` upward (emitted from
+`StateStack.chargeGuards`, the choke point every paid site funnels
+through). The parent bills the charge via `billCharge` on the run()
+call-site stack — so parent `getCost()` includes child spend — and a trip
+kills the child and surfaces the standard cost-limit Failure at the
+owning `guard(cost:)` boundary. Relay to the root is automatic in nested
+trees (the mid-tier handler's own `chargeGuards` re-emits upward).
+Detection latency is at most one paid call, matching in-process CostGuard
+semantics. Telemetry is cost-only; tokens arrive terminally via
+`result.tokens`. One `getCost()` edge: telemetry arriving after a kill
+(abort, wall-clock, stdout, memory — FIFO rules this out on normal
+completion) still charges budgets via the shared guard references, but
+can be invisible to `getCost()` if the owning fork branch already joined.
+Budgets never undercount; `getCost()` may, on abnormal termination only.
+
 ## The `std::run` interrupt gate
 
 `run()` throws a `std::run` interrupt before executing the subprocess. Running agent-generated code is a dangerous operation: the caller must either have a handler that approves `std::run`, or the interrupt propagates to the user for approval — which, with pause/resume, is a real question rather than an auto-reject.
@@ -167,7 +184,6 @@ A subprocess may itself call `run()`. Safety is the language's own idiom plus a 
 ## Remaining limitations
 
 - **Debugger/trace integration**: the debugger sees `run()` as an opaque step. No stepping into subprocess code.
-- **Cost-guard telemetry**: the parent learns child spend only at terminal messages; incremental cost telemetry is a follow-up.
 - **Callback forwarding**: parent-registered lifecycle callbacks are not triggered by subprocess events; follow-up.
 
 ## Tests
@@ -197,6 +213,11 @@ Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/ag
 | `nested-pause-resume` | grandchild interrupt surfaces through both hops; one respond resumes the tree |
 | `nested-reject-middle` | mid-tree reject is final |
 | `nested-lock-relay` | grandchild locks contend with the root's lock domain (marker-file handshake — no duration-based coordination) |
+| `cost-guard-trips-on-child-spend` | parent guard trips on child telemetry; child killed; standard Failure |
+| `cost-child-spend-in-getcost` | parent getCost() reflects child spend live |
+| `cost-nested-relay-trips-root` | grandchild spend relays through a guardless mid-tier to the root guard |
+| `cost-two-children-share-budget` | two concurrent children share ONE budget (the ship-guards-into-child counterexample) |
+| `cost-no-double-charge-across-pause` | pause/resume replay does not re-emit completed calls' telemetry |
 | `nested-gate-unapproved` | the gate exists on every hop |
 | `subprocess-no-handler` (js) | std::run gate surfaces without a handler |
 | `subprocess-pause-basic` (js) | end-to-end pause → respond → resume |

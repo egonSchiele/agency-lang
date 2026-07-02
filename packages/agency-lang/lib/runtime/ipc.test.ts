@@ -7,10 +7,13 @@ import {
   getSubprocessRunInfo,
   resolveDepthCap,
   attachSessionHandlers,
+  handleTelemetryMessage,
   withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
+import { StateStack } from "./state/stateStack.js";
+import { CostGuard, isGuardExceededError } from "./guard.js";
 
 describe("withParentStatelog", () => {
   it("forwards the parent logFile (absolutized) when the parent logs and the caller set none", () => {
@@ -260,5 +263,82 @@ describe("wall-clock timer is per execution segment", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("handleTelemetryMessage", () => {
+  const makeSession = (stack: StateStack) => {
+    const kills: string[] = [];
+    const rejections: any[] = [];
+    const session: any = {
+      sessionId: "s1",
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1, stdout: 1 },
+      ctx: { lockReleasers: {} },
+      stateStack: stack,
+      resolvePromise: () => {},
+      rejectPromise: (err: any) => { rejections.push(err); },
+      settled: false,
+      startedAt: Date.now(),
+      wallClockTimer: null,
+      stdoutBytes: 0,
+      stoppedForwarding: false,
+      detachAbortListener: null,
+    };
+    return { session, kills, rejections };
+  };
+
+  it("charges localCost and guards; no trip under budget", () => {
+    const stack = new StateStack();
+    const guard = new CostGuard(1.0);
+    stack.guards.push(guard);
+    const { session, kills, rejections } = makeSession(stack);
+
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.25 });
+
+    expect(stack.localCost).toBe(0.25);
+    expect(guard.check(stack)).toBeNull();
+    expect(kills).toEqual([]);
+    expect(rejections).toEqual([]);
+    expect(session.settled).toBe(false);
+  });
+
+  it("a trip kills the child and rejects the session with the guard-trip abort", () => {
+    const stack = new StateStack();
+    stack.guards.push(new CostGuard(0.1));
+    const { session, kills, rejections } = makeSession(stack);
+
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.2 });
+
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toHaveLength(1);
+    expect(session.settled).toBe(true);
+    // The rejection must be the guard-trip abort ITSELF (identity, not a
+    // wrapper or re-thrown copy) so the OWNING boundary's ownedGuardIds
+    // matching converts it (the stdlib run() plain try re-throws).
+    expect(isGuardExceededError(rejections[0])).toBe(true);
+    expect(String(rejections[0])).toMatch(/cost/i);
+  });
+
+  it("post-settle telemetry still charges (the spend was real) but does not enforce", () => {
+    const stack = new StateStack();
+    stack.guards.push(new CostGuard(0.1));
+    const { session, kills, rejections } = makeSession(stack);
+    session.settled = true;
+
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.2 });
+
+    expect(stack.localCost).toBe(0.2);
+    expect(kills).toEqual([]);
+    expect(rejections).toEqual([]);
+  });
+
+  it("ignores malformed cost values", () => {
+    const stack = new StateStack();
+    const { session } = makeSession(stack);
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: NaN } as any);
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: -5 } as any);
+    handleTelemetryMessage(session, { type: "telemetry" } as any);
+    expect(stack.localCost).toBe(0);
   });
 });

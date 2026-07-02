@@ -18,6 +18,8 @@ import { runBatch } from "./runBatch.js";
 import { AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, type SubprocessRunInfo } from "./subprocessRunInfo.js";
+import { isPayableCost, type IpcTelemetryMessage } from "./costTelemetry.js";
+export { type IpcTelemetryMessage };
 
 export { getSubprocessRunInfo, setSubprocessRunInfo, type SubprocessRunInfo };
 import {
@@ -169,6 +171,7 @@ export function ipcLog(direction: "send" | "recv", msg: any): void {
   else if (type === "error") detail = `error=${truncate(msg.error)}`;
   else if (type === "run") detail = `node=${msg.node} script=${msg.scriptPath}`;
   else if (type === "resume") detail = `node=${msg.node} responses=${msg.responses?.length}`;
+  else if (type === "telemetry") detail = `costUsd=${msg.costUsd}`;
   else detail = truncate(msg);
   process.stderr.write(`[ipc:${role}] ${ts} ${direction} ${type} ${detail}\n`);
 }
@@ -274,7 +277,8 @@ export type SubprocessToParent =
   | IpcInterruptedMessage
   | IpcErrorMessage
   | IpcLockAcquireMessage
-  | IpcLockReleaseMessage;
+  | IpcLockReleaseMessage
+  | IpcTelemetryMessage;
 export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
 
 const sessionLockOwners: Record<string, string[]> = {};
@@ -439,7 +443,7 @@ export async function sendLockAcquireToParent(
  * Bundled into one object so helpers can be extracted to module scope
  * without each one needing 8 closure parameters.
  */
-type RunSession = {
+export type RunSession = {
   sessionId: string;
   child: ReturnType<typeof fork>;
   limits: RunLimits;
@@ -831,6 +835,47 @@ function handleErrorMessage(s: RunSession, msg: any): void {
   }
 }
 
+/** Child (or descendant, via relay) reported a paid call. Bill it to the
+ * run() call-site stack via the same billCharge every in-process paid
+ * site uses: localCost (parent getCost() reflects child spend live) plus
+ * the guards — whose chargeGuards re-emits upward when THIS process is
+ * itself a subprocess, which is what relays grandchild spend to the root
+ * with no explicit plumbing. Billing is unconditional (the spend already
+ * happened, even post-settle); enforcement only runs on a live session:
+ * a trip kills the child and REJECTS the session with the guard-trip
+ * abort, which propagates through invokeSubprocess → runBatch (errors
+ * win over interrupts) → the stdlib run() plain `try` re-throws trips →
+ * the user's owning guard(cost:) boundary converts it to the standard
+ * cost-limit Failure.
+ *
+ * MUST STAY SYNCHRONOUS: handleChildMessage void-invokes its async
+ * dispatch, so arrival-order processing (all telemetry before the
+ * child's own terminal message, per IPC FIFO) holds only while this
+ * path contains no awaits — an await before enforcement would let a
+ * fast child's result settle the session before the trip fires.
+ *
+ * Known getCost() edge: post-settle billing (possible only on kill
+ * paths — FIFO rules it out on normal completion) charges the shared
+ * guard REFERENCES correctly, but the localCost increment can land
+ * after a fork branch's cost delta has already propagated at join, so
+ * getCost() may slightly undercount on abnormal termination. Budgets
+ * never undercount; do not "fix" this by skipping post-settle billing. */
+export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage): void {
+  if (!isPayableCost(msg.costUsd)) return;
+  s.stateStack.billCharge(msg.costUsd);
+  if (s.settled) return;
+  try {
+    s.stateStack.enforceGuards();
+  } catch (err) {
+    try {
+      s.child.kill("SIGKILL");
+    } catch (killErr) {
+      ipcLog("send", { type: "kill_failed", detail: killErr instanceof Error ? killErr.message : String(killErr) });
+    }
+    settle(s, s.rejectPromise, err);
+  }
+}
+
 async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   ipcLog("recv", msg);
   // Defensively serialize once: a non-serializable value (circular refs,
@@ -855,6 +900,8 @@ async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
     settle(s, s.resolvePromise, { type: "result", value: msg.value } satisfies SessionOutcome);
   } else if (msg.type === "interrupted") {
     settle(s, s.resolvePromise, { type: "interrupted", msg } satisfies SessionOutcome);
+  } else if (msg.type === "telemetry") {
+    handleTelemetryMessage(s, msg);
   } else if (msg.type === "error") {
     handleErrorMessage(s, msg);
   } else if (msg.type === "lockAcquire") {

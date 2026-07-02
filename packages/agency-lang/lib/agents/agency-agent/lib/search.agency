@@ -100,7 +100,7 @@ export type LlmOpts = {
   model?: string;
   provider?: string;
   memory?: boolean;
-  reasoningEffort?: string;
+  reasoningEffort?: "low" | "medium" | "high";
   thinking?: ThinkingConfig;
 }
 

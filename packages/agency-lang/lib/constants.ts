@@ -14,6 +14,20 @@
 export const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
 /**
+ * Default image-generation model. Provider is auto-resolved from the name by
+ * smoltalk (gpt-image-1 → openai, per smoltalk's imageModels registry), the
+ * same way chat models resolve. Used when a generateImage() call sets no model.
+ */
+export const DEFAULT_IMAGE_MODEL = "gpt-image-1";
+
+/**
+ * Fixed USD cost the DeterministicClient reports per generated image, so tests
+ * can assert cost accrual / guard trips without a real provider. Shared by the
+ * deterministic client and the image-generation e2e assertion.
+ */
+export const DETERMINISTIC_IMAGE_COST = 0.04;
+
+/**
  * Default token threshold for triggering memory compaction when the
  * caller does not set `memory.compaction.threshold` in agency.json.
  * Compaction is expensive (LLM call) — this default keeps it from

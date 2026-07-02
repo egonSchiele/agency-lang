@@ -4,9 +4,13 @@ import { agencyStore } from "./asyncContext.js";
 import type {
   EmbedConfig,
   EmbedResult,
+  ImageConfig,
+  ImageGenResult,
+  ImageInput,
   LLMClient,
   PromptConfig,
 } from "./llmClient.js";
+import { DETERMINISTIC_IMAGE_COST } from "../constants.js";
 
 export type ReturnMock = {
   return: any;
@@ -223,6 +227,27 @@ export class DeterministicClient implements LLMClient {
       success: false,
       error:
         "DeterministicClient does not implement embed. Register a client with embed() support via setLLMClient() if your test needs vector recall.",
+    };
+  }
+
+  // Returns a fixed 1x1 PNG + a fixed cost, so tests can exercise the image
+  // pipeline (cost accrual, guard trips, base64 composition) without a real
+  // provider. Never makes a network call.
+  async image(
+    _input: ImageInput,
+    _config?: Partial<ImageConfig>,
+  ): Promise<Result<ImageGenResult>> {
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+    return {
+      success: true,
+      value: {
+        images: [
+          { data: new Uint8Array(Buffer.from(pngBase64, "base64")), mimeType: "image/png" },
+        ],
+        model: "deterministic-image",
+        costEstimate: { totalCost: DETERMINISTIC_IMAGE_COST } as any,
+      },
     };
   }
 }

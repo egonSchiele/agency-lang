@@ -1,0 +1,30 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo resumed-ok")
+  return r.stdout
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      logFile: "child-statelog.jsonl",
+    )
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return result
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

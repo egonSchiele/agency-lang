@@ -101,6 +101,13 @@ export function isFailure(result: unknown): result is ResultFailure {
 export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
   try {
     const value = await fn();
+    // Interrupts are control flow, not values: a callee that paused on an
+    // unresolved interrupt bubbles the Interrupt[] up as its return value,
+    // and `try` must pass it through untouched — wrapping it in success()
+    // would make the batch look like a completed Result and strand the
+    // paused state. (First hit by `try _run(...)` when a subprocess
+    // pauses; applies to any interrupting callee under `try`.)
+    if (hasInterrupts(value)) return value as any;
     if (resultValueSchema.safeParse(value).success) return value;
     return success(value);
   } catch (error) {

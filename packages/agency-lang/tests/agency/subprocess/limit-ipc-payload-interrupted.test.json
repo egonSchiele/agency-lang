@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An oversized interrupted message fails loudly with the structured ipc_payload limit failure instead of pausing un-resumably",
+      "input": "",
+      "expectedOutput": "\"ipc_payload limit hit on pause\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

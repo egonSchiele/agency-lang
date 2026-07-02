@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A mid-tree reject is final even though the root would approve",
+      "input": "",
+      "expectedOutput": "\"rejected-locally\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

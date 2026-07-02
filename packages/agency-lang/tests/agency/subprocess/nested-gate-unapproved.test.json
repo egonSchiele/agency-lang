@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An unapproved nested std::run gate surfaces to the user; rejecting it fails the nested run",
+      "input": "",
+      "expectedOutput": "\"gate-rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

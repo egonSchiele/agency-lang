@@ -201,6 +201,22 @@ describe("summarizeSpan — identifying detail", () => {
     expect(summarizeSpan(node)).toBe("forkAll 5 branches (3.0s)");
   });
 
+  it("subprocessRun shows the node name (and resume mode)", () => {
+    const fresh = spanNode(
+      "subprocessRun",
+      [leaf({ type: "subprocessStarted", moduleId: "m", node: "main", subprocessSessionId: "s1", mode: "run", depth: 1 })],
+      { duration: 3000 },
+    );
+    expect(summarizeSpan(fresh)).toBe('subprocessRun "main" (3.0s)');
+
+    const resumed = spanNode(
+      "subprocessRun",
+      [leaf({ type: "subprocessStarted", moduleId: "m", node: "main", subprocessSessionId: "s1", mode: "resume", depth: 1 })],
+      { duration: 3000 },
+    );
+    expect(summarizeSpan(resumed)).toBe('subprocessRun "main" · resume (3.0s)');
+  });
+
   it("llmCall shows model, prompt preview, and outcome", () => {
     const node = spanNode(
       "llmCall",

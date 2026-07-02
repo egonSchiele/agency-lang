@@ -1,12 +1,16 @@
 # `runBatch` — the concurrent-interrupt primitive
 
 `lib/runtime/runBatch.ts` is the single runtime primitive that owns
-concurrent-interrupt orchestration. Three callers delegate to it:
+concurrent-interrupt orchestration. Four callers delegate to it:
 
 - `Runner.runForkAll` — `fork(items) as item { ... }` (mode `"all"`).
 - `Runner.runRace`    — `race(items) as item { ... }` (mode `"race"`).
 - `PromptRunner.parallel` — parallel tool calls inside `runPrompt`
   (mode `"all"`, `recordBranchOutcomes: false`).
+- `_run` in `lib/runtime/ipc.ts` — subprocess execution via
+  `std::agency run()` (mode `"all"`, a single child whose invoke forks
+  the subprocess; a paused child's interrupts get the parent-side
+  shared checkpoint stamped by `runBatch`).
 
 The full architectural context — what BranchState looks like, why the
 slice rule exists, how the leaf checkpoint vehicles into the parent's
@@ -56,9 +60,9 @@ wrong slice yields a checkpoint that captures the wrong frame chain
 and silently breaks resume.
 
 This is the **one** discipline `runBatch` callers must observe. Every
-existing adapter (`runForkAll`, `runRace`, `PromptRunner.parallel`)
-gets this right; review any new adapter against the slice rule before
-merging.
+existing adapter (`runForkAll`, `runRace`, `PromptRunner.parallel`,
+`_run`) gets this right; review any new adapter against the slice rule
+before merging.
 
 ## The `invoke` no-throw contract
 

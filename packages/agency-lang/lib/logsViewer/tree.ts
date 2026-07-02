@@ -7,6 +7,28 @@ import { summarize, summarizeSpan, summarizeTrace } from "./summary.js";
 // interactive tree.
 const HIDDEN_EVENT_TYPES = new Set<string>(["graph"]);
 
+// Event types whose `inferSpanLabel` mapping is DEFINITIVE for their span.
+// A span introduced by a generic event (e.g. a `threadCreated` that happens
+// to fire first inside it) gets a weak passthrough label; when one of these
+// arrives later in the same span, the label upgrades. Concrete case: the
+// `subprocessRun` span's first event is runBatch's branch `threadCreated`,
+// and only then `subprocessStarted` — without the upgrade the span would
+// render as "threadCreated".
+const STRONG_LABEL_EVENTS = new Set<string>([
+  "agentStart",
+  "agentEnd",
+  "enterNode",
+  "promptCompletion",
+  "embedCompletion",
+  "toolCallStart",
+  "toolCall",
+  "forkStart",
+  "forkEnd",
+  "subprocessStarted",
+  "subprocessEnd",
+  "handlerDecision",
+]);
+
 export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // traceId → trace root
   const traces: Record<string, TreeNode> = {};
@@ -21,10 +43,21 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // (or trace root) in arrival order. This puts child spans into their
   // parent's `children` array BEFORE any leaf events get appended in
   // pass 2, so a span's child spans are always listed before its leaves.
+  // span_id → label was inferred from a generic (passthrough) event and
+  // may be upgraded by a later STRONG_LABEL_EVENTS arrival in the span.
+  const weakLabel = new Set<string>();
   for (const evt of events) {
     ensureTrace(traces, evt.trace_id);
     if (evt.span_id) {
+      const existed = evt.span_id in spans;
       ensureSpan(spans, traces, evt);
+      const strong = STRONG_LABEL_EVENTS.has(evt.data.type);
+      if (!existed && !strong) {
+        weakLabel.add(evt.span_id);
+      } else if (existed && strong && weakLabel.has(evt.span_id)) {
+        spans[evt.span_id].label = inferSpanLabel(evt);
+        weakLabel.delete(evt.span_id);
+      }
       if (!(evt.span_id in desiredParent)) {
         desiredParent[evt.span_id] = evt.parent_span_id ?? null;
       }
@@ -186,6 +219,11 @@ function inferSpanLabel(evt: EventEnvelope): string {
     case "forkStart":
     case "forkEnd":
       return evt.data.mode === "race" ? "race" : "forkAll";
+    case "subprocessStarted":
+    case "subprocessEnd":
+      // One subprocess execution segment (std::agency run()); the child
+      // process's own spans nest underneath via the adopted span root.
+      return "subprocessRun";
     case "handlerDecision":
       return "handlerChain";
     default:

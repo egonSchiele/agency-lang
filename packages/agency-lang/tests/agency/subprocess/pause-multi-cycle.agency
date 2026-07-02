@@ -1,0 +1,29 @@
+import { compile, run } from "std::agency"
+
+// The child pauses twice in sequence: first bash pauses → approve → resume →
+// second bash pauses → approve → resume → completes.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  let r1 = bash("echo one")
+  let r2 = bash("echo two")
+  return r1.stdout + r2.stdout
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

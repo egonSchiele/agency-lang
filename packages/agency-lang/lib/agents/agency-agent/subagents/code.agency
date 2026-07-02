@@ -269,8 +269,8 @@ fences. Code fences are especially important — they're how code in
 your reply gets per-language coloring.
 
 **Important:** put a blank line between a heading and any bullet list
-or paragraph that follows it (`## Heading\\n\\n- item`, not
-`## Heading\\n- item`). Without the blank line our Markdown renderer
+or paragraph that follows it (`## Heading\n\n- item`, not
+`## Heading\n- item`). Without the blank line our Markdown renderer
 silently truncates everything after the heading.
 
 ### ASCII diagrams

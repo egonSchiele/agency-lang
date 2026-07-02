@@ -302,6 +302,13 @@ describe("prettyPrint", () => {
     expect(printTs(node)).toBe("`a\n\tb`");
   });
 
+  it("TsTemplateLit escapes carriage returns (template source normalizes raw CR to LF)", () => {
+    const node = ts.template([{ text: "a\rb" }]);
+    expect(printTs(node)).toBe("`a\\rb`");
+    // eslint-disable-next-line no-eval
+    expect(eval(printTs(node))).toBe("a\rb");
+  });
+
   it("TsComment line", () => {
     expect(printTs(ts.comment("TODO: fix this"))).toBe("// TODO: fix this");
   });

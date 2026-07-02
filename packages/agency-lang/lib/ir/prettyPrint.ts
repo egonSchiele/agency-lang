@@ -146,16 +146,22 @@ export function printTs(node: TsNode, indent = 0): string {
     case "templateLit": {
       // Part text is RAW runtime characters — the Agency parser has already
       // interpreted `\n` / `\\` etc. into real chars, so real newlines/tabs
-      // pass straight through (valid inside a template literal). Three
+      // pass straight through (valid inside a template literal). Four
       // sequences must be escaped or they corrupt the emitted template:
       //   `\`     → `\\`  (a raw backslash would escape whatever follows —
       //                    a lone `\` before the closing backtick yields an
       //                    unterminated template; must run FIRST so it
       //                    doesn't double the escapes added below)
+      //   CR      → `\r`  (ECMAScript normalizes a raw CR/CRLF in template
+      //                    source to LF, silently changing the value)
       //   `` ` `` → `\``  (otherwise closes the template)
       //   `${`    → `\${` (otherwise starts an interpolation)
       const escapeForTemplate = (text: string): string =>
-        text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+        text
+          .replace(/\\/g, "\\\\")
+          .replace(/\r/g, "\\r")
+          .replace(/`/g, "\\`")
+          .replace(/\$\{/g, "\\${");
       let s = "`";
       for (const part of node.parts) {
         s += escapeForTemplate(part.text);

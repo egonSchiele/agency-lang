@@ -26,14 +26,14 @@ node judgePairwise(
   ${responseB}
   </response>
 
-  Decide which response better meets the goal. Pick \"A\", \"B\", or \"tie\". Return confidence as an integer from 0 to 100:
+  Decide which response better meets the goal. Pick "A", "B", or "tie". Return confidence as an integer from 0 to 100:
   - 0-20 means nearly indistinguishable / coin flip
   - 21-40 means weak preference
   - 41-60 means moderate preference
   - 61-80 means strong preference
   - 81-100 means overwhelming preference
 
-  Be honest about confidence — \"tie\" is the right call when responses are genuinely indistinguishable, not a way to dodge the question. Give a brief reasoning (1-3 sentences) that cites specifics from each response.
+  Be honest about confidence — "tie" is the right call when responses are genuinely indistinguishable, not a way to dodge the question. Give a brief reasoning (1-3 sentences) that cites specifics from each response.
   """
   const result: PairwiseJudgeResult = llm(prompt)
 

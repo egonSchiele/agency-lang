@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { clampLimits } from "./ipc.js";
+import { clampLimits, serializeInterruptsForIpc } from "./ipc.js";
+
+describe("serializeInterruptsForIpc", () => {
+  it("strips per-interrupt checkpoints and hoists the shared one", () => {
+    const cp = { id: 1, nodeId: "main", stack: [] };
+    const interrupts = [
+      { type: "interrupt", interruptId: "i1", runId: "r", effect: "std::bash", message: "m", data: {}, origin: "o", checkpoint: cp, checkpointId: 1 },
+      { type: "interrupt", interruptId: "i2", runId: "r", effect: "std::bash", message: "m", data: {}, origin: "o", checkpoint: cp, checkpointId: 1 },
+    ] as any[];
+    const msg = serializeInterruptsForIpc(interrupts as any);
+    expect(msg.type).toBe("interrupted");
+    expect(msg.checkpoint).toBe(cp);
+    expect(msg.interrupts.map((i) => i.interruptId)).toEqual(["i1", "i2"]);
+    expect(msg.interrupts[0].runId).toBe("r");
+    expect((msg.interrupts[0] as any).checkpoint).toBeUndefined();
+    expect((msg.interrupts[0] as any).checkpointId).toBeUndefined();
+    // The message must survive the JSON round-trip process.send performs —
+    // a class instance anywhere in the tree would silently degrade here.
+    expect(JSON.parse(JSON.stringify(msg))).toEqual(msg);
+  });
+});
 
 describe("clampLimits", () => {
   it("clamps wallClock above 1h to 1h", () => {

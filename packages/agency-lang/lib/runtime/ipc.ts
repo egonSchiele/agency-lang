@@ -140,6 +140,7 @@ export function ipcLog(direction: "send" | "recv", msg: any): void {
   if (type === "interrupt") detail = `effect=${msg.interrupt?.effect}`;
   else if (type === "decision") detail = `outcome=${msg.outcome?.kind}`;
   else if (type === "result") detail = `data=${truncate(msg.value?.data)}`;
+  else if (type === "interrupted") detail = `count=${msg.interrupts?.length}`;
   else if (type === "error") detail = `error=${truncate(msg.error)}`;
   else if (type === "run") detail = `node=${msg.node} script=${msg.scriptPath}`;
   else detail = truncate(msg);
@@ -164,6 +165,46 @@ export type IpcResultMessage = {
   type: "result";
   value: any;
 };
+
+/** An interrupt as it travels over IPC: the per-interrupt checkpoint fields
+ * are stripped — the batch-level checkpoint travels once, at the message
+ * level (see IpcInterruptedMessage). */
+export type SerializedInterrupt = {
+  type: "interrupt";
+  interruptId: string;
+  runId: string;
+  effect: string;
+  message: string;
+  data: any;
+  origin: string;
+};
+
+/** Terminal message for a child that paused itself: its unresolved
+ * interrupts plus the shared checkpoint they all resume from. A third
+ * terminal outcome alongside `result` and `error`. */
+export type IpcInterruptedMessage = {
+  type: "interrupted";
+  interrupts: SerializedInterrupt[];
+  checkpoint: any;
+  subprocessSessionId: string;
+};
+
+/** Convert a child's final Interrupt[] into the `interrupted` terminal
+ * message: strip each interrupt's checkpoint fields and hoist the shared
+ * batch checkpoint (every interrupt in a batch carries the same one). */
+export function serializeInterruptsForIpc(interrupts: any[]): IpcInterruptedMessage {
+  const checkpoint = interrupts[0]?.checkpoint;
+  const serialized = interrupts.map((intr) => {
+    const { checkpoint: _cp, checkpointId: _cpId, ...rest } = intr;
+    return rest as SerializedInterrupt;
+  });
+  return {
+    type: "interrupted",
+    interrupts: serialized,
+    checkpoint,
+    subprocessSessionId: "", // wired to the run instruction's session id in the statelog task
+  };
+}
 
 export type IpcErrorMessage = {
   type: "error";
@@ -204,6 +245,7 @@ export type IpcLockReleaseMessage = {
 export type SubprocessToParent =
   | IpcInterruptMessage
   | IpcResultMessage
+  | IpcInterruptedMessage
   | IpcErrorMessage
   | IpcLockAcquireMessage
   | IpcLockReleaseMessage;

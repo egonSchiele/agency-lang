@@ -382,17 +382,12 @@ export async function interruptWithHandlers<T = any>(
   if (isIpcMode()) {
     const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
     const merged = mergeChainOutcomes(local, parentOutcome);
-    // TEMPORARY (removed by the subprocess pause path): renderVerdict maps
-    // propagated/noResponse to the interrupt-array return; until the child
-    // can checkpoint itself, convert that case to a reject.
-    const verdict = renderVerdict(merged, ctx, interruptId, interruptObj, "ipc");
-    if (hasInterrupts(verdict)) {
-      return {
-        type: "reject",
-        value: "Interrupt propagated to user (subprocess slow-path not yet supported)",
-      };
-    }
-    return verdict;
+    // A propagated/noResponse merge renders as an Interrupt[] — the child
+    // pauses itself through its NORMAL propagate path (batching with
+    // concurrent siblings, stamping the shared checkpoint), and the
+    // bootstrap converts the final Interrupt[] into an `interrupted`
+    // terminal message for the parent to surface to the user.
+    return renderVerdict(merged, ctx, interruptId, interruptObj, "ipc");
   }
 
   return renderVerdict(local, ctx, interruptId, interruptObj, "handler");

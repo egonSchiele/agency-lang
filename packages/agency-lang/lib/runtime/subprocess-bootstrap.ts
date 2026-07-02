@@ -11,8 +11,9 @@
  */
 
 import { pathToFileURL } from "url";
-import type { IpcResultMessage, IpcErrorMessage, RunInstruction } from "./ipc.js";
-import { ipcLog, setSubprocessIpcPayloadLimit } from "./ipc.js";
+import type { IpcResultMessage, IpcErrorMessage, IpcInterruptedMessage, RunInstruction } from "./ipc.js";
+import { ipcLog, setSubprocessIpcPayloadLimit, serializeInterruptsForIpc } from "./ipc.js";
+import { hasInterrupts } from "./interrupts.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
 
 let ipcPayloadLimit = Infinity;
@@ -23,7 +24,7 @@ let ipcPayloadLimit = Infinity;
  * the immediate exit can race with the async send and the parent will see
  * only an abnormal close, missing the structured message entirely.
  */
-function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): Promise<void> {
+function sendOrDie(msg: IpcResultMessage | IpcErrorMessage | IpcInterruptedMessage): Promise<void> {
   if (typeof process.send !== "function") {
     console.error("[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().");
     process.exit(1);
@@ -43,7 +44,7 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): Promise<void> {
  * them back to the same Result.failure shape that wall_clock and memory
  * limits produce.
  */
-async function sendResultOrLimitError(msg: IpcResultMessage): Promise<void> {
+async function sendResultOrLimitError(msg: IpcResultMessage | IpcInterruptedMessage): Promise<void> {
   const serialized = JSON.stringify(msg);
   const byteLength = Buffer.byteLength(serialized, "utf8");
   if (byteLength > ipcPayloadLimit) {
@@ -129,6 +130,15 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     // child's own `RuntimeContext`.
     const result = await nodeFn(...positionalArgs);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
+
+    if (hasInterrupts(result.data)) {
+      // Unresolved interrupts: the child checkpointed itself through its
+      // normal propagate path. Ship the batch + shared checkpoint to the
+      // parent and exit; the parent surfaces them to the user and re-forks
+      // us with a resume instruction once the user responds.
+      await sendResultOrLimitError(serializeInterruptsForIpc(result.data));
+      process.exit(0);
+    }
 
     await sendResultOrLimitError({
       type: "result",

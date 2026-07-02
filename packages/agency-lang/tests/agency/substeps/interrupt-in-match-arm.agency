@@ -1,0 +1,28 @@
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+node main(x: string) {
+  setMutable("log", "start,")
+  match(x) {
+    "go" => {
+      setMutable("log", getMutable("log", "") + "arm1,")
+      interrupt("confirm")
+      setMutable("log", getMutable("log", "") + "arm2,")
+    }
+    "first" => {
+      interrupt("early")
+      setMutable("log", getMutable("log", "") + "after-early,")
+    }
+    "last" => {
+      setMutable("log", getMutable("log", "") + "pre,")
+      interrupt("tail")
+    }
+    "twice" => {
+      interrupt("one")
+      setMutable("log", getMutable("log", "") + "mid,")
+      interrupt("two")
+      setMutable("log", getMutable("log", "") + "end,")
+    }
+    _ => setMutable("log", getMutable("log", "") + "other,")
+  }
+  return getMutable("log", "")
+}

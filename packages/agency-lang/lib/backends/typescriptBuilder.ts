@@ -1293,10 +1293,13 @@ export class TypeScriptBuilder {
 
     const branches: { condition: TsNode; body: TsNode[] }[] = [];
     let elseBranch: TsNode[] | undefined;
+    let nextStartId = 0;
 
     for (const caseItem of filteredCases) {
+      const body = this.processBodyAsParts(caseItem.body, nextStartId);
+      nextStartId += body.length;
       if (caseItem.caseValue === "_") {
-        elseBranch = caseItem.body.map((b) => this.processNode(b));
+        elseBranch = body;
       } else {
         branches.push({
           condition: ts.binOp(
@@ -1304,7 +1307,7 @@ export class TypeScriptBuilder {
             "===",
             this.processNode(caseItem.caseValue as AgencyNode),
           ),
-          body: caseItem.body.map((b) => this.processNode(b)),
+          body,
         });
       }
     }

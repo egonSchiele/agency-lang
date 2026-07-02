@@ -71,7 +71,7 @@ const __globalCtx = new RuntimeContext({
   dirname: __dirname,
   logLevel: "info",
   traceConfig: {
-    program: "comments.agency"
+    program: "matchBlockBlockArms.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -155,158 +155,16 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  if (__ctx.globals.isInitialized("comments.agency")) {
+  if (__ctx.globals.isInitialized("matchBlockBlockArms.agency")) {
     return;
   }
-  __ctx.globals.markInitialized("comments.agency")
-  __ctx.globals.set("comments.agency", "x", 42)
-  __ctx.globals.set("comments.agency", "y", `hello`)
+  __ctx.globals.markInitialized("matchBlockBlockArms.agency")
 }
-__registerGlobalsInit("comments.agency", __initializeGlobals);
+__registerGlobalsInit("matchBlockBlockArms.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
 __functionRefReviver.registry = __toolRegistry;
-//  This is a single line comment at the top of the file
-//  Variable assignment with comment above
-//  Multiple comments
-//  can be placed
-//  on consecutive lines
-//  Comment before function definition
-async function __greet_impl() {
-  const __setupData = setupFunction();
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
-let __forked;
-let __functionCompleted = false;
-  if (!__globals()!.isInitialized("comments.agency")) {
-    await __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet", threads: __setupData.threads });
-  // `__resultCheckpointId` is referenced by interruptAssignment /
-// interruptReturn templates when an interrupt rejects and `runner.halt`
-// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
-// We keep the variable declared (sentinel -1) but skip the createPinned
-// call: pinning at every function entry causes pinned checkpoints to
-// accumulate without bound (evictIfNeeded only evicts unpinned), and the
-// JSON deep-clone of stateStack + globals on each call is a measurable
-// per-keystroke cost inside std::ui's repl loop. The cost of always
-// pinning outweighs the retry-on-failure feature, so it is disabled.
-// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
-// gracefully omits the embedded checkpoint and retry simply becomes a
-// no-op rather than failing.
-let __resultCheckpointId = -1;
-if (__ctx._pendingArgOverrides) {
-  const __overrides = __ctx._pendingArgOverrides;
-  __ctx._pendingArgOverrides = undefined;
-
-}
-
-  try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
-      ctx: __ctx,
-      stack: __setupData.stateStack,
-      threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
-          name: "onFunctionStart",
-          data: {
-            functionName: "greet",
-            args: {},
-            isBuiltin: false,
-            moduleId: "comments.agency"
-          }
-        })
-      });
-      await runner.step(1, async (runner) => {
-//  Comment inside function
-      });
-      await runner.step(2, async (runner) => {
-__stack.locals.message = `Hello, World!`;
-//  Another comment
-      });
-      await runner.step(3, async (runner) => {
-__functionCompleted = true;
-runner.halt(__stack.locals.message)
-return;
-      });
-    })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-  throw __error;
-}
-// All aborts — cancellations (Esc / abort) AND guard trips — are now a single
-// AgencyAbort carrying an AbortCause, and must propagate untouched. The owning
-// guard's `try` converts its own guardTrip; every other abort unwinds. One
-// rung replaces the old GuardExceededError + isAbortError ladder. Converting
-// any abort to a Failure here would (a) hide a guard trip so the block appears
-// to succeed over budget, and (b) let a cancel limp onward / surface as a
-// logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
-if (__error instanceof AgencyAbort) {
-  throw __error;
-}
-// Surface the underlying exception via logger + statelog before
-// converting to a Failure. Without this, a caller that doesn't
-// inspect the result (the common case for void side-effect calls)
-// silently loses the error — a debugging nightmare. See the
-// recordAlwaysScoped bug debugged in
-// https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
-{
-  const __errMsg = __error instanceof Error ? __error.message : String(__error);
-  const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
-  const __log = __createLogger(__ctx.logLevel);
-  __log.error("Function " + "greet" + " threw an exception (converted to Failure): " + __errMsg);
-  if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
-    errorType: "runtimeError",
-    message: __errMsg,
-    functionName: "greet",
-    retryable: __self.__retryable,
-  });
-}
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
-    functionName: "greet",
-    args: __stack.args,
-  }
-);
-
-  } finally {
-    __stateStack()?.pop()
-    if (__functionCompleted) {
-      await callHook({
-        name: "onFunctionEnd",
-        data: {
-          functionName: "greet",
-          timeTaken: performance.now() - __funcStartTime
-        }
-      })
-    }
-  }
-}
-const greet = __AgencyFunction.create({
-  name: "greet",
-  module: "comments.agency",
-  fn: __greet_impl,
-  params: [],
-  toolDefinition: {
-    name: "greet",
-    description: "No description provided.",
-    schema: z.object({})
-  },
-  safe: false,
-  exported: false
-}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -317,7 +175,10 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlockBlockArms.agency", scopeName: "main", threads: __setupData.threads });
+  if (!__state.isResume) {
+    __stack.args["x"] = __state.data.x;
+  }
   try {
     await agencyStore.run({
       ...getRuntimeContext(),
@@ -334,53 +195,17 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
-//  Comment before function call
+__stack.locals.out = ``;
       });
-      await runner.step(2, async (runner) => {
-__stack.locals.result = await __call(greet, {
-          type: "positional",
-          args: []
-        });
-if (hasInterrupts(__stack.locals.result)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.result
-          })
-          return;
-        }
-      });
-      await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
-          type: "positional",
-          args: [__stack.locals.result]
-        });
-if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-//  Testing comments in different contexts
-      });
-      await runner.step(4, async (runner) => {
-__stack.locals.age = 25;
-//  2. Before conditionals
-      });
-      await runner.step(5, async (runner) => {
-__stack.locals.status = `active`;
-      });
-      await runner.ifElse(6, [
+      await runner.ifElse(2, [
 
   {
-    condition: async () => __stack.locals.status === `inactive`,
+    condition: async () => __stack.args.x === `a`,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
                 type: "positional",
-                args: [`Stopped`]
+                args: [`first`]
               });
 if (hasInterrupts(__funcResult)) {
                 await getRuntimeContext().ctx.pendingPromises.awaitAll()
@@ -391,16 +216,50 @@ if (hasInterrupts(__funcResult)) {
                 return;
               }
             });
+await runner.step(1, async (runner) => {
+__stack.locals.out = `was a`;
+            });
     },
   },
 
-]);
-      await runner.step(7, async (runner) => {
-//  Final comment at end of file
+  {
+    condition: async () => __stack.args.x === `b`,
+    body: async (runner) => {
+await runner.step(2, async (runner) => {
+__stack.locals.out = `was b`;
+            });
+    },
+  },
+
+], async (runner) => {
+await runner.step(3, async (runner) => {
+const __funcResult = await __call(print, {
+              type: "positional",
+              args: [`default`]
+            });
+if (hasInterrupts(__funcResult)) {
+              await getRuntimeContext().ctx.pendingPromises.awaitAll()
+              runner.halt({
+                ...__state,
+                data: __funcResult
+              })
+              return;
+            }
+          });
+await runner.step(4, async (runner) => {
+__stack.locals.out = `other`;
+          });
+});
+      await runner.step(3, async (runner) => {
+runner.halt({
+          messages: __threads(),
+          data: __stack.locals.out
+        })
+return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(8, async () => {
+    await runner.hook(4, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -438,11 +297,13 @@ await callHook({
     };
   }
 })
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
+export async function main(x: string, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {},
+    data: {
+      x: x
+    },
     messages: messages,
     callbacks: callbacks,
     initializeGlobals: __initializeGlobals,
@@ -450,7 +311,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
     moduleDir: __dirname
   });
 }
-export const __mainNodeParams = [];
+export const __mainNodeParams = ["x"];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
@@ -465,4 +326,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"2":{"line":13,"col":2},"3":{"line":15,"col":2}},"comments.agency:main":{"2":{"line":20,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2},"5":{"line":27,"col":2},"6":{"line":28,"col":2},"6.0":{"line":30,"col":18}}};
+export const __sourceMap = {"matchBlockBlockArms.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":13,"col":2},"2.0":{"line":4,"col":6},"2.1":{"line":5,"col":6},"2.2":{"line":7,"col":11},"2.3":{"line":9,"col":6},"2.4":{"line":10,"col":6}}};

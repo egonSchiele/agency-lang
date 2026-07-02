@@ -52,7 +52,7 @@ Filesystem mutation: creating, editing, moving, copying, and deleting.
 
 ```ts
 /** Filesystem mutation: creating, editing, moving, copying, and deleting. */
-export effectSet FileWrite = <std::write, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove>
+export effectSet FileWrite = <std::write, std::writeBinary, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L36))

@@ -33,7 +33,7 @@
 export effectSet FileRead = <std::read, std::readBinary, std::ls, std::glob, std::grep>
 
 /** Filesystem mutation: creating, editing, moving, copying, and deleting. */
-export effectSet FileWrite = <std::write, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove>
+export effectSet FileWrite = <std::write, std::writeBinary, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove>
 
 /** All filesystem access — reads and writes. */
 export effectSet FileSystem = <FileRead, FileWrite>

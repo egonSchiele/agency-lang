@@ -28,6 +28,7 @@ import {
   _round,
   _read,
   _write,
+  _writeBinary,
   _readBinary,
   _notify,
   _range,
@@ -208,6 +209,40 @@ export def write(
     mode: mode
   })
   return try _write(dir, filename, content, mode)
+}
+
+export def writeBinary(
+  filename: string,
+  base64: string,
+  dir: string = ".",
+  mode: string = "overwrite",
+  useAgentCwd: boolean = false,
+): Result {
+  """
+  Write base64-encoded binary data to a file (images, audio, video, PDFs, any
+  binary). Decodes the base64 and writes raw bytes — unlike write(), which
+  writes UTF-8 text. The filename is resolved relative to dir.
+
+  The `mode` parameter controls how an existing file is handled:
+  - "overwrite" (default): replace the file if it exists, create it if not
+  - "append": append to the file if it exists, create it if not
+  - "create-only": fail if the file already exists
+
+  @param filename - The file to write
+  @param base64 - The binary content, base64-encoded (e.g. from generateImage() or readBinary())
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  """
+  if (useAgentCwd) {
+    dir = applyAgentCwd(dir)
+  }
+  return interrupt std::writeBinary("Are you sure you want to write this file?", {
+    dir: dir,
+    filename: filename,
+    mode: mode
+  })
+  return try _writeBinary(dir, filename, base64, mode)
 }
 
 export safe def readBinary(

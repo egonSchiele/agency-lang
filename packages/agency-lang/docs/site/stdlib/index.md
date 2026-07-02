@@ -20,7 +20,7 @@ A tool for printing a message to the console.
 |---|---|---|
 | messages |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L47))
 
 ### setAgentCwd
 
@@ -41,7 +41,7 @@ Set the agent working directory. Path-taking tools (read, write, edit,
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L66))
 
 ### getAgentCwd
 
@@ -54,7 +54,7 @@ Return the agent working directory, or an empty string when none is
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L78))
 
 ### applyAgentCwd
 
@@ -78,7 +78,7 @@ Resolve `dir` against the agent working directory when one is set;
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L86))
 
 ### printJSON
 
@@ -95,7 +95,7 @@ A tool for printing an object as formatted JSON to the console.
 | obj | `any` |  |
 | highlight | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L103))
 
 ### parseJSON
 
@@ -113,7 +113,7 @@ Parse a JSON string and return the corresponding value (object, array, string, n
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L115))
 
 ### input
 
@@ -133,7 +133,7 @@ A tool for prompting the user for input and returning their response.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L122))
 
 ### sleep
 
@@ -151,7 +151,7 @@ Pause execution for the given duration in milliseconds. Use with unit literals f
 |---|---|---|
 | ms | `number` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L131))
 
 ### round
 
@@ -170,7 +170,7 @@ A tool for rounding a number to a specified number of decimal places.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L140))
 
 ### read
 
@@ -206,7 +206,7 @@ A tool for reading the contents of a file and returning it as a string. The file
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L147))
 
 ### write
 
@@ -241,7 +241,44 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L180))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L181))
+
+### writeBinary
+
+```ts
+writeBinary(filename: string, base64: string, dir: string, mode: string, useAgentCwd: boolean): Result
+```
+
+Write base64-encoded binary data to a file (images, audio, video, PDFs, any
+  binary). Decodes the base64 and writes raw bytes — unlike write(), which
+  writes UTF-8 text. The filename is resolved relative to dir.
+
+  The `mode` parameter controls how an existing file is handled:
+  - "overwrite" (default): replace the file if it exists, create it if not
+  - "append": append to the file if it exists, create it if not
+  - "create-only": fail if the file already exists
+
+  @param filename - The file to write
+  @param base64 - The binary content, base64-encoded (e.g. from generateImage() or readBinary())
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
+  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| filename | `string` |  |
+| base64 | `string` |  |
+| dir | `string` | "." |
+| mode | `string` | "overwrite" |
+| useAgentCwd | `boolean` | false |
+
+**Returns:** `Result`
+
+**Throws:** `std::writeBinary`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L214))
 
 ### readBinary
 
@@ -269,7 +306,7 @@ Read a file and return its contents as a Base64-encoded string. Works for any
 
 **Throws:** `std::readBinary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L248))
 
 ### notify
 
@@ -290,7 +327,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L237))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L272))
 
 ### range
 
@@ -309,7 +346,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L283))
 
 ### mostCommon
 
@@ -327,7 +364,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L258))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L293))
 
 ### keys
 
@@ -345,7 +382,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L265))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L300))
 
 ### values
 
@@ -363,7 +400,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L272))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L307))
 
 ### entries
 
@@ -381,7 +418,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L279))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L314))
 
 ### emit
 
@@ -397,7 +434,7 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L321))
 
 ### callback
 
@@ -419,4 +456,4 @@ Register a scoped callback for the dynamic extent of the calling function or nod
 | name | `string` |  |
 | fn | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L293))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L328))

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import path from "path";
 import {
   clampLimits,
@@ -6,6 +6,7 @@ import {
   setSubprocessRunInfo,
   getSubprocessRunInfo,
   resolveDepthCap,
+  attachSessionHandlers,
   withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
@@ -151,5 +152,113 @@ describe("clampLimits", () => {
       ipcPayload: 1024,
       stdout: 512,
     });
+  });
+});
+
+describe("wall-clock timer is per execution segment", () => {
+  // Replaces the deleted pause-limit-wallclock-resets execution test: the
+  // per-segment property (paused time never counts against wallClock)
+  // cannot be asserted end-to-end without segment-time-vs-cap arithmetic,
+  // which is inherently flaky on loaded CI runners (observed ~2s of pure
+  // per-segment overhead). The property is structural — each session arms
+  // its own timer and settle() clears it — so pin it with fake timers.
+  const makeFakeChild = () => {
+    const listeners: Record<string, (arg: any) => void> = {};
+    return {
+      child: {
+        stdout: null,
+        stderr: null,
+        on: (evt: string, cb: (arg: any) => void) => { listeners[evt] = cb; },
+        send: () => true,
+        connected: true,
+        kill: () => true,
+      },
+      listeners,
+    };
+  };
+
+  const makeSession = (child: any, outcomes: any[]): any => ({
+    sessionId: "seg-test",
+    child,
+    limits: { wallClock: 5000, memory: 1, ipcPayload: 1024 * 1024 * 1024, stdout: 1024 * 1024 * 1024 },
+    ctx: { lockReleasers: {} },
+    stateStack: {},
+    resolvePromise: (v: any) => outcomes.push({ kind: "resolve", v }),
+    rejectPromise: (e: any) => outcomes.push({ kind: "reject", e }),
+    settled: false,
+    startedAt: Date.now(),
+    wallClockTimer: null,
+    stdoutBytes: 0,
+    stoppedForwarding: false,
+    detachAbortListener: null,
+  });
+
+  it("arms on session start and is cleared when the child pauses; never fires afterward", async () => {
+    vi.useFakeTimers();
+    try {
+      const { child, listeners } = makeFakeChild();
+      const outcomes: any[] = [];
+      const session = makeSession(child, outcomes);
+
+      attachSessionHandlers(session, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
+      expect(session.wallClockTimer).not.toBeNull();
+
+      // Child pauses (self-checkpointed): the segment is over — its
+      // remaining budget must die with it.
+      listeners["message"]({ type: "interrupted", interrupts: [], checkpoint: {}, subprocessSessionId: "s" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.settled).toBe(true);
+      expect(session.wallClockTimer).toBeNull();
+
+      // Long past the cap: no wall_clock failure may fire — paused time
+      // never counts.
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0].kind).toBe("resolve");
+      expect(outcomes[0].v.type).toBe("interrupted");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a running segment that exceeds its own budget fails with the wall_clock limit", async () => {
+    vi.useFakeTimers();
+    try {
+      const { child } = makeFakeChild();
+      const outcomes: any[] = [];
+      const session = makeSession(child, outcomes);
+
+      attachSessionHandlers(session, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
+      await vi.advanceTimersByTimeAsync(5001);
+
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0].kind).toBe("resolve");
+      expect(outcomes[0].v.type).toBe("result");
+      expect(outcomes[0].v.value.error.limit).toBe("wall_clock");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("each new session arms a fresh timer with the full budget", () => {
+    vi.useFakeTimers();
+    try {
+      const first = makeFakeChild();
+      const firstOutcomes: any[] = [];
+      const s1 = makeSession(first.child, firstOutcomes);
+      attachSessionHandlers(s1, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
+      first.listeners["message"]({ type: "interrupted", interrupts: [], checkpoint: {}, subprocessSessionId: "s" });
+
+      // A resume segment (second session) gets its own full budget,
+      // independent of how much the first segment used.
+      const second = makeFakeChild();
+      const secondOutcomes: any[] = [];
+      const s2 = makeSession(second.child, secondOutcomes);
+      attachSessionHandlers(s2, { type: "resume", scriptPath: "/x.js", node: "main", checkpoint: {}, interrupts: [], responses: [] });
+      expect(s2.wallClockTimer).not.toBeNull();
+      expect(s2.wallClockTimer).not.toBe(s1.wallClockTimer);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -126,7 +126,7 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 
 ## Limits
 
-Wall-clock, memory, ipcPayload, and stdout limits clamp each subprocess (ceilings in `LIMIT_CEILINGS`). All budgets are **per execution segment**: each fork gets a fresh timer/counters, and paused time never counts (the process doesn't exist while paused). Accepted quirk: a child that pauses N times gets N stdout budgets.
+Wall-clock, memory, ipcPayload, and stdout limits clamp each subprocess (ceilings in `LIMIT_CEILINGS`). All budgets are **per execution segment**: each fork gets a fresh timer/counters, and paused time never counts (the process doesn't exist while paused). This property is pinned by fake-timer unit tests in `ipc.test.ts` (an end-to-end assertion would require segment-time-vs-cap arithmetic, which is unreliable on loaded CI runners). Accepted quirk: a child that pauses N times gets N stdout budgets.
 
 The `ipcPayload` limit applies to the `interrupted` message, whose dominant term is the child checkpoint — an oversized pause **fails loudly** with the structured `limit_exceeded` failure rather than pausing un-resumably (`limit-ipc-payload-interrupted` test).
 
@@ -190,14 +190,13 @@ Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/ag
 | `pause-reject-response` | rejection resumes, doesn't abort |
 | `pause-two-subprocesses` | two paused children batch into one respond |
 | `pause-then-child-handler` / `pause-then-parent-handler` | handler re-registration after resume (safety-critical) |
-| `pause-limit-wallclock-resets` | per-segment budgets |
 | `limit-ipc-payload-interrupted` | oversized pause fails loudly |
 | `limit-*` | resource limits |
 | `nested-basic` | 3-level nesting; per-level depth in gate data |
 | `nested-depth-boundary` | at-cap allowed, above-cap structured failure; ancestor caps win |
 | `nested-pause-resume` | grandchild interrupt surfaces through both hops; one respond resumes the tree |
 | `nested-reject-middle` | mid-tree reject is final |
-| `nested-lock-relay` | grandchild locks contend with the root's lock domain |
+| `nested-lock-relay` | grandchild locks contend with the root's lock domain (marker-file handshake — no duration-based coordination) |
 | `nested-gate-unapproved` | the gate exists on every hop |
 | `subprocess-no-handler` (js) | std::run gate surfaces without a handler |
 | `subprocess-pause-basic` (js) | end-to-end pause → respond → resume |

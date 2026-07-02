@@ -1,22 +1,50 @@
 import { compile, run } from "std::agency"
 import { withLock } from "std::concurrency"
+import { bash } from "std::shell"
 
 // The whole nested tree shares the ROOT's lock domain: while a root fork
 // branch holds "resource", a GRANDCHILD's timed acquire must contend with
 // it and time out. If a mid-tree process acquired locks locally instead of
 // relaying upward, the grandchild would get the lock instantly.
+//
+// Coordination is a marker-file HANDSHAKE, not durations: branch 1 does not
+// spawn until the lock is actually held (heldMarker), and branch 0 does not
+// release until the grandchild's attempt has actually completed
+// (doneMarker). The previous version held for a fixed 2s, which raced the
+// two nested subprocess spawns + in-child compile on slow CI runners — the
+// hold expired before the attempt, the lock map was legitimately empty, and
+// the grandchild acquired instantly ("acquired-unexpectedly").
+
+def waitForMarker(path: string): boolean {
+  let i = 0
+  while (i < 150) {
+    const check = bash("test -f " + path + " && echo yes || echo no")
+    if (check.stdout == "yes\n") {
+      return true
+    }
+    sleep(200ms)
+    i = i + 1
+  }
+  return false
+}
+
 node main() {
+  const heldMarker = "/tmp/agency-nested-lock-relay-held.txt"
+  const doneMarker = "/tmp/agency-nested-lock-relay-done.txt"
   const grandSource = """
 import { withLock } from "std::concurrency"
+import { bash } from "std::shell"
 
 node main() {
   const r = withLock("resource", 300) as {
     sleep(1ms)
   }
+  let outcome = "acquired-unexpectedly"
   if (isFailure(r)) {
-    return "lock-timed-out"
+    outcome = "lock-timed-out"
   }
-  return "acquired-unexpectedly"
+  let done = bash("touch /tmp/agency-nested-lock-relay-done.txt")
+  return outcome
 }
 """
   const childSource = """
@@ -45,14 +73,23 @@ node main(grandSource: string) {
   }
   const compiled = compileResult.value
   handle {
+    let cleanup = bash("rm -f " + heldMarker + " " + doneMarker)
     const results = fork([0, 1], shared: true) as branch {
       if (branch == 0) {
         withLock("resource") as {
-          sleep(2s)
+          let held = bash("touch " + heldMarker)
+          let sawDone = waitForMarker(doneMarker)
         }
-        return "held"
+        const done = bash("test -f " + doneMarker + " && echo yes || echo no")
+        if (done.stdout == "yes\n") {
+          return "held"
+        }
+        return "gave-up-waiting"
       }
-      sleep(50ms)
+      const lockIsHeld = waitForMarker(heldMarker)
+      if (!lockIsHeld) {
+        return "lock-never-held"
+      }
       const result = run(
         compiled: compiled,
         node: "main",
@@ -63,6 +100,7 @@ node main(grandSource: string) {
       }
       return "run failed"
     }
+    let cleanup2 = bash("rm -f " + heldMarker + " " + doneMarker)
     return results
   } with (e) {
     return approve()

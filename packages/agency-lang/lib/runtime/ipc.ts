@@ -882,8 +882,11 @@ function handleChildClose(s: RunSession, code: number | null, signal: NodeJS.Sig
 /**
  * Wire up all event handlers on the child process and kick off execution by
  * sending the (prebuilt) startup instruction over IPC.
+ * Exported for unit tests: the per-segment wall-clock property (timer armed
+ * per session, cleared at settle, never firing across a pause) is pinned
+ * with fake timers here rather than by a timing-arithmetic execution test.
  */
-function attachSessionHandlers(s: RunSession, instruction: RunInstruction | ResumeInstruction): void {
+export function attachSessionHandlers(s: RunSession, instruction: RunInstruction | ResumeInstruction): void {
   attachStdoutForwarder(s, s.child.stdout, process.stdout);
   attachStdoutForwarder(s, s.child.stderr, process.stderr);
 

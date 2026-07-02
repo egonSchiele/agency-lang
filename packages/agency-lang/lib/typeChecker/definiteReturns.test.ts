@@ -54,15 +54,14 @@ describe("definite-return checking", () => {
     ).toBe(false);
   });
 
-  // SAFE SUBSET: functions that use a `match` are skipped for now (whether they
-  // return on all paths depends on match exhaustiveness — deferred to a follow-up).
-  it("skips a match-containing function (surviving statement matchBlock)", () => {
-    // Originally this arm-returned on every path; `return` in a statement-
-    // position arm is now a compile error (Task 10), so the nearest equivalent
-    // is a statement match that assigns on every arm. The trailing return is
-    // CONDITIONAL, so the flow graph sees a fall-through path with no return —
-    // only the containsMatch skip (hitting the surviving pure-literal
-    // `matchBlock` node) suppresses the diagnostic.
+  // --- match-aware definite-return (the #386 safe-subset skip is gone) ---
+  // Since match expressions (7eefd7c1), `return` in a statement-position arm is
+  // a compile error and expression-arm returns are matchYield unwinds, so a
+  // match can never itself return from the function. The flow terminal is
+  // therefore exact for match-containing functions: what matters is whether the
+  // statements AROUND the match return on every path.
+
+  it("flags a conditional return after a statement match (genuine fall-through)", () => {
     expect(
       misses(`def f(x: string): number {
   let out = 0
@@ -72,29 +71,99 @@ describe("definite-return checking", () => {
   }
   if (x == "a") { return out }
 }`),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("skips a match-containing function that does not return on all paths (no false positive)", () => {
-    // A statement match with no trailing return: the function misses a return,
-    // but is skipped because it contains a match.
-    expect(misses(`def f(x: string): number { match (x) { "a" => print("hi")  _ => print("no") } }`)).toBe(false);
+  it("flags a statement match with no trailing return", () => {
+    expect(misses(`def f(x: string): number { match (x) { "a" => print("hi")  _ => print("no") } }`)).toBe(true);
   });
 
-  it("skips a function with a pattern match (idiomatic Result match, no `_`)", () => {
-    // The false-positive case that drove the safe-subset decision: an exhaustive
-    // Result match with no `_`. Arm returns are now illegal (Task 10), so the
-    // idiomatic form is an expression match; this shape exercises the LOWERED
-    // detection path (the scrutinee `assignment` carrying `matchSource`, since
-    // pattern arms are lowered to an if-chain). The trailing return is
-    // conditional so the flow graph sees a fall-through; only the containsMatch
-    // skip suppresses the diagnostic.
+  it("flags a conditional return after a Result expression match (genuine fall-through)", () => {
     expect(
       misses(`def mk(): Result<number, string> { return success(1) }
 def f(): number {
   let r = mk()
   let out = match (r) { success(v) => v  failure(e) => 0 }
   if (out > 0) { return out }
+}`),
+    ).toBe(true);
+  });
+
+  it("flags a conditional return after a boolean expression match (genuine fall-through)", () => {
+    expect(
+      misses(`def f(x: bool): number {
+  const out = match (x) { true => 1  false => 2 }
+  if (x) { return out }
+}`),
+    ).toBe(true);
+  });
+
+  it("accepts a returned match expression (literal arms)", () => {
+    // `return match(...)` lowers to the match region + a real trailing return.
+    expect(misses(`def f(x: bool): number { return match (x) { true => 1  false => 2 } }`)).toBe(false);
+  });
+
+  it("accepts a returned match expression (pattern arms — the old idiomatic Result tail)", () => {
+    expect(
+      misses(`def mk(): Result<number, string> { return success(1) }
+def f(): number {
+  let r = mk()
+  return match (r) { success(v) => v  failure(e) => 0 }
+}`),
+    ).toBe(false);
+  });
+
+  it("accepts an expression match with a block arm followed by an unconditional return", () => {
+    // The mid-arm `return 1` is a matchYield (yields to the match), NOT a
+    // function return — the function's own return is the trailing statement.
+    expect(
+      misses(`def f(x: bool): number {
+  const out = match (x) {
+    true => {
+      print("t")
+      return 1
+    }
+    false => 2
+  }
+  return out
+}`),
+    ).toBe(false);
+  });
+
+  it("accepts a statement match followed by an unconditional return", () => {
+    expect(
+      misses(`def f(x: string): number {
+  let out = 0
+  match (x) {
+    "a" => out = 1
+    _ => out = 2
+  }
+  return out
+}`),
+    ).toBe(false);
+  });
+
+  it("a matchYield is not a function return: expression match as the last statement still flags", () => {
+    // Every arm "returns" (yields), but the match value is assigned and the
+    // function then falls through.
+    expect(
+      misses(`def f(x: bool): number { const out = match (x) { true => { return 1 }  false => 2 } }`),
+    ).toBe(true);
+  });
+
+  it("accepts return match with a block-arm mid-yield", () => {
+    // Pins that the returned-match form stays exit even when an arm body is a
+    // block whose yield is mid-arm (protects against a future flowBuilder
+    // change to arm-body threading).
+    expect(
+      misses(`def f(x: bool): number {
+  return match (x) {
+    true => {
+      print("t")
+      return 1
+    }
+    false => 0
+  }
 }`),
     ).toBe(false);
   });
@@ -129,22 +198,6 @@ def g(x: number): number { if (x > 0) { return 2 } }`;
   // --- documented limitations, pinned ---
   it("LIMITATION: an infinite loop is flagged (flow model has no exit for while(true))", () => {
     expect(misses(`def f(): number { while (true) { let x = 1 } }`)).toBe(true);
-  });
-
-  it("skips a `_`-less match (safe subset — no false positive on exhaustive matches)", () => {
-    // A boolean match over true/false is exhaustive, but the safe subset simply
-    // skips any match-containing function rather than reasoning about
-    // exhaustiveness. (Arms can no longer `return` — Task 10 — so the value
-    // flows out via a `_`-less expression match instead.) The conditional
-    // trailing return leaves a fall-through path, so without the containsMatch
-    // skip this exhaustive match WOULD be flagged — the exact false positive
-    // the safe subset exists to avoid.
-    expect(
-      misses(`def f(x: bool): number {
-  const out = match (x) { true => 1  false => 2 }
-  if (x) { return out }
-}`),
-    ).toBe(false);
   });
 
   // --- config knob ---

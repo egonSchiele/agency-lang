@@ -36,6 +36,21 @@ describe("_writeBinary", () => {
     ).rejects.toThrow(/Invalid mode/);
   });
 
+  it("throws on malformed base64 rather than writing corrupted bytes", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "wb-"));
+    await expect(_writeBinary(dir, "bad.bin", "not valid base64!!", "overwrite")).rejects.toThrow(
+      /valid base64/,
+    );
+  });
+
+  it("tolerates whitespace/newlines in base64 input", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "wb-"));
+    const raw = Buffer.from([10, 20, 30, 40, 50]);
+    const chunked = raw.toString("base64").replace(/(.{2})/g, "$1\n"); // inject newlines
+    await _writeBinary(dir, "ws.bin", chunked, "overwrite");
+    expect(await _readBinary(dir, "ws.bin")).toBe(raw.toString("base64"));
+  });
+
   it("preserves all 256 byte values (no text-mode encoding sneaks in)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "wb-"));
     const all = Buffer.from(Array.from({ length: 256 }, (_, i) => i));

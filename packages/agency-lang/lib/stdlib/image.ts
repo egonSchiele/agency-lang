@@ -76,11 +76,11 @@ export async function _generateImage(
     return failure("Image generation returned no images.");
   }
 
-  // Reuse the declarative cost interface: addCost bills guards + enforces (may
-  // throw a guard trip, which must propagate); addTokens accrues the counter.
-  addCost(gen.costEstimate?.totalCost ?? 0);
+  // The generation already happened (and cost real money), so record tokens and
+  // trace the event BEFORE enforcing guards — same ordering as the llm() path
+  // (lib/runtime/prompt.ts). This way a guard trip inside addCost still leaves
+  // the spend traced and token accounting consistent; the trip then propagates.
   addTokens(gen.tokenUsage?.totalTokens ?? 0);
-
   ctx.statelogClient.imageGeneration({
     promptPreview: prompt.slice(0, PROMPT_PREVIEW_MAX),
     model: gen.model,
@@ -91,6 +91,9 @@ export async function _generateImage(
         ? undefined
         : { totalCost: gen.costEstimate.totalCost },
   });
+  // addCost accrues localCost, bills guards, and enforces limits (may throw a
+  // guard trip, which must propagate — must be last).
+  addCost(gen.costEstimate?.totalCost ?? 0);
 
   return success({
     base64: Buffer.from(first.data).toString("base64"),

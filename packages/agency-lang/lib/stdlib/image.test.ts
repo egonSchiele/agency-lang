@@ -68,14 +68,18 @@ describe("_generateImage", () => {
     });
   });
 
-  it("propagates a guard trip (enforceGuards throwing) instead of swallowing it", async () => {
-    await withClient(async () => okResult({ costEstimate: { totalCost: 5.0 } }), async ({ stack }) => {
+  it("propagates a guard trip, but still traces the spend + tokens first", async () => {
+    await withClient(async () => okResult({ costEstimate: { totalCost: 5.0 } }), async ({ stack, imageGeneration }) => {
       stack.enforceGuards.mockImplementation(() => {
         throw new Error("budget exceeded");
       });
       await expect(_generateImage("x", "", "", "", "", [], "", "")).rejects.toThrow(
         /budget exceeded/,
       );
+      // The generation already cost money — tokens counted + event traced
+      // before the trip propagates (same ordering as llm()).
+      expect(stack.localTokens).toBe(10);
+      expect(imageGeneration).toHaveBeenCalledTimes(1);
     });
   });
 

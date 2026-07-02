@@ -190,7 +190,16 @@ export async function _writeBinary(
   base64: string,
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
-  return _writeBytes(dir, filename, Buffer.from(base64, "base64"), mode);
+  // `Buffer.from(x, "base64")` silently drops invalid characters and truncates
+  // at bad padding, so it would write corrupted bytes rather than fail. Validate
+  // first and throw a clear error (whitespace is allowed and ignored).
+  const normalized = base64.replace(/\s+/g, "");
+  if (normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
+    throw new Error(
+      "writeBinary: `base64` is not valid base64-encoded data (expected standard base64 from generateImage()/readBinary()).",
+    );
+  }
+  return _writeBytes(dir, filename, Buffer.from(normalized, "base64"), mode);
 }
 
 export async function _readBinary(dir: string, filename: string): Promise<string> {

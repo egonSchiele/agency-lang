@@ -1,6 +1,7 @@
 import type { Guard, GuardJSON } from "../guard.js";
 import type { ReplyAttachmentPart } from "../replyAttachments.js";
 import { guardFromJSON } from "../guard.js";
+import { sendCostTelemetryToParent } from "../costTelemetry.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
@@ -527,6 +528,20 @@ export class StateStack {
   }
 
   /**
+   * Bill one paid charge to this stack: accumulate the branch-local cost
+   * accumulator and charge every active guard. The single billing
+   * sequence every paid site runs — llm (prompt.ts), addCost (cost.ts;
+   * memory and image generation pay through it), and the parent-side
+   * subprocess telemetry handler (ipc.ts). Enforcement stays at call
+   * sites because it legitimately varies: prompt/addCost always enforce;
+   * the telemetry handler skips enforcement once its session has settled.
+   */
+  billCharge(amount: number): void {
+    this.localCost += amount;
+    this.chargeGuards(amount);
+  }
+
+  /**
    * Charge every active guard with this call's cost. Shared parent
    * guards (CostGuard.cloneForBranch returns `this`) accumulate
    * descendant spend in real time — this is what makes mid-fork trip
@@ -535,6 +550,11 @@ export class StateStack {
    */
   chargeGuards(amount: number): void {
     for (const g of this.guards) g.charge(amount);
+    // Subprocess: forward this charge to the parent so ITS cost guards
+    // see the spend live. Emission is per paid call and unconditional on
+    // local guards existing: a mid-tier relay may have none but must
+    // still forward grandchild spend upward. No-op outside IPC mode.
+    sendCostTelemetryToParent(amount);
   }
 
   /**

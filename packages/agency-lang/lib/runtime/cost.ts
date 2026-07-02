@@ -8,8 +8,7 @@ import { getRuntimeContext } from "./asyncContext.js";
  *  Throws (a guard-trip) if enforcement fails — callers must not swallow it. */
 export function addCost(amount: number): void {
   const stack = getRuntimeContext().stack;
-  stack.localCost += amount;
-  stack.chargeGuards(amount);
+  stack.billCharge(amount);
   stack.enforceGuards();
 }
 

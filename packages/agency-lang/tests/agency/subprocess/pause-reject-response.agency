@@ -1,0 +1,31 @@
+import { compile, run } from "std::agency"
+
+// A rejection response is not an abort: the child resumes, its bash call
+// returns a failure, and the child continues to a normal completion.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo nope")
+  if (isFailure(r)) {
+    return "rejected-as-expected"
+  }
+  return "unexpectedly-ran"
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two concurrent paused subprocesses batch into one surfaced array and resume independently",
+      "input": "",
+      "expectedOutput": "[\"sub-a\\n\",\"sub-b\\n\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

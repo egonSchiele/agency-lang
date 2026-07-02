@@ -1,0 +1,70 @@
+import { compile, run } from "std::agency"
+import { withLock } from "std::concurrency"
+
+// The whole nested tree shares the ROOT's lock domain: while a root fork
+// branch holds "resource", a GRANDCHILD's timed acquire must contend with
+// it and time out. If a mid-tree process acquired locks locally instead of
+// relaying upward, the grandchild would get the lock instantly.
+node main() {
+  const grandSource = """
+import { withLock } from "std::concurrency"
+
+node main() {
+  const r = withLock("resource", 300) as {
+    sleep(1ms)
+  }
+  if (isFailure(r)) {
+    return "lock-timed-out"
+  }
+  return "acquired-unexpectedly"
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+  handle {
+    const results = fork([0, 1], shared: true) as branch {
+      if (branch == 0) {
+        withLock("resource") as {
+          sleep(2s)
+        }
+        return "held"
+      }
+      sleep(50ms)
+      const result = run(
+        compiled: compiled,
+        node: "main",
+        args: { grandSource: grandSource },
+      )
+      if (isSuccess(result)) {
+        return result.value.data
+      }
+      return "run failed"
+    }
+    return results
+  } with (e) {
+    return approve()
+  }
+}

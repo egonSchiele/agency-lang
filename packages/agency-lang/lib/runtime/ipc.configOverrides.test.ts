@@ -80,42 +80,40 @@ describe("subprocess interrupt IPC", () => {
     vi.restoreAllMocks();
   });
 
-  it("correlates parent decisions to the matching interrupt", async () => {
+  it("correlates parent outcomes to the matching interrupt id", async () => {
     const sent: any[] = [];
     process.send = vi.fn((msg: any) => {
       sent.push(msg);
       return true;
     }) as any;
 
+    // The message id IS the caller's interrupt-level id, preserved verbatim.
     const first = sendInterruptToParent(
       { effect: "test", message: "first", data: {}, origin: "test" },
-      { propagated: false },
+      "intr-first",
     );
     const second = sendInterruptToParent(
       { effect: "test", message: "second", data: {}, origin: "test" },
-      { propagated: false },
+      "intr-second",
     );
 
     expect(sent).toHaveLength(2);
-    expect(sent[0].interruptId).toBeTruthy();
-    expect(sent[1].interruptId).toBeTruthy();
-    expect(sent[0].interruptId).not.toBe(sent[1].interruptId);
+    expect(sent[0].interruptId).toBe("intr-first");
+    expect(sent[1].interruptId).toBe("intr-second");
 
     process.emit("message", {
       type: "decision",
-      interruptId: sent[1].interruptId,
-      approved: true,
-      value: "second-approved",
+      interruptId: "intr-second",
+      outcome: { kind: "approved", value: "second-approved" },
     });
     process.emit("message", {
       type: "decision",
-      interruptId: sent[0].interruptId,
-      approved: false,
-      value: "first-rejected",
+      interruptId: "intr-first",
+      outcome: { kind: "rejected", value: "first-rejected" },
     });
 
-    await expect(first).resolves.toEqual({ type: "reject", value: "first-rejected" });
-    await expect(second).resolves.toEqual({ type: "approve", value: "second-approved" });
+    await expect(first).resolves.toEqual({ kind: "rejected", value: "first-rejected" });
+    await expect(second).resolves.toEqual({ kind: "approved", value: "second-approved" });
   });
 
   it("sends a structured limit error instead of an oversized interrupt", async () => {
@@ -128,8 +126,8 @@ describe("subprocess interrupt IPC", () => {
 
     await expect(sendInterruptToParent(
       { effect: "test", message: "too large", data: { value: "é" }, origin: "test" },
-      { propagated: false },
-    )).resolves.toEqual({ type: "reject", value: expect.stringContaining("ipc_payload") });
+      "intr-oversized",
+    )).resolves.toEqual({ kind: "rejected", value: expect.stringContaining("ipc_payload") });
 
     expect(sent).toHaveLength(1);
     expect(sent[0].type).toBe("error");
@@ -152,8 +150,8 @@ describe("subprocess interrupt IPC", () => {
 
     await expect(sendInterruptToParent(
       { effect: "test", message: "bad", data: circular, origin: "test" },
-      { propagated: false },
-    )).resolves.toEqual({ type: "reject", value: expect.stringContaining("Failed to serialize interrupt payload") });
+      "intr-circular",
+    )).resolves.toEqual({ kind: "rejected", value: expect.stringContaining("Failed to serialize interrupt payload") });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]).toEqual({

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A grandchild lock acquire relays to the root lock domain and times out against a root-held lock",
+      "input": "",
+      "expectedOutput": "[\"held\",\"lock-timed-out\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

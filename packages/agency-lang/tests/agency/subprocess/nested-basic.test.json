@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Nested subprocess runs, with per-level depth visible in the std::run gate data",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

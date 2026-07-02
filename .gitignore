@@ -11,6 +11,8 @@
 **/tests/**/*.judge_evaluate.json
 **/*.js
 !**/test.js
+# Stage-2 helper of the subprocess durability test (spawned by its test.js)
+!**/tests/agency-js/subprocess-durable-resume/resume-stage.js
 skills/*
 *__result.json
 **/docs/local/

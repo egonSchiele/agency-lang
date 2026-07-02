@@ -1,0 +1,36 @@
+import { compile, run } from "std::agency"
+
+// After a resume, the PARENT chain must be back in place: replay
+// re-registers the parent handler before _run re-enters. phase-one is
+// unmatched by any handler (pauses); phase-two must be approved by the
+// REPLAYED parent handler — if parent re-registration were broken,
+// phase-two would surface a second interrupt and the single-response
+// test would fail.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  let first = bash("echo phase-one")
+  let second = bash("echo phase-two")
+  return first.stdout + second.stdout
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+    if (e.effect == "std::bash" && e.data.command == "echo phase-two") {
+      return approve()
+    }
+  }
+}

@@ -1,0 +1,58 @@
+import { compile, run } from "std::agency"
+
+// Mixed batch: branch a is approved by a child-local handler and completes
+// BEFORE the pause; branches b and c pause. On resume, branch a must
+// short-circuit on its cached result — the marker file proves it ran
+// exactly once (array equality alone cannot distinguish a buggy re-run).
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  handle {
+    let cleanup = bash("rm -f mixed-marker.txt")
+  } with (e) {
+    return approve()
+  }
+  const results = fork(["a", "b", "c"]) as item {
+    if (item == "a") {
+      handle {
+        let m = bash("echo ran-a >> mixed-marker.txt")
+        let r = bash("echo branch-" + item)
+        return r.stdout
+      } with (e) {
+        if (e.effect == "std::bash" && e.data.command == "echo ran-a >> mixed-marker.txt") {
+          return approve()
+        }
+        if (e.effect == "std::bash" && e.data.command == "echo branch-a") {
+          return approve()
+        }
+      }
+    }
+    let r2 = bash("echo branch-" + item)
+    return r2.stdout
+  }
+  handle {
+    let count = bash("awk 'END{print NR}' mixed-marker.txt")
+    let cleanup2 = bash("rm -f mixed-marker.txt")
+    return { results: results, branchARuns: count.stdout }
+  } with (e) {
+    return approve()
+  }
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

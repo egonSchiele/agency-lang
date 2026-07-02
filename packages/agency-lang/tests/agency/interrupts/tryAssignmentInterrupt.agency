@@ -1,0 +1,29 @@
+def mightPause(): string {
+  const name = interrupt("Approve this?")
+  return "resumed: ${name}"
+}
+
+// Regression: an assignment-position `try` must still propagate an
+// Interrupt[] bubbling out of the callee. Without the halt check on
+// tryExpression assignments, the raw interrupt array is assigned to `r`
+// (isSuccess and isFailure both false), the interrupts never surface,
+// and the paused state is stranded.
+node main() {
+  const r = try mightPause()
+  if (isFailure(r)) {
+    return "failed"
+  }
+  return r.value
+}
+
+// Same bug class, catch form: `try f() catch v` parses as a binOp whose
+// left is the tryExpression, and __catchResult passes a raw Interrupt[]
+// through unchanged — the guard must fire for binOp-wrapped try too.
+node mainCatch() {
+  const r = try mightPause() catch "fell-back"
+  // Consume r as a value: without the guard, r would be the raw
+  // Interrupt[] and this returns a mangled string with no interrupt
+  // surfaced (a bare `return r` would mask the bug by re-bubbling the
+  // array at node level).
+  return "got: ${r}"
+}

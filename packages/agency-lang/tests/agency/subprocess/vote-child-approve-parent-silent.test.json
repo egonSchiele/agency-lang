@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Child-local approve with a silent parent chain is an approve, not a reject",
+      "input": "",
+      "expectedOutput": "\"child-approved\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

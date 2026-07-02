@@ -1,5 +1,101 @@
-import { describe, it, expect } from "vitest";
-import { clampLimits } from "./ipc.js";
+import { describe, it, expect, afterEach } from "vitest";
+import path from "path";
+import {
+  clampLimits,
+  serializeInterruptsForIpc,
+  setSubprocessRunInfo,
+  getSubprocessRunInfo,
+  resolveDepthCap,
+  withParentStatelog,
+  DEFAULT_MAX_SUBPROCESS_DEPTH,
+  SUBPROCESS_DEPTH_CEILING,
+} from "./ipc.js";
+
+describe("withParentStatelog", () => {
+  it("forwards the parent logFile (absolutized) when the parent logs and the caller set none", () => {
+    const out = withParentStatelog(undefined, { observability: true, logFile: "log.jsonl" });
+    expect(out).toEqual({
+      observability: true,
+      log: { logFile: path.resolve(process.cwd(), "log.jsonl") },
+    });
+  });
+
+  it("an explicit child logFile always wins", () => {
+    const overrides = { observability: true, log: { logFile: "child.jsonl" } };
+    expect(withParentStatelog(overrides, { observability: true, logFile: "log.jsonl" })).toBe(overrides);
+  });
+
+  it("forwards nothing when the parent has observability off", () => {
+    expect(withParentStatelog(undefined, { observability: false, logFile: "log.jsonl" })).toBeUndefined();
+  });
+
+  it("forwards observability alone when the parent has no file sink", () => {
+    expect(withParentStatelog(undefined, { observability: true })).toEqual({ observability: true });
+  });
+});
+
+describe("resolveDepthCap", () => {
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+
+  it("uses the param cap when no ancestor cap exists", () => {
+    expect(resolveDepthCap(DEFAULT_MAX_SUBPROCESS_DEPTH)).toBe(DEFAULT_MAX_SUBPROCESS_DEPTH);
+  });
+
+  it("clamps the param cap to the hard ceiling", () => {
+    expect(resolveDepthCap(100)).toBe(SUBPROCESS_DEPTH_CEILING);
+  });
+
+  it("a tighter ancestor cap always wins", () => {
+    setSubprocessRunInfo({ depth: 1, maxDepth: 2 });
+    expect(resolveDepthCap(5)).toBe(2);
+  });
+
+  it("a looser param cap cannot loosen the ancestor cap", () => {
+    setSubprocessRunInfo({ depth: 1, maxDepth: 3 });
+    expect(resolveDepthCap(10)).toBe(3);
+  });
+});
+
+describe("subprocess run info", () => {
+  // Module-scoped per-PROCESS state (one run per subprocess). Tests share
+  // the module instance, so isolate via afterEach instead of relying on
+  // in-test reset ordering.
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+
+  it("defaults to depth 0 and round-trips", () => {
+    expect(getSubprocessRunInfo()).toEqual({ depth: 0 });
+    setSubprocessRunInfo({ runId: "r1", subprocessSessionId: "s1", parentSpanId: "sp1", depth: 1 });
+    expect(getSubprocessRunInfo()).toEqual({ runId: "r1", subprocessSessionId: "s1", parentSpanId: "sp1", depth: 1 });
+  });
+
+  it("serializeInterruptsForIpc echoes the seeded session id", () => {
+    setSubprocessRunInfo({ runId: "r1", subprocessSessionId: "sess-42", depth: 1 });
+    const msg = serializeInterruptsForIpc([
+      { type: "interrupt", interruptId: "i1", runId: "r1", effect: "e", message: "m", data: {}, origin: "o" } as any,
+    ]);
+    expect(msg.subprocessSessionId).toBe("sess-42");
+  });
+});
+
+describe("serializeInterruptsForIpc", () => {
+  it("strips per-interrupt checkpoints and hoists the shared one", () => {
+    const cp = { id: 1, nodeId: "main", stack: [] };
+    const interrupts = [
+      { type: "interrupt", interruptId: "i1", runId: "r", effect: "std::bash", message: "m", data: {}, origin: "o", checkpoint: cp, checkpointId: 1 },
+      { type: "interrupt", interruptId: "i2", runId: "r", effect: "std::bash", message: "m", data: {}, origin: "o", checkpoint: cp, checkpointId: 1 },
+    ] as any[];
+    const msg = serializeInterruptsForIpc(interrupts as any);
+    expect(msg.type).toBe("interrupted");
+    expect(msg.checkpoint).toBe(cp);
+    expect(msg.interrupts.map((i) => i.interruptId)).toEqual(["i1", "i2"]);
+    expect(msg.interrupts[0].runId).toBe("r");
+    expect((msg.interrupts[0] as any).checkpoint).toBeUndefined();
+    expect((msg.interrupts[0] as any).checkpointId).toBeUndefined();
+    // The message must survive the JSON round-trip process.send performs —
+    // a class instance anywhere in the tree would silently degrade here.
+    expect(JSON.parse(JSON.stringify(msg))).toEqual(msg);
+  });
+});
 
 describe("clampLimits", () => {
   it("clamps wallClock above 1h to 1h", () => {

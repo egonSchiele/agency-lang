@@ -11,11 +11,26 @@
  */
 
 import { pathToFileURL } from "url";
-import type { IpcResultMessage, IpcErrorMessage, RunInstruction } from "./ipc.js";
-import { ipcLog, setSubprocessIpcPayloadLimit } from "./ipc.js";
+import type { IpcResultMessage, IpcErrorMessage, IpcInterruptedMessage, RunInstruction, ResumeInstruction } from "./ipc.js";
+import { ipcLog, setSubprocessIpcPayloadLimit, serializeInterruptsForIpc } from "./ipc.js";
+import { hasInterrupts } from "./interrupts.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
+import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
 
 let ipcPayloadLimit = Infinity;
+
+// Parent-death watchdog. If the parent process dies (SIGKILL on a limit,
+// crash, anything), our IPC channel disconnects — exit immediately instead
+// of running on outside every limit. This also reaps nested trees: when a
+// mid-tier process dies this way, its own children's channels disconnect
+// in turn, so the whole subtree tears itself down without process-group
+// plumbing. It equally covers a child parked in sendInterruptToParent
+// awaiting a decision that will never come. Registered before anything
+// else so no window exists where the parent can die unobserved.
+process.on("disconnect", () => {
+  process.stderr.write("[bootstrap] parent disconnected — exiting\n");
+  process.exit(1);
+});
 
 /**
  * Send an IPC message and wait for the channel to flush before resolving.
@@ -23,7 +38,7 @@ let ipcPayloadLimit = Infinity;
  * the immediate exit can race with the async send and the parent will see
  * only an abnormal close, missing the structured message entirely.
  */
-function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): Promise<void> {
+function sendOrDie(msg: IpcResultMessage | IpcErrorMessage | IpcInterruptedMessage): Promise<void> {
   if (typeof process.send !== "function") {
     console.error("[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().");
     process.exit(1);
@@ -43,7 +58,7 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): Promise<void> {
  * them back to the same Result.failure shape that wall_clock and memory
  * limits produce.
  */
-async function sendResultOrLimitError(msg: IpcResultMessage): Promise<void> {
+async function sendResultOrLimitError(msg: IpcResultMessage | IpcInterruptedMessage): Promise<void> {
   const serialized = JSON.stringify(msg);
   const byteLength = Buffer.byteLength(serialized, "utf8");
   if (byteLength > ipcPayloadLimit) {
@@ -64,9 +79,63 @@ async function sendResultOrLimitError(msg: IpcResultMessage): Promise<void> {
   await sendOrDie(msg);
 }
 
-// Listen for the initial run instruction, then remove the listener
+/** Run-mode body: look up the node function, map named args to positional
+ * order via the module's `__<node>NodeParams` metadata, and call it. */
+async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
+  const nodeFn = mod[msg.node];
+  if (typeof nodeFn !== "function") {
+    await sendOrDie({
+      type: "error",
+      error: `Node "${msg.node}" not found in compiled module. Available exports: ${Object.keys(mod).join(", ")}`,
+    });
+    process.exit(1);
+  }
+
+  // Compiled nodes export a params list as __<nodeName>NodeParams.
+  // Node args are positional: main(name, { messages, callbacks }).
+  const paramsKey = `__${msg.node}NodeParams`;
+  if (!(paramsKey in mod)) {
+    await sendOrDie({
+      type: "error",
+      error: `Node params metadata "${paramsKey}" not found in compiled module. The module may have been compiled with an incompatible version.`,
+    });
+    process.exit(1);
+  }
+  const paramNames: string[] = mod[paramsKey];
+  const positionalArgs = paramNames.map((p: string) => msg.args[p]);
+
+  ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
+  // No top-level `agencyStore.run(...)` wrap here: the node entry
+  // point (`runNode` in `lib/runtime/node.ts`) installs its own
+  // initial frame once the compiled module's `main(...)`-style
+  // wrapper invokes it, and the per-step `agencyStore.run` inside
+  // generated function/node bodies re-establishes the scope frame.
+  // Wrapping again here would attach the subprocess's parent-process
+  // context (which doesn't even exist as a peer ALS) instead of the
+  // child's own `RuntimeContext`.
+  return nodeFn(...positionalArgs);
+}
+
+/** Resume-mode body: re-attach the shared checkpoint to each interrupt and
+ * hand the batch to the module's own `respondToInterrupts` export — the
+ * exact machinery in-process resumes use (restore state, set the response
+ * map, replay the node). Handlers re-register during the replay. */
+async function executeResume(mod: any, msg: ResumeInstruction): Promise<any> {
+  if (typeof mod.respondToInterrupts !== "function") {
+    await sendOrDie({
+      type: "error",
+      error: `respondToInterrupts export not found in compiled module. The module may have been compiled with an incompatible version.`,
+    });
+    process.exit(1);
+  }
+  const interrupts = msg.interrupts.map((intr) => ({ ...intr, checkpoint: msg.checkpoint }));
+  ipcLog("send", { type: "log", detail: `resuming node ${msg.node} with ${msg.responses.length} responses` });
+  return mod.respondToInterrupts(interrupts, msg.responses);
+}
+
+// Listen for the initial run/resume instruction, then remove the listener
 // so it doesn't interfere with sendInterruptToParent's decision handler.
-const bootstrapHandler = async (msg: RunInstruction) => {
+const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
   if ((msg as any).type === "decision") {
     // Decision messages are for sendInterruptToParent, not for us
     return;
@@ -74,7 +143,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   process.removeListener("message", bootstrapHandler);
   ipcLog("recv", msg);
 
-  if (msg.type !== "run") {
+  if (msg.type !== "run" && msg.type !== "resume") {
     await sendOrDie({
       type: "error",
       error: `Unknown message type: ${(msg as any).type ?? "undefined"}`,
@@ -87,6 +156,16 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   }
   setSubprocessIpcPayloadLimit(ipcPayloadLimit);
   setRuntimeConfigOverrides(msg.configOverrides);
+  // Adopt the parent's identity BEFORE importing the compiled module, so
+  // every context this process creates inherits it (runId/trace, span
+  // parentage, nesting depth, tightest ancestor depth cap).
+  setSubprocessRunInfo({
+    runId: msg.runId,
+    subprocessSessionId: msg.subprocessSessionId,
+    parentSpanId: msg.spanContext,
+    depth: msg.depth ?? 0,
+    ...(msg.maxDepth !== undefined ? { maxDepth: msg.maxDepth } : {}),
+  });
 
   try {
     const scriptUrl = pathToFileURL(msg.scriptPath).href;
@@ -94,41 +173,21 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     // eslint-disable-next-line no-restricted-syntax -- dynamic import required: script path is determined at runtime by the parent process
     const mod = await import(scriptUrl);
 
-    const nodeFn = mod[msg.node];
-    if (typeof nodeFn !== "function") {
-      await sendOrDie({
-        type: "error",
-        error: `Node "${msg.node}" not found in compiled module. Available exports: ${Object.keys(mod).join(", ")}`,
-      });
-      process.exit(1);
-      return;
-    }
-
-    // Compiled nodes export a params list as __<nodeName>NodeParams.
-    // Node args are positional: main(name, { messages, callbacks }).
-    const paramsKey = `__${msg.node}NodeParams`;
-    if (!(paramsKey in mod)) {
-      await sendOrDie({
-        type: "error",
-        error: `Node params metadata "${paramsKey}" not found in compiled module. The module may have been compiled with an incompatible version.`,
-      });
-      process.exit(1);
-      return;
-    }
-    const paramNames: string[] = mod[paramsKey];
-    const positionalArgs = paramNames.map((p: string) => msg.args[p]);
-
-    ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
-    // No top-level `agencyStore.run(...)` wrap here: the node entry
-    // point (`runNode` in `lib/runtime/node.ts`) installs its own
-    // initial frame once the compiled module's `main(...)`-style
-    // wrapper invokes it, and the per-step `agencyStore.run` inside
-    // generated function/node bodies re-establishes the scope frame.
-    // Wrapping again here would attach the subprocess's parent-process
-    // context (which doesn't even exist as a peer ALS) instead of the
-    // child's own `RuntimeContext`.
-    const result = await nodeFn(...positionalArgs);
+    const result = msg.type === "resume"
+      ? await executeResume(mod, msg)
+      : await executeRun(mod, msg);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
+
+    if (hasInterrupts(result.data)) {
+      // Unresolved interrupts: the child checkpointed itself through its
+      // normal propagate path. Ship the batch + shared checkpoint to the
+      // parent and exit; the parent surfaces them to the user and re-forks
+      // us with a resume instruction once the user responds. This branch
+      // applies to BOTH modes — a resumed child that pauses again
+      // re-enters the same cycle (multi-cycle).
+      await sendResultOrLimitError(serializeInterruptsForIpc(result.data));
+      process.exit(0);
+    }
 
     await sendResultOrLimitError({
       type: "result",

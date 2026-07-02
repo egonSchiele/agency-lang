@@ -77,12 +77,10 @@ describe("_compileFile sandbox containment", () => {
   it("compiles a file that lives inside the sandbox dir, and produces JS derived from THAT file", () => {
     const result = _compileFile(sandbox, "inside.agency");
     expect(result.moduleId).toBeTruthy();
-    expect(result.path).toContain(result.moduleId);
     // Crucial: prove the compiled output came from inside.agency and not,
     // e.g., outside.agency. The sentinel string from inside.agency must
-    // appear in the emitted JS.
-    const compiled = readFileSync(result.path, "utf-8");
-    expect(compiled).toContain(INSIDE_SENTINEL);
+    // appear in the emitted JS (carried in the value, not written to disk).
+    expect(result.code).toContain(INSIDE_SENTINEL);
   });
 
   it("rejects a filename containing .. that escapes the sandbox", () => {

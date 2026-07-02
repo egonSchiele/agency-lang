@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "atCap",
+      "description": "Nesting at exactly maxDepth succeeds",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aboveCap",
+      "description": "Nesting above an ancestor cap fails with the structured depth limit; descendants cannot loosen it",
+      "input": "",
+      "expectedOutput": "\"depth-capped\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

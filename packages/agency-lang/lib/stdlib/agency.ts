@@ -1,7 +1,6 @@
 import { compileSource, typeCheckSource, TypeCheckReport } from "../compiler/compile.js";
-import { writeFileSync, mkdirSync, readFileSync, realpathSync, existsSync } from "fs";
-import { join, resolve, sep } from "path";
-import { nanoid } from "nanoid";
+import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
+import { resolve, sep } from "path";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { generateAgency } from "../backends/agencyGenerator.js";
 import { walkNodesArray } from "../utils/node.js";
@@ -80,7 +79,7 @@ export const _callback = new AgencyFunction({
   toolDefinition: null,
 });
 
-function compileAndPersist(source: string): { moduleId: string; path: string } {
+function compileToProgram(source: string): { moduleId: string; code: string } {
   const result = compileSource(source, {
     typechecker: { enabled: true },
     imports: { allowKinds: ["stdlib"] },
@@ -90,18 +89,15 @@ function compileAndPersist(source: string): { moduleId: string; path: string } {
     throw new Error(result.errors.join("\n"));
   }
 
-  // Write to .agency-tmp/ under cwd so the subprocess can resolve
-  // agency-lang package imports via the project's node_modules.
-  const tempDir = join(process.cwd(), ".agency-tmp", nanoid());
-  mkdirSync(tempDir, { recursive: true });
-  const tempPath = join(tempDir, `${result.moduleId}.js`);
-  writeFileSync(tempPath, result.code, "utf-8");
-
-  return { moduleId: result.moduleId, path: tempPath };
+  // The compiled JS travels IN the CompiledProgram value so that any
+  // checkpoint containing it is fully self-contained — the code is
+  // generated at runtime and cannot be assumed present on disk at resume
+  // time. `_run` materializes it to .agency-tmp/ at fork time.
+  return { moduleId: result.moduleId, code: result.code };
 }
 
-export function _compile(source: string): { moduleId: string; path: string } {
-  return compileAndPersist(source);
+export function _compile(source: string): { moduleId: string; code: string } {
+  return compileToProgram(source);
 }
 
 // Resolve `filename` against `dir`, requiring the result to live strictly
@@ -160,9 +156,17 @@ function resolveInSandbox(
 export function _compileFile(
   dir: string,
   filename: string,
-): { moduleId: string; path: string } {
+): { moduleId: string; code: string } {
   const source = readFileSync(resolveInSandbox(dir, filename), "utf-8");
-  return compileAndPersist(source);
+  return compileToProgram(source);
+}
+
+/** The current process's subprocess nesting depth (0 = root). Backs the
+ * `depth` field in std::run gate interrupt data — `run()` reports the
+ * PROSPECTIVE child depth as `_subprocessDepth() + 1` so handlers can
+ * reject by depth. Also readable from TS via `agency.ctx().subprocessDepth`. */
+export function _subprocessDepth(): number {
+  return getRuntimeContext().ctx.subprocessDepth ?? 0;
 }
 
 export function _typecheck(source: string): TypeCheckReport {

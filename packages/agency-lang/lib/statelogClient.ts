@@ -34,7 +34,11 @@ export type SpanType =
   | "memoryRemember"
   | "memoryRecall"
   | "memoryForget"
-  | "memoryCompaction";
+  | "memoryCompaction"
+  // One subprocess execution segment (std::agency run()). On the parent
+  // side it wraps the whole session; in the child it is the synthetic
+  // root frame adopted from the parent so child spans nest under it.
+  | "subprocessRun";
 
 export type SpanContext = {
   spanId: string;
@@ -242,6 +246,21 @@ export class StatelogClient {
       startTime: performance.now(),
     });
     return spanId;
+  }
+
+  // Adopt a span owned by ANOTHER process (the parent's `subprocessRun`
+  // span) as this client's root: a synthetic frame pushed at the bottom of
+  // the root stack, never popped, never emitted — it exists purely so every
+  // span this process starts carries a parentSpanId chain rooted at the
+  // parent's span tree. Used by subprocess bootstrap seeding.
+  adoptExternalParentSpan(spanId: string): void {
+    if (!this.enabled) return;
+    this.rootStack.unshift({
+      spanId,
+      parentSpanId: null,
+      spanType: "subprocessRun",
+      startTime: performance.now(),
+    });
   }
 
   // Pop the span identified by `spanId` from the active stack. The id
@@ -895,6 +914,58 @@ export class StatelogClient {
       restoreCount,
       maxRestores,
       overrides,
+    });
+  }
+
+  // --- Subprocess lifecycle ---
+  // Emitted by `_run` inside the parent's `subprocessRun` span. The start
+  // event is what makes the span EXIST for the log viewer (spans are
+  // reconstructed from event lines), and it must land before any child
+  // events so their parent_span_id chain resolves to it.
+
+  async subprocessStarted({
+    moduleId,
+    node,
+    subprocessSessionId,
+    mode,
+    depth,
+  }: {
+    moduleId: string;
+    node: string;
+    subprocessSessionId: string;
+    mode: "run" | "resume";
+    depth: number;
+  }): Promise<void> {
+    await this.post({
+      type: "subprocessStarted",
+      moduleId,
+      node,
+      subprocessSessionId,
+      mode,
+      depth,
+    });
+  }
+
+  async subprocessEnd({
+    moduleId,
+    node,
+    subprocessSessionId,
+    outcome,
+    timeTaken,
+  }: {
+    moduleId: string;
+    node: string;
+    subprocessSessionId: string;
+    outcome: "success" | "interrupted" | "failure";
+    timeTaken: number;
+  }): Promise<void> {
+    await this.post({
+      type: "subprocessEnd",
+      moduleId,
+      node,
+      subprocessSessionId,
+      outcome,
+      timeTaken,
     });
   }
 

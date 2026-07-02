@@ -426,7 +426,7 @@ export function walkScopeBody(
         for (const caseItem of node.cases) {
           if (caseItem.type === "comment") continue;
           if (caseItem.type === "newLine") continue;
-          walkScopeBody([caseItem.body], scope, ctx);
+          walkScopeBody(caseItem.body, scope, ctx);
         }
         break;
       case "handleBlock":

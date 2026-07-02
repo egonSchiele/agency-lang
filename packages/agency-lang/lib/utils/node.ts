@@ -500,7 +500,7 @@ export function* walkNodes(
         if (caseItem.caseValue !== "_") {
           yield* walkNodes([caseItem.caseValue as AgencyNode], [...ancestors, node], scopes);
         }
-        yield* walkNodes([caseItem.body], [...ancestors, node], scopes);
+        yield* walkNodes(caseItem.body, [...ancestors, node], scopes);
       }
     } else if (node.type === "valueAccess") {
       yield* walkNodes([node.base], [...ancestors, node], scopes);

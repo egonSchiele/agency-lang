@@ -208,8 +208,8 @@ const statementRules: StatementRuleTable = {
   // `e.data` the matching member's payload inside the arm. Only POSITIVE (.then)
   // facts, each from the base flow (arms are independent — no cross-arm/negative
   // narrowing). Non-literal / `_` arms get the base flow unchanged. Post-match
-  // flow is unchanged. `c.body` is a single node (matchBlock.ts:12), wrapped in
-  // `[]` to reuse buildFlowGraph — same shape as walkScopeBody (scopes.ts:470).
+  // flow is unchanged. `c.body` is an array of nodes (matchBlock.ts) fed directly
+  // to buildFlowGraph — same shape as walkScopeBody (scopes.ts).
   matchBlock: (node, flow, env) => {
     attachExpressionsToFlow(node.expression as AgencyNode, flow, env);
     const scrutinee = node.expression as Expression;
@@ -233,7 +233,7 @@ const statementRules: StatementRuleTable = {
         };
         armFlow = wrapFacts(flow, analyzeCondition(cond).then);
       }
-      buildFlowGraph([c.body], armFlow, env);
+      buildFlowGraph(c.body, armFlow, env);
     }
     return flow;
   },

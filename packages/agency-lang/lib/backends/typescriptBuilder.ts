@@ -1296,7 +1296,7 @@ export class TypeScriptBuilder {
 
     for (const caseItem of filteredCases) {
       if (caseItem.caseValue === "_") {
-        elseBranch = [this.processNode(caseItem.body)];
+        elseBranch = caseItem.body.map((b) => this.processNode(b));
       } else {
         branches.push({
           condition: ts.binOp(
@@ -1304,7 +1304,7 @@ export class TypeScriptBuilder {
             "===",
             this.processNode(caseItem.caseValue as AgencyNode),
           ),
-          body: [this.processNode(caseItem.body)],
+          body: caseItem.body.map((b) => this.processNode(b)),
         });
       }
     }
@@ -3230,7 +3230,7 @@ export class TypeScriptBuilder {
       let elseBody: TsNode | undefined;
       for (const caseItem of filteredCases) {
         if (caseItem.caseValue === "_") {
-          elseBody = this.processNode(caseItem.body);
+          elseBody = processBody(caseItem.body);
         }
       }
       const nonDefault = filteredCases.filter((c) => c.caseValue !== "_");
@@ -3243,7 +3243,7 @@ export class TypeScriptBuilder {
           "===",
           this.processNode(c.caseValue as AgencyNode),
         ),
-        body: this.processNode(c.body),
+        body: processBody(c.body),
       }));
       return ts.if(
         ts.binOp(
@@ -3251,7 +3251,7 @@ export class TypeScriptBuilder {
           "===",
           this.processNode(nonDefault[0].caseValue as AgencyNode),
         ),
-        this.processNode(nonDefault[0].body),
+        processBody(nonDefault[0].body),
         { elseIfs, elseBody },
       );
     }

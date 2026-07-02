@@ -1,7 +1,6 @@
-import { Assignment, AgencyComment, Expression, NewLine } from "../types.js";
+import { AgencyComment, AgencyNode, Expression, NewLine } from "../types.js";
 import { BaseNode } from "./base.js";
 import { IsExpression, MatchPattern } from "./pattern.js";
-import { ReturnStatement } from "./returnStatement.js";
 
 export type DefaultCase = "_";
 
@@ -9,7 +8,7 @@ export type MatchBlockCase = {
   type: "matchBlockCase";
   caseValue: MatchPattern | DefaultCase;
   guard?: Expression;
-  body: Expression | Assignment | ReturnStatement;
+  body: AgencyNode[];
 };
 
 export type MatchBlock = BaseNode & {

@@ -166,7 +166,7 @@ function walkForBindings(node: AgencyNode, binds: Set<string>): void {
     for (const c of node.cases) {
       if (c.type === "comment") continue;
       if (c.type === "newLine") continue;
-      walkForBindings(c.body as any, binds);
+      for (const n of c.body) walkForBindings(n, binds);
     }
     return;
   }
@@ -455,7 +455,7 @@ function descendIntoSubstructures(node: AgencyNode): void {
       for (const c of node.cases) {
         if (c.type === "comment") continue;
         if (c.type === "newLine") continue;
-        c.body = desugarParallelInBody([c.body as any])[0] as any;
+        c.body = desugarParallelInBody(c.body);
       }
       return;
     case "withModifier":

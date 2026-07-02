@@ -353,8 +353,7 @@ class PatternLowerer {
 
   /** Recurse into the body of a single match arm (without lowering the arm itself). */
   private lowerMatchCase(c: MatchBlockCase): MatchBlockCase {
-    const lowered = this.lower([c.body]);
-    const body = lowered[0] as MatchBlockCase["body"];
+    const body = this.lower(c.body);
     return { ...c, body };
   }
 
@@ -394,7 +393,7 @@ class PatternLowerer {
     let result: IfElse | undefined;
     for (let i = arms.length - 1; i >= 0; i--) {
       const arm = arms[i];
-      const armBody = this.lower([arm.body]);
+      const armBody = this.lower(arm.body);
 
       if (arm.caseValue === "_") {
         // Default case: becomes an else-body. If we already have an `if`, attach as elseBody.

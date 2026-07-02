@@ -1155,7 +1155,13 @@ export class AgencyGenerator {
       const guardCode = caseNode.guard
         ? ` if (${this.processNode(caseNode.guard).trim()})`
         : "";
-      const bodyCode = this.processNode(caseNode.body).trim();
+      // Minimal compile fix: single-statement arms print inline; multi-statement
+      // arms print as an unindented `{ ... }` one-liner. Task 2 replaces this
+      // with properly indented block printing.
+      const bodyCode =
+        caseNode.body.length === 1
+          ? this.processNode(caseNode.body[0]).trim()
+          : `{ ${caseNode.body.map((b) => this.processNode(b).trim()).join("\n")} }`;
 
       result += this.indentStr(`${pattern}${guardCode} => ${bodyCode}\n`);
     }

@@ -3000,6 +3000,21 @@ const caseLhsParser: Parser<unknown> = (input: string) => {
   return exprParser(input);
 };
 
+// `{ ... }` after `=>` is always a block, never an object literal (JS-arrow
+// rule) — this must be tried before `exprParser`'s object-literal path so
+// `=> { label: "hi" }` is parsed as a (failing) statement block rather than
+// an object literal expression.
+const matchArmBlockParser: Parser<AgencyNode[]> = map(
+  seqC(
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(lazy(() => bodyParser), "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+  ),
+  (result: { body: AgencyNode[] }) => result.body,
+);
+
 export const matchBlockParserCase: Parser<MatchBlockCase> = (
   input: string,
 ): ParserResult<MatchBlockCase> => {
@@ -3026,7 +3041,27 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     optionalSpaces,
     str("=>"),
     optionalSpaces,
-    capture(or(returnStatementParser, lazy(() => assignmentParser), exprParser), "body"),
+    capture(
+      or(
+        matchArmBlockParser,
+        // `not(char("{"))` prevents falling through to `exprParser`'s
+        // object-literal path when `matchArmBlockParser` fails to parse the
+        // brace's contents as statements — otherwise `=> { label: "hi" }`
+        // would silently reinterpret the block as an object literal instead
+        // of surfacing the statement-parse failure.
+        map(
+          seqC(
+            not(char("{")),
+            capture(
+              or(returnStatementParser, lazy(() => assignmentParser), exprParser),
+              "n",
+            ),
+          ),
+          (r: { n: AgencyNode }) => [r.n],
+        ),
+      ),
+      "body",
+    ),
     optionalSemicolon,
     optionalSpacesOrNewline,
   );

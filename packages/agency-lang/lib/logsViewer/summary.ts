@@ -34,6 +34,10 @@ export function summarize(evt: EventEnvelope): string {
       return `checkpointCreated #${shortId(d.checkpointId)} (${d.reason ?? "?"})`;
     case "checkpointRestored":
       return `checkpointRestored #${shortId(d.checkpointId)} (attempt ${d.restoreCount ?? "?"})`;
+    case "subprocessStarted":
+      return `subprocessStarted ${d.mode} "${d.node}" depth=${d.depth}`;
+    case "subprocessEnd":
+      return `subprocessEnd (${d.outcome}, ${fmtDuration(d.timeTaken)})`;
     case "forkStart":
       return `forkStart ${d.mode} (${d.branchCount} branches)`;
     case "forkBranchEnd": {
@@ -128,6 +132,14 @@ function spanDetail(node: TreeNode): string | undefined {
       const e = childEvent(node, "forkStart");
       const n = e?.data.branchCount;
       return typeof n === "number" ? `${n} ${n === 1 ? "branch" : "branches"}` : undefined;
+    }
+    case "subprocessRun": {
+      const e = childEvent(node, "subprocessStarted");
+      if (!e) return undefined;
+      const node_ = e.data.node ? `"${e.data.node}"` : undefined;
+      const mode = e.data.mode === "resume" ? "resume" : undefined;
+      const parts = [node_, mode].filter((p): p is string => !!p);
+      return parts.length > 0 ? parts.join(" · ") : undefined;
     }
     case "embedding": {
       const e = childEvent(node, "embedCompletion");

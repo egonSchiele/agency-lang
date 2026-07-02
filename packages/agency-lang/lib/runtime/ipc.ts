@@ -995,11 +995,24 @@ async function invokeSubprocess(args: {
   cappedMaxDepth?: number;
 }): Promise<any> {
   const scriptPath = materializeCompiledScript(args.compiled);
+  const startedAt = performance.now();
+  let subprocessSessionId = "";
   try {
     const saved = loadSubprocessPayload(args.parentFrame);
     // One stable session id per logical child run: minted at first fork,
     // reused from the payload on every resume segment.
-    const subprocessSessionId = saved?.subprocessSessionId || nanoid();
+    subprocessSessionId = saved?.subprocessSessionId || nanoid();
+    // Emitted (and awaited) BEFORE the fork so this line lands in the log
+    // ahead of any child events — it is what introduces the subprocessRun
+    // span to the log viewer, and the child's span parentage resolves
+    // against it.
+    await args.ctx.statelogClient.subprocessStarted({
+      moduleId: args.compiled.moduleId,
+      node: args.node,
+      subprocessSessionId,
+      mode: saved ? "resume" : "run",
+      depth: args.childDepth ?? 1,
+    });
     const instruction = resolveInstruction({
       ctx: args.ctx,
       saved,
@@ -1024,7 +1037,16 @@ async function invokeSubprocess(args: {
       cwd: args.cwd,
       abortSignal: args.abortSignal,
     });
+    const endEvent = (outcomeLabel: "success" | "interrupted" | "failure") =>
+      args.ctx.statelogClient.subprocessEnd({
+        moduleId: args.compiled.moduleId,
+        node: args.node,
+        subprocessSessionId,
+        outcome: outcomeLabel,
+        timeTaken: performance.now() - startedAt,
+      });
     if (outcome.type === "interrupted") {
+      await endEvent("interrupted");
       // Opaque payload: serialized with the parent frame; NEVER walked by
       // State.toJSON — the child checkpoint belongs to another process and
       // must not be spliced into the parent replay.
@@ -1038,8 +1060,18 @@ async function invokeSubprocess(args: {
       // shared checkpoint and overwrites intr.checkpoint on each.
       return outcome.msg.interrupts.map((intr) => ({ ...intr })) as Interrupt[];
     }
+    await endEvent("success");
     clearSubprocessPayload(args.parentFrame);
     return outcome.value;
+  } catch (err) {
+    await args.ctx.statelogClient.subprocessEnd({
+      moduleId: args.compiled.moduleId,
+      node: args.node,
+      subprocessSessionId,
+      outcome: "failure",
+      timeTaken: performance.now() - startedAt,
+    });
+    throw err;
   } finally {
     cleanupTempDir(scriptPath);
   }
@@ -1089,9 +1121,9 @@ export async function _run(
   // buildForkOptions, so env-configured providers already reach the child.)
   // Paths are resolved to absolute against the parent's cwd here so they still
   // resolve in the child even when `run(cwd:)` gives it a different cwd.
-  const mergedConfigOverrides = withParentProviderModules(
-    configOverrides,
-    ctx.providerModules,
+  const mergedConfigOverrides = withParentStatelog(
+    withParentProviderModules(configOverrides, ctx.providerModules),
+    ctx.getStatelogSink(),
   );
 
   const parentFrame = stateStack.lastFrame();
@@ -1135,6 +1167,36 @@ export async function _run(
   } finally {
     ctx.statelogClient.endSpan(spanId);
   }
+}
+
+/**
+ * Forward the parent's statelog sink to a subprocess so child events land in
+ * the SAME log the parent writes — nested under the parent's subprocessRun
+ * span via the inherited runId + adopted span root. Without this, a child
+ * compiled at runtime has observability baked OFF and its execution is
+ * invisible in the parent's logs.
+ *
+ * Precedence: an explicit child logFile from the caller (run(logFile:))
+ * always wins; a parent with observability disabled forwards nothing. The
+ * parent's logFile is absolutized against the parent's cwd so a child
+ * launched with a different `cwd` still appends to the same file.
+ */
+export function withParentStatelog(
+  overrides: Partial<AgencyConfig> | undefined,
+  parentConfig: { observability?: boolean; logFile?: string },
+): Partial<AgencyConfig> | undefined {
+  if (overrides?.log?.logFile) return overrides;
+  if (!parentConfig.observability) return overrides;
+  const logFile = parentConfig.logFile
+    ? path.isAbsolute(parentConfig.logFile)
+      ? parentConfig.logFile
+      : path.resolve(process.cwd(), parentConfig.logFile)
+    : undefined;
+  return {
+    ...overrides,
+    observability: true,
+    ...(logFile ? { log: { ...overrides?.log, logFile } } : {}),
+  };
 }
 
 /**

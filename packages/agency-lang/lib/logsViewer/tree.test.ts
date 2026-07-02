@@ -35,6 +35,27 @@ describe("buildForest", () => {
     expect(forest.map((r) => r.traceId).sort()).toEqual(["a", "b"]);
   });
 
+  it("upgrades a weak span label when a definitive event arrives later", () => {
+    // The subprocessRun span's first event is runBatch's branch
+    // threadCreated; subprocessStarted lands second. The span label must
+    // upgrade from the passthrough "threadCreated" to "subprocessRun".
+    const forest = buildForest([
+      evt({ span_id: "s1", data: { type: "threadCreated", timestamp: "", threadId: "1", threadType: "subthread" } }),
+      evt({ span_id: "s1", data: { type: "subprocessStarted", timestamp: "", moduleId: "m", node: "main", subprocessSessionId: "x", mode: "run", depth: 1 } }),
+    ]);
+    const span = forest[0].children[0];
+    expect(span.nodeKind).toBe("span");
+    expect(span.label).toBe("subprocessRun");
+  });
+
+  it("does not downgrade a strong span label", () => {
+    const forest = buildForest([
+      evt({ span_id: "s1", data: { type: "agentStart", timestamp: "", entryNode: "main" } }),
+      evt({ span_id: "s1", data: { type: "threadCreated", timestamp: "", threadId: "1", threadType: "thread" } }),
+    ]);
+    expect(forest[0].children[0].label).toBe("agentRun");
+  });
+
   it("nests span children under their parent span", () => {
     const forest = buildForest([
       evt({

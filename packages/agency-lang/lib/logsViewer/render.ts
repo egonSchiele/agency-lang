@@ -396,6 +396,8 @@ export function colorFor(node: TreeNode): string | undefined {
         return "magenta";
       case "handlerChain":
         return "bright-yellow";
+      case "subprocessRun":
+        return "bright-blue";
       default:
         return undefined;
     }

@@ -917,6 +917,58 @@ export class StatelogClient {
     });
   }
 
+  // --- Subprocess lifecycle ---
+  // Emitted by `_run` inside the parent's `subprocessRun` span. The start
+  // event is what makes the span EXIST for the log viewer (spans are
+  // reconstructed from event lines), and it must land before any child
+  // events so their parent_span_id chain resolves to it.
+
+  async subprocessStarted({
+    moduleId,
+    node,
+    subprocessSessionId,
+    mode,
+    depth,
+  }: {
+    moduleId: string;
+    node: string;
+    subprocessSessionId: string;
+    mode: "run" | "resume";
+    depth: number;
+  }): Promise<void> {
+    await this.post({
+      type: "subprocessStarted",
+      moduleId,
+      node,
+      subprocessSessionId,
+      mode,
+      depth,
+    });
+  }
+
+  async subprocessEnd({
+    moduleId,
+    node,
+    subprocessSessionId,
+    outcome,
+    timeTaken,
+  }: {
+    moduleId: string;
+    node: string;
+    subprocessSessionId: string;
+    outcome: "success" | "interrupted" | "failure";
+    timeTaken: number;
+  }): Promise<void> {
+    await this.post({
+      type: "subprocessEnd",
+      moduleId,
+      node,
+      subprocessSessionId,
+      outcome,
+      timeTaken,
+    });
+  }
+
   // --- Fork/Race lifecycle ---
 
   async forkStart({

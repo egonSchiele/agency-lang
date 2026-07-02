@@ -269,6 +269,16 @@ export class RuntimeContext<T> {
     return this.runId;
   }
 
+  /** The statelog sink identity a subprocess should inherit — see
+   * `withParentStatelog` in ipc.ts. Narrow accessor so the full (private)
+   * statelog config stays encapsulated. */
+  getStatelogSink(): { observability: boolean; logFile?: string } {
+    return {
+      observability: this.statelogConfig?.observability ?? false,
+      ...(this.statelogConfig?.logFile ? { logFile: this.statelogConfig.logFile } : {}),
+    };
+  }
+
   async createExecutionContext(runId: string): Promise<RuntimeContext<T>> {
     const execCtx = Object.create(
       RuntimeContext.prototype,

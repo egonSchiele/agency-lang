@@ -1,13 +1,38 @@
 import { describe, it, expect, afterEach } from "vitest";
+import path from "path";
 import {
   clampLimits,
   serializeInterruptsForIpc,
   setSubprocessRunInfo,
   getSubprocessRunInfo,
   resolveDepthCap,
+  withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
+
+describe("withParentStatelog", () => {
+  it("forwards the parent logFile (absolutized) when the parent logs and the caller set none", () => {
+    const out = withParentStatelog(undefined, { observability: true, logFile: "log.jsonl" });
+    expect(out).toEqual({
+      observability: true,
+      log: { logFile: path.resolve(process.cwd(), "log.jsonl") },
+    });
+  });
+
+  it("an explicit child logFile always wins", () => {
+    const overrides = { observability: true, log: { logFile: "child.jsonl" } };
+    expect(withParentStatelog(overrides, { observability: true, logFile: "log.jsonl" })).toBe(overrides);
+  });
+
+  it("forwards nothing when the parent has observability off", () => {
+    expect(withParentStatelog(undefined, { observability: false, logFile: "log.jsonl" })).toBeUndefined();
+  });
+
+  it("forwards observability alone when the parent has no file sink", () => {
+    expect(withParentStatelog(undefined, { observability: true })).toEqual({ observability: true });
+  });
+});
 
 describe("resolveDepthCap", () => {
   afterEach(() => setSubprocessRunInfo({ depth: 0 }));

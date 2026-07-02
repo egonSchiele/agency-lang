@@ -648,6 +648,20 @@ class PatternLowerer {
           firstReturnLoc(c.body) ?? c.body[0]?.loc,
         );
       }
+      // A `return` hidden inside a `thread { ... }` block within an arm is a
+      // raw function return (thread bodies run inline in the same frame), so it
+      // would silently keep the old exit-the-function semantics this error
+      // exists to make loud. Lifted parallel/seq branch returns are branch
+      // results, not function returns, so they stay legal in statement arms.
+      const threadLoc = threadBlockReturnLoc(c.body);
+      if (threadLoc) {
+        throw new LoweringError(
+          "`return` inside a `thread` block within a match arm exits the enclosing " +
+            "function — move the match out of the arm or restructure; a match arm " +
+            "cannot contain a function return",
+          threadLoc,
+        );
+      }
     }
   }
 
@@ -1003,17 +1017,43 @@ function isExpr(v: unknown): v is Expression {
   return t !== "messageThread";
 }
 
-/** True when `node` is a concurrency/sequencing block whose body runs in a
- *  separate frame, so a `return` inside it cannot legally yield to an enclosing
- *  expression match. `parallel`/`seq` are desugared to `fork` calls later; the
- *  fork/race/thread forms in the error message are the surface concepts. */
+/** True when `node` is a block whose body a `return` cannot legally cross to
+ *  reach an enclosing match arm. `parallel`/`seq` branch bodies are lifted into
+ *  separate frames (desugared to `fork` calls later); `thread` bodies run
+ *  inline in the same frame, but a `return` there is a raw function return the
+ *  `_matchExit` unwind cannot reach, so it is rejected the same way. The
+ *  fork/race forms in the error message are surface concepts that desugar to
+ *  calls before lowering. */
 function isConcurrencyBlock(node: AgencyNode): boolean {
-  return node.type === "parallelBlock" || node.type === "seqBlock";
+  return (
+    node.type === "parallelBlock" ||
+    node.type === "seqBlock" ||
+    node.type === "messageThread"
+  );
 }
 
-/** The guarded body of a concurrency/sequencing block (`parallel`/`seq`). */
+/** The guarded body of a concurrency/sequencing/thread block. */
 function concurrencyBlockBody(node: AgencyNode): AgencyNode[] {
   return (node as { body: AgencyNode[] }).body;
+}
+
+/** Location of the first `thread { ... }` block within the arm's return-flow
+ *  that hides a `return`, or undefined. Thread bodies run inline in the same
+ *  frame, so a `return` there is a genuine function return; statement-position
+ *  arms must reject it to keep the breaking change loud. Walks the shared
+ *  `returnFlowBodies` boundary so it sees exactly what `containsReturn`
+ *  cannot. */
+function threadBlockReturnLoc(nodes: AgencyNode[]): SourceLocation | undefined {
+  for (const node of nodes) {
+    if (node.type === "messageThread" && containsReturn(node.body)) {
+      return node.loc;
+    }
+    for (const body of returnFlowBodies(node)) {
+      const found = threadBlockReturnLoc(body);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 /**

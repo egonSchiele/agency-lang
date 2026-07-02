@@ -1310,9 +1310,11 @@ export class TypeScriptBuilder {
     const id = this.steps.currentId();
     const expression = this.processNode(node.expression);
 
+    // MatchBlock.cases may also carry comment/newLine entries; keep only real
+    // arms (type-narrowing filter, not a cast).
     const filteredCases = node.cases.filter(
-      (c) => c.type !== "comment",
-    ) as MatchBlockCase[];
+      (c): c is MatchBlockCase => c.type === "matchBlockCase",
+    );
 
     const branches: { condition: TsNode; body: TsNode[] }[] = [];
     let elseBranch: TsNode[] | undefined;
@@ -3270,11 +3272,12 @@ export class TypeScriptBuilder {
       return ts.while(this.processNode(node.condition), processBody(node.body));
     }
     if (node.type === "matchBlock") {
-      // Match compiles to if/else chain
+      // Match compiles to if/else chain. Cases may also carry comment/newLine
+      // entries; keep only real arms (type-narrowing filter, not a cast).
       const expression = this.processNode(node.expression);
       const filteredCases = node.cases.filter(
-        (c) => c.type !== "comment",
-      ) as MatchBlockCase[];
+        (c): c is MatchBlockCase => c.type === "matchBlockCase",
+      );
       let result: TsNode | undefined;
       let elseBody: TsNode | undefined;
       for (const caseItem of filteredCases) {

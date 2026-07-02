@@ -180,6 +180,12 @@ describe("expression match lowering errors", () => {
     expectError(WRAP(`"a" => { return }`), /must return a value/i));
   it("return inside parallel in an arm errors", () =>
     expectError(WRAP(`"a" => {\n      parallel {\n        return 1\n      }\n    }`), /parallel|concurrency/i));
+  it("return inside a thread block in an expression arm errors", () =>
+    expectError(WRAP(`"a" => {\n      thread {\n        return 1\n      }\n      return 2\n    }`), /thread/i));
+  it("thread block without a return inside an expression arm passes", () => {
+    const parsed = parseAgency(WRAP(`"a" => {\n      thread {\n        print("hi")\n      }\n      return 2\n    }`));
+    expect(parsed.success).toBe(true);
+  });
   it("match(x is ...) in expression position errors", () =>
     expectError(`node main(x: any) {\n  const val = match(x is { k }) {\n    _ => 2\n  }\n  return val\n}`, /cannot be used as an expression/i));
   it("module-level match expression errors", () =>
@@ -222,6 +228,49 @@ describe("statement-position return-in-arm errors", () => {
   }
   return "no"
 }`, /return match\(/));
+
+  it("return hidden in a thread block inside a statement arm errors", () =>
+    expectError(`def f(x: string): string {
+  match(x) {
+    "a" => {
+      thread {
+        return "escaped"
+      }
+    }
+    _ => print("no")
+  }
+  return "no"
+}`, /thread/i));
+
+  it("thread block without a return inside a statement arm passes", () => {
+    const parsed = parseAgency(`def f(x: string): string {
+  match(x) {
+    "a" => {
+      thread {
+        print("hi")
+      }
+    }
+    _ => print("no")
+  }
+  return "no"
+}`);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("return inside a parallel branch in a statement arm stays legal (branch-local result)", () => {
+    const parsed = parseAgency(`def f(x: string): string {
+  match(x) {
+    "a" => {
+      parallel {
+        return "branch result"
+      }
+    }
+    _ => print("no")
+  }
+  return "no"
+}`);
+    expect(parsed.success).toBe(true);
+  });
 
   it("return inside a for loop inside a statement arm errors", () =>
     expectError(`def f(xs: any): string {

@@ -1,0 +1,15 @@
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+node main(x: string) {
+  setMutable("log", "start,")
+  const val = match(x) {
+    "go" => {
+      setMutable("log", getMutable("log", "") + "before,")
+      interrupt("proceed?")
+      setMutable("log", getMutable("log", "") + "after,")
+      return "approved"
+    }
+    _ => "skipped"
+  }
+  return getMutable("log", "") + val
+}

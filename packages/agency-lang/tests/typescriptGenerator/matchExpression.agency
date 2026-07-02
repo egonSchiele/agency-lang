@@ -1,0 +1,16 @@
+node main(x: string) {
+  const val = match(x) {
+    "a" => {
+      print("in a")
+      return 1
+    }
+    "b" => 2
+    _ => {
+      if (x == "z") {
+        return 26
+      }
+      return 0
+    }
+  }
+  return val
+}

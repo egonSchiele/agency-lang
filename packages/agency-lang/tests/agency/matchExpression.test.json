@@ -1,0 +1,9 @@
+{
+  "tests": [
+    { "nodeName": "classifyAll", "input": "", "expectedOutput": "[\"zero\",\"big\",\"small\"]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "blockArmSideEffect", "input": "", "expectedOutput": "\"checking,was zero\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "scrutineeOnce", "input": "", "expectedOutput": "[\"matched\",1]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nestedMatch", "input": "\"outer\"", "expectedOutput": "\"both\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "returnMatchInLoop", "input": "", "expectedOutput": "\"z,other,two,\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

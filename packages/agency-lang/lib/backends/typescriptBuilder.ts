@@ -861,6 +861,17 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
+        // Synthetic match-expression result temps (`__matchval_<id>`) are
+        // written by `runner.exitMatch(id, value)` into
+        // `runner.frame.locals.__matchval_<id>` (i.e. `__stack.locals`), but
+        // pattern lowering emits the *read* as a plain `variableName` with no
+        // declaration, so scope resolution leaves it `imported` and it would
+        // otherwise compile to a bare, undeclared JS identifier. Resolve it to
+        // the same frame-local accessor `exitMatch` writes to so the consumer
+        // (`const x = match(...)` / `return match(...)`) sees the value.
+        if (/^__matchval_\d+$/.test(literal.value)) {
+          return ts.scopedVar(literal.value, "local", this.moduleId);
+        }
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);

@@ -71,6 +71,39 @@ describe("TypeScript Builder Integration Tests", () => {
   );
 });
 
+describe("match-expression result temp resolution", () => {
+  // Regression: `runner.exitMatch(id, value)` writes the match result to
+  // `__stack.locals.__matchval_<id>`, so the consumer read MUST compile to the
+  // same frame-local accessor. Pattern lowering emits the read as an undeclared
+  // synthetic `variableName`; without targeted resolution it compiled to a bare
+  // JS identifier (`runner.halt(__matchval_1)`) and crashed with
+  // `ReferenceError: __matchval_1 is not defined`.
+  const source = `node main(x: number) {
+  const val = match(x) {
+    1 => "one"
+    _ => "other"
+  }
+  return val
+}
+`;
+
+  it("compiles the consumer read to the locals accessor, never a bare identifier", () => {
+    const out = generateWithBuilder(source, "matchExprResult.agency");
+
+    // The value is read through the same frame-local accessor exitMatch writes.
+    expect(out).toContain("__stack.locals.__matchval_1");
+    // And it is written through exitMatch (the other half of the contract).
+    expect(out).toContain("exitMatch(1,");
+
+    // There must be NO bare `__matchval_1` occurrence: every occurrence must be
+    // preceded by `__stack.locals.` (or be the string arg to exitMatch, which
+    // does not name the identifier at all). Strip the accessor form, then assert
+    // the identifier no longer appears anywhere.
+    const withoutAccessor = out.replaceAll("__stack.locals.__matchval_1", "");
+    expect(withoutAccessor).not.toMatch(/__matchval_\d+/);
+  });
+});
+
 describe("Named argument validation", () => {
   // Named arg validation is now done at runtime by AgencyFunction.invoke(),
   // not at compile time. These tests verify the builder compiles successfully.

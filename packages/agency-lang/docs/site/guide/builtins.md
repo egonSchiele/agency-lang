@@ -7,7 +7,7 @@ description: Reference table of every user-facing built-in function and language
 
 This page lists every user-facing built-in function and built-in language construct in Agency. These are available in every `.agency` file without an `import` statement.
 
-For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `range`, ...) see [Agency's Standard Library](/appendix/agency-stdlib) and the [stdlib reference](/stdlib/).
+For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `range`, ...) see [Agency's Standard Library](/guide/agency-stdlib) and the [stdlib reference](/stdlib/).
 
 ## LLM
 

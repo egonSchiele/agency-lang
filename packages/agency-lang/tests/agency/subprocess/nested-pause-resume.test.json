@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A grandchild interrupt surfaces through both hops; one approval resumes the whole tree",
+      "input": "",
+      "expectedOutput": "\"deep-ok\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

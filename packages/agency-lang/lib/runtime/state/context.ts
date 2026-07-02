@@ -142,6 +142,12 @@ export class RuntimeContext<T> {
 
   traceConfig: TraceConfig;
   runId: string | null;
+
+  /** Subprocess nesting depth of THIS process: 0 in the root, seeded from
+   * the run/resume instruction in subprocesses. Surfaced to Agency via the
+   * std::run gate interrupt's `depth` payload and to TS helpers via
+   * `agency.ctx().subprocessDepth`. */
+  subprocessDepth: number = getSubprocessRunInfo().depth;
   verbose: boolean;
   /**
    * Log threshold used by ad-hoc subsystem loggers (memory, etc.).
@@ -297,6 +303,7 @@ export class RuntimeContext<T> {
     });
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
+    execCtx.subprocessDepth = getSubprocessRunInfo().depth;
     execCtx.verbose = this.verbose;
     execCtx.logLevel = this.logLevel;
     execCtx.pendingPromises = new PendingPromiseStore();

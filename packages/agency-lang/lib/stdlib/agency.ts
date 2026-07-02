@@ -161,6 +161,14 @@ export function _compileFile(
   return compileToProgram(source);
 }
 
+/** The current process's subprocess nesting depth (0 = root). Backs the
+ * `depth` field in std::run gate interrupt data — `run()` reports the
+ * PROSPECTIVE child depth as `_subprocessDepth() + 1` so handlers can
+ * reject by depth. Also readable from TS via `agency.ctx().subprocessDepth`. */
+export function _subprocessDepth(): number {
+  return getRuntimeContext().ctx.subprocessDepth ?? 0;
+}
+
 export function _typecheck(source: string): TypeCheckReport {
   return typeCheckSource(source);
 }

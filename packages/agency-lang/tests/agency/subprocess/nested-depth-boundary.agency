@@ -1,0 +1,88 @@
+import { compile, run } from "std::agency"
+
+// The exact depth-cap boundary, both sides. An off-by-one in
+// `childDepth > cappedMaxDepth` fails exactly one of the two nodes.
+
+// (a) allowed-at-cap: grandchild depth 2 == maxDepth 2 → succeeds.
+node atCap() {
+  const childSource = """
+import { compile, run } from "std::agency"
+node main() {
+  const c = compile("node main() { return 42 }")
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main", maxDepth: 2)
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+
+// (b) rejected-above-cap: the parent caps the tree at depth 1; the child's
+// nested run() (depth 2) must fail with the structured depth limit —
+// even though the child's own maxDepth defaults to 5 (a descendant can
+// never loosen an ancestor's cap).
+node aboveCap() {
+  const childSource = """
+import { compile, run } from "std::agency"
+node main() {
+  const c = compile("node main() { return 42 }")
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "depth") {
+        return "depth-capped"
+      }
+      return "wrong failure"
+    }
+    return "unexpected success"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main", maxDepth: 1)
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

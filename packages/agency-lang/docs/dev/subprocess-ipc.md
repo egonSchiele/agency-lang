@@ -156,9 +156,16 @@ AGENCY_IPC_DEBUG=1 pnpm run agency run myagent.agency
 
 Uses `process.stderr.write()` which is synchronous — no flushing issues.
 
+## Nested subprocesses
+
+A subprocess may itself call `run()`. Safety is the language's own idiom plus a backstop:
+
+- Every `run()` at every level throws its `std::run` gate interrupt through the distributed chain (data includes `depth`, the prospective child depth via `_subprocessDepth() + 1`) — un-gated nesting pauses and asks the user.
+- `maxDepth` (default `DEFAULT_MAX_SUBPROCESS_DEPTH = 5`, hard ceiling `SUBPROCESS_DEPTH_CEILING = 10`) backstops blindly-approving handlers with a structured `limit_exceeded`/`depth` failure. The tightest ancestor cap always wins (`resolveDepthCap`; the cap rides the run/resume instruction).
+- Everything composes recursively with no new machinery: per-interrupt consultation recurses because a mid-tree `gatherChainOutcome` is itself in IPC mode; a mid-tree reject is fail-fast (the root is never consulted); pause is checkpoint-in-checkpoint Russian dolls and one respond resumes the whole tree; lock requests relay hop-by-hop to the ROOT's lock domain (`handleLockAcquireMessage`); depth is on `RuntimeContext.subprocessDepth` (TS: `agency.ctx().subprocessDepth`).
+
 ## Remaining limitations
 
-- **Nested subprocesses**: a subprocess calling `run()` fails with "Nested subprocess execution is not supported" (being removed behind a depth cap — see the pause/resume spec's nesting section).
 - **Debugger/trace integration**: the debugger sees `run()` as an opaque step. No stepping into subprocess code.
 - **Cost-guard telemetry**: the parent learns child spend only at terminal messages; incremental cost telemetry is a follow-up.
 - **Callback forwarding**: parent-registered lifecycle callbacks are not triggered by subprocess events; follow-up.
@@ -186,6 +193,12 @@ Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/ag
 | `pause-limit-wallclock-resets` | per-segment budgets |
 | `limit-ipc-payload-interrupted` | oversized pause fails loudly |
 | `limit-*` | resource limits |
+| `nested-basic` | 3-level nesting; per-level depth in gate data |
+| `nested-depth-boundary` | at-cap allowed, above-cap structured failure; ancestor caps win |
+| `nested-pause-resume` | grandchild interrupt surfaces through both hops; one respond resumes the tree |
+| `nested-reject-middle` | mid-tree reject is final |
+| `nested-lock-relay` | grandchild locks contend with the root's lock domain |
+| `nested-gate-unapproved` | the gate exists on every hop |
 | `subprocess-no-handler` (js) | std::run gate surfaces without a handler |
 | `subprocess-pause-basic` (js) | end-to-end pause → respond → resume |
 | `subprocess-durable-resume` (js) | JSON round-trip + fresh-process resume + artifact wipe |

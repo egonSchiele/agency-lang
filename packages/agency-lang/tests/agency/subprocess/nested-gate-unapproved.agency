@@ -1,0 +1,38 @@
+import { compile, run } from "std::agency"
+
+// The std::run gate exists on EVERY nesting hop: the child's inner run()
+// gate (depth 2) is unapproved anywhere in the tree, so it surfaces to the
+// user, who rejects it — the nested run fails and the tree reports it.
+// (Replaces the old nested-blocked test whose premise — a hard error —
+// is gone.)
+node main() {
+  const childSource = """
+import { compile, run } from "std::agency"
+node main() {
+  const c = compile("node main() { return 1 }")
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  const result = run(compiled: c.value, node: "main")
+  if (isFailure(result)) {
+    return "gate-rejected"
+  }
+  return "gate-approved-unexpectedly"
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run" && e.data.depth == 1) {
+      return approve()
+    }
+  }
+}

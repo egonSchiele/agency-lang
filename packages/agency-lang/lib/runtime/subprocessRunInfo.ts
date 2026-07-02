@@ -24,6 +24,9 @@ export type SubprocessRunInfo = {
   parentSpanId?: string;
   /** Nesting depth of this process: 0 = root (not a subprocess). */
   depth: number;
+  /** The tightest maxDepth cap along the ancestor chain — a child's own
+   * run() calls can never exceed an ancestor's cap. */
+  maxDepth?: number;
 };
 
 let info: SubprocessRunInfo = { depth: 0 };

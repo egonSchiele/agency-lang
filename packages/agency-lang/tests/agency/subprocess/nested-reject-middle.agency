@@ -1,0 +1,57 @@
+import { compile, run } from "std::agency"
+
+// A MIDDLE-level reject is final: the child's handler rejects the
+// grandchild's bash even though the parent would approve everything —
+// reject is fail-fast at any level and cannot be overridden above.
+node main() {
+  const grandSource = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo never")
+  if (isFailure(r)) {
+    return "rejected-locally"
+  }
+  return "leaked-upward"
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+    if (e.effect == "std::bash") {
+      return reject()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    return approve()
+  }
+}

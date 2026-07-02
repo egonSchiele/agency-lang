@@ -48,6 +48,25 @@ const LIMIT_CEILINGS = {
   stdout: 100 * 1024 * 1024,           // 100mb in bytes
 } as const;
 
+// Depth cap on nested subprocess trees. Every run() is already gated by a
+// std::run interrupt, so the cap is a backstop against handlers that
+// blindly approve — it converts a runaway agent-writes-agent recursion
+// into a structured failure. The DEFAULT (5) allows realistic
+// tool-building pipelines (agent → generated agent → helper) with
+// headroom; the CEILING (10) bounds the total process tree even when
+// users raise maxDepth. (Separate from LIMIT_CEILINGS because depth is
+// not a per-segment RunLimits resource — it clamps tree shape.)
+export const DEFAULT_MAX_SUBPROCESS_DEPTH = 5;
+export const SUBPROCESS_DEPTH_CEILING = 10;
+
+/** The effective depth cap for a run() call: the caller's maxDepth param,
+ * tightened by the tightest ancestor cap (inherited via the run/resume
+ * instruction) and the hard ceiling. */
+export function resolveDepthCap(paramMaxDepth: number): number {
+  const inherited = getSubprocessRunInfo().maxDepth ?? SUBPROCESS_DEPTH_CEILING;
+  return Math.min(paramMaxDepth, inherited, SUBPROCESS_DEPTH_CEILING);
+}
+
 export type RunLimits = {
   wallClock: number;
   memory: number;
@@ -481,14 +500,17 @@ function clearSubprocessPayload(frame: State): void {
   delete frame.locals[SUBPROCESS_PAYLOAD_KEY];
 }
 
-/** Statelog identity the child adopts, carried on both startup
- * instructions: the parent's runId (one trace across processes and
- * pause/resume cycles), a stable per-logical-child session id, and the
- * parent's subprocessRun span id for span nesting. */
+/** Identity the child adopts, carried on both startup instructions: the
+ * parent's runId (one trace across processes and pause/resume cycles), a
+ * stable per-logical-child session id, the parent's subprocessRun span id
+ * for span nesting, the child's nesting depth, and the tightest ancestor
+ * depth cap. */
 type SubprocessIdentity = {
   runId?: string;
   subprocessSessionId?: string;
   spanContext?: string;
+  depth?: number;
+  maxDepth?: number;
 };
 
 export type RunInstruction = SubprocessIdentity & {
@@ -745,11 +767,17 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
 async function handleLockAcquireMessage(s: RunSession, msg: IpcLockAcquireMessage): Promise<void> {
   const ownerId = `ipc:${s.sessionId}:${msg.ownerId ?? msg.requestId}`;
   try {
-    const release = await acquireLocalLock(s.ctx, msg.name, {
+    // Mid-tree processes RELAY lock requests upward instead of acquiring
+    // locally, so the whole nested subprocess tree shares the ROOT's lock
+    // domain — a grandchild contends with a lock the root holds.
+    const lockOpts = {
       ownerId,
       ...(msg.timeoutMs !== undefined ? { timeoutMs: msg.timeoutMs } : {}),
       ...(msg.warnAfterMs !== undefined ? { warnAfterMs: msg.warnAfterMs } : {}),
-    });
+    };
+    const release = isIpcMode()
+      ? await sendLockAcquireToParent(msg.name, lockOpts)
+      : await acquireLocalLock(s.ctx, msg.name, lockOpts);
     registerSessionLock(s.ctx, s.sessionId, lockReleaserKey(msg.name, ownerId), release);
     trySendDecision(s, {
       type: "lockGranted",
@@ -963,6 +991,8 @@ async function invokeSubprocess(args: {
   cwd?: string;
   abortSignal?: AbortSignal;
   spanId?: string;
+  childDepth?: number;
+  cappedMaxDepth?: number;
 }): Promise<any> {
   const scriptPath = materializeCompiledScript(args.compiled);
   try {
@@ -982,6 +1012,8 @@ async function invokeSubprocess(args: {
         runId: args.ctx.getRunId(),
         subprocessSessionId,
         ...(args.spanId ? { spanContext: args.spanId } : {}),
+        ...(args.childDepth !== undefined ? { depth: args.childDepth } : {}),
+        ...(args.cappedMaxDepth !== undefined ? { maxDepth: args.cappedMaxDepth } : {}),
       },
     });
     const outcome = await runSubprocessSession({
@@ -1030,15 +1062,23 @@ export async function _run(
   stdout: number,
   configOverrides?: Partial<AgencyConfig>,
   cwd?: string,
+  maxDepth: number = DEFAULT_MAX_SUBPROCESS_DEPTH,
 ): Promise<any> {
-  if (isIpcMode()) {
-    throw new Error("Nested subprocess execution is not supported.");
-  }
   // Post-ALS: read `ctx` and the per-scope `stateStack` from the active
   // `agencyStore` frame. The trailing `__state` positional that AgencyFunction
   // .invoke() still passes is now harmlessly ignored.
   const store = getRuntimeContext();
   const { ctx, stack: stateStack } = store;
+
+  // Nested subprocesses are allowed: every run() is gated by a std::run
+  // interrupt flowing through the distributed handler chain, and this depth
+  // cap backstops handlers that blindly approve.
+  const childDepth = (ctx.subprocessDepth ?? 0) + 1;
+  const cappedMaxDepth = resolveDepthCap(maxDepth);
+  if (childDepth > cappedMaxDepth) {
+    return makeLimitFailure("depth", cappedMaxDepth, childDepth);
+  }
+
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
   // Forward the parent's configured provider modules to the subprocess. The
@@ -1085,6 +1125,8 @@ export async function _run(
             cwd,
             abortSignal,
             spanId,
+            childDepth,
+            cappedMaxDepth,
           }),
       }],
     });

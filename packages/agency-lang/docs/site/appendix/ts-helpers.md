@@ -65,7 +65,10 @@ The active runtime context — same object the codegen used to receive as a `__c
 ```ts
 const ctx = agency.ctx();
 console.log(`run id: ${ctx.runId}, cost so far: ${ctx.stateStack.localCost}`);
+console.log(`subprocess depth: ${ctx.subprocessDepth}`); // 0 = root process
 ```
+
+`ctx.subprocessDepth` is the current process's subprocess nesting depth (0 outside `std::agency run()` subprocesses). The `std::run` gate interrupt reports the prospective child depth as `depth` in its data, so handlers can reject by depth.
 
 ### `agency.callsite()`
 

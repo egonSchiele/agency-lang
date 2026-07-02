@@ -143,13 +143,15 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
   }
   setSubprocessIpcPayloadLimit(ipcPayloadLimit);
   setRuntimeConfigOverrides(msg.configOverrides);
-  // Adopt the parent's statelog identity BEFORE importing the compiled
-  // module, so every context this process creates inherits it.
+  // Adopt the parent's identity BEFORE importing the compiled module, so
+  // every context this process creates inherits it (runId/trace, span
+  // parentage, nesting depth, tightest ancestor depth cap).
   setSubprocessRunInfo({
     runId: msg.runId,
     subprocessSessionId: msg.subprocessSessionId,
     parentSpanId: msg.spanContext,
-    depth: 0,
+    depth: msg.depth ?? 0,
+    ...(msg.maxDepth !== undefined ? { maxDepth: msg.maxDepth } : {}),
   });
 
   try {

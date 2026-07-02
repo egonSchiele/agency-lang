@@ -1,0 +1,43 @@
+import { compile, run } from "std::agency"
+
+// A subprocess may itself run a subprocess. Depth is visible in the
+// std::run gate data at every level: the parent approves only depth-1
+// gates, the child approves only depth-2 gates — a wrong depth value at
+// either level leaves a gate unapproved and the test fails.
+node main() {
+  const childSource = """
+import { compile, run } from "std::agency"
+node main() {
+  const c = compile("node main() { return 42 }")
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run" && e.data.depth == 2) {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run" && e.data.depth == 1) {
+      return approve()
+    }
+  }
+}

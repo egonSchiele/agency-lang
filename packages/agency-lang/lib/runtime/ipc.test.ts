@@ -1,5 +1,35 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { clampLimits, serializeInterruptsForIpc, setSubprocessRunInfo, getSubprocessRunInfo } from "./ipc.js";
+import {
+  clampLimits,
+  serializeInterruptsForIpc,
+  setSubprocessRunInfo,
+  getSubprocessRunInfo,
+  resolveDepthCap,
+  DEFAULT_MAX_SUBPROCESS_DEPTH,
+  SUBPROCESS_DEPTH_CEILING,
+} from "./ipc.js";
+
+describe("resolveDepthCap", () => {
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+
+  it("uses the param cap when no ancestor cap exists", () => {
+    expect(resolveDepthCap(DEFAULT_MAX_SUBPROCESS_DEPTH)).toBe(DEFAULT_MAX_SUBPROCESS_DEPTH);
+  });
+
+  it("clamps the param cap to the hard ceiling", () => {
+    expect(resolveDepthCap(100)).toBe(SUBPROCESS_DEPTH_CEILING);
+  });
+
+  it("a tighter ancestor cap always wins", () => {
+    setSubprocessRunInfo({ depth: 1, maxDepth: 2 });
+    expect(resolveDepthCap(5)).toBe(2);
+  });
+
+  it("a looser param cap cannot loosen the ancestor cap", () => {
+    setSubprocessRunInfo({ depth: 1, maxDepth: 3 });
+    expect(resolveDepthCap(10)).toBe(3);
+  });
+});
 
 describe("subprocess run info", () => {
   // Module-scoped per-PROCESS state (one run per subprocess). Tests share

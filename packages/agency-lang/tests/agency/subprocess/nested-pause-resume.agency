@@ -1,0 +1,55 @@
+import { compile, run } from "std::agency"
+
+// Russian dolls: the grandchild's bash is unhandled ANYWHERE, so it
+// surfaces through BOTH hops (grandchild checkpoints inside the child's
+// checkpoint inside the parent's), and ONE approval resumes the whole
+// tree. The grandchild source travels as a node arg so the child can
+// compile it (avoids nesting triple-quoted strings).
+node main() {
+  const grandSource = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo deep-ok")
+  return r.stdout
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

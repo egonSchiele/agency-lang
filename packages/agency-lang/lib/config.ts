@@ -22,6 +22,15 @@ export const BUILTIN_TOOLS: string[] = [];
 
 export const BUILTIN_VARIABLES = ["color"];
 
+/** Reply-attachment caps (tools showing images to the model — see
+ *  docs/dev/reply-attachments.md). The byte cap mirrors smoltalk's
+ *  DEFAULT_MAX_ATTACHMENT_BYTES (20 MB, enforced again at send time);
+ *  smoltalk does not currently export that constant from its index —
+ *  keep in sync if that changes. The count cap is ours and matches the
+ *  agent's user-attachment detection limit. */
+export const MAX_REPLY_ATTACHMENTS_PER_CALL = 10;
+export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
 /**
  * Configuration options for the Agency compiler
  */

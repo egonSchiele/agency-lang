@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { _imageAttachment, _fileAttachment } from "./thread.js";
+import { describe, it, expect, vi } from "vitest";
+import { _imageAttachment, _fileAttachment, _attachToReply } from "./thread.js";
+import { agencyStore } from "../runtime/asyncContext.js";
+import { StateStack } from "../runtime/state/stateStack.js";
 
 describe("_imageAttachment", () => {
   it("classifies a plain path", () => {
@@ -87,5 +89,43 @@ describe("_fileAttachment", () => {
       type: "file",
       source: { kind: "base64", base64: "AAAB", mimeType: "application/pdf" },
     });
+  });
+});
+
+describe("_attachToReply", () => {
+  function frameWith(toolDepth: number) {
+    const stack = new StateStack();
+    const ctx = {
+      isInsideToolCall: () => toolDepth > 0,
+      statelogClient: { error: vi.fn() },
+    };
+    return { ctx, stack } as any;
+  }
+
+  it("queues onto the frame's stack.other when inside a tool call", () => {
+    const frame = frameWith(1);
+    agencyStore.run(frame, () => {
+      _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
+    });
+    const queued = frame.stack.drainPendingReplyAttachments();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].source.path).toBe("/tmp/x.png");
+    // Drain clears: a second drain is empty.
+    expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
+  });
+
+  it("drops with a statelog error outside a tool call (never throws)", () => {
+    const frame = frameWith(0);
+    agencyStore.run(frame, () => {
+      _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
+    });
+    expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
+    expect(frame.ctx.statelogClient.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a no-op outside any runtime frame", () => {
+    expect(() =>
+      _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } }),
+    ).not.toThrow();
   });
 });

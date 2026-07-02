@@ -1,4 +1,5 @@
 import type { Guard, GuardJSON } from "../guard.js";
+import type { ReplyAttachmentPart } from "../replyAttachments.js";
 import { guardFromJSON } from "../guard.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
@@ -324,6 +325,26 @@ export class StateStack {
 
   other: Record<string, any> = {};
   deserializeStackLength: number = 0;
+
+  /** Queue an attachment for the model (backs std::thread.attachToReply).
+   *  Branch-local: each parallel tool call runs on its own branch stack,
+   *  so queues cannot mix; the entry lives in `other`, which serializes,
+   *  so a mid-round interrupt cannot drop it. The tool loop drains it at
+   *  invocation completion — see lib/runtime/replyAttachments.ts. */
+  queueReplyAttachment(part: ReplyAttachmentPart): void {
+    this.other.pendingReplyAttachments ??= [];
+    (this.other.pendingReplyAttachments as ReplyAttachmentPart[]).push(part);
+  }
+
+  /** Drain (return and clear) the attachments queued on this stack by
+   *  queueReplyAttachment. Called by the tool loop exactly once per tool
+   *  invocation, at completion. */
+  drainPendingReplyAttachments(): ReplyAttachmentPart[] {
+    const queued = (this.other.pendingReplyAttachments ??
+      []) as ReplyAttachmentPart[];
+    delete this.other.pendingReplyAttachments;
+    return queued;
+  }
   nodesTraversed: string[] = [];
 
   // currently not serialized, but used to track if we've hit an interrupt in the current branch

@@ -8,6 +8,12 @@ import {
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
+import {
+  harvestReplyAttachments,
+  buildReplyUserMessage,
+  appendReplyMarker,
+  type HarvestedReplyAttachment,
+} from "./replyAttachments.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, resolveRetryPolicy } from "./llmRetry.js";
@@ -1056,18 +1062,58 @@ export async function runPrompt(args: {
         };
       }
 
-      // Success: cache the result, push tool message.
+      // Success: cache the result, push tool message (extracted helper
+      // keeps this arrow inside the max-lines-per-function budget).
       toolResult =
         toolResult ||
         `${handler.name} ran successfully but did not return a value`;
       stack.setResultOnBranch(branchKey, toolResult);
-      messages.push(
-        smoltalk.toolMessage(capToolResultForLlm(toolResult, toolResultCap), {
-          tool_call_id: toolCall.id,
-          name: toolCall.name,
-        }),
-      );
+      pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack });
       return { toolResult, invokeOutcome: "success" };
+    };
+
+    // Push the success ToolMessage for one invocation, with any reply-
+    // attachment marker appended. Reply attachments: drain what this
+    // invocation queued via attachToReply (branch-local, so parallel
+    // tools cannot mix), gate and id it, and append the model-facing
+    // marker to THIS tool's result. Called from inside the idempotent
+    // invoke b.step, so it fires exactly once per tool call across
+    // interrupt/resume. Survivors land in self.runnerState (serialized
+    // per-llm()-call) and are injected after the round completes.
+    //
+    // `clientConfig.model` passes through unmodified — smoltalk's own
+    // send-time gate calls modelSupportsInputModality(config.model, ...)
+    // with the same value, so this pre-check is bug-for-bug identical
+    // with send. Do NOT extract/stringify the model here.
+    const pushSuccessToolMessage = (args: {
+      toolResult: any;
+      toolCall: smoltalk.ToolCallJSON;
+      handler: AgencyFunction;
+      branchStack: StateStack;
+    }): void => {
+      const { toolResult, toolCall, handler, branchStack } = args;
+      const replyMarker = harvestReplyAttachments({
+        queued: branchStack.drainPendingReplyAttachments(),
+        runnerState: self.runnerState,
+        model: clientConfig.model,
+        toolName: handler.name,
+      });
+      messages.push(
+        smoltalk.toolMessage(
+          // `as any` mirrors the pre-existing call: capToolResultForLlm
+          // returns `any` (an under-cap structured result passes through
+          // unstringified) and ToolMessage accepts it at runtime.
+          appendReplyMarker(
+            capToolResultForLlm(toolResult, toolResultCap),
+            replyMarker,
+            stringifyToolResult,
+          ) as any,
+          {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+          },
+        ),
+      );
     };
 
     // Handle tool calls
@@ -1336,6 +1382,35 @@ export async function runPrompt(args: {
       toolFunctions = toolFunctions.filter(
         (fn) => !removedTools.includes(fn.name),
       );
+
+      // Reply attachments harvested from this round's tools (and any
+      // earlier round whose injection was pre-empted by an interrupt):
+      // inject ONE labeled user message after ALL tool results — the
+      // provider adjacency rules require the assistant's tool calls to
+      // be answered by every tool result before any other message.
+      // Resume-safety (verified): pr.step marks the key in
+      // completedSteps and skips it on resume; PromptRunner snapshots
+      // messagesJSON in beforeCheckpoint (promptRunner.ts) so a
+      // checkpoint stamped after this step completes carries the
+      // injected message, and resume restores messages from
+      // messagesJSON — the same mechanism that preserves sibling
+      // tool-message pushes. Clearing the buffer inside the step keeps
+      // the outer guard consistent on replay. The explicit messagesJSON
+      // write matches the pattern at the first-LLM-call and nextLlmCall
+      // sites.
+      const pendingReplies = (self.runnerState.replyAttachments ??
+        []) as HarvestedReplyAttachment[];
+      if (pendingReplies.length > 0) {
+        await pr.step(`round.${round}.attachReplies`, async () => {
+          messages.push(
+            smoltalk.userMessage(
+              buildReplyUserMessage(pendingReplies) as smoltalk.UserContentInput,
+            ),
+          );
+          self.runnerState.replyAttachments = [];
+          self.messagesJSON = messages.toJSON().messages;
+        });
+      }
 
       // Next LLM call wrapped in pr.step for resume idempotency. Once
       // marked done, resume re-entries skip the LLM call. The llmCall

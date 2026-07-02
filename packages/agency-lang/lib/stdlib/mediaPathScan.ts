@@ -23,8 +23,9 @@ import { expandPath } from "./expandPath.js";
 export type MediaPathCandidate = { path: string; mime: string };
 
 /** extension (lowercase, with dot) -> MIME type. Media-only by design:
- *  code/text paths stay with the agent's read tool. */
-const MIME_TYPES: Record<string, string> = {
+ *  code/text paths stay with the agent's read tool. Exported as the
+ *  canonical media ext->MIME map (also used by reply attachments). */
+export const MIME_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",

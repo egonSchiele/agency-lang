@@ -1,0 +1,116 @@
+// attachToReply: a tool queues an attachment; the tool loop appends a
+// marker to the tool result and injects a labeled user message after
+// the round. Asserted through getThread, whose reader renders
+// attachment parts as "[image attachment]".
+import { attachToReply, image, getThread } from "std::thread"
+
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+def showChart(): string {
+  """
+  Render the chart the user asked about.
+  """
+  attachToReply(image("/tmp/tra-chart.png"))
+  return "chart ready"
+}
+
+def showMap(): string {
+  """
+  Render the map the user asked about.
+  """
+  attachToReply(image("/tmp/tra-map.png"))
+  return "map ready"
+}
+
+def writeNote(): string {
+  """
+  Write a note file (raises the writeBinary interrupt).
+  """
+  writeBinary("tra-note.txt", "aGk=", "/tmp")
+  return "note written"
+}
+
+// Collect the whole conversation as one string via the thread reader.
+def conversationText(): string {
+  let collected = ""
+  for (tid in ["t0", "t1", "t2", "t3"]) {
+    const messages = getThread(tid, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        collected = collected + "<" + message.role + "> " + message.content + "\n"
+      }
+    }
+  }
+  return collected
+}
+
+node singleToolAttachment(): string {
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  const reply = llm("show me the chart", { tools: [showChart] })
+  const convo = conversationText()
+  const hasMarker = convo.includes("[attached img_1 — delivered in the user message following these tool results]")
+  const hasLabel = convo.includes("[img_1 — image output of tool showChart]")
+  const hasImage = convo.includes("[image attachment]")
+  return "${reply}|${hasMarker}|${hasLabel}|${hasImage}"
+}
+
+node parallelToolsAttribution(): string {
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  writeBinary("tra-map.png", PNG, "/tmp") with approve
+  const reply = llm("show both", { tools: [showChart, showMap] })
+  const convo = conversationText()
+  // Each tool result carries exactly its own marker; both labels appear
+  // in the injected user message; two image parts total.
+  const chartMarked = convo.includes("chart ready") && convo.includes("[attached img_")
+  const chartLabel = convo.includes("image output of tool showChart]")
+  const mapLabel = convo.includes("image output of tool showMap]")
+  const both = convo.includes("img_1") && convo.includes("img_2")
+  return "${reply}|${chartMarked}|${chartLabel}|${mapLabel}|${both}"
+}
+
+node interruptMidRoundKeepsAttachment(): string {
+  // showChart queues an attachment; writeNote interrupts the round
+  // (std::writeBinary). `with approve` resumes — the queued attachment
+  // must survive the two-trip path and still be injected exactly once.
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  const reply = llm("chart and note", { tools: [showChart, writeNote] }) with approve
+  const convo = conversationText()
+  const marker = convo.includes("[attached img_1 — delivered in the user message following these tool results]")
+  const image = convo.includes("[image attachment]")
+  const once = convo.split("[img_1 — image output of tool showChart]").length == 2
+  return "${reply}|${marker}|${image}|${once}"
+}
+
+node textOnlyModelSkips(): string {
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  const reply = llm("show me", { tools: [showChart], model: "gpt-3.5-turbo" })
+  const convo = conversationText()
+  const skip = convo.includes("[attachment img_1 skipped: the current model has no image input]")
+  const noImage = !convo.includes("[image attachment]")
+  return "${reply}|${skip}|${noImage}"
+}
+
+node outsideToolIsDropped(): string {
+  attachToReply(image("/tmp/tra-chart.png"))
+  return "ok"
+}
+
+node sequentialLlmCallsAreIsolated(): string {
+  // Each llm() call gets its own runPrompt runnerState, so counters and
+  // buffers never leak between calls: both threads carry img_1 and
+  // img_2 never exists. (No e2e FORK variant: the deterministic
+  // client's mock queue is flat and module-keyed — ScopedLLMMocks keys
+  // by module, and both branches would share this module — so
+  // concurrent branches consume mocks nondeterministically. The
+  // parallel-isolation property is structural — one runnerState per
+  // runPrompt — and pinned by the "separate runnerStates" vitest unit.)
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  writeBinary("tra-map.png", PNG, "/tmp") with approve
+  const left = llm("show chart", { tools: [showChart] })
+  const right = llm("show map", { tools: [showMap] })
+  const convo = conversationText()
+  const chartLabel = convo.includes("[img_1 — image output of tool showChart]")
+  const mapLabel = convo.includes("[img_1 — image output of tool showMap]")
+  const noCross = !convo.includes("img_2")
+  return "${left}|${right}|${chartLabel}|${mapLabel}|${noCross}"
+}

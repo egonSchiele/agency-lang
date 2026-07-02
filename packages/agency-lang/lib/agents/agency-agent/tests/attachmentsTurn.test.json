@@ -78,6 +78,33 @@
           "return": "code reply"
         }
       ]
+    },
+    {
+      "nodeName": "generatedImageIsShownToModel",
+      "input": "",
+      "expectedOutput": "\"made it|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            {
+              "name": "generateImageFile",
+              "args": {
+                "prompt": "a bicycle",
+                "path": "/tmp/tra-gen-turn.png"
+              }
+            }
+          ]
+        },
+        {
+          "return": "made it"
+        }
+      ]
     }
   ]
 }

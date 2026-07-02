@@ -1,5 +1,6 @@
 import * as smoltalk from "smoltalk";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
+import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
@@ -168,6 +169,31 @@ export function _fileAttachment(
   return name
     ? { type: "file", source: src, filename: name }
     : { type: "file", source: src };
+}
+
+/** Backs `std::thread.attachToReply`. Queues an attachment on the CALLING
+ *  TOOL INVOCATION's branch-local stack bag; the LLM tool loop harvests it
+ *  when the invocation completes and shows it to the model as a labeled
+ *  user message after the tool round (see lib/runtime/replyAttachments.ts).
+ *  Outside a tool invocation there is no tool loop to harvest, so the
+ *  attachment is dropped with a statelog error — never a throw (a tool
+ *  must not crash because its host context changed). */
+export function _attachToReply(attachment: unknown): void {
+  const frame = agencyStore.getStore();
+  if (!frame?.stack) {
+    return;
+  }
+  if (!frame.ctx?.isInsideToolCall()) {
+    frame.ctx?.statelogClient?.error({
+      errorType: "toolError",
+      message:
+        "attachToReply called outside a tool invocation; attachment dropped",
+      functionName: "attachToReply",
+      retryable: false,
+    });
+    return;
+  }
+  frame.stack.queueReplyAttachment(attachment as ReplyAttachmentPart);
 }
 
 export async function __internal_getCost(

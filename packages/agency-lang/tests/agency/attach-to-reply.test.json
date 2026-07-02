@@ -1,0 +1,67 @@
+{
+  "tests": [
+    {
+      "nodeName": "singleToolAttachment",
+      "input": "",
+      "expectedOutput": "\"done|true|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "showChart" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "parallelToolsAttribution",
+      "input": "",
+      "expectedOutput": "\"done|true|true|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "showChart" }, { "name": "showMap" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "interruptMidRoundKeepsAttachment",
+      "input": "",
+      "expectedOutput": "\"done|true|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "showChart" }, { "name": "writeNote" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "textOnlyModelSkips",
+      "input": "",
+      "expectedOutput": "\"done|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "showChart" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "outsideToolIsDropped",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "sequentialLlmCallsAreIsolated",
+      "input": "",
+      "expectedOutput": "\"done|done|true|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "showChart" }] },
+        { "return": "done" },
+        { "toolCalls": [{ "name": "showMap" }] },
+        { "return": "done" }
+      ]
+    }
+  ]
+}

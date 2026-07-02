@@ -1614,18 +1614,17 @@ def _appendPaletteFilterCharacter(
 
 def _replReducePaletteOpen(state: ReplState, keyEvent: KeyEvent): ReplState {
   const paletteKeys = _filteredPaletteKeys(state)
-  match(keyEvent) {
-    { key: "escape" } => return _closePalette(state)
-    { key: "up" } => return _movePaletteCursor(state, paletteKeys, -1)
-    { key: "down" } => return _movePaletteCursor(state, paletteKeys, 1)
-    { key: "enter" } => return _selectPaletteCommand(state, paletteKeys)
-    { key: "tab" } => return _selectPaletteCommand(state, paletteKeys)
-    { key: "backspace" } if (state.palette.filter == "") => return _closePalette(state)
-    { key: "backspace" } => return _removePaletteFilterCharacter(state)
-    { key } if (key.length == 1) => return _appendPaletteFilterCharacter(state, key)
-    _ => return state
+  return match(keyEvent) {
+    { key: "escape" } => _closePalette(state)
+    { key: "up" } => _movePaletteCursor(state, paletteKeys, -1)
+    { key: "down" } => _movePaletteCursor(state, paletteKeys, 1)
+    { key: "enter" } => _selectPaletteCommand(state, paletteKeys)
+    { key: "tab" } => _selectPaletteCommand(state, paletteKeys)
+    { key: "backspace" } if (state.palette.filter == "") => _closePalette(state)
+    { key: "backspace" } => _removePaletteFilterCharacter(state)
+    { key } if (key.length == 1) => _appendPaletteFilterCharacter(state, key)
+    _ => state
   }
-  return state
 }
 
 def _appendInputCharacter(state: ReplState, character: string): ReplState {
@@ -1867,32 +1866,31 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
     return _replReducePaletteOpen(state, keyEvent)
   }
 
-  match(keyEvent) {
-    { ctrl: true, key: "c" } => return {
+  return match(keyEvent) {
+    { ctrl: true, key: "c" } => ({
       ...state,
       done: true
-    }
-    { ctrl: true, key: "u" } => return _clearInputBuffer(state)
+    })
+    { ctrl: true, key: "u" } => _clearInputBuffer(state)
     // Bracketed-paste payload from the terminal (e.g. Cmd+V on
     // macOS). `_pasteText` coerces the optional `keyEvent.text` to a
     // plain string so the match arm stays a single expression.
-    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
-    { key: "/" } if (state.input.buffer == "") => return _openPalette(state)
-    { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
-    { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)
-    { key: "backspace" } if (state.input.buffer != "") => return _removeInputCharacter(state)
+    { key: "paste" } => _appendPaste(state, _pasteText(keyEvent))
+    { key: "/" } if (state.input.buffer == "") => _openPalette(state)
+    { key: "up" } if (state.input.historyIdx > 0) => _recallPreviousHistory(state)
+    { key: "down" } if (state.input.historyIdx < state.input.history.length) => _recallNextHistory(state)
+    { key: "backspace" } if (state.input.buffer != "") => _removeInputCharacter(state)
     // Shift+Enter inserts a literal newline. Must come before the
     // plain `enter` arms — match arms with more specific predicates
     // win, but only when listed before the more general one.
-    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
+    { key: "enter", shift: true } => _appendInputCharacter(state, "\n")
     // Empty-buffer Enter is a no-op: skip writing a blank "You" row
     // and entering the busy/Thinking state for an empty prompt.
-    { key: "enter" } if (state.input.buffer == "") => return state
-    { key: "enter" } => return _submitPrompt(state)
-    { key } if (key.length == 1) => return _appendInputCharacter(state, key)
-    _ => return state
+    { key: "enter" } if (state.input.buffer == "") => state
+    { key: "enter" } => _submitPrompt(state)
+    { key } if (key.length == 1) => _appendInputCharacter(state, key)
+    _ => state
   }
-  return state
 }
 
 def _replIsDone(state: ReplState): boolean {

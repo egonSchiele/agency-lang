@@ -1,11 +1,10 @@
 // Nested-in-object: result pattern inside an object match pattern.
 def describe(box: any): string {
-  match (box) {
-    { result: success(v) } => return "ok ${v}"
-    { result: failure(e) } => return "err ${e}"
-    _ => return "other"
+  return match (box) {
+    { result: success(v) } => "ok ${v}"
+    { result: failure(e) } => "err ${e}"
+    _ => "other"
   }
-  return "unreachable"
 }
 
 node main() {

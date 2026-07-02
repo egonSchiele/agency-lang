@@ -2,11 +2,12 @@
 // scrutinee doesn't match (x.type !== "a"), the function should return a
 // `failure` Result rather than silently no-oping.
 def lookup(x: any): string {
+  let out = "unreachable"
   match (x is { type: "a", v }) {
-    v > 5 => return "big"
-    _ => return "small"
+    v > 5 => out = "big"
+    _ => out = "small"
   }
-  return "unreachable"
+  return out
 }
 
 node main() {

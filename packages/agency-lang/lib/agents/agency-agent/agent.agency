@@ -918,9 +918,9 @@ def givePolicyChoice() {
   ]
 
   const answer = chooseOption(title, body, items, allowFreeText: true)
-  match(answer) {
-    "minimal" => return minimalAutoApprovePolicy
-    "recommended" => return recommendedAutoApprovePolicy
+  return match(answer) {
+    "minimal" => minimalAutoApprovePolicy
+    "recommended" => recommendedAutoApprovePolicy
   }
 }
 

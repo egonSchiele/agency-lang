@@ -51,7 +51,10 @@ export default defineConfig({
               text: "Effect Sets and raises",
               link: "/guide/effects-and-raises",
             },
-            { text: "Partial Function Application", link: "/guide/partial-application" },
+            {
+              text: "Partial Function Application",
+              link: "/guide/partial-application",
+            },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             {
               text: "Message History and Threads",
@@ -61,7 +64,10 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Guards", link: "/guide/guards" },
             { text: "Execution Model", link: "/guide/execution-model" },
-            { text: "Global vs Static Variables", link: "/guide/global-vs-static" },
+            {
+              text: "Global vs Static Variables",
+              link: "/guide/global-vs-static",
+            },
             { text: "Testing", link: "/guide/testing" },
             { text: "Observability", link: "/guide/observability" },
           ],
@@ -86,96 +92,37 @@ export default defineConfig({
         {
           text: "Appendix",
           items: [
-            { text: "Agency CLI", link: "/appendix/cli" },
-            { text: "VSCode Extension", link: "/appendix/vscode-extension" },
-            { text: "Callbacks", link: "/appendix/callbacks" },
+            { text: "VSCode Extension", link: "/guide/vscode-extension" },
+            { text: "Callbacks", link: "/guide/callbacks" },
             {
               text: "Agency vs TypeScript",
-              link: "/appendix/agency-vs-typescript",
+              link: "/guide/agency-vs-typescript",
             },
             {
               text: "Agency's Standard Library",
-              link: "/appendix/agency-stdlib",
+              link: "/guide/agency-stdlib",
             },
             {
               text: "Built-in Functions",
-              link: "/appendix/builtins",
+              link: "/guide/builtins",
             },
             {
               text: "Advanced Types",
-              link: "/appendix/advanced-types",
+              link: "/guide/advanced-types",
+            },
+            {
+              text: "TypeScript Helpers (agency.*)",
+              link: "/guide/ts-helpers",
             },
             { text: "Agency Config File", link: "/guide/agency-config-file" },
             { text: "CLI Argument Parsing", link: "/guide/cli-args" },
             {
               text: "Schema Parameter Injection",
-              link: "/appendix/schema-parameter-injection",
+              link: "/guide/schema-parameter-injection",
             },
           ],
         },
       ],
-      "/appendix/": [
-        {
-          text: "Guide",
-          items: [
-            { text: "Getting Started", link: "/guide/getting-started" },
-            { text: "Basic Syntax", link: "/guide/basic-syntax" },
-            { text: "Types", link: "/guide/types" },
-            { text: "Nodes", link: "/guide/nodes" },
-            { text: "LLMs", link: "/guide/llm" },
-            { text: "Image generation", link: "/guide/image-generation" },
-            { text: "Functions", link: "/guide/functions" },
-            { text: "Interrupts", link: "/guide/interrupts" },
-            { text: "Handlers", link: "/guide/handlers" },
-            { text: "Effect Sets and raises", link: "/guide/effects-and-raises" },
-            { text: "Testing", link: "/guide/testing" },
-            { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
-            {
-              text: "Message History and Threads",
-              link: "/guide/message-history-and-threads",
-            },
-            { text: "Error Handling", link: "/guide/error-handling" },
-            { text: "Blocks", link: "/guide/blocks" },
-            { text: "Execution Model", link: "/guide/execution-model" },
-            {
-              text: "Imports and Packages",
-              link: "/guide/imports-and-packages",
-            },
-            { text: "Schemas", link: "/guide/schemas" },
-            { text: "Type Validation", link: "/guide/type-validation" },
-            { text: "Checkpointing", link: "/guide/checkpointing" },
-            { text: "Memory", link: "/guide/memory" },
-            { text: "MCP", link: "/guide/mcp" },
-          ],
-        },
-        {
-          text: "Appendix",
-          items: [
-            { text: "Agency CLI", link: "/appendix/cli" },
-            { text: "VSCode Extension", link: "/appendix/vscode-extension" },
-            { text: "Generating Docs", link: "/appendix/docs" },
-            { text: "Callbacks", link: "/appendix/callbacks" },
-            {
-              text: "Agency vs TypeScript",
-              link: "/appendix/agency-vs-typescript",
-            },
-            {
-              text: "Agency's Standard Library",
-              link: "/appendix/agency-stdlib",
-            },
-            {
-              text: "Built-in Functions",
-              link: "/appendix/builtins",
-            },
-            { text: "TypeScript Helpers (agency.*)", link: "/appendix/ts-helpers" },
-            {
-              text: "Schema Parameter Injection",
-              link: "/appendix/schema-parameter-injection",
-            },
-          ],
-        },
-      ],
-
       "/cli/": [
         {
           text: "CLI",
@@ -214,7 +161,7 @@ export default defineConfig({
           items: [
             {
               text: "agency",
-              collapsed: true,
+              collapsed: false,
               items: [
                 { text: "agency", link: "/stdlib/agency" },
                 { text: "agency/eval", link: "/stdlib/agency/eval" },
@@ -226,7 +173,7 @@ export default defineConfig({
             { text: "array", link: "/stdlib/array" },
             {
               text: "auth",
-              collapsed: true,
+              collapsed: false,
               items: [
                 { text: "auth/keyring", link: "/stdlib/auth/keyring" },
                 { text: "auth/oauth", link: "/stdlib/auth/oauth" },
@@ -247,7 +194,7 @@ export default defineConfig({
             { text: "memory", link: "/stdlib/memory" },
             {
               text: "messaging",
-              collapsed: true,
+              collapsed: false,
               items: [
                 { text: "messaging/email", link: "/stdlib/messaging/email" },
                 {
@@ -270,7 +217,7 @@ export default defineConfig({
             { text: "thread", link: "/stdlib/thread" },
             {
               text: "ui",
-              collapsed: true,
+              collapsed: false,
               items: [
                 { text: "ui (interactive)", link: "/stdlib/ui" },
                 { text: "ui/chart", link: "/stdlib/ui/chart" },
@@ -283,7 +230,7 @@ export default defineConfig({
             { text: "weather", link: "/stdlib/weather" },
             {
               text: "web",
-              collapsed: true,
+              collapsed: false,
               items: [
                 { text: "web/browser", link: "/stdlib/web/browser" },
                 { text: "web/search", link: "/stdlib/web/search" },

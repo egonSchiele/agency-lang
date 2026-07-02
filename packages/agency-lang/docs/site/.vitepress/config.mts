@@ -23,6 +23,7 @@ export default defineConfig({
             { text: "Types", link: "/guide/types" },
             { text: "Nodes", link: "/guide/nodes" },
             { text: "LLMs", link: "/guide/llm" },
+            { text: "Image generation", link: "/guide/image-generation" },
             {
               text: "Custom & local model providers",
               link: "/guide/custom-providers",
@@ -118,6 +119,7 @@ export default defineConfig({
             { text: "Types", link: "/guide/types" },
             { text: "Nodes", link: "/guide/nodes" },
             { text: "LLMs", link: "/guide/llm" },
+            { text: "Image generation", link: "/guide/image-generation" },
             { text: "Functions", link: "/guide/functions" },
             { text: "Interrupts", link: "/guide/interrupts" },
             { text: "Handlers", link: "/guide/handlers" },

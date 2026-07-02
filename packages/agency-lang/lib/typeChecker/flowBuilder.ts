@@ -114,6 +114,54 @@ export function assignedNames(body: AgencyNode[]): string[] {
   return names;
 }
 
+/** The literal condition `true` — no constant folding (`1 == 1` doesn't count). */
+function isLiteralTrue(cond: AgencyNode): boolean {
+  return cond.type === "boolean" && cond.value === true;
+}
+
+/** A `break` that can exit the loop whose body this is: found anywhere in the
+ *  body except (a) inside a nested loop — break binds to the nearest loop,
+ *  (b) inside a nested function/node definition (same ancestor filter as
+ *  assignedNames), or (c) inside an INLINE HANDLER body — handler bodies are
+ *  codegen'd as separate arrow functions (`insideHandlerBody`;
+ *  typescriptBuilder.ts processKeyword emits a bare `break` there), so a
+ *  break in a `with (e) { ... }` body can never reach the enclosing Agency
+ *  loop. Everything else counts, conservative toward the loop being
+ *  escapable — a break in the guarded `handle { ... }` body or in a callback
+ *  block compiles to runner.breakLoop(), which genuinely breaks the loop when
+ *  it runs during an iteration. Traversal note (verified): walkNodes descends
+ *  into every statement-bearing construct that could carry a loop-bound
+ *  break — ifElse, loops, handleBlock body + inline handler body,
+ *  thread/parallel/seq blocks, match arm bodies, withModifier — the only
+ *  non-descended wrapper is staticStatement, which cannot meaningfully
+ *  contain a break. */
+function hasReachableBreak(body: AgencyNode[]): boolean {
+  // Breaks under inline handler bodies can't escape the loop (see (c) above).
+  // Collected by node identity so the main walk can skip exactly those.
+  const handlerBodyBreaks: AgencyNode[] = [];
+  for (const { node } of walkNodes(body)) {
+    if (node.type !== "handleBlock" || node.handler.kind !== "inline") continue;
+    for (const { node: inner } of walkNodes(node.handler.body)) {
+      if (inner.type === "keyword" && inner.value === "break") {
+        handlerBodyBreaks.push(inner);
+      }
+    }
+  }
+  for (const { node, ancestors } of walkNodes(body)) {
+    if (node.type !== "keyword" || node.value !== "break") continue;
+    if (handlerBodyBreaks.includes(node)) continue;
+    const bindsElsewhere = ancestors.some(
+      (a) =>
+        a.type === "whileLoop" ||
+        a.type === "forLoop" ||
+        a.type === "function" ||
+        a.type === "graphNode",
+    );
+    if (!bindsElsewhere) return true;
+  }
+  return false;
+}
+
 /** statement kind → its flow transformation. The "what". */
 type StatementRuleTable = {
   [K in AgencyNode["type"]]?: (
@@ -185,6 +233,19 @@ const statementRules: StatementRuleTable = {
     attachExpressionsToFlow(node.condition as AgencyNode, flow, env);
     const facts = analyzeCondition(node.condition);
     const bodyEnd = buildFlowGraph(node.body, wrapFacts(flow, facts.then), env);
+    // `while (true)` with no break that can exit THIS loop never falls
+    // through: the post-loop flow is unreachable, so the loop diverges like a
+    // `return` (definite-return §5b; also makes trailing statements dead code
+    // to downstream consumers). The body was still built above so its refs
+    // keep their flowOf entries; skipping widenAtLoopBackEdge here is
+    // deliberate — widening only shapes the POST-loop flow, which does not
+    // exist for a diverging loop (do not "restore" it). Scope note: only the
+    // literal-true condition counts; `while (cond) { raise ... }` is out of
+    // scope (raise is passThrough / may resume — same convention as
+    // alwaysExits).
+    if (isLiteralTrue(node.condition as AgencyNode) && !hasReachableBreak(node.body)) {
+      return { kind: "exit" };
+    }
     return wrapFacts(
       widenAtLoopBackEdge(flow, bodyEnd, assignedNames(node.body), env),
       facts.else,

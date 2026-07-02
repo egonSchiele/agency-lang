@@ -32,7 +32,7 @@ def f(b: Box): void {
 type Env = { result: Result<number, string> }
 def takesNumber(n: number): number { return n }
 def f(env: Env): number {
-  match (env) {
+  return match (env) {
     { result: success(v) } => takesNumber(v)
     { result: failure(e) } => 0
   }
@@ -265,7 +265,7 @@ def f(rs: Result<number, string>[]): void {
     expect(check(`${TRY}
 def takesNumber(n: number): number { return n }
 def f(pair: Result<number, string>[]): number {
-  match (pair) {
+  return match (pair) {
     [success(v), _] => takesNumber(v)
     _ => 0
   }

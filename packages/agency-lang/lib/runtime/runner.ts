@@ -17,6 +17,7 @@ import {
 } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
+import { matchValName } from "../matchVal.js";
 
 /** Options bag for the new `Runner.thread(id, method, opts, callback)`
  *  signature. All fields are optional; emitter passes only the ones
@@ -259,7 +260,7 @@ export class Runner {
   /** Yield `value` from a match arm: store it as the match result and skip
    *  everything until the owning ifElse (matchId) consumes the flag. */
   exitMatch(matchId: number, value: unknown): void {
-    this.frame.locals[`__matchval_${matchId}`] = value;
+    this.frame.locals[matchValName(matchId)] = value;
     this._matchExit = matchId;
   }
 

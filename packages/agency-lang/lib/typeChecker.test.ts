@@ -2236,6 +2236,68 @@ describe("TypeChecker", () => {
       expect(errors[0].actualType).toBe("number");
       expect(errors[0].expectedType).toBe("string");
     });
+
+    it("index access on an object literal yields the property value type (not any)", () => {
+      // Shared with the for-loop typer: `obj[k]` must agree with `for (k, v in
+      // obj)` that an object literal's value type is the union of its property
+      // values — here `number`, so passing it where a string is expected errors.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "a", value: { type: "number", value: "1" } },
+                { key: "b", value: { type: "number", value: "2" } },
+              ],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "key",
+            iterable: { type: "variableName", value: "obj" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectStr",
+                arguments: [
+                  {
+                    type: "valueAccess",
+                    base: { type: "variableName", value: "obj" },
+                    chain: [
+                      {
+                        kind: "index",
+                        index: { type: "variableName", value: "key" },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
   });
 
   describe("inferred variable used correctly", () => {

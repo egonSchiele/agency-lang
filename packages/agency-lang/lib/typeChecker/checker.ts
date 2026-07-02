@@ -5,6 +5,7 @@ import {
   VariableType,
 } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
+import { parseMatchValId } from "../matchVal.js";
 import { scopeKey as getScopeKey } from "../compilationUnit.js";
 import type { Scope as WalkScope } from "../types.js";
 import { formatTypeHint } from "../utils/formatType.js";
@@ -797,8 +798,7 @@ function checkReturnTypesInScope(
  *  `return match(...)` produces, else undefined. */
 function matchvalRefId(expr: AgencyNode): number | undefined {
   if (expr.type !== "variableName") return undefined;
-  const m = /^__matchval_(\d+)$/.exec(expr.value);
-  return m ? Number(m[1]) : undefined;
+  return parseMatchValId(expr.value);
 }
 
 /**

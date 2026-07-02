@@ -1,4 +1,6 @@
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
+import { parseMatchValId } from "../matchVal.js";
+import { recordLikeKeyValue } from "./recordLike.js";
 import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
 import type { SourceLocation } from "../types/base.js";
 import { resultToObjectUnion } from "./resultUnion.js";
@@ -254,9 +256,9 @@ export function synthType(
       // lowerer leaves as an expression-match's value. It is never declared in
       // scope; resolve it directly to the match's computed value type so an
       // outer yield that reads an inner match's temp gets the inner union.
-      const matchvalMatch = /^__matchval_(\d+)$/.exec(expr.value);
-      if (matchvalMatch) {
-        return ctx.matchExprTypes[Number(matchvalMatch[1])] ?? "any";
+      const matchvalId = parseMatchValId(expr.value);
+      if (matchvalId !== undefined) {
+        return ctx.matchExprTypes[matchvalId] ?? "any";
       }
       const scopeType = scope.lookup(expr.value);
       if (scopeType) {
@@ -923,11 +925,16 @@ export function synthValueAccess(
       case "index": {
         if (resolved.type === "arrayType") {
           currentType = resolved.elementType;
-        } else if (resolved.type === "genericType" && resolved.name === "Record") {
-          // Record<K, V>: index access yields V.
-          currentType = resolved.typeArgs[1];
         } else {
-          return "any";
+          // Record-like (`Record<K, V>` or an object literal): index access
+          // yields the value type. Shared with the for-loop typer so `obj[k]`
+          // and `for (k, v in obj)` agree on an object literal's value type.
+          const recordLike = recordLikeKeyValue(resolved);
+          if (recordLike) {
+            currentType = recordLike.value;
+          } else {
+            return "any";
+          }
         }
         break;
       }

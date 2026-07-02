@@ -26,6 +26,7 @@ import type {
 import { isExpressionNode } from "../types.js";
 import type { MatchYield } from "../types/matchYield.js";
 import { LoweringError } from "./loweringError.js";
+import { matchValName } from "../matchVal.js";
 import type { BinOpExpression, Operator } from "../types/binop.js";
 import type { AgencyArray } from "../types/dataStructures.js";
 import type {
@@ -424,7 +425,7 @@ class PatternLowerer {
         : c,
     );
     const statements = this.lowerMatchBlock({ ...match, cases }, matchId);
-    return { statements, valueRef: varRef(`__matchval_${matchId}`, loc), matchId };
+    return { statements, valueRef: varRef(matchValName(matchId), loc), matchId };
   }
 
   /**

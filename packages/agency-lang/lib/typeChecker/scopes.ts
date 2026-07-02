@@ -21,8 +21,8 @@ import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { checkMatchExprYields } from "./matchExprTypes.js";
-import { NUMBER_T, STRING_T } from "./primitives.js";
-import { unionTypes } from "./inference.js";
+import { NUMBER_T } from "./primitives.js";
+import { recordLikeKeyValue } from "./recordLike.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { expressionChildren } from "../utils/node.js";
 
@@ -387,6 +387,14 @@ export function walkScopeBody(
         // mirroring how the runtime `Runner.loop` passes callback arguments.
         let itemType: VariableType | "any";
         let secondType: VariableType | "any";
+        // Record-like: `for (k, v in obj)` binds key + value. A shared helper
+        // (`recordLikeKeyValue`) handles both `Record<K, V>` and structural
+        // object literals (`objectType`), so this typer and index-access
+        // synthesis agree on an object literal's value type. Object literals
+        // synthesize to `objectType`, not `Record`, so without this they'd be
+        // wrongly rejected as non-iterable.
+        const recordLike =
+          iterableType === "any" ? undefined : recordLikeKeyValue(iterableType);
         if (iterableType === "any") {
           itemType = "any";
           // Iterable kind is unknown, so the second var could be either an
@@ -395,26 +403,9 @@ export function walkScopeBody(
         } else if (iterableType.type === "arrayType") {
           itemType = iterableType.elementType;
           secondType = NUMBER_T;
-        } else if (
-          iterableType.type === "genericType" &&
-          iterableType.name === "Record"
-        ) {
-          // for (k, v in record): key is Record's key type, value is its
-          // value type.
-          itemType = iterableType.typeArgs[0];
-          secondType = iterableType.typeArgs[1];
-        } else if (iterableType.type === "objectType") {
-          // for (k, v in obj): an object literal iterates by its (string)
-          // keys, with the value being the property value at that key. Object
-          // literals synthesize to a structural `objectType`, not a `Record`
-          // generic, so they need their own branch here or iteration is
-          // wrongly rejected. The value type is the union of all property
-          // value types.
-          itemType = STRING_T;
-          secondType =
-            iterableType.properties.length === 0
-              ? "any"
-              : unionTypes(iterableType.properties.map((p) => p.value));
+        } else if (recordLike) {
+          itemType = recordLike.key;
+          secondType = recordLike.value;
         } else {
           itemType = "any";
           secondType = "any";

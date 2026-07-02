@@ -74,6 +74,7 @@ import {
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { MatchYield } from "../types/matchYield.js";
+import { matchValName, isMatchValName } from "../matchVal.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
@@ -233,10 +234,26 @@ export class TypeScriptBuilder {
   // checks. This counter gives each one a unique name.
   private handlerFuncResultCounter: number = 0;
   private insideGlobalInit: boolean = false;
+  // Gives each plain-mode (handler) for-loop unique names for its normalization
+  // temps, so nested loops in the same block don't collide.
+  private plainForLoopCounter: number = 0;
   // Set while emitting the body of a plain-mode (handler) match EXPRESSION,
   // whose arms are wrapped in an async IIFE. Inside it, a `matchYield` compiles
   // to a real `return <value>` (exiting the IIFE) instead of the stepped
   // `runner.exitMatch`, so the handler never touches the `_matchExit` flag.
+  //
+  // INVARIANT: this must be true ONLY where a `return` lands directly in the
+  // IIFE. Today that holds because (a) `matchYield` nodes exist only inside
+  // expression-match regions, every one of which routes through
+  // `processMatchExpressionPlain` in a handler, and (b) the builder never
+  // switches OUT of plain mode within the IIFE — it does not reset
+  // `insideHandlerBody` at block-argument / nested-frame boundaries, so nothing
+  // stepped compiles inside a handler. At every yield site this flag therefore
+  // currently equals `insideHandlerBody`. If a future change starts compiling
+  // stepped constructs inside a handler (e.g. resetting `insideHandlerBody` per
+  // frame), reset THIS flag at those same boundaries too — otherwise a stepped
+  // match nested in a plain arm would emit a bare `return` inside a step
+  // callback (value discarded, `_matchExit` never set: a silent wrong answer).
   private insidePlainMatchExpr: boolean = false;
 
   /*
@@ -531,9 +548,7 @@ export class TypeScriptBuilder {
         return ts.empty();
       case "matchBlock":
         return this.insideHandlerBody
-          ? node.matchExprId !== undefined
-            ? this.processMatchExpressionPlain(node)
-            : this.processBlockPlain(node)
+          ? this.processPlainBranching(node)
           : this.processMatchBlockWithSteps(node);
       case "number":
       case "unitLiteral":
@@ -571,9 +586,7 @@ export class TypeScriptBuilder {
           : this.processWhileLoopWithSteps(node);
       case "ifElse":
         return this.insideHandlerBody
-          ? node.matchExprId !== undefined
-            ? this.processMatchExpressionPlain(node)
-            : this.processBlockPlain(node)
+          ? this.processPlainBranching(node)
           : this.processIfElseWithSteps(node);
       case "newLine":
         return ts.empty();
@@ -925,7 +938,7 @@ export class TypeScriptBuilder {
           if (
             !isBuiltinVar &&
             !isLoopVar &&
-            /^__matchval_\d+$/.test(literal.value)
+            isMatchValName(literal.value)
           ) {
             return ts.scopedVar(literal.value, "local", this.moduleId);
           }
@@ -1380,6 +1393,21 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * Plain-mode (handler body) routing for the two lowered shapes of a branching
+   * construct: a match expression (literal arms → `matchBlock`, pattern arms →
+   * `ifElse`, both carrying `matchExprId`) becomes a self-contained IIFE; a plain
+   * statement match / if compiles as ordinary JS. Single source of truth so the
+   * `matchBlock` and `ifElse` dispatch cases can't drift apart — a mismatch would
+   * silently emit a statement match whose consumer reads an unassigned
+   * `__matchval_N` as `undefined`.
+   */
+  private processPlainBranching(node: MatchBlock | IfElse): TsNode {
+    return node.matchExprId !== undefined
+      ? this.processMatchExpressionPlain(node)
+      : this.processBlockPlain(node);
+  }
+
+  /**
    * Compile an expression-position `match` inside a handler body (plain mode).
    *
    * Stepped code unwinds a match arm's value via `runner.exitMatch` + the owning
@@ -1400,10 +1428,16 @@ export class TypeScriptBuilder {
     const matchId = node.matchExprId!;
     const prev = this.insidePlainMatchExpr;
     this.insidePlainMatchExpr = true;
-    const ifChain = this.processBlockPlain(node);
-    this.insidePlainMatchExpr = prev;
+    let ifChain: TsNode;
+    try {
+      ifChain = this.processBlockPlain(node);
+    } finally {
+      // Restore in a finally so an emission error inside an arm can't leak the
+      // flag and turn a later sibling `matchYield` into a bare `return`.
+      this.insidePlainMatchExpr = prev;
+    }
     return ts.assign(
-      ts.scopedVar(`__matchval_${matchId}`, "local", this.moduleId),
+      ts.scopedVar(matchValName(matchId), "local", this.moduleId),
       ts.await(ts.iife({ async: true, body: [ifChain] })),
     );
   }
@@ -3376,36 +3410,64 @@ export class TypeScriptBuilder {
         { elseIfs, elseBody },
       );
     }
-    // forLoop — for-of with optional index
+    return this.processPlainForLoop(node);
+  }
+
+  /**
+   * Emit a plain-JS for-loop (used inside handler bodies) that iterates arrays
+   * by (element, index) and records/plain objects by (key, value) — the same
+   * array-vs-record normalization `Runner.loop` applies in stepped mode. The
+   * old emission looped `i < iterable.length` over `iterable[i]`, which over a
+   * record iterated zero times (`.length` is undefined) and made `for (k in
+   * record)` a `for...of` over a non-iterable object (a TypeError). All three
+   * for-loop implementations (this, `Runner.loop`, the type checker) now agree.
+   *
+   *   const __src = <iterable>;
+   *   const __isArr = Array.isArray(__src);
+   *   const __keys = __isArr ? __src
+   *     : (__src != null && typeof __src === "object" ? Object.keys(__src) : []);
+   *   for (let __i = 0; __i < __keys.length; __i++) {
+   *     const <item>   = __keys[__i];                        // element | key
+   *     const <second> = __isArr ? __i : __src[__keys[__i]]; // index   | value
+   *     ...body
+   *   }
+   */
+  private processPlainForLoop(node: ForLoop): TsNode {
+    const n = this.plainForLoopCounter++;
+    const src = `__forsrc_${n}`;
+    const isArr = `__forisarr_${n}`;
+    const keys = `__forkeys_${n}`;
+    const i = `__fori_${n}`;
+
+    const loopBody: TsNode[] = [
+      ts.constDecl(node.itemVar as string, ts.index(ts.id(keys), ts.id(i))),
+    ];
     if (node.indexVar) {
-      // for (item, index in iterable) → for (let index = 0; index < iterable.length; index++) { const item = iterable[index]; ... }
-      const iterableNode = this.processNode(node.iterable);
-      const iterableVar = `__iter_${node.itemVar}`;
-      return ts.statements([
-        ts.constDecl(iterableVar, iterableNode),
-        ts.forC(
-          ts.letDecl(node.indexVar, ts.num(0)),
-          ts.binOp(
-            ts.id(node.indexVar),
-            "<",
-            ts.prop(ts.id(iterableVar), "length"),
-          ),
-          ts.postfix(ts.id(node.indexVar), "++"),
-          ts.statements([
-            ts.constDecl(
-              node.itemVar as string,
-              ts.index(ts.id(iterableVar), ts.id(node.indexVar)),
-            ),
-            ...node.body.map((s) => this.processNode(s)),
-          ]),
+      loopBody.push(
+        ts.constDecl(
+          node.indexVar,
+          ts.raw(`${isArr} ? ${i} : ${src}[${keys}[${i}]]`),
         ),
-      ]);
+      );
     }
-    return ts.forOf(
-      node.itemVar as string,
-      this.processNode(node.iterable),
-      processBody(node.body),
-    );
+    for (const s of node.body) loopBody.push(this.processNode(s));
+
+    return ts.statements([
+      ts.constDecl(src, this.processNode(node.iterable)),
+      ts.constDecl(isArr, ts.raw(`Array.isArray(${src})`)),
+      ts.constDecl(
+        keys,
+        ts.raw(
+          `${isArr} ? ${src} : (${src} != null && typeof ${src} === "object" ? Object.keys(${src}) : [])`,
+        ),
+      ),
+      ts.forC(
+        ts.letDecl(i, ts.num(0)),
+        ts.binOp(ts.id(i), "<", ts.prop(ts.id(keys), "length")),
+        ts.postfix(ts.id(i), "++"),
+        ts.statements(loopBody),
+      ),
+    ]);
   }
 
   /**

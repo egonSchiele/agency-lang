@@ -1,11 +1,12 @@
 import type { VariableType } from "../types.js";
 import type { MatchYield } from "../types/matchYield.js";
+import type { SourceLocation } from "../types/base.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { walkNodes } from "../utils/node.js";
 import { isInScope } from "./checker.js";
 import { synthType } from "./synthesizer.js";
-import { widenType } from "./assignability.js";
-import { isAnyType } from "./utils.js";
+import { widenType, isAssignable } from "./assignability.js";
+import { isAnyType, emitAssignabilityError } from "./utils.js";
 import { unionTypes } from "./inference.js";
 
 /**
@@ -44,9 +45,16 @@ export function computeMatchExprTypes(
         .map(Number)
         .sort((a, b) => b - a);
       for (const id of ids) {
-        const types = yieldsByMatch[id].map((y) =>
+        const yields = yieldsByMatch[id];
+        const types = yields.map((y) =>
           y.value ? synthType(y.value, info.scope, ctx) : "any",
         );
+        // Record each yield's UNWIDENED type + loc for CHECKED-position
+        // per-arm assignability checking (see `checkMatchExprYields`).
+        ctx.matchExprYieldTypes[id] = yields.map((y, i) => ({
+          type: types[i],
+          loc: y.value?.loc ?? y.loc,
+        }));
         // A yield of `any` (the sentinel string OR the `any` primitive) makes
         // the whole match's value type `any` — the union can't be narrowed.
         const isAny = (t: VariableType | "any") => t === "any" || isAnyType(t);
@@ -89,5 +97,42 @@ export function computeMatchExprTypes(
   // memo — checkScopes recomputes on demand.
   if (ctx.flowEnv) {
     ctx.flowEnv.memo = new WeakMap();
+  }
+}
+
+/**
+ * CHECKED-position assignability for an expression-position `match`: check EACH
+ * arm's `matchYield` value against `expected` using the yield's UNWIDENED type,
+ * anchoring any error on the offending arm's value. This is what makes
+ * `const c: Category = match(x) { "go" => "a"; _ => "b" }` (with
+ * `type Category = "a" | "b"`) type-check — the widened union `string` recorded
+ * in `matchExprTypes` would falsely reject it. Use this whenever the consumer
+ * supplies an expected type (annotation or declared return type); fall back to
+ * the widened `matchExprTypes` union only in synthesis (unannotated) positions.
+ * No-op if the match id has no recorded yields.
+ */
+export function checkMatchExprYields(
+  matchId: number,
+  expected: VariableType,
+  context: string,
+  ctx: TypeCheckerContext,
+  fallbackLoc: SourceLocation | undefined,
+): void {
+  const yields = ctx.matchExprYieldTypes[matchId];
+  if (!yields) return;
+  // If ANY arm yields `any` the match's value type collapses to `any` (same
+  // rule as `matchExprTypes`), which is assignable to anything — no error.
+  const isAny = (t: VariableType | "any") => t === "any" || isAnyType(t);
+  if (yields.some((y) => isAny(y.type))) return;
+  // Report the FIRST arm whose UNWIDENED yield type is not assignable to the
+  // expected type. Anchoring on that arm's value gives a precise location and
+  // names the offending value; stopping after one keeps the diagnostic count
+  // at one when several arms mismatch (matching the pre-per-yield behavior).
+  for (const y of yields) {
+    if (isAssignable(y.type as VariableType, expected, ctx.getTypeAliases())) {
+      continue;
+    }
+    emitAssignabilityError(y.type, expected, y.loc ?? fallbackLoc, context, ctx);
+    return;
   }
 }

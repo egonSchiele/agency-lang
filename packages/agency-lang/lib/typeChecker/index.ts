@@ -127,6 +127,7 @@ export class TypeChecker {
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,
       matchExprTypes: {},
+      matchExprYieldTypes: {},
       config: this.config,
       getTypeAliases: () => this.typeAliases,
       withScope: <T>(key: string, fn: () => T): T => this.withScope(key, fn),

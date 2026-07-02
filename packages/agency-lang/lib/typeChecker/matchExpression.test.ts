@@ -125,6 +125,57 @@ node main() {
     expect(errs).toEqual([]);
   });
 
+  it("literal-union annotation accepts literal yields (per-arm unwidened check)", () => {
+    // Regression: the widened union `string` was falsely rejected against a
+    // `"a" | "b"` annotation. Each arm's UNWIDENED literal must be checked.
+    const errs = check(`type Category = "a" | "b"
+node main(x: string) {
+  const c: Category = match(x) {
+    "go" => "a"
+    _ => "b"
+  }
+  return c
+}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("a genuinely wrong yield errors, naming the offending arm's value", () => {
+    const errs = check(`type Category = "a" | "b"
+node main(x: string) {
+  const c: Category = match(x) {
+    "go" => "a"
+    _ => "c"
+  }
+  return c
+}`);
+    expect(errs.length).toBe(1);
+    expect(errs[0]).toMatch(/"c"/);
+    expect(errs[0]).toMatch(/Category/);
+  });
+
+  it("return match(...) against a literal-union return type passes", () => {
+    const errs = check(`type Category = "a" | "b"
+def pick(x: string): Category {
+  return match(x) {
+    "go" => "a"
+    _ => "b"
+  }
+}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("return match(...) with a wrong yield errors against the return type", () => {
+    const errs = check(`type Category = "a" | "b"
+def pick(x: string): Category {
+  return match(x) {
+    "go" => "a"
+    _ => "c"
+  }
+}`);
+    expect(errs.length).toBe(1);
+    expect(errs[0]).toMatch(/"c"/);
+  });
+
   it("expression exhaustiveness is a hard error even under silent config", () => {
     const errs = check(`${TRY}
 node main() {

@@ -19,7 +19,8 @@ import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { checkType, emitAssignabilityError, getBlockSlot } from "./utils.js";
+import { checkType, getBlockSlot } from "./utils.js";
+import { checkMatchExprYields } from "./matchExprTypes.js";
 import { NUMBER_T } from "./primitives.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { expressionChildren } from "../utils/node.js";
@@ -198,13 +199,16 @@ export function checkAssignmentValue(
   // and skip the generic checkType path (which would re-synth the temp).
   if (node.matchExprSource) {
     if (node.typeHint) {
-      const actual = ctx.matchExprTypes[node.matchExprSource.matchId] ?? "any";
-      emitAssignabilityError(
-        actual,
+      // Checked position: check each arm's yield against the annotation using
+      // its UNWIDENED type, so a literal-union annotation accepts a literal
+      // yield (`const c: Category = match(x) { "go" => "a"; ... }`) and errors
+      // point at the offending arm's value. See `checkMatchExprYields`.
+      checkMatchExprYields(
+        node.matchExprSource.matchId,
         node.typeHint,
-        node.loc,
         `assignment to '${node.variableName}'`,
         ctx,
+        node.loc,
       );
     }
     return;

@@ -147,12 +147,20 @@ const statementRules: StatementRuleTable = {
       // (`obj[i()] = x`) can't be keyed → pass through unchanged.
       return assignNodeForAccessChainWrite(node.variableName, node.accessChain, flow, env) ?? flow;
     }
-    return {
+    const assignFlow: FlowNode = {
       kind: "assign",
       prev: flow,
       ref: { variable: node.variableName, chain: [] },
       type: env.scope.lookup(node.variableName) ?? "any",
     };
+    // Expression-match consumer (`const x = match(...)`): the type snapshotted
+    // above is stale — the union isn't computed until computeMatchExprTypes
+    // runs AFTER this pass. Register the assign node so that pass can patch its
+    // `type` in place. See FlowEnvironment.matchConsumerAssignFlows.
+    if (node.matchExprSource) {
+      env.matchConsumerAssignFlows?.set(node, assignFlow);
+    }
+    return assignFlow;
   },
 
   returnStatement: (node, flow, env) => {
@@ -302,13 +310,20 @@ export function buildFlowGraph(
 export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   const flowOf: WeakMap<AgencyNode, FlowNode> = new WeakMap();
   const memo: WeakMap<FlowNode, Record<string, ScopeType>> = new WeakMap();
+  const matchConsumerAssignFlows: WeakMap<AgencyNode, FlowNode> = new WeakMap();
   const typeAliases = ctx.getTypeAliases();
   // Null-prototype: scopeKeys derive from user-controlled function/node names, so
   // a reserved key ("__proto__"/"toString"/…) must not collide with
   // Object.prototype on write or read (mirrors the flow memo dicts in flow.ts).
   const scopeTerminals: Record<string, FlowNode> = Object.create(null);
   for (const info of scopes) {
-    const env: FlowEnvironment = { scope: info.scope, flowOf, typeAliases, memo };
+    const env: FlowEnvironment = {
+      scope: info.scope,
+      flowOf,
+      typeAliases,
+      memo,
+      matchConsumerAssignFlows,
+    };
     scopeTerminals[info.scopeKey] = buildFlowGraph(
       info.body,
       { kind: "start", scope: info.scope },
@@ -316,5 +331,12 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
     );
   }
   const rootScope = scopes[0]?.scope ?? new Scope("global");
-  ctx.flowEnv = { scope: rootScope, flowOf, typeAliases, memo, scopeTerminals };
+  ctx.flowEnv = {
+    scope: rootScope,
+    flowOf,
+    typeAliases,
+    memo,
+    scopeTerminals,
+    matchConsumerAssignFlows,
+  };
 }

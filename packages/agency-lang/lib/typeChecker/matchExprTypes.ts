@@ -57,17 +57,37 @@ export function computeMatchExprTypes(
             );
       }
 
-      // Patch consumer scope entries for un-annotated declarations so the
-      // variable carries the match's value type instead of the "any" recorded
-      // during buildScopes.
+      // Patch each un-annotated consumer binding (`const x = match(...)`) so
+      // downstream uses see the match's value type instead of the "any"
+      // recorded before this pass ran. Two stale copies exist, both eager
+      // snapshots:
+      //  1. the scope entry (buildScopes synthed the `__matchval_` ref to
+      //     "any" while the table was empty), and
+      //  2. the `assign` flow node (buildFlowGraphs snapshotted
+      //     `scope.lookup(...)` at graph-build time — see the flow builder's
+      //     assignment rule / FlowEnvironment.matchConsumerAssignFlows).
+      // Annotated consumers are already correct in both (declared/snapshotted
+      // from the typeHint during buildScopes), so they are skipped.
       for (const { node, scopes: nodeScopes } of walkNodes(info.body)) {
         if (node.type !== "assignment" || !node.matchExprSource) continue;
+        if (node.typeHint) continue;
         if (!isInScope(nodeScopes, info)) continue;
-        const type = node.typeHint ?? ctx.matchExprTypes[node.matchExprSource.matchId];
-        if (type !== undefined) {
-          info.scope.declare(node.variableName, type, node.declKind === "const");
+        const type = ctx.matchExprTypes[node.matchExprSource.matchId];
+        if (type === undefined) continue;
+        info.scope.declare(node.variableName, type, node.declKind === "const");
+        const assignFlow = ctx.flowEnv?.matchConsumerAssignFlows?.get(node);
+        if (assignFlow?.kind === "assign") {
+          assignFlow.type = type;
         }
       }
     });
+  }
+
+  // Scope entries and flow-node types were rebound above; per the
+  // FlowEnvironment soundness contract, any typeAt result memoized during this
+  // pass (yield synthesis walks the flow graph) may now be stale. Drop the
+  // memo — checkScopes recomputes on demand.
+  if (ctx.flowEnv) {
+    ctx.flowEnv.memo = new WeakMap();
   }
 }

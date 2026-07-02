@@ -315,15 +315,17 @@ export class TypeChecker {
 
     // 3d. Build the flow graph AFTER the param retype, so its `typeAt` oracle is
     // seeded with the refined `e` (no stale-memo reset needed).
-    // 3e. Compute the value type of every expression-position `match` (union of
-    // its matchYield types) and patch the consumer variables' scope types BEFORE
-    // buildFlowGraphs, so the flow graph captures each `const x = match(...)`
-    // binding at its real (union) type — a downstream `const y = x` then narrows
-    // through typeAt correctly. Also populates the `__matchval_<id>` synth hook
-    // and the `matchExprSource` assignment check consumed in checkScopes.
-    computeMatchExprTypes(scopes, ctx);
-
     buildFlowGraphs(scopes, ctx);
+
+    // 3e. Compute the value type of every expression-position `match` (union of
+    // its matchYield types). Runs AFTER buildFlowGraphs so yield synthesis sees
+    // flow-narrowed bindings (e.g. `"a" => e.val` under a discriminant match),
+    // and before checkScopes so the `__matchval_<id>` synth hook and the
+    // `matchExprSource` assignment check can read the results. Patches each
+    // consumer variable's scope entry AND its eagerly-snapshotted `assign` flow
+    // node with the computed union, then resets the typeAt memo (per the
+    // FlowEnvironment soundness contract) so no stale entry survives.
+    computeMatchExprTypes(scopes, ctx);
 
     // 4. Check function calls, return types, and expressions. `e.data` is now
     // payload-typed → narrowing on `e.effect` makes `e.data` concrete here.

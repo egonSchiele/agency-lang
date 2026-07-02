@@ -99,6 +99,21 @@ node main() {
     expect(errs[0]).toMatch(/number/);
   });
 
+  it("discriminant narrowing applies to field-access yields (valid code accepted)", () => {
+    // Matching on `e.kind` narrows `e` inside each literal arm, so `e.val` is
+    // `number` in the "a" arm — the union is `number`, and the annotated
+    // downstream use must NOT error.
+    const errs = check(`node main(e: { kind: "a", val: number } | { kind: "b", val: string }) {
+  const out = match(e.kind) {
+    "a" => e.val
+    "b" => 0
+  }
+  const n: number = out
+  return n
+}`);
+    expect(errs).toEqual([]);
+  });
+
   it("an any-typed yield collapses the union to any (no errors)", () => {
     const errs = check(`node main(x: any) {
   const val: boolean = match("k") {

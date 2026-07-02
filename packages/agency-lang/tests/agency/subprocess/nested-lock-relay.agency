@@ -47,8 +47,12 @@ node main(grandSource: string) {
   handle {
     const results = fork([0, 1], shared: true) as branch {
       if (branch == 0) {
+        // Hold long enough that the grandchild's acquire attempt (which is
+        // two subprocess spawns away) reliably lands inside the window even
+        // on a slow CI runner — otherwise the lock frees early and the
+        // grandchild acquires it instead of timing out.
         withLock("resource") as {
-          sleep(2s)
+          sleep(8s)
         }
         return "held"
       }

@@ -2,14 +2,16 @@ import { compile, run } from "std::agency"
 
 // Wall-clock budgets are per execution SEGMENT: each fork gets a fresh
 // timer, and user thinking time never counts (the child has exited while
-// paused). Each segment sleeps ~1.2s under a 2s cap, but the segments sum
-// past the cap — the run must still succeed.
+// paused). Each segment sleeps ~3s under a 5s cap, but the segments sum
+// past the cap — the run must still succeed. The margins are generous
+// (segment work well under the cap, cap well under the 6s total) so
+// subprocess-spawn overhead on a loaded CI runner can't flip the result.
 node main() {
   const source = """
 import { bash } from "std::shell"
 node main() {
-  let r1 = bash("sleep 1.2 && echo one")
-  let r2 = bash("sleep 1.2 && echo two")
+  let r1 = bash("sleep 3 && echo one")
+  let r2 = bash("sleep 3 && echo two")
   return r1.stdout + r2.stdout
 }
 """
@@ -18,7 +20,7 @@ node main() {
     return "compile failed"
   }
   handle {
-    const result = run(compiled: compileResult.value, node: "main", wallClock: 2s)
+    const result = run(compiled: compileResult.value, node: "main", wallClock: 5s)
     if (isSuccess(result)) {
       return result.value.data
     }

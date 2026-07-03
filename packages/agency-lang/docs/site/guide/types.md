@@ -5,45 +5,40 @@ description: Reference for Agency's TypeScript-like type system — including pr
 
 # Types
 
-Agency's type system is similar to TypeScript's. It includes user-defined generic type aliases and the built-in `Record<K, V>` / `Array<T>` / `Schema<T>` generics, but not all of TypeScript's more advanced features (conditional types, mapped types, etc.).
+Agency's type system is similar to TypeScript's.
 
-Agency types are cool because Agency generates Zod Schemas from the types automatically. This means you can use types to specify the structured output format for LLM calls.
-
-```ts
-let greet: number = llm("add 4 + 5")
-```
-
-This will tell the LLM to respond with a number.
-
-Here are some supported types:
-
-Primitive types:
-- `string`
-- `number`
-- `boolean`
-- `null`
-- `undefined` (treated as null)
-- `regex` (matches a `RegExp` literal — note that LLMs can't return regex values through structured output, so `regex` cannot appear in an `llm()` return type)
-
-Union types. Example:
+## Primitives
 
 ```ts
-let status: "success" | "error" = llm("Respond with either 'success' or 'error'")
+const name: string = "Alice"
+const age: number = 30
+const isActive: boolean = true
+const nothing: null = null
+const simpleRegex: regex = re/\d+/
 ```
 
-Array types. Example:
+While JavaScript has two keywords that mean "empty", `null` and `undefined`, Agency just has one: `null`.
+
+## Arrays and objects
 
 ```ts
-let items: string[] = llm("List 5 fruits")
+const names: string[] = ["Alice", "Bob", "Charlie"]
+
+type Person = {
+  name: string
+  age: number
+}
+
+const person: Person = { name: "Alice", age: 30 }
 ```
 
-Object types. Example:
+## Union types
 
 ```ts
-let user: {name: string, age: number} = llm("Provide a user object with name and age")
+const status: "success" | "error" = "error"
 ```
 
-You can define a new type:
+## Type aliases
 
 ```ts
 type User = {
@@ -52,26 +47,29 @@ type User = {
 }
 ```
 
-You can describe a property on an object for the LLM:
+## Optional properties
+
+Add `?` after a property name to make it optional:
 
 ```ts
-type User = {
-  name: string # The name of the user
-  age: number # The age of the user
+type Options = {
+  // required
+  model: string
+
+  // optional
+  temperature?: number
 }
 ```
 
 ## Records
 
-Use `Record` types when the set of keys isn't known up front, but you know generally what type all the keys and values need to be. Here is what a record type looks like.
-
 ```ts
 // all keys are strings, all values are either "approve" or "reject"
-let votes: Record<string, "approve" | "reject"> = {}
+const votes: Record<string, "approve" | "reject"> = {}
 votes["alice"] = "approve"
 ```
 
-Note that in agency, because every type needs to be compilable to a schema, the keys can only be numbers, strings, or unions of numbers or strings (or type aliases that are numbers, strings, etc).
+The keys can only be numbers, strings, or unions of numbers or strings. This is because in Agency, every type needs to be compilable to a schema. More on this later.
 
 Another example:
 ```ts
@@ -83,7 +81,7 @@ let counts: Record<Status, number> = {
 }
 ```
 
-Note that if you use a union type for the keys, then all of the keys need to be defined in the object. For the example above, this will cause a type error:
+If you use a union type for the keys, all of the keys need to be defined. For example, this will cause a type error:
 
 ```ts
 // missing the 'inactive' key
@@ -100,24 +98,8 @@ Types can take type parameters:
 type Container<T> = { value: T }
 type Pair<A, B> = { first: A, second: B }
 
-let c: Container<number> = { value: 42 }
-let p: Pair<string, number> = { first: "age", second: 30 }
-```
-
-A type parameter can have a default. When all parameters have defaults, the alias can be used bare:
-
-```ts
-type StringMap<V = any> = Record<string, V>
-
-let untyped: StringMap = {}                       // V defaults to any
-let typed:   StringMap<number> = { count: 1 }     // V explicit
-```
-
-Default parameters must come **after** all required ones, mirroring TypeScript:
-
-```ts
-type Pair<A, B = string> = { first: A, second: B }  // ok
-type Pair<A = string, B> = { first: A, second: B }  // error
+const c: Container<number> = { value: 42 }
+const p: Pair<string, number> = { first: "age", second: 30 }
 ```
 
 Recursive generic aliases work:
@@ -126,49 +108,42 @@ Recursive generic aliases work:
 type Tree<T> = { value: T, children: Tree<T>[] }
 ```
 
-`Array<T>` and `Schema<T>` are built-in generics.
+### Default type parameters
 
-`Array<T>` is equivalent to `T[]`, and `Schema<T>` is equivalent to the type of `schema(T)`. Schemas come later in the guide, but [click here](/guide/schemas) if you want to learn more.
-
-## Optional properties
-
-Add `?` after a property name to make it optional:
+A type parameter can have a default. When all parameters have defaults, the alias can be used bare:
 
 ```ts
-type Options = {
-  model?: string
-  temperature?: number
-}
+type StringMap<V = any> = Record<string, V>
+
+// V defaults to `any`
+const untyped: StringMap = {}
+
+// V is explicitly set to `number`
+const typed: StringMap<number> = { count: 1 }
 ```
 
-This is shorthand for `key: T | undefined` — when the property is missing from a value, that's still type-correct. For example:
+Default parameters must come **after** all required ones, mirroring TypeScript:
 
 ```ts
-def configure(opts: Options): void { ... }
-configure({ model: "gpt-4" })  // ok — temperature omitted
-configure({})                  // ok — both omitted
+// ok
+type Pair<A, B = string> = { first: A, second: B }
+
+// error
+type Pair<A = string, B> = { first: A, second: B }
 ```
 
-## Excess properties
+### Built-in generics
 
-When you write an object *literal*, every key in the literal must be in its declared type. This helps catch typos like `modle:` instead of `model:`:
+- `Record<K, V>` (see above)
+- `Array<T>` (same as `T[]`)
+- `Schema<T>` (equivalent to the type of `schema(T)`)
+- `Result<S, E>` (used for error handling, see [the `Result` type](/guide/error-handling))
 
-```ts
-const cfg: Options = { modle: "gpt-4" }  // error: Unknown property 'modle'
-```
-
-This check fires only on object literals at the argument site. Assigning the same object to a variable first skips the excess property check, matching the behavior of TypeScript.
-
-```ts
-const badCfg = { modle: "gpt-4" }
-const cfg: Options = badCfg  // ok — excess property check doesn't apply here
-```
+Schemas come later in the guide, but [click here](/guide/schemas) if you want to learn more.
 
 ## Suppressing typecheck errors
 
-How to opt out of typechecking:
-
-**`// @tc-nocheck`** — silences every typecheck error in the file. Must appear at the top of the file:
+**`// @tc-nocheck`** — Put it at the top of a file. Silences every typecheck error in the file.
 
 ```ts
 // @tc-nocheck
@@ -179,18 +154,28 @@ def foo(x: number) {
 }
 ```
 
-**`// @tc-ignore`** — silences typecheck errors on the *next* line only. Must be on its own line, Agency does not allow trailing comments.
+**`// @tc-ignore`** — Silences typecheck errors on the *next* line only. Must be on its own line.
 
 ```ts
-def take(x: number): void { print(x) }
+def double(x: number) {
+  return x * 2
+}
 
 node main() {
   // @tc-ignore
-  take("not a number")
-  take(42)
+  double("not a number")
 }
 ```
 
-## See also
+## Excess property checks
 
-- **[Schemas and validated types](./schemas)** — the `T!` shorthand for `Result<T, string>`, used for validation at runtime.
+When you write an object *literal*, every key in the literal must be in its declared type. This helps catch typos like `modle:` instead of `model:`:
+
+```ts
+const cfg: Options = { modle: "gpt-4" }  // error: Unknown property 'modle'
+```
+
+## References
+
+- [Schemas](/guide/schemas)
+- [Type validation](/guide/type-validation)

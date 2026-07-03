@@ -1,3 +1,12 @@
-export def greet(name: string): number {
-  return `Hello, ${name}!`;
+import { search } from "std::wikipedia"
+
+def searchWikipedia(query: string) {
+  const results = search(query) with approve
+  return results
+}
+
+node main() {
+  const query = input("Enter a search query: ")
+  const results = llm("Search Wikipedia for: ${query}", tools: [searchWikipedia])
+  print(results)
 }

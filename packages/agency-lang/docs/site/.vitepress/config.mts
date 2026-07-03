@@ -15,27 +15,31 @@ export default defineConfig({
     sidebar: {
       "/guide/": [
         {
-          text: "Basic",
+          text: "01. Basics",
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
-            { text: "Agents 101", link: "/guide/agents-101" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
-            { text: "Nodes", link: "/guide/nodes" },
+            { text: "The `main` node", link: "/guide/the-main-node" },
+            /* { text: "Nodes", link: "/guide/nodes" }, */
             { text: "LLMs", link: "/guide/llm" },
-            { text: "Image generation", link: "/guide/image-generation" },
+            /* { text: "Image generation", link: "/guide/image-generation" },
             {
               text: "Custom & local model providers",
               link: "/guide/custom-providers",
-            },
+            }, */
             { text: "Functions", link: "/guide/functions" },
             {
               text: "Imports and Packages",
               link: "/guide/imports-and-packages",
             },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
-            { text: "Odds and Ends", link: "/guide/odds-and-ends" },
+            {
+              text: "Common Functions",
+              link: "/guide/common-functions",
+            },
             { text: "Troubleshooting", link: "/guide/troubleshooting" },
+            { text: "Exercise 1", link: "/guide/exercise-1" },
           ],
         },
         {
@@ -57,8 +61,8 @@ export default defineConfig({
             },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             {
-              text: "Message History and Threads",
-              link: "/guide/message-history-and-threads",
+              text: "Message Threads",
+              link: "/guide/message-threads",
             },
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },

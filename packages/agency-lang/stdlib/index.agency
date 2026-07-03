@@ -484,7 +484,11 @@ export def groupBy(arr: any[], func: (any) -> any): any {
   @param arr - The array to group
   @param func - The function returning the group key for each element
   """
-  const groups = {}
+  // Null-prototype object so a user-supplied key like "__proto__" or
+  // "constructor" is stored as a plain own property instead of hitting
+  // the Object prototype (which would otherwise crash `.push` or mutate
+  // shared state).
+  const groups = Object.create(null)
   for (item in arr) {
     const key = func(item)
     groups[key] ??= []

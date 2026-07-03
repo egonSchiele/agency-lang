@@ -31,7 +31,7 @@ export type StatelogEvalRecord = {
   warnings: string[]
 }
 
-export safe def emit(data) {
+export safe def emit(data: any) {
   """
   Emit a custom event to the calling TypeScript code via the onEmit callback.
   """

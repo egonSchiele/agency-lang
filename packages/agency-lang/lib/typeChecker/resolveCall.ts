@@ -183,6 +183,10 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     values: callable({ params: ["any"], returnType: anyArray }),
     entries: callable({ params: ["any"], returnType: anyArray }),
     fromEntries: callable({ params: [anyArray], returnType: "any" }),
+    // `Object.create(proto, props?)` — used e.g. with `null` to make a
+    // null-prototype map that's safe against user-controlled keys like
+    // "__proto__" (see std::index `groupBy`).
+    create: callable({ params: ["any", "any"], minParams: 1, returnType: "any" }),
     assign: callable(),
     freeze: callable({ params: ["any"], returnType: "any" }),
     getOwnPropertyNames: callable({ params: ["any"], returnType: stringArray }),

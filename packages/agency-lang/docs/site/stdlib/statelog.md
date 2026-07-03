@@ -47,7 +47,7 @@ export type StatelogEvalRecord = {
 ### emit
 
 ```ts
-emit(data)
+emit(data: any)
 ```
 
 Emit a custom event to the calling TypeScript code via the onEmit callback.
@@ -56,7 +56,7 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 
 | Name | Type | Default |
 |---|---|---|
-| data |  |  |
+| data | `any` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L34))
 

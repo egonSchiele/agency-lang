@@ -21,13 +21,8 @@ export default defineConfig({
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
             { text: "The `main` Node", link: "/guide/the-main-node" },
-            /* { text: "Nodes", link: "/guide/nodes" }, */
-            { text: "LLMs", link: "/guide/llm" },
-            /* { text: "Image generation", link: "/guide/image-generation" },
-            {
-              text: "Custom & local model providers",
-              link: "/guide/custom-providers",
-            }, */
+
+            { text: "LLM Calls", link: "/guide/llm" },
             { text: "Functions", link: "/guide/functions" },
             {
               text: "Imports and Packages",
@@ -63,17 +58,26 @@ export default defineConfig({
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
+            { text: "Nodes", link: "/guide/nodes" },
+            // TS interop part 2, including handling interrupts, cancellation
           ],
         },
         {
           text: "04. LLMs",
           items: [
             {
+              text: "LLM Calls, Part 2",
+              link: "/guide/llm-part-2",
+            },
+            {
               text: "Message Threads",
               link: "/guide/message-threads",
             },
 
             { text: "Guards", link: "/guide/guards" },
+            { text: "Image generation", link: "/guide/image-generation" },
+            // attachments
+            // streaming
           ],
         },
         {
@@ -83,31 +87,40 @@ export default defineConfig({
               text: "Effect Sets and raises",
               link: "/guide/effects-and-raises",
             },
-
+            { text: "Policies", link: "/guide/policies" },
+          ],
+        },
+        {
+          text: "06. Agency's Execution Model",
+          items: [
             { text: "Execution Model", link: "/guide/execution-model" },
             {
               text: "Global vs Static Variables",
               link: "/guide/global-vs-static",
             },
-            { text: "Testing", link: "/guide/testing" },
-            { text: "Observability", link: "/guide/observability" },
-            { text: "Policies", link: "/guide/policies" },
+            { text: "Checkpointing", link: "/guide/checkpointing" },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
+            },
+            // Initializer dependencies
           ],
         },
         {
           text: "Advanced",
           items: [
+            { text: "Testing", link: "/guide/testing" },
+            { text: "Observability", link: "/guide/observability" },
             { text: "Concurrency", link: "/guide/concurrency" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
-            { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Memory", link: "/guide/memory" },
-            {
-              text: "Cross-Thread Context Sharing",
-              link: "/guide/cross-thread-context",
-            },
             { text: "MCP", link: "/guide/mcp" },
             { text: "Serving Agency Code", link: "/guide/serving" },
+            {
+              text: "Custom & local model providers",
+              link: "/guide/custom-providers",
+            },
           ],
         },
         {
@@ -122,6 +135,10 @@ export default defineConfig({
             {
               text: "Agency's Standard Library",
               link: "/guide/agency-stdlib",
+            },
+            {
+              text: "Agency Packages",
+              link: "/guide/agency-packages",
             },
             {
               text: "Built-in Functions",

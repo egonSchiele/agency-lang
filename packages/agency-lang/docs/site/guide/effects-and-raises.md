@@ -5,8 +5,7 @@ description: Declare the interrupt effects a function may raise with a `raises` 
 
 # Effect Sets and `raises`
 
-[Structured interrupts](./structured-interrupts) gave every interrupt an
-**effect** — a label like `std::read` or `myapp::deploy`. This chapter adds
+Every interrupt has an [effect](/guide/effects) — a label like `std::read` or `myapp::deploy`. This chapter adds
 a way to **declare**, in a function's signature, which effects it may
 raise, and to have the typechecker verify that declaration. Catching a
 mismatch at compile time — before you run the program — is much cheaper

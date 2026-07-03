@@ -59,7 +59,6 @@ if (hasInterrupts(result.data)) {
 A couple callouts:
 
 - Notice that in TypeScript, you get an array of interrupts. This is because Agency supports concurrent execution, and so you might have interrupts getting thrown from multiple threads.
-- All interrupts have a standard format... more on this in the section on [structured interrupts](./structured-interrupts). This means all interrupts will have a message you can print for the user. If you pass in data to the interrupt, that will be at `result.data[0].data`.
 - The responses are always in the same order as the interrupts, so you can just loop through them together and respond to each one.
 
 To approve or reject, call the `approve()` or `reject()` functions. If you want to approve with a response – to respond with a filename for example:

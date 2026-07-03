@@ -57,8 +57,8 @@ export default defineConfig({
             },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             {
-              text: "Message History and Threads",
-              link: "/guide/message-history-and-threads",
+              text: "Message Threads",
+              link: "/guide/message-threads",
             },
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },

@@ -177,6 +177,18 @@ def greet(name: string): string {
 }
 ```
 
+### Named arguments
+
+You can call functions with named arguments:
+
+```ts
+def greet(name: string, greeting: string = "Hello"): string {
+  return `${greeting}, ${name}!`
+}
+
+greet(name: "Adit")
+```
+
 Functions are covered in more detail in the [chapter on functions](/guide/functions).
 
 ## Nodes

@@ -43,7 +43,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "02. Safety",
+          text: "02. Safety, Part 1",
           items: [
             { text: "Interrupts", link: "/guide/interrupts" },
             {
@@ -52,21 +52,38 @@ export default defineConfig({
             },
             { text: "Handlers", link: "/guide/handlers" },
             {
-              text: "Structured Interrupts",
-              link: "/guide/structured-interrupts",
+              text: "Effects",
+              link: "/guide/effects",
             },
-            {
-              text: "Effect Sets and raises",
-              link: "/guide/effects-and-raises",
-            },
+          ],
+        },
+        {
+          text: "03. Basics, Part 2",
+          items: [
+            { text: "Error Handling", link: "/guide/error-handling" },
+            { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
+          ],
+        },
+        {
+          text: "04. LLMs",
+          items: [
             {
               text: "Message Threads",
               link: "/guide/message-threads",
             },
-            { text: "Error Handling", link: "/guide/error-handling" },
-            { text: "Blocks", link: "/guide/blocks" },
+
             { text: "Guards", link: "/guide/guards" },
+          ],
+        },
+        {
+          text: "05. Safety, Part 2",
+          items: [
+            {
+              text: "Effect Sets and raises",
+              link: "/guide/effects-and-raises",
+            },
+
             { text: "Execution Model", link: "/guide/execution-model" },
             {
               text: "Global vs Static Variables",
@@ -74,13 +91,13 @@ export default defineConfig({
             },
             { text: "Testing", link: "/guide/testing" },
             { text: "Observability", link: "/guide/observability" },
+            { text: "Policies", link: "/guide/policies" },
           ],
         },
         {
           text: "Advanced",
           items: [
             { text: "Concurrency", link: "/guide/concurrency" },
-            { text: "Policies", link: "/guide/policies" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Checkpointing", link: "/guide/checkpointing" },

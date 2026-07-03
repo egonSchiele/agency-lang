@@ -44,6 +44,22 @@ export type StatelogEvalRecord = {
 
 ## Functions
 
+### emit
+
+```ts
+emit(data)
+```
+
+Emit a custom event to the calling TypeScript code via the onEmit callback.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| data |  |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L34))
+
 ### evalValue
 
 ```ts
@@ -78,7 +94,7 @@ Record an eval value — a value that should be considered part of
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L41))
 
 ### evalOutput
 
@@ -112,7 +128,7 @@ Record an eval output — a value that should be considered the
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L68))
 
 ### evalRecord
 
@@ -137,7 +153,7 @@ Parse a statelog JSONL file and return the same structured EvalRecord
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L93))
 
 ### evalValues
 
@@ -160,7 +176,7 @@ Parse a statelog JSONL file and return the values recorded as eval values.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L106))
 
 ### evalOutputs
 
@@ -183,7 +199,7 @@ Parse a statelog JSONL file and return the values recorded as eval outputs.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L117))
 
 ### finalEvalOutput
 
@@ -207,4 +223,4 @@ Parse a statelog JSONL file and return the final eval output, or null when
 
 **Returns:** `StatelogEvalValue | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L128))

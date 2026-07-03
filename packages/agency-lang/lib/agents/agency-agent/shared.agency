@@ -10,6 +10,7 @@
  * `route()` / `handoff()` and the agent now consumes them directly.
  */
 import { registerLocalModel } from "std::agency/local"
+import { keys } from "std::object"
 import { setLlmOptions } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"

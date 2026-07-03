@@ -1,3 +1,26 @@
+import { _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
+
+export safe def keys(obj: any): string[] {
+  """
+  Return an array of an object's own enumerable property names.
+  """
+  return _keys(obj)
+}
+
+export safe def values(obj: any): any[] {
+  """
+  Return an array of an object's own enumerable property values.
+  """
+  return _values(obj)
+}
+
+export safe def entries(obj: any): any[] {
+  """
+  Return an array of an object's own enumerable entries, each as { key, value }.
+  """
+  return _entries(obj)
+}
+
 export def mapValues(obj: any, func: (any, string) -> any): any {
   """
   Return a new object with the same keys, but with each value transformed by the function. The function receives (value, key).

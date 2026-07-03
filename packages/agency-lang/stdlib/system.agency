@@ -11,11 +11,24 @@ import {
   _readStdin,
   _setTitle,
  } from "agency-lang/stdlib-lib/system.js"
+import { _notify } from "agency-lang/stdlib-lib/builtins.js"
 
 effect std::screenshot { filepath: string }
 effect std::exit { code: number }
 effect std::setEnv { name: string, value: string }
 effect std::openUrl { url: string }
+effect std::notify { title: string, body: string }
+
+export def notify(title: string, message: string): boolean {
+  """
+  A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
+  """
+  return interrupt std::notify("Are you sure you want to show this notification?", {
+    title: title,
+    body: message
+  })
+  return _notify(title, message)
+}
 
 export def screenshot(
   filepath: string,

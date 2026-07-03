@@ -18,7 +18,7 @@ import {
 import {
   isAgencyImport,
   resolveAgencyImportPath,
-  getStdlibDir,
+  isNonTemplatedStdlib,
 } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
@@ -574,8 +574,11 @@ export function getImportsRecursively(
   }
   visited.add(filename);
   const contents = fs.readFileSync(filename, "utf-8");
-  const isStdlibIndex = filename === path.join(getStdlibDir(), "index.agency");
-  const parsed = parseAgency(contents, { verbose: false }, !isStdlibIndex);
+  const parsed = parseAgency(
+    contents,
+    { verbose: false },
+    !isNonTemplatedStdlib(filename),
+  );
   if (!parsed.success) {
     console.error(`Error parsing ${filename}:`, parsed);
     return [];

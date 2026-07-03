@@ -24,18 +24,11 @@ import { _callback } from "agency-lang/stdlib-lib/agency.js"
 import {
   _print,
   _printJSON,
-  _parseJSON,
-  _round,
   _read,
   _write,
   _writeBinary,
   _readBinary,
-  _notify,
   _range,
-  _mostCommon,
-  _keys,
-  _values,
-  _entries,
   _input,
   _sleep,
  } from "agency-lang/stdlib-lib/builtins.js"
@@ -52,7 +45,6 @@ import {
 effect std::read { dir: string, filename: string }
 effect std::write { dir: string, filename: string }
 effect std::readImage { dir: string, filename: string }
-effect std::notify { title: string, body: string }
 
 export safe def print(...messages) {
   """
@@ -93,16 +85,13 @@ export safe def getAgentCwd(): string {
   return _agentCwd
 }
 
+// Internal plumbing, not an agent tool: no docstring, so it is not exposed
+// as an LLM-callable tool. Resolve `dir` against the agent working directory
+// when one is set; otherwise return `dir` unchanged. Used by the path-taking
+// stdlib wrappers so a set agent cwd overrides their default base. `_resolve`
+// short-circuits on an absolute `dir`, and resolve(base, "") returns base, so
+// this works for both the fs default (".") and shell default ("").
 export safe def applyAgentCwd(dir: string): string {
-  """
-  Resolve `dir` against the agent working directory when one is set;
-  otherwise return `dir` unchanged. Used by the path-taking stdlib
-  wrappers so a set agent cwd overrides their default base. `_resolve`
-  short-circuits on an absolute `dir`, and resolve(base, "") returns
-  base, so this works for both the fs default (".") and shell default ("").
-
-  @param dir - The directory argument to resolve.
-  """
   const base = getAgentCwd()
   if (base == "") {
     return dir
@@ -122,13 +111,6 @@ export safe def printJSON(obj: any, highlight: boolean = false) {
   return "JSON printed."
 }
 
-export safe def parseJSON(text: string): any {
-  """
-  Parse a JSON string and return the corresponding value (object, array, string, number, boolean, or null). Throws if the input is not valid JSON.
-  """
-  return _parseJSON(text)
-}
-
 export safe def input(prompt: string): string {
   """
   A tool for prompting the user for input and returning their response.
@@ -145,13 +127,6 @@ export safe def sleep(ms: number) {
   Cancellation: a long sleep wakes up immediately on Ctrl-C, race-loser, or time-guard abort.
   """
   _sleep(ms)
-}
-
-export safe def round(num: number, precision: number): number {
-  """
-  A tool for rounding a number to a specified number of decimal places.
-  """
-  return _round(num, precision)
 }
 
 export safe def read(
@@ -279,17 +254,6 @@ export safe def readBinary(
   return try _readBinary(dir, filename)
 }
 
-export def notify(title: string, message: string): boolean {
-  """
-  A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
-  """
-  return interrupt std::notify("Are you sure you want to show this notification?", {
-    title: title,
-    body: message
-  })
-  return _notify(title, message)
-}
-
 export safe def range(start: number, end: number = -1): number[] {
   """
   Generate an array of numbers. With one argument, generates from 0 to start-1. With two arguments, generates from start to end-1.
@@ -300,39 +264,233 @@ export safe def range(start: number, end: number = -1): number[] {
   return _range(start, end)
 }
 
-export safe def mostCommon(items: any[]): any {
+// --- Array helpers (auto-imported) ---------------------------------------
+// These collection primitives live in `std::index` so they ride the single
+// auto-import prelude line into every file. Agency has no `.map()` method
+// syntax, so these free functions are the only way to operate on arrays —
+// which is why they belong in the always-available set. `std::array`
+// re-exports them for backward compatibility.
+
+export def map(arr: any[], func: (any) -> any): any[] {
   """
-  Return the most common element in an array. Uses JSON serialization for comparison.
+  Map a function over an array, returning a new array of results.
+
+  @param arr - The array to map over
+  @param func - The function to apply to each element
   """
-  return _mostCommon(items)
+  const newArr = []
+  for (item in arr) {
+    newArr.push(func(item))
+  }
+  return newArr
 }
 
-export safe def keys(obj: any): string[] {
+export def filter(arr: any[], func: (any) -> any): any[] {
   """
-  Return an array of an object's own enumerable property names.
+  Return a new array containing only the elements for which the function returns true.
+
+  @param arr - The array to filter
+  @param func - The function that returns true for elements to keep
   """
-  return _keys(obj)
+  const result = []
+  for (item in arr) {
+    if (func(item)) {
+      result.push(item)
+    }
+  }
+  return result
 }
 
-export safe def values(obj: any): any[] {
+export def exclude(arr: any[], func: (any) -> any): any[] {
   """
-  Return an array of an object's own enumerable property values.
+  Return a new array excluding elements for which the function returns true. Inverse of filter.
+
+  @param arr - The array to filter
+  @param func - The function that returns true for elements to exclude
   """
-  return _values(obj)
+  const result = []
+  for (item in arr) {
+    if (func(item) == false) {
+      result.push(item)
+    }
+  }
+  return result
 }
 
-export safe def entries(obj: any): any[] {
+export def find(arr: any[], func: (any) -> any): any {
   """
-  Return an array of an object's own enumerable entries, each as { key, value }.
+  Return the first element for which the function returns true, or null if none match.
+
+  @param arr - The array to search
+  @param func - The function that returns true for the desired element
   """
-  return _entries(obj)
+  for (item in arr) {
+    if (func(item)) {
+      return item
+    }
+  }
+  return null
 }
 
-export safe def emit(data) {
+export def findIndex(arr: any[], func: (any) -> any): number {
   """
-  Emit a custom event to the calling TypeScript code via the onEmit callback.
+  Return the index of the first element for which the function returns true, or -1 if none match.
+
+  @param arr - The array to search
+  @param func - The function that returns true for the desired element
   """
-  _emit(data)
+  for (item, index in arr) {
+    if (func(item)) {
+      return index
+    }
+  }
+  return -1
+}
+
+export def reduce(arr: any[], initial: any, func: (any, any) -> any): any {
+  """
+  Reduce an array to a single value by applying a function to an accumulator and each element.
+
+  @param arr - The array to reduce
+  @param initial - The initial accumulator value
+  @param func - The reducer function receiving (accumulator, element)
+  """
+  let acc = initial
+  for (item in arr) {
+    acc = func(acc, item)
+  }
+  return acc
+}
+
+export def flatMap(arr: any[], func: (any) -> any): any[] {
+  """
+  Map a function over an array and flatten the results by one level.
+
+  @param arr - The array to map over
+  @param func - The function to apply to each element
+  """
+  const result = []
+  for (item in arr) {
+    const mapped = func(item)
+    for (sub in mapped) {
+      result.push(sub)
+    }
+  }
+  return result
+}
+
+export def every(arr: any[], func: (any) -> any): boolean {
+  """
+  Return true if the function returns true for every element in the array.
+
+  @param arr - The array to test
+  @param func - The predicate function
+  """
+  for (item in arr) {
+    if (func(item) == false) {
+      return false
+    }
+  }
+  return true
+}
+
+export def some(arr: any[], func: (any) -> any): boolean {
+  """
+  Return true if the function returns true for at least one element in the array.
+
+  @param arr - The array to test
+  @param func - The predicate function
+  """
+  for (item in arr) {
+    if (func(item)) {
+      return true
+    }
+  }
+  return false
+}
+
+export def count(arr: any[], func: (any) -> any): number {
+  """
+  Count the number of elements in the array for which the function returns true.
+
+  @param arr - The array to count in
+  @param func - The predicate function
+  """
+  let n = 0
+  for (item in arr) {
+    if (func(item)) {
+      n = n + 1
+    }
+  }
+  return n
+}
+
+export def sortBy(arr: any[], func: (any) -> any): any[] {
+  """
+  Return a new array sorted by the values returned by the function, in ascending order.
+
+  @param arr - The array to sort
+  @param func - The function returning the sort key for each element
+  """
+  const result = []
+  for (item in arr) {
+    result.push(item)
+  }
+  let i = 0
+  while (i < result.length) {
+    let j = i + 1
+    while (j < result.length) {
+      if (func(result[j]) < func(result[i])) {
+        const temp = result[i]
+        result[i] = result[j]
+        result[j] = temp
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return result
+}
+
+export def unique(arr: any[], func: (any) -> any): any[] {
+  """
+  Return a new array with duplicate elements removed, using the function to determine the identity of each element.
+
+  @param arr - The array to deduplicate
+  @param func - The function returning the identity key for each element
+  """
+  const result = []
+  const seen = []
+  for (item in arr) {
+    const key = func(item)
+    let found = false
+    for (s in seen) {
+      if (s == key) {
+        found = true
+      }
+    }
+    if (found == false) {
+      result.push(item)
+      seen.push(key)
+    }
+  }
+  return result
+}
+
+export def groupBy(arr: any[], func: (any) -> any): any {
+  """
+  Group elements of an array by the value returned by the function. Returns an object where keys are group names and values are arrays of elements.
+
+  @param arr - The array to group
+  @param func - The function returning the group key for each element
+  """
+  const groups = {}
+  for (item in arr) {
+    const key = func(item)
+    groups[key] ??= []
+    groups[key].push(item)
+  }
+  return groups
 }
 
 export def callback(name: string, fn: any) {

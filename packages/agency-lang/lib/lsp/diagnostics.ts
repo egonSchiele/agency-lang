@@ -20,9 +20,11 @@ import { resolveAgencyImportPath } from "../importPaths.js";
 // Names auto-imported from std::index by the parser template. Kept in sync
 // with lib/templates/backends/agency/template.mustache.
 const STDLIB_AUTO_IMPORTS: string[] = [
-  "print", "printJSON", "parseJSON", "input", "sleep", "round",
-  "read", "write", "writeBinary", "readBinary", "notify", "range",
-  "mostCommon", "keys", "values", "entries", "emit",
+  "print", "printJSON", "input", "sleep", "read", "write",
+  "writeBinary", "readBinary", "range", "callback",
+  // Array helpers (moved from std::array into std::index).
+  "map", "filter", "exclude", "find", "findIndex", "reduce", "flatMap",
+  "every", "some", "count", "sortBy", "unique", "groupBy",
 ];
 
 /**

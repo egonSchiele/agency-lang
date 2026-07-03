@@ -15,7 +15,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L45))
 
 ### std::write
 
@@ -26,7 +26,7 @@ effect std::write {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L46))
 
 ### std::readImage
 
@@ -37,18 +37,7 @@ effect std::readImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L54))
-
-### std::notify
-
-```ts
-effect std::notify {
-  title: string;
-  body: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L47))
 
 ## Functions
 
@@ -66,7 +55,7 @@ A tool for printing a message to the console.
 |---|---|---|
 | messages |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L49))
 
 ### setAgentCwd
 
@@ -87,7 +76,7 @@ Set the agent working directory. Path-taking tools (read, write, edit,
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L68))
 
 ### getAgentCwd
 
@@ -100,21 +89,13 @@ Return the agent working directory, or an empty string when none is
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L80))
 
 ### applyAgentCwd
 
 ```ts
 applyAgentCwd(dir: string): string
 ```
-
-Resolve `dir` against the agent working directory when one is set;
-  otherwise return `dir` unchanged. Used by the path-taking stdlib
-  wrappers so a set agent cwd overrides their default base. `_resolve`
-  short-circuits on an absolute `dir`, and resolve(base, "") returns
-  base, so this works for both the fs default (".") and shell default ("").
-
-  @param dir - The directory argument to resolve.
 
 **Parameters:**
 
@@ -124,7 +105,7 @@ Resolve `dir` against the agent working directory when one is set;
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L94))
 
 ### printJSON
 
@@ -141,25 +122,7 @@ A tool for printing an object as formatted JSON to the console.
 | obj | `any` |  |
 | highlight | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L113))
-
-### parseJSON
-
-```ts
-parseJSON(text: string): any
-```
-
-Parse a JSON string and return the corresponding value (object, array, string, number, boolean, or null). Throws if the input is not valid JSON.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| text | `string` |  |
-
-**Returns:** `any`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L102))
 
 ### input
 
@@ -179,7 +142,7 @@ A tool for prompting the user for input and returning their response.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L114))
 
 ### sleep
 
@@ -197,26 +160,7 @@ Pause execution for the given duration in milliseconds. Use with unit literals f
 |---|---|---|
 | ms | `number` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L141))
-
-### round
-
-```ts
-round(num: number, precision: number): number
-```
-
-A tool for rounding a number to a specified number of decimal places.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| num | `number` |  |
-| precision | `number` |  |
-
-**Returns:** `number`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L123))
 
 ### read
 
@@ -252,7 +196,7 @@ A tool for reading the contents of a file and returning it as a string. The file
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L132))
 
 ### write
 
@@ -287,7 +231,7 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L166))
 
 ### writeBinary
 
@@ -324,7 +268,7 @@ Write base64-encoded binary data to a file (images, audio, video, PDFs, any
 
 **Throws:** `std::writeBinary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L224))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L199))
 
 ### readBinary
 
@@ -352,28 +296,7 @@ Read a file and return its contents as a Base64-encoded string. Works for any
 
 **Throws:** `std::readBinary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L258))
-
-### notify
-
-```ts
-notify(title: string, message: string): boolean
-```
-
-A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
-| message | `string` |  |
-
-**Returns:** `boolean`
-
-**Throws:** `std::notify`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L282))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L233))
 
 ### range
 
@@ -392,95 +315,295 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L293))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L257))
 
-### mostCommon
+### map
 
 ```ts
-mostCommon(items: any[]): any
+map(arr: any[], func: (any) => any): any[]
 ```
 
-Return the most common element in an array. Uses JSON serialization for comparison.
+Map a function over an array, returning a new array of results.
+
+  @param arr - The array to map over
+  @param func - The function to apply to each element
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| items | `any[]` |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L274))
+
+### filter
+
+```ts
+filter(arr: any[], func: (any) => any): any[]
+```
+
+Return a new array containing only the elements for which the function returns true.
+
+  @param arr - The array to filter
+  @param func - The function that returns true for elements to keep
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L288))
+
+### exclude
+
+```ts
+exclude(arr: any[], func: (any) => any): any[]
+```
+
+Return a new array excluding elements for which the function returns true. Inverse of filter.
+
+  @param arr - The array to filter
+  @param func - The function that returns true for elements to exclude
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L304))
+
+### find
+
+```ts
+find(arr: any[], func: (any) => any): any
+```
+
+Return the first element for which the function returns true, or null if none match.
+
+  @param arr - The array to search
+  @param func - The function that returns true for the desired element
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L303))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L320))
 
-### keys
+### findIndex
 
 ```ts
-keys(obj: any): string[]
+findIndex(arr: any[], func: (any) => any): number
 ```
 
-Return an array of an object's own enumerable property names.
+Return the index of the first element for which the function returns true, or -1 if none match.
+
+  @param arr - The array to search
+  @param func - The function that returns true for the desired element
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| obj | `any` |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** `string[]`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L310))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L335))
 
-### values
+### reduce
 
 ```ts
-values(obj: any): any[]
+reduce(arr: any[], initial: any, func: (any, any) => any): any
 ```
 
-Return an array of an object's own enumerable property values.
+Reduce an array to a single value by applying a function to an accumulator and each element.
+
+  @param arr - The array to reduce
+  @param initial - The initial accumulator value
+  @param func - The reducer function receiving (accumulator, element)
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| obj | `any` |  |
+| arr | `any[]` |  |
+| initial | `any` |  |
+| func | `(any, any) => any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L350))
+
+### flatMap
+
+```ts
+flatMap(arr: any[], func: (any) => any): any[]
+```
+
+Map a function over an array and flatten the results by one level.
+
+  @param arr - The array to map over
+  @param func - The function to apply to each element
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L317))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L365))
 
-### entries
+### every
 
 ```ts
-entries(obj: any): any[]
+every(arr: any[], func: (any) => any): boolean
 ```
 
-Return an array of an object's own enumerable entries, each as { key, value }.
+Return true if the function returns true for every element in the array.
+
+  @param arr - The array to test
+  @param func - The predicate function
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| obj | `any` |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L382))
+
+### some
+
+```ts
+some(arr: any[], func: (any) => any): boolean
+```
+
+Return true if the function returns true for at least one element in the array.
+
+  @param arr - The array to test
+  @param func - The predicate function
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L397))
+
+### count
+
+```ts
+count(arr: any[], func: (any) => any): number
+```
+
+Count the number of elements in the array for which the function returns true.
+
+  @param arr - The array to count in
+  @param func - The predicate function
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `number`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L412))
+
+### sortBy
+
+```ts
+sortBy(arr: any[], func: (any) => any): any[]
+```
+
+Return a new array sorted by the values returned by the function, in ascending order.
+
+  @param arr - The array to sort
+  @param func - The function returning the sort key for each element
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L324))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L428))
 
-### emit
+### unique
 
 ```ts
-emit(data)
+unique(arr: any[], func: (any) => any): any[]
 ```
 
-Emit a custom event to the calling TypeScript code via the onEmit callback.
+Return a new array with duplicate elements removed, using the function to determine the identity of each element.
+
+  @param arr - The array to deduplicate
+  @param func - The function returning the identity key for each element
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| data |  |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L331))
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L455))
+
+### groupBy
+
+```ts
+groupBy(arr: any[], func: (any) => any): any
+```
+
+Group elements of an array by the value returned by the function. Returns an object where keys are group names and values are arrays of elements.
+
+  @param arr - The array to group
+  @param func - The function returning the group key for each element
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L480))
 
 ### callback
 
@@ -502,4 +625,4 @@ Register a scoped callback for the dynamic extent of the calling function or nod
 | name | `string` |  |
 | fn | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L338))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L496))

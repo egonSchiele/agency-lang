@@ -6,6 +6,60 @@ name: "object"
 
 ## Functions
 
+### keys
+
+```ts
+keys(obj: any): string[]
+```
+
+Return an array of an object's own enumerable property names.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| obj | `any` |  |
+
+**Returns:** `string[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L3))
+
+### values
+
+```ts
+values(obj: any): any[]
+```
+
+Return an array of an object's own enumerable property values.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| obj | `any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L10))
+
+### entries
+
+```ts
+entries(obj: any): any[]
+```
+
+Return an array of an object's own enumerable entries, each as { key, value }.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| obj | `any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L17))
+
 ### mapValues
 
 ```ts
@@ -26,7 +80,7 @@ Return a new object with the same keys, but with each value transformed by the f
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L1))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L24))
 
 ### mapEntries
 
@@ -48,7 +102,7 @@ Return a new object by applying the function to each entry. The function receive
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L38))
 
 ### filterEntries
 
@@ -70,7 +124,7 @@ Return a new object containing only the entries for which the function returns t
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L53))
 
 ### everyEntry
 
@@ -92,7 +146,7 @@ Return true if the function returns true for every entry in the object. The func
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L69))
 
 ### someEntry
 
@@ -114,4 +168,4 @@ Return true if the function returns true for at least one entry in the object. T
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L84))

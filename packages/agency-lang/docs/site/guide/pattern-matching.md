@@ -266,14 +266,20 @@ const greeting = match(name) {
 
 ### v1 restrictions
 
-- **A `return` inside an arm cannot cross a concurrency boundary.** A
-  `return` inside a `parallel`/`seq`/`fork`/`race`/`thread` block nested in an
-  arm is a compile error — those run in separate execution contexts that
-  the match-yield unwind cannot cross.
-- You can't have a match statement at the module level (outside of a function or node).
-- **A match-expression arm cannot yield a graph-node call.** A node call
-  compiles to a control-flow transition (goto/halt), not a value; use an
-  `if`/`else` chain for node dispatch instead of a match expression.
+Here are the places you can't use match blocks right now:
+
+- At the module level (outside of a function or node).
+- Inside `parallel`, `seq`, `thread`, and `subthread` blocks.
+
+You can't use `goto` with match blocks:
+
+```ts
+// not allowed
+goto match(x) {
+  "next" => next
+  _ => end
+}
+```
 
 ## Result patterns
 

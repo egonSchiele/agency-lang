@@ -5,56 +5,52 @@ description: Documents the `guard` function for capping the cost and/or compute 
 
 # Guards
 
-LLM-driven agents are easy to write, easy to deploy, and easy to set on fire — a runaway loop or a chatty tool can turn a planned $0.20 task into a $20 surprise, or a 200ms response into a five-minute hang. Agency's `guard` function caps the **cost** and/or **compute time** of a block of work and lets your code decide what to do when the budget is blown.
-
-## The shape
+Guards let you limit the **cost** and/or **compute time** of a block of work.
 
 ```ts
 import { guard } from "std::thread"
 
 node main() {
-  const result = guard(cost: $2.0) as {
-    const a = llm("classify this email")
-    const b = llm("draft a reply")
-    return a + " — " + b
+  const result = guard(cost: $0.2) {
+    const category = llm("classify this email: I love you")
+    const reply = llm("draft a reply")
+    return category
   }
-  if (isFailure(result)) {
-    print("Over budget: spent " + result.error.actualCost)
-    return "could not finish"
+
+  match(result) {
+    success(value) => print("Category: ${value}")
+    failure(error) => printJSON(error)
   }
-  return result.value
+}
+```
+
+Things to note:
+- You don't have access to all the variables inside the guard, only to the return value.
+- `result` is a `Result` type. On success, it has the return value. On failure, it has this data:
+
+```ts
+// "guardFailure" = cost, "timeoutFailure" = time
+type GuardFailureData = {
+  type: "guardFailure" | "timeoutFailure"
+  maxCost?: number
+  actualCost?: number
+  maxTime?: number
+  actualTime?: number
 }
 ```
 
 `guard` takes one or both of:
 
-- `cost:` — a `number` of dollars (`$2.0` is the same as `2.0`; `$` is a no-op compile-time scale factor).
-- `time:` — a `number` of milliseconds (use the unit literals: `30s`, `5m`, `100ms`, `1h`).
+- `cost:` — a `number` of dollars, eg `$2.0`.
+- `time:` — a `number` of milliseconds (or use the unit literals: `30s`, `5m`, `100ms`, `1h`).
 
-…and a trailing block. It runs the block, and:
+These use [unit literals](/guide/basic-syntax.html#unit-literals).
 
-- If the block completes within all configured limits, `guard` returns `success(blockReturnValue)`.
-- If any limit is exceeded, the block aborts and `guard` returns a `Failure` carrying the structured `GuardFailureData`:
+The cost check fires before and after every LLM call.
 
-  ```ts
-  type GuardFailureData = {
-    type: string,         // "guardFailure" (cost) or "timeoutFailure" (time)
-    maxCost: number | null,
-    actualCost: number | null,
-    maxTime: number | null,    // ms
-    actualTime: number | null, // ms
-  }
-  ```
+ The time check fires at the next runner step boundary after the timer expires.
 
-  Access these as `result.error.type`, `result.error.maxCost`, `result.error.maxTime`, etc. The unused dimension's fields are `null`.
-
-The cost check fires every time an LLM call's cost is added to the per-branch accumulator. The time check fires at the next runner step boundary after the timer expires.
-
-Cost guards also meter subprocesses: spend from `std::agency` `run()` —
-including nested subprocesses — is charged to enclosing cost guards in
-real time, and a tripped budget terminates the subprocess and fails the
-guard block with the usual cost-limit failure. `getCost()` reflects
-subprocess spend as it happens.
+Cost guards and time guards also apply to subprocesses created using `std::agency.run`.
 
 ## Timeout
 
@@ -68,26 +64,13 @@ if (isFailure(result)) {
 }
 ```
 
-Time semantics are **compute-time**: wall clock only ticks while a runner is actively executing inside the guarded scope. Time spent paused on an interrupt (waiting for user input, etc.) does **not** count against the budget; on resume, the timer is re-armed with the remaining budget. This mirrors how cost guards only count actual LLM spend, not wall-clock waiting.
+When the clock ticks:
+- regular code execution = yes.
+- interrupts = no.
+- waiting for user input through `input` = yes.
+- `sleep` = yes.
 
-In-flight LLM HTTP requests are cancelled when the timer fires — the abort signal is composed into the request via smoltalk. In-flight Agency tool bodies stop at the next runner step boundary.
-
-## Combining cost and time
-
-```ts
-const result = guard(cost: $5.0, time: 60s) as {
-  return runLongConversation()
-}
-if (isFailure(result)) {
-  if (result.error.type == "guardFailure") {
-    print("Out of money after " + result.error.actualCost)
-  } else {
-    print("Out of time after " + result.error.actualTime + "ms")
-  }
-}
-```
-
-Both limits trip independently; whichever fires first wins. Internally `guard` pushes two separate `Guard` instances onto the stack — each is responsible for its own dimension.
+When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.
 
 ## Nested guards
 
@@ -105,14 +88,15 @@ const outer = guard(cost: $10.0) as {
 }
 ```
 
-The inner cost guard owns its own `spent` counter (initialized to `0` at push) and trips on its own limit. The outer cost guard is also charged for every LLM call in scope (including ones made inside the inner) and trips against its own limit. The `prompt.ts` post-call walk goes innermost-first, so when an inner exceeds its limit the inner's trip fires first and the outer's check at the same call site is skipped — that's how the `if (isFailure(inner))` above works. Inner time guards similarly track only the compute time spent inside the inner scope; the outer's timer keeps ticking through the inner regardless of whether the inner tripped.
+They work with `fork` and other [concurrency primitives](/guide/concurrency) too:
 
-Inner guards that a branch pushes *after* a `fork` opens stay branch-local — they sit on the child's stack at indices past `inheritedGuardCount` and are never visible to the parent or other sibling branches. This lets you compose an outer "hard cap across all branches" with per-branch sub-budgets:
 
 ```ts
-guard(cost: $5.0) as {              // shared across every branch below
+// shared across every branch below
+guard(cost: $5.0) as {
   fork(jobs) as job {
-    guard(cost: $0.50) as {         // per-branch sub-budget, isolated
+    // per-branch sub-budget, isolated
+    guard(cost: $0.50) as {
       return processOneJob(job)
     }
   }

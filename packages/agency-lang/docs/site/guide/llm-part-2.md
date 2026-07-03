@@ -3,11 +3,22 @@ name: LLM Calls, Part 2
 description: More about LLM calls in Agency, including retries, timeouts, backoff, and other options.
 ---
 
+# LLM calls, Part 2
+
+Remember that LLM calls look like this.
+
+```ts
+const response = llm("What is the capital of France?")
+print(response)
+```
+
+Read the section on [LLM calls](/guide/llm) if you need a refresher.
+
 ## The `safe` keyword
 
 LLMs are often flaky. It's possible that your LLM will call a tool incorrectly for some reason. If this happens, it's possible to get the LLM to retry the tool call.
 
-Some functions are okay to retry and some aren't. If you have a function that has a side effect, like writing to a database, you probably don't want the LLM to retry it automatically. However, if you have a function that doesn't have any side effects, you can make it `safe` to retry:
+Some functions are okay to retry and some aren't. If you have a function that has a side effect, like writing to a database, you probably don't want the LLM to retry it automatically. However, if you have a function that doesn't have any side effects, you can mark it `safe` to retry:
 
 ```ts
 safe def add(a: number, b: number): number {

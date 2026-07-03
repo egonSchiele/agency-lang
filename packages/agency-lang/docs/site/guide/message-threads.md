@@ -5,8 +5,6 @@ description: Explains how Agency's default shared message history works across L
 
 # Message history and threads
 
-A critical part of an agent is the message history. You want the agent to remember everything that's been said so far. Let's see how message history works in Agency.
-
 By default, all LLM calls share a message history:
 
 ```ts
@@ -16,16 +14,20 @@ print(result1)
 print(result2)
 ```
 
-Prints:
+Prints something like:
 
 ```
 Hello Alice! I'm an AI assistant and I don't have a personal name, but you can call me Assistant. How can I help you today?
 Yes, I remember your name is Alice! How can I assist you today?
 ```
 
-This message history gets shared across function calls and across nodes, which makes it very easy to build an agent that remembers everything that has been talked about so far. Sometimes, though, you want to have a side conversation that doesn't pollute the main message history. You can use threads and subthreads for this.
+This message history gets shared across function calls and across nodes.
 
-`thread` creates an isolated conversation. The thread block starts a new empty conversation, and all the LLM calls within the thread block share message history, but it doesn't touch the main conversation.
+## `thread` and `subthread`
+
+Sometimes you want to have a side conversation that doesn't pollute the main message history. You can use threads and subthreads for this.
+
+`thread` creates an isolated conversation. The thread block starts a new empty conversation. All the LLM calls within the thread block share message history, but they don't touch the main conversation.
 
 ```ts
   const result1 = llm("Hi my name is Alice. What is your name?")
@@ -36,14 +38,14 @@ This message history gets shared across function calls and across nodes, which m
   print(result2)
 ```
 
-Prints:
+Prints something like:
 
 ```
 Hello Alice! I'm an AI assistant, and I don't have a personal name, but you can call me Assistant. How can I help you today?
 I don’t have the ability to remember personal details or past interactions, including your name. However, I’m here to help you with any questions or tasks you have! How can I assist you today?
 ```
 
-This is a good way to have a side conversation without filling up the context in the main conversation. If you want to create a side conversation but still wanted to inherit all the messages in the current conversation, use a `subthread` instead:
+If you want to create a side conversation but want to inherit the message history thus far, use a `subthread` instead:
 
 ```ts
   const result1 = llm("Hi my name is Alice. What is your name?")
@@ -58,7 +60,7 @@ This is a good way to have a side conversation without filling up the context in
   print(result4)
 ```
 
-Prints:
+Prints something like:
 
 ```
 Hello Alice! I'm an AI assistant and I don't have a personal name, but you can call me Assistant. How can I help you today?
@@ -69,20 +71,41 @@ I don't have access to personal data, so I can't know your favorite ice cream fl
 
 You can also nest threads and subthreads to create side conversations branching off other side conversations.
 
-## Where threads work
+Message threads work everywhere except module top-level code.
 
-Message threads are scoped to a running agent. They work anywhere inside a `node` or `def` body, and inside callback bodies (`handle`, `pipe`, etc.) that fire while a node is running.
+## `systemMessage`, `userMessage`
 
-They do **not** work in these "bootstrap" scopes:
+When you make LLM calls, the `llm` function adds user messages and assistant messages to the message history automatically. But if you want to insert a message into the message history yourself, you can use functions from the [`std::thread` module](/stdlib/thread):
 
-- Module top-level code (e.g. a `const x = ...` declaration outside any node/function). This runs once at module load — there is no agent yet, so there is no message thread to attach to.
-- The body of a `callback(...)` registration at the top of a module.
-- The `onAgentStart` lifecycle hook. This fires before the agent runs.
+```ts
+import { systemMessage, userMessage } from "std::thread"
 
-If you call a thread builtin from one of these scopes — `systemMessage`, `userMessage`, `llm`, `thread { ... }`, `subthread { ... }` — you'll get a runtime error like *"Message threads are not available in this scope."* with a pointer to this guide. Move the code inside a `node` or `def` body to fix it.
+node main() {
+  systemMessage("You are a helpful assistant.")
+  userMessage("Hi my name is Alice.")
+  const result = llm("Do you remember my name?")
+  print(result)
+}
+```
 
-`onAgentEnd` is the exception: it fires *after* the run completes, so it has access to the final conversation. You can inspect or log the thread state from there.
+These functions only work inside nodes or functions. You can't use them in global scope.
 
-## See also
+## `getCost`, `getTokens`
 
-- [Cross-Thread Context Sharing](./cross-thread-context) — `listThreads()`, `getThread()`, and the `thread(label, summarize, continue, session)` named arguments for inspecting and resuming sibling threads. The marquee use case is the categorize-and-route pattern (one router, many specialized agents, per-category thread continuity).
+Use these to get the current cost and token usage of the message history. 
+
+```ts
+import { getCost, getTokens } from "std::thread"
+
+node main() {
+  const result = llm("What's the capital of India?")
+  print(result)
+  print(getCost())
+}
+```
+
+You can set limits on cost by using [guards](/guide/guards).
+
+## References
+
+- [Cross-Thread Context Sharing](./cross-thread-context) — lets threads peek at other threads.

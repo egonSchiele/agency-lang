@@ -1,17 +1,14 @@
-import { search } from "std::wikipedia"
-
-def callMe(block) {
-  return block()
-}
+import { guard } from "std::thread"
 
 node main() {
-  const n = 2
-  const size = match(n) {
-    100 => "big"
-    2 => fork(range(n)) {
-      print("forked")
-      return "small"
-    }
+  const result = guard(cost: $0.0) {
+    const category = llm("classify this email: I love you")
+    const reply = llm("draft a reply")
+    return category
   }
-  print(size)
+
+  match(result) {
+    success(value) => print("Category: ${value}")
+    failure(error) => printJSON(error)
+  }
 }

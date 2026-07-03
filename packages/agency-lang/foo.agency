@@ -1,12 +1,17 @@
 import { search } from "std::wikipedia"
 
-def searchWikipedia(query: string) {
-  const results = search(query) with approve
-  return results
+def callMe(block) {
+  return block()
 }
 
 node main() {
-  const query = input("Enter a search query: ")
-  const results = llm("Search Wikipedia for: ${query}", tools: [searchWikipedia])
-  print(results)
+  const n = 2
+  const size = match(n) {
+    100 => "big"
+    2 => fork(range(n)) {
+      print("forked")
+      return "small"
+    }
+  }
+  print(size)
 }

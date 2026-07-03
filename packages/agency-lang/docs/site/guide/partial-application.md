@@ -1,110 +1,71 @@
 ---
-name: Partial Application
-description: Explains Agency's `.partial()` method for creating new functions with some parameters pre-filled, comparing the behavior to JavaScript and TypeScript.
+name: Partial Function Application
+description: Explains Agency's `.partial()` method for creating new functions with some parameters pre-filled.
 ---
 
-# Partial Application
+# Partial Function Application (PFA)
 
-## What is it?
-
-Let's take a simple `readFile` function. Here is its function signature in three different languages, JavaScript, TypeScript and Agency:
+Partial function application, or PFA, is another way to make it safe to read and write files. Here's how it works. The `read` function has this signature.
 
 ```ts
-// JavaScript
-function readFile(dir, filename);
-
-// TypeScript
-function readFile(dir: string, filename: string): string;
-
-// Agency
-def readFile(dir: string, filename: string): string;
+read(filename: string, dir: string): Result
 ```
 
-Now suppose you call this function with only one argument:
+Instead of calling this function, I can choose to just lock one of its parameters.
 
 ```ts
-readFile("dirName")
+const readFromTmp = readFile.partial(dir: "/tmp")
 ```
 
-What would happen? JavaScript allows you to call the function and the second argument is just `undefined`. TypeScript and Agency show a type error.
+`readFromTmp` is now a new function that only takes the `filename` parameter. The `dir` parameter is locked to `"/tmp"`, so it can only read files from `"/tmp"`. 
 
-However! Agency has a special feature called **partial application** that does something neat.
+Now I can give this function to an LLM, and it will only be able read files from the `/tmp` directory! Partial application lets you make a new function where some of the arguments are already filled in. 
 
-## Basic usage
+Things to note:
+- You use `.partial()` for PFAs.
+- You *have* to specify named args. You can't use positional args, like `readFile.partial("/tmp")`. You have to use `readFile.partial(dir: "/tmp")`.
 
-Use `.partial()`:
+## Preapprove
+
+`readFromTmp` will still raise an interrupt. You have three options:
+
+- You could continue asking for user approval
+- You could use the `with approve` shorthand syntax and auto-approve, since now it can only read from the `/tmp` directory.
+- You could preapprove all interrupts for this function using `.preapprove()`:
 
 ```ts
-const readFromDir = readFile.partial(dir: "dirName")
+const readFromTmp = readFile.partial(dir: "/tmp").preapprove()
 ```
 
-`.partial()` creates a new function where the `dir` parameter is set to `"dirName"`. The new function only takes the remaining parameter `filename`:
+`.preapprove()` is a method that you can call on any function, not just PFAs. It will return a new function, with all interrupts raised by that function automatically approved.
 
-```ts
-readFromDir("file.txt") // calls readFile("dirName", "file.txt")
-```
+## Docstrings and JSON schemas
 
-Partial application lets you make a new function where some of the arguments are already filled in. 
+When we send a tool to an LLM, we're really sending some information:
+- what parameters to call this tool with
+- what this tool returns
+- an optional tool description, which is the docstring.
 
-Partial function application is an old concept from functional languages. Why is it useful in agency? Is it just niche? No, it ends up having a pretty cool use case.
+If you use PFA to lock one of the arguments, it won't be sent to the LLM. With our `read` function, if we send the `read` function directly, the LLM will know it has to pass in two arguments, the file name and the directory name. But if we send `readFromTmp`, it will only know to pass in the file name. It won't even know that the directory parameter existed.
 
-## Constraining LLM tools
-
-Remember that every function is also a tool in Agency. Agency gives you a couple ways to make tool usage safe. One is interrupts, checking with the user before taking an action. Another one is PFA – partial function application.
-
-If you give the readFile() function to an LLM call, all of a sudden it can read any file on your file system:
-
-```ts
-const result = llm("Read the config file", { tools: [readFile] })
-```
-
-You could make it safer by throwing an interrupt and checking with the user before you read any file, but you could also just limit what directories it can read from:
-
-```ts
-const readFromTemp = readFile.partial(dir: "/tmp")
-const result = llm("Read the config file", { tools: [readFromTemp] })
-```
-
-Now the readFile function can only read the files in the `/tmp` directory!
-
-PFAs are a really easy way to restrict the capabilities you provide to an LLM. The functions in the agency's standard library are written with PFA in mind. For example, `std::messaging/email` has several functions to send email. They have `allowList` and `blockList` parameters so that you can restrict who the LLM can send emails to.
-
-Now obviously PFAs aren't magic. You as the function author need to make sure the restriction is actually obeyed. For example, if you wrote the readFile function in such a way that you just ignored the `dir` parameter, then the LLM could again read any file on your system. 
-
-## Why not just use wrapper functions?
-
-Why not just wrap the function call in another function call? This works fine:
-
-```ts
-function readFromTemp(filename: string): string {
-  return readFile("/tmp", filename)
-}
-```
-
-A couple of advantages to using PFAs:
-1. You don't have to create wrappers for every possible iteration. PFAs are more flexible.
-2. You don't have to copy over the function description into the wrapper.
-
-When a tool gets sent to an LLM, we additionally send over a JSON schema containing the parameters and description of the tool. If you use a PFA, the function description from the original function will get sent, so you don't have to worry about adding a description to your wrapper function. If you mention any parameters in the function docstring, those parameters will get stripped from the docstring for you automatically, as long as you use the `@param name - description` format. Example:
+But what if your docstring talks about the directory parameter? If you mention any parameters in the function docstring, those parameters will get stripped from the docstring for you automatically, as long as you use the `@param name - description` format. Example:
 
 ```agency
-def readFile(dir: string, filename: string): string {
+def readFile(filename: string, dir: string): string {
   """
   Reads a file from the filesystem.
-  @param dir - The directory to read from
   @param filename - The name of the file to read
+  @param dir - The directory to read from
   """
   // ...
 }
 ```
 
-When you use `.partial()`, any `@param` lines in the function's docstring for bound parameters are automatically stripped from the description the LLM sees.
+When you use `.partial()`, any `@param` lines in the function's docstring for bound parameters are automatically stripped.
 
-If you write your functions well, users can use PFA to restrict its capabilities in all sorts of useful ways before handing the function to an agent.
+### Custom descriptions with `.describe()`
 
-## Custom descriptions with `.describe()`
-
-Use `.describe()` to override the tool description that the LLM sees:
+If you want to override the docstring completely, use `.describe()`:
 
 ```ts
 const add5 = add.partial(a: 5).describe("Adds 5 to any number")
@@ -114,75 +75,22 @@ const add5 = add.partial(a: 5).describe("Adds 5 to any number")
 
 `.partial()` and `.describe()` keep the original function's **name**. That
 matters when you pass several derived copies of one function to the same
-`llm(...)` call: an LLM tool list must have unique names, so two copies of
-`add` would be rejected by the model provider.
-
-Use `.rename()` to give a derived tool a distinct name:
+`llm(...)` call:
 
 ```ts
-const addOne = add.partial(a: 1).rename("addOne")
-const addTwo = add.partial(a: 2).rename("addTwo")
-
-// Both can now be passed to one call — distinct names, no collision.
-const result = llm("add some numbers", { tools: [addOne, addTwo] })
+const readFromTmp = readFile.partial(dir: "/tmp")
+const readFromHome = readFile.partial(dir: "/home")
+const result = llm("read some files", { tools: [readFromTmp, readFromHome] })
 ```
 
-The new name is what the LLM sees as the tool name *and* what Agency uses to
-route the tool call back to your function, so it's updated in both places.
-`.rename()` chains with `.partial()`, `.describe()`, and `.preapprove()` in
-any order.
-
-> If you do pass duplicate-named tools to an LLM call, Agency catches it
-> before the request is sent and raises an error naming the collision —
-> rather than letting it surface as an opaque provider error.
-
-## In pipes
-
-Partial application works naturally with the [pipe operator](./error-handling):
+Here, the LLM will see the same name for both `readFromTmp` and `readFromHome` – `readFile`. Each tool must have a unique name. Use `.rename()` to give each tool a unique name:
 
 ```ts
-def multiply(a: number, b: number): Result {
-  return success(a * b)
-}
-
-def half(x: number): Result {
-  return success(x / 2)
-}
-
-const result = success(10) |> half |> multiply.partial(a: 3)
+const readFromTmp = readFile.partial(dir: "/tmp").rename("readFromTmp")
+const readFromHome = readFile.partial(dir: "/home").rename("readFromHome")
 ```
 
-The piped value fills the remaining unbound parameter.
+If you write your functions well, users can use PFA to restrict its capabilities in all sorts of useful ways before handing the function to an agent.
 
-## Auto-approving interrupts with `.preapprove()`
+For example, the standard library has [functions for sending email](/stdlib/messaging/email.html#sendwithresend), and they have allowList and blockList parameters that you can use to set who the LLM can send the email to.
 
-If you trust a function and want to auto-approve all its interrupts, use `.preapprove()`:
-
-```ts
-const tool = readFile.preapprove()
-llm("Read the config", { tools: [tool] })
-```
-
-This is equivalent to wrapping every call in a handler that approves:
-
-```ts
-handle {
-  readFile(filename)
-} with (data) {
-  return approve()
-}
-```
-
-`.preapprove()` works on any function, not just PFAs, and chains with `.partial()` and `.describe()` in any order:
-
-```ts
-const safeTool = readFile.partial(dir: "/tmp").preapprove().describe("Read temp files")
-```
-
-Outer handlers still take precedence. If a handler further up the chain rejects the interrupt, it stays rejected — `.preapprove()` can't override an outer rejection. This follows the normal [handler rules](./handlers).
-
-## Rules and restrictions
-
-- You can only bind parameters by name: `fn.partial(x: 5)`, not by position.
-- You cannot bind a parameter that is already bound.
-- You cannot bind variadic parameters (`...args`).

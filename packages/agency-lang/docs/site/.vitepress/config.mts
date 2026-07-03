@@ -20,14 +20,9 @@ export default defineConfig({
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
-            { text: "The `main` node", link: "/guide/the-main-node" },
-            /* { text: "Nodes", link: "/guide/nodes" }, */
-            { text: "LLMs", link: "/guide/llm" },
-            /* { text: "Image generation", link: "/guide/image-generation" },
-            {
-              text: "Custom & local model providers",
-              link: "/guide/custom-providers",
-            }, */
+            { text: "The `main` Node", link: "/guide/the-main-node" },
+
+            { text: "LLM Calls", link: "/guide/llm" },
             { text: "Functions", link: "/guide/functions" },
             {
               text: "Imports and Packages",
@@ -43,54 +38,89 @@ export default defineConfig({
           ],
         },
         {
-          text: "Intermediate",
+          text: "02. Safety, Part 1",
           items: [
             { text: "Interrupts", link: "/guide/interrupts" },
-            { text: "Handlers", link: "/guide/handlers" },
-            {
-              text: "Structured Interrupts",
-              link: "/guide/structured-interrupts",
-            },
-            {
-              text: "Effect Sets and raises",
-              link: "/guide/effects-and-raises",
-            },
             {
               text: "Partial Function Application",
               link: "/guide/partial-application",
             },
+            { text: "Handlers", link: "/guide/handlers" },
+            {
+              text: "Effects",
+              link: "/guide/effects",
+            },
+          ],
+        },
+        {
+          text: "03. Basics, Part 2",
+          items: [
+            { text: "Error Handling", link: "/guide/error-handling" },
+            { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
+            { text: "Nodes", link: "/guide/nodes" },
+            // TS interop part 2, including handling interrupts, cancellation
+          ],
+        },
+        {
+          text: "04. LLMs",
+          items: [
+            {
+              text: "LLM Calls, Part 2",
+              link: "/guide/llm-part-2",
+            },
             {
               text: "Message Threads",
               link: "/guide/message-threads",
             },
-            { text: "Error Handling", link: "/guide/error-handling" },
-            { text: "Blocks", link: "/guide/blocks" },
+
             { text: "Guards", link: "/guide/guards" },
+            { text: "Image generation", link: "/guide/image-generation" },
+            // attachments
+            // streaming
+          ],
+        },
+        {
+          text: "05. Safety, Part 2",
+          items: [
+            {
+              text: "Effect Sets and raises",
+              link: "/guide/effects-and-raises",
+            },
+            { text: "Policies", link: "/guide/policies" },
+          ],
+        },
+        {
+          text: "06. Agency's Execution Model",
+          items: [
             { text: "Execution Model", link: "/guide/execution-model" },
             {
               text: "Global vs Static Variables",
               link: "/guide/global-vs-static",
             },
-            { text: "Testing", link: "/guide/testing" },
-            { text: "Observability", link: "/guide/observability" },
+            { text: "Checkpointing", link: "/guide/checkpointing" },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
+            },
+            // Initializer dependencies
           ],
         },
         {
           text: "Advanced",
           items: [
+            { text: "Testing", link: "/guide/testing" },
+            { text: "Observability", link: "/guide/observability" },
             { text: "Concurrency", link: "/guide/concurrency" },
-            { text: "Policies", link: "/guide/policies" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
-            { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Memory", link: "/guide/memory" },
-            {
-              text: "Cross-Thread Context Sharing",
-              link: "/guide/cross-thread-context",
-            },
             { text: "MCP", link: "/guide/mcp" },
             { text: "Serving Agency Code", link: "/guide/serving" },
+            {
+              text: "Custom & local model providers",
+              link: "/guide/custom-providers",
+            },
           ],
         },
         {
@@ -105,6 +135,10 @@ export default defineConfig({
             {
               text: "Agency's Standard Library",
               link: "/guide/agency-stdlib",
+            },
+            {
+              text: "Agency Packages",
+              link: "/guide/agency-packages",
             },
             {
               text: "Built-in Functions",

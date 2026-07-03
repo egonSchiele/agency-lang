@@ -274,6 +274,5 @@ Now let's talk about Agency's execution model.
 ---
 
 ## Files
-guide/llm-part-2.md
 guide/agency-packages.md
 

@@ -220,3 +220,45 @@ if (a is success(aVal) && b is success(bVal)) {
 ---
 
 optimizer: should `workdir` be a symlink? Right now, I can't exec a command against a local file while using the optimizer, as the workdir doesn't contain anything, so while running the optimizer, that file isn't found.
+
+---
+
+Along with the Result type, agency has Success and Failure types, but they are hilariously broken. For example, this code doesn't throw a type error:
+
+```ts
+import { search } from "std::wikipedia"
+
+def half(x: number): Result {
+  if (x % 2 != 0) {
+    return failure("Number must be even to be halved, got ${x}")
+  }
+  return success(x / 2)
+}
+
+node main() {
+  const foo: Success = half(5)
+}
+```
+
+because these two types are just aliases for Result:
+
+```ts
+// Same as Result<any, any>
+const ok: Success = success(1)
+
+// Same as Result<number, any>
+const ok: Success<number> = success(1)
+
+// Same as Result<any, any>
+const bad: Failure = failure("oops")
+```
+
+- `Success<T>` is sugar for `Result<T, any>`
+- `Failure<E>` is sugar for `Result<any, E>`
+- Bare `Success` and `Failure` are both sugar for `Result<any, any>`
+
+In fact, the agency generator will actually convert the Success type to a Result type.
+
+---
+
+allow a match expression as an obj value?

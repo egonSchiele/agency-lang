@@ -91,11 +91,21 @@ function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
       continue;
     }
     switch (c) {
-      case "\\": out += "\\\\"; break;
-      case "\n": out += "\\n"; break;
-      case "\t": out += "\\t"; break;
-      case "\r": out += "\\r"; break;
-      case "\0": out += "\\0"; break;
+      case "\\":
+        out += "\\\\";
+        break;
+      case "\n":
+        out += "\\n";
+        break;
+      case "\t":
+        out += "\\t";
+        break;
+      case "\r":
+        out += "\\r";
+        break;
+      case "\0":
+        out += "\\0";
+        break;
       case "$":
         // Only `${` starts an interpolation. Escape a bare `$` only
         // when followed by `{` so a literal `$5` stays as `$5`.
@@ -148,9 +158,7 @@ export class AgencyGenerator {
    */
   protected preserveOrder: boolean = false;
 
-  constructor(
-    args: { config?: AgencyConfig; preserveOrder?: boolean } = {},
-  ) {
+  constructor(args: { config?: AgencyConfig; preserveOrder?: boolean } = {}) {
     this.agencyConfig = mergeDeep(this.configDefaults(), args.config || {});
     this.preserveOrder = args.preserveOrder ?? false;
     if (this.agencyConfig.verbose) {
@@ -384,7 +392,7 @@ export class AgencyGenerator {
     }
   }
 
-  protected preprocessAST(): void { }
+  protected preprocessAST(): void {}
 
   protected generateBuiltins(): string {
     return "";
@@ -406,7 +414,7 @@ export class AgencyGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   public processNode(node: AgencyNode): string {
     const result = this.processNodeInner(node);
@@ -933,8 +941,8 @@ export class AgencyGenerator {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
-      variableTypeToString(node.returnType, this.typeAliases, true) +
-      returnTypeBang
+        variableTypeToString(node.returnType, this.typeAliases, true) +
+        returnTypeBang
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
 
@@ -1050,7 +1058,9 @@ export class AgencyGenerator {
 
     if (block && !block.inline) {
       let asClause = "as ";
-      if (block.params.length === 1) {
+      if (block.params.length < 1) {
+        asClause = "";
+      } else if (block.params.length === 1) {
         asClause = `as ${block.params[0].name} `;
       } else if (block.params.length > 1) {
         asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
@@ -1160,7 +1170,10 @@ export class AgencyGenerator {
       // matchBlock: the single-statement arm grammar only accepts
       // return/assignment/expression, so a nested match statement must print
       // in block form to re-parse.
-      if (caseNode.body.length === 1 && caseNode.body[0].type !== "matchBlock") {
+      if (
+        caseNode.body.length === 1 &&
+        caseNode.body[0].type !== "matchBlock"
+      ) {
         const stmt = caseNode.body[0];
         let stmtCode = this.processNode(stmt).trim();
         // `=> { ... }` is always parsed as a block, never an object literal
@@ -1409,8 +1422,8 @@ export class AgencyGenerator {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
-      variableTypeToString(node.returnType, this.typeAliases, true) +
-      returnTypeBang
+        variableTypeToString(node.returnType, this.typeAliases, true) +
+        returnTypeBang
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
     const exportPrefix = node.exported ? "export " : "";
@@ -1493,7 +1506,7 @@ export class AgencyGenerator {
       continue: node.continueExpr,
       session: node.sessionExpr,
       hidden: node.hidden,
-    }
+    };
 
     for (const [key, value] of Object.entries(paramConfig)) {
       if (value) {

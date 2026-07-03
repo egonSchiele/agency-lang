@@ -5,8 +5,10 @@ def callMe(block) {
 }
 
 node main() {
-  const foo = callMe() {
-    return 5
+  match(event) {
+    // you can now use the `x` and `y` variables in the arm body
+    { type: "click", x, y } => handleClick(x, y)
+    { type: "scroll", delta } => handleScroll(delta)
+    _ => ignore()
   }
-  print(foo)
 }

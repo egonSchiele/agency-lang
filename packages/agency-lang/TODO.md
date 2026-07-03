@@ -258,3 +258,7 @@ const bad: Failure = failure("oops")
 - Bare `Success` and `Failure` are both sugar for `Result<any, any>`
 
 In fact, the agency generator will actually convert the Success type to a Result type.
+
+---
+
+allow a match expression as an obj value?

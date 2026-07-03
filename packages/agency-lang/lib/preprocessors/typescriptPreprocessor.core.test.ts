@@ -691,4 +691,120 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(fn.docComment.content).toBe(" Func docs ");
     });
   });
+
+  describe("prunePreludeShadows", () => {
+    const preludeImport = () => ({
+      type: "importStatement" as const,
+      modulePath: "std::index",
+      importedNames: [
+        {
+          type: "namedImport" as const,
+          importedNames: ["map", "filter", "count", "range"],
+          safeNames: ["range"],
+          aliases: {},
+        },
+      ],
+    });
+
+    it("drops prelude names shadowed by a top-level def or global, keeping the rest", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          preludeImport(),
+          // shadows the prelude `map`
+          { type: "function", functionName: "map", parameters: [], body: [] },
+          // shadows the prelude `count` global
+          {
+            type: "assignment",
+            declKind: "let",
+            variableName: "count",
+            value: { type: "number", value: "0" },
+          },
+        ],
+      } as any;
+      new TypescriptPreprocessor(program).preprocess();
+      const imp = program.nodes.find(
+        (n) => n.type === "importStatement",
+      ) as any;
+      expect(imp.importedNames[0].importedNames).toEqual(["filter", "range"]);
+      // `range` was safe and survives; the pruned names leave safeNames intact.
+      expect(imp.importedNames[0].safeNames).toEqual(["range"]);
+    });
+
+    it("leaves the import untouched when nothing is shadowed", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          preludeImport(),
+          { type: "graphNode", nodeName: "main", parameters: [], body: [] },
+        ],
+      } as any;
+      new TypescriptPreprocessor(program).preprocess();
+      const imp = program.nodes.find(
+        (n) => n.type === "importStatement",
+      ) as any;
+      expect(imp.importedNames[0].importedNames).toEqual([
+        "map",
+        "filter",
+        "count",
+        "range",
+      ]);
+    });
+
+    it("does not prune imports from modules other than std::index", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "std::object",
+            importedNames: [
+              {
+                type: "namedImport",
+                importedNames: ["mapValues"],
+                safeNames: [],
+                aliases: {},
+              },
+            ],
+          },
+          {
+            type: "function",
+            functionName: "mapValues",
+            parameters: [],
+            body: [],
+          },
+        ],
+      } as any;
+      new TypescriptPreprocessor(program).preprocess();
+      const imp = program.nodes.find(
+        (n) => n.type === "importStatement",
+      ) as any;
+      expect(imp.importedNames[0].importedNames).toEqual(["mapValues"]);
+    });
+
+    it("removes a std::index import entirely once all its names are shadowed", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "std::index",
+            importedNames: [
+              {
+                type: "namedImport",
+                importedNames: ["map"],
+                safeNames: [],
+                aliases: {},
+              },
+            ],
+          },
+          { type: "function", functionName: "map", parameters: [], body: [] },
+        ],
+      } as any;
+      new TypescriptPreprocessor(program).preprocess();
+      expect(program.nodes.some((n) => n.type === "importStatement")).toBe(
+        false,
+      );
+    });
+  });
 });

@@ -116,9 +116,9 @@ node main() {
     return
   }
 
-  const interruptEffects = cliArgs[0] |> parseJSON
+  const interruptEffects = try JSON.parse(cliArgs[0])
   const outputPath = cliArgs[1]
-  const existingPolicy = get(cliArgs, 2) |> parseJSON
+  const existingPolicy = try JSON.parse(get(cliArgs, 2))
 
   if (interruptEffects is failure(error)) {
     print("Failed to parse interrupt effects: ${error}")

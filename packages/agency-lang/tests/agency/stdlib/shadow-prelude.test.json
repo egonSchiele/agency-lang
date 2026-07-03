@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "User def/global shadow auto-imported prelude names (map, count); non-shadowed helpers (filter) still work",
+      "input": "",
+      "expectedOutput": "{\"mapResult\":\"user-map\",\"count\":5,\"filtered\":[2,4]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

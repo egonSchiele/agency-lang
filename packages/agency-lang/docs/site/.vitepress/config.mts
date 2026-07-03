@@ -18,7 +18,6 @@ export default defineConfig({
           text: "Basic",
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
-            { text: "Agents 101", link: "/guide/agents-101" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
             { text: "Nodes", link: "/guide/nodes" },

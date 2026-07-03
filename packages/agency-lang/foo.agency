@@ -1,3 +1,12 @@
-export def greet(name: string): number {
-  return `Hello, ${name}!`;
+import { compile, run } from "std::agency"
+
+node main() {
+  const name = "foo"
+
+  const val = match(name) {
+    "std::run" => "hi"
+    "foo" || "bar" => "there"
+    _ => "you"
+  }
+  print(val)
 }

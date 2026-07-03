@@ -5,11 +5,9 @@ description: Overview of Agency's TypeScript-derived syntax, covering primitive 
 
 # Basic syntax
 
-Hello and welcome! Agency is a language for building agents, or any other type of system that is complex, hard to debug, and involves non-deterministic outputs. But before you read about that, let's take two minutes to quickly cover installation and syntax.
+A lot of Agency syntax is borrowed from TypeScript and Python. If you have used these languages, the code should look similar.
 
-Agency is a language that compiles down to TypeScript or JavaScript. It borrows its syntax from these languages, if you have used either JS or TS before, a lot of Agency will be familiar to you.
-
-> Note: I'll just say TypeScript everywhere, because writing "TypeScript or JavaScript" gets really boring, but you'll know that I mean both.
+## Primitives and variables
 
 You've got primitives: strings, numbers, booleans:
 
@@ -19,46 +17,118 @@ const age: number = 30
 const isAgent: boolean = true
 ```
 
-You can define variables with `let` or `const`. You can add type annotations, just like TypeScript.
+You can define variables with `let` or `const`.
+
+You can use double quotes, single quotes, or backticks for strings. All three allow string interpolation with `${...}`:
+
+```ts
+const name = "Alice"
+const greeting1 = "Hello, ${name}!"
+const greeting2 = 'Hello, ${name}!'
+const greeting3 = `Hello, ${name}!`
+```
+
+Multi-line strings use `"""` triple-quotes and do **not** interpret backslash escapes (i.e. `\n` is not a newline, it's just a backslash followed by an `n`):
+
+```ts
+const block = """
+  first line\n
+  second line
+"""
+```
+
+## Arrays and objects
 
 You can define arrays and objects:
 
 ```ts
-const names: string[] = ["Alice", "Bob", "Charlie"]
-const person: { name: string, age: number } = { name: "Alice", age: 30 }
+const names = ["Alice", "Bob", "Charlie"]
+const person = { name: "Alice", age: 30 }
 ```
 
-You can define functions:
-
-```ts
-def greet(name: string): string {
-  return `Hello, ${name}!`
-}
-```
-
-Agency has no implicit returns: a function that declares a return type must
-`return` a value on every path. `def f(x: number): number { if (x > 0) { return 1 } }`
-is flagged because the `else` path returns nothing (see `definiteReturns` in
-[config](./agency-config-file.md)).
-
-You can use if statements, while loops and for loops:
+## If statements
 
 ```ts
 if (age > 18) {
   print("You are an adult.")
+} else if (age == 18) {
+  print("You are exactly 18 years old.")
 } else {
   print("You are a minor.")
 }
+```
 
+Agency does not have ternary expressions.
+
+## Type annotations
+
+You can add type annotations, just like TypeScript.
+
+```ts
+const name: string = "Alice"
+const age: number = 30
+const names: string[] = ["Alice", "Bob", "Charlie"]
+```
+
+Types are covered in more detail in the [chapter on types](/guide/types).
+
+## Loops
+
+While loop:
+
+```ts
 while (age < 100) {
   print(`You are ${age} years old.`)
   age = age + 1
 }
+```
 
+For loop:
+
+```ts
+const names = ["Alice", "Bob", "Charlie"]
 for (name in names) {
   print(name)
 }
+
+// or with index:
+for (name, i in names) {
+  print(`Person ${i}: ${name}`)
+}
 ```
+
+For loop with objects:
+
+```ts
+const person = { name: "Alice", age: 30 }
+for (key, value in person) {
+  print(`${key}: ${value}`)
+}
+
+// or just the key:
+for (key in person) {
+  print(`${key}: ${person[key]}`)
+}
+```
+
+The second loop variable depends on what you're iterating: for an array it's
+the numeric **index**, and for an object it's the **value** at that key.
+
+For loops can also destructure arrays and objects:
+
+```ts
+const people = [
+  { name: "Alice", age: 30 },
+  { name: "Bob", age: 25 },
+]
+for ({ name, age } in people) {
+  print(`${name} is ${age} years old.`)
+}
+```
+
+Other loop constructs, such as map, are part of the [agency standard library](/stdlib/array).
+
+## Comments
 
 You can have single-line or multi-line comments.
 
@@ -79,6 +149,8 @@ type Person = {
 }
 ```
 
+Doc comments are wrapped in `/** ... */` and must be on their own line. They can be used to document types, functions, and variables. Doc comments support Markdown formatting.
+
 You can also write a module-level doc comment using the `@module` tag. This documents the file itself and appears at the top of the generated documentation:
 
 ```ts
@@ -88,6 +160,26 @@ You can also write a module-level doc comment using the `@module` tag. This docu
 ```
 
 > Note: comments must be on their own line, they cannot be at the end of a line containing code.
+
+Not allowed:
+
+```ts
+const x = 5 // this is a comment
+```
+
+## Functions
+
+You can define functions:
+
+```ts
+def greet(name: string): string {
+  return `Hello, ${name}!`
+}
+```
+
+Functions are covered in more detail in the [chapter on functions](/guide/functions).
+
+## Regexes
 
 Regexes are also supported as a primitive:
 
@@ -106,58 +198,30 @@ if (str !~ regex) {
 }
 ```
 
-Array slice syntax is supported:
+## Array slice syntax
+
+Python-style array slice syntax is supported:
 
 ```ts
 let arr = [1, 2, 3, 4, 5]
-const sliced = arr[1:4] // sliced is [2, 3, 4]
-const slicedToEnd = arr[2:] // slicedToEnd is [3, 4, 5]
-const slicedFromStart = arr[:3] // slicedFromStart is [1, 2, 3]
-const negativeSlice = arr[-3:-1] // negativeSlice is [3, 4]
-arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
+
+// sliced is [2, 3, 4]
+const sliced = arr[1:4]
+
+// slicedToEnd is [3, 4, 5]
+const slicedToEnd = arr[2:]
+
+// slicedFromStart is [1, 2, 3]
+const slicedFromStart = arr[:3]
+
+// negativeSlice is [3, 4]
+const negativeSlice = arr[-3:-1]
+
+// arr is now [10, 20, 30, 4, 5]
+arr[:3] = [10, 20, 30]
 ```
 
-### String literals
-
-Strings are delimited by `"`, `'`, or `` ` ``. All three are equivalent — same escape rules, same `${...}` interpolation. The two delimiters you didn't pick can appear unescaped inside, so you rarely need to escape anything:
-
-```ts
-const s1 = "she said `hi`"
-const s2 = `she said "hi"`
-const s3 = 'she said "hi" and `bye`'
-```
-
-For cases where the same quote character must appear inside the string, use a backslash escape. The recognized escapes are:
-
-| Escape | Meaning            |
-|--------|--------------------|
-| `\\`   | literal backslash  |
-| `\"`   | literal `"`        |
-| `\'`   | literal `'`        |
-| `` \` `` | literal `` ` ``  |
-| `\n`   | newline            |
-| `\t`   | tab                |
-| `\r`   | carriage return    |
-| `\0`   | null character     |
-| `\${`  | literal `${` (no interpolation) |
-
-Any other backslash sequence is left as-is — `"a\zb"` is the four-character string `a\zb`, not an error. Interpolation works inside all three quote styles with `${expression}`:
-
-```ts
-const name = "world"
-const greeting = "hello, ${name}!"
-```
-
-Multi-line strings use `"""` triple-quotes and do **not** interpret backslash escapes (so docstrings containing prose like `path\to\file` work as written):
-
-```ts
-const block = """
-  first line
-  second line
-"""
-```
-
-### Unit literals
+## Unit literals
 
 Agency supports unit literals for time, cost, and size values. They compile to plain numbers at compile time:
 
@@ -185,7 +249,7 @@ Supported cost units: `$` (dollars).
 
 Supported size units: `kb` (kilobytes), `mb` (megabytes), `gb` (gigabytes). Case insensitive. All size units normalize to bytes.
 
-Unit math works because both sides normalize to the same base unit:
+Unit math works:
 
 ```ts
 1s + 500ms       // 1000 + 500 = 1500
@@ -193,17 +257,7 @@ Unit math works because both sides normalize to the same base unit:
 if (elapsed > 30s) { ... }
 ```
 
-Mixing dimensions is a type error:
-
-```ts
-1s + $5.00    // ERROR: cannot add time and cost
-```
-
-### Reserved names
-
-Identifiers beginning with two underscores (`__name`) are reserved for the compiler and runtime. The codegen uses this prefix for plumbing identifiers like `__ctx`, `__stack`, and `__call`, and the `__internal_` prefix for context-injected stdlib builtins. Do not define functions, variables, or globals whose names start with `__` — your code may compile today but collide with a future internal addition.
-
-### Destructuring and pattern matching
+## Destructuring and pattern matching
 
 Array and object destructuring work in `let` / `const` declarations and
 in `for` loops:
@@ -214,10 +268,16 @@ let { name, age }         = person
 for ({ name, age } in users) { ... }
 ```
 
-The `is` operator, optional guards on `match` arms, and full pattern
-matching are documented in the [Pattern matching guide](/guide/pattern-matching).
+Pattern matching is covered in the [chapter on pattern matching](/guide/pattern-matching).
+
+## Misc
+
+### Reserved names
+
+Variables and functions beginning with two underscores (`__name`) are reserved for the compiler and runtime, so you cannot use them in your code.
+
 
 ### JavaScript features that don't exist in Agency
-- lambdas
-- async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).
-- classes.
+- Lambdas.
+- Async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).
+- Classes.

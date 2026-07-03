@@ -12,6 +12,27 @@ const response = llm("What is the capital of France?")
 print(response)
 ```
 
+## Model and provider configuration
+
+```ts
+const response = llm("What is the capital of France?", {
+  model: "claude-opus-4-8",
+  provider: "anthropic",
+})
+```
+
+Based on the provider you selected, the LLM function will look for one of these API keys:
+
+| Provider   | Environment Variable       |
+|------------|---------------------------|
+| Anthropic  | ANTHROPIC_API_KEY         |
+| Google     | GOOGLE_API_KEY            |
+| OpenAI     | OPENAI_API_KEY            |
+| LiteLLM    | LITELLM_API_KEY           |
+| OpenRouter | OPENROUTER_API_KEY        |
+
+You can also pass the API key directly. Check out [llms part 2](/guide/llm-part-2) for a full list of options to the LLM function.
+
 ## Structured output
 
 To specify structured output, simply add a type annotation.

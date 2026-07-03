@@ -1,7 +1,7 @@
 # Custom & local model providers
 
-Agency selects models through smoltalk, which ships providers for OpenAI,
-Anthropic, Google, and Ollama, plus four built-in **hosted open-model**
+Agency selects models through Smoltalk, which ships providers for OpenAI,
+Anthropic, Google, and Ollama, plus various built-in **hosted open-model**
 providers (OpenRouter, DeepInfra, LiteLLM, and a generic OpenAI-compatible
 provider — see below). To use any *other* **custom or local** provider — for
 example a local model via [`smoltalk-llama-cpp`](https://github.com/egonSchiele/smoltalk/tree/main/packages/smoltalk-llama-cpp) —

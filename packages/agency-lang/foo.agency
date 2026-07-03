@@ -5,10 +5,13 @@ def callMe(block) {
 }
 
 node main() {
-  match(event) {
-    // you can now use the `x` and `y` variables in the arm body
-    { type: "click", x, y } => handleClick(x, y)
-    { type: "scroll", delta } => handleScroll(delta)
-    _ => ignore()
+  const n = 2
+  const size = match(n) {
+    100 => "big"
+    2 => fork(range(n)) {
+      print("forked")
+      return "small"
+    }
   }
+  print(size)
 }

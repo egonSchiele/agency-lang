@@ -185,50 +185,95 @@ Or just use the block form, which doesn't require parentheses:
 kind => { return { label: kind } }
 ```
 
-### Typing and exhaustiveness
+### What type does a match expression have?
 
-In checked position (e.g. `const val: string = match(...) { ... }`), each
-arm's yielded value is checked against the expected type. In synthesis
-position, the match's type is the union of every arm's yielded type;
-narrowing (Result patterns, object patterns, field-path narrowing) applies
-inside block arms exactly as it does today.
+There are two cases, depending on whether you tell Agency the type up front.
 
-**Exhaustiveness is a hard error in expression position**, regardless of
-`typechecker.matchExhaustiveness` in `agency.json`. A match used as an
-expression must produce a value, so `"silent"`/`"warn"` don't apply — a
-match over a closed scrutinee type (Result, a closed literal/value union,
-a discriminated object union, `boolean`) needs a `_` arm or full coverage.
+**You annotated the variable.** Every arm has to produce that type. If an
+arm produces something else, that's an error:
 
-For an *open* scrutinee type (e.g. a bare `string`), the checker cannot
-enumerate every case, so it can't flag missing arms. If no arm matches at
-runtime, the match expression yields `undefined` — add a `_` arm whenever
-the scrutinee type is open.
+```ts
+const label: string = match(grade) {
+    "A" => "top"
+    "B" => "good"
+    _   => 0        // error: expected string, got number
+}
+```
+
+**You didn't annotate the variable.** Agency figures out the type for you:
+it's the union of whatever the arms produce. Here `size` is a `string`:
+
+```ts
+const size = match(n) {
+    100 => "big"
+    _   => "small"
+}
+```
+
+### A match expression must always produce a value
+
+When you use `match` as an expression, it has to hand back a value. That
+means **every case has to be covered** — otherwise there'd be a path where
+the match produces nothing.
+
+```ts
+type Shape = { kind: "circle", r: number }
+           | { kind: "square", side: number }
+
+// error: not exhaustive, missing `{ kind: "square" }`
+const area = match(shape) {
+    { kind: "circle", r } => 3.14 * r * r
+}
+```
+
+To fix it, cover every case or add a `_` catch-all:
+
+```ts
+const area = match(shape) {
+    { kind: "circle", r }    => 3.14 * r * r
+    { kind: "square", side } => side * side
+}
+```
+
+This is an exhaustiveness check.
+
+### Open types: always add a `_` arm
+
+Agency can do an exhaustiveness check whenever the scrutinee (the thing being matched) has a **closed** type, like a `Result`, a literal union like `"a" | "b"`, a `boolean`.
+
+Some types are **open** — a bare `string` or `number`, for example. Agency
+can't list every possible string, so it can't tell you when you've missed
+one. That means it won't warn you, but at runtime a value that matches no
+arm makes the whole match produce `undefined`:
+
+```ts
+const greeting = match(name) {   // name is a plain string
+    "Ada"  => "Hi Ada!"
+    "Alan" => "Hi Alan!"
+}
+// greeting is undefined if name is "Grace"
+```
+
+So whenever the scrutinee is an open type, add a `_` arm to be safe:
+
+```ts
+const greeting = match(name) {
+    "Ada"  => "Hi Ada!"
+    "Alan" => "Hi Alan!"
+    _      => "Hello!"
+}
+```
 
 ### v1 restrictions
 
-- **Expression position is limited to assignment RHS and `return`
-  operands** (see above) — no generic expression-hoisting exists yet.
-- **`match(x is pattern)` stays statement-only.** Its `is`-form lowering
-  synthesizes a function-level `failure(...)` return on head mismatch,
-  which has no coherent meaning as a match-expression value.
 - **A `return` inside an arm cannot cross a concurrency boundary.** A
   `return` inside a `parallel`/`seq`/`fork`/`race`/`thread` block nested in an
   arm is a compile error — those run in separate execution contexts that
   the match-yield unwind cannot cross.
-- **Module-level `const x = match(...)` initializers are a compile
-  error.** Module-level initializers are planned one expression per
-  variable by the init-topsort machinery; a lowered match region is
-  multiple statements. Use a `def` that returns the match and call it
-  from the initializer instead.
+- You can't have a match statement at the module level (outside of a function or node).
 - **A match-expression arm cannot yield a graph-node call.** A node call
   compiles to a control-flow transition (goto/halt), not a value; use an
   `if`/`else` chain for node dispatch instead of a match expression.
-- **A `match` expression cannot appear inside a `with` handler body.** A
-  `const x = match(...)` or `return match(...)` inside a handler (the
-  `with (data) { ... }` block) is a compile error, because a handler body
-  compiles without an owning frame to unwind the match into — the match
-  exit would escape the handler and silently skip the rest of the node.
-  The guarded `handle { ... }` body is unaffected.
 
 ## Result patterns
 
@@ -314,52 +359,3 @@ property of `null` or `undefined` (e.g. `const { name } = null`) throws a
 `TypeError`, which Agency captures and surfaces as a `failure` Result.
 At runtime, a match without a `_` arm that matches no other arm is a
 no-op — no branch runs.
-
-## Exhaustiveness checking
-
-The type checker reports (by default, an **error**) when a `match` over a
-*closed* type doesn't cover every case and has no `_` arm:
-
-- a **Result** (`success` / `failure`),
-- a **closed literal or value union** (`"a" | "b"`, `1 | 2`),
-- a **discriminated object union** (`{ kind: "a" } | { kind: "b" }` — a common
-  property typed as a distinct literal in each member),
-- a bare **`boolean`** (`true` / `false`).
-
-```ts
-type Ev = { kind: "click", x: number } | { kind: "scroll", d: number }
-match (e) {
-    { kind: "click" } => handleClick(e)
-    // error: match is not exhaustive: missing `{ kind: "scroll" }`
-}
-```
-
-Adding the missing arm — or a `_` catch-all — clears it. A guarded arm
-(`… if (…) => …`) never counts toward coverage. Open types (`string`,
-`number`, arbitrary object unions) and the `match(x is …)` form are never
-required to be exhaustive. Control the severity with
-`typechecker.matchExhaustiveness` in `agency.json` (`"silent"` / `"warn"` /
-`"error"`; default `"error"`).
-
-## Narrowing on a field-path scrutinee
-
-When the scrutinee is a stable field path like `e.effect`, each literal arm
-narrows the path's receiver inside that arm — exactly as the equivalent
-`if (e.effect == "...")` guard would. So a discriminated union's other fields
-narrow too:
-
-```ts
-type Ev = { kind: "confirm", question: string }
-        | { kind: "wait",    seconds: number }
-
-match (ev.kind) {
-    "confirm" => ask(ev.question)      // ev is the confirm member here
-    "wait"    => sleep(ev.seconds)     // ev is the wait member here
-}
-```
-
-This applies to a stable field-path scrutinee (`ev.kind`, `a.b.c`). A
-bare-variable scrutinee (`match (x)`) does not narrow the variable itself, and an
-object-pattern arm (`match (e) { { kind: "..." } => ... }`) does not narrow the
-scrutinee inside the arm — use the field-path form or an `if` guard when you need
-that narrowing.

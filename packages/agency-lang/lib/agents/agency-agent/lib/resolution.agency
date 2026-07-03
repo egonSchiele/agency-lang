@@ -1,6 +1,7 @@
 /** @module Resolution matrix. Immutable layers (most-immediate first) times
   specificity (per-slot then global-pin), first non-empty cell wins; built-in
   falls to `priceDefault`. Pure: layers are read-only inputs. See spec 3.2/3.3. */
+import { keys } from "std::object"
 import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
 import { ModelSettings } from "./settings.agency"
 import { canonicalSlot, SLOTS } from "./slots.agency"

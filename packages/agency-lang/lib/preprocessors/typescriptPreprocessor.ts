@@ -32,6 +32,7 @@ import {
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
+import { prunePreludeShadows } from "./prunePreludeShadows.js";
 
 /**
  * Recursively apply a transform function to all body arrays in a node tree.
@@ -324,6 +325,7 @@ export class TypescriptPreprocessor {
     if (Object.keys(this.graphNodeDefinitions).length === 0) {
       this.getGraphNodeDefinitions();
     }
+    prunePreludeShadows(this.program);
     this.propagateBlockTypes();
     injectSchemaArgsInProgram(
       this.program,

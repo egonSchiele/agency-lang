@@ -1,0 +1,24 @@
+// A file may shadow auto-imported std::index prelude symbols with its own
+// top-level `def` or global. The prelude import for the shadowed name is
+// pruned so the user's declaration is the sole binding (Python/Rust prelude
+// semantics) — without the prune this crashes at load with a TDZ error for
+// `def map` and "Assignment to constant" for the `count` global.
+let count = 0
+
+def map(x: any): string {
+  return "user-map"
+}
+
+def isPos(n: number): boolean {
+  return n > 0
+}
+
+node main() {
+  count = count + 5
+  // A non-shadowed array helper (filter) is still auto-imported and works.
+  return {
+    mapResult: map(1),
+    count: count,
+    filtered: filter([-1, 2, -3, 4], isPos),
+  }
+}

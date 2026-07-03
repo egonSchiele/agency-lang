@@ -6,6 +6,25 @@ name: "math"
 
 ## Functions
 
+### round
+
+```ts
+round(num: number, precision: number): number
+```
+
+A tool for rounding a number to a specified number of decimal places.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| num | `number` |  |
+| precision | `number` |  |
+
+**Returns:** `number`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L3))
+
 ### add
 
 ```ts
@@ -21,7 +40,7 @@ add(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L1))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L10))
 
 ### subtract
 
@@ -38,7 +57,7 @@ subtract(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L5))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L14))
 
 ### multiply
 
@@ -55,7 +74,7 @@ multiply(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L18))
 
 ### divide
 
@@ -72,4 +91,4 @@ divide(a: number, b: number): Result<number>
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L13))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L22))

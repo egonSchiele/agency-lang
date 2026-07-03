@@ -1,3 +1,12 @@
+import { _mostCommon } from "agency-lang/stdlib-lib/builtins.js"
+
+// Private helper: return the most common element in an array (majority vote).
+// `mostCommon` used to be a public auto-imported stdlib function; it was
+// removed as too niche to auto-import, and consensus() is its only consumer.
+def mostCommon(items: any[]): any {
+  return _mostCommon(items)
+}
+
 export def sample(n: number, block: () -> any): any[] {
   """
   Run a block n times in parallel. Returns an array of all results.

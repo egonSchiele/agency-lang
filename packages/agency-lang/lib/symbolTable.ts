@@ -22,7 +22,7 @@ import { walkNodes } from "./utils/node.js";
 import {
   resolveAgencyImportPath,
   isAgencyImport,
-  getStdlibDir,
+  isNonTemplatedStdlib,
 } from "./importPaths.js";
 
 export type InterruptEffect = {
@@ -145,9 +145,11 @@ export class SymbolTable {
       }
 
       const contents = fs.readFileSync(absPath, "utf-8");
-      const isStdlibIndex =
-        absPath === path.join(getStdlibDir(), "index.agency");
-      const parseResult = parseAgency(contents, config, !isStdlibIndex);
+      const parseResult = parseAgency(
+        contents,
+        config,
+        !isNonTemplatedStdlib(absPath),
+      );
       if (!parseResult.success) {
         if (config.verbose) {
           console.error(

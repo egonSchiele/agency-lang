@@ -228,6 +228,17 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
       "Raise an exception. Unwinds the current function/node. Argument is coerced to a string for the Error message.",
   },
 
+  // `_emit(data)` is a compiler intrinsic (handled by name in
+  // typescriptBuilder.ts) with no `.js` import backing it, so the
+  // undefined-function diagnostic would otherwise warn wherever the
+  // `emit` stdlib wrapper calls it. Registered here so `std::statelog`
+  // (which now owns `emit`) type-checks clean.
+  _emit: {
+    params: ["any"],
+    returnType: voidT,
+    description: "Emit a custom event to the host via the onEmit callback.",
+  },
+
   // --- Checkpoint / rewind ---
   restore: {
     params: ["any", "any"],

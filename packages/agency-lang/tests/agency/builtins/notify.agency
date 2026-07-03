@@ -1,3 +1,5 @@
+import { notify } from "std::system"
+
 node main(title: string, message: string) {
   const result = notify(title, message)
   if (isFailure(result)) {

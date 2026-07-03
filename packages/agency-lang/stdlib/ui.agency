@@ -1,4 +1,5 @@
 import { filter, map } from "std::array"
+import { entries } from "std::object"
 
 import { _termWidth } from "agency-lang/stdlib-lib/cli.js"
 import { _isTTY } from "agency-lang/stdlib-lib/system.js"

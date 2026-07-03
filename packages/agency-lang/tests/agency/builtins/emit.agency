@@ -1,3 +1,4 @@
+import { emit } from "std::statelog"
 
 let emittedData = null
 

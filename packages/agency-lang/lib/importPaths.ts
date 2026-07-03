@@ -86,6 +86,30 @@ export function getStdlibDir(): string {
 }
 
 /**
+ * Stdlib modules that must NOT have the auto-import prelude
+ * (`import { ... } from "std::index"`) prepended when parsed/compiled.
+ *
+ * - `index.agency` declares the very symbols the prelude imports, so
+ *   wrapping it would be circular.
+ * - `array.agency` re-exports those same auto-imported symbols from
+ *   `std::index` for backward compatibility. A prelude-wrapped module
+ *   cannot cleanly re-export a name the prelude also auto-imports (the
+ *   generated `__registerTool(name)` would reference a re-export binding
+ *   still in its temporal dead zone), so it must be left un-templated too.
+ *
+ * Centralized here because several parse/compile entry points each need
+ * to make this per-file decision — keep them all going through this one
+ * predicate rather than re-deriving `absPath === index.agency` inline.
+ */
+export function isNonTemplatedStdlib(absPath: string): boolean {
+  const stdlibDir = getStdlibDir();
+  return (
+    absPath === path.join(stdlibDir, "index.agency") ||
+    absPath === path.join(stdlibDir, "array.agency")
+  );
+}
+
+/**
  * Returns the absolute path to the bundled agents directory, resolved relative
  * to this compiled module (`lib/agents` in dev, `dist/lib/agents` at runtime).
  */

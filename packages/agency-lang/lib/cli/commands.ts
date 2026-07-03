@@ -21,6 +21,7 @@ import * as path from "path";
 
 import {
   getStdlibDir,
+  isNonTemplatedStdlib,
   isPkgImport,
   isStdlibImport,
   resolveAgencyImportPath,
@@ -339,9 +340,8 @@ export function compile(
   compiledFiles.add(absoluteInputFile);
 
   const contents = readFile(inputFile);
-  const isStdlibIndex =
-    absoluteInputFile === path.join(getStdlibDir(), "index.agency");
-  const parsedProgram = parse(contents, config, !isStdlibIndex);
+  const applyTemplate = !isNonTemplatedStdlib(absoluteInputFile);
+  const parsedProgram = parse(contents, config, applyTemplate);
 
   const symbolTableStartTime = performance.now();
   const symbolTable =

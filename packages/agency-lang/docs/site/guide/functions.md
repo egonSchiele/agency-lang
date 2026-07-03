@@ -90,3 +90,5 @@ def repeat(n: number, block: () -> any) {
   }
 }
 ```
+
+Blocks are covered in more detail in the [section on blocks](/guide/blocks).

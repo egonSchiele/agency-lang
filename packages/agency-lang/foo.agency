@@ -1,12 +1,12 @@
-import { compile, run } from "std::agency"
+import { search } from "std::wikipedia"
+
+def searchWikipedia(query: string) {
+  const results = search(query) with approve
+  return results
+}
 
 node main() {
-  const name = "foo"
-
-  const val = match(name) {
-    "std::run" => "hi"
-    "foo" || "bar" => "there"
-    _ => "you"
-  }
-  print(val)
+  const query = input("Enter a search query: ")
+  const results = llm("Search Wikipedia for: ${query}", tools: [searchWikipedia])
+  print(results)
 }

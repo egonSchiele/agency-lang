@@ -70,7 +70,7 @@ const age: number = 30
 const names: string[] = ["Alice", "Bob", "Charlie"]
 ```
 
-Types are covered in more detail in the [chapter on types](/guide/types).
+Types are covered in more detail in the [section on types](/guide/types).
 
 ## Loops
 
@@ -189,7 +189,7 @@ def greet(name: string, greeting: string = "Hello"): string {
 greet(name: "Adit")
 ```
 
-Functions are covered in more detail in the [chapter on functions](/guide/functions).
+Functions are covered in more detail in the [section on functions](/guide/functions).
 
 ## Nodes
 
@@ -201,7 +201,7 @@ node greet(name: string): string {
 }
 ```
 
-Nodes are covered in more detail in the [chapter on nodes](/guide/nodes).
+Nodes are covered in more detail in the [section on nodes](/guide/nodes).
 
 ## Blocks
 
@@ -221,7 +221,7 @@ const numbers = [1, 2, 3, 4, 5]
 const squares = map(numbers, \n -> n * n)
 ```
 
-Blocks are covered in more detail in the [chapter on blocks](/guide/blocks).
+Blocks are covered in more detail in the [section on blocks](/guide/blocks).
 
 ## Regexes
 
@@ -312,7 +312,7 @@ let { name, age }         = person
 for ({ name, age } in users) { ... }
 ```
 
-Pattern matching is covered in the [chapter on pattern matching](/guide/pattern-matching).
+Pattern matching is covered in the [section on pattern matching](/guide/pattern-matching).
 
 ## Misc
 

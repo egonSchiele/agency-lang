@@ -269,6 +269,43 @@ const { tokens, cost } = await myCustomLLM(prompt);
 agency.addCost(cost);
 ```
 
+### Respecting cancellation (the abort signal)
+
+When a [time guard](/guide/guards#timeout) trips, a `race` loses, or the run is cancelled (`ctx.cancel()` / the REPL's Esc), the runtime fires an `AbortSignal`. In-flight `agency.llm`, `fetch`, `sleep`, and `input` calls already observe it and unwind on their own. **A TS helper (or JS-bodied tool) that runs its own long loop or I/O must observe it too** — otherwise it runs to completion after a trip, the "JS-bodied work can't be aborted mid-execution" limitation described in [Guards](/guide/guards#limitations-v1).
+
+There is no `agency.*` shortcut for this; read the composed signal from the low-level `getRuntimeContext()` export:
+
+```ts
+import { getRuntimeContext } from "agency-lang/runtime";
+
+export async function fetchAll(urls: string[]): Promise<string[]> {
+  const { ctx, stack } = getRuntimeContext();
+  const signal = ctx.getAbortSignal(stack);
+
+  // Pass it straight into anything AbortSignal-aware:
+  return Promise.all(
+    urls.map((u) => fetch(u, { signal }).then((r) => r.text())),
+  );
+}
+```
+
+For a compute loop with no natural `AbortSignal` sink, poll `signal.aborted` and bail cooperatively:
+
+```ts
+const { ctx, stack } = getRuntimeContext();
+const signal = ctx.getAbortSignal(stack);
+for (const item of items) {
+  if (signal.aborted) throw new Error("aborted"); // or return a partial result
+  heavyWork(item);
+}
+```
+
+Notes:
+
+- **Use `getRuntimeContext().stack`, not `ctx.stateStack`.** `ctx.getAbortSignal(stack)` composes the run-level cancel signal with the guard/race signals installed on the *active branch* stack. Inside a `fork`/`race` branch those two stacks differ — the same reason `agency.withCostGuard` / `agency.withTimeGuard` install on `getRuntimeContext().stack`. Passing the branch stack ensures a branch-local time guard is honored.
+- The signal fires for **every** cancellation source — time-guard trip, race loss, `cancel()`, Esc. (Cost guards are the exception: they enforce at LLM-call boundaries and do **not** fire this signal.) Treat "aborted" as "stop and unwind."
+- This is a **cooperative** hook. A synchronous CPU-bound loop that never checks `signal.aborted` still runs to completion; the runtime cannot preempt it.
+
 ---
 
 ## Memory
@@ -509,6 +546,14 @@ agency.addCost(amount)                    // custom cost contribution
 agency.withResumableScope(opts, body)     // Temporal-style resumable scope
 
 agency.withTestContext({ctx,stack,threads}, fn)  // (test only)
+```
+
+Cancellation is the one hook without an `agency.*` shortcut — read the composed abort signal via the low-level export:
+
+```ts
+import { getRuntimeContext } from "agency-lang/runtime";
+const { ctx, stack } = getRuntimeContext();
+const signal = ctx.getAbortSignal(stack);   // fires on time-guard trip, race loss, cancel/Esc
 ```
 
 For the broader interop story (cancelling agents, importing Agency code from TS, gotchas around serializability), see [TypeScript Interoperability](/guide/ts-interop).

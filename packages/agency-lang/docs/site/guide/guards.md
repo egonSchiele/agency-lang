@@ -72,6 +72,39 @@ When the clock ticks:
 
 When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.
 
+### Cooperative cancellation from TypeScript
+
+That "abort signal sent to other code" is something your own TypeScript can observe. In-flight LLM HTTP requests are cancelled automatically, and Agency-bodied tools stop at the next runner step boundary — but **JS-bodied work does not stop on its own**. A TypeScript helper or JS tool body running a long loop or its own I/O must observe the signal to be cancellable.
+
+Read the composed abort signal from any TS code that participates in the run:
+
+```ts
+import { getRuntimeContext } from "agency-lang/runtime"
+
+export async function fetchAll(urls: string[]): Promise<string[]> {
+  const { ctx, stack } = getRuntimeContext()
+  const signal = ctx.getAbortSignal(stack)
+  // Hand it to anything AbortSignal-aware:
+  return Promise.all(urls.map((u) => fetch(u, { signal }).then((r) => r.text())))
+}
+```
+
+For a compute loop with no natural `AbortSignal` sink, poll `signal.aborted`:
+
+```ts
+for (const item of items) {
+  if (signal.aborted) throw new Error("guard tripped")
+  heavyWork(item)
+}
+```
+
+`ctx.getAbortSignal(stack)` folds together every cancellation source — the time-guard timer, a lost `race`, and top-level `cancel()` / Esc. Two things to know:
+
+- **Cost guards do not fire this signal.** They enforce at LLM-call boundaries, not via an abort controller. Cancellation-by-signal is a time-guard, `race`, and `cancel()` concern.
+- **Use `getRuntimeContext().stack`, not `ctx.stateStack`** — the composed signal includes guards on the *active branch* stack, and inside a `fork`/`race` branch the two differ.
+
+See [TypeScript helpers](/guide/ts-helpers#respecting-cancellation-the-abort-signal) for the full treatment.
+
 ## Nested guards
 
 Guards are scoped — an inner trip does **not** trip an outer guard:
@@ -103,42 +136,6 @@ guard(cost: $5.0) as {
 }
 ```
 
-## Forks, parallel, and message threads
-
-### `fork` / `race` / `parallel`
-
-Both kinds of guard work, with different mechanics:
-
-- **Cost guards** are *shared* across all branches. `CostGuard.cloneForBranch` returns the same in-memory object the parent holds, so every branch's `stack.guards` array contains a live reference to the same `CostGuard` instance. Any LLM call from any branch charges the same counter; the next post-call check (in any branch — whichever runs next) returns the trip when the cumulative shared spend exceeds the limit. Inner cost guards that a branch pushes *after* the fork opens stay branch-local (see [Nested guards](#nested-guards)).
-- **Time guards** are *not* cloned. The parent's `setTimeout` is the single source of truth. When it fires, the parent's `AbortController` propagates through the branches' composed abort signals; each branch halts at its next runner step boundary and control returns to the parent. The parent's next sync point then sees its own time guard's trip and produces the `timeoutFailure`.
-
-A `prompt.ts` **pre-call gate** also walks the guard stack immediately before issuing an LLM request. If a sibling branch's earlier charge has already pushed the shared cost guard over its limit, the gate refuses the request before it hits the wire — you don't pay for a response you'd just throw away.
-
-If you want per-branch enforcement, put the guard **inside** each branch:
-
-```ts
-const results = fork(jobs) as job {
-  return guard(cost: $0.50, time: 10s) as {
-    return processOneJob(job)
-  }
-}
-// results is an array of Result; each branch may have tripped independently.
-```
-
-### `thread { ... }` / `subthread { ... }`
-
-These isolate *message history* but **not** cost or abort plumbing. A guard wrapping a thread block sees every LLM call inside it, just as it would without the block:
-
-```ts
-guard(cost: $1.0) as {
-  thread {
-    llm("first turn")  // counts toward the $1.0 budget
-    llm("second turn") // also counts
-  }
-}
-```
-
-If you want per-thread cost or time limits, wrap each thread in its own `guard(...)`, or push the work into a fork to get a fresh `StateStack`.
 
 ### `goto`
 
@@ -146,30 +143,5 @@ If you want per-thread cost or time limits, wrap each thread in its own `guard(.
 
 ## Limitations (V1)
 
-**JS-bodied tool calls cannot be aborted mid-execution.** Tool functions whose body is written in JavaScript (rather than Agency code) run to completion in the background once started; only the next runner step after they return will see the trip and abandon their result. Agency-bodied tools, in-flight LLM HTTP requests, and the runner itself all observe the abort signal and stop promptly. Long-term plan: opt-in cancellation by reading `state.stateStack.abortSignal` from inside JS tool bodies (currently only internal tools do this).
+**JS-bodied tool calls are not aborted mid-execution *unless they opt in*.** Tool functions whose body is written in JavaScript (rather than Agency code) are not preempted: by default they run to completion in the background once started, and only the next runner step after they return sees the trip and abandons their result. Agency-bodied tools, in-flight LLM HTTP requests, and the runner itself all observe the abort signal and stop promptly. A JS body can join them by reading the composed signal via `getRuntimeContext().ctx.getAbortSignal(stack)` and passing it to `AbortSignal`-aware APIs or polling `signal.aborted` — see [Cooperative cancellation from TypeScript](#cooperative-cancellation-from-typescript). What remains a hard limitation is a *synchronous* CPU-bound JS body that never yields or checks the signal: nothing can preempt it.
 
-**Memory layer LLM calls bypass cost guards.** Calls made internally by the memory layer (e.g. `memory.text`, `memory.embed` extraction prompts) currently don't flow through the guard check. The guard only enforces against LLM calls made via the standard `llm()` and `runPrompt` paths. Tracked as a follow-up.
-
-**No dimensional unit checking.** `$2.0` and `2.0` are the same `number` at the type level — the unit literal is a notation aid, not a type-system distinction. You could pass a non-dollar number for `cost:` or a non-millisecond number for `time:`; the typechecker won't notice. This will improve when dimensioned types land.
-
-## How it works under the hood
-
-Both variants share the same `Guard` interface in `lib/runtime/guard.ts`. `StateStack.guards` is an array of `Guard` instances; `pushGuard` / `popGuard` call each guard's `install` / `uninstall` hooks.
-
-**Cost guards** (`CostGuard`):
-
-1. Each `CostGuard` instance owns a `spent` counter (initialized to `0`).
-2. Inside `prompt.ts`, every LLM call's cost is dispatched to `guard.charge(cost)` on every guard in `stack.guards` — including any shared parent guards inherited by a child branch.
-3. `prompt.ts` walks the active guards innermost-first **twice** per call: a pre-call gate (refuses to issue the request if any guard's `spent > limit`) and a post-call check after the charge. Either site returns a `GuardExceededError` which propagates through user code; the stdlib `guard`'s `try block()` catches it via `__tryCall` and produces the structured `Failure`.
-4. **Shared across fork branches.** `CostGuard.cloneForBranch` returns `this` — the same JS object — so every branch's `stack.guards` array holds a reference to the parent's CostGuard. Mutations are race-free thanks to single-threaded JS. On serialize, each child stack's `inheritedGuardCount` records how many of its guards were inherited; `toJSON` only serializes branch-owned guards (the inherited parent guard is serialized once on the parent's snapshot). On resume, `runBatch.rehydrateInheritedGuards` re-prepends the parent's live refs onto each child, restoring real-time sharing.
-
-**Time guards** (`TimeGuard`):
-
-1. `install` creates an `AbortController`, composes its signal into `stack.abortSignal`, and schedules a `setTimeout(timeLimit)` that calls `.abort()` when it fires.
-2. Smoltalk and `Runner.shouldSkip` already observe `stack.abortSignal` for unrelated reasons (race-loser cancellation), so the abort propagates with no extra plumbing.
-3. When the runner halts at an interrupt, `Guard.pause()` charges the in-flight window to `elapsedMs` and clears the timer. On resume, `Guard.resume()` re-arms `setTimeout(timeLimit - elapsedMs)`.
-4. `Runner.shouldSkip()` converts the silent abort into a typed `GuardExceededError("time", ...)` at the next step boundary; the stdlib `guard`'s `try` catches it the same way as cost trips.
-
-Checkpoint/restore cycles preserve guards: `toJSON` serializes only persistent state (cost baselines, accumulated elapsed time) and `Guard.resume()` re-establishes the runtime plumbing (abort controllers, timers) on the first runner step after deserialization.
-
-See [the design spec](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/docs/superpowers/specs/2026-05-20-cost-and-guard-tracking-design.md) for the cost-guard rationale.

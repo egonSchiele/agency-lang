@@ -20,7 +20,7 @@ export default defineConfig({
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
-            { text: "The `main` Node", link: "/guide/the-main-node" },
+            { text: "Nodes", link: "/guide/nodes" },
 
             { text: "LLM Calls", link: "/guide/llm" },
             { text: "Functions", link: "/guide/functions" },
@@ -58,7 +58,6 @@ export default defineConfig({
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
-            { text: "Nodes", link: "/guide/nodes" },
             // TS interop part 2, including handling interrupts, cancellation
           ],
         },

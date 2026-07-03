@@ -36,10 +36,16 @@ design is specifically about the **programmatic `AgencyCallbacks` API**.
   moot for v1. Because the parent already owns the child session and its kill path,
   the parent-side `onAgentStart.cancel` is reconstructed as a real closure that
   kills the child + settles `run()` as cancelled — one-directional, no new channel,
-  still fire-and-forget on the wire. Any OTHER future function field falls back to a
-  **no-op stub**; true parent-*driven* interaction (the `complete`-style
-  "child-parks-on-parent" case) is explicitly deferred to a **v2 "blocking
-  callbacks"** follow-up.
+  still fire-and-forget on the wire. This mirrors in-process fidelity: an in-process
+  `onAgentStart` callback holds a real `cancel`, so the forwarded copy does too. Any
+  OTHER future function field falls back to a **no-op stub**.
+
+  Beyond this single `cancel` capability (which callbacks already carry in-process),
+  callbacks are **purely observational** and do not influence the child's execution
+  flow. There is no blocking-callback concept, in-process or forwarded: callbacks
+  are typechecker-enforced to return `void` and cannot raise interrupts, so a
+  parent-*driven* "child-parks-on-parent" interaction is not a feature of the
+  callback model and is explicitly NOT in scope (now or later).
 
 ## How callbacks work today (the facts the design builds on)
 
@@ -239,9 +245,9 @@ skip threshold and the parent's drop threshold agree.
 - **Never kills the run**: forwarding is observational; oversize/unserializable
   payloads are dropped+logged, never fatal.
 - **`onStream` out of scope** (bypasses the choke point).
-- **v2 deferred**: true parent-driven blocking callbacks (a child parking on a
-  parent's async decision, the `onOAuthRequired.complete` shape) are a separate
-  follow-up requiring a reply channel.
+- **Purely observational**: the only way a forwarded callback influences the child
+  is the `onAgentStart.cancel` capability, which in-process callbacks also carry.
+  There is no blocking-callback mechanism; callbacks return `void` by contract.
 
 ## Testing (mirror the telemetry tests)
 
@@ -283,8 +289,11 @@ skip threshold and the parent's drop threshold agree.
 
 ## Out of scope / follow-ups
 
-- **v2 blocking callbacks**: parent-driven interaction where the child parks on a
-  parent's decision (needs a reply channel; the `onOAuthRequired.complete` shape).
+- **Blocking / parent-driven callbacks**: explicitly not a feature. Callbacks are
+  purely observational (the sole exception being `onAgentStart.cancel`, which
+  mirrors an in-process capability). Callbacks return `void` by contract and cannot
+  raise interrupts, so there is no "child parks on parent's decision" model to
+  build. Not deferred — not wanted.
 - `onStream` forwarding (bypasses the choke point by design).
 - Housekeeping noted during brainstorm (not part of this feature): PR #403 should
   be **closed, not merged** (its branch predates #404 and merging would revert the

@@ -1,3 +1,4 @@
+import { keys } from "std::object"
 import { parsePolicyFile } from "std::policy"
 
 node main(args: { policyFile: string, missingFile: string }) {

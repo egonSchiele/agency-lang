@@ -16,6 +16,7 @@ import {
 import { today } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
+import { keys } from "std::object"
 import { basename, dirname } from "std::path"
 import { box, render } from "std::ui/layout"
 import { listHostedModels, hostedModelInfo } from "std::llm"

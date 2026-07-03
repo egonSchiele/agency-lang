@@ -37,7 +37,7 @@ import {
 } from "./initDepGraph.js";
 import { topSortInitGraph, type CycleError } from "./topSortInitGraph.js";
 import {
-  getStdlibDir,
+  isNonTemplatedStdlib,
   isAgencyImport,
   isPkgImport,
   isStdlibImport,
@@ -238,9 +238,10 @@ function parseClosure(
  * client). Exporting prematurely would freeze the signature before the
  * second caller has a chance to drive its shape.
  *
- * The stdlib `index.agency` carve-out (skip template application)
- * lives here because it's a per-file decision both phases of closure
- * walking — and any future one-off loader — need.
+ * The non-templated stdlib carve-out (skip template application for
+ * `index.agency` / `array.agency`, via `isNonTemplatedStdlib`) is applied
+ * here because it's a per-file decision both phases of closure walking —
+ * and any future one-off loader — need.
  */
 function loadModule(
   moduleId: string,
@@ -252,8 +253,7 @@ function loadModule(
     );
   }
   const source = fs.readFileSync(moduleId, "utf-8");
-  const stdlibIndex = path.join(getStdlibDir(), "index.agency");
-  const applyTemplate = moduleId !== stdlibIndex;
+  const applyTemplate = !isNonTemplatedStdlib(moduleId);
   const result = parseAgency(source, config, applyTemplate);
   if (!result.success) {
     throw new CompileClosureError(

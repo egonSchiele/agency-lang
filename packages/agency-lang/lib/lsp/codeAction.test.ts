@@ -31,7 +31,10 @@ describe("getCodeActions", () => {
   });
 
   it("suggests stdlib import for known stdlib function", () => {
-    const doc = makeDoc('node main() {\n  map([])\n}');
+    // `mapValues` lives in std::object and is not auto-imported, so it needs
+    // an explicit import suggestion. (Array helpers like `map` are now
+    // auto-imported from std::index, so they never need this action.)
+    const doc = makeDoc('node main() {\n  mapValues({})\n}');
     const symbolTable = new SymbolTable();
     const params = {
       textDocument: { uri: doc.uri },
@@ -40,8 +43,8 @@ describe("getCodeActions", () => {
         diagnostics: [
           {
             severity: DiagnosticSeverity.Error,
-            range: { start: { line: 1, character: 2 }, end: { line: 1, character: 5 } },
-            message: "'map' is not defined",
+            range: { start: { line: 1, character: 2 }, end: { line: 1, character: 11 } },
+            message: "'mapValues' is not defined",
             source: "agency",
           },
         ],
@@ -51,11 +54,12 @@ describe("getCodeActions", () => {
     expect(actions.length).toBeGreaterThanOrEqual(1);
     const stdlibAction = actions.find((a) => a.title.includes("std::"));
     expect(stdlibAction).toBeDefined();
-    expect(stdlibAction!.title).toContain("std::array");
+    expect(stdlibAction!.title).toContain("std::object");
   });
 
   it("merges into existing stdlib import", () => {
-    const source = 'import { filter } from "std::array"\nnode main() {\n  map([])\n}';
+    const source =
+      'import { keys } from "std::object"\nnode main() {\n  mapValues({})\n}';
     const doc = makeDoc(source);
     const symbolTable = new SymbolTable();
     const params = {
@@ -65,19 +69,19 @@ describe("getCodeActions", () => {
         diagnostics: [
           {
             severity: DiagnosticSeverity.Error,
-            range: { start: { line: 2, character: 2 }, end: { line: 2, character: 5 } },
-            message: "'map' is not defined",
+            range: { start: { line: 2, character: 2 }, end: { line: 2, character: 11 } },
+            message: "'mapValues' is not defined",
             source: "agency",
           },
         ],
       },
     };
     const actions = getCodeActions(params, doc, symbolTable);
-    const stdlibAction = actions.find((a) => a.title.includes("std::array"));
+    const stdlibAction = actions.find((a) => a.title.includes("std::object"));
     expect(stdlibAction).toBeDefined();
-    // Should merge: insert ", map" before the "}" rather than adding a new line
+    // Should merge: insert ", mapValues" before the "}" rather than adding a new line
     const edit = stdlibAction!.edit!.changes![doc.uri][0];
-    expect(edit.newText).toBe(", map");
+    expect(edit.newText).toBe(", mapValues");
     expect(edit.range.start.line).toBe(0);
   });
 

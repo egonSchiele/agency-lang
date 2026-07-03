@@ -1,4 +1,4 @@
-import { add, multiply } from "std::math"
+import { add, multiply, round } from "std::math"
 
 node testStdlibAdd() {
   return add(3, 4)

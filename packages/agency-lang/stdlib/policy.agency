@@ -1,4 +1,5 @@
 import { withLock } from "std::concurrency"
+import { keys } from "std::object"
 import { render, text } from "std::ui/layout"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
@@ -459,7 +460,7 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
       error: readResult.error
     })
   }
-  const parsed = try parseJSON(readResult.value)
+  const parsed = try JSON.parse(readResult.value)
   if (isFailure(parsed)) {
     return failure({
       status: "malformed-json"

@@ -1,3 +1,4 @@
+import { keys } from "std::object"
 import { buildScopedMatch, ScopedField, ScopedRuleFields } from "std::policy"
 
 node main() {

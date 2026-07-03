@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, parseJSON, input, sleep, round, read, write, writeBinary, readBinary, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, read, write, writeBinary, readBinary, range, callback, map, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -158,22 +158,27 @@ function registerTools(tools: any[]) {
 
 __registerTool(print);
 __registerTool(printJSON);
-__registerTool(parseJSON);
 __registerTool(input);
 __registerTool(sleep);
-__registerTool(round);
 __registerTool(read);
 __registerTool(write);
 __registerTool(writeBinary);
 __registerTool(readBinary);
-__registerTool(notify);
 __registerTool(range);
-__registerTool(mostCommon);
-__registerTool(keys);
-__registerTool(values);
-__registerTool(entries);
-__registerTool(emit);
 __registerTool(callback);
+__registerTool(map);
+__registerTool(filter);
+__registerTool(exclude);
+__registerTool(find);
+__registerTool(findIndex);
+__registerTool(reduce);
+__registerTool(flatMap);
+__registerTool(every);
+__registerTool(some);
+__registerTool(count);
+__registerTool(sortBy);
+__registerTool(unique);
+__registerTool(groupBy);
 async function __initializeGlobals(__ctx) {
   if (__ctx.globals.isInitialized("tests/debugger/loop-test.agency")) {
     return;

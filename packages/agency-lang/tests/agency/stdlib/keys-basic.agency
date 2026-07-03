@@ -1,3 +1,5 @@
+import { keys } from "std::object"
+
 node main() {
   const obj = { a: 1, b: 2, c: 3 }
   return keys(obj)

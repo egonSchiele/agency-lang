@@ -31,6 +31,13 @@ export type StatelogEvalRecord = {
   warnings: string[]
 }
 
+export safe def emit(data: any) {
+  """
+  Emit a custom event to the calling TypeScript code via the onEmit callback.
+  """
+  _emit(data)
+}
+
 export def evalValue(value: any) {
   """
   Record an eval value — a value that should be considered part of

@@ -12,6 +12,7 @@
  *     into the concrete fast/slow model + provider to apply.
  */
 import { pickProvider, envVarFor } from "std::llm"
+import { keys } from "std::object"
 import { env } from "std::system"
 
 import { slotKind, canonicalSlot } from "./slots.agency"

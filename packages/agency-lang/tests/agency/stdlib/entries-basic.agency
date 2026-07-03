@@ -1,3 +1,5 @@
+import { entries } from "std::object"
+
 node main() {
   const obj = { x: 10, y: 20 }
   return entries(obj)

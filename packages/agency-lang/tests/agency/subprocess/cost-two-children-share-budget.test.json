@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two concurrent subprocesses under one guard share the single budget",
+      "input": "",
+      "expectedOutput": "\"tripped:guardFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" }
+      ]
+    }
+  ]
+}

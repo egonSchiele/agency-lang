@@ -7,10 +7,13 @@ import {
   getSubprocessRunInfo,
   resolveDepthCap,
   attachSessionHandlers,
+  handleTelemetryMessage,
   withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
+import { StateStack } from "./state/stateStack.js";
+import { CostGuard, isGuardExceededError } from "./guard.js";
 
 describe("withParentStatelog", () => {
   it("forwards the parent logFile (absolutized) when the parent logs and the caller set none", () => {
@@ -155,6 +158,27 @@ describe("clampLimits", () => {
   });
 });
 
+/** One canonical RunSession mock — when `RunSession` gains a field the
+ * code under test reads, add it HERE so every suite sees it (the mocks
+ * are `any`-typed, so a second hand-rolled literal would go stale
+ * silently). Suites layer their specifics via `overrides`. */
+const makeSession = (overrides: Record<string, any> = {}): any => ({
+  sessionId: "test-session",
+  child: { stdout: null, stderr: null, on: () => {}, send: () => true, connected: true, kill: () => true },
+  limits: { wallClock: 1000, memory: 1, ipcPayload: 1, stdout: 1 },
+  ctx: { lockReleasers: {} },
+  stateStack: {},
+  resolvePromise: () => {},
+  rejectPromise: () => {},
+  settled: false,
+  startedAt: Date.now(),
+  wallClockTimer: null,
+  stdoutBytes: 0,
+  stoppedForwarding: false,
+  detachAbortListener: null,
+  ...overrides,
+});
+
 describe("wall-clock timer is per execution segment", () => {
   // Replaces the deleted pause-limit-wallclock-resets execution test: the
   // per-segment property (paused time never counts against wallClock)
@@ -177,20 +201,12 @@ describe("wall-clock timer is per execution segment", () => {
     };
   };
 
-  const makeSession = (child: any, outcomes: any[]): any => ({
+  const makeSegmentSession = (child: any, outcomes: any[]): any => makeSession({
     sessionId: "seg-test",
     child,
     limits: { wallClock: 5000, memory: 1, ipcPayload: 1024 * 1024 * 1024, stdout: 1024 * 1024 * 1024 },
-    ctx: { lockReleasers: {} },
-    stateStack: {},
     resolvePromise: (v: any) => outcomes.push({ kind: "resolve", v }),
     rejectPromise: (e: any) => outcomes.push({ kind: "reject", e }),
-    settled: false,
-    startedAt: Date.now(),
-    wallClockTimer: null,
-    stdoutBytes: 0,
-    stoppedForwarding: false,
-    detachAbortListener: null,
   });
 
   it("arms on session start and is cleared when the child pauses; never fires afterward", async () => {
@@ -198,7 +214,7 @@ describe("wall-clock timer is per execution segment", () => {
     try {
       const { child, listeners } = makeFakeChild();
       const outcomes: any[] = [];
-      const session = makeSession(child, outcomes);
+      const session = makeSegmentSession(child, outcomes);
 
       attachSessionHandlers(session, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
       expect(session.wallClockTimer).not.toBeNull();
@@ -226,7 +242,7 @@ describe("wall-clock timer is per execution segment", () => {
     try {
       const { child } = makeFakeChild();
       const outcomes: any[] = [];
-      const session = makeSession(child, outcomes);
+      const session = makeSegmentSession(child, outcomes);
 
       attachSessionHandlers(session, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
       await vi.advanceTimersByTimeAsync(5001);
@@ -245,7 +261,7 @@ describe("wall-clock timer is per execution segment", () => {
     try {
       const first = makeFakeChild();
       const firstOutcomes: any[] = [];
-      const s1 = makeSession(first.child, firstOutcomes);
+      const s1 = makeSegmentSession(first.child, firstOutcomes);
       attachSessionHandlers(s1, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
       first.listeners["message"]({ type: "interrupted", interrupts: [], checkpoint: {}, subprocessSessionId: "s" });
 
@@ -253,12 +269,79 @@ describe("wall-clock timer is per execution segment", () => {
       // independent of how much the first segment used.
       const second = makeFakeChild();
       const secondOutcomes: any[] = [];
-      const s2 = makeSession(second.child, secondOutcomes);
+      const s2 = makeSegmentSession(second.child, secondOutcomes);
       attachSessionHandlers(s2, { type: "resume", scriptPath: "/x.js", node: "main", checkpoint: {}, interrupts: [], responses: [] });
       expect(s2.wallClockTimer).not.toBeNull();
       expect(s2.wallClockTimer).not.toBe(s1.wallClockTimer);
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("handleTelemetryMessage", () => {
+  const makeTelemetrySession = (stack: StateStack) => {
+    const kills: string[] = [];
+    const rejections: any[] = [];
+    const session = makeSession({
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      stateStack: stack,
+      rejectPromise: (err: any) => { rejections.push(err); },
+    });
+    return { session, kills, rejections };
+  };
+
+  it("charges localCost and guards; no trip under budget", () => {
+    const stack = new StateStack();
+    const guard = new CostGuard(1.0);
+    stack.guards.push(guard);
+    const { session, kills, rejections } = makeTelemetrySession(stack);
+
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.25 });
+
+    expect(stack.localCost).toBe(0.25);
+    expect(guard.check(stack)).toBeNull();
+    expect(kills).toEqual([]);
+    expect(rejections).toEqual([]);
+    expect(session.settled).toBe(false);
+  });
+
+  it("a trip kills the child and rejects the session with the guard-trip abort", () => {
+    const stack = new StateStack();
+    stack.guards.push(new CostGuard(0.1));
+    const { session, kills, rejections } = makeTelemetrySession(stack);
+
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.2 });
+
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toHaveLength(1);
+    expect(session.settled).toBe(true);
+    // The rejection must be the guard-trip abort ITSELF (identity, not a
+    // wrapper or re-thrown copy) so the OWNING boundary's ownedGuardIds
+    // matching converts it (the stdlib run() plain try re-throws).
+    expect(isGuardExceededError(rejections[0])).toBe(true);
+    expect(String(rejections[0])).toMatch(/cost/i);
+  });
+
+  it("post-settle telemetry still charges (the spend was real) but does not enforce", () => {
+    const stack = new StateStack();
+    stack.guards.push(new CostGuard(0.1));
+    const { session, kills, rejections } = makeTelemetrySession(stack);
+    session.settled = true;
+
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.2 });
+
+    expect(stack.localCost).toBe(0.2);
+    expect(kills).toEqual([]);
+    expect(rejections).toEqual([]);
+  });
+
+  it("ignores malformed cost values", () => {
+    const stack = new StateStack();
+    const { session } = makeTelemetrySession(stack);
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: NaN } as any);
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: -5 } as any);
+    handleTelemetryMessage(session, { type: "telemetry" } as any);
+    expect(stack.localCost).toBe(0);
   });
 });

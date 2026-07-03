@@ -79,6 +79,8 @@ export def run(
 
   Resource limits clamp the subprocess: it is killed and a limit_exceeded failure is returned if it exceeds wallClock, memory, ipcPayload, or stdout (each budget applies per execution segment). Subprocesses may themselves call run() — nesting is gated by the std::run interrupt at every level (its data includes the prospective depth) and hard-capped by maxDepth.
 
+  Enclosing cost guards meter the subprocess: each paid call inside it is charged to the parent's guard(cost:) budgets in real time, and a tripped budget terminates the subprocess and fails the guard block.
+
   @param compiled - A CompiledProgram from compile()
   @param node - Which exported node to run
   @param args - Arguments to pass to the node (defaults to no args)

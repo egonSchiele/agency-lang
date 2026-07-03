@@ -1,0 +1,30 @@
+import { compile, run } from "std::agency"
+import { getCost } from "std::thread"
+
+// Under budget: the run succeeds AND the parent's getCost() reflects the
+// child's spend live (the parent itself makes zero llm calls, so any
+// positive cost came through telemetry).
+node main() {
+  const source = """
+node main() {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  return b
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isFailure(result)) {
+      return "run failed"
+    }
+    return "childSpendVisible:${getCost() > 0}"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

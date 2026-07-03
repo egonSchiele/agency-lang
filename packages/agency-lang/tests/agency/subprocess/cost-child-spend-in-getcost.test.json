@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parent getCost() reflects subprocess spend delivered via telemetry",
+      "input": "",
+      "expectedOutput": "\"childSpendVisible:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" }
+      ]
+    }
+  ]
+}

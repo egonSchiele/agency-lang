@@ -29,6 +29,13 @@ export type SubprocessRunInfo = {
   maxDepth?: number;
 };
 
+/** Whether this process is a forked Agency subprocess (AGENCY_IPC=1 is set
+ * by `buildForkOptions` before every fork). The single source of truth for
+ * the mode signal — ipc.ts and the telemetry leaf both read it from here. */
+export function isIpcMode(): boolean {
+  return process.env.AGENCY_IPC === "1";
+}
+
 let info: SubprocessRunInfo = { depth: 0 };
 
 export function setSubprocessRunInfo(next: SubprocessRunInfo): void {

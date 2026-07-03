@@ -5,12 +5,19 @@ import { _generateImage } from "./image.js";
 type ImageImpl = (input: any, config: any) => Promise<any>;
 
 function makeStack() {
-  return {
+  // billCharge mirrors the real StateStack pair (localCost + chargeGuards)
+  // so the existing per-piece assertions keep observing the same effects.
+  const stack = {
     localCost: 0,
     localTokens: 0,
     chargeGuards: vi.fn(),
     enforceGuards: vi.fn(),
+    billCharge: vi.fn((amount: number) => {
+      stack.localCost += amount;
+      stack.chargeGuards(amount);
+    }),
   };
+  return stack;
 }
 
 /** Run `fn` inside a real ALS frame whose ctx carries a mock image client +

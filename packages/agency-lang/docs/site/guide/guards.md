@@ -50,6 +50,12 @@ node main() {
 
 The cost check fires every time an LLM call's cost is added to the per-branch accumulator. The time check fires at the next runner step boundary after the timer expires.
 
+Cost guards also meter subprocesses: spend from `std::agency` `run()` —
+including nested subprocesses — is charged to enclosing cost guards in
+real time, and a tripped budget terminates the subprocess and fails the
+guard block with the usual cost-limit failure. `getCost()` reflects
+subprocess spend as it happens.
+
 ## Timeout
 
 ```ts

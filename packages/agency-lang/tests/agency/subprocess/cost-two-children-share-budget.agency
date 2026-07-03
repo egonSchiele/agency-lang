@@ -1,0 +1,38 @@
+import { compile, run } from "std::agency"
+import { guard } from "std::thread"
+
+// The discriminating case for the rejected ship-guards-into-child design:
+// each child alone (2 calls x 0.000002 = 0.000004) is under the 0.000005
+// cap, but the two together (0.000008) must trip the ONE shared budget.
+// Interleaving-independent: total spend strictly exceeds the cap while
+// each child alone stays under it.
+node main() {
+  const source = """
+node main(tag: string) {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  return tag
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+  handle {
+    const result = guard(cost: 0.000005) as {
+      const results = fork(["a", "b"]) as item {
+        return run(compiled: compiled, node: "main", args: { tag: item })
+      }
+      return results
+    }
+    if (isFailure(result)) {
+      return "tripped:${result.error.type}"
+    }
+    return "did not trip"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

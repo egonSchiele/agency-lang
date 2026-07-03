@@ -562,9 +562,8 @@ async function _runPrompt({
   // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
   // builtins-and-stdlib-design.md.
   const callCost = completion.cost?.totalCost ?? 0;
-  targetStack.localCost += callCost;
+  targetStack.billCharge(callCost);
   targetStack.localTokens += completion.usage?.totalTokens ?? 0;
-  targetStack.chargeGuards(callCost);
   targetStack.enforceGuards();
 
   // Memory layer: auto-extraction and compaction run unconditionally

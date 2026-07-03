@@ -73,9 +73,9 @@ export default defineConfig({
               link: "/guide/message-threads",
             },
 
-            { text: "Guards", link: "/guide/guards" },
+            { text: "Attachments", link: "/guide/attachments" },
             { text: "Image generation", link: "/guide/image-generation" },
-            // attachments
+            { text: "Guards", link: "/guide/guards" },
             // streaming
           ],
         },

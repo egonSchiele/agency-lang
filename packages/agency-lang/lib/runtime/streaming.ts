@@ -8,8 +8,10 @@ import {
 } from "smoltalk";
 import { builtinSleep } from "./builtins.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { StateStack } from "./state/stateStack.js";
 import { GraphState } from "./types.js";
 import { isAbortError } from "./errors.js";
+import { hasCallbackConsumer, invokeCallbacks, type CallbackMap } from "./hooks.js";
 
 export function isGenerator(variable: any): boolean {
   const toString = Object.prototype.toString.call(variable);
@@ -22,13 +24,21 @@ export async function handleStreamingResponse(args: {
   ctx: RuntimeContext<GraphState>;
   completion: AsyncGenerator<StreamChunk>;
   prompt: string | UserContentInput;
+  /** The branch-local stack, if this call runs inside a fork/race branch.
+   *  Used to discover scoped `callback("onStream")` registrations on the
+   *  right frame chain — passed straight through to the callback machinery. */
+  stateStack?: StateStack;
 }): Promise<
   Result<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> | undefined
 > {
-  const { ctx, completion, prompt } = args;
+  const { ctx, completion, prompt, stateStack } = args;
   const toolCalls: ToolCallJSON[] = [];
 
-  if (!ctx.callbacks.onStream) {
+  // Resolve `onStream` through the shared callback machinery so a callback
+  // registered via the Agency `callback("onStream")` builtin — scoped inside a
+  // node or at module top level — is found, not just a TS-passed one on
+  // `ctx.callbacks`. See gatherCallbacks / invokeCallbacks in hooks.ts.
+  if (!hasCallbackConsumer(ctx, "onStream", stateStack)) {
     console.log(
       "No onStream callback provided for streaming response, returning response synchronously",
     );
@@ -63,7 +73,12 @@ export async function handleStreamingResponse(args: {
     }
     return { success: true, value: { completion: syncResult!, toolCalls } };
   } else {
-    const onStream = ctx.callbacks.onStream;
+    // Fire every registered onStream consumer for this chunk. Awaited because
+    // Agency-registered callbacks are AgencyFunctions invoked through the
+    // runtime (async); this also applies natural backpressure — we finish
+    // delivering a chunk before pulling the next.
+    const emit = (data: CallbackMap["onStream"]) =>
+      invokeCallbacks({ ctx, name: "onStream", data, stateStack });
     // try to acquire lock
     let count = 0;
     // wait 60 seconds to acquire lock
@@ -80,23 +95,23 @@ export async function handleStreamingResponse(args: {
       for await (const chunk of completion) {
         switch (chunk.type) {
           case "text":
-            onStream({ type: "text", text: chunk.text });
+            await emit({ type: "text", text: chunk.text });
             break;
           case "tool_call":
             toolCalls.push(chunk.toolCall);
-            onStream({
+            await emit({
               type: "tool_call",
               toolCall: chunk.toolCall,
             });
             break;
           case "done":
-            onStream({ type: "done", result: chunk.result });
+            await emit({ type: "done", result: chunk.result });
             return {
               success: true,
               value: { completion: chunk.result, toolCalls },
             };
           case "error":
-            onStream({ type: "error", error: chunk.error });
+            await emit({ type: "error", error: chunk.error });
             break;
         }
       }

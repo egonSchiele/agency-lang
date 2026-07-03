@@ -96,11 +96,13 @@ async function dispatchLLMRequest({
   promptConfig,
   prompt,
   stream,
+  stateStack,
 }: {
   ctx: RuntimeContext<GraphState>;
   promptConfig: PromptConfig;
   prompt: string | UserContentInput;
   stream: boolean;
+  stateStack?: StateStack;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
   if (stream) {
     const streamGen = ctx.llmClient.textStream(promptConfig);
@@ -108,6 +110,7 @@ async function dispatchLLMRequest({
       ctx,
       completion: streamGen,
       prompt,
+      stateStack,
     });
     if (!response) {
       throw new Error(
@@ -344,8 +347,10 @@ async function dispatchWithRetry(args: {
   stream: boolean;
   retryPolicy: RetryPolicy;
   parentSignal: AbortSignal | undefined;
+  stateStack?: StateStack;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
-  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal } = args;
+  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } =
+    args;
 
   const normalizeError = (err: unknown): NormalizedLLMError => {
     if (ctx.llmClient.normalizeError) {
@@ -376,6 +381,7 @@ async function dispatchWithRetry(args: {
         promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
         prompt,
         stream,
+        stateStack,
       }),
     retryPolicy,
     parentSignal,
@@ -473,6 +479,7 @@ async function _runPrompt({
       stream,
       retryPolicy,
       parentSignal: ctx.getAbortSignal(stateStack),
+      stateStack,
     }));
   } catch (err) {
     // Cancellation normalization. When WE aborted the request (user pressed

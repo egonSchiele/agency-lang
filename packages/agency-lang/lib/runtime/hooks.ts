@@ -244,6 +244,22 @@ export function gatherCallbacks<K extends keyof CallbackMap>(
   return out;
 }
 
+/** Whether any consumer is registered for `name` across all sources a fire
+ *  would reach: global hooks, scoped callbacks on `stack`, top-level
+ *  registrations, and a TS-passed callback. Mirrors what `invokeCallbacks`
+ *  actually fires, so callers can branch on "is anyone listening?" without
+ *  reaching into `ctx.callbacks` directly (which only sees the TS-passed
+ *  slot — the bug that made streaming ignore `callback("onStream")`). */
+export function hasCallbackConsumer<K extends keyof CallbackMap>(
+  ctx: RuntimeContext<any>,
+  name: K,
+  stateStack?: StateStack,
+): boolean {
+  if ((_globalHooks[name]?.length ?? 0) > 0) return true;
+  const walkStack = stateStack ?? ctx.stateStack;
+  return gatherCallbacks(ctx, name, walkStack).length > 0;
+}
+
 /** Fire every callback registered for `name`, sequentially. When
  *  `stateStack` is supplied, callbacks run on that stack (so scoped
  *  callbacks registered inside a branch's frame chain are found). When

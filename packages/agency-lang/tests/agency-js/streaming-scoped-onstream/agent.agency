@@ -1,0 +1,14 @@
+// Regression: a scoped `callback("onStream")` registered INSIDE a node body
+// must receive streaming chunks from a `stream: true` llm() call in that node.
+// Before the fix, handleStreamingResponse only looked at ctx.callbacks (the
+// TS-passed slot), so a callback registered via the Agency builtin was never
+// found and the stream fell back to synchronous — the callback never fired.
+let chunks: string = ""
+
+node main(): string {
+  callback("onStream") as data {
+    chunks = chunks + data.type + ","
+  }
+  const _response = llm("What is the capital of India?", stream: true)
+  return chunks
+}

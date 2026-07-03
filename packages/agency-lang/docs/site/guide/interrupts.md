@@ -1,24 +1,85 @@
 ---
 name: Interrupts
-description: Introduces Agency's interrupt feature for pausing execution at any step to ask the user for input, with resumption from the exact point of pause — inside loops, conditionals, and tool calls.
+description: Introduces Agency's interrupt feature for pausing execution and asking for user approval.
 ---
 
 # Interrupts
 
-Interrupts are a core feature in Agency. They allow you to pause execution at any step and ask the user for input. I think it's fair to say that Agency does interrupts better than any other library. Most libraries, if they offer interrupts, can only resume execution from the start of the function where the interrupt was defined, but Agency can resume execution from the exact point that we left off. Interrupts work inside if statements, inside loops, inside tool calls. They are a very powerful feature and they're also very easy to use.
-
-Here is what an interrupt looks like.
+Interrupts let you pause your code and ask for user approval.
 
 ```ts
 def writeFile(filename: string, content: string) {
-  return interrupt(`Are you sure you want to write to this file?: ${filename}`)
+  raise interrupt(`Are you sure you want to write to this file?: ${filename}`)
   // write to file
 }
 ```
 
-Before writing to this file, this function will now first confirm with the user. If the user approves, the rest of the function will continue. If the user rejects, then the function will exit immediately with a `failure` [Result value](./error-handling).
+A lot of functions in the Agency Standard Library raise interrupts, such as the `read` and `write` functions. Earlier, we had just auto-approved reading a file with the shorthand `with approve` syntax. Here's an example where we ask the user for approval instead.
 
-You can also use interrupts to ask the user for data:
+```ts
+node main() {
+  handle {
+    const results = read("./README.md")
+    print(results)
+  } with (data) {
+    printJSON(data)
+    const decision = input("Do you want to continue? (yes/no): ")
+    if (decision == "yes") {
+      return approve()
+    }
+    return reject()
+  }
+}
+```
+
+There's a couple new things here that we will discuss in detail, but here's a quick summary for now:
+1. We wrap the code that could throw an interrupt inside a `handle` block.
+2. If an interrupt is raised, we print it.
+3. We ask for user input using the `input` function.
+4. If the user approves, we return `approve`.
+5. Otherwise, we return `reject`.
+
+Now you might be thinking, "couldn't I just use the `input` function to ask the user for input directly?".
+
+Or you might be thinking, "so the user has to approve every little action? That doesn't seem like a very good user experience."
+
+We'll address both of these questions, but lets look at a couple more examples of interrupts first.
+
+## Other ways to approve or reject interrupts
+
+### Shorthand syntax
+
+We had seen this earlier.
+
+```ts
+const results = read("./README.md") with approve
+```
+
+### Shorthand syntax with a block
+
+```ts
+handle {
+  const results = read("./README.md")
+  print(results)
+} with approve
+```
+
+### Named function as handler
+
+```ts
+def handleInterrupt(data: any) {
+  return approve()
+}
+
+handle {
+  const results = read("./README.md")
+  print(results)
+} with handleInterrupt
+```
+
+## Asking for user input
+
+You can also use interrupts to get user input:
 
 ```ts
 def writeFile(content: string) {
@@ -27,73 +88,45 @@ def writeFile(content: string) {
 }
 ```
 
-Here, the user can choose to resolve the interrupt with a filename, or they can reject the interrupt. If they reject, the function will return immediately with a failure value.
-
-You can use the `writefile` function directly or pass it as a tool to an LLM call, and either way the interrupt will be triggered.
-
-## `interrupt()` function parameters
-
-The first parameter of the interrupt function is the message you want to show the user. You can also return some data as the second parameter. The data must be an object.
+Now when you call `approve`, pass in the filename as an argument:
 
 ```ts
-def writeFile(filename: string, content: string) {
-  const filename = interrupt(
-    "Are you sure you want to write to this file?",
-    { filename: filename }
-  )
-  // write to file
+handle {
+  const filename = writeFile("Hello, world!")
+  print(`Wrote to file: ${filename}`)
+} with (data) {
+  // filename = "myfile.txt"
+  return approve("myfile.txt")
 }
 ```
 
-## Responding to interrupts in TypeScript
+## Rejecting with a message
 
-You can respond to interrupts either in TypeScript code or in Agency code. If you're running a website, and you want to show the user a dialogue asking them to respond to an interrupt, here is how you would do it.
+When you reject an interrupt, it gets rejected with a generic "interrupt rejected" error. You can reject with a specific message if you would like instead.
 
 ```ts
-// call the `main` node in typescript
-const result = await main();
-
-// check if the result is an interrupt
-if (hasInterrupts(result.data)) {
-  const responses = [];
-  for (const interrupt of result.data) {
-    console.log("Please respond to this interrupt: " + interrupt.message);
-
-    // Pretend there's a getUserResponse function that gets a y/n
-    // response from the user
-    const userResponse = await getUserResponse(interrupt);
-
-    if (userResponse === "y") {
-      responses.push(approve());
-    } else {
-      responses.push(reject());
-    }
-  }
-  // respond to the interrupts and get the final result
-  // `respondToInterrupts` takes in the original interrupts and the responses
-  // and returns `newResult` after resuming execution.
-  // `newResult` could have interrupts too.
-  const newResult = await respondToInterrupts(result.data, responses);
+handle {
+  const filename = writeFile("Hello, world!")
+  print(`Wrote to file: ${filename}`)
+} with (data) {
+  return reject("Don't write any files to disk!")
 }
 ```
 
-A couple callouts:
+## Interrupts in tool calls
 
-- Notice that in TypeScript, you get an array of interrupts. This is because Agency supports concurrent execution, and so you might have interrupts getting thrown from multiple threads.
-- All interrupts have a standard format... more on this in the section on [structured interrupts](./structured-interrupts). This means all interrupts will have a message you can print for the user. If you pass in data to the interrupt, that will be at `result.data[0].data`.
-- The responses are always in the same order as the interrupts, so you can just loop through them together and respond to each one.
-
-To approve or reject, call the `approve()` or `reject()` functions. If you want to approve with a response – to respond with a filename for example:
+Interrupts get raised in tool calls as well. This is what makes them such critical safety infrastructure. You remember that when we read a file, we approved our own read:
 
 ```ts
-def writeFile(content: string) {
-  const filename = interrupt(`Where do you want to write this content?`)
-  // write to file
-}
+const result = read("./README.md") with approve
 ```
 
- You can pass that response as an argument to `approve()`, like `approve("myfile.txt")`. If you want to reject, but give a reason for the rejection, you can pass that to the reject function as a string: `reject("I don't think it's safe to write to this file")`.
+But suppose you passed the `read` and `write` functions to an LLM instead to use as tools:
 
-## Responding to interrupts in Agency
+```ts
+const result = llm("summarize README.md", tools: [read, write])
+```
 
-You can also respond to interrupts in Agency code. This is done using handlers, which have their own chapter! We'll talk about them in the next chapter.
+You wouldn't want it to be able to read and write *any* file on your file system. With interrupts, it will need to ask you for permission before reading or writing any file.
+
+All of these examples so far involve auto-approving or asking the user for input. Let's see other ways to make reads and writes safe without needing user input.

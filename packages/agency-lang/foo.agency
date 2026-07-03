@@ -1,12 +1,23 @@
 import { search } from "std::wikipedia"
 
 def searchWikipedia(query: string) {
+  raise("Searching Wikipedia for: ${query}")
   const results = search(query) with approve
   return results
 }
 
 node main() {
-  const query = input("Enter a search query: ")
-  const results = llm("Search Wikipedia for: ${query}", tools: [searchWikipedia])
-  print(results)
+  handle {
+    const query = "algebra"
+    const results = searchWikipedia(query)
+    print(results)
+  } with (data) {
+    print(data.message)
+    printJSON(data.data)
+    const decision = input("Do you want to continue? (yes/no): ")
+    if (decision == "yes") {
+      return approve()
+    }
+    return reject()
+  }
 }

@@ -20,7 +20,7 @@ export default defineConfig({
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
-            { text: "The `main` node", link: "/guide/the-main-node" },
+            { text: "The `main` Node", link: "/guide/the-main-node" },
             /* { text: "Nodes", link: "/guide/nodes" }, */
             { text: "LLMs", link: "/guide/llm" },
             /* { text: "Image generation", link: "/guide/image-generation" },
@@ -43,9 +43,13 @@ export default defineConfig({
           ],
         },
         {
-          text: "Intermediate",
+          text: "02. Safety",
           items: [
             { text: "Interrupts", link: "/guide/interrupts" },
+            {
+              text: "Partial Function Application",
+              link: "/guide/partial-application",
+            },
             { text: "Handlers", link: "/guide/handlers" },
             {
               text: "Structured Interrupts",
@@ -54,10 +58,6 @@ export default defineConfig({
             {
               text: "Effect Sets and raises",
               link: "/guide/effects-and-raises",
-            },
-            {
-              text: "Partial Function Application",
-              link: "/guide/partial-application",
             },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             {

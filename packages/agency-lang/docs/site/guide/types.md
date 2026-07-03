@@ -137,6 +137,7 @@ type Pair<A = string, B> = { first: A, second: B }
 - `Record<K, V>` (see above)
 - `Array<T>` (same as `T[]`)
 - `Schema<T>` (equivalent to the type of `schema(T)`)
+- `Result<S, E>` (used for error handling, see [the `Result` type](/guide/error-handling))
 
 Schemas come later in the guide, but [click here](/guide/schemas) if you want to learn more.
 
@@ -174,6 +175,7 @@ When you write an object *literal*, every key in the literal must be in its decl
 const cfg: Options = { modle: "gpt-4" }  // error: Unknown property 'modle'
 ```
 
-## See also
+## References
 
-- **[Schemas and validated types](./schemas)** — the `T!` shorthand for `Result<T, string>`, used for validation at runtime.
+- [Schemas](/guide/schemas)
+- [Type validation](/guide/type-validation)

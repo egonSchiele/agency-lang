@@ -179,6 +179,38 @@ def greet(name: string): string {
 
 Functions are covered in more detail in the [chapter on functions](/guide/functions).
 
+## Nodes
+
+Nodes are like functions, but they are the entry points into your agent:
+
+```ts
+node greet(name: string): string {
+  return `Hello, ${name}!`
+}
+```
+
+Nodes are covered in more detail in the [chapter on nodes](/guide/nodes).
+
+## Blocks
+
+Although Agency doesn't have lambdas the way JavaScript does, it has a similar feature called blocks. You can use this to define functions that take another function. For example, let's use Agency's built-in map function, which takes a block:
+
+```ts
+const numbers = [1, 2, 3, 4, 5]
+const squares = map(numbers) as n {
+  return n * n
+}
+```
+
+There are also inline blocks:
+
+```ts
+const numbers = [1, 2, 3, 4, 5]
+const squares = map(numbers, \n -> n * n)
+```
+
+Blocks are covered in more detail in the [chapter on blocks](/guide/blocks).
+
 ## Regexes
 
 Regexes are also supported as a primitive:

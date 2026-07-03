@@ -5,22 +5,53 @@ description: How to make LLM calls in Agency, including structured outputs via t
 
 # LLM Calls
 
-Agency provides a lot of functionality to make it easier to make LLM calls. Let's look at some of them. To make a basic LLM call, use the LLM built-in function.
+To make a basic LLM call, use the built-in `llm` function.
 
 ```ts
 const response = llm("What is the capital of France?")
 print(response)
 ```
 
-To specify a structured output, simply add a type annotation.
+## Structured output
+
+To specify structured output, simply add a type annotation.
 
 ```ts
 type Response = {
   capital: string
 }
 const response: Response = llm("What is the capital of France?")
-print(response)
+print(response.capital)
 ```
+
+You can also annotate properties on the type using `#` to give the LLM more guidance on what to return.
+
+```ts
+type Response = {
+  capital: string # the capital city of the country
+  population: number # the population of the capital city
+}
+const response: Response = llm("What is the capital of France?")
+```
+
+## Validation
+
+You can also use the `T!` shorthand to validate the LLM's output at runtime:
+
+```ts
+type Response = {
+  capital: string
+  population: number
+}
+
+const response: Response! = llm("What is the capital of France?")
+```
+
+`response` is now a `Result` object. We'll cover these concepts in more detail later.
+
+### References
+- [the `Result` type](/guide/error-handling)
+- [Schemas and validated types](/guide/schemas)
 
 ## Attachments (images & files)
 

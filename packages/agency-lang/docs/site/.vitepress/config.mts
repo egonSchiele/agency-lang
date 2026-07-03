@@ -20,7 +20,8 @@ export default defineConfig({
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
-            { text: "Nodes", link: "/guide/nodes" },
+            { text: "The `main` node", link: "/guide/the-main-node" },
+            /* { text: "Nodes", link: "/guide/nodes" }, */
             { text: "LLMs", link: "/guide/llm" },
             { text: "Image generation", link: "/guide/image-generation" },
             {

@@ -77,6 +77,13 @@ By default, `generateImage` uses OpenAI's image model. You can override the mode
 // OpenAI (default)
 generateImage("a red bike")
 
+// Google's "nano banana" (Gemini 2.5 Flash Image). The provider is derived
+// from the model name, so you only need `model`. Set GEMINI_API_KEY.
+generateImage("a red bike", model: "gemini-2.5-flash-image")
+
+// The higher-tier "nano banana pro"
+generateImage("a red bike", model: "nano-banana-pro-preview")
+
 // An open-source model via LiteLLM
 generateImage("a red bike", provider: "litellm", model: "flux-pro",
               baseUrl: "https://your-litellm-host")
@@ -87,26 +94,20 @@ generateImage("a red bike", provider: "openai-compat",
               baseUrl: "https://api.together.ai/v1")
 ```
 
-Options: `model`, `provider`, `size`, `quality` (`"low"`/`"medium"`/`"high"`/
-`"auto"`), `images`, `apiKey`, `baseUrl`.
+Options:
 
-## Cost and guards
+| Option | Description |
+| --- | --- |
+| `model` | Image model (default: the provider's default image model). |
+| `provider` | eg "google", "openai-compat", "litellm" |
+| `size` | Image size, e.g. `"1024x1024"` (provider-dependent). |
+| `quality` | `"low"` / `"medium"` / `"high"` / `"auto"`. |
+| `images` | Input images to edit/vary, as path / URL / data-URI strings. |
+| `apiKey` | API key (reads env vars `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc. if not set) |
+| `baseUrl` | Base URL for `openai-compat` / `litellm` providers. |
 
-Image generation costs real money, so it participates in Agency's cost tracking:
-its cost accrues to `getCost()` and is billed against any enclosing
-`guard(cost:)`, which will abort runaway generation.
+## Limitations
 
-```ts
-import { guard } from "std::thread"
-
-const result = guard(cost: $1.00) as {
-  return generateImage("a detailed landscape")
-}
-```
-
-## Limitations (v1)
-
-- Hosted providers only — local image generation (Stable Diffusion / FLUX on your
-  own GPU) is not yet supported; it needs a different runtime than local text models.
+- Local image generation is not yet supported.
 - One image per call.
 - No mask-based inpainting yet.

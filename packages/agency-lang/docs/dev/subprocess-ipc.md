@@ -137,7 +137,7 @@ Locks brokered through the parent are released at segment settle, and lock-acqui
 
 **Cost guards** meter subprocess spend live: every paid call in a child
 fire-and-forgets `{ type: "telemetry", costUsd }` upward (emitted from
-`StateStack.chargeGuards`, the choke point every paid site funnels
+`StateStack.billCharge`, the choke point every paid site funnels
 through). The parent bills the charge via `billCharge` on the run()
 call-site stack — so parent `getCost()` includes child spend — and a trip
 kills the child and surfaces the standard cost-limit Failure at the

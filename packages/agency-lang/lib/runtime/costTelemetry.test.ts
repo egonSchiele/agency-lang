@@ -3,6 +3,17 @@ import { isPayableCost, sendCostTelemetryToParent } from "./costTelemetry.js";
 import { StateStack } from "./state/stateStack.js";
 import { CostGuard } from "./guard.js";
 
+// process.send has no vi.stubEnv equivalent — save/restore it manually.
+// Env vars are stubbed per test and reset via vi.unstubAllEnvs(): a leaked
+// AGENCY_IPC=1 would make every billCharge in later tests emit telemetry.
+const originalSend = process.send;
+
+afterEach(() => {
+  process.send = originalSend;
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
 describe("isPayableCost", () => {
   it("accepts positive finite numbers only", () => {
     expect(isPayableCost(0.5)).toBe(true);
@@ -16,18 +27,8 @@ describe("isPayableCost", () => {
 });
 
 describe("sendCostTelemetryToParent", () => {
-  const originalSend = process.send;
-  const originalIpc = process.env.AGENCY_IPC;
-
-  afterEach(() => {
-    process.send = originalSend;
-    if (originalIpc === undefined) delete process.env.AGENCY_IPC;
-    else process.env.AGENCY_IPC = originalIpc;
-    vi.restoreAllMocks();
-  });
-
   it("sends the telemetry message when in IPC mode", () => {
-    process.env.AGENCY_IPC = "1";
+    vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
     sendCostTelemetryToParent(0.5);
@@ -35,7 +36,6 @@ describe("sendCostTelemetryToParent", () => {
   });
 
   it("no-ops outside IPC mode", () => {
-    delete process.env.AGENCY_IPC;
     const send = vi.fn(() => true);
     process.send = send as any;
     sendCostTelemetryToParent(0.5);
@@ -43,7 +43,7 @@ describe("sendCostTelemetryToParent", () => {
   });
 
   it("no-ops for zero, negative, and non-finite cost", () => {
-    process.env.AGENCY_IPC = "1";
+    vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
     sendCostTelemetryToParent(0);
@@ -53,45 +53,43 @@ describe("sendCostTelemetryToParent", () => {
   });
 
   it("swallows a dead-channel send error", () => {
-    process.env.AGENCY_IPC = "1";
+    vi.stubEnv("AGENCY_IPC", "1");
     process.send = vi.fn(() => { throw new Error("channel closed"); }) as any;
     expect(() => sendCostTelemetryToParent(0.5)).not.toThrow();
   });
 });
 
-describe("StateStack.chargeGuards emission", () => {
-  const originalSend = process.send;
-  const originalIpc = process.env.AGENCY_IPC;
-
-  afterEach(() => {
-    process.send = originalSend;
-    if (originalIpc === undefined) delete process.env.AGENCY_IPC;
-    else process.env.AGENCY_IPC = originalIpc;
-    vi.restoreAllMocks();
-  });
-
+describe("StateStack.billCharge", () => {
   it("emits exactly once per charge, even with zero guards installed", () => {
     // Emission must be unconditional on guards being present: a mid-tier
     // relay process may have NO local guards but must still forward the
     // grandchild spend upward.
-    process.env.AGENCY_IPC = "1";
+    vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
     const stack = new StateStack();
-    stack.chargeGuards(0.25);
+    stack.billCharge(0.25);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "telemetry", costUsd: 0.25 });
   });
 
   it("does not emit for a zero charge", () => {
-    process.env.AGENCY_IPC = "1";
+    vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    new StateStack().chargeGuards(0);
+    new StateStack().billCharge(0);
     expect(send).not.toHaveBeenCalled();
   });
-});
 
-describe("StateStack.billCharge", () => {
+  it("a direct chargeGuards call does NOT emit — emission rides the fresh-paid-charge semantic", () => {
+    // Pins the hoist: re-applying spend to guard accumulators (restore /
+    // reconciliation paths) must never double-bill the parent.
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    new StateStack().chargeGuards(0.25);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("accumulates localCost and really charges guards in one call", () => {
     const stack = new StateStack();
     const guard = new CostGuard(0.1);

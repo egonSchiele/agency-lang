@@ -158,6 +158,27 @@ describe("clampLimits", () => {
   });
 });
 
+/** One canonical RunSession mock — when `RunSession` gains a field the
+ * code under test reads, add it HERE so every suite sees it (the mocks
+ * are `any`-typed, so a second hand-rolled literal would go stale
+ * silently). Suites layer their specifics via `overrides`. */
+const makeSession = (overrides: Record<string, any> = {}): any => ({
+  sessionId: "test-session",
+  child: { stdout: null, stderr: null, on: () => {}, send: () => true, connected: true, kill: () => true },
+  limits: { wallClock: 1000, memory: 1, ipcPayload: 1, stdout: 1 },
+  ctx: { lockReleasers: {} },
+  stateStack: {},
+  resolvePromise: () => {},
+  rejectPromise: () => {},
+  settled: false,
+  startedAt: Date.now(),
+  wallClockTimer: null,
+  stdoutBytes: 0,
+  stoppedForwarding: false,
+  detachAbortListener: null,
+  ...overrides,
+});
+
 describe("wall-clock timer is per execution segment", () => {
   // Replaces the deleted pause-limit-wallclock-resets execution test: the
   // per-segment property (paused time never counts against wallClock)
@@ -180,20 +201,12 @@ describe("wall-clock timer is per execution segment", () => {
     };
   };
 
-  const makeSession = (child: any, outcomes: any[]): any => ({
+  const makeSegmentSession = (child: any, outcomes: any[]): any => makeSession({
     sessionId: "seg-test",
     child,
     limits: { wallClock: 5000, memory: 1, ipcPayload: 1024 * 1024 * 1024, stdout: 1024 * 1024 * 1024 },
-    ctx: { lockReleasers: {} },
-    stateStack: {},
     resolvePromise: (v: any) => outcomes.push({ kind: "resolve", v }),
     rejectPromise: (e: any) => outcomes.push({ kind: "reject", e }),
-    settled: false,
-    startedAt: Date.now(),
-    wallClockTimer: null,
-    stdoutBytes: 0,
-    stoppedForwarding: false,
-    detachAbortListener: null,
   });
 
   it("arms on session start and is cleared when the child pauses; never fires afterward", async () => {
@@ -201,7 +214,7 @@ describe("wall-clock timer is per execution segment", () => {
     try {
       const { child, listeners } = makeFakeChild();
       const outcomes: any[] = [];
-      const session = makeSession(child, outcomes);
+      const session = makeSegmentSession(child, outcomes);
 
       attachSessionHandlers(session, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
       expect(session.wallClockTimer).not.toBeNull();
@@ -229,7 +242,7 @@ describe("wall-clock timer is per execution segment", () => {
     try {
       const { child } = makeFakeChild();
       const outcomes: any[] = [];
-      const session = makeSession(child, outcomes);
+      const session = makeSegmentSession(child, outcomes);
 
       attachSessionHandlers(session, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
       await vi.advanceTimersByTimeAsync(5001);
@@ -248,7 +261,7 @@ describe("wall-clock timer is per execution segment", () => {
     try {
       const first = makeFakeChild();
       const firstOutcomes: any[] = [];
-      const s1 = makeSession(first.child, firstOutcomes);
+      const s1 = makeSegmentSession(first.child, firstOutcomes);
       attachSessionHandlers(s1, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
       first.listeners["message"]({ type: "interrupted", interrupts: [], checkpoint: {}, subprocessSessionId: "s" });
 
@@ -256,7 +269,7 @@ describe("wall-clock timer is per execution segment", () => {
       // independent of how much the first segment used.
       const second = makeFakeChild();
       const secondOutcomes: any[] = [];
-      const s2 = makeSession(second.child, secondOutcomes);
+      const s2 = makeSegmentSession(second.child, secondOutcomes);
       attachSessionHandlers(s2, { type: "resume", scriptPath: "/x.js", node: "main", checkpoint: {}, interrupts: [], responses: [] });
       expect(s2.wallClockTimer).not.toBeNull();
       expect(s2.wallClockTimer).not.toBe(s1.wallClockTimer);
@@ -267,24 +280,14 @@ describe("wall-clock timer is per execution segment", () => {
 });
 
 describe("handleTelemetryMessage", () => {
-  const makeSession = (stack: StateStack) => {
+  const makeTelemetrySession = (stack: StateStack) => {
     const kills: string[] = [];
     const rejections: any[] = [];
-    const session: any = {
-      sessionId: "s1",
+    const session = makeSession({
       child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
-      limits: { wallClock: 1000, memory: 1, ipcPayload: 1, stdout: 1 },
-      ctx: { lockReleasers: {} },
       stateStack: stack,
-      resolvePromise: () => {},
       rejectPromise: (err: any) => { rejections.push(err); },
-      settled: false,
-      startedAt: Date.now(),
-      wallClockTimer: null,
-      stdoutBytes: 0,
-      stoppedForwarding: false,
-      detachAbortListener: null,
-    };
+    });
     return { session, kills, rejections };
   };
 
@@ -292,7 +295,7 @@ describe("handleTelemetryMessage", () => {
     const stack = new StateStack();
     const guard = new CostGuard(1.0);
     stack.guards.push(guard);
-    const { session, kills, rejections } = makeSession(stack);
+    const { session, kills, rejections } = makeTelemetrySession(stack);
 
     handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.25 });
 
@@ -306,7 +309,7 @@ describe("handleTelemetryMessage", () => {
   it("a trip kills the child and rejects the session with the guard-trip abort", () => {
     const stack = new StateStack();
     stack.guards.push(new CostGuard(0.1));
-    const { session, kills, rejections } = makeSession(stack);
+    const { session, kills, rejections } = makeTelemetrySession(stack);
 
     handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.2 });
 
@@ -323,7 +326,7 @@ describe("handleTelemetryMessage", () => {
   it("post-settle telemetry still charges (the spend was real) but does not enforce", () => {
     const stack = new StateStack();
     stack.guards.push(new CostGuard(0.1));
-    const { session, kills, rejections } = makeSession(stack);
+    const { session, kills, rejections } = makeTelemetrySession(stack);
     session.settled = true;
 
     handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.2 });
@@ -335,7 +338,7 @@ describe("handleTelemetryMessage", () => {
 
   it("ignores malformed cost values", () => {
     const stack = new StateStack();
-    const { session } = makeSession(stack);
+    const { session } = makeTelemetrySession(stack);
     handleTelemetryMessage(session, { type: "telemetry", costUsd: NaN } as any);
     handleTelemetryMessage(session, { type: "telemetry", costUsd: -5 } as any);
     handleTelemetryMessage(session, { type: "telemetry" } as any);

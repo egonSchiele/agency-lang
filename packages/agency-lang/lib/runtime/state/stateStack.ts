@@ -529,16 +529,27 @@ export class StateStack {
 
   /**
    * Bill one paid charge to this stack: accumulate the branch-local cost
-   * accumulator and charge every active guard. The single billing
-   * sequence every paid site runs — llm (prompt.ts), addCost (cost.ts;
-   * memory and image generation pay through it), and the parent-side
-   * subprocess telemetry handler (ipc.ts). Enforcement stays at call
-   * sites because it legitimately varies: prompt/addCost always enforce;
-   * the telemetry handler skips enforcement once its session has settled.
+   * accumulator, charge every active guard, and — in a subprocess —
+   * forward the charge to the parent so ITS cost guards see the spend
+   * live. The single billing sequence every paid site runs — llm
+   * (prompt.ts), addCost (cost.ts; memory and image generation pay
+   * through it), and the parent-side subprocess telemetry handler
+   * (ipc.ts, which is what relays grandchild spend upward in nested
+   * trees). Enforcement stays at call sites because it legitimately
+   * varies: prompt/addCost always enforce; the telemetry handler skips
+   * enforcement once its session has settled.
+   *
+   * Telemetry emission lives HERE, on the fresh-paid-charge semantic —
+   * not in chargeGuards — so re-applying spend to guard accumulators
+   * (e.g. a future restore/reconciliation path) can never double-bill
+   * the parent. Emission is per paid call and unconditional on local
+   * guards existing: a mid-tier relay may have none but must still
+   * forward. No-op outside IPC mode.
    */
   billCharge(amount: number): void {
     this.localCost += amount;
     this.chargeGuards(amount);
+    sendCostTelemetryToParent(amount);
   }
 
   /**
@@ -547,14 +558,12 @@ export class StateStack {
    * descendant spend in real time — this is what makes mid-fork trip
    * detection work without waiting for the fork to settle. TimeGuard's
    * charge is a no-op.
+   *
+   * Guard-accumulator update ONLY — no localCost, no telemetry. Paid
+   * sites must go through billCharge.
    */
   chargeGuards(amount: number): void {
     for (const g of this.guards) g.charge(amount);
-    // Subprocess: forward this charge to the parent so ITS cost guards
-    // see the spend live. Emission is per paid call and unconditional on
-    // local guards existing: a mid-tier relay may have none but must
-    // still forward grandchild spend upward. No-op outside IPC mode.
-    sendCostTelemetryToParent(amount);
   }
 
   /**

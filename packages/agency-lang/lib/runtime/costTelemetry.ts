@@ -3,15 +3,17 @@
  * parent-side cost guards see child LLM spend live (see
  * docs/superpowers/specs/2026-07-02-subprocess-cost-telemetry-design.md).
  *
- * Deliberately dependency-free (the subprocessRunInfo.ts layering
- * pattern): `StateStack.chargeGuards` calls this on every paid charge,
- * and stateStack must not import ipc.ts. The message type lives here and
- * is re-exported by ipc.ts into the SubprocessToParent union.
+ * Deliberately dependency-light (the subprocessRunInfo.ts layering
+ * pattern — the only import IS subprocessRunInfo, itself dependency-free):
+ * `StateStack.billCharge` calls this on every paid charge, and stateStack
+ * must not import ipc.ts.
  *
  * Never blocks and never throws: there is no reply, no listener, and a
  * dead channel is swallowed — the bootstrap disconnect watchdog is about
  * to reap this process anyway.
  */
+
+import { isIpcMode } from "./subprocessRunInfo.js";
 
 export type IpcTelemetryMessage = {
   type: "telemetry";
@@ -27,7 +29,7 @@ export function isPayableCost(costUsd: unknown): costUsd is number {
 }
 
 export function sendCostTelemetryToParent(costUsd: number): void {
-  if (process.env.AGENCY_IPC !== "1" || typeof process.send !== "function") return;
+  if (!isIpcMode() || typeof process.send !== "function") return;
   if (!isPayableCost(costUsd)) return;
   const msg: IpcTelemetryMessage = { type: "telemetry", costUsd };
   try {
@@ -35,10 +37,12 @@ export function sendCostTelemetryToParent(costUsd: number): void {
   } catch (err) {
     // Channel gone — parent died; the watchdog will exit this process.
     // Deliberately swallowed (fire-and-forget invariant), but traceable:
-    // ipcLog is unreachable from this leaf module, so mirror its gating.
+    // ipcLog is unreachable from this leaf module, so mirror its line
+    // format (this sender only ever runs in a child) and env gating.
     if (process.env.AGENCY_IPC_DEBUG === "1") {
+      const ts = new Date().toISOString().slice(11, 23);
       const detail = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[ipc:telemetry] send failed: ${detail}\n`);
+      process.stderr.write(`[ipc:child] ${ts} send telemetry_send_failed ${detail}\n`);
     }
   }
 }

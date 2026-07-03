@@ -41,24 +41,7 @@ const result = llm("What is 4 + 5?", { tools: [add] })
 print(result)
 ```
 
-## Streaming
 
-To stream your response back, you will need two things:
-1. You will need to set the stream option on the LLM call to true.
-
-```ts
-const response = llm("What is the capital of France?", { stream: true })
-```
-
-2. You will need to provide an `onStream` callback function to handle the streamed data. Streaming only works when you use your agent through TypeScript or JavaScript, though hopefully this limitation will be resolved soon. When you call a node through TypeScript, provide the callbacks: 
-
-```ts
-const callbacks = {
-  onStream: console.log
-}
-
-const result = await main("some-param", { callbacks })
-```
 
 ---
 

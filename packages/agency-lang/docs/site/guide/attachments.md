@@ -5,9 +5,14 @@ description: Explains how to send images and files to the model in an LLM call, 
 
 # Attachments
 
-`llm()`'s first argument can also be an **array** that mixes text with image and
-file attachments. Bare strings in the array are text; use the `image()` and
-`file()` builders from `std::thread` for attachments:
+So far, in all the LLM calls we have made, the first argument has been a string:
+
+```ts
+const answer = llm("What is the capital of India?")
+```
+
+But `llm()`'s first argument can also be an **array**. Arrays let you mix text with image and
+file attachments. To include images and files, use `image()` and `file()` from `std::thread`:
 
 ```ts
 import { image, file } from "std::thread"
@@ -15,31 +20,34 @@ import { image, file } from "std::thread"
 node main() {
   const answer = llm([
     "What's in this image, and how does it relate to the report?",
-    image("./diagram.png"),               // local path
-    image("https://example.com/a.jpg"),   // remote URL (auto-detected)
-    file("./report.pdf"),                 // local PDF / file
+    image("./diagram.png"),
+    file("./report.pdf"),
   ])
   print(answer)
 }
 ```
 
 `image(source)` and `file(source)` accept a local path, an `http(s)` URL, or a
-`data:` URI, and figure out which it is. Smoltalk reads the file, fetches the
-URL, infers the MIME type, and enforces size limits when the call is sent — you
-don't do any file I/O yourself.
+`data:` URI:
 
-Both builders take optional arguments:
+```ts
+image("./diagram.png")                         // local path
+image("https://example.com/a.jpg")             // http(s) URL
+image("data:image/png;base64,iVBORw0KGgo...")  // data: URI
+```
 
-- `mimeType` — set an explicit MIME type (overrides inference).
-- `base64: true` — treat `source` as raw base64 data. A `mimeType` is then
-  required, e.g. `image(data, mimeType: "image/png", base64: true)`. This is
-  handy when you already hold base64 in memory — for example the base64 string
-  inside the `Result` that `readBinary()` returns.
-- `file(source, filename)` — the filename shown to the model; it defaults to the
-  source's basename.
+You can also pass in base64 data directly, but you must set `base64: true` and provide a MIME type:
 
-The same array form works with `userMessage()` from `std::thread`, so you can
-seed a multimodal user turn into the conversation history:
+```ts
+image(data, mimeType: "image/png", base64: true)
+file(data, mimeType: "application/pdf", base64: true)
+```
+
+The `file` function also takes an optional `filename` argument, which is the filename shown to the model. It defaults to the source's basename.
+
+
+
+You can also use the array form with functions like `userMessage()` from `std::thread`:
 
 ```ts
 import { userMessage, image } from "std::thread"

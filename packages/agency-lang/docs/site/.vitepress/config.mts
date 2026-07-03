@@ -69,6 +69,10 @@ export default defineConfig({
               link: "/guide/llm-part-2",
             },
             {
+              text: "Streaming",
+              link: "/guide/streaming",
+            },
+            {
               text: "Message Threads",
               link: "/guide/message-threads",
             },

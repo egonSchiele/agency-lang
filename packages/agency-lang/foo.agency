@@ -1,14 +1,6 @@
-import { guard } from "std::thread"
-
 node main() {
-  const result = guard(cost: $0.0) {
-    const category = llm("classify this email: I love you")
-    const reply = llm("draft a reply")
-    return category
+  callback("onStream") as data {
+    printJSON(data)
   }
-
-  match(result) {
-    success(value) => print("Category: ${value}")
-    failure(error) => printJSON(error)
-  }
+  const response = llm("What is the capital of India?", stream: true)
 }

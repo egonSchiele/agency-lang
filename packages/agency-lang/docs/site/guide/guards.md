@@ -72,39 +72,6 @@ When the clock ticks:
 
 When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.
 
-### Cooperative cancellation from TypeScript
-
-That "abort signal sent to other code" is something your own TypeScript can observe. In-flight LLM HTTP requests are cancelled automatically, and Agency-bodied tools stop at the next runner step boundary — but **JS-bodied work does not stop on its own**. A TypeScript helper or JS tool body running a long loop or its own I/O must observe the signal to be cancellable.
-
-Read the composed abort signal from any TS code that participates in the run:
-
-```ts
-import { getRuntimeContext } from "agency-lang/runtime"
-
-export async function fetchAll(urls: string[]): Promise<string[]> {
-  const { ctx, stack } = getRuntimeContext()
-  const signal = ctx.getAbortSignal(stack)
-  // Hand it to anything AbortSignal-aware:
-  return Promise.all(urls.map((u) => fetch(u, { signal }).then((r) => r.text())))
-}
-```
-
-For a compute loop with no natural `AbortSignal` sink, poll `signal.aborted`:
-
-```ts
-for (const item of items) {
-  if (signal.aborted) throw new Error("guard tripped")
-  heavyWork(item)
-}
-```
-
-`ctx.getAbortSignal(stack)` folds together every cancellation source — the time-guard timer, a lost `race`, and top-level `cancel()` / Esc. Two things to know:
-
-- **Cost guards do not fire this signal.** They enforce at LLM-call boundaries, not via an abort controller. Cancellation-by-signal is a time-guard, `race`, and `cancel()` concern.
-- **Use `getRuntimeContext().stack`, not `ctx.stateStack`** — the composed signal includes guards on the *active branch* stack, and inside a `fork`/`race` branch the two differ.
-
-See [TypeScript helpers](/guide/ts-helpers#respecting-cancellation-the-abort-signal) for the full treatment.
-
 ## Nested guards
 
 Guards are scoped — an inner trip does **not** trip an outer guard:
@@ -136,12 +103,32 @@ guard(cost: $5.0) as {
 }
 ```
 
+## Aborting TypeScript code
 
-### `goto`
+When an abort is fired, TypeScript code does not stop automatically. You need to thread in the abort signal.
 
-`goto` is statically rejected inside any block, including a guard block. The check happens at compile time.
+```ts
+import { getRuntimeContext } from "agency-lang/runtime"
 
-## Limitations (V1)
+export async function fetchAll(urls: string[]): Promise<string[]> {
+  const { ctx, stack } = getRuntimeContext()
+  const signal = ctx.getAbortSignal(stack)
+  // Hand it to anything AbortSignal-aware:
+  return Promise.all(urls.map((u) => fetch(u, { signal })))
+}
+```
 
-**JS-bodied tool calls are not aborted mid-execution *unless they opt in*.** Tool functions whose body is written in JavaScript (rather than Agency code) are not preempted: by default they run to completion in the background once started, and only the next runner step after they return sees the trip and abandons their result. Agency-bodied tools, in-flight LLM HTTP requests, and the runner itself all observe the abort signal and stop promptly. A JS body can join them by reading the composed signal via `getRuntimeContext().ctx.getAbortSignal(stack)` and passing it to `AbortSignal`-aware APIs or polling `signal.aborted` — see [Cooperative cancellation from TypeScript](#cooperative-cancellation-from-typescript). What remains a hard limitation is a *synchronous* CPU-bound JS body that never yields or checks the signal: nothing can preempt it.
+For a compute loop with no natural `AbortSignal` sink, poll `signal.aborted`:
 
+```ts
+for (const item of items) {
+  if (signal.aborted) throw new Error("guard tripped")
+  heavyWork(item)
+}
+```
+
+`ctx.getAbortSignal(stack)` folds together every cancellation source — the time-guard timer, a lost `race`, and top-level `cancel()` / Esc. Two things to know:
+
+- **Cost guards do not fire this signal.** They enforce at LLM-call boundaries, not via an abort controller.
+
+See [TypeScript helpers](/guide/ts-helpers#respecting-cancellation-the-abort-signal) for more on the `agency-lang/runtime` helpers.

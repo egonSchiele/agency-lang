@@ -69,14 +69,17 @@ export default defineConfig({
               link: "/guide/llm-part-2",
             },
             {
+              text: "Streaming",
+              link: "/guide/streaming",
+            },
+            {
               text: "Message Threads",
               link: "/guide/message-threads",
             },
 
-            { text: "Guards", link: "/guide/guards" },
+            { text: "Attachments", link: "/guide/attachments" },
             { text: "Image generation", link: "/guide/image-generation" },
-            // attachments
-            // streaming
+            { text: "Guards", link: "/guide/guards" },
           ],
         },
         {

@@ -80,7 +80,6 @@ export default defineConfig({
             { text: "Attachments", link: "/guide/attachments" },
             { text: "Image generation", link: "/guide/image-generation" },
             { text: "Guards", link: "/guide/guards" },
-            // streaming
           ],
         },
         {

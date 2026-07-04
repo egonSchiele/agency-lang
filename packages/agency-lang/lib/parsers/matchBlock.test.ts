@@ -134,6 +134,24 @@ describe("matchBlockParserCase", () => {
       },
     },
     {
+      input: "x => goto next()",
+      expected: {
+        success: true,
+        result: {
+          type: "matchBlockCase",
+          caseValue: { type: "variableName", value: "x" },
+          body: [{
+            type: "gotoStatement",
+            nodeCall: {
+              type: "functionCall",
+              functionName: "next",
+              arguments: [],
+            },
+          }],
+        },
+      },
+    },
+    {
       input: "x -> y",
       expected: { success: false },
     },

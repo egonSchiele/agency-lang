@@ -3120,7 +3120,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
           seqC(
             not(char("{")),
             capture(
-              or(returnStatementParser, lazy(() => assignmentParser), exprParser),
+              or(returnStatementParser, gotoStatementParser, lazy(() => assignmentParser), exprParser),
               "n",
             ),
           ),

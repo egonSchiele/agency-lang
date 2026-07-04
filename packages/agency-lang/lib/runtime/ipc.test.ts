@@ -9,6 +9,7 @@ import {
   attachSessionHandlers,
   handleTelemetryMessage,
   handleCallbackMessage,
+  handleChildMessage,
   withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
@@ -418,5 +419,69 @@ describe("handleCallbackMessage", () => {
     expect(rejections).toHaveLength(1);
     expect(rejections[0]).toBeInstanceOf(AgencyCancelledError);
     expect(session.settled).toBe(true);
+  });
+});
+
+describe("handleChildMessage oversize handling", () => {
+  it("drops an oversize callback message instead of killing the run", async () => {
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
+    // makeSession default ipcPayload is 1 byte, so any callback payload is oversize.
+    const session = makeSession({ ctx, stateStack: stack, rejectPromise: (e: any) => rejections.push(e) });
+
+    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "big" } });
+
+    expect(session.settled).toBe(false);
+    expect(rejections).toEqual([]);
+  });
+
+  it("still kills the run for an oversize non-callback message", async () => {
+    const stack = new StateStack();
+    const ctx: any = { lockReleasers: {}, stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack });
+
+    await handleChildMessage(session, { type: "result", value: { big: "x".repeat(50) } } as any);
+
+    expect(session.settled).toBe(true); // settleWithLimitFailure fired
+  });
+
+  it("drops an UNSERIALIZABLE callback message instead of killing the run", async () => {
+    // Covers the `!serialized.ok` observational branch (separate from oversize).
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({
+      ctx, stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 }, // large, so oversize is NOT the cause
+      rejectPromise: (e: any) => rejections.push(e),
+    });
+    const circular: any = { type: "callback", name: "onNodeStart", data: {} };
+    circular.data.self = circular; // JSON.stringify throws -> serialized.ok === false
+
+    await handleChildMessage(session, circular);
+
+    expect(session.settled).toBe(false);
+    expect(rejections).toEqual([]);
+  });
+
+  it("routes a within-limit callback through the dispatch case to the parent callback", async () => {
+    // Directly exercises Task 3(d) — the `msg.type === "callback"` dispatch case
+    // in handleChildMessage. The other handleCallbackMessage tests call it
+    // directly, and the oversize test drops BEFORE dispatch, so without this the
+    // dispatch wiring is only covered by the slow E2E (Task 5). A missing/typo'd
+    // dispatch case would leave `fired` empty here.
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({
+      ctx, stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
+
+    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "routed" } });
+    await flush(); // handleCallbackMessage void-invokes invokeCallbacks; let the microtask chain drain
+
+    expect(fired).toEqual([{ nodeName: "routed" }]);
   });
 });

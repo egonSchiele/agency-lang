@@ -942,19 +942,40 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
   void invokeCallbacks({ ctx: s.ctx, name: msg.name, data, stateStack: s.stateStack });
 }
 
-async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
+/** Message types whose delivery is observational — an oversize or
+ * unserializable one is DROPPED, never fatal, because it cannot affect the run
+ * outcome (unlike result/interrupt/error/lock messages, which must settle or
+ * kill the run). Extend this list when adding another fire-and-forget message. */
+const OBSERVATIONAL_MESSAGE_TYPES: readonly string[] = ["callback"];
+
+function isObservationalMessage(msg: { type?: string }): boolean {
+  return typeof msg.type === "string" && OBSERVATIONAL_MESSAGE_TYPES.includes(msg.type);
+}
+
+export async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   ipcLog("recv", msg);
   // Defensively serialize once: a non-serializable value (circular refs,
   // BigInt) would otherwise throw inside the event handler and leave the
   // session unsettled, hanging _run's Promise.
   const serialized = serializedByteLength(msg);
   if (!serialized.ok) {
+    // An observational message is never worth killing the run over.
+    if (isObservationalMessage(msg)) {
+      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "unserializable" });
+      return;
+    }
     settle(s, s.rejectPromise, new Error(
       `Failed to serialize subprocess message: ${serialized.error}`,
     ));
     return;
   }
   if (serialized.byteLength > s.limits.ipcPayload) {
+    // Drop an oversize observational message rather than settleWithLimitFailure
+    // (which kills the run) — preserves the pure-observation invariant.
+    if (isObservationalMessage(msg)) {
+      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "oversize" });
+      return;
+    }
     settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serialized.byteLength, {
       samplePrefix: serialized.serialized.slice(0, 1024),
     });

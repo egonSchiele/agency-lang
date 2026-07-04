@@ -265,6 +265,7 @@ Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/ag
 | `cost-no-double-charge-across-pause` | pause/resume replay does not re-emit completed calls' telemetry |
 | `callback-forwarding-child-events` | parent onNodeStart callback fires for a child subprocess node entry |
 | `callback-forwarding-nested-relay` | root callback fires for a grandchild event relayed through a callbackless mid-tier |
+| `callback-forwarding-relay-both-fire` | mid-tier's own callback AND the root's both fire for the same grandchild event, filters respected |
 | `nested-gate-unapproved` | the gate exists on every hop |
 | `subprocess-no-handler` (js) | std::run gate surfaces without a handler |
 | `subprocess-pause-basic` (js) | end-to-end pause → respond → resume |

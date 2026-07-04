@@ -477,10 +477,8 @@ describe("handleCallbackMessage", () => {
     // Models a MID-TIER that is itself a subprocess: on a forwarded grandchild
     // event it must BOTH fire its own registered callback AND re-forward the
     // event to its parent (invokeCallbacks re-emits because this process is in
-    // IPC mode). This is the deterministic equivalent of a "both fire" E2E —
-    // which cannot be written cleanly because a run()-compiled child can't hold
-    // top-level globals and a forwarded-event callback fires on the parentStore
-    // frame (so node-locals aren't observable).
+    // IPC mode). Fast/deterministic complement to the E2E
+    // callback-forwarding-relay-both-fire.agency.
     vi.stubEnv("AGENCY_IPC", "1");
     const originalSend = process.send;
     const sent: any[] = [];

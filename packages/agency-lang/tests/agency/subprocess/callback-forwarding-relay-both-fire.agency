@@ -1,0 +1,74 @@
+import { compile, run } from "std::agency"
+
+// Both the ROOT and the MID-TIER register their own onNodeStart callback,
+// filtered to "grandNode". The grandchild fires onNodeStart for grandNode; the
+// mid-tier's own callback fires (from the forwarded event) AND the mid re-forwards
+// to the root, whose callback also fires. Proves the two observers fire
+// independently with no interference, and that each callback's filter is
+// respected (neither the mid's own "main" entry nor the root's "main" entry
+// increments the "grandNode"-filtered counters).
+//
+// NOTE: the nested source strings deliberately avoid `${...}` — a triple-quoted
+// raw string interpolates it at THIS level (see issue on raw-string `${}`
+// codegen), so the mid returns its count as a number instead of an interpolated
+// string.
+let rootSeen: number = 0
+
+node main() {
+  callback("onNodeStart") as data {
+    if (data.nodeName == "grandNode") {
+      rootSeen = rootSeen + 1
+    }
+  }
+  const grandSource = """
+node grandNode() {
+  return "grandchild done"
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+let midSeen: number = 0
+node main(grandSource: string) {
+  callback("onNodeStart") as data {
+    if (data.nodeName == "grandNode") {
+      midSeen = midSeen + 1
+    }
+  }
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return 0 - 1
+  }
+  handle {
+    const result = run(compiled: c.value, node: "grandNode")
+    if (isFailure(result)) {
+      return 0 - 2
+    }
+    return midSeen
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isFailure(result)) {
+      return "run failed"
+    }
+    const midCount: number = result.value.data
+    return "root:${rootSeen}|mid:${midCount}"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

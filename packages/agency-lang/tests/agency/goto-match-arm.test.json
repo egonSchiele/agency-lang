@@ -1,0 +1,7 @@
+{
+  "tests": [
+    { "nodeName": "dispatch", "input": "\"a\"", "expectedOutput": "\"landed on A\"", "evaluationCriteria": [{ "type": "exact" }], "description": "bare `goto` arm transitions to the matched node" },
+    { "nodeName": "dispatch", "input": "\"b\"", "expectedOutput": "\"landed on B\"", "evaluationCriteria": [{ "type": "exact" }], "description": "braced `{ goto }` arm coexists with bare goto arms" },
+    { "nodeName": "dispatch", "input": "\"other\"", "expectedOutput": "\"landed on C\"", "evaluationCriteria": [{ "type": "exact" }], "description": "wildcard `goto` arm transitions on fall-through" }
+  ]
+}

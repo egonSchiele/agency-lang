@@ -1,0 +1,14 @@
+node landA() { return "landed on A" }
+node landB() { return "landed on B" }
+node landC() { return "landed on C" }
+
+// Dispatch to a graph node from a match arm using `goto`. Bare `goto next()`
+// arms and braced `{ goto next() }` arms may be mixed; each performs a real
+// node transition rather than yielding a value.
+node dispatch(x: string) {
+  match(x) {
+    "a" => goto landA()
+    "b" => { goto landB() }
+    _   => goto landC()
+  }
+}

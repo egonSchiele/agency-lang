@@ -97,7 +97,7 @@ export default defineConfig({
           items: [
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
-            { text: "Execution Model", link: "/guide/execution-model" },
+            { text: "State Isolation", link: "/guide/state-isolation" },
             {
               text: "Global vs Static Variables",
               link: "/guide/global-vs-static",

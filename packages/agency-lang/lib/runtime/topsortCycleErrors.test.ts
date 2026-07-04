@@ -298,3 +298,76 @@ describe("tests/agency/topsort/cycles fixtures", () => {
     expect(result.data).toBe("hello!");
   });
 });
+
+describe("module-level match hoist preserves dependency detection", () => {
+  // A module-level `const x = match(...)` is hoisted into a synthesized init
+  // function `x = matchInit$N()`. These cases confirm the init dep graph still
+  // sees the match's real dependencies through that function (via depth-1 call
+  // expansion), so use-before-def, cycles, and cross-phase reads still error.
+
+  it("match reading a later-declared global → use-before-def error", async () => {
+    const dir = writeUseBeforeDefFixture("match-forward-ref", {
+      "main.agency":
+        "const label = match(env) {\n" +
+        '  "prod" => "Production"\n' +
+        '  _ => "Local"\n' +
+        "}\n" +
+        'const env = "prod"\n' +
+        "\n" +
+        "node main() {\n" +
+        "  return label\n" +
+        "}\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/declared later in the same file/);
+    expect(outcome.message).toMatch(/\blabel\b/);
+    expect(outcome.message).toMatch(/\benv\b/);
+  });
+
+  it("two module-level matches that depend on each other → cycle error", async () => {
+    const dir = writeUseBeforeDefFixture("match-mutual-cycle", {
+      "main.agency":
+        "const a = match(b) {\n" +
+        '  "bv" => "a-from-b"\n' +
+        '  _ => "a?"\n' +
+        "}\n" +
+        "const b = match(a) {\n" +
+        '  "av" => "b-from-a"\n' +
+        '  _ => "b?"\n' +
+        "}\n" +
+        "\n" +
+        "node main() {\n" +
+        "  return a\n" +
+        "}\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/Circular global dependency/);
+    expect(outcome.message).toMatch(/\ba\b/);
+    expect(outcome.message).toMatch(/\bb\b/);
+  });
+
+  it("static match reading a global → cross-phase error", async () => {
+    const dir = writeUseBeforeDefFixture("match-static-reads-global", {
+      "main.agency":
+        'let g = "prod"\n' +
+        "static const label = match(g) {\n" +
+        '  "prod" => "P"\n' +
+        '  _ => "L"\n' +
+        "}\n" +
+        "\n" +
+        "node main() {\n" +
+        "  return label\n" +
+        "}\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/static const '.*' .*references global/);
+    expect(outcome.message).toMatch(/\blabel\b/);
+    expect(outcome.message).toMatch(/\bg\b/);
+  });
+});

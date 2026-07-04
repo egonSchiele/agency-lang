@@ -186,8 +186,67 @@ describe("expression match lowering errors", () => {
   });
   it("match(x is ...) in expression position errors", () =>
     expectError(`node main(x: any) {\n  const val = match(x is { k }) {\n    _ => 2\n  }\n  return val\n}`, /cannot be used as an expression/i));
-  it("module-level match expression errors", () =>
-    expectError(`const g = match("a") {\n  "a" => 1\n  _ => 2\n}\nnode main() { return g }`, /module-level|top-level/i));
+});
+
+describe("module-level match expression hoisting", () => {
+  it("module-level match hoists to a synthesized function + a call", () => {
+    const parsed = parseAgency(`const label = match("a") {
+  "a" => "A"
+  _ => "other"
+}
+node main(): string { return label }`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const nodes = parsed.result.nodes as any[];
+    // The const now calls a synthesized function instead of holding the match.
+    const decl = nodes.find(
+      (n) => n.type === "assignment" && n.variableName === "label",
+    );
+    expect(decl.value.type).toBe("functionCall");
+    // A matching synthesized function was added at the top level, with the
+    // lowered match region ending in a `return` of the temp, and no declared
+    // return type (inferred).
+    const synth = nodes.find(
+      (n) => n.type === "function" && n.functionName === decl.value.functionName,
+    );
+    expect(synth).toBeDefined();
+    expect(synth.returnType).toBeNull();
+    expect(synth.body.some((s: any) => s.type === "returnStatement")).toBe(true);
+    // No raw match block is left at module level.
+    expect(nodes.some((n) => n.type === "matchBlock")).toBe(false);
+  });
+
+  it("module-level match on a `let` also hoists and preserves declKind", () => {
+    const parsed = parseAgency(`let label = match("a") {
+  "a" => "A"
+  _ => "other"
+}
+node main(): string { return label }`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const decl = (parsed.result.nodes as any[]).find(
+      (n) => n.type === "assignment" && n.variableName === "label",
+    );
+    expect(decl.value.type).toBe("functionCall");
+    expect(decl.declKind).toBe("let");
+  });
+
+  it("synthesized init function name cannot collide with user identifiers", () => {
+    const parsed = parseAgency(`const label = match("a") {
+  "a" => "A"
+  _ => "other"
+}
+node main(): string { return label }`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const decl = (parsed.result.nodes as any[]).find(
+      (n) => n.type === "assignment" && n.variableName === "label",
+    );
+    // `$` is not a legal Agency identifier char, so the name is collision-proof
+    // against user code, and (not `__`-prefixed) it routes through __call.
+    expect(decl.value.functionName).toContain("$");
+    expect(decl.value.functionName.startsWith("__")).toBe(false);
+  });
 });
 
 describe("expression match arm: seq/thread yield to the match", () => {

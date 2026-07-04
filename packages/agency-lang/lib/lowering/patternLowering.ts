@@ -16,6 +16,7 @@ import type {
   Expression,
   ForLoop,
   FunctionCall,
+  FunctionDefinition,
   HandleBlock,
   IfElse,
   MatchBlock,
@@ -239,13 +240,45 @@ class PatternLowerer {
     // hoisted region to a self-contained async IIFE there (plain mode), which
     // never sets the runner's `_matchExit` flag.
     if (node.value && (node.value as AgencyNode).type === "matchBlock") {
-      if (this.atModuleLevel) {
-        throw new LoweringError(
-          "match expressions are not supported in module-level initializers",
-          node.loc,
-        );
-      }
       const region = this.lowerMatchExpressionCore(node.value as MatchBlock, node.loc);
+      if (this.atModuleLevel) {
+        // A module-level initializer has no execution frame for the match's
+        // `_matchExit` unwind, so we can't splice the region inline the way we
+        // do inside a function. Instead hoist the region into a synthesized
+        // init function and rewrite the initializer to call it. The result is
+        // exactly the manual `def`-wrapper workaround:
+        //
+        //   const x = match(E) { ... }
+        //     =>  def matchInit$N() { <region>; return __matchval_N }
+        //         const x = matchInit$N()
+        //
+        // `const x = matchInit$N()` is then an ordinary single-expression
+        // initializer that the init-topsort machinery already handles: its
+        // depth-1 call expansion walks the synthesized function's body, so `x`
+        // still depends on whatever the scrutinee and arms read. The `$` cannot
+        // appear in a user identifier (Agency names are [A-Za-z0-9_]), so the
+        // name never collides; and NOT starting with `__` routes the call
+        // through the runtime dispatch that makes an AgencyFunction callable.
+        const fnName = `matchInit$${++this.counter}`;
+        const synthFn: FunctionDefinition = {
+          type: "function",
+          functionName: fnName,
+          parameters: [],
+          returnType: null,
+          body: [
+            ...region.statements,
+            { type: "returnStatement", value: region.valueRef, loc: node.loc },
+          ],
+          loc: node.loc,
+        };
+        const call: FunctionCall = {
+          type: "functionCall",
+          functionName: fnName,
+          arguments: [],
+          loc: node.loc,
+        };
+        return [synthFn, { ...node, value: call }];
+      }
       return [
         ...region.statements,
         { ...node, value: region.valueRef, matchExprSource: { matchId: region.matchId } },

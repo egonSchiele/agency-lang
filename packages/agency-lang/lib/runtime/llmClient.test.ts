@@ -63,18 +63,34 @@ describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
     expect(out.provider).toBe("openrouter");
   });
 
-  it("overrides only openAi when a per-call apiKey string is supplied", () => {
+  it("overrides only the openAi slot when a per-call apiKey names just openAi", () => {
     const clientConfig = {
       model: "gpt-4o",
       apiKey: { openAi: "sk-baked", anthropic: "sk-a" },
     };
     const promptConfig = {
       ...clientConfig,
-      apiKey: "sk-percall", // a per-call string override
+      apiKey: { openAi: "sk-percall" }, // per-call, single provider
       messages: [],
       metadata: clientConfig,
     } as any;
     const out = toSmolConfig(promptConfig) as any;
     expect(out.apiKey).toEqual({ openAi: "sk-percall", anthropic: "sk-a" });
+  });
+
+  it("merges a per-call apiKey object over the baked-in map (per-provider override)", () => {
+    const clientConfig = {
+      model: "claude-opus-4",
+      apiKey: { openAi: "sk-o", anthropic: "sk-baked" },
+    };
+    const promptConfig = {
+      ...clientConfig,
+      apiKey: { anthropic: "sk-percall", google: "sk-g" }, // per-call object override
+      messages: [],
+      metadata: clientConfig,
+    } as any;
+    const out = toSmolConfig(promptConfig) as any;
+    // openAi preserved from baked-in, anthropic overridden, google added.
+    expect(out.apiKey).toEqual({ openAi: "sk-o", anthropic: "sk-percall", google: "sk-g" });
   });
 });

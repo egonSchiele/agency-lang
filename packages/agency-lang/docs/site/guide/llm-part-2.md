@@ -69,14 +69,12 @@ You can pass an options object as the second parameter, or use named arguments. 
 |---|---|
 | `model` | `string` |
 | `provider` | `string` |
-| `apiKey` | `string` |
+| `apiKey` | `{ openAi?, google?, anthropic?, ollama?, openRouter?, deepInfra?, liteLlm?, openAiCompat? }` |
 | `maxTokens` | `number` |
 | `temperature` | `number` |
 | `reasoningEffort` | `"low" \| "medium" \| "high"` |
 | `thinking` | `{ enabled: boolean, budgetTokens?: number }` |
 | `stream` | `boolean` |
-
-`apiKey` is the OpenAI API key for this call. To configure keys for other providers, set them in `agency.json` under `client.apiKey` (a per-provider object) or via the `OPENAI_API_KEY` / provider-specific environment variables.
 
 ### Tools & context
 

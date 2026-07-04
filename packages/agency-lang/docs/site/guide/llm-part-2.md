@@ -69,14 +69,14 @@ You can pass an options object as the second parameter, or use named arguments. 
 |---|---|
 | `model` | `string` |
 | `provider` | `string` |
-| `apiKey` | `string \| { openAi?, google?, anthropic?, ollama?, openRouter?, deepInfra?, liteLlm?, openAiCompat? }` |
+| `apiKey` | `{ openAi?, google?, anthropic?, ollama?, openRouter?, deepInfra?, liteLlm?, openAiCompat? }` |
 | `maxTokens` | `number` |
 | `temperature` | `number` |
 | `reasoningEffort` | `"low" \| "medium" \| "high"` |
 | `thinking` | `{ enabled: boolean, budgetTokens?: number }` |
 | `stream` | `boolean` |
 
-`apiKey` sets the API key(s) for this call. A bare `string` is a shorthand for the OpenAI key. To supply keys for other providers per call, pass the per-provider object form — e.g. `apiKey: { anthropic: "sk-ant-..." }` — which uses the same shape as `agency.json`'s `client.apiKey`. Keys you don't set still fall back to `agency.json` `client.apiKey` and the `OPENAI_API_KEY` / provider-specific environment variables.
+`apiKey` sets the API key(s) for this call as a per-provider object — e.g. `apiKey: { anthropic: "sk-ant-..." }` — using the same shape as `agency.json`'s `client.apiKey`. A bare string is intentionally **not** accepted: it would have to guess a provider slot, silently misrouting (say) an Anthropic key into the OpenAI slot. Name the provider explicitly. Keys you don't set still fall back to `agency.json` `client.apiKey` and the `OPENAI_API_KEY` / provider-specific environment variables.
 
 ### Tools & context
 

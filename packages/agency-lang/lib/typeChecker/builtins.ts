@@ -20,8 +20,9 @@ const optional = (t: VariableType): VariableType => ({
 
 /** Per-provider API-key map, mirroring `SmolConfig["apiKey"]` (see
  *  lib/runtime/llmClient.ts) and `agency.json` `client.apiKey`. Every field is
- *  optional so `{}` and any partial subset type-check. Accepted by `llm()`'s
- *  `apiKey` option alongside a bare `string` (OpenAI-key shorthand). */
+ *  optional so `{}` and any partial subset type-check. This is the ONLY form
+ *  accepted by `llm()`'s `apiKey` option — a bare string is intentionally
+ *  rejected so a non-OpenAI key can never be silently routed to `openAi`. */
 const apiKeyObject: VariableType = {
   type: "objectType",
   properties: [
@@ -45,9 +46,10 @@ const apiKeyObject: VariableType = {
 const llmOptionProperties: { key: string; value: VariableType }[] = [
     { key: "model", value: optional(string) },
     { key: "provider", value: optional(string) },
-    // A bare `string` is the OpenAI-key shorthand; the object form supplies
-    // per-provider keys (see `apiKeyObject`). Runtime: `toSmolConfig`.
-    { key: "apiKey", value: { type: "unionType", types: [string, apiKeyObject, nullT] } },
+    // Per-provider key map only (see `apiKeyObject`) — no bare-string
+    // shorthand, so a key is never silently routed to the wrong provider.
+    // Runtime: `toSmolConfig`.
+    { key: "apiKey", value: optional(apiKeyObject) },
     { key: "maxTokens", value: optional(number) },
     { key: "temperature", value: optional(number) },
     { key: "stream", value: optional(boolean) },

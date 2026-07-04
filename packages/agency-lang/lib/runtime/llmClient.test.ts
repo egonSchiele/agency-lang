@@ -63,14 +63,14 @@ describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
     expect(out.provider).toBe("openrouter");
   });
 
-  it("overrides only openAi when a per-call apiKey string is supplied", () => {
+  it("overrides only the openAi slot when a per-call apiKey names just openAi", () => {
     const clientConfig = {
       model: "gpt-4o",
       apiKey: { openAi: "sk-baked", anthropic: "sk-a" },
     };
     const promptConfig = {
       ...clientConfig,
-      apiKey: "sk-percall", // a per-call string override
+      apiKey: { openAi: "sk-percall" }, // per-call, single provider
       messages: [],
       metadata: clientConfig,
     } as any;

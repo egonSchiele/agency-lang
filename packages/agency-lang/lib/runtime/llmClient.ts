@@ -37,9 +37,10 @@ export type PromptConfig = {
     budgetTokens?: number;
   };
   reasoningEffort?: "low" | "medium" | "high";
-  /** A bare string is the OpenAI-key shorthand; the object form (same shape as
-   *  `SmolConfig["apiKey"]`) supplies per-provider keys. See `toSmolConfig`. */
-  apiKey?: string | SmolConfig["apiKey"];
+  /** Per-provider key map (same shape as `SmolConfig["apiKey"]`). No bare-string
+   *  shorthand — that would route a key to `openAi` regardless of the actual
+   *  provider. See `toSmolConfig`. */
+  apiKey?: SmolConfig["apiKey"];
   model?: string;
   provider?: string;
   metadata?: Record<string, any>;
@@ -221,8 +222,8 @@ export class SmoltalkClient implements LLMClient {
  *  The nested `apiKey` map (every provider's key) and `baseUrl` arrive via
  *  `...metadata` (the merged smoltalk client config) and MUST be preserved —
  *  replacing `apiKey` wholesale here would clobber non-OpenAI / hosted-provider
- *  keys. A per-call `apiKey` string overrides only `apiKey.openAi`; a per-call
- *  `apiKey` object merges over the metadata map (per-provider override). */
+ *  keys. A per-call `apiKey` object merges over the metadata map, overriding
+ *  only the provider slots it names. */
 export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
   const {
     messages, tools, responseFormat, abortSignal,
@@ -237,10 +238,6 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
     messages, tools, responseFormat, abortSignal,
     model, maxTokens, temperature, provider, thinking, reasoningEffort,
     hostedTools,
-    ...(typeof apiKey === "string"
-      ? { apiKey: { ...metaApiKey, openAi: apiKey } }
-      : apiKey
-      ? { apiKey: { ...metaApiKey, ...apiKey } }
-      : {}),
+    ...(apiKey ? { apiKey: { ...metaApiKey, ...apiKey } } : {}),
   } as Omit<SmolConfig, "stream">;
 }

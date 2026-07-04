@@ -18,6 +18,24 @@ const optional = (t: VariableType): VariableType => ({
   types: [t, nullT],
 });
 
+/** Per-provider API-key map, mirroring `SmolConfig["apiKey"]` (see
+ *  lib/runtime/llmClient.ts) and `agency.json` `client.apiKey`. Every field is
+ *  optional so `{}` and any partial subset type-check. Accepted by `llm()`'s
+ *  `apiKey` option alongside a bare `string` (OpenAI-key shorthand). */
+const apiKeyObject: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "openAi", value: optional(string) },
+    { key: "google", value: optional(string) },
+    { key: "anthropic", value: optional(string) },
+    { key: "ollama", value: optional(string) },
+    { key: "openRouter", value: optional(string) },
+    { key: "deepInfra", value: optional(string) },
+    { key: "liteLlm", value: optional(string) },
+    { key: "openAiCompat", value: optional(string) },
+  ],
+};
+
 /**
  * Options accepted by `llm()`'s second argument. Mirrors the user-facing
  * fields of smoltalk's PromptConfig (lib/runtime/llmClient.ts) — the runtime
@@ -27,7 +45,9 @@ const optional = (t: VariableType): VariableType => ({
 const llmOptionProperties: { key: string; value: VariableType }[] = [
     { key: "model", value: optional(string) },
     { key: "provider", value: optional(string) },
-    { key: "apiKey", value: optional(string) },
+    // A bare `string` is the OpenAI-key shorthand; the object form supplies
+    // per-provider keys (see `apiKeyObject`). Runtime: `toSmolConfig`.
+    { key: "apiKey", value: { type: "unionType", types: [string, apiKeyObject, nullT] } },
     { key: "maxTokens", value: optional(number) },
     { key: "temperature", value: optional(number) },
     { key: "stream", value: optional(boolean) },

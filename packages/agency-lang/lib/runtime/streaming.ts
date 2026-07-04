@@ -92,6 +92,7 @@ export async function handleStreamingResponse(args: {
     ctx.onStreamLock = true;
 
     try {
+      let streamError: unknown = undefined;
       for await (const chunk of completion) {
         switch (chunk.type) {
           case "text":
@@ -111,10 +112,23 @@ export async function handleStreamingResponse(args: {
               value: { completion: chunk.result, toolCalls },
             };
           case "error":
+            streamError = chunk.error;
             await emit({ type: "error", error: chunk.error });
             break;
         }
       }
+      // Stream ended without a `done` chunk. If the provider signaled an
+      // `error` chunk, surface THAT so the real failure reaches the caller
+      // (dispatchLLMRequest turns a failure Result into a throw carrying the
+      // message) instead of a generic "No completion returned". Mirrors the
+      // sync-fallback branch, which never masks the error either.
+      return {
+        success: false,
+        error:
+          streamError !== undefined
+            ? String(streamError)
+            : "Streaming response ended without a completion.",
+      };
     } catch (error) {
       if (isAbortError(error)) throw error;
       console.error("Unexpected error consuming LLM stream:", error);

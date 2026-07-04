@@ -1,0 +1,16 @@
+// A streaming provider that ends on an `error` chunk (no `done`) must surface
+// the real error to the caller, not a generic "No completion returned". An
+// onStream consumer is registered so the call routes through the streaming
+// (else) branch, which is where the error must now be carried out.
+let seen: string = ""
+
+node main(): string {
+  callback("onStream") as data {
+    seen = seen + data.type + ","
+  }
+  const result = try llm("ping", stream: true)
+  if (isFailure(result)) {
+    return "chunks=" + seen + " error=" + result.error
+  }
+  return "chunks=" + seen + " ok"
+}

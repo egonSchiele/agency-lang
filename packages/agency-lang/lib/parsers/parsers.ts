@@ -127,6 +127,7 @@ import {
   AgencyObject,
   AgencyObjectKV,
   SplatExpression,
+  Trivia,
 } from "../types/dataStructures.js";
 import {
   DefaultImport,
@@ -2019,31 +2020,111 @@ export const splatParser: Parser<SplatExpression> = seqC(
   capture(lazy(() => exprParser), "value"),
 );
 
+// Trivia (blank line / line comment / block comment) that may appear between
+// items of an array or object literal, plus any trailing whitespace so the
+// cursor lands on the next item. Mirrors `objectTrivia` (used by object
+// *types*) so literals preserve comments the same way and `fmt` round-trips.
+type TriviaNode = AgencyComment | AgencyMultiLineComment | NewLine;
+
+type LiteralEntry<T> =
+  | { kind: "item"; item: T }
+  | { kind: "trivia"; node: TriviaNode };
+
+const literalTrivia = (
+  input: string,
+): ParserResult<{ kind: "trivia"; node: TriviaNode }> => {
+  const parser = seqC(
+    capture(or(blankLineParser, commentParser, multiLineCommentParser), "node"),
+    optionalSpacesOrNewline,
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success(
+    { kind: "trivia" as const, node: result.result.node as TriviaNode },
+    result.rest,
+  );
+};
+
+// One item followed by an optional comma and trailing whitespace, so
+// `many(or(literalTrivia, itemEntry))` walks the whole list. Replaces the
+// old `sepBy(commaWithNewline, ...)`, which could not skip comments.
+const literalItemEntry =
+  <T>(itemParser: Parser<T>) =>
+  (input: string): ParserResult<{ kind: "item"; item: T }> => {
+    const parser = seqC(
+      capture(itemParser, "item"),
+      // Whitespace/newlines may sit on either side of the separating comma
+      // (matching the old `commaWithNewline`); the comma itself is optional
+      // so a trailing comma before `}`/`]` is allowed.
+      optionalSpacesOrNewline,
+      optional(char(",")),
+      optionalSpacesOrNewline,
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    return success(
+      { kind: "item" as const, item: result.result.item as T },
+      result.rest,
+    );
+  };
+
+// Split an interleaved item/trivia list into the item array plus
+// anchor-indexed trivia. Trivia is anchored to the index of the item that
+// follows it; trailing trivia is anchored at `items.length`.
+function splitLiteralEntries<T>(entries: LiteralEntry<T>[]): {
+  items: T[];
+  trivia: Trivia[];
+} {
+  const items: T[] = [];
+  const trivia: Trivia[] = [];
+  let pending: TriviaNode[] = [];
+  for (const entry of entries) {
+    if (entry.kind === "trivia") {
+      pending.push(entry.node);
+    } else {
+      if (pending.length > 0) {
+        trivia.push({ anchorIndex: items.length, comments: pending });
+        pending = [];
+      }
+      items.push(entry.item);
+    }
+  }
+  if (pending.length > 0) {
+    trivia.push({ anchorIndex: items.length, comments: pending });
+  }
+  return { items, trivia };
+}
+
 export const agencyArrayParser: Parser<AgencyArray> = (
   input: string,
 ): ParserResult<AgencyArray> => {
   const parser = trace(
     "agencyArrayParser",
     seqC(
-      set("type", "agencyArray"),
       char("["),
       optionalSpacesOrNewline,
       capture(
-        sepBy(
-          commaWithNewline,
+        many(
           or(
-            splatParser,
-            lazy(() => exprParser),
+            literalTrivia,
+            literalItemEntry(or(splatParser, lazy(() => exprParser))),
           ),
         ),
-        "items",
+        "entries",
       ),
       optionalSpacesOrNewline,
       char("]"),
     ),
   );
 
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) return result;
+  const { items, trivia } = splitLiteralEntries(
+    result.result.entries as LiteralEntry<Expression | SplatExpression>[],
+  );
+  const node: AgencyArray = { type: "agencyArray", items };
+  if (trivia.length > 0) node.trivia = trivia;
+  return success(node, result.rest);
 };
 
 const agencyObjectComputedKVParser: Parser<AgencyObjectKV> = memo(
@@ -2089,21 +2170,31 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
 ): ParserResult<AgencyObjectKV> =>
   or(agencyObjectComputedKVParser, agencyObjectStaticKVParser)(input);
 
-export const agencyObjectParser: Parser<AgencyObject> = seqC(
-  set("type", "agencyObject"),
-  char("{"),
-  optionalSpacesOrNewline,
-  capture(
-    or(
-      sepBy(commaWithNewline, or(splatParser, agencyObjectKVParser)),
-      succeed([]),
+export const agencyObjectParser: Parser<AgencyObject> = (
+  input: string,
+): ParserResult<AgencyObject> => {
+  const parser = seqC(
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(
+      many(
+        or(literalTrivia, literalItemEntry(or(splatParser, agencyObjectKVParser))),
+      ),
+      "entries",
     ),
-    "entries",
-  ),
-  optional(char(",")),
-  optionalSpacesOrNewline,
-  char("}"),
-);
+    optionalSpacesOrNewline,
+    char("}"),
+  );
+
+  const result = parser(input);
+  if (!result.success) return result;
+  const { items, trivia } = splitLiteralEntries(
+    result.result.entries as LiteralEntry<AgencyObjectKV | SplatExpression>[],
+  );
+  const node: AgencyObject = { type: "agencyObject", entries: items };
+  if (trivia.length > 0) node.trivia = trivia;
+  return success(node, result.rest);
+};
 
 // =============================================================================
 // functionCall.ts

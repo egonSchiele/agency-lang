@@ -748,3 +748,51 @@ describe("AgencyGenerator - optional key shorthand (nullish unification)", () =>
     expect(result.output).not.toContain("string | null");
   });
 });
+
+describe("AgencyGenerator - literal comment trivia (issue #317)", () => {
+  const roundTrip = (input: string): string => {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) throw new Error("parse failed");
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output;
+  };
+
+  it("preserves a line comment between object-literal entries", () => {
+    const input = `const policy = {
+  "a": 1,
+  // keep me
+  "b": 2
+}`;
+    expect(roundTrip(input)).toContain("// keep me");
+  });
+
+  it("preserves a line comment between array-literal items", () => {
+    const input = `const xs = [
+  1,
+  // keep me
+  2
+]`;
+    expect(roundTrip(input)).toContain("// keep me");
+  });
+
+  it("preserves a block comment between object-literal entries", () => {
+    const input = `const policy = {
+  "a": 1,
+  /* keep me */
+  "b": 2
+}`;
+    expect(roundTrip(input)).toContain("/* keep me */");
+  });
+
+  it("is idempotent: formatting the formatted output is a fixed point", () => {
+    const input = `const policy = {
+  "a": 1,
+  // keep me
+  "b": 2
+}`;
+    const once = roundTrip(input);
+    const twice = roundTrip(once);
+    expect(twice).toBe(once);
+  });
+});

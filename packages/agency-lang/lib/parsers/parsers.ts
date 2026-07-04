@@ -451,12 +451,24 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
     return success({ type: "text" as const, value }, input.slice(i));
   };
 
+// One character of raw multi-line text: any char that does not begin the close
+// delimiter (`"""`) or an interpolation (`${`). `not(...)` is a zero-width
+// negative lookahead; `capture(anyChar)` then consumes the single char.
+const multiLineRawChar: Parser<string> = map(
+  seqC(not(or(str('"""'), str("${"))), capture(anyChar, "c")),
+  (r) => r.c,
+);
+
+// Text segment inside a triple-quoted string. Raw by design — backslash escapes
+// like `\n` are NOT interpreted (a literal backslash then `n`) — with ONE
+// exception: `\${` decodes to a literal `${` (via `dollarBraceEscape`) so a raw
+// string can contain literal interpolation syntax (e.g. embedded Agency/shell/JS
+// source) without opening an interpolation. `\${` is tried first so its `${` is
+// consumed as an escape rather than starting one; a lone backslash and every
+// other `\x` stays verbatim. Ends at the closing `"""` or an unescaped `${`.
 export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
-  many1Till(or(str('"""'), str("${"))),
-  (text) => ({
-    type: "text",
-    value: text,
-  }),
+  many1WithJoin(or(dollarBraceEscape, multiLineRawChar)),
+  (value) => ({ type: "text", value }),
 );
 
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((

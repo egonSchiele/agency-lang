@@ -1,0 +1,9 @@
+// A triple-quoted string mixes real interpolation (${name}) with an escaped
+// literal ${} (\${skip}). Proves the \${ escape survives parser -> codegen ->
+// runtime: the printer must emit the literal ${ into the JS template literal
+// without re-interpolating it.
+node main() {
+  let name: string = "world"
+  const s = """hi ${name} and literal \${skip}"""
+  return s
+}

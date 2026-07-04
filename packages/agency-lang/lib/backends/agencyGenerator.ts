@@ -123,6 +123,16 @@ function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
   return out;
 }
 
+/** Re-escape `${` -> `\${` when printing a triple-quoted (raw) string's text.
+ * The parser decodes `\${` -> a literal `${` text segment; without re-escaping
+ * here, the formatter would emit a bare `${` and silently turn a literal back
+ * into a live interpolation on the next parse. Everything else stays raw —
+ * triple-quoted strings do not escape backslashes, newlines, or quotes. Uses
+ * split/join so `$` in the replacement is not treated as a special pattern. */
+function escapeMultiLineText(s: string): string {
+  return s.split("${").join("\\${");
+}
+
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
   protected generatedStatements: string[] = [];
@@ -912,7 +922,7 @@ export class AgencyGenerator {
     let result = '"""';
     for (const segment of node.segments) {
       if (segment.type === "text") {
-        result += segment.value;
+        result += escapeMultiLineText(segment.value);
       } else if (segment.type === "interpolation") {
         result += `\${${this.processNode(segment.expression).trim()}}`;
       }
@@ -978,7 +988,7 @@ export class AgencyGenerator {
       let content = "";
       for (const seg of node.docString.segments) {
         if (seg.type === "text") {
-          content += seg.value;
+          content += escapeMultiLineText(seg.value);
         } else {
           content += `\${${this.processNode(seg.expression).trim()}}`;
         }
@@ -1478,7 +1488,7 @@ export class AgencyGenerator {
       let content = "";
       for (const seg of node.docString.segments) {
         if (seg.type === "text") {
-          content += seg.value;
+          content += escapeMultiLineText(seg.value);
         } else {
           content += `\${${this.processNode(seg.expression).trim()}}`;
         }

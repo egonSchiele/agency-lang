@@ -15,11 +15,11 @@ import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext, agencyStore } from "./asyncContext.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
-import { AgencyCancelledError } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
 import { isPayableCost, type IpcTelemetryMessage } from "./costTelemetry.js";
-import { type IpcCallbackMessage } from "./callbackForwarding.js";
+import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
 import { invokeCallbacks } from "./hooks.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
 // isIpcMode lives in subprocessRunInfo.ts (dependency-free, so the telemetry
@@ -897,7 +897,13 @@ export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage):
 }
 
 function isForwardableCallbackName(name: unknown): name is CallbackName {
-  return typeof name === "string" && (VALID_CALLBACK_NAMES as readonly string[]).includes(name);
+  return typeof name === "string"
+    && (VALID_CALLBACK_NAMES as readonly string[]).includes(name)
+    // Reject the same names the child-side sender denylists. The child never
+    // forwards these, but a version-skewed or future-refactored child might; a
+    // JSON-stripped onOAuthRequired/onStream would fire a broken (function-less)
+    // parent callback, so the guard must match its name and exclude them.
+    && !(NON_FORWARDABLE_CALLBACKS as readonly string[]).includes(name);
 }
 
 /**
@@ -955,9 +961,26 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
   // Fire within the parent's captured ALS frame so an AgencyFunction callback
   // body resolves __globals()/__threads() against the parent's real state (we
   // run from the event-loop message handler, outside any agencyStore frame).
-  // The synchronous `void invokeCallbacks` starts inside agencyStore.run, so its
-  // async continuations inherit the frame while FIFO ordering is preserved.
-  const fire = () => void invokeCallbacks({ ctx: s.ctx, name: msg.name, data });
+  // Firing is fire-and-forget, but NOT bare `void`: fireWithGuard re-throws
+  // AgencyAbort (a cost-guard trip or cancellation raised inside a parent
+  // callback), so invokeCallbacks can reject. A bare void would orphan that as
+  // an unhandledRejection (Node may terminate) AND lose the trip. Route an
+  // AgencyAbort to the session exactly as handleTelemetryMessage routes a
+  // guard trip (kill the child, settle the run); log anything else. Attaching
+  // the handler is synchronous, so FIFO arrival-order processing still holds.
+  const fire = () =>
+    invokeCallbacks({ ctx: s.ctx, name: msg.name, data }).catch((err) => {
+      if (err instanceof AgencyAbort) {
+        killChildSafely(s);
+        settle(s, s.rejectPromise, err);
+        return;
+      }
+      ipcLog("recv", {
+        type: "callback_fire_error",
+        name: msg.name,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    });
   if (s.parentStore) {
     agencyStore.run(s.parentStore, fire);
   } else {
@@ -971,8 +994,13 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
  * kill the run). Extend this list when adding another fire-and-forget message. */
 const OBSERVATIONAL_MESSAGE_TYPES: readonly string[] = ["callback"];
 
-function isObservationalMessage(msg: { type?: string }): boolean {
-  return typeof msg.type === "string" && OBSERVATIONAL_MESSAGE_TYPES.includes(msg.type);
+function isObservationalMessage(msg: unknown): boolean {
+  // Null-safe: handleChildMessage runs on arbitrary values from an untrusted
+  // child. A child sending `undefined`/`null` makes serializedByteLength !ok and
+  // reaches here; reading `.type` off a non-object must not throw (that would
+  // leave the session unsettled — the exact failure the serialize guard avoids).
+  const type = (msg as { type?: unknown } | null | undefined)?.type;
+  return typeof type === "string" && OBSERVATIONAL_MESSAGE_TYPES.includes(type);
 }
 
 export async function handleChildMessage(s: RunSession, msg: any): Promise<void> {

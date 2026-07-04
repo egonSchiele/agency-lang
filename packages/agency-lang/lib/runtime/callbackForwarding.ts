@@ -1,8 +1,8 @@
 /**
  * Fire-and-forget forwarding of lifecycle callbacks from a subprocess to its
  * parent, so a parent's registered AgencyCallbacks fire for events that happen
- * inside a std::agency run() child (see
- * docs/superpowers/specs/2026-07-02-subprocess-callback-forwarding-design.md).
+ * inside a std::agency run() child (see the "Callback forwarding" section of
+ * docs/dev/subprocess-ipc.md).
  *
  * Dependency-light leaf (mirrors costTelemetry.ts): the only runtime import is
  * subprocessRunInfo.ts (for isIpcMode + the shared ipcChildDebug). invokeCallbacks
@@ -43,8 +43,10 @@ export const CALLBACK_PAYLOAD_LIMIT = 1024 * 1024 * 1024; // 1gb
  * defensive guard against a future refactor routing them through the choke
  * point. onTrace is function-free and simply never fires today, so it is
  * excluded by non-existence rather than listed here. See the plan's
- * "Scope & design tradeoffs" section. */
-const NON_FORWARDABLE_CALLBACKS: readonly CallbackName[] = ["onStream", "onOAuthRequired"];
+ * "Scope & design tradeoffs" section. Exported so the parent-side handler
+ * (ipc.ts) rejects the same names — the guard should match its intent even under
+ * parent/child version skew. */
+export const NON_FORWARDABLE_CALLBACKS: readonly CallbackName[] = ["onStream", "onOAuthRequired"];
 
 /** Forward one lifecycle event to the parent. No-op unless this process is a
  * forked Agency subprocess with a live IPC channel. `maxBytes` is overridable
@@ -72,9 +74,13 @@ export function sendCallbackToParent(
     return;
   }
   try {
-    // Re-parse so the sent object is guaranteed function-free regardless of the
-    // channel's serialization mode.
-    process.send(JSON.parse(serialized) as IpcCallbackMessage);
+    // Send the object directly: the fork uses the default ("json") IPC
+    // serialization (buildForkOptions sets no `serialization` option), so
+    // process.send JSON-serializes internally — stripping function fields and
+    // producing the SAME wire bytes we just measured. The up-front JSON.stringify
+    // stays only to validate serializability + measure size; a redundant
+    // parse-then-re-serialize round-trip would triple the hot-path cost.
+    process.send({ type: "callback", name, data } as IpcCallbackMessage);
   } catch (err) {
     // Channel gone — parent died; the watchdog will reap this process.
     ipcChildDebug(`callback_send_failed ${name} ${err instanceof Error ? err.message : String(err)}`);

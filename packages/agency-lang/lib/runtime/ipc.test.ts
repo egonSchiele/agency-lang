@@ -15,7 +15,7 @@ import {
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
 import { State, StateStack } from "./state/stateStack.js";
-import { AgencyCancelledError } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
 
 describe("withParentStatelog", () => {
@@ -442,6 +442,51 @@ describe("handleCallbackMessage", () => {
     expect(rejections[0]).toBeInstanceOf(AgencyCancelledError);
     expect(session.settled).toBe(true);
   });
+
+  it("routes an AgencyAbort thrown by a parent callback to kill + settle (guard trip / cancel)", async () => {
+    // fireWithGuard re-throws AgencyAbort, so invokeCallbacks can reject. The
+    // fire-and-forget `.catch` must route it to the session (not orphan it as an
+    // unhandledRejection and lose the trip), mirroring handleTelemetryMessage.
+    const kills: string[] = [];
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const abort = new AgencyCancelledError("callback tripped a guard"); // an AgencyAbort
+    const ctx: any = {
+      callbacks: { onNodeStart: () => { throw abort; } },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      rejectPromise: (e: any) => { rejections.push(e); },
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "n" } });
+    await flush();
+
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toEqual([abort]);
+    expect(rejections[0]).toBeInstanceOf(AgencyAbort);
+    expect(session.settled).toBe(true);
+  });
+
+  it("does not fire a denylisted callback name even if the parent registered it", async () => {
+    // onStream/onOAuthRequired are non-forwardable (function/Promise fields). The
+    // parent guard must reject them too — not just the child sender — else a
+    // version-skewed child could fire a broken (function-stripped) callback.
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onStream: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack });
+
+    handleCallbackMessage(session, { type: "callback", name: "onStream" as any, data: { type: "text", text: "x" } });
+    await flush();
+
+    expect(fired).toEqual([]);
+  });
 });
 
 describe("handleChildMessage oversize handling", () => {
@@ -466,6 +511,21 @@ describe("handleChildMessage oversize handling", () => {
     await handleChildMessage(session, { type: "result", value: { big: "x".repeat(50) } } as any);
 
     expect(session.settled).toBe(true); // settleWithLimitFailure fired
+  });
+
+  it("does not throw on a malformed (undefined) child message; settles instead of hanging", async () => {
+    // Regression for the null-safety fix: undefined -> serializedByteLength !ok
+    // -> isObservationalMessage(undefined) must NOT throw (a throw would escape
+    // the void-invoked handler, leaving the session unsettled = a hung run).
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { lockReleasers: {}, stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack, rejectPromise: (e: any) => rejections.push(e) });
+
+    await expect(handleChildMessage(session, undefined as any)).resolves.toBeUndefined();
+
+    expect(session.settled).toBe(true); // settled via the serialize-error path, not a throw
+    expect(rejections).toHaveLength(1);
   });
 
   it("drops an UNSERIALIZABLE callback message instead of killing the run", async () => {

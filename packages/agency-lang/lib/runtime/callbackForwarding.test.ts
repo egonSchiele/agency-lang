@@ -33,10 +33,14 @@ describe("sendCallbackToParent", () => {
     expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" })).not.toThrow();
   });
 
-  it("strips function-valued fields (e.g. onAgentStart.cancel)", () => {
+  it("strips function-valued fields (e.g. onAgentStart.cancel) on the wire", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const sent: any[] = [];
-    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    // Emulate the real fork's default ("json") IPC serialization: process.send
+    // JSON-serializes internally, which is what strips function fields. The
+    // sender hands off the object directly (no redundant parse round-trip), so
+    // the mock must serialize to reflect the actual wire payload.
+    process.send = ((m: any) => { sent.push(JSON.parse(JSON.stringify(m))); return true; }) as any;
     sendCallbackToParent("onAgentStart", { nodeName: "n", args: {}, messages: [], cancel: () => {} });
     expect(sent).toEqual([
       { type: "callback", name: "onAgentStart", data: { nodeName: "n", args: {}, messages: [] } },

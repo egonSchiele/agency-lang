@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parent onNodeStart callback fires for the child subprocess node entry",
+      "input": "",
+      "expectedOutput": "\"childNodeSeen:true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

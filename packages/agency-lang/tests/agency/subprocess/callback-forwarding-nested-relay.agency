@@ -1,0 +1,59 @@
+import { compile, run } from "std::agency"
+
+// The grandchild fires onNodeStart for "grandNode". The mid-tier child has no
+// callbacks of its own but relays the event upward (its invokeCallbacks
+// re-emits because that process is in IPC mode). The ROOT parent's callback,
+// filtered to "grandNode", must fire -> proves automatic nested relay.
+let seen: number = 0
+
+node main() {
+  callback("onNodeStart") as data {
+    if (data.nodeName == "grandNode") {
+      seen = seen + 1
+    }
+  }
+  const grandSource = """
+node grandNode() {
+  return "grandchild done"
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "grandNode")
+    if (isFailure(result)) {
+      return "inner run failed"
+    }
+    return "middle done"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isFailure(result)) {
+      return "run failed"
+    }
+    return "grandchildSeen:${seen > 0}"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

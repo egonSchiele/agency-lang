@@ -12,6 +12,7 @@ import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext } from "./asyncContext.js";
+import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RestoreSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
@@ -276,6 +277,14 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   stateStack?: StateStack;
 }): Promise<void> {
   const { name, data, stateStack } = args;
+
+  // Forward every event to the parent when running inside a std::agency run()
+  // subprocess, so the parent's registered callbacks fire for child events
+  // (fire-and-forget; strips functions; no-op outside IPC). Purely additive: the
+  // child still fires its own callbacks below. When THIS process is itself a
+  // subprocess, this re-forwards relayed events upward -> automatic nested relay.
+  sendCallbackToParent(name, data);
+
   const ctx = args.ctx ?? getRuntimeContext().ctx;
   const walkStack = stateStack ?? ctx.stateStack;
 

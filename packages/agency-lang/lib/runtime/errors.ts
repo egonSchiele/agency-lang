@@ -72,6 +72,11 @@ export type AbortCause =
     }
   | { kind: "raceLoser" }
   | { kind: "cleanup" }
+  // A runaway-recursion trip: logical function-call nesting exceeded
+  // `maxCallDepth`. Modeled as an abort (like `guardTrip`) so it propagates
+  // untouched through every generated catch and halts the run instead of being
+  // converted to a Failure that could silently re-descend into the recursion.
+  | { kind: "callDepthExceeded"; limit: number; observed: number }
   // An abort WE initiate when a single llm() call exceeds its per-call deadline.
   // (This is the cause on the call's AbortController while retrying. A transient
   // LLM failure that EXHAUSTS retries is NOT an abort — it surfaces as a plain
@@ -158,6 +163,32 @@ export class AgencyCancelledError extends AgencyAbort {
       cause ?? makeAbortCause({ kind: "userKill", reason }),
     );
     this.name = "AgencyCancelledError";
+  }
+}
+
+/** Thrown by the call-depth guard (lib/runtime/callDepth.ts, invoked from
+ *  every `AgencyFunction.invoke()`) when the logical function-call nesting
+ *  depth exceeds `maxCallDepth`. Almost always indicates unbounded recursion —
+ *  most dangerously the async kind, which flattens V8's stack and grows the
+ *  promise chain until the process OOMs with no useful diagnostic. Modeled as
+ *  an `AgencyAbort` (like `GuardExceededError`) so it propagates untouched
+ *  through every generated catch rung and halts the run rather than being
+ *  converted to a Failure and silently re-descending into the recursion. */
+export class CallDepthExceededError extends AgencyAbort {
+  readonly limit: number;
+  readonly observed: number;
+  constructor(limit: number, observed: number, recentFrames: string[]) {
+    const chain = recentFrames.join(" → ");
+    super(
+      `Maximum call depth exceeded (${observed} > ${limit}). This usually ` +
+        `means unbounded recursion. Recent calls: ${chain}. If your program ` +
+        `legitimately recurses this deeply, raise the limit via the ` +
+        `\`maxCallDepth\` config option.`,
+      makeAbortCause({ kind: "callDepthExceeded", limit, observed }),
+    );
+    this.name = "CallDepthExceededError";
+    this.limit = limit;
+    this.observed = observed;
   }
 }
 

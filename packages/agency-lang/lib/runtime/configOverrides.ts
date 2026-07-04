@@ -13,6 +13,7 @@ export type RuntimeContextConstructorArgs = {
   providerModules?: string[];
   dirname: string;
   maxRestores?: number;
+  maxCallDepth?: number;
   traceConfig?: TraceConfig;
   verbose?: boolean;
   memory?: MemoryConfig;
@@ -70,6 +71,11 @@ export function applyRuntimeConfigOverridesToContextArgs(
       ...(args.providerModules ?? []),
       ...overrideModules,
     ];
+  }
+
+  // Let a subprocess inherit the parent's runaway-recursion ceiling.
+  if (overrides.maxCallDepth !== undefined) {
+    merged.maxCallDepth = overrides.maxCallDepth;
   }
 
   return merged;

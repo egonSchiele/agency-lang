@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "45150",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "deep-but-bounded recursion (depth 300) runs to completion under the call-depth guard"
+    }
+  ]
+}

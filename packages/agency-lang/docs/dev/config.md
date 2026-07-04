@@ -44,6 +44,7 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
 | Option | Type | Description |
 |--------|------|-------------|
 | `maxToolCallRounds` | `number` | Max LLM-to-tool iterations before halting (default: 10) |
+| `maxCallDepth` | `number` | Max logical function-call nesting depth before the runaway-recursion guard throws `CallDepthExceededError` (default: 2048). Catches unbounded recursion — especially the async kind, which grows the promise chain until the process OOMs with no diagnostic — before it exhausts memory. Raise it for programs that legitimately recurse very deeply. |
 | `client` | `Partial<SmolConfig>` | Smoltalk client defaults — `logLevel`, `defaultModel`, `defaultProvider`, nested `apiKey`/`baseUrl` maps, and nested `statelog` config |
 
 > **Breaking change (smoltalk 0.6.0):** the flat `client.openAiApiKey` /

@@ -4,6 +4,26 @@ import { AgencyFunction, UNSET } from "./agencyFunction.js";
 import { runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { CallDepthExceededError } from "./errors.js";
+
+function makeNamedFunction(
+  name: string,
+  fn: (...args: any[]) => any,
+  params: { name: string }[] = [],
+) {
+  return new AgencyFunction({
+    name,
+    module: "test.agency",
+    fn,
+    params: params.map((p) => ({
+      name: p.name,
+      hasDefault: false,
+      defaultValue: undefined,
+      variadic: false,
+    })),
+    toolDefinition: null,
+  });
+}
 
 function makeFunction(
   params: { name: string; hasDefault?: boolean; defaultValue?: unknown; variadic?: boolean }[],
@@ -71,6 +91,58 @@ describe("AgencyFunction", () => {
       const fn = makeFunction([]);
       const result = await fn.invoke({ type: "positional", args: [] });
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("call-depth guard", () => {
+    const noArgs = { type: "positional" as const, args: [] };
+
+    it("trips CallDepthExceededError on unbounded mutual recursion", async () => {
+      const ctx = makeMockCtx();
+      ctx.maxCallDepth = 5;
+      // foo's body references bar before bar is declared; the arrow only runs
+      // at call time (after both exist), so const forward-reference is fine.
+      const foo = makeNamedFunction("foo", () => bar.invoke(noArgs));
+      const bar = makeNamedFunction("bar", () => foo.invoke(noArgs));
+      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
+        await expect(foo.invoke(noArgs)).rejects.toBeInstanceOf(
+          CallDepthExceededError,
+        );
+      });
+    });
+
+    it("allows recursion that stays under the limit", async () => {
+      const ctx = makeMockCtx();
+      ctx.maxCallDepth = 100;
+      const countdown: AgencyFunction = makeNamedFunction(
+        "countdown",
+        (n: number) =>
+          n <= 0
+            ? "done"
+            : countdown.invoke({ type: "positional", args: [n - 1] }),
+        [{ name: "n" }],
+      );
+      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
+        await expect(
+          countdown.invoke({ type: "positional", args: [10] }),
+        ).resolves.toBe("done");
+      });
+    });
+
+    it("counts logical depth, not V8 stack (async recursion trips)", async () => {
+      const ctx = makeMockCtx();
+      ctx.maxCallDepth = 20;
+      // Each call awaits before recursing, flattening V8's stack — only the
+      // logical depth counter can catch this.
+      const self: AgencyFunction = makeNamedFunction("selfAsync", async () => {
+        await Promise.resolve();
+        return self.invoke(noArgs);
+      });
+      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
+        await expect(self.invoke(noArgs)).rejects.toBeInstanceOf(
+          CallDepthExceededError,
+        );
+      });
     });
   });
 

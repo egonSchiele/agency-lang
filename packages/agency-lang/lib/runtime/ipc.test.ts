@@ -473,6 +473,34 @@ describe("handleCallbackMessage", () => {
     expect(session.settled).toBe(true);
   });
 
+  it("re-fires the mid-tier's own callback AND re-forwards upward (nested relay, both fire)", async () => {
+    // Models a MID-TIER that is itself a subprocess: on a forwarded grandchild
+    // event it must BOTH fire its own registered callback AND re-forward the
+    // event to its parent (invokeCallbacks re-emits because this process is in
+    // IPC mode). This is the deterministic equivalent of a "both fire" E2E —
+    // which cannot be written cleanly because a run()-compiled child can't hold
+    // top-level globals and a forwarded-event callback fires on the parentStore
+    // frame (so node-locals aren't observable).
+    vi.stubEnv("AGENCY_IPC", "1");
+    const originalSend = process.send;
+    const sent: any[] = [];
+    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    try {
+      const fired: any[] = [];
+      const stack = new StateStack();
+      const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+      const session = makeSession({ ctx, stateStack: stack, limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+
+      handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } });
+      await flush();
+
+      expect(fired).toEqual([{ nodeName: "grandNode" }]); // mid-tier's own callback fired
+      expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } }]); // and re-forwarded upward
+    } finally {
+      process.send = originalSend;
+    }
+  });
+
   it("does not fire a denylisted callback name even if the parent registered it", async () => {
     // onStream/onOAuthRequired are non-forwardable (function/Promise fields). The
     // parent guard must reject them too — not just the child sender — else a

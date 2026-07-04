@@ -13,7 +13,7 @@
  * to reap this process anyway.
  */
 
-import { isIpcMode } from "./subprocessRunInfo.js";
+import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
 
 export type IpcTelemetryMessage = {
   type: "telemetry";
@@ -36,13 +36,9 @@ export function sendCostTelemetryToParent(costUsd: number): void {
     process.send(msg);
   } catch (err) {
     // Channel gone — parent died; the watchdog will exit this process.
-    // Deliberately swallowed (fire-and-forget invariant), but traceable:
-    // ipcLog is unreachable from this leaf module, so mirror its line
-    // format (this sender only ever runs in a child) and env gating.
-    if (process.env.AGENCY_IPC_DEBUG === "1") {
-      const ts = new Date().toISOString().slice(11, 23);
-      const detail = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[ipc:child] ${ts} send telemetry_send_failed ${detail}\n`);
-    }
+    // Deliberately swallowed (fire-and-forget invariant), but traceable via the
+    // shared child-debug logger (ipcLog is unreachable from this leaf module).
+    const detail = err instanceof Error ? err.message : String(err);
+    ipcChildDebug(`send telemetry_send_failed ${detail}`);
   }
 }

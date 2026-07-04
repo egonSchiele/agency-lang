@@ -36,6 +36,16 @@ export function isIpcMode(): boolean {
   return process.env.AGENCY_IPC === "1";
 }
 
+/** Emit one child-side IPC debug line to stderr, gated on AGENCY_IPC_DEBUG=1.
+ * Lives here (the dependency-free leaf) so both callbackForwarding.ts and
+ * costTelemetry.ts share one implementation; ipcLog (ipc.ts) is unreachable from
+ * these leaves without violating the layering rule. */
+export function ipcChildDebug(line: string): void {
+  if (process.env.AGENCY_IPC_DEBUG !== "1") return;
+  const ts = new Date().toISOString().slice(11, 23);
+  process.stderr.write(`[ipc:child] ${ts} ${line}\n`);
+}
+
 let info: SubprocessRunInfo = { depth: 0 };
 
 export function setSubprocessRunInfo(next: SubprocessRunInfo): void {

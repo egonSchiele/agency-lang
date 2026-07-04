@@ -36,9 +36,9 @@ parent re-fires its own callbacks. Notes:
 - **Unconditional.** Every event is forwarded even when no parent callback is
   registered, and payloads are the full in-process ones (e.g. `messages` arrays),
   so forwarding is heavier than in-process firing.
-- **Not forwarded:** `onStream` (streamed outside the forwarding choke point),
-  `onOAuthRequired` (needs a live bidirectional channel), and `onTrace` (not
-  currently dispatched). All other hooks forward.
+- **Not forwarded:** `onStream` (streamed outside the forwarding choke point —
+  forwarding it is tracked in #418), `onOAuthRequired` (needs a live bidirectional
+  channel), and `onTrace` (not currently dispatched). All other hooks forward.
 
 See `docs/dev/subprocess-ipc.md` (Callback forwarding) for the mechanism.
 

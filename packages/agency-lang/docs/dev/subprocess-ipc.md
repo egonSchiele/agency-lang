@@ -189,10 +189,13 @@ child-side sender live in the dependency-light leaf `callbackForwarding.ts`
 - **Unconditional + heavy.** The child cannot know which callbacks the parent
   registered, so every event (except the denylist below) is serialized and sent
   on every occurrence, even with no parent callback — an accepted v1 tradeoff.
-- **Not forwarded:** `onStream` (dispatched outside `invokeCallbacks`) and
-  `onOAuthRequired` (carries a `Promise`/functions needing a live bidirectional
-  channel) are denylisted in `sendCallbackToParent`; `onTrace` is never dispatched
-  today so it simply never forwards.
+- **Not forwarded:** `onStream` (dispatched outside `invokeCallbacks`; forwarding
+  it is tracked in #418) and `onOAuthRequired` (carries a `Promise`/functions
+  needing a live bidirectional channel) are denylisted in `sendCallbackToParent`;
+  `onTrace` is never dispatched today so it simply never forwards.
+- **Child-side diagnostics** (`callback_send_failed`, `callback_dropped_oversize`,
+  `callback_unserializable`) go to a statelog `debug` event (best-effort, via
+  `ipcChildDebug`) plus stderr under `AGENCY_IPC_DEBUG=1`.
 
 ## The `std::run` interrupt gate
 

@@ -1,0 +1,25 @@
+// A `return` inside a standalone `seq` block or a `thread`/`subthread` block
+// yields the value of an enclosing `match` expression arm. These blocks run
+// inline on the arm's own runner, so the match-exit unwind reaches its owner.
+node dispatch(x: string): string {
+  const r = match(x) {
+    "seq" => {
+      seq {
+        let v = "from-seq"
+        return v
+      }
+    }
+    "thread" => {
+      thread {
+        return "from-thread"
+      }
+    }
+    "subthread" => {
+      subthread {
+        return "from-subthread"
+      }
+    }
+    _ => "default"
+  }
+  return "got: ${r}"
+}

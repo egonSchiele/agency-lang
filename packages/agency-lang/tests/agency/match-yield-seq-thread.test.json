@@ -1,0 +1,8 @@
+{
+  "tests": [
+    { "nodeName": "dispatch", "input": "\"seq\"", "expectedOutput": "\"got: from-seq\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return inside a standalone seq yields the match value" },
+    { "nodeName": "dispatch", "input": "\"thread\"", "expectedOutput": "\"got: from-thread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return inside a thread block yields the match value" },
+    { "nodeName": "dispatch", "input": "\"subthread\"", "expectedOutput": "\"got: from-subthread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return inside a subthread block yields the match value" },
+    { "nodeName": "dispatch", "input": "\"other\"", "expectedOutput": "\"got: default\"", "evaluationCriteria": [{ "type": "exact" }], "description": "wildcard arm still yields normally" }
+  ]
+}

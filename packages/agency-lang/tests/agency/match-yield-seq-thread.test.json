@@ -3,6 +3,16 @@
     { "nodeName": "dispatch", "input": "\"seq\"", "expectedOutput": "\"got: from-seq\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return inside a standalone seq yields the match value" },
     { "nodeName": "dispatch", "input": "\"thread\"", "expectedOutput": "\"got: from-thread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return inside a thread block yields the match value" },
     { "nodeName": "dispatch", "input": "\"subthread\"", "expectedOutput": "\"got: from-subthread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return inside a subthread block yields the match value" },
-    { "nodeName": "dispatch", "input": "\"other\"", "expectedOutput": "\"got: default\"", "evaluationCriteria": [{ "type": "exact" }], "description": "wildcard arm still yields normally" }
+    { "nodeName": "dispatch", "input": "\"other\"", "expectedOutput": "\"got: default\"", "evaluationCriteria": [{ "type": "exact" }], "description": "wildcard arm still yields normally" },
+
+    { "nodeName": "nested", "input": "\"tt\"", "expectedOutput": "\"got: tt\"", "evaluationCriteria": [{ "type": "exact" }], "description": "thread nested in thread yields" },
+    { "nodeName": "nested", "input": "\"st\"", "expectedOutput": "\"got: st\"", "evaluationCriteria": [{ "type": "exact" }], "description": "seq nested in thread yields" },
+    { "nodeName": "nested", "input": "\"ts\"", "expectedOutput": "\"got: ts\"", "evaluationCriteria": [{ "type": "exact" }], "description": "thread nested in seq yields" },
+    { "nodeName": "nested", "input": "\"ss\"", "expectedOutput": "\"got: ss\"", "evaluationCriteria": [{ "type": "exact" }], "description": "seq nested in seq yields" },
+
+    { "nodeName": "controlFlow", "input": "\"if\"", "expectedOutput": "\"got: if-thread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "thread return inside an if branch yields" },
+    { "nodeName": "controlFlow", "input": "\"for\"", "expectedOutput": "\"got: for-seq\"", "evaluationCriteria": [{ "type": "exact" }], "description": "seq return inside a for loop yields and unwinds through the loop" },
+    { "nodeName": "controlFlow", "input": "\"while\"", "expectedOutput": "\"got: while-thread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "thread return inside a while loop yields and unwinds through the loop" },
+    { "nodeName": "controlFlow", "input": "\"nestedmatch\"", "expectedOutput": "\"got: inner-thread\"", "evaluationCriteria": [{ "type": "exact" }], "description": "thread return in an inner match arm yields the inner match, returned to the outer" }
   ]
 }

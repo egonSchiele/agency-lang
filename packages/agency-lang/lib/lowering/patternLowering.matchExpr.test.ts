@@ -242,6 +242,45 @@ describe("expression match arm: seq/thread yield to the match", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("thread nested in a thread: matchYield lands in the innermost body", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      thread {\n        thread {\n          return 1\n        }\n      }\n    }`));
+    const outer = arm.find((s: any) => s.type === "messageThread");
+    const inner = outer.body.find((s: any) => s.type === "messageThread");
+    expect(inner).toBeDefined();
+    expect(inner.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq nested in a thread (and vice versa) rewrites the innermost return", () => {
+    const st = armBodyOf(WRAPN(`"a" => { thread { seq { return 1 } } }`));
+    const seqInThread = st
+      .find((s: any) => s.type === "messageThread")
+      .body.find((s: any) => s.type === "seqBlock");
+    expect(seqInThread.body.some((s: any) => s.type === "matchYield")).toBe(true);
+
+    const ts = armBodyOf(WRAPN(`"a" => { seq { thread { return 1 } } }`));
+    const threadInSeq = ts
+      .find((s: any) => s.type === "seqBlock")
+      .body.find((s: any) => s.type === "messageThread");
+    expect(threadInSeq.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq inside a for loop body rewrites the return (loop still needs a trailing yield)", () => {
+    const arm = armBodyOf(
+      WRAPN(`"a" => {\n      for (i in [1]) {\n        seq { return 1 }\n      }\n      return 2\n    }`),
+    );
+    const loop = arm.find((s: any) => s.type === "forLoop");
+    const seqInLoop = loop.body.find((s: any) => s.type === "seqBlock");
+    expect(seqInLoop.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("a parallel nested inside a standalone seq is still rejected", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      seq {\n        parallel {\n          return 1\n        }\n      }\n    }`),
+    );
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(/parallel/i);
+  });
+
   it("a seq arm that does not yield on every path still errors", () => {
     const parsed = parseAgency(WRAPN(`"a" => {\n      seq {\n        print("hi")\n      }\n    }`));
     expect(parsed.success).toBe(false);

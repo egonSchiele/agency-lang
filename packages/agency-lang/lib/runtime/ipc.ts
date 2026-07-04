@@ -19,6 +19,9 @@ import { AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
 import { isPayableCost, type IpcTelemetryMessage } from "./costTelemetry.js";
+import { type IpcCallbackMessage } from "./callbackForwarding.js";
+import { invokeCallbacks } from "./hooks.js";
+import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
 // isIpcMode lives in subprocessRunInfo.ts (dependency-free, so the telemetry
 // leaf can share it); re-exported here for the existing consumers.
 export { isIpcMode };
@@ -276,7 +279,8 @@ export type SubprocessToParent =
   | IpcErrorMessage
   | IpcLockAcquireMessage
   | IpcLockReleaseMessage
-  | IpcTelemetryMessage;
+  | IpcTelemetryMessage
+  | IpcCallbackMessage;
 export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
 
 const sessionLockOwners: Record<string, string[]> = {};
@@ -886,6 +890,58 @@ export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage):
   }
 }
 
+function isForwardableCallbackName(name: unknown): name is CallbackName {
+  return typeof name === "string" && (VALID_CALLBACK_NAMES as readonly string[]).includes(name);
+}
+
+/**
+ * Give a forwarded onAgentStart payload a REAL parent-owned cancel().
+ *
+ * The child's own cancel function was stripped by JSON. The parent owns the
+ * child session, so a parent onAgentStart callback that calls cancel() kills the
+ * child (SIGKILL) and settles run() as cancelled.
+ *
+ * BEST-EFFORT and ASYNC — NOT the in-process semantic. In-process, cancel()
+ * throws synchronously and PREVENTS the agent from running. Here the child fires
+ * onAgentStart and proceeds without back-pressure (fire-and-forget), so the
+ * parent's cancel arrives later and kills a child that may already be mid-run or
+ * finished. If the child's terminal result wins the race, settle()'s `s.settled`
+ * guard makes the cancel a silent no-op. Killing the child is the closest
+ * approximation this one-way channel allows.
+ *
+ * The `typeof data === object` guard is defensive: the child is the less-trusted
+ * party, so we do not spread a malformed non-object payload.
+ */
+function withParentCancel(s: RunSession, data: unknown): unknown {
+  if (typeof data !== "object" || data === null) return data;
+  return {
+    ...(data as Record<string, unknown>),
+    cancel: (reason?: string) => {
+      killChildSafely(s);
+      settle(s, s.rejectPromise, new AgencyCancelledError(reason));
+    },
+  };
+}
+
+/**
+ * Fire the PARENT's registered callbacks for an event forwarded from a child.
+ *
+ * MUST STAY SYNCHRONOUS (like handleTelemetryMessage): handleChildMessage
+ * void-invokes its async dispatch, so FIFO arrival-order processing holds only
+ * while this path has no awaits. Parent callbacks fire fire-and-forget (void
+ * invokeCallbacks) so a slow or throwing parent callback cannot wedge the pump.
+ *
+ * invokeCallbacks re-emits upward when THIS process is itself a subprocess, so a
+ * grandchild's event relays to the root with no explicit relay code.
+ */
+export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): void {
+  if (s.settled) return; // drop post-settle events
+  if (!isForwardableCallbackName(msg.name)) return; // child is less-trusted
+
+  const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
+  void invokeCallbacks({ ctx: s.ctx, name: msg.name, data, stateStack: s.stateStack });
+}
+
 async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   ipcLog("recv", msg);
   // Defensively serialize once: a non-serializable value (circular refs,
@@ -912,6 +968,8 @@ async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
     settle(s, s.resolvePromise, { type: "interrupted", msg } satisfies SessionOutcome);
   } else if (msg.type === "telemetry") {
     handleTelemetryMessage(s, msg);
+  } else if (msg.type === "callback") {
+    handleCallbackMessage(s, msg);
   } else if (msg.type === "error") {
     handleErrorMessage(s, msg);
   } else if (msg.type === "lockAcquire") {

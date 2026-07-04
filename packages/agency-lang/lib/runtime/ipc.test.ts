@@ -8,11 +8,13 @@ import {
   resolveDepthCap,
   attachSessionHandlers,
   handleTelemetryMessage,
+  handleCallbackMessage,
   withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
 import { StateStack } from "./state/stateStack.js";
+import { AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
 
 describe("withParentStatelog", () => {
@@ -343,5 +345,78 @@ describe("handleTelemetryMessage", () => {
     handleTelemetryMessage(session, { type: "telemetry", costUsd: -5 } as any);
     handleTelemetryMessage(session, { type: "telemetry" } as any);
     expect(stack.localCost).toBe(0);
+  });
+});
+
+const flush = () => new Promise((r) => setImmediate(r));
+
+describe("handleCallbackMessage", () => {
+  it("fires the parent's registered callback with the forwarded data", async () => {
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack, limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "childNode" } });
+    await flush();
+
+    expect(fired).toEqual([{ nodeName: "childNode" }]);
+  });
+
+  it("ignores an unknown callback name (child is less-trusted)", async () => {
+    // Register the handler UNDER the bogus name. gatherCallbacks reads
+    // ctx.callbacks[name] dynamically, so WITHOUT the isForwardableCallbackName
+    // guard this would fire. This makes the test actually discriminate the guard
+    // (registering it under a valid name would pass either way — false confidence).
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onBogus: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack });
+
+    handleCallbackMessage(session, { type: "callback", name: "onBogus" as any, data: { x: 1 } });
+    await flush();
+
+    expect(fired).toEqual([]);
+  });
+
+  it("drops a callback that arrives after the session settled", async () => {
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack, settled: true });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "late" } });
+    await flush();
+
+    expect(fired).toEqual([]);
+  });
+
+  it("reconstructs onAgentStart.cancel to kill the child and settle cancelled", async () => {
+    const kills: string[] = [];
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = {
+      callbacks: { onAgentStart: (d: any) => d.cancel("parent said stop") },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      rejectPromise: (err: any) => { rejections.push(err); },
+    });
+
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onAgentStart",
+      data: { nodeName: "childToCancel", args: {}, messages: [] },
+    });
+    await flush();
+
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0]).toBeInstanceOf(AgencyCancelledError);
+    expect(session.settled).toBe(true);
   });
 });

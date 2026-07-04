@@ -113,31 +113,8 @@ type defined in a node doesn't work
 handle multiple interrupts in debugger
 better debugger test harness
 
-`with approve` cant be used in a return statement?
-`with reject` seems useless
-
-tool-retry test failure:
-```
-Running JS test: tool-retry
-Tool call "unsafeChainTool" crashed: Unknown named argument 'action' in call to 'unsafeChainTool'
-Tool call "unsafeMethodTool" crashed: Unknown named argument 'action' in call to 'unsafeMethodTool'
-```
-
-import * from std::array into every file
-
-nested fork blocks, inner block can't access the variables of the outer block (the arg vars at least)
 
 Need to add cron agent jobs that periodically check for out-of-date documentation and to check for files in the standard library that are missing from the docs-new config.
-
-
-`+=` doesn;t work with globals:
-
-```
-let foo = 0
-def func(id: string) {
-  foo += 1
-}
-```
 
 tool-retry test skipped - one test failing
 
@@ -189,19 +166,11 @@ Two options:
 
 ----
 
-allow comments inside arrays and objects too
-
-undefined var typecheck not triggering (`handoff` func in research agent not imported)
-
----
 
 If multiple tool calls in parallel, throw an interrupt, they mess up the display because they are all printing interleaved output to the terminal. I think I need a mutex system for something like this.
 
 ---
 
-sort imports alphabetically and group them by agency imports, std imports, and other imports.
-
----
 
 clean up imports in lib/templates/backends/typescriptGenerator/imports.mustache, agency scripts shouldn't be able to access built-in node modules like path/os without explicitly importing them.
 

@@ -77,7 +77,7 @@ You can also nest `fork`s inside other `fork`s. This can be a powerful way to ru
 ```ts
 node main() {
   const prompt = "Write me a 100 word story about a talking dog."
-  const models = ["gpt-4o-mini", "gpt-3.5-turbo", "gemini-3.1-flash-lite-preview"]
+  const models = ["gpt-4o-mini", "gpt-3.5-turbo", "gemini-3.1-pro-preview"]
   const story = race(models) as model {
     const _story = llm(prompt, { model: model })
     return { model: model, story: _story }    

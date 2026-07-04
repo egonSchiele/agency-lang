@@ -12,7 +12,7 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
-import { getRuntimeContext } from "./asyncContext.js";
+import { getRuntimeContext, agencyStore } from "./asyncContext.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
 import { AgencyCancelledError } from "./errors.js";
@@ -451,6 +451,12 @@ export type RunSession = {
   limits: RunLimits;
   ctx: any;
   stateStack: any;
+  /** The parent's full ALS store frame captured at run() time. Forwarded
+   * callbacks (handleCallbackMessage) fire from the event-loop message handler,
+   * OUTSIDE any agencyStore frame; re-establishing this frame lets an
+   * AgencyFunction callback body resolve __globals()/__threads() against the
+   * parent's real globals, exactly as an in-process callback would. */
+  parentStore?: any;
   resolvePromise: (v: SessionOutcome) => void;
   rejectPromise: (v: any) => void;
   settled: boolean;
@@ -933,13 +939,30 @@ function withParentCancel(s: RunSession, data: unknown): unknown {
  *
  * invokeCallbacks re-emits upward when THIS process is itself a subprocess, so a
  * grandchild's event relays to the root with no explicit relay code.
+ *
+ * Fires on the parent's FULL stack (ctx.stateStack), NOT the run() call-site
+ * slice s.stateStack: a parent callback registered on an ancestor frame (e.g. a
+ * node-level `callback("onNodeStart")` above the run() call) is only reachable by
+ * walking the full stack, exactly as an in-process event does via callHook (which
+ * omits stateStack and defaults to ctx.stateStack). Passing s.stateStack here
+ * would silently miss those ancestor-frame callbacks.
  */
 export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): void {
   if (s.settled) return; // drop post-settle events
   if (!isForwardableCallbackName(msg.name)) return; // child is less-trusted
 
   const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
-  void invokeCallbacks({ ctx: s.ctx, name: msg.name, data, stateStack: s.stateStack });
+  // Fire within the parent's captured ALS frame so an AgencyFunction callback
+  // body resolves __globals()/__threads() against the parent's real state (we
+  // run from the event-loop message handler, outside any agencyStore frame).
+  // The synchronous `void invokeCallbacks` starts inside agencyStore.run, so its
+  // async continuations inherit the frame while FIFO ordering is preserved.
+  const fire = () => void invokeCallbacks({ ctx: s.ctx, name: msg.name, data });
+  if (s.parentStore) {
+    agencyStore.run(s.parentStore, fire);
+  } else {
+    fire();
+  }
 }
 
 /** Message types whose delivery is observational — an oversize or
@@ -1048,6 +1071,7 @@ export function attachSessionHandlers(s: RunSession, instruction: RunInstruction
 async function runSubprocessSession(opts: {
   ctx: any;
   stateStack: any;
+  parentStore?: any;
   instruction: RunInstruction | ResumeInstruction;
   limits: RunLimits;
   cwd?: string;
@@ -1065,6 +1089,7 @@ async function runSubprocessSession(opts: {
       limits: opts.limits,
       ctx: opts.ctx,
       stateStack: opts.stateStack,
+      parentStore: opts.parentStore,
       resolvePromise,
       rejectPromise,
       settled: false,
@@ -1131,6 +1156,7 @@ function resolveInstruction(args: {
 async function invokeSubprocess(args: {
   ctx: any;
   stateStack: any;
+  parentStore?: any;
   parentFrame: State;
   compiled: { moduleId: string; code: string };
   node: string;
@@ -1181,6 +1207,7 @@ async function invokeSubprocess(args: {
     const outcome = await runSubprocessSession({
       ctx: args.ctx,
       stateStack: args.stateStack,
+      parentStore: args.parentStore,
       instruction,
       limits: args.limits,
       cwd: args.cwd,
@@ -1297,6 +1324,7 @@ export async function _run(
           invokeSubprocess({
             ctx,
             stateStack,
+            parentStore: store,
             parentFrame,
             compiled,
             node,

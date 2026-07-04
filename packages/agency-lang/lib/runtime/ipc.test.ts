@@ -14,7 +14,7 @@ import {
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
-import { StateStack } from "./state/stateStack.js";
+import { State, StateStack } from "./state/stateStack.js";
 import { AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
 
@@ -362,6 +362,28 @@ describe("handleCallbackMessage", () => {
     await flush();
 
     expect(fired).toEqual([{ nodeName: "childNode" }]);
+  });
+
+  it("fires a SCOPED parent callback registered on an ancestor stack frame", async () => {
+    // Regression guard: a node-level `callback("onNodeStart")` registers a
+    // SCOPED callback on the parent's stack, found only by walking
+    // ctx.stateStack. s.stateStack is the run() call-site SLICE and does NOT
+    // contain the ancestor frame — the handler must ignore it and walk
+    // ctx.stateStack (as in-process callHook does). With the old
+    // `stateStack: s.stateStack` this callback was silently missed.
+    const fired: any[] = [];
+    const frame = new State();
+    frame.addScopedCallback("onNodeStart", (d: any) => fired.push(d));
+    const fullStack = new StateStack();
+    fullStack.stack = [frame];
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: fullStack };
+    // A DIFFERENT, empty slice — mimics the run() call-site slice.
+    const session = makeSession({ ctx, stateStack: new StateStack(), limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "child" } });
+    await flush();
+
+    expect(fired).toEqual([{ nodeName: "child" }]);
   });
 
   it("ignores an unknown callback name (child is less-trusted)", async () => {

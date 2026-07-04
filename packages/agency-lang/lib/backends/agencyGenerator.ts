@@ -28,6 +28,7 @@ import {
   AgencyArray,
   AgencyObject,
   AgencyObjectKV,
+  Trivia,
 } from "../types/dataStructures.js";
 import {
   FunctionCall,
@@ -660,26 +661,34 @@ export class AgencyGenerator {
     return str;
   }
 
+  // Append the comment/blank-line trivia anchored at `anchorIndex` to `lines`,
+  // one rendered line per comment. Shared by object types and array/object
+  // literals so all three preserve trivia identically. Accepts either
+  // `ObjectTypeTrivia[]` or `Trivia[]` (structurally identical).
+  protected emitTriviaAt(
+    trivia: (ObjectTypeTrivia | Trivia)[] | undefined,
+    anchorIndex: number,
+    lines: string[],
+  ): void {
+    const match = (trivia ?? []).find((t) => t.anchorIndex === anchorIndex);
+    for (const n of match?.comments ?? []) {
+      if (n.type === "newLine") lines.push("");
+      else if (n.type === "comment") lines.push(this.processComment(n));
+      else lines.push(this.processMultiLineComment(n));
+    }
+  }
+
   protected aliasedTypeToString(aliasedType: VariableType): string {
     if (aliasedType.type === "objectType") {
       this.increaseIndent();
-      const byAnchor: Record<number, ObjectTypeTrivia> = {};
-      for (const t of aliasedType.trivia ?? []) byAnchor[t.anchorIndex] = t;
       const lines: string[] = [];
-      const emit = (i: number) => {
-        for (const n of byAnchor[i]?.comments ?? []) {
-          if (n.type === "newLine") lines.push("");
-          else if (n.type === "comment") lines.push(this.processComment(n));
-          else lines.push(this.processMultiLineComment(n));
-        }
-      };
       const props = aliasedType.properties;
       for (let i = 0; i < props.length; i++) {
-        emit(i);
+        this.emitTriviaAt(aliasedType.trivia, i, lines);
         const sep = i === props.length - 1 ? "" : ";";
         lines.push(this.indentStr(this.stringifyProp(props[i])) + sep);
       }
-      emit(props.length);
+      this.emitTriviaAt(aliasedType.trivia, props.length, lines);
       this.decreaseIndent();
       return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
     }
@@ -1079,37 +1088,61 @@ export class AgencyGenerator {
   // Data structures
 
   protected processAgencyArray(node: AgencyArray): string {
-    const items = node.items.map((item) => {
-      if (item.type === "splat") {
-        return `...${this.processNode(item.value).trim()}`;
-      }
-      return this.processNode(item).trim();
-    });
-    return this.wrapList(items, "", "[", "]");
+    // With no interleaved comments, keep the compact `wrapList` formatting
+    // (which may render on a single line). Trivia forces the multi-line form
+    // so each comment gets its own line.
+    if (!node.trivia?.length) {
+      const items = node.items.map((item) => {
+        if (item.type === "splat") {
+          return `...${this.processNode(item.value).trim()}`;
+        }
+        return this.processNode(item).trim();
+      });
+      return this.wrapList(items, "", "[", "]");
+    }
+
+    this.increaseIndent();
+    const lines: string[] = [];
+    for (let i = 0; i < node.items.length; i++) {
+      this.emitTriviaAt(node.trivia, i, lines);
+      const item = node.items[i];
+      const itemStr =
+        item.type === "splat"
+          ? `...${this.processNode(item.value).trim()}`
+          : this.processNode(item).trim();
+      const sep = i === node.items.length - 1 ? "" : ",";
+      lines.push(this.indentStr(itemStr) + sep);
+    }
+    this.emitTriviaAt(node.trivia, node.items.length, lines);
+    this.decreaseIndent();
+    return "[\n" + lines.join("\n") + "\n" + this.indentStr("]");
   }
 
   protected processAgencyObject(node: AgencyObject): string {
-    this.increaseIndent();
-
-    const entries = node.entries.map((entry) => {
-      if ("type" in entry && entry.type === "splat") {
-        return this.indentStr(`...${this.processNode(entry.value).trim()}`);
-      }
-      const kv = entry as AgencyObjectKV;
-      const valueCode = this.processNode(kv.value).trim();
-      if (kv.computedKey) {
-        const keyCode = this.processNode(kv.computedKey).trim();
-        return this.indentStr(`[${keyCode}]: ${valueCode}`);
-      }
-      return this.indentStr(`${this.addQuotesToKey(kv.key)}: ${valueCode}`);
-    });
-    this.decreaseIndent();
-    if (entries.length === 0) {
+    if (node.entries.length === 0 && !node.trivia?.length) {
       return `{}`;
     }
-    const entriesStr = "\n" + entries.join(",\n") + "\n";
-
-    return `{${entriesStr}` + this.indentStr("}");
+    this.increaseIndent();
+    const lines: string[] = [];
+    for (let i = 0; i < node.entries.length; i++) {
+      this.emitTriviaAt(node.trivia, i, lines);
+      const entry = node.entries[i];
+      let entryStr: string;
+      if ("type" in entry && entry.type === "splat") {
+        entryStr = `...${this.processNode(entry.value).trim()}`;
+      } else {
+        const kv = entry as AgencyObjectKV;
+        const valueCode = this.processNode(kv.value).trim();
+        entryStr = kv.computedKey
+          ? `[${this.processNode(kv.computedKey).trim()}]: ${valueCode}`
+          : `${this.addQuotesToKey(kv.key)}: ${valueCode}`;
+      }
+      const sep = i === node.entries.length - 1 ? "" : ",";
+      lines.push(this.indentStr(entryStr) + sep);
+    }
+    this.emitTriviaAt(node.trivia, node.entries.length, lines);
+    this.decreaseIndent();
+    return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
   }
 
   private addQuotesToKey(key: string): string {

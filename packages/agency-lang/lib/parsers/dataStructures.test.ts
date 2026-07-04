@@ -799,4 +799,96 @@ describe("dataStructures parsers", () => {
       }
     });
   });
+
+  // Regression tests for issue #317: `//` and `/* */` comments between
+  // object-literal entries / array items must parse AND be preserved as
+  // trivia so `agency fmt` round-trips losslessly.
+  describe("comments between entries (issue #317)", () => {
+    it("parses a line comment between object entries and preserves it as trivia", () => {
+      const input = `{
+  "a": 1,
+  // keep me
+  "b": 2
+}`;
+      const result = agencyObjectParser(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.entries).toHaveLength(2);
+        expect(result.result.trivia).toEqual([
+          {
+            anchorIndex: 1,
+            comments: [{ type: "comment", content: " keep me" }],
+          },
+        ]);
+      }
+    });
+
+    it("preserves a leading comment (anchorIndex 0) and a trailing comment", () => {
+      const input = `{
+  // lead
+  "a": 1
+  // trail
+}`;
+      const result = agencyObjectParser(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.entries).toHaveLength(1);
+        expect(result.result.trivia).toEqual([
+          { anchorIndex: 0, comments: [{ type: "comment", content: " lead" }] },
+          { anchorIndex: 1, comments: [{ type: "comment", content: " trail" }] },
+        ]);
+      }
+    });
+
+    it("parses a block comment between object entries and preserves it", () => {
+      const input = `{
+  "a": 1,
+  /* keep me */
+  "b": 2
+}`;
+      const result = agencyObjectParser(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.trivia?.[0].anchorIndex).toBe(1);
+        const comment = result.result.trivia?.[0].comments[0];
+        expect(comment?.type).toBe("multiLineComment");
+        expect((comment as { content: string }).content).toBe(" keep me ");
+      }
+    });
+
+    it("omits the trivia field entirely when there are no comments", () => {
+      const result = agencyObjectParser(`{ "a": 1, "b": 2 }`);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).not.toHaveProperty("trivia");
+      }
+    });
+
+    it("parses a line comment between array items and preserves it as trivia", () => {
+      const input = `[
+  1,
+  // keep me
+  2
+]`;
+      const result = agencyArrayParser(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.items).toHaveLength(2);
+        expect(result.result.trivia).toEqual([
+          {
+            anchorIndex: 1,
+            comments: [{ type: "comment", content: " keep me" }],
+          },
+        ]);
+      }
+    });
+
+    it("omits the trivia field on arrays with no comments", () => {
+      const result = agencyArrayParser(`[1, 2, 3]`);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).not.toHaveProperty("trivia");
+      }
+    });
+  });
 });

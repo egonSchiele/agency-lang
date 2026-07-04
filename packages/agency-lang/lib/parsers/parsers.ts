@@ -91,7 +91,6 @@ import {
   NumberLiteralType,
   ObjectProperty,
   ObjectType,
-  ObjectTypeTrivia,
   GenericType,
   PrimitiveType,
   ResultType,
@@ -127,6 +126,8 @@ import {
   AgencyObject,
   AgencyObjectKV,
   SplatExpression,
+  Trivia,
+  TriviaNode,
 } from "../types/dataStructures.js";
 import {
   DefaultImport,
@@ -1189,109 +1190,101 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
   },
 );
 
-type ObjectBodyEntry =
-  | { kind: "prop"; prop: ObjectProperty }
-  | {
-    kind: "trivia";
-    node: AgencyComment | AgencyMultiLineComment | NewLine;
-  };
+// -----------------------------------------------------------------------------
+// Shared trivia handling for `{ ... }` / `[ ... ]` bodies.
+//
+// Object types, object literals, and array literals all allow blank lines and
+// `//` / `/* */` comments interleaved between their members. Each body is
+// parsed as `many(or(triviaEntry, itemEntry(...)))`, producing a flat list of
+// tagged entries that `partitionTrivia` folds into the item array plus
+// anchor-indexed trivia. These are parse-time tagging types, not AST nodes.
+// -----------------------------------------------------------------------------
 
-const objectMemberWithDelimiter: Parser<ObjectBodyEntry> = (input: string) => {
-  const parser = seqC(
-    capture(
-      or(
-        taggedObjectPropertyParser,
-        objectPropertyWithDescriptionParser,
-        objectPropertyParser,
-      ),
-      "prop",
-    ),
-    optional(objectPropertyDelimiter),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  return success(
-    { kind: "prop" as const, prop: result.result.prop as ObjectProperty },
-    result.rest,
-  );
-};
+type ItemEntry<T> = { kind: "item"; item: T };
+type TriviaEntry = { kind: "trivia"; node: TriviaNode };
+type InterleavedEntry<T> = ItemEntry<T> | TriviaEntry;
 
-// Consumes a single trivia entry (blank line, line comment, or multi-line
-// comment) plus any trailing whitespace/newlines so the cursor is left at
-// the start of the next member or trivia entry. `multiLineCommentParser`
-// in particular does NOT eat its trailing newline, so we add it here to
-// keep `many(or(...))` making progress.
-const objectTrivia: Parser<ObjectBodyEntry> = (input: string) => {
-  const parser = seqC(
-    capture(
-      or(blankLineParser, commentParser, multiLineCommentParser),
-      "node",
-    ),
-    optionalSpacesOrNewline,
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  return success(
-    {
-      kind: "trivia" as const,
-      node: result.result.node as
-        | AgencyComment
-        | AgencyMultiLineComment
-        | NewLine,
-    },
-    result.rest,
-  );
-};
+// One trivia entry (blank line / line comment / block comment) plus any
+// trailing whitespace so the cursor lands on the next member. `set` tags it
+// so `partitionTrivia` can distinguish it — no manual result unwrapping.
+// `multiLineCommentParser` does NOT eat its trailing newline, which the
+// trailing `optionalSpacesOrNewline` handles so `many(...)` keeps progressing.
+const triviaEntry: Parser<TriviaEntry> = seqC(
+  set("kind", "trivia"),
+  capture(or(blankLineParser, commentParser, multiLineCommentParser), "node"),
+  optionalSpacesOrNewline,
+) as Parser<TriviaEntry>;
+
+// Wrap an item parser as a tagged `{ kind: "item", item }` entry, consuming
+// the trailing delimiter (`delimiter`) after it.
+const itemEntry = <T>(
+  itemParser: Parser<T>,
+  delimiter: Parser<unknown>,
+): Parser<ItemEntry<T>> =>
+  seqC(
+    set("kind", "item"),
+    capture(itemParser, "item"),
+    delimiter,
+  ) as Parser<ItemEntry<T>>;
+
+// Fold an interleaved item/trivia list into the item array plus anchor-indexed
+// trivia. Trivia is anchored to the index of the item it precedes; trailing
+// trivia is anchored at `items.length`. The one place this rule lives.
+function partitionTrivia<T>(
+  entries: InterleavedEntry<T>[],
+): { items: T[]; trivia: Trivia[] } {
+  const items: T[] = [];
+  const trivia: Trivia[] = [];
+  let pending: TriviaNode[] = [];
+  for (const entry of entries) {
+    if (entry.kind === "trivia") {
+      pending.push(entry.node);
+    } else {
+      if (pending.length > 0) {
+        trivia.push({ anchorIndex: items.length, comments: pending });
+        pending = [];
+      }
+      items.push(entry.item);
+    }
+  }
+  if (pending.length > 0) {
+    trivia.push({ anchorIndex: items.length, comments: pending });
+  }
+  return { items, trivia };
+}
+
+const objectMember = itemEntry(
+  or(
+    taggedObjectPropertyParser,
+    objectPropertyWithDescriptionParser,
+    objectPropertyParser,
+  ),
+  optional(objectPropertyDelimiter),
+);
 
 export const objectTypeParser: Parser<ObjectType> = memo(
   "objectTypeParser",
-  (input: string): ParserResult<ObjectType> => {
-    const parser = seqC(
-      set("type", "objectType"),
+  map(
+    seqC(
       char("{"),
       optionalSpacesOrNewline,
-      capture(many(or(objectTrivia, objectMemberWithDelimiter)), "entries"),
+      capture(many(or(triviaEntry, objectMember)), "entries"),
       optionalSpacesOrNewline,
       parseError(
         "Expected `}`. Did you forget to add a comma between object properties?",
         char("}"),
       ),
       optionalSpacesOrNewline,
-    );
-    const result = parser(input);
-    if (!result.success) {
-      return result;
-    }
-
-    // Walk the interleaved entries and split into `properties` + `trivia`.
-    // Trivia is anchored to the next property's index. Any trailing trivia
-    // (after the last property) is anchored at `properties.length`.
-    const properties: ObjectProperty[] = [];
-    const trivia: ObjectTypeTrivia[] = [];
-    let pending: (AgencyComment | AgencyMultiLineComment | NewLine)[] = [];
-
-    const entries = result.result.entries as ObjectBodyEntry[];
-    for (const entry of entries) {
-      if (entry.kind === "trivia") {
-        pending.push(entry.node);
-      } else {
-        if (pending.length > 0) {
-          trivia.push({ anchorIndex: properties.length, comments: pending });
-          pending = [];
-        }
-        properties.push(entry.prop);
-      }
-    }
-    if (pending.length > 0) {
-      trivia.push({ anchorIndex: properties.length, comments: pending });
-    }
-
-    const objectType: ObjectType = { type: "objectType", properties };
-    if (trivia.length > 0) {
-      objectType.trivia = trivia;
-    }
-    return success(objectType, result.rest);
-  },
+    ),
+    (r) => {
+      const { items, trivia } = partitionTrivia(
+        r.entries as InterleavedEntry<ObjectProperty>[],
+      );
+      const objectType: ObjectType = { type: "objectType", properties: items };
+      if (trivia.length > 0) objectType.trivia = trivia;
+      return objectType;
+    },
+  ),
 );
 
 export const unionItemParser: Parser<VariableType> = memo(
@@ -2019,32 +2012,43 @@ export const splatParser: Parser<SplatExpression> = seqC(
   capture(lazy(() => exprParser), "value"),
 );
 
-export const agencyArrayParser: Parser<AgencyArray> = (
-  input: string,
-): ParserResult<AgencyArray> => {
-  const parser = trace(
-    "agencyArrayParser",
+// The delimiter between literal items: whitespace/newlines may sit on either
+// side of the separating comma (matching the old `commaWithNewline`), and the
+// comma itself is optional so a trailing comma before `}`/`]` is allowed.
+const literalDelimiter = seqR(
+  optionalSpacesOrNewline,
+  optional(char(",")),
+  optionalSpacesOrNewline,
+);
+
+export const agencyArrayParser: Parser<AgencyArray> = trace(
+  "agencyArrayParser",
+  map(
     seqC(
-      set("type", "agencyArray"),
       char("["),
       optionalSpacesOrNewline,
       capture(
-        sepBy(
-          commaWithNewline,
+        many(
           or(
-            splatParser,
-            lazy(() => exprParser),
+            triviaEntry,
+            itemEntry(or(splatParser, lazy(() => exprParser)), literalDelimiter),
           ),
         ),
-        "items",
+        "entries",
       ),
       optionalSpacesOrNewline,
       char("]"),
     ),
-  );
-
-  return parser(input);
-};
+    (r) => {
+      const { items, trivia } = partitionTrivia(
+        r.entries as InterleavedEntry<Expression | SplatExpression>[],
+      );
+      const node: AgencyArray = { type: "agencyArray", items };
+      if (trivia.length > 0) node.trivia = trivia;
+      return node;
+    },
+  ),
+);
 
 const agencyObjectComputedKVParser: Parser<AgencyObjectKV> = memo(
   "agencyObjectComputedKVParser",
@@ -2089,20 +2093,30 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
 ): ParserResult<AgencyObjectKV> =>
   or(agencyObjectComputedKVParser, agencyObjectStaticKVParser)(input);
 
-export const agencyObjectParser: Parser<AgencyObject> = seqC(
-  set("type", "agencyObject"),
-  char("{"),
-  optionalSpacesOrNewline,
-  capture(
-    or(
-      sepBy(commaWithNewline, or(splatParser, agencyObjectKVParser)),
-      succeed([]),
+export const agencyObjectParser: Parser<AgencyObject> = map(
+  seqC(
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(
+      many(
+        or(
+          triviaEntry,
+          itemEntry(or(splatParser, agencyObjectKVParser), literalDelimiter),
+        ),
+      ),
+      "entries",
     ),
-    "entries",
+    optionalSpacesOrNewline,
+    char("}"),
   ),
-  optional(char(",")),
-  optionalSpacesOrNewline,
-  char("}"),
+  (r) => {
+    const { items, trivia } = partitionTrivia(
+      r.entries as InterleavedEntry<AgencyObjectKV | SplatExpression>[],
+    );
+    const node: AgencyObject = { type: "agencyObject", entries: items };
+    if (trivia.length > 0) node.trivia = trivia;
+    return node;
+  },
 );
 
 // =============================================================================

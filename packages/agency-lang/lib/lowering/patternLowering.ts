@@ -491,12 +491,30 @@ class PatternLowerer {
         out.push(mapBodies(stmt, (b) => this.rewriteReturnsToYields(b, matchId)));
         continue;
       }
-      // Opaque node. A `return` inside a concurrency block would otherwise
-      // survive as a raw function return the `_matchExit` unwind can't reach, so
-      // reject it explicitly.
-      if (isConcurrencyBlock(stmt) && containsReturn(concurrencyBlockBody(stmt))) {
+      // A standalone `seq` inlines into the enclosing body, and `thread` /
+      // `subthread` bodies run inline on this same runner, so a `return` inside
+      // them yields into THIS match — the `_matchExit` lands on the arm's own
+      // runner. Recurse the rewrite into their bodies. (A `seq` that is an arm
+      // of a `parallel` is a concurrent `fork` branch and is never reached here:
+      // we never descend into the `parallelBlock` below.)
+      if (stmt.type === "seqBlock" || stmt.type === "messageThread") {
+        out.push({
+          ...stmt,
+          body: this.rewriteReturnsToYields(
+            (stmt as { body: AgencyNode[] }).body,
+            matchId,
+          ),
+        });
+        continue;
+      }
+      // A `parallel` branch is lifted into a separate `fork` frame whose child
+      // runner the `_matchExit` unwind can't reach, and concurrent branches
+      // would race the scalar flag — so a `return` that would yield this match
+      // is rejected. (A `return` inside a `seq` arm of the parallel is a
+      // branch-local result, not seen by `containsReturn`, and stays legal.)
+      if (stmt.type === "parallelBlock" && containsReturn(stmt.body)) {
         throw new LoweringError(
-          "cannot return from a match arm inside a parallel, fork, race, seq, or thread block",
+          "cannot return from a match arm inside a parallel or fork block",
           stmt.loc,
         );
       }
@@ -513,6 +531,15 @@ class PatternLowerer {
   private alwaysYields(body: AgencyNode[]): boolean {
     for (const stmt of body) {
       if (stmt.type === "matchYield") return true;
+      // A standalone `seq` and a `thread`/`subthread` body run unconditionally
+      // and inline on this runner, so the arm yields on every path iff their
+      // body does.
+      if (
+        (stmt.type === "seqBlock" || stmt.type === "messageThread") &&
+        this.alwaysYields((stmt as { body: AgencyNode[] }).body)
+      ) {
+        return true;
+      }
       if (
         stmt.type === "ifElse" &&
         stmt.elseBody &&
@@ -969,26 +996,6 @@ function isExpr(v: unknown): v is Expression {
   return t !== "messageThread";
 }
 
-/** True when `node` is a block whose body a `return` cannot legally cross to
- *  reach an enclosing match arm. `parallel`/`seq` branch bodies are lifted into
- *  separate frames (desugared to `fork` calls later); `thread` bodies run
- *  inline in the same frame, but a `return` there is a raw function return the
- *  `_matchExit` unwind cannot reach, so it is rejected the same way. The
- *  fork/race forms in the error message are surface concepts that desugar to
- *  calls before lowering. */
-function isConcurrencyBlock(node: AgencyNode): boolean {
-  return (
-    node.type === "parallelBlock" ||
-    node.type === "seqBlock" ||
-    node.type === "messageThread"
-  );
-}
-
-/** The guarded body of a concurrency/sequencing/thread block. */
-function concurrencyBlockBody(node: AgencyNode): AgencyNode[] {
-  return (node as { body: AgencyNode[] }).body;
-}
-
 /** Location of the first `thread { ... }` block within the arm's return-flow
  *  that hides a `return`, or undefined. Thread bodies run inline in the same
  *  frame, so a `return` there is a genuine function return; statement-position
@@ -1012,12 +1019,18 @@ function threadBlockReturnLoc(nodes: AgencyNode[]): SourceLocation | undefined {
  * THE single source of truth for the match-arm return-flow descent boundary.
  * Returns the child bodies of `node` that a `return` flows through to reach the
  * enclosing arm: the `if`/`else` branches and `for`/`while` loop bodies ONLY.
- * Every other body-bearing node is opaque — a `return` inside a nested
+ * Every other body-bearing node is opaque here — a `return` inside a nested
  * `matchBlock` arm, a `handleBlock` (guarded body OR `with` handler),
- * `blockArgument`/callback body, or concurrency block does NOT flow to this arm
+ * `blockArgument`/callback body, or `parallel` branch does NOT flow to this arm
  * (it belongs to that inner construct / a separate frame). Shared by
  * `rewriteReturnsToYields`, `containsReturn`, and `firstReturnLoc` so their
  * boundaries can never diverge again.
+ *
+ * NOTE: standalone `seq` and `thread`/`subthread` bodies DO flow a `return` to
+ * the enclosing match arm (they run inline on the arm's own runner), but that
+ * transparency is applied explicitly in `rewriteReturnsToYields`/`alwaysYields`
+ * — NOT here — so the statement-arm diagnostics and the `parallel` rejection
+ * that consume this boundary keep treating them as opaque.
  */
 function returnFlowBodies(node: AgencyNode): AgencyNode[][] {
   if (node.type === "ifElse") {

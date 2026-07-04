@@ -180,8 +180,6 @@ describe("expression match lowering errors", () => {
     expectError(WRAP(`"a" => { return }`), /must return a value/i));
   it("return inside parallel in an arm errors", () =>
     expectError(WRAP(`"a" => {\n      parallel {\n        return 1\n      }\n    }`), /parallel|concurrency/i));
-  it("return inside a thread block in an expression arm errors", () =>
-    expectError(WRAP(`"a" => {\n      thread {\n        return 1\n      }\n      return 2\n    }`), /thread/i));
   it("thread block without a return inside an expression arm passes", () => {
     const parsed = parseAgency(WRAP(`"a" => {\n      thread {\n        print("hi")\n      }\n      return 2\n    }`));
     expect(parsed.success).toBe(true);
@@ -190,6 +188,112 @@ describe("expression match lowering errors", () => {
     expectError(`node main(x: any) {\n  const val = match(x is { k }) {\n    _ => 2\n  }\n  return val\n}`, /cannot be used as an expression/i));
   it("module-level match expression errors", () =>
     expectError(`const g = match("a") {\n  "a" => 1\n  _ => 2\n}\nnode main() { return g }`, /module-level|top-level/i));
+});
+
+describe("expression match arm: seq/thread yield to the match", () => {
+  const WRAPN = (arm: string) => `node main(x: any) {
+  const val = match(x) {
+    ${arm}
+    _ => 2
+  }
+  return val
+}`;
+
+  function armBodyOf(src: string): any[] {
+    const body = lowerBody(src);
+    const m = body.find(
+      (n: any) => n.type === "matchBlock" && n.matchExprId !== undefined,
+    );
+    const arm = m.cases.find((c: any) => c.type === "matchBlockCase");
+    return arm.body;
+  }
+
+  it("standalone seq: return rewrites to a matchYield inside the seq", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      seq {\n        return 1\n      }\n    }`));
+    const seq = arm.find((s: any) => s.type === "seqBlock");
+    expect(seq).toBeDefined();
+    const y = seq.body.find((s: any) => s.type === "matchYield");
+    expect(y).toBeDefined();
+    expect(y.value).toEqual(expect.objectContaining({ type: "number", value: "1" }));
+    expect(seq.body.some((s: any) => s.type === "returnStatement")).toBe(false);
+  });
+
+  it("thread: return rewrites to a matchYield inside the thread", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      thread {\n        return 1\n      }\n    }`));
+    const th = arm.find((s: any) => s.type === "messageThread");
+    expect(th).toBeDefined();
+    const y = th.body.find((s: any) => s.type === "matchYield");
+    expect(y).toBeDefined();
+    expect(y.value).toEqual(expect.objectContaining({ type: "number", value: "1" }));
+  });
+
+  it("subthread: return rewrites to a matchYield inside the subthread", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      subthread {\n        return 1\n      }\n    }`));
+    const th = arm.find((s: any) => s.type === "messageThread");
+    expect(th).toBeDefined();
+    expect(th.threadType).toBe("subthread");
+    expect(th.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq nested inside an if branch yields on that path", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      if (true) {\n        seq { return 1 }\n      } else {\n        return 2\n      }\n    }`),
+    );
+    expect(parsed.success).toBe(true);
+  });
+
+  it("thread nested in a thread: matchYield lands in the innermost body", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      thread {\n        thread {\n          return 1\n        }\n      }\n    }`));
+    const outer = arm.find((s: any) => s.type === "messageThread");
+    const inner = outer.body.find((s: any) => s.type === "messageThread");
+    expect(inner).toBeDefined();
+    expect(inner.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq nested in a thread (and vice versa) rewrites the innermost return", () => {
+    const st = armBodyOf(WRAPN(`"a" => { thread { seq { return 1 } } }`));
+    const seqInThread = st
+      .find((s: any) => s.type === "messageThread")
+      .body.find((s: any) => s.type === "seqBlock");
+    expect(seqInThread.body.some((s: any) => s.type === "matchYield")).toBe(true);
+
+    const ts = armBodyOf(WRAPN(`"a" => { seq { thread { return 1 } } }`));
+    const threadInSeq = ts
+      .find((s: any) => s.type === "seqBlock")
+      .body.find((s: any) => s.type === "messageThread");
+    expect(threadInSeq.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq inside a for loop body rewrites the return (loop still needs a trailing yield)", () => {
+    const arm = armBodyOf(
+      WRAPN(`"a" => {\n      for (i in [1]) {\n        seq { return 1 }\n      }\n      return 2\n    }`),
+    );
+    const loop = arm.find((s: any) => s.type === "forLoop");
+    const seqInLoop = loop.body.find((s: any) => s.type === "seqBlock");
+    expect(seqInLoop.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("a parallel nested inside a standalone seq is still rejected", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      seq {\n        parallel {\n          return 1\n        }\n      }\n    }`),
+    );
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(/parallel/i);
+  });
+
+  it("a seq arm that does not yield on every path still errors", () => {
+    const parsed = parseAgency(WRAPN(`"a" => {\n      seq {\n        print("hi")\n      }\n    }`));
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(/must return a value/i);
+  });
+
+  it("a seq used as a parallel arm is still rejected (concurrent branch)", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      parallel {\n        seq { return 1 }\n      }\n    }`),
+    );
+    // The parallel block does not yield the match, so the arm has no value.
+    expect(parsed.success).toBe(false);
+  });
 });
 
 describe("statement-position return-in-arm errors", () => {

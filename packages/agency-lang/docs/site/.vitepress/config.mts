@@ -95,12 +95,13 @@ export default defineConfig({
         {
           text: "06. Agency's Execution Model",
           items: [
+            { text: "Checkpointing", link: "/guide/checkpointing" },
+            { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
             { text: "Execution Model", link: "/guide/execution-model" },
             {
               text: "Global vs Static Variables",
               link: "/guide/global-vs-static",
             },
-            { text: "Checkpointing", link: "/guide/checkpointing" },
             {
               text: "Cross-Thread Context Sharing",
               link: "/guide/cross-thread-context",

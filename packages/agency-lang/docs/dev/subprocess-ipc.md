@@ -95,6 +95,7 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 { type: "error", error: string }
 { type: "lockAcquire" | "lockRelease", ... }
 { type: "telemetry", costUsd }   // fire-and-forget, one per paid call
+{ type: "callback", name, data } // fire-and-forget, one per lifecycle event (see Callback forwarding)
 ```
 
 **Parent → Subprocess:**
@@ -151,6 +152,48 @@ completion) still charges budgets via the shared guard references, but
 can be invisible to `getCost()` if the owning fork branch already joined.
 Budgets never undercount; `getCost()` may, on abnormal termination only.
 
+## Callback forwarding
+
+A parent's registered lifecycle callbacks fire for events that happen inside a
+`std::agency run()` child. Every lifecycle event in a child fire-and-forgets
+`{ type: "callback", name, data }` upward, emitted from `invokeCallbacks`
+(`hooks.ts`) — the choke point every event funnels through. The wire type and
+child-side sender live in the dependency-light leaf `callbackForwarding.ts`
+(`hooks.ts` must not import `ipc.ts`, mirroring the `costTelemetry.ts` layering).
+
+- **Serialization.** The child JSON-serializes once up front: function-valued
+  fields (e.g. `onAgentStart.cancel`) are stripped, and an unserializable
+  (circular / BigInt) payload degrades to a dropped event rather than a throw.
+- **Parent side.** `handleCallbackMessage` (synchronous, like
+  `handleTelemetryMessage`) validates the name against `VALID_CALLBACK_NAMES`
+  (the child is the less-trusted party), drops post-settle events, then
+  `void invokeCallbacks(...)` fire-and-forget so a slow/throwing parent callback
+  cannot wedge the message pump. It fires inside the parent's captured ALS store
+  frame (`RunSession.parentStore`) and walks the parent's full `ctx.stateStack`,
+  so an AgencyFunction callback body resolves `__globals()`/`__threads()` and a
+  callback registered on an ancestor frame (e.g. a node-level
+  `callback("onNodeStart")` above the `run()` call) is found — matching
+  in-process firing.
+- **Nested relay is automatic.** `invokeCallbacks` re-emits when THIS process is
+  itself a subprocess, so a grandchild's event relays to the root through a
+  callbackless mid-tier with no explicit relay code (same shape as cost telemetry).
+- **`onAgentStart.cancel` is reconstructed** parent-side to a REAL cancel: a
+  parent `onAgentStart` callback that calls `cancel()` kills the child and settles
+  `run()` as cancelled. This is best-effort and async (the child already started;
+  it is a kill, not the in-process synchronous prevent-start), and a no-op if the
+  child's result wins the race.
+- **Observational, never fatal.** Forwarding is purely observational: an oversize
+  or unserializable `callback` message is dropped, not settled (the
+  `isObservationalMessage` carve-out in `handleChildMessage`), preserving the
+  invariant that a forwarded event can never kill the run.
+- **Unconditional + heavy.** The child cannot know which callbacks the parent
+  registered, so every event (except the denylist below) is serialized and sent
+  on every occurrence, even with no parent callback — an accepted v1 tradeoff.
+- **Not forwarded:** `onStream` (dispatched outside `invokeCallbacks`) and
+  `onOAuthRequired` (carries a `Promise`/functions needing a live bidirectional
+  channel) are denylisted in `sendCallbackToParent`; `onTrace` is never dispatched
+  today so it simply never forwards.
+
 ## The `std::run` interrupt gate
 
 `run()` throws a `std::run` interrupt before executing the subprocess. Running agent-generated code is a dangerous operation: the caller must either have a handler that approves `std::run`, or the interrupt propagates to the user for approval — which, with pause/resume, is a real question rather than an auto-reject.
@@ -184,7 +227,6 @@ A subprocess may itself call `run()`. Safety is the language's own idiom plus a 
 ## Remaining limitations
 
 - **Debugger/trace integration**: the debugger sees `run()` as an opaque step. No stepping into subprocess code.
-- **Callback forwarding**: parent-registered lifecycle callbacks are not triggered by subprocess events; follow-up.
 
 ## Tests
 
@@ -218,6 +260,8 @@ Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/ag
 | `cost-nested-relay-trips-root` | grandchild spend relays through a guardless mid-tier to the root guard |
 | `cost-two-children-share-budget` | two concurrent children share ONE budget (the ship-guards-into-child counterexample) |
 | `cost-no-double-charge-across-pause` | pause/resume replay does not re-emit completed calls' telemetry |
+| `callback-forwarding-child-events` | parent onNodeStart callback fires for a child subprocess node entry |
+| `callback-forwarding-nested-relay` | root callback fires for a grandchild event relayed through a callbackless mid-tier |
 | `nested-gate-unapproved` | the gate exists on every hop |
 | `subprocess-no-handler` (js) | std::run gate surfaces without a handler |
 | `subprocess-pause-basic` (js) | end-to-end pause → respond → resume |

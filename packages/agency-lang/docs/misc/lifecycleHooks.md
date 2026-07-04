@@ -20,6 +20,28 @@ All hooks are fully typed via the `AgencyCallbacks` type exported from `agency-l
 | `onToolCallEnd` | After a tool function returns | `{ toolName, result, timeTaken }` |
 | `onStream` | Streaming chunks *(see Streaming)* | `StreamChunk` |
 
+## Subprocess forwarding
+
+A parent's registered callbacks **also fire for events that happen inside a
+`std::agency run()` subprocess** (and, recursively, grandchildren). The child
+forwards each lifecycle event to the parent fire-and-forget over IPC, and the
+parent re-fires its own callbacks. Notes:
+
+- **Observational.** Forwarded callbacks cannot affect the child's outcome — a
+  forwarding failure (dead channel, oversize, unserializable payload) is silently
+  dropped and never kills the run. The one flow-affecting exception is
+  `onAgentStart.cancel`: calling it from a parent callback kills the child and
+  fails the `run()` as cancelled (best-effort — the child has already started, so
+  it is an async kill, not the in-process synchronous prevent-start).
+- **Unconditional.** Every event is forwarded even when no parent callback is
+  registered, and payloads are the full in-process ones (e.g. `messages` arrays),
+  so forwarding is heavier than in-process firing.
+- **Not forwarded:** `onStream` (streamed outside the forwarding choke point),
+  `onOAuthRequired` (needs a live bidirectional channel), and `onTrace` (not
+  currently dispatched). All other hooks forward.
+
+See `docs/dev/subprocess-ipc.md` (Callback forwarding) for the mechanism.
+
 ## Usage
 
 Hooks are passed in the `callbacks` object when calling an agent from TypeScript:

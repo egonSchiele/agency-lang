@@ -655,6 +655,47 @@ describe("AgencyGenerator - string escape round-tripping", () => {
   });
 });
 
+describe("AgencyGenerator - multi-line string escape round-tripping", () => {
+  // A parsed literal `${...}` (written `\${...}` in a triple-quoted string) must
+  // survive emit + re-parse as a literal text segment, not silently become a
+  // live interpolation. Other raw content (a literal `\n`) must stay raw.
+  const cases = [
+    { name: "escaped interpolation only", source: '"""a \\${x} b"""' },
+    { name: "raw backslash-n stays raw", source: '"""raw \\n text"""' },
+    { name: "real interp next to escaped", source: '"""hi ${name} lit \\${skip}"""' },
+  ];
+
+  const segsOf = (program: { nodes: unknown[] }) => {
+    const a = program.nodes.find((n: any) => n?.type === "assignment") as
+      | { value?: { type?: string; segments?: any[] } }
+      | undefined;
+    if (a?.value?.type !== "multiLineString") return null;
+    return (a.value.segments ?? []).map((s: any) =>
+      s.type === "text"
+        ? { type: "text", value: s.value }
+        : { type: "interpolation", name: s.expression?.value },
+    );
+  };
+
+  cases.forEach(({ name, source }) => {
+    it(`round-trips: ${name}`, () => {
+      const r1 = parseAgency(`let s = ${source}`, {}, false);
+      expect(r1.success, "first parse").toBe(true);
+      if (!r1.success) return;
+
+      const emitted = new AgencyGenerator().generate(r1.result).output;
+
+      const r2 = parseAgency(emitted, {}, false);
+      expect(r2.success, `re-parse of ${JSON.stringify(emitted)}`).toBe(true);
+      if (!r2.success) return;
+
+      const segs1 = segsOf(r1.result);
+      expect(segs1, "first parse produced a multi-line string").not.toBeNull();
+      expect(segsOf(r2.result)).toEqual(segs1);
+    });
+  });
+});
+
 describe("AgencyGenerator - string delimiter round-tripping", () => {
   // Emit, parse, and check that (a) the emitted source is exactly the
   // input source (no delimiter rewrite, no needless escapes) and (b)

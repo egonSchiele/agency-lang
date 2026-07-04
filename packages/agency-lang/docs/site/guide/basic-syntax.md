@@ -28,12 +28,19 @@ const greeting2 = 'Hello, ${name}!'
 const greeting3 = `Hello, ${name}!`
 ```
 
-Multi-line strings use `"""` triple-quotes and do **not** interpret backslash escapes (i.e. `\n` is not a newline, it's just a backslash followed by an `n`):
+To write a literal `${` without starting an interpolation, escape it as `\${`. This works in every string kind, including triple-quoted strings:
+
+```ts
+const price = "costs \${5}"        // -> costs ${5}
+const template = """let x = \${y}"""  // -> let x = ${y}  (useful for embedding code)
+```
+
+Multi-line strings use `"""` triple-quotes. They **also** support `${...}` interpolation, but otherwise do **not** interpret backslash escapes — `\n` is a backslash followed by an `n`, not a newline. The one exception is `\${`, which escapes an interpolation as shown above:
 
 ```ts
 const block = """
-  first line\n
-  second line
+  ${name} on the first line\n
+  literal \${skip} on the second
 """
 ```
 

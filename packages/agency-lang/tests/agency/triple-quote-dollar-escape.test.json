@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Triple-quoted string interpolates ${name} but keeps \\${skip} literal",
+      "input": "",
+      "expectedOutput": "\"hi world and literal ${skip}\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

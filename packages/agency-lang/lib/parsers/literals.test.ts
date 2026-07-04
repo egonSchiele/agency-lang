@@ -1457,6 +1457,45 @@ describe("literals parsers", () => {
         },
       },
 
+      // Escaped interpolation: \${ -> literal ${ (the ONE backslash escape in
+      // triple-quoted strings; all other backslashes stay raw).
+      {
+        input: '"""a \\${x} b"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "a ${x} b" }],
+          },
+        },
+      },
+      // Only \${ is special: a literal \n (backslash-n) stays raw alongside it.
+      {
+        input: '"""raw \\n and escaped \\${x}"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "raw \\n and escaped ${x}" }],
+          },
+        },
+      },
+      // Mixed: real interpolation next to an escaped literal ${}.
+      {
+        input: '"""real ${a} literal \\${b}"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [
+              { type: "text", value: "real " },
+              { type: "interpolation", expression: { type: "variableName", value: "a" } },
+              { type: "text", value: " literal ${b}" },
+            ],
+          },
+        },
+      },
+
       // Failure cases
       { input: '"""hello', expected: { success: false } },
       { input: 'hello"""', expected: { success: false } },

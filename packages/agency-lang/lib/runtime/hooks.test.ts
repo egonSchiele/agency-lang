@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
-import { callHook, registerGlobalHook } from "./hooks.js";
+import { callHook, invokeCallbacks, registerGlobalHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
 
 function ctxWithStack(
@@ -168,5 +168,46 @@ describe("registerGlobalHook", () => {
     const ctx = fakeCtx();
     await callHook({ ctx, name: "onEmit", data: "hello" as any });
     expect(calls).toContain("global");
+  });
+});
+
+describe("invokeCallbacks subprocess forwarding", () => {
+  const originalSend = process.send;
+  afterEach(() => {
+    process.send = originalSend;
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("forwards the event to the parent when in IPC mode", async () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const sent: any[] = [];
+    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: new StateStack() };
+    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: ctx.stateStack });
+    expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]);
+  });
+
+  it("does not forward outside IPC mode", async () => {
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: new StateStack() };
+    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: ctx.stateStack });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("forwarding is ADDITIVE: the local callback still fires in IPC mode", async () => {
+    // Guards the "purely additive" invariant: the emit line must not replace or
+    // short-circuit the existing local callback firing. A registered callback
+    // must BOTH fire locally AND be forwarded.
+    vi.stubEnv("AGENCY_IPC", "1");
+    const sent: any[] = [];
+    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: stack });
+    expect(fired).toEqual([{ nodeName: "x" }]); // local callback still fired
+    expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]); // and forwarded
   });
 });

@@ -4,10 +4,15 @@
  *
  * A subprocess executes exactly one run per process, so module scope is the
  * correct lifetime here (the same arrangement as the bootstrap's
- * ipcPayloadLimit). This lives in its own dependency-free module so both
- * `ipc.ts` and `state/context.ts` / `node.ts` can read it without import
- * cycles.
+ * ipcPayloadLimit). Kept intentionally minimal so both `ipc.ts` and
+ * `state/context.ts` / `node.ts` can read it without import cycles. Its only
+ * runtime import is `asyncContext` (for `ipcChildDebug`'s best-effort statelog
+ * emission); that edge is cycle-safe because asyncContext's value-chain
+ * (bootstrapThreadStore -> threadStore -> statelogClient / messageThread) never
+ * imports back into this module, ipc.ts, or the leaf senders.
  */
+
+import { agencyStore } from "./asyncContext.js";
 
 export type SubprocessRunInfo = {
   /** The parent's runId — the child adopts it instead of minting its own,
@@ -34,6 +39,31 @@ export type SubprocessRunInfo = {
  * the mode signal — ipc.ts and the telemetry leaf both read it from here. */
 export function isIpcMode(): boolean {
   return process.env.AGENCY_IPC === "1";
+}
+
+/** Emit one child-side IPC diagnostic. Shared by callbackForwarding.ts and
+ * costTelemetry.ts (ipcLog in ipc.ts is unreachable from these leaves without
+ * violating the layering rule). Two independent sinks:
+ *   - statelog `debug` event (best-effort) so the diagnostic is visible in the
+ *     trace when observability is on — resolved from the active ALS frame's
+ *     ctx.statelogClient; no-ops with no frame/client, never throws;
+ *   - stderr, gated on AGENCY_IPC_DEBUG=1, for local IPC debugging. */
+export function ipcChildDebug(line: string): void {
+  const client = agencyStore.getStore()?.ctx?.statelogClient;
+  if (client) {
+    try {
+      // Fire-and-forget; a failed statelog post must never affect the run. The
+      // real client.debug is async (rejection handled by .catch); the try guards
+      // the defensive case of a synchronous throw. Intentionally swallowed — this
+      // IS the diagnostic sink, so there is nowhere else to surface an error.
+      void Promise.resolve(client.debug(`[ipc:child] ${line}`, {})).catch(() => {});
+    } catch {
+      // no-op: statelog diagnostics are best-effort
+    }
+  }
+  if (process.env.AGENCY_IPC_DEBUG !== "1") return;
+  const ts = new Date().toISOString().slice(11, 23);
+  process.stderr.write(`[ipc:child] ${ts} ${line}\n`);
 }
 
 let info: SubprocessRunInfo = { depth: 0 };

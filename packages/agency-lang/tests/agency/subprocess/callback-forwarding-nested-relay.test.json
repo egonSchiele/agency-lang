@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Root parent callback fires for a grandchild node event relayed through a callbackless mid-tier",
+      "input": "",
+      "expectedOutput": "\"grandchildSeen:true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

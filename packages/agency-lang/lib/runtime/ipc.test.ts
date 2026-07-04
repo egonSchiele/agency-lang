@@ -8,11 +8,14 @@ import {
   resolveDepthCap,
   attachSessionHandlers,
   handleTelemetryMessage,
+  handleCallbackMessage,
+  handleChildMessage,
   withParentStatelog,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
-import { StateStack } from "./state/stateStack.js";
+import { State, StateStack } from "./state/stateStack.js";
+import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
 
 describe("withParentStatelog", () => {
@@ -343,5 +346,250 @@ describe("handleTelemetryMessage", () => {
     handleTelemetryMessage(session, { type: "telemetry", costUsd: -5 } as any);
     handleTelemetryMessage(session, { type: "telemetry" } as any);
     expect(stack.localCost).toBe(0);
+  });
+});
+
+const flush = () => new Promise((r) => setImmediate(r));
+
+describe("handleCallbackMessage", () => {
+  it("fires the parent's registered callback with the forwarded data", async () => {
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack, limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "childNode" } });
+    await flush();
+
+    expect(fired).toEqual([{ nodeName: "childNode" }]);
+  });
+
+  it("fires a SCOPED parent callback registered on an ancestor stack frame", async () => {
+    // Regression guard: a node-level `callback("onNodeStart")` registers a
+    // SCOPED callback on the parent's stack, found only by walking
+    // ctx.stateStack. s.stateStack is the run() call-site SLICE and does NOT
+    // contain the ancestor frame — the handler must ignore it and walk
+    // ctx.stateStack (as in-process callHook does). With the old
+    // `stateStack: s.stateStack` this callback was silently missed.
+    const fired: any[] = [];
+    const frame = new State();
+    frame.addScopedCallback("onNodeStart", (d: any) => fired.push(d));
+    const fullStack = new StateStack();
+    fullStack.stack = [frame];
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: fullStack };
+    // A DIFFERENT, empty slice — mimics the run() call-site slice.
+    const session = makeSession({ ctx, stateStack: new StateStack(), limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "child" } });
+    await flush();
+
+    expect(fired).toEqual([{ nodeName: "child" }]);
+  });
+
+  it("ignores an unknown callback name (child is less-trusted)", async () => {
+    // Register the handler UNDER the bogus name. gatherCallbacks reads
+    // ctx.callbacks[name] dynamically, so WITHOUT the isForwardableCallbackName
+    // guard this would fire. This makes the test actually discriminate the guard
+    // (registering it under a valid name would pass either way — false confidence).
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onBogus: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack });
+
+    handleCallbackMessage(session, { type: "callback", name: "onBogus" as any, data: { x: 1 } });
+    await flush();
+
+    expect(fired).toEqual([]);
+  });
+
+  it("drops a callback that arrives after the session settled", async () => {
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack, settled: true });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "late" } });
+    await flush();
+
+    expect(fired).toEqual([]);
+  });
+
+  it("reconstructs onAgentStart.cancel to kill the child and settle cancelled", async () => {
+    const kills: string[] = [];
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = {
+      callbacks: { onAgentStart: (d: any) => d.cancel("parent said stop") },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      rejectPromise: (err: any) => { rejections.push(err); },
+    });
+
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onAgentStart",
+      data: { nodeName: "childToCancel", args: {}, messages: [] },
+    });
+    await flush();
+
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0]).toBeInstanceOf(AgencyCancelledError);
+    expect(session.settled).toBe(true);
+  });
+
+  it("routes an AgencyAbort thrown by a parent callback to kill + settle (guard trip / cancel)", async () => {
+    // fireWithGuard re-throws AgencyAbort, so invokeCallbacks can reject. The
+    // fire-and-forget `.catch` must route it to the session (not orphan it as an
+    // unhandledRejection and lose the trip), mirroring handleTelemetryMessage.
+    const kills: string[] = [];
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const abort = new AgencyCancelledError("callback tripped a guard"); // an AgencyAbort
+    const ctx: any = {
+      callbacks: { onNodeStart: () => { throw abort; } },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      rejectPromise: (e: any) => { rejections.push(e); },
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
+
+    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "n" } });
+    await flush();
+
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toEqual([abort]);
+    expect(rejections[0]).toBeInstanceOf(AgencyAbort);
+    expect(session.settled).toBe(true);
+  });
+
+  it("re-fires the mid-tier's own callback AND re-forwards upward (nested relay, both fire)", async () => {
+    // Models a MID-TIER that is itself a subprocess: on a forwarded grandchild
+    // event it must BOTH fire its own registered callback AND re-forward the
+    // event to its parent (invokeCallbacks re-emits because this process is in
+    // IPC mode). Fast/deterministic complement to the E2E
+    // callback-forwarding-relay-both-fire.agency.
+    vi.stubEnv("AGENCY_IPC", "1");
+    const originalSend = process.send;
+    const sent: any[] = [];
+    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    try {
+      const fired: any[] = [];
+      const stack = new StateStack();
+      const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+      const session = makeSession({ ctx, stateStack: stack, limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+
+      handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } });
+      await flush();
+
+      expect(fired).toEqual([{ nodeName: "grandNode" }]); // mid-tier's own callback fired
+      expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } }]); // and re-forwarded upward
+    } finally {
+      process.send = originalSend;
+    }
+  });
+
+  it("does not fire a denylisted callback name even if the parent registered it", async () => {
+    // onStream/onOAuthRequired are non-forwardable (function/Promise fields). The
+    // parent guard must reject them too — not just the child sender — else a
+    // version-skewed child could fire a broken (function-stripped) callback.
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onStream: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack });
+
+    handleCallbackMessage(session, { type: "callback", name: "onStream" as any, data: { type: "text", text: "x" } });
+    await flush();
+
+    expect(fired).toEqual([]);
+  });
+});
+
+describe("handleChildMessage oversize handling", () => {
+  it("drops an oversize callback message instead of killing the run", async () => {
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
+    // makeSession default ipcPayload is 1 byte, so any callback payload is oversize.
+    const session = makeSession({ ctx, stateStack: stack, rejectPromise: (e: any) => rejections.push(e) });
+
+    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "big" } });
+
+    expect(session.settled).toBe(false);
+    expect(rejections).toEqual([]);
+  });
+
+  it("still kills the run for an oversize non-callback message", async () => {
+    const stack = new StateStack();
+    const ctx: any = { lockReleasers: {}, stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack });
+
+    await handleChildMessage(session, { type: "result", value: { big: "x".repeat(50) } } as any);
+
+    expect(session.settled).toBe(true); // settleWithLimitFailure fired
+  });
+
+  it("does not throw on a malformed (undefined) child message; settles instead of hanging", async () => {
+    // Regression for the null-safety fix: undefined -> serializedByteLength !ok
+    // -> isObservationalMessage(undefined) must NOT throw (a throw would escape
+    // the void-invoked handler, leaving the session unsettled = a hung run).
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { lockReleasers: {}, stateStack: stack };
+    const session = makeSession({ ctx, stateStack: stack, rejectPromise: (e: any) => rejections.push(e) });
+
+    await expect(handleChildMessage(session, undefined as any)).resolves.toBeUndefined();
+
+    expect(session.settled).toBe(true); // settled via the serialize-error path, not a throw
+    expect(rejections).toHaveLength(1);
+  });
+
+  it("drops an UNSERIALIZABLE callback message instead of killing the run", async () => {
+    // Covers the `!serialized.ok` observational branch (separate from oversize).
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({
+      ctx, stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 }, // large, so oversize is NOT the cause
+      rejectPromise: (e: any) => rejections.push(e),
+    });
+    const circular: any = { type: "callback", name: "onNodeStart", data: {} };
+    circular.data.self = circular; // JSON.stringify throws -> serialized.ok === false
+
+    await handleChildMessage(session, circular);
+
+    expect(session.settled).toBe(false);
+    expect(rejections).toEqual([]);
+  });
+
+  it("routes a within-limit callback through the dispatch case to the parent callback", async () => {
+    // Directly exercises Task 3(d) — the `msg.type === "callback"` dispatch case
+    // in handleChildMessage. The other handleCallbackMessage tests call it
+    // directly, and the oversize test drops BEFORE dispatch, so without this the
+    // dispatch wiring is only covered by the slow E2E (Task 5). A missing/typo'd
+    // dispatch case would leave `fired` empty here.
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({
+      ctx, stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
+
+    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "routed" } });
+    await flush(); // handleCallbackMessage void-invokes invokeCallbacks; let the microtask chain drain
+
+    expect(fired).toEqual([{ nodeName: "routed" }]);
   });
 });

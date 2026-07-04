@@ -1,0 +1,35 @@
+import { compile, run } from "std::agency"
+
+// The parent registers an onNodeStart callback filtered to a node name that
+// ONLY the child uses. Without forwarding, the parent's callback never sees the
+// child's node entry, so `seen` stays 0. With forwarding, the child's
+// onNodeStart is delivered to the parent and increments `seen`.
+let seen: number = 0
+
+node main() {
+  callback("onNodeStart") as data {
+    if (data.nodeName == "childOnlyNode") {
+      seen = seen + 1
+    }
+  }
+  const source = """
+node childOnlyNode() {
+  return "child done"
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "childOnlyNode")
+    if (isFailure(result)) {
+      return "run failed"
+    }
+    return "childNodeSeen:${seen > 0}"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

@@ -12,13 +12,16 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
-import { getRuntimeContext } from "./asyncContext.js";
+import { getRuntimeContext, agencyStore } from "./asyncContext.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
-import { AgencyCancelledError } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
 import { isPayableCost, type IpcTelemetryMessage } from "./costTelemetry.js";
+import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
+import { invokeCallbacks } from "./hooks.js";
+import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
 // isIpcMode lives in subprocessRunInfo.ts (dependency-free, so the telemetry
 // leaf can share it); re-exported here for the existing consumers.
 export { isIpcMode };
@@ -276,7 +279,8 @@ export type SubprocessToParent =
   | IpcErrorMessage
   | IpcLockAcquireMessage
   | IpcLockReleaseMessage
-  | IpcTelemetryMessage;
+  | IpcTelemetryMessage
+  | IpcCallbackMessage;
 export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
 
 const sessionLockOwners: Record<string, string[]> = {};
@@ -447,6 +451,12 @@ export type RunSession = {
   limits: RunLimits;
   ctx: any;
   stateStack: any;
+  /** The parent's full ALS store frame captured at run() time. Forwarded
+   * callbacks (handleCallbackMessage) fire from the event-loop message handler,
+   * OUTSIDE any agencyStore frame; re-establishing this frame lets an
+   * AgencyFunction callback body resolve __globals()/__threads() against the
+   * parent's real globals, exactly as an in-process callback would. */
+  parentStore?: any;
   resolvePromise: (v: SessionOutcome) => void;
   rejectPromise: (v: any) => void;
   settled: boolean;
@@ -886,19 +896,137 @@ export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage):
   }
 }
 
-async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
+function isForwardableCallbackName(name: unknown): name is CallbackName {
+  return typeof name === "string"
+    && (VALID_CALLBACK_NAMES as readonly string[]).includes(name)
+    // Reject the same names the child-side sender denylists. The child never
+    // forwards these, but a version-skewed or future-refactored child might; a
+    // JSON-stripped onOAuthRequired/onStream would fire a broken (function-less)
+    // parent callback, so the guard must match its name and exclude them.
+    && !(NON_FORWARDABLE_CALLBACKS as readonly string[]).includes(name);
+}
+
+/**
+ * Give a forwarded onAgentStart payload a REAL parent-owned cancel().
+ *
+ * The child's own cancel function was stripped by JSON. The parent owns the
+ * child session, so a parent onAgentStart callback that calls cancel() kills the
+ * child (SIGKILL) and settles run() as cancelled.
+ *
+ * BEST-EFFORT and ASYNC — NOT the in-process semantic. In-process, cancel()
+ * throws synchronously and PREVENTS the agent from running. Here the child fires
+ * onAgentStart and proceeds without back-pressure (fire-and-forget), so the
+ * parent's cancel arrives later and kills a child that may already be mid-run or
+ * finished. If the child's terminal result wins the race, settle()'s `s.settled`
+ * guard makes the cancel a silent no-op. Killing the child is the closest
+ * approximation this one-way channel allows.
+ *
+ * The `typeof data === object` guard is defensive: the child is the less-trusted
+ * party, so we do not spread a malformed non-object payload.
+ */
+function withParentCancel(s: RunSession, data: unknown): unknown {
+  if (typeof data !== "object" || data === null) return data;
+  return {
+    ...(data as Record<string, unknown>),
+    cancel: (reason?: string) => {
+      killChildSafely(s);
+      settle(s, s.rejectPromise, new AgencyCancelledError(reason));
+    },
+  };
+}
+
+/**
+ * Fire the PARENT's registered callbacks for an event forwarded from a child.
+ *
+ * MUST STAY SYNCHRONOUS (like handleTelemetryMessage): handleChildMessage
+ * void-invokes its async dispatch, so FIFO arrival-order processing holds only
+ * while this path has no awaits. Parent callbacks fire fire-and-forget (void
+ * invokeCallbacks) so a slow or throwing parent callback cannot wedge the pump.
+ *
+ * invokeCallbacks re-emits upward when THIS process is itself a subprocess, so a
+ * grandchild's event relays to the root with no explicit relay code.
+ *
+ * Fires on the parent's FULL stack (ctx.stateStack), NOT the run() call-site
+ * slice s.stateStack: a parent callback registered on an ancestor frame (e.g. a
+ * node-level `callback("onNodeStart")` above the run() call) is only reachable by
+ * walking the full stack, exactly as an in-process event does via callHook (which
+ * omits stateStack and defaults to ctx.stateStack). Passing s.stateStack here
+ * would silently miss those ancestor-frame callbacks.
+ */
+export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): void {
+  if (s.settled) return; // drop post-settle events
+  if (!isForwardableCallbackName(msg.name)) return; // child is less-trusted
+
+  const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
+  // Fire within the parent's captured ALS frame so an AgencyFunction callback
+  // body resolves __globals()/__threads() against the parent's real state (we
+  // run from the event-loop message handler, outside any agencyStore frame).
+  // Firing is fire-and-forget, but NOT bare `void`: fireWithGuard re-throws
+  // AgencyAbort (a cost-guard trip or cancellation raised inside a parent
+  // callback), so invokeCallbacks can reject. A bare void would orphan that as
+  // an unhandledRejection (Node may terminate) AND lose the trip. Route an
+  // AgencyAbort to the session exactly as handleTelemetryMessage routes a
+  // guard trip (kill the child, settle the run); log anything else. Attaching
+  // the handler is synchronous, so FIFO arrival-order processing still holds.
+  const fire = () =>
+    invokeCallbacks({ ctx: s.ctx, name: msg.name, data }).catch((err) => {
+      if (err instanceof AgencyAbort) {
+        killChildSafely(s);
+        settle(s, s.rejectPromise, err);
+        return;
+      }
+      ipcLog("recv", {
+        type: "callback_fire_error",
+        name: msg.name,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    });
+  if (s.parentStore) {
+    agencyStore.run(s.parentStore, fire);
+  } else {
+    fire();
+  }
+}
+
+/** Message types whose delivery is observational — an oversize or
+ * unserializable one is DROPPED, never fatal, because it cannot affect the run
+ * outcome (unlike result/interrupt/error/lock messages, which must settle or
+ * kill the run). Extend this list when adding another fire-and-forget message. */
+const OBSERVATIONAL_MESSAGE_TYPES: readonly string[] = ["callback"];
+
+function isObservationalMessage(msg: unknown): boolean {
+  // Null-safe: handleChildMessage runs on arbitrary values from an untrusted
+  // child. A child sending `undefined`/`null` makes serializedByteLength !ok and
+  // reaches here; reading `.type` off a non-object must not throw (that would
+  // leave the session unsettled — the exact failure the serialize guard avoids).
+  const type = (msg as { type?: unknown } | null | undefined)?.type;
+  return typeof type === "string" && OBSERVATIONAL_MESSAGE_TYPES.includes(type);
+}
+
+export async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   ipcLog("recv", msg);
   // Defensively serialize once: a non-serializable value (circular refs,
   // BigInt) would otherwise throw inside the event handler and leave the
   // session unsettled, hanging _run's Promise.
   const serialized = serializedByteLength(msg);
   if (!serialized.ok) {
+    // An observational message is never worth killing the run over.
+    if (isObservationalMessage(msg)) {
+      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "unserializable" });
+      return;
+    }
     settle(s, s.rejectPromise, new Error(
       `Failed to serialize subprocess message: ${serialized.error}`,
     ));
     return;
   }
   if (serialized.byteLength > s.limits.ipcPayload) {
+    // Drop an oversize observational message rather than settleWithLimitFailure
+    // (which kills the run) — preserves the pure-observation invariant.
+    if (isObservationalMessage(msg)) {
+      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "oversize" });
+      return;
+    }
     settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serialized.byteLength, {
       samplePrefix: serialized.serialized.slice(0, 1024),
     });
@@ -912,6 +1040,8 @@ async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
     settle(s, s.resolvePromise, { type: "interrupted", msg } satisfies SessionOutcome);
   } else if (msg.type === "telemetry") {
     handleTelemetryMessage(s, msg);
+  } else if (msg.type === "callback") {
+    handleCallbackMessage(s, msg);
   } else if (msg.type === "error") {
     handleErrorMessage(s, msg);
   } else if (msg.type === "lockAcquire") {
@@ -969,6 +1099,7 @@ export function attachSessionHandlers(s: RunSession, instruction: RunInstruction
 async function runSubprocessSession(opts: {
   ctx: any;
   stateStack: any;
+  parentStore?: any;
   instruction: RunInstruction | ResumeInstruction;
   limits: RunLimits;
   cwd?: string;
@@ -986,6 +1117,7 @@ async function runSubprocessSession(opts: {
       limits: opts.limits,
       ctx: opts.ctx,
       stateStack: opts.stateStack,
+      parentStore: opts.parentStore,
       resolvePromise,
       rejectPromise,
       settled: false,
@@ -1052,6 +1184,7 @@ function resolveInstruction(args: {
 async function invokeSubprocess(args: {
   ctx: any;
   stateStack: any;
+  parentStore?: any;
   parentFrame: State;
   compiled: { moduleId: string; code: string };
   node: string;
@@ -1102,6 +1235,7 @@ async function invokeSubprocess(args: {
     const outcome = await runSubprocessSession({
       ctx: args.ctx,
       stateStack: args.stateStack,
+      parentStore: args.parentStore,
       instruction,
       limits: args.limits,
       cwd: args.cwd,
@@ -1218,6 +1352,7 @@ export async function _run(
           invokeSubprocess({
             ctx,
             stateStack,
+            parentStore: store,
             parentFrame,
             compiled,
             node,

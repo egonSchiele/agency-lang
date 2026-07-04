@@ -277,7 +277,10 @@ class PatternLowerer {
           arguments: [],
           loc: node.loc,
         };
-        return [synthFn, { ...node, value: call }];
+        return [
+          synthFn,
+          { ...node, value: call, matchExprSource: { matchId: region.matchId } },
+        ];
       }
       return [
         ...region.statements,

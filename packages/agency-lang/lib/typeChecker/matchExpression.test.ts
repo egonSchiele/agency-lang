@@ -216,3 +216,45 @@ node main() {
     expect(errs).toEqual([]);
   });
 });
+
+describe("module-level match expression consumer typing", () => {
+  // A module-level `const x = match(...)` is hoisted into a synthesized init
+  // function whose match yields live in that function's scope, not the module
+  // scope. These cases confirm the consumer is still typed from the match's
+  // union (not the synth fn's inferred `any` return) — the same type checks the
+  // in-function form enforces.
+
+  it("unannotated consumer flows the match union to downstream uses", () => {
+    const errs = check(`const env: string = "prod"
+const label = match(env) {
+  "prod" => "Production"
+  _ => "Local"
+}
+const n: number = label
+node main(): number { return n }`);
+    expect(errs.length).toBe(1);
+    expect(errs[0]).toMatch(/\bn\b/);
+    expect(errs[0]).toMatch(/number/);
+  });
+
+  it("annotation mismatch is caught per arm at module level", () => {
+    const errs = check(`const env: string = "prod"
+const label: number = match(env) {
+  "prod" => "Production"
+  _ => "Local"
+}
+node main(): number { return label }`);
+    expect(errs.length).toBeGreaterThan(0);
+    expect(errs.some((e) => /number/.test(e))).toBe(true);
+  });
+
+  it("a compatible annotation at module level has no errors", () => {
+    const errs = check(`const env: string = "prod"
+const label: string = match(env) {
+  "prod" => "Production"
+  _ => "Local"
+}
+node main(): string { return label }`);
+    expect(errs).toEqual([]);
+  });
+});

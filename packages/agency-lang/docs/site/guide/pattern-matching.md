@@ -271,36 +271,10 @@ Here are the places you can't use match blocks right now:
 - At the module level (outside of a function or node).
 - Inside `parallel`, `seq`, `thread`, and `subthread` blocks.
 
-### Dispatching to a node from a match arm
-
-Inside a node, a match arm can `goto` another node. Each arm performs a
-real node transition — it does not yield a value — so a `goto`-dispatching
-match must be a statement, not the value of a `return` or assignment. Arms
-may be written bare or as a block, and the two forms can be mixed:
+You can't use `goto` with match blocks:
 
 ```ts
-node dispatch(x: string) {
-  match(x) {
-    "a" => goto landA()
-    "b" => {
-      prepare()
-      goto landB()
-    }
-    _   => goto landC()
-  }
-}
-```
-
-Because it is an ordinary statement match, a `goto`-dispatching match is
-not required to be exhaustive: an unmatched value simply falls through and
-execution continues after the `match`.
-
-The **prefix** form, where a single `goto` precedes the whole `match` and
-arms name a bare node target, is not supported — put the `goto` inside each
-arm instead:
-
-```ts
-// not allowed — no `goto match(...)` prefix form
+// not allowed
 goto match(x) {
   "next" => next
   _ => end

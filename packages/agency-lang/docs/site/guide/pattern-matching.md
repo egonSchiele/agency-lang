@@ -268,7 +268,6 @@ const greeting = match(name) {
 
 Here are the places you can't use match blocks right now:
 
-- At the module level (outside of a function or node).
 - Inside `parallel`, `seq`, `thread`, and `subthread` blocks.
 
 You can't use `goto` with match blocks:

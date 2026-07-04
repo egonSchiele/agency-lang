@@ -8,11 +8,25 @@
 
 **Tech Stack:** TypeScript (Node `child_process` IPC via `process.send`), vitest for unit tests, Agency `.agency`/`.test.json` execution tests.
 
+## Scope & design tradeoffs
+
+**Every forwarded event is serialized and sent on every occurrence — even when the parent registered NO matching callback.** The child cannot know which callbacks (if any) its parent registered, so `invokeCallbacks` forwards unconditionally. This mirrors the cost-telemetry design (PR #404), but the payloads are heavier: `onLLMCallStart`/`onLLMCallEnd`/`onThreadEnd` carry full `messages` arrays, `onAgentEnd` carries the full run result, and `onEmit`/`onNodeEnd` carry arbitrary user data — each `JSON.stringify`'d in the child's hot path. For an LLM-heavy child this is real per-event CPU + IPC bandwidth. **This is an accepted tradeoff for v1** (observational fidelity over efficiency). If it proves costly, the future mitigation — out of scope here — is for the parent to send the set of callback names it registered at fork time (one-shot via `buildForkOptions`/`SubprocessRunInfo`) and gate `sendCallbackToParent` on that set, so a child with no interested ancestor forwards nothing.
+
+**Three callbacks are deliberately NOT forwarded.** A hard denylist in `sendCallbackToParent` (Task 1) enforces this so a future refactor that routes one of them through `invokeCallbacks` cannot silently start forwarding a broken payload:
+
+| Callback | Why excluded today | What inclusion would take |
+| --- | --- | --- |
+| `onStream` | Dispatched directly at the `handleStreamingResponse` call site (`streaming.ts`), NOT through `invokeCallbacks`, so it never reaches the choke point. The child also only enters the streaming branch when the CHILD itself has an `onStream` callback — otherwise it drains the stream synchronously and emits nothing. | An explicit forward at the `streaming.ts` call site (data is function-free — no reconstruction needed), PLUS a mechanism for the child to stream even without a local callback (it must learn the parent wants streaming), PLUS accepting per-chunk IPC volume. Moderate. |
+| `onTrace` | Declared in `CallbackMap`/`VALID_CALLBACK_NAMES` but currently never dispatched anywhere — nothing fires it, so nothing forwards. (Function-free, so NOT in the correctness denylist; excluded only by non-existence.) | If ever wired to fire through `invokeCallbacks`, it forwards automatically with no new code — but must be deduped against the existing statelog span forwarding (`parentSpanId` adoption) and its `TraceEvent` payload size/frequency reviewed. Low, if routed through the choke point. |
+| `onOAuthRequired` | Declared but currently never dispatched. Also carries `complete: Promise<void>` + `cancel: () => void`: the child AWAITS `complete` while the parent drives an interactive OAuth flow — a live bidirectional dependency that fire-and-forget cannot satisfy (a stripped `complete` would leave the child awaiting forever). | A request/response IPC round-trip (like the existing interrupt/decision and lock-grant channels), not this one-way design. Large; separate effort. |
+
 ## Global Constraints
 
 - Leaf module `callbackForwarding.ts` MUST NOT import `ipc.ts` (layering rule — `hooks.ts` imports the leaf, and `hooks.ts`/`stateStack.ts` must never pull in `ipc.ts`). Its only runtime import is `subprocessRunInfo.js`.
 - `handleCallbackMessage` MUST be synchronous (no `await`) — `handleChildMessage` void-invokes its async dispatch, so IPC FIFO ordering holds only while the path has no awaits. Fire parent callbacks as `void invokeCallbacks(...)`.
 - Forwarding is PURELY OBSERVATIONAL and MUST NEVER kill the run: a dead channel, oversize, or unserializable payload is dropped/swallowed, never fatal.
+- `sendCallbackToParent` MUST enforce a non-forwardable denylist (`onStream`, `onOAuthRequired`) so a future refactor that routes them through `invokeCallbacks` cannot forward a payload with silently-stripped functions/Promises. See **Scope & design tradeoffs**. (`onTrace` is function-free and simply never fires today, so it is not in the denylist.)
+- Forwarding is UNCONDITIONAL and payloads can be large — an accepted v1 tradeoff, documented in **Scope & design tradeoffs**. Do not add listener-negotiation gating in this plan.
 - Fire-and-forget: the child never waits for the parent's callback; no reply channel.
 - Code style: NO dynamic imports; use objects not Maps; arrays not Sets; types not interfaces.
 - Git: never force-push/amend. Commit messages use `-m` with NO apostrophes (apostrophes on the command line fail in this repo); add the trailer via a second `-m`.
@@ -23,8 +37,10 @@
 
 ## File Structure
 
-- **Create** `lib/runtime/callbackForwarding.ts` — leaf module: `IpcCallbackMessage` wire type, `CALLBACK_PAYLOAD_LIMIT`, `sendCallbackToParent`. Child-side emission only.
+- **Create** `lib/runtime/callbackForwarding.ts` — leaf module: `IpcCallbackMessage` wire type, `CALLBACK_PAYLOAD_LIMIT`, `NON_FORWARDABLE_CALLBACKS`, `sendCallbackToParent`. Child-side emission only.
 - **Create** `lib/runtime/callbackForwarding.test.ts` — unit tests for the sender.
+- **Modify** `lib/runtime/subprocessRunInfo.ts` — add the shared `ipcChildDebug` helper (dependency-free leaf, used by both callback + cost leaves).
+- **Modify** `lib/runtime/costTelemetry.ts` — use the shared `ipcChildDebug` instead of its inline stderr block (pure refactor, keeps the two leaves consistent).
 - **Modify** `lib/runtime/hooks.ts` — one emit line at the top of `invokeCallbacks` + one import.
 - **Modify** `lib/runtime/hooks.test.ts` — one test proving `invokeCallbacks` forwards in IPC mode.
 - **Modify** `lib/runtime/ipc.ts` — add `IpcCallbackMessage` to the `SubprocessToParent` union; add `handleCallbackMessage` + `isForwardableCallbackName`; add a `"callback"` dispatch case; make oversize/unserializable `"callback"` messages drop (not kill) in `handleChildMessage`; export `handleChildMessage` for tests.
@@ -123,6 +139,15 @@ describe("sendCallbackToParent", () => {
     process.send = vi.fn(() => { throw new Error("channel closed"); }) as any;
     expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" })).not.toThrow();
   });
+
+  it("does not forward a denylisted callback (onStream)", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendCallbackToParent("onStream", { type: "text", text: "hi" } as any);
+    sendCallbackToParent("onOAuthRequired", { serverName: "s", authUrl: "u" } as any);
+    expect(send).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -133,7 +158,32 @@ Expected: FAIL — cannot resolve `./callbackForwarding.js` (module does not exi
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `lib/runtime/callbackForwarding.ts`:
+First, hoist the child-debug logger into the shared dependency-free leaf so both
+this module and `costTelemetry.ts` use ONE implementation (today `costTelemetry.ts`
+inlines the same `[ipc:child] …` stderr block — an inconsistency between the two
+sibling leaves). In `lib/runtime/subprocessRunInfo.ts`, add:
+
+```typescript
+/** Emit one child-side IPC debug line to stderr, gated on AGENCY_IPC_DEBUG=1.
+ * Lives here (the dependency-free leaf) so both callbackForwarding.ts and
+ * costTelemetry.ts share one implementation; ipcLog (ipc.ts) is unreachable from
+ * these leaves without violating the layering rule. */
+export function ipcChildDebug(line: string): void {
+  if (process.env.AGENCY_IPC_DEBUG !== "1") return;
+  const ts = new Date().toISOString().slice(11, 23);
+  process.stderr.write(`[ipc:child] ${ts} ${line}\n`);
+}
+```
+
+Then refactor `costTelemetry.ts` to import and use it, replacing its inline
+`if (process.env.AGENCY_IPC_DEBUG === "1") { … process.stderr.write(…) }` block
+with `ipcChildDebug("send telemetry_send_failed " + detail)` (same output; the
+`import { isIpcMode } from "./subprocessRunInfo.js"` there becomes
+`import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js"`). This keeps
+the two leaves consistent and is a pure refactor — `costTelemetry.test.ts` stays
+green.
+
+Now create `lib/runtime/callbackForwarding.ts`:
 
 ```typescript
 /**
@@ -143,16 +193,22 @@ Create `lib/runtime/callbackForwarding.ts`:
  * docs/superpowers/specs/2026-07-02-subprocess-callback-forwarding-design.md).
  *
  * Dependency-light leaf (mirrors costTelemetry.ts): the only runtime import is
- * subprocessRunInfo.ts. invokeCallbacks (hooks.ts) calls sendCallbackToParent on
- * every event; hooks.ts must not import ipc.ts, so the wire type + sender live
- * here.
+ * subprocessRunInfo.ts (for isIpcMode + the shared ipcChildDebug). invokeCallbacks
+ * (hooks.ts) calls sendCallbackToParent on every event; hooks.ts must not import
+ * ipc.ts, so the wire type + sender live here.
  *
  * Never blocks, never throws, and never kills the run: no reply, no listener; a
  * dead channel or an over-limit / unserializable payload is swallowed — the
  * event is observational, so dropping it is always safe.
+ *
+ * Forwarding is UNCONDITIONAL: the child cannot know which callbacks the parent
+ * registered, so every event (except the NON_FORWARDABLE_CALLBACKS denylist) is
+ * serialized and sent on every occurrence, even when no parent callback exists.
+ * Payloads can be large (full messages arrays, run results). Accepted v1
+ * tradeoff — see the plan's "Scope & design tradeoffs".
  */
 
-import { isIpcMode } from "./subprocessRunInfo.js";
+import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
 import type { CallbackName } from "../types/function.js";
 
 export type IpcCallbackMessage = {
@@ -167,11 +223,16 @@ export type IpcCallbackMessage = {
  * drop agree. Purely defensive: real callback payloads are KB-MB, far under it. */
 export const CALLBACK_PAYLOAD_LIMIT = 1024 * 1024 * 1024; // 1gb
 
-function ipcChildDebug(line: string): void {
-  if (process.env.AGENCY_IPC_DEBUG !== "1") return;
-  const ts = new Date().toISOString().slice(11, 23);
-  process.stderr.write(`[ipc:child] ${ts} ${line}\n`);
-}
+/** Callbacks that MUST NOT be forwarded. onStream and onOAuthRequired carry
+ * function / Promise fields (cancel, complete) whose semantics require a live
+ * local channel; JSON forwarding would strip them and fire a broken callback in
+ * the parent. Neither currently reaches this function (onStream dispatches
+ * outside invokeCallbacks; onOAuthRequired is never fired), so this is a
+ * defensive guard against a future refactor routing them through the choke
+ * point. onTrace is function-free and simply never fires today, so it is
+ * excluded by non-existence rather than listed here. See the plan's
+ * "Scope & design tradeoffs" section. */
+const NON_FORWARDABLE_CALLBACKS: readonly CallbackName[] = ["onStream", "onOAuthRequired"];
 
 /** Forward one lifecycle event to the parent. No-op unless this process is a
  * forked Agency subprocess with a live IPC channel. `maxBytes` is overridable
@@ -182,6 +243,7 @@ export function sendCallbackToParent(
   maxBytes: number = CALLBACK_PAYLOAD_LIMIT,
 ): void {
   if (!isIpcMode() || typeof process.send !== "function") return;
+  if (NON_FORWARDABLE_CALLBACKS.includes(name)) return; // functions/Promises can't survive JSON
   // JSON.stringify drops function-valued fields (e.g. onAgentStart.cancel) and
   // throws on circular refs / BigInt. Serialize ONCE up front so an
   // un-serializable payload degrades to a dropped event instead of a throw
@@ -211,12 +273,12 @@ export function sendCallbackToParent(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test:run lib/runtime/callbackForwarding.test.ts 2>&1 | tee /tmp/cbf-1.log`
-Expected: PASS (7 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/runtime/callbackForwarding.ts lib/runtime/callbackForwarding.test.ts
+git add lib/runtime/callbackForwarding.ts lib/runtime/callbackForwarding.test.ts lib/runtime/subprocessRunInfo.ts lib/runtime/costTelemetry.ts
 git commit -m "Add callbackForwarding leaf: child-side sendCallbackToParent" -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
@@ -264,6 +326,21 @@ describe("invokeCallbacks subprocess forwarding", () => {
     await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: ctx.stateStack });
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("forwarding is ADDITIVE: the local callback still fires in IPC mode", async () => {
+    // Guards the "purely additive" invariant: the emit line must not replace or
+    // short-circuit the existing local callback firing. A registered callback
+    // must BOTH fire locally AND be forwarded.
+    vi.stubEnv("AGENCY_IPC", "1");
+    const sent: any[] = [];
+    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: stack });
+    expect(fired).toEqual([{ nodeName: "x" }]); // local callback still fired
+    expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]); // and forwarded
+  });
 });
 ```
 
@@ -296,7 +373,7 @@ Then, at the very top of the `invokeCallbacks` body (right after the destructuri
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test:run lib/runtime/hooks.test.ts 2>&1 | tee /tmp/cbf-2.log`
-Expected: PASS (all existing hooks tests plus the 2 new ones).
+Expected: PASS (all existing hooks tests plus the 3 new ones).
 
 - [ ] **Step 5: Commit**
 
@@ -338,12 +415,16 @@ describe("handleCallbackMessage", () => {
   });
 
   it("ignores an unknown callback name (child is less-trusted)", async () => {
+    // Register the handler UNDER the bogus name. gatherCallbacks reads
+    // ctx.callbacks[name] dynamically, so WITHOUT the isForwardableCallbackName
+    // guard this would fire. This makes the test actually discriminate the guard
+    // (registering it under a valid name would pass either way — false confidence).
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const ctx: any = { callbacks: { onBogus: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
     const session = makeSession({ ctx, stateStack: stack });
 
-    handleCallbackMessage(session, { type: "callback", name: "onBogus" as any, data: {} });
+    handleCallbackMessage(session, { type: "callback", name: "onBogus" as any, data: { x: 1 } });
     await flush();
 
     expect(fired).toEqual([]);
@@ -409,6 +490,8 @@ import { invokeCallbacks } from "./hooks.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
 ```
 
+Note: `import { invokeCallbacks } from "./hooks.js"` adds a NEW `ipc.ts → hooks.ts` import edge (neither imports the other on `main` today). `hooks.ts` does NOT import `ipc.ts` — it forwards via the `callbackForwarding.ts` leaf, precisely to keep this acyclic — so there is no cycle. After this step, run `make` and `pnpm run lint:structure` to confirm no transitive `ipc → hooks → … → ipc` cycle was introduced.
+
 (b) Add `IpcCallbackMessage` to the `SubprocessToParent` union (`ipc.ts:272-279`):
 
 ```typescript
@@ -431,6 +514,35 @@ function isForwardableCallbackName(name: unknown): name is CallbackName {
 }
 
 /**
+ * Give a forwarded onAgentStart payload a REAL parent-owned cancel().
+ *
+ * The child's own cancel function was stripped by JSON. The parent owns the
+ * child session, so a parent onAgentStart callback that calls cancel() kills the
+ * child (SIGKILL) and settles run() as cancelled.
+ *
+ * BEST-EFFORT and ASYNC — NOT the in-process semantic. In-process, cancel()
+ * throws synchronously and PREVENTS the agent from running. Here the child fires
+ * onAgentStart and proceeds without back-pressure (fire-and-forget), so the
+ * parent's cancel arrives later and kills a child that may already be mid-run or
+ * finished. If the child's terminal result wins the race, settle()'s `s.settled`
+ * guard makes the cancel a silent no-op. Killing the child is the closest
+ * approximation this one-way channel allows.
+ *
+ * The `typeof data === object` guard is defensive: the child is the less-trusted
+ * party, so we do not spread a malformed non-object payload.
+ */
+function withParentCancel(s: RunSession, data: unknown): unknown {
+  if (typeof data !== "object" || data === null) return data;
+  return {
+    ...(data as Record<string, unknown>),
+    cancel: (reason?: string) => {
+      killChildSafely(s);
+      settle(s, s.rejectPromise, new AgencyCancelledError(reason));
+    },
+  };
+}
+
+/**
  * Fire the PARENT's registered callbacks for an event forwarded from a child.
  *
  * MUST STAY SYNCHRONOUS (like handleTelemetryMessage): handleChildMessage
@@ -445,20 +557,7 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
   if (s.settled) return; // drop post-settle events
   if (!isForwardableCallbackName(msg.name)) return; // child is less-trusted
 
-  let data: any = msg.data;
-  if (msg.name === "onAgentStart") {
-    // The child's cancel function was stripped by JSON. Reconstruct a REAL one:
-    // the parent owns the child session, so a parent onAgentStart callback that
-    // calls cancel() kills the child and settles run() as cancelled. Mirrors
-    // in-process fidelity, where onAgentStart carries a real cancel.
-    data = {
-      ...(data as Record<string, unknown>),
-      cancel: (reason?: string) => {
-        killChildSafely(s);
-        settle(s, s.rejectPromise, new AgencyCancelledError(reason));
-      },
-    };
-  }
+  const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
   void invokeCallbacks({ ctx: s.ctx, name: msg.name, data, stateStack: s.stateStack });
 }
 ```
@@ -522,13 +621,54 @@ describe("handleChildMessage oversize handling", () => {
 
     expect(session.settled).toBe(true); // settleWithLimitFailure fired
   });
+
+  it("drops an UNSERIALIZABLE callback message instead of killing the run", async () => {
+    // Covers the `!serialized.ok` observational branch (separate from oversize).
+    const rejections: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({
+      ctx, stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 }, // large, so oversize is NOT the cause
+      rejectPromise: (e: any) => rejections.push(e),
+    });
+    const circular: any = { type: "callback", name: "onNodeStart", data: {} };
+    circular.data.self = circular; // JSON.stringify throws -> serialized.ok === false
+
+    await handleChildMessage(session, circular);
+
+    expect(session.settled).toBe(false);
+    expect(rejections).toEqual([]);
+  });
+
+  it("routes a within-limit callback through the dispatch case to the parent callback", async () => {
+    // Directly exercises Task 3(d) — the `msg.type === "callback"` dispatch case
+    // in handleChildMessage. The other handleCallbackMessage tests call it
+    // directly, and the oversize test drops BEFORE dispatch, so without this the
+    // dispatch wiring is only covered by the slow E2E (Task 5). A missing/typo'd
+    // dispatch case would leave `fired` empty here.
+    const fired: any[] = [];
+    const stack = new StateStack();
+    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const session = makeSession({
+      ctx, stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
+
+    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "routed" } });
+    await flush(); // handleCallbackMessage void-invokes invokeCallbacks; let the microtask chain drain
+
+    expect(fired).toEqual([{ nodeName: "routed" }]);
+  });
 });
 ```
+
+Note: `flush` is the `const flush = () => new Promise((r) => setImmediate(r))` helper introduced in Task 3 (file scope); reuse it. If Task 3 and Task 4 land in a different order, hoist `flush` to the top of the file.
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test:run lib/runtime/ipc.test.ts 2>&1 | tee /tmp/cbf-4.log`
-Expected: FAIL — either `handleChildMessage` is not exported, or the oversize callback test fails because the current code calls `settleWithLimitFailure` (session settles) for the callback message.
+Expected: FAIL — either `handleChildMessage` is not exported, or the oversize callback test fails because the current code calls `settleWithLimitFailure` (session settles) for the callback message. (The unserializable-drop and dispatch-route tests also fail against the pre-change code: the former settles via the serialize-error branch; the latter cannot import the unexported `handleChildMessage`.)
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -536,21 +676,44 @@ In `lib/runtime/ipc.ts`:
 
 (a) Export `handleChildMessage` — change `async function handleChildMessage` (`ipc.ts:889`) to `export async function handleChildMessage`.
 
-(b) Replace the two serialization/limit branches (`ipc.ts:895-906`) with:
+(b) Add a declarative drop-policy predicate near the other module-level
+helpers, so the generic serialize/size gate does NOT hard-code which message
+types are droppable (keeps the transport "how" separate from the drop-policy
+"what"):
+
+```typescript
+/** Message types whose delivery is observational — an oversize or
+ * unserializable one is DROPPED, never fatal, because it cannot affect the run
+ * outcome (unlike result/interrupt/error/lock messages, which must settle or
+ * kill the run). Extend this list when adding another fire-and-forget message. */
+const OBSERVATIONAL_MESSAGE_TYPES: readonly string[] = ["callback"];
+
+function isObservationalMessage(msg: { type?: string }): boolean {
+  return typeof msg.type === "string" && OBSERVATIONAL_MESSAGE_TYPES.includes(msg.type);
+}
+```
+
+(c) Replace the two serialization/limit branches (`ipc.ts:895-906`) with:
 
 ```typescript
   if (!serialized.ok) {
-    // A forwarded callback is observational — never kill the run over it.
-    if (msg.type === "callback") { ipcLog("recv", { type: "callback_dropped", reason: "unserializable" }); return; }
+    // An observational message is never worth killing the run over.
+    if (isObservationalMessage(msg)) {
+      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "unserializable" });
+      return;
+    }
     settle(s, s.rejectPromise, new Error(
       `Failed to serialize subprocess message: ${serialized.error}`,
     ));
     return;
   }
   if (serialized.byteLength > s.limits.ipcPayload) {
-    // Drop an oversize observational callback rather than settleWithLimitFailure
+    // Drop an oversize observational message rather than settleWithLimitFailure
     // (which kills the run) — preserves the pure-observation invariant.
-    if (msg.type === "callback") { ipcLog("recv", { type: "callback_dropped", reason: "oversize" }); return; }
+    if (isObservationalMessage(msg)) {
+      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "oversize" });
+      return;
+    }
     settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serialized.byteLength, {
       samplePrefix: serialized.serialized.slice(0, 1024),
     });
@@ -561,7 +724,7 @@ In `lib/runtime/ipc.ts`:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test:run lib/runtime/ipc.test.ts 2>&1 | tee /tmp/cbf-4.log`
-Expected: PASS (existing tests plus the 2 new ones).
+Expected: PASS (existing tests plus the 4 new ones).
 
 - [ ] **Step 5: Commit**
 
@@ -762,7 +925,7 @@ Run: `grep -n "callback\|limitation\|Remaining" docs/dev/subprocess-ipc.md 2>&1 
 
 - [ ] **Step 2: Update lifecycleHooks.md**
 
-In `docs/misc/lifecycleHooks.md`: add a short note that a parent's registered callbacks also fire for events inside a `std::agency run()` subprocess (forwarded fire-and-forget), that they are observational, and that `onStream` is the one exception (it bypasses the `invokeCallbacks` choke point and is not forwarded). Verify current wording first:
+In `docs/misc/lifecycleHooks.md`: add a short note that a parent's registered callbacks also fire for events inside a `std::agency run()` subprocess (forwarded fire-and-forget), that they are observational, that forwarding is unconditional (fires even with no parent callback; heavier payloads than in-process — see the plan's Scope section), and that `onStream`, `onOAuthRequired`, and `onTrace` are NOT forwarded (`onStream`/`onOAuthRequired` bypass or would break over the one-way choke point; `onTrace` is not dispatched today). Also note that `onAgentStart.cancel` fired from a parent callback is a best-effort async kill of the child, not the synchronous in-process prevent-start. Verify current wording first:
 
 Run: `grep -n "onStream\|subprocess\|invokeCallbacks" docs/misc/lifecycleHooks.md 2>&1 | tee -a /tmp/cbf-docs.log`
 
@@ -785,9 +948,12 @@ git commit -m "Document subprocess callback forwarding" -m "Co-Authored-By: Clau
 - `onAgentStart.cancel` reconstructed real (kill + settle cancelled) → Task 3 (unit-tested; E2E intentionally omitted because cancel surfaces as a propagating abort). ✓
 - Automatic nested relay → Task 3 impl (re-entrant `invokeCallbacks`) + Task 5 E2E. ✓
 - Oversize/unserializable never kills the run (child skip + parent drop) → Task 1 (child skip) + Task 4 (parent drop). ✓
-- `onStream` out of scope → documented in Task 6. ✓
+- `onStream`/`onOAuthRequired`/`onTrace` NOT forwarded → `NON_FORWARDABLE_CALLBACKS` denylist enforces the two function/Promise-bearing ones (Task 1, with a test); `onTrace` excluded by non-existence. Rationale + inclusion cost → "Scope & design tradeoffs". Documented in Task 6. ✓
+- Unconditional forwarding of heavy payloads is an accepted v1 tradeoff (no listener gating) → documented in "Scope & design tradeoffs", the Global Constraints, and the `callbackForwarding.ts` module doc. ✓
+- `onAgentStart.cancel` is best-effort/async (NOT the synchronous in-process prevent-start semantic), with the settle-race no-op called out → Task 3 comment. ✓
 - Purely observational, no blocking callbacks → reflected in comments/docs; nothing to implement. ✓
 - Tests: unit (sender, emit, handler, oversize) + E2E (child events, nested relay) → Tasks 1-5. ✓
+  - Each test is written to FAIL if its target code breaks (mutation-aware): the unknown-name test registers under the bogus name so it discriminates the `isForwardableCallbackName` guard (Task 3); Task 2 asserts forwarding is ADDITIVE (local callback still fires); Task 4 covers BOTH oversize and unserializable observational drops AND the `handleChildMessage` dispatch case (via a within-limit callback that reaches `handleCallbackMessage`), plus the complementary non-callback-still-kills case. ✓
 - Docs → Task 6. ✓
 
 **Placeholder scan:** No TBD/TODO; all code shown in full; all expected outputs are concrete strings. ✓

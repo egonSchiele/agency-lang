@@ -1,3 +1,4 @@
+import { applyPatch } from "std::fs"
 import { guard } from "std::thread"
 
 node main() {
@@ -6,6 +7,8 @@ node main() {
     const reply = llm("draft a reply")
     return category
   }
+
+  raise std::edit("Are you sure you want to continue?")
 
   match(result) {
     success(value) => print("Category: ${value}")

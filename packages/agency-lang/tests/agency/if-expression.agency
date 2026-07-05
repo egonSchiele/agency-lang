@@ -1,0 +1,43 @@
+// `if <cond> then <a> else <b>` — a conditional expression that is sugar for the
+// stepped `if` statement: it lowers to the same `runner.ifElse` machinery a
+// `match` expression uses (NOT a ternary), so interrupts / checkpoints inside a
+// branch work. Like `match` expressions, it is only valid in assignment / return
+// position, never as a nested value.
+
+def confirm(): string {
+  interrupt("proceed?")
+  return "approved"
+}
+
+const env: string = "prod"
+const moduleLabel = if env == "prod" then "PROD" else "DEV"
+
+node basic(age: number): string {
+  const kind = if age > 18 then "adult" else "child"
+  return kind
+}
+
+node returnForm(n: number): string {
+  return if n > 100 then "big" else "small"
+}
+
+node moduleLevel(): string {
+  return moduleLabel
+}
+
+// CRITICAL: an interrupt thrown from a branch pauses and resumes correctly.
+node withInterrupt(c: boolean): string {
+  const val = if c then confirm() else "skipped"
+  return "got:${val}"
+}
+
+// An `is`-pattern condition binds into the then-branch, like a statement `if`.
+def tryParse(s: string): Result<number, string> {
+  if (s == "ok") { return success(42) }
+  return failure("bad input")
+}
+node isCondition(s: string): number {
+  const r = tryParse(s)
+  const n = if (r is success(v)) then v else -1
+  return n
+}

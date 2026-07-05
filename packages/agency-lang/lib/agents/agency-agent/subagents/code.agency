@@ -18,6 +18,7 @@ import { edit } from "std::fs"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
 import { exec, ls, glob, grep, bash } from "std::shell"
+import { gitStatus, gitLog, gitCommit } from "std::git"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
@@ -317,6 +318,9 @@ export static const codeTools: any[] = [
   glob.partial(useAgentCwd: true),
   grep.partial(useAgentCwd: true),
   bash.partial(useAgentCwd: true),
+  gitStatus,
+  gitLog,
+  gitCommit,
   agencyCli,
   typecheck,
   parseAST,

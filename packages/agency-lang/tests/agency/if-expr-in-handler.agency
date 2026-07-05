@@ -1,0 +1,33 @@
+// `if` expressions (`return if (...) { ... } else { ... }` / `const x = if ...`)
+// inside a handler body. Like match expressions, they compile to a
+// self-contained async IIFE in the handler's plain-mode codegen, so they never
+// touch the runner's `_matchExit` unwind flag.
+
+def guarded(): number {
+  const check = interrupt("confirm?")
+  return 42
+}
+
+node approvesViaIf() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return if (data.effect == "unknown") { approve() } else { reject() }
+  }
+}
+
+node rejectsViaIf() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return if (data.effect == "std::run") { approve() } else { reject() }
+  }
+}

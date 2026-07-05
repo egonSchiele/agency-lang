@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "approvesViaIf", "input": "", "expectedOutput": "\"approved\"", "evaluationCriteria": [{ "type": "exact" }], "description": "if-expression in a handler body approves when the branch matches" },
+    { "nodeName": "rejectsViaIf", "input": "", "expectedOutput": "\"rejected\"", "evaluationCriteria": [{ "type": "exact" }], "description": "if-expression in a handler body rejects on the else branch" }
+  ]
+}

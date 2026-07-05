@@ -1,0 +1,46 @@
+// `if` expressions: assignable / returnable, mirroring `match` expressions.
+
+// Basic const = if, single-expression braced branches.
+node basic(x: string): string {
+  const label = if (x == "prod") { "Production" } else { "Local" }
+  return label
+}
+
+// else-if chain (must terminate in else).
+node chain(x: string): string {
+  const label = if (x == "a") { "A" } else if (x == "b") { "B" } else { "C" }
+  return label
+}
+
+// Block branch with an explicit return (returns from the if, not the fn).
+node block(x: number): string {
+  const size = if (x > 100) {
+    let note = "big"
+    return note
+  } else {
+    return "small"
+  }
+  return "size: ${size}"
+}
+
+// `return if (...)` operand form.
+def classify(x: boolean): string {
+  return if (x) { "yes" } else { "no" }
+}
+node returnForm(x: boolean): string {
+  return classify(x)
+}
+
+// Nested: the arm of a match is an if-expression value.
+node nested(x: number): string {
+  const r = if (x == 0) {
+    "zero"
+  } else {
+    if (x > 0) { "positive" } else { "negative" }
+  }
+  return r
+}
+
+const envName: string = "prod"
+const moduleLabel = if (envName == "prod") { "PROD" } else { "DEV" }
+node moduleLevel(): string { return moduleLabel }

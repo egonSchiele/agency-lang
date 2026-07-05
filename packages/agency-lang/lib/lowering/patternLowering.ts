@@ -114,14 +114,15 @@ class PatternLowerer {
       }
       case "returnStatement": {
         const ret = node as ReturnStatement;
-        // Expression-position match: `return match(E) { ... }`. Hoist the match
-        // region and return the temp it produces. This is allowed inside handler
-        // bodies too: the builder compiles the hoisted region to a self-contained
-        // async IIFE there (plain mode), so it never sets the runner's
-        // `_matchExit` unwind flag that a handler has no `runner.ifElse` to clear.
-        if (ret.value !== undefined && (ret.value as AgencyNode).type === "matchBlock") {
-          const region = this.lowerMatchExpressionCore(ret.value as MatchBlock, ret.loc);
-          return [...region.statements, { ...ret, value: region.valueRef }];
+        // Expression-position `match`/`if`: `return match(E) { ... }` or
+        // `return if (c) { ... } else { ... }`. Hoist the region and return the
+        // temp it produces. Allowed inside handler bodies too: the builder
+        // compiles the hoisted region to a self-contained async IIFE there
+        // (plain mode), so it never sets the runner's `_matchExit` unwind flag
+        // that a handler has no `runner.ifElse` to clear.
+        const retRegion = this.expressionRegion(ret.value as AgencyNode | undefined, ret.loc);
+        if (retRegion) {
+          return [...retRegion.statements, { ...ret, value: retRegion.valueRef }];
         }
         return [
           {
@@ -233,14 +234,14 @@ class PatternLowerer {
   // -------------------------------------------------------------------------
 
   private lowerAssignment(node: Assignment): AgencyNode[] {
-    // Expression-position match: `const x = match(E) { ... }`. Hoist the match
-    // region above and rewrite the assignment value to the temp the region
-    // produces. Module-level initializers have no execution frame to unwind, so
-    // they are rejected. Handler bodies ARE allowed: the builder compiles the
-    // hoisted region to a self-contained async IIFE there (plain mode), which
-    // never sets the runner's `_matchExit` flag.
-    if (node.value && (node.value as AgencyNode).type === "matchBlock") {
-      const region = this.lowerMatchExpressionCore(node.value as MatchBlock, node.loc);
+    // Expression-position `match`/`if`: `const x = match(E) { ... }` or
+    // `const x = if (c) { ... } else { ... }`. Hoist the region above and
+    // rewrite the assignment value to the temp the region produces. Handler
+    // bodies ARE allowed: the builder compiles the hoisted region to a
+    // self-contained async IIFE there (plain mode), which never sets the
+    // runner's `_matchExit` flag.
+    const region = this.expressionRegion(node.value as AgencyNode | undefined, node.loc);
+    if (region) {
       if (this.atModuleLevel) {
         // A module-level initializer has no execution frame for the match's
         // `_matchExit` unwind, so we can't splice the region inline the way we
@@ -465,6 +466,79 @@ class PatternLowerer {
   }
 
   /**
+   * Lower an expression-position `if`: `const x = if (c) { ... } else { ... }`.
+   * Allocates a match id, rewrites every branch (and each `else if` level) so it
+   * yields a value into that id, tags the ROOT if-chain with `matchExprId` (the
+   * node the lowered `runner.ifElse` OWNS — the else-if chain is flattened into
+   * one `runner.ifElse` at codegen, so only the root is tagged), and hands back
+   * the tagged if-chain plus a reference to the `__matchval_<id>` temp. Rides the
+   * exact same codegen / runtime / typechecker machinery as a `match` expression.
+   */
+  private lowerIfExpressionCore(
+    node: IfElse,
+    loc: SourceLocation | undefined,
+  ): { statements: AgencyNode[]; valueRef: Expression; matchId: number } {
+    const matchId = ++this.counter;
+    const rewritten = this.rewriteIfExprForYield(node, matchId);
+    const tagged: IfElse = { ...rewritten, matchExprId: matchId };
+    return { statements: [tagged], valueRef: varRef(matchValName(matchId), loc), matchId };
+  }
+
+  /**
+   * Recursively rewrite an `if`-expression's branches so every path yields into
+   * `matchId`, and lower each branch body. An `else` is mandatory (an if
+   * expression must always produce a value); a bare `else if` recurses (the
+   * nested `IfElse` is left UNtagged — the root owns the id). Mirrors
+   * `lowerIfElse`'s condition handling (including the `is`-form binder hoist).
+   */
+  private rewriteIfExprForYield(node: IfElse, matchId: number): IfElse {
+    if (!node.elseBody) {
+      throw new LoweringError(
+        "an `if` expression must have an `else` branch — it must produce a value on every path",
+        node.loc,
+      );
+    }
+    const branchMsg =
+      "an `if` expression branch must return a value on every path";
+
+    const elseBody: AgencyNode[] =
+      node.elseBody.length === 1 && (node.elseBody[0] as AgencyNode).type === "ifElse"
+        ? [this.rewriteIfExprForYield(node.elseBody[0] as IfElse, matchId)]
+        : this.lowerBody(
+            this.rewriteYieldingBody(node.elseBody, matchId, node.elseBody[0]?.loc ?? node.loc, branchMsg),
+          );
+
+    const rewriteThen = () =>
+      this.lowerBody(
+        this.rewriteYieldingBody(node.thenBody, matchId, node.thenBody[0]?.loc ?? node.loc, branchMsg),
+      );
+
+    if (node.condition.type === "isExpression") {
+      const isExp = node.condition;
+      const condition = patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc);
+      const bindings = this.extractBindings(isExp.pattern, isExp.expression, "const", node.loc);
+      return { ...node, condition, thenBody: [...bindings, ...rewriteThen()], elseBody };
+    }
+    return { ...node, condition: this.lowerExpression(node.condition), thenBody: rewriteThen(), elseBody };
+  }
+
+  /**
+   * If `value` is an expression-position control-flow construct (`match(...)` or
+   * `if (...)`), lower it to its hoisted region + value-ref temp; otherwise null.
+   * Shared by the assignment and return lowering paths so both forms ride the
+   * same hoist/module-level machinery.
+   */
+  private expressionRegion(
+    value: AgencyNode | undefined,
+    loc: SourceLocation | undefined,
+  ): { statements: AgencyNode[]; valueRef: Expression; matchId: number } | null {
+    if (!value) return null;
+    if (value.type === "matchBlock") return this.lowerMatchExpressionCore(value as MatchBlock, loc);
+    if (value.type === "ifElse") return this.lowerIfExpressionCore(value as IfElse, loc);
+    return null;
+  }
+
+  /**
    * Rewrite a single match arm's body so every path yields a value into the
    * owning match (`matchYield`). Throws a `LoweringError` if any path can fall
    * off the end without yielding.
@@ -474,18 +548,36 @@ class PatternLowerer {
     matchId: number,
     arm: MatchBlockCase,
   ): AgencyNode[] {
+    const fallbackLoc =
+      body[0]?.loc ??
+      (arm.caseValue === "_" ? undefined : (arm.caseValue as AgencyNode).loc);
+    return this.rewriteYieldingBody(
+      body,
+      matchId,
+      fallbackLoc,
+      "match arm must return a value on every path when the match is used as an expression",
+    );
+  }
+
+  /**
+   * Rewrite a yielding body (a match arm OR an `if`-expression branch) so every
+   * path yields into the owning match id: a single-expression body becomes one
+   * `matchYield`; a block body has its `return`s rewritten to `matchYield`s and
+   * must satisfy `alwaysYields`, else `errorMessage` is thrown. Does NOT lower
+   * the body — the caller lowers it afterward (`lowerMatchCase` / `lowerBody`).
+   */
+  private rewriteYieldingBody(
+    body: AgencyNode[],
+    matchId: number,
+    fallbackLoc: SourceLocation | undefined,
+    errorMessage: string,
+  ): AgencyNode[] {
     if (body.length === 1 && isExpressionNode(body[0])) {
       return [{ type: "matchYield", matchId, value: body[0] as Expression, loc: body[0].loc }];
     }
     const rewritten = this.rewriteReturnsToYields(body, matchId);
     if (!this.alwaysYields(rewritten)) {
-      const loc =
-        body[0]?.loc ??
-        (arm.caseValue === "_" ? undefined : (arm.caseValue as AgencyNode).loc);
-      throw new LoweringError(
-        "match arm must return a value on every path when the match is used as an expression",
-        loc,
-      );
+      throw new LoweringError(errorMessage, fallbackLoc);
     }
     return rewritten;
   }

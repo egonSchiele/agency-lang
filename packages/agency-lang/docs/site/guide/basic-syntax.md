@@ -65,7 +65,16 @@ if (age > 18) {
 }
 ```
 
-Agency does not have ternary expressions.
+Agency has no ternary (`? :`). Instead, an `if` can be used as an expression — it
+produces the value of whichever branch runs:
+
+```ts
+const label = if (isProd) { "Production" } else { "Local" }
+```
+
+The `else` is required, since the `if` has to produce a value. A branch can also
+be a block that ends in a `return` (which returns the value from the `if`, not
+from the function), just like a `match` expression arm.
 
 ## Type annotations
 

@@ -2741,7 +2741,7 @@ export const returnStatementParser: Parser<ReturnStatement> = label("a return st
     captureCaptures(
       seqC(
         optionalSpaces,
-        capture(or(lazy(() => matchBlockExprParser), exprParser), "value"),
+        capture(or(lazy(() => matchBlockExprParser), lazy(() => ifParser), exprParser), "value"),
       ),
     ),
   ),
@@ -3464,7 +3464,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), exprParser), "value"),
+      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), lazy(() => ifParser), exprParser), "value"),
       optionalSemicolon,
       optionalSpacesOrNewline,
     ),

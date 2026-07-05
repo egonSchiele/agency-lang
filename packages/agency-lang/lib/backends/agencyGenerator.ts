@@ -1522,7 +1522,16 @@ export class AgencyGenerator {
   protected renderBody(body: AgencyNode[]): string {
     const lines: string[] = [];
     for (const stmt of body) {
-      const line = this.processNode(stmt);
+      let line = this.processNode(stmt);
+      // A bare expression-statement (a lone string / number / identifier /
+      // binop — common as a single-expression `if`/`match` branch value) is
+      // rendered by `generateLiteral` etc. WITHOUT self-indenting, unlike
+      // statements whose `process*` calls `indentStr`. Indent any non-empty
+      // statement whose first line isn't already indented so block bodies stay
+      // aligned. (At indent 0 `indentStr` is a no-op, so this is safe.)
+      if (line !== "" && stmt.type !== "newLine" && !/^\s/.test(line)) {
+        line = this.indentStr(line);
+      }
       if (line !== "" || stmt.type === "newLine") {
         lines.push(line);
       }

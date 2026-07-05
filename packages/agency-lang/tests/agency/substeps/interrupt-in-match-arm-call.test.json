@@ -1,6 +1,8 @@
 {
   "tests": [
-    { "nodeName": "main", "input": "\"go\"", "expectedOutput": "\"got:approved\"", "evaluationCriteria": [{ "type": "exact" }], "interruptHandlers": [{ "action": "approve", "expectedMessage": "proceed?" }] },
-    { "nodeName": "main", "input": "\"stop\"", "expectedOutput": "\"got:skip\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "matched", "input": "\"go\"", "expectedOutput": "\"got:approved\"", "evaluationCriteria": [{ "type": "exact" }], "interruptHandlers": [{ "action": "approve", "expectedMessage": "proceed?" }] },
+    { "nodeName": "matched", "input": "\"stop\"", "expectedOutput": "\"got:skip\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "wildcard", "input": "\"other\"", "expectedOutput": "\"got:denied\"", "evaluationCriteria": [{ "type": "exact" }], "interruptHandlers": [{ "action": "approve", "expectedMessage": "really?" }] },
+    { "nodeName": "wildcard", "input": "\"keep\"", "expectedOutput": "\"got:kept\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

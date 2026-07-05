@@ -22,9 +22,11 @@ describe("expression match lowering", () => {
     const matchStmt = body.find((n: any) => n.type === "matchBlock");
     expect(matchStmt.matchExprId).toBeTypeOf("number");
     const arm = matchStmt.cases.find((c: any) => c.type === "matchBlockCase");
-    expect(arm.body[0].type).toBe("matchYield");
-    expect(arm.body[0].matchId).toBe(matchStmt.matchExprId);
-    expect(arm.body[0].value).toEqual(expect.objectContaining({ type: "number", value: "1" }));
+    // Every single-expression arm hoists its value to a temp, then yields it.
+    const y = arm.body.find((s: any) => s.type === "matchYield");
+    expect(y.matchId).toBe(matchStmt.matchExprId);
+    // The type checker reads `typeSource` (the original literal), not the temp.
+    expect(y.typeSource).toEqual(expect.objectContaining({ type: "number", value: "1" }));
     const assign = body.find((n: any) => n.type === "assignment" && n.variableName === "val");
     expect(assign.value.value).toBe(`__matchval_${matchStmt.matchExprId}`);
     expect(assign.matchExprSource.matchId).toBe(matchStmt.matchExprId);
@@ -157,41 +159,45 @@ describe("single-expression arm interrupt hoisting (#430)", () => {
     return matchStmt.cases.find((c: any) => c.type === "matchBlockCase").body;
   }
 
-  it("a call arm binds to a temp at statement position, then yields the temp", () => {
-    const stmts = armStmts(`"a" => confirm()`);
-    // [ const __armval_N = confirm();  matchYield(__armval_N) ]
+  // Every single-expression arm is hoisted the same way, regardless of what
+  // the value is: the whole point is NOT to guess which values can interrupt.
+  // The temp binding puts the value at statement position (where codegen emits
+  // the interrupt guard); `typeSource` preserves the original expression for
+  // typing so literals/narrowing survive; `value` is the temp ref for codegen.
+  function expectHoisted(arm: string, valueType: string) {
+    const stmts = armStmts(arm);
     const binding = stmts.find((s: any) => s.type === "assignment");
     expect(binding).toBeDefined();
     expect(binding.matchArmValueTemp).toBe(true);
-    expect(binding.value.type).toBe("functionCall");
-    expect(binding.value.functionName).toBe("confirm");
+    expect(binding.value.type).toBe(valueType);
     const y = stmts.find((s: any) => s.type === "matchYield");
     expect(y.value.type).toBe("variableName");
     expect(y.value.value).toBe(binding.variableName);
+    // The temp binding precedes the yield of that temp.
+    expect(stmts.indexOf(binding)).toBeLessThan(stmts.indexOf(y));
+    // The yield carries the original expression for the type checker.
+    expect(y.typeSource).toEqual(binding.value);
+    return { binding, y };
+  }
+
+  it("a call arm binds to a temp, then yields the temp", () => {
+    const { binding } = expectHoisted(`"a" => confirm()`, "functionCall");
+    expect(binding.value.functionName).toBe("confirm");
   });
 
-  it("a literal arm stays a bare yield (no temp binding)", () => {
-    const stmts = armStmts(`"a" => 1`);
-    expect(stmts.some((s: any) => s.type === "assignment")).toBe(false);
-    expect(stmts[0].type).toBe("matchYield");
-    expect(stmts[0].value).toEqual(
+  it("a literal arm also hoists (uniform lowering, not case-detection)", () => {
+    const { y } = expectHoisted(`"a" => 1`, "number");
+    expect(y.typeSource).toEqual(
       expect.objectContaining({ type: "number", value: "1" }),
     );
   });
 
-  it("a variable-ref arm stays a bare yield (cannot interrupt)", () => {
-    const stmts = armStmts(`"a" => x`);
-    expect(stmts.some((s: any) => s.type === "assignment")).toBe(false);
-    expect(stmts[0].type).toBe("matchYield");
-    expect(stmts[0].value.type).toBe("variableName");
-    expect(stmts[0].value.value).toBe("x");
+  it("a variable-ref arm also hoists", () => {
+    expectHoisted(`"a" => x`, "variableName");
   });
 
-  it("a method-call arm binds to a temp (may interrupt)", () => {
-    const stmts = armStmts(`"a" => x.run()`);
-    const binding = stmts.find((s: any) => s.type === "assignment");
-    expect(binding?.matchArmValueTemp).toBe(true);
-    expect(stmts.some((s: any) => s.type === "matchYield")).toBe(true);
+  it("a method-call arm hoists", () => {
+    expectHoisted(`"a" => x.run()`, "valueAccess");
   });
 });
 
@@ -606,7 +612,7 @@ describe("expression match inside a handler body lowers like anywhere else", () 
     const matchStmt = body.find((n: any) => n.type === "matchBlock");
     expect(matchStmt.matchExprId).toBeTypeOf("number");
     const arm = matchStmt.cases.find((c: any) => c.type === "matchBlockCase");
-    expect(arm.body[0].type).toBe("matchYield");
+    expect(arm.body.some((s: any) => s.type === "matchYield")).toBe(true);
     const assign = body.find(
       (n: any) => n.type === "assignment" && n.variableName === "x",
     );

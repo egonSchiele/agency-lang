@@ -224,14 +224,17 @@ return;
     condition: async () => __stack.args.x === `b`,
     body: async (runner) => {
 await runner.step(2, async (runner) => {
-runner.exitMatch(1, 2);
+__stack.locals.__armval_2 = 2;
+            });
+await runner.step(3, async (runner) => {
+runner.exitMatch(1, __stack.locals.__armval_2);
 return;
             });
     },
   },
 
 ], async (runner) => {
-await runner.ifElse(3, [
+await runner.ifElse(4, [
 
   {
     condition: async () => __eq(__stack.args.x, `z`),
@@ -244,7 +247,7 @@ return;
   },
 
 ]);
-await runner.step(4, async (runner) => {
+await runner.step(5, async (runner) => {
 runner.exitMatch(1, 0);
 return;
           });
@@ -329,4 +332,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"matchExpression.agency:main":{"1":{"line":1,"col":14},"2":{"line":1,"col":2},"3":{"line":14,"col":2},"1.0":{"line":3,"col":6},"1.1":{"line":4,"col":6},"1.3.0":{"line":9,"col":8},"1.3":{"line":8,"col":6},"1.4":{"line":11,"col":6}}};
+export const __sourceMap = {"matchExpression.agency:main":{"1":{"line":1,"col":14},"2":{"line":1,"col":2},"3":{"line":14,"col":2},"1.0":{"line":3,"col":6},"1.1":{"line":4,"col":6},"1.4.0":{"line":9,"col":8},"1.4":{"line":8,"col":6},"1.5":{"line":11,"col":6}}};

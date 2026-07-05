@@ -1,16 +1,33 @@
 // Regression for #430: an interrupt thrown by a function call in a
-// SINGLE-EXPRESSION match arm must pause/resume, not be swallowed. The arm
-// value is bound to a temp at statement position (like a block arm), so the
-// call gets the interrupt-propagation check.
+// SINGLE-EXPRESSION match arm must pause/resume, not be swallowed. Every
+// single-expression arm is hoisted to a temp at statement position (like a
+// block arm), so the call gets the interrupt-propagation check — the fix does
+// not try to guess which arm values can interrupt, it hoists them all.
 def confirm(): string {
   interrupt("proceed?")
   return "approved"
 }
 
-node main(x: string): string {
+def deny(): string {
+  interrupt("really?")
+  return "denied"
+}
+
+// A matched literal arm whose value is a call.
+node matched(x: string): string {
   const val = match(x) {
     "go" => confirm()
     _    => "skip"
+  }
+  return "got:${val}"
+}
+
+// The wildcard arm is a call too: proves hoisting covers every arm, not just
+// the one that happens to be a literal-keyed match.
+node wildcard(x: string): string {
+  const val = match(x) {
+    "keep" => "kept"
+    _      => deny()
   }
   return "got:${val}"
 }

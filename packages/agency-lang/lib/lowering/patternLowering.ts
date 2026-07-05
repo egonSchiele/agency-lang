@@ -542,33 +542,37 @@ class PatternLowerer {
   ): AgencyNode[] {
     if (body.length === 1 && isExpressionNode(body[0])) {
       const expr = body[0] as Expression;
-      // A call arm (`"go" => confirm()`) must bind its value to a temp at
-      // STATEMENT position, then yield the temp (#430): a bare
-      // `matchYield(await __call(f))` hands the call result straight to
-      // `exitMatch` with no interrupt-propagation check, so an interrupt is
-      // swallowed. Non-call values (literals, refs, ...) stay a bare yield —
-      // they can't interrupt, and keeping them direct preserves the per-arm
-      // unwidened literal check and the graph-node-transition guard, both of
-      // which read the yielded value.
-      if (armValueMayInterrupt(expr)) {
-        const tmp = this.freshName("armval");
-        const binding: Assignment = {
-          type: "assignment",
-          variableName: tmp,
-          declKind: "const",
-          value: expr,
-          loc: expr.loc,
-          matchArmValueTemp: true,
-        };
-        const yielded: MatchYield = {
-          type: "matchYield",
-          matchId,
-          value: varRef(tmp, expr.loc),
-          loc: expr.loc,
-        };
-        return [binding, yielded];
-      }
-      return [{ type: "matchYield", matchId, value: expr, loc: expr.loc }];
+      // Always bind a single-expression arm's value to a temp at STATEMENT
+      // position, then yield the temp (#430). A bare `matchYield(<expr>)`
+      // compiles to `exitMatch(id, <expr>)`; if the expression is a call that
+      // returns a bubbling interrupt, that interrupt is handed straight to
+      // `exitMatch` with no propagation check and is silently swallowed. At
+      // statement position the value flows through `_processAssignmentInner`,
+      // which emits the `hasInterrupts` halt guard. We hoist unconditionally
+      // rather than trying to detect which values "may interrupt": that
+      // detection is brittle (easy to miss a case) and a missed case silently
+      // reintroduces the swallow. The temp is tagged `matchArmValueTemp` so
+      // codegen re-applies the graph-node-transition guard (the node call is
+      // now hidden from `processMatchYield`, which reads the yielded value).
+      const tmp = this.freshName("armval");
+      const binding: Assignment = {
+        type: "assignment",
+        variableName: tmp,
+        declKind: "const",
+        value: expr,
+        loc: expr.loc,
+        matchArmValueTemp: true,
+      };
+      const yielded: MatchYield = {
+        type: "matchYield",
+        matchId,
+        value: varRef(tmp, expr.loc),
+        // The type checker types the arm from the original expression, not the
+        // temp ref, so literal types and discriminant narrowing survive (#430).
+        typeSource: expr,
+        loc: expr.loc,
+      };
+      return [binding, yielded];
     }
     const rewritten = this.rewriteReturnsToYields(body, matchId);
     if (!this.alwaysYields(rewritten)) {
@@ -1123,36 +1127,6 @@ function isExpr(v: unknown): v is Expression {
   // in some fields (e.g. Assignment.value is `Expression | MessageThread`).
   const t = (v as { type: string }).type;
   return t !== "messageThread";
-}
-
-/**
- * True when a single-expression match-arm value involves a function/method call
- * — so it may return an interrupt that must propagate rather than be swallowed
- * by `exitMatch` (#430). Such arms are bound to a temp at statement position
- * before yielding; everything else (literals, variable refs, plain field/index
- * access) stays a bare yield, which cannot interrupt and keeps the yielded value
- * direct for the per-arm unwidened-literal check and the graph-node-transition
- * guard. `try`/`raise`/binop calls surface as one of these node types too.
- */
-function armValueMayInterrupt(expr: Expression): boolean {
-  switch (expr.type) {
-    case "functionCall":
-    case "tryExpression":
-    case "interruptStatement":
-      return true;
-    case "valueAccess":
-      return (
-        armValueMayInterrupt(expr.base as Expression) ||
-        expr.chain.some((el) => el.kind === "methodCall" || el.kind === "call")
-      );
-    case "binOpExpression":
-      return (
-        armValueMayInterrupt(expr.left as Expression) ||
-        armValueMayInterrupt(expr.right as Expression)
-      );
-    default:
-      return false;
-  }
 }
 
 /** Location of the first `thread { ... }` block within the arm's return-flow

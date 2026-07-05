@@ -48,14 +48,20 @@ export function computeMatchExprTypes(
         .sort((a, b) => b - a);
       for (const id of ids) {
         const yields = yieldsByMatch[id];
-        const types = yields.map((y) =>
-          y.value ? synthType(y.value, info.scope, ctx) : "any",
-        );
+        // A single-expression arm is hoisted to a temp for interrupt
+        // propagation (#430); `typeSource` carries the arm's original
+        // expression so literal types and per-arm narrowing survive typing —
+        // the temp ref in `value` would widen them and lose narrowing.
+        const typeExpr = (y: MatchYield) => y.typeSource ?? y.value;
+        const types = yields.map((y) => {
+          const e = typeExpr(y);
+          return e ? synthType(e, info.scope, ctx) : "any";
+        });
         // Record each yield's UNWIDENED type + loc for CHECKED-position
         // per-arm assignability checking (see `checkMatchExprYields`).
         ctx.matchExprYieldTypes[id] = yields.map((y, i) => ({
           type: types[i],
-          loc: y.value?.loc ?? y.loc,
+          loc: typeExpr(y)?.loc ?? y.loc,
         }));
         // A yield of `any` (the sentinel string OR the `any` primitive) makes
         // the whole match's value type `any` — the union can't be narrowed.

@@ -63,6 +63,21 @@ export default defineConfig({
           ],
         },
         {
+          text: "04. Tooling",
+          items: [
+            {
+              text: "Compiling and Running Code",
+              link: "/guide/compiling-and-running",
+            },
+            { text: "Agency Config File", link: "/guide/agency-config-file" },
+            { text: "Testing", link: "/guide/testing" },
+            { text: "Developer Tools", link: "/guide/developer-tools" },
+            { text: "Debugging", link: "/guide/debugging" },
+            { text: "Observability", link: "/guide/observability" },
+
+          ],
+        },
+        {
           text: "04. LLMs",
           items: [
             {
@@ -113,8 +128,6 @@ export default defineConfig({
         {
           text: "07. Testing and Validation",
           items: [
-            { text: "Testing", link: "/guide/testing" },
-            { text: "Observability", link: "/guide/observability" },
             { text: "Schemas", link: "/guide/schemas" },
           ],
         },
@@ -154,7 +167,7 @@ export default defineConfig({
               text: "TypeScript Helpers (agency.*)",
               link: "/guide/ts-helpers",
             },
-            { text: "Agency Config File", link: "/guide/agency-config-file" },
+
             { text: "CLI Argument Parsing", link: "/guide/cli-args" },
             {
               text: "Schema Parameter Injection",
@@ -162,6 +175,7 @@ export default defineConfig({
             },
             { text: "MCP", link: "/guide/mcp" },
             { text: "Serving Agency Code", link: "/guide/serving" },
+            { text: "Build Integration", link: "/guide/build-integration" },
             {
               text: "Custom & local model providers",
               link: "/guide/custom-providers",

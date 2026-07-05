@@ -5,15 +5,9 @@ description: A tour of the options you can set in an agency.json file to configu
 
 # Agency config file
 
-Drop an `agency.json` file in your project root and Agency picks it up automatically — the compiler searches upward from the file you're running until it finds one. Every option is optional, so you only set what you need.
+To set options, add an `agency.json` file to your project root. The compiler searches upward from the file you're running until it finds this file.
 
-Want a config somewhere else? Point at it with `-c`:
-
-```bash
-agency -c custom-config.json compile input.agency
-```
-
-The sections below cover the options worth knowing about. For the exhaustive list, the source of truth is [`lib/config.ts`](https://github.com/egonSchiele/agency-lang/blob/main/lib/config.ts).
+I would suggest referring to this page as needed, instead of reading it all the way through.
 
 ## The basics
 
@@ -27,101 +21,77 @@ The sections below cover the options worth knowing about. For the exhaustive lis
 
 - **`verbose`** — extra logging during compilation.
 - **`logLevel`** — `"debug"`, `"info"`, `"warn"`, or `"error"`.
-- **`outDir`** — where compiled TypeScript goes.
+- **`outDir`** — where compiled code goes (next to Agency source by default).
 
 ## LLM client
 
-This is where you set your default model, provider, and API keys. Keys live under `apiKey`, one per provider.
+This is where you set your default model, provider, and API keys.
 
 ```json
 {
   "client": {
-    "defaultModel": "gpt-5",
-    "defaultProvider": "openAi",
+    "defaultModel": "claude-fable-5",
+    "defaultProvider": "anthropic",
     "apiKey": {
       "openAi": "sk-...",
       "anthropic": "sk-ant-..."
     },
-    "maxToolResultChars": 100000
   }
 }
 ```
 
-- **`defaultModel`** / **`defaultProvider`** — used when a `llm()` call doesn't specify its own.
-- **`apiKey`** — keys for `openAi`, `google`, `anthropic`, `ollama`, `openRouter`, `deepInfra`, `liteLlm`, and `openAiCompat`.
-- **`baseUrl`** — custom endpoints for the OpenAI-compatible-style providers (`openRouter`, `deepInfra`, `liteLlm`, `openAiCompat`).
-- **`maxToolResultChars`** — caps how much of a single tool result the model sees (the full value still reaches your code). Default `100000`; `0` disables it. Keeps a chatty tool from blowing the context window.
-- **`providerModules`** — paths to custom smoltalk provider modules (e.g. a local model via `smoltalk-llama-cpp`).
-- **`modelAliases`** / **`modelsDir`** — short-name aliases and the cache directory for local models.
+| Option | Description |
+| --- | --- |
+| `defaultModel` / `defaultProvider` | Used when a `llm()` call doesn't specify its own. |
+| `apiKey` | Keys for `openAi`, `google`, `anthropic`, `ollama`, `openRouter`, `deepInfra`, `liteLlm`, and `openAiCompat`. |
+| `baseUrl` | Needed if you're using a provider that provides an endpoint compatible with the OpenAI API, such as `openRouter`, `deepInfra`, `liteLlm` and others. |
+| `maxToolResultChars` | Caps how much of a single tool result the model sees (the full value still reaches your code). Default `100000`; `0` disables it. Keeps a chatty tool from blowing the context window. |
+| `providerModules` | Paths to custom smoltalk provider modules (e.g. a local model via `smoltalk-llama-cpp`). |
+| `modelAliases` / `modelsDir` | Short-name aliases and the cache directory for local models. |
 
-Also relevant here:
-
-- **`maxToolCallRounds`** (top level) — how many times the LLM can loop between calling tools and reacting to their output before Agency halts it. Default `10`.
+Agency uses [Smoltalk](https://github.com/egonSchiele/smoltalk) for its LLM client.
 
 ## Type checking
 
-Off by default. Turn it on to catch problems at compile time.
+The typechecker is on by default.
 
 ```json
 {
   "typechecker": {
     "enabled": true,
+    "strict": true,
     "strictTypes": true,
     "undefinedFunctions": "warn"
   }
 }
 ```
 
-- **`enabled`** — run the type checker and print warnings.
-- **`strict`** — type errors become fatal (implies `enabled`).
-- **`strictTypes`** — untyped variables are errors.
-- **`undefinedFunctions`** / **`undefinedVariables`** — `"silent"`, `"warn"`, or `"error"` for unresolved calls/references.
-- **`strictMemberAccess`** — guards against reaching for a member that only exists on some branches of a union, like `r.value` on an un-narrowed `Result`. Default `"error"` — narrow first with a guard, `catch`, or `match`.
-- **`matchExhaustiveness`** — flags a `match` over a closed type that doesn't cover every case and has no `_` arm. Default `"error"`.
-- **`definiteReturns`** — flags a typed function that can fall off the end without returning (Agency has no implicit returns). Default `"warn"`.
-
-## Sandboxing and security
-
-Restrict what compiled code can do.
-
-```json
-{
-  "allowedFetchDomains": ["api.openai.com", "api.example.com"],
-  "disallowedFetchDomains": ["malicious.com"],
-  "excludeBuiltinFunctions": ["write"]
-}
-```
-
-- **`allowedFetchDomains`** — if set, `fetch`/`fetchJSON` may only hit these domains.
-- **`disallowedFetchDomains`** — blocks these domains. If both lists are set, you get allowed-minus-disallowed.
-- **`excludeBuiltinFunctions`** — strips built-ins like `write` or `fetch` from generated code entirely.
-
-Heads up: domain checks only work on string-literal URLs at compile time — variable URLs can't be validated.
+| Option | Description |
+| --- | --- |
+| `enabled` | Run the type checker and print warnings. Defaults to `true`. |
+| `strict` | Type errors become fatal. Defaults to `true`. |
+| `strictTypes` | Untyped variables are errors. |
+| `undefinedFunctions` / `undefinedVariables` |  `"silent"`, `"warn"`, or `"error"` for undefined functions or variables. Both default to `"warn"`. |
+| `strictMemberAccess` | Guards against accessing a member that only exists on some branches of a union. For example, if you had a [Result](/guide/error-handling) type, and you tried to access `result.value` (which only exists on Success), that would be an error. Default `"error"`. |
+| `matchExhaustiveness` | Flags a `match` over a closed type that doesn't cover every case. For example, if you were matching over a variable with a union type like "success" | "failure", but you didn't handle the failure case, that would be an error. Default `"error"`. |
+| `definiteReturns` | Flags a function that has a return type set, but not all of its code paths return a value. Default `"error"`. |
 
 ## Observability and logging
 
-Structured event logging via [statelog](https://github.com/egonSchiele/agency-lang). It's a complete no-op until you flip `observability` on.
+Turns on logging. See [Observability](/guide/observability) for details.
 
 ```json
 {
   "observability": true,
   "log": {
-    "host": "https://statelog.example.com",
-    "projectId": "my-project",
-    "logFile": "./events.jsonl"
+    "logFile": "log.jsonl"
   }
 }
 ```
 
-- **`observability`** — the master switch.
-- **`log.host`** / **`log.projectId`** / **`log.apiKey`** — the remote sink.
-- **`log.logFile`** — a local file sink (one JSON object per line); can run alongside `host`.
-- **`log.requestTimeoutMs`** — how long to wait on a slow host before giving up. Default `1500`.
-- **`log.metadata`** — tags, environment, userId, and custom fields attached to events.
-
 ## Memory
 
-Enable the memory layer so agents can store and recall facts across runs. Setting this makes `std::memory` usable and lets `llm({ memory: true })` inject relevant facts.
+Enable the memory layer so agents can store and recall facts across runs. Setting this makes `std::memory` usable and lets `llm({ memory: true })` inject relevant facts. See [Memory](/guide/memory) for details.
 
 ```json
 {
@@ -133,27 +103,46 @@ Enable the memory layer so agents can store and recall facts across runs. Settin
 }
 ```
 
-- **`dir`** — where memory JSON files live (required if you use `memory`).
-- **`model`** — model used for extraction, compaction, and recall.
-- **`autoExtract.interval`** — LLM turns between auto-extraction passes. Default `5`.
-- **`compaction`** — when to compact, triggered by `"token"` estimates or `"messages"` count.
-- **`embeddings.model`** — embedding model for semantic recall.
+| Option | Description |
+| --- | --- |
+| `dir` | Where memory JSON files live (required if you use `memory`). |
+| `model` | Model used for extraction, compaction, and recall. |
+| `autoExtract.interval` | How many turns to wait before running an auto-extraction on message history. Default `5`. |
+| `compaction` | Controls when a conversation gets compacted. When the thread crosses `threshold`, Agency extracts facts from the older messages in the conversation, summarizes them with an LLM, and replaces them with a single summary message. Roughly the older half of the conversation is compacted. Use `trigger` to pick the metric: either `"token"` (estimated at roughly 4 characters per token) or `"messages"` (raw message count). Defaults to `trigger: "token"` and `threshold: 50000`. |
+| `embeddings.model` | Embedding model for semantic recall. |
 
 ## Debugging and tracing
 
 ```json
 {
-  "trace": true,
-  "maxCallDepth": 2048
+  "trace": true
 }
 ```
 
-- **`debugger`** — auto-inserts a breakpoint before every step.
-- **`instrument`** — emit per-step instrumentation (default `true`). Set `false` to shed the overhead when you don't need tracing.
-- **`trace`** / **`traceFile`** / **`traceDir`** — write execution checkpoints to a `.trace` file.
-- **`distDir`** — directory of pre-compiled JS the debugger imports instead of compiling on the fly.
-- **`maxCallDepth`** — the runaway-recursion guard. Default `2048`; raise it for legitimately deep recursion.
-- **`checkpoints.maxRestores`** — cap on how often one checkpoint can be restored before it errors out. Default `100`.
+| Option | Description |
+| --- | --- |
+| `debugger` | Auto-inserts a breakpoint before every step. |
+| `instrument` | Emit per-step instrumentation (default `true`). Set `false` to shed the overhead when you don't need tracing. |
+| `trace` / `traceFile` / `traceDir` | Write execution checkpoints to a `.trace` file. |
+| `distDir` | Directory of pre-compiled JS the debugger imports instead of compiling on the fly. |
+
+## Runtime limits
+
+Safety guards that stop a program from running away.
+
+```json
+{
+  "maxCallDepth": 2048,
+  "maxToolCallRounds": 10,
+  "checkpoints": { "maxRestores": 100 }
+}
+```
+
+| Option | Description |
+| --- | --- |
+| `maxCallDepth` | The runaway-recursion guard. Default `2048`; raise it for legitimately deep recursion. |
+| `maxToolCallRounds` | How many times the LLM can loop between calling tools and reacting to their output before Agency halts it. Default `10`. |
+| `checkpoints.maxRestores` | Cap on how often one checkpoint can be restored before it errors out. Default `100`. |
 
 ## Testing and coverage
 
@@ -168,9 +157,12 @@ Enable the memory layer so agents can store and recall facts across runs. Settin
 }
 ```
 
-- **`test.parallel`** — number of test files to run at once. Default `1`.
-- **`coverage.threshold`** / **`perFileThreshold`** — minimum coverage percentages; `agency coverage report` fails below them.
-- **`coverage.outDir`** / **`exclude`** — where coverage data lands and which files to skip.
+| Option | Description |
+| --- | --- |
+| `test.parallel` | Number of test files to run at once. Default `1`. |
+| `coverage.threshold` / `coverage.perFileThreshold` | Minimum coverage percentages; `agency coverage report` fails below them. |
+| `coverage.outDir` | Where coverage data lands. |
+| `coverage.exclude` | Which files to skip, as glob patterns (e.g. `["examples/**"]`). |
 
 ## Eval and optimize
 
@@ -189,11 +181,13 @@ Configuration for the `agency eval` and `agency eval optimize` commands.
 }
 ```
 
-- **`runsDir`** / **`optimizeRunsDir`** — where run artifacts are saved.
-- **`optimize.goal`** — the optimization objective.
-- **`optimize.graders`** — path to a TS grading module.
-- **`optimize.optimizer`** — a built-in optimizer name or a path to your own module.
-- **`optimize.validation`** — a validation inputs file and/or a `split` fraction held out for validation.
+| Option | Description |
+| --- | --- |
+| `runsDir` / `optimizeRunsDir` | Where run artifacts are saved. |
+| `optimize.goal` | The optimization objective. |
+| `optimize.graders` | Path to a TS grading module. |
+| `optimize.optimizer` | A built-in optimizer name or a path to your own module. |
+| `optimize.validation` | A validation inputs file and/or a `split` fraction held out for validation. |
 
 ## Docs, packing, and the log viewer
 
@@ -207,6 +201,11 @@ Odds and ends for other commands.
 }
 ```
 
-- **`doc`** — output directory and source-link base URL for `agency doc`.
-- **`pack`** — output `format` (`"esm"` or `"cjs"`), esbuild `target`, and extra `external` specifiers for `agency pack`.
-- **`viewer`** — color thresholds for `agency logs view`: `slowMs` and `fastMs` for durations, `expensiveUsd` for cost.
+| Option | Description |
+| --- | --- |
+| `doc` | Output directory and source-link base URL for `agency doc`. |
+| `pack` | Output `format` (`"esm"` or `"cjs"`), esbuild `target`, and extra `external` specifiers for `agency pack`. |
+| `viewer` | Color thresholds for `agency logs view`: `slowMs` and `fastMs` for durations, `expensiveUsd` for cost. |
+
+## References
+- [Full list of options](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/lib/config.ts).

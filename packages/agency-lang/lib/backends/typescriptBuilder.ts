@@ -41,7 +41,6 @@ import * as renderBuiltinToolRegistration from "../templates/backends/typescript
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 
-
 import { AgencyConfig } from "@/config.js";
 import {
   BinOpArgument,
@@ -270,7 +269,6 @@ export class TypeScriptBuilder {
 
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
-
   private compilationUnit: CompilationUnit;
   private moduleId: string;
   private outputFile: string | undefined;
@@ -366,6 +364,15 @@ export class TypeScriptBuilder {
           projectId: "smoltalk",
         },
       },
+      typechecker: {
+        enabled: true,
+        strict: true,
+        undefinedFunctions: "warn",
+        undefinedVariables: "warn",
+        strictMemberAccess: "error",
+        matchExhaustiveness: "error",
+        definiteReturns: "error",
+      },
     };
   }
 
@@ -414,7 +421,6 @@ export class TypeScriptBuilder {
     ];
   }
 
-
   /** Generate a TsNode for `hasInterrupts(x)` */
   private interruptCheck(expr: TsNode): TsNode {
     return ts.call(ts.id("hasInterrupts"), [expr]);
@@ -434,7 +440,8 @@ export class TypeScriptBuilder {
   private needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
     if (child.type !== "binOpExpression") return false;
     // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
-    if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
+    if (parentOp === "**")
+      return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 
@@ -625,8 +632,7 @@ export class TypeScriptBuilder {
 
   private processKeyword(node: Keyword): TsNode {
     // Inside a handler body or not inside a stepped loop: emit bare keyword
-    const loopSubKey =
-      this.steps.currentLoopKey();
+    const loopSubKey = this.steps.currentLoopKey();
     if (this.insideHandlerBody || loopSubKey === undefined) {
       return node.value === "break" ? ts.break() : ts.continue();
     }
@@ -659,9 +665,7 @@ export class TypeScriptBuilder {
     for (const { node, ancestors } of walkNodes(body)) {
       if (node.type !== "typeAlias") continue;
       const inNestedDef = ancestors.some(
-        (a) =>
-          a.type === "function" ||
-          a.type === "graphNode",
+        (a) => a.type === "function" || a.type === "graphNode",
       );
       if (inNestedDef) continue;
       collected.push(node);
@@ -768,12 +772,17 @@ export class TypeScriptBuilder {
     // never reach the codegen since only use-site `VariableType.tags` are
     // consulted; alias-level tags live on the `TypeAlias` node itself.
     const aliasedWithTags: VariableType = node.tags
-      ? { ...node.aliasedType, tags: [...(node.aliasedType.tags ?? []), ...node.tags] }
+      ? {
+          ...node.aliasedType,
+          tags: [...(node.aliasedType.tags ?? []), ...node.tags],
+        }
       : node.aliasedType;
     const zodSchema = this.zodSchemaFor(aliasedWithTags);
     const stmts: TsNode[] = [
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
-      ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
+      ts.raw(
+        `${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`,
+      ),
     ];
     // If the alias body carries any `@validate(...)` annotation, attach a
     // descriptor to the schema const so use-site `Foo!` validations can
@@ -792,10 +801,7 @@ export class TypeScriptBuilder {
       // symbol. Cast to `any` because Zod's typings don't know about us.
       stmts.push(
         ts.assign(
-          ts.prop(
-            ts.raw(`(${node.aliasName} as any)`),
-            "__agency_descriptor",
-          ),
+          ts.prop(ts.raw(`(${node.aliasName} as any)`), "__agency_descriptor"),
           descriptor,
         ),
       );
@@ -831,10 +837,18 @@ export class TypeScriptBuilder {
     const resolved = resolveTypeDeep(t, aliasesFull);
     const aliases = this.scopes.visibleTypeAliases();
     if (!hasAnyValidateTag(resolved, aliasesFull)) {
-      const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
+      const zodSchema = mapTypeToValidationSchema(
+        resolved,
+        aliases,
+        aliasesFull,
+      );
       return ts.validateType(value, ts.raw(zodSchema));
     }
-    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
+    const descriptor = buildValidationDescriptor(
+      resolved,
+      aliases,
+      aliasesFull,
+    );
     return ts.validateChainRecursive(value, descriptor);
   }
 
@@ -935,11 +949,7 @@ export class TypeScriptBuilder {
           // with a resolved scope (local/block/blockArgs/...) or as a loop
           // var / builtin / agency import, and must resolve through the
           // normal paths untouched.
-          if (
-            !isBuiltinVar &&
-            !isLoopVar &&
-            isMatchValName(literal.value)
-          ) {
+          if (!isBuiltinVar && !isLoopVar && isMatchValName(literal.value)) {
             return ts.scopedVar(literal.value, "local", this.moduleId);
           }
           return ts.id(literal.value);
@@ -1018,10 +1028,14 @@ export class TypeScriptBuilder {
     for (const element of node.chain) {
       switch (element.kind) {
         case "property":
-          result = ts.prop(result, element.name, { optional: element.optional });
+          result = ts.prop(result, element.name, {
+            optional: element.optional,
+          });
           break;
         case "index":
-          result = ts.index(result, this.processNode(element.index), { optional: element.optional });
+          result = ts.index(result, this.processNode(element.index), {
+            optional: element.optional,
+          });
           break;
         case "slice": {
           const args: TsNode[] = [];
@@ -1032,23 +1046,35 @@ export class TypeScriptBuilder {
             args.push(ts.raw("0"));
             args.push(this.processNode(element.end));
           }
-          const sliceProp = ts.prop(result, "slice", { optional: element.optional });
+          const sliceProp = ts.prop(result, "slice", {
+            optional: element.optional,
+          });
           result = ts.call(sliceProp, args);
           break;
         }
         case "methodCall": {
           const fnCall = element.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
-          const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
+          const callArgs: TsNode[] = [
+            result,
+            ts.str(fnCall.functionName),
+            descriptor,
+          ];
           if (element.optional) callArgs.push(ts.bool(true));
-          result = this.awaitChainCall(ts.call(ts.id("__callMethod"), callArgs), element === node.chain[node.chain.length - 1]);
+          result = this.awaitChainCall(
+            ts.call(ts.id("__callMethod"), callArgs),
+            element === node.chain[node.chain.length - 1],
+          );
           break;
         }
         case "call": {
           const descriptor = this.buildCallDescriptor(element);
           const callArgs: TsNode[] = [result, descriptor];
           if (element.optional) callArgs.push(ts.bool(true));
-          result = this.awaitChainCall(ts.call(ts.id("__call"), callArgs), element === node.chain[node.chain.length - 1]);
+          result = this.awaitChainCall(
+            ts.call(ts.id("__call"), callArgs),
+            element === node.chain[node.chain.length - 1],
+          );
           break;
         }
       }
@@ -1057,7 +1083,9 @@ export class TypeScriptBuilder {
   }
 
   private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
-    return isLast ? ts.await(callExpr) : ts.raw(`(${this.str(ts.await(callExpr))})`);
+    return isLast
+      ? ts.await(callExpr)
+      : ts.raw(`(${this.str(ts.await(callExpr))})`);
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
@@ -1157,7 +1185,10 @@ export class TypeScriptBuilder {
   }
 
   private processTryExpression(node: TryExpression): TsNode {
-    if (node.call.type === "functionCall" && node.call.functionName === "throw") {
+    if (
+      node.call.type === "functionCall" &&
+      node.call.functionName === "throw"
+    ) {
       throw new Error(
         "Cannot use 'try' with 'throw' — throw always raises an error.",
       );
@@ -1210,7 +1241,6 @@ export class TypeScriptBuilder {
     return undefined;
   }
 
-
   private processIfElseWithSteps(node: IfElse): TsNode {
     const id = this.steps.currentId();
 
@@ -1256,7 +1286,12 @@ export class TypeScriptBuilder {
       elseBranch = this.processBodyAsParts(remainingElse, nextStartId);
     }
 
-    return ts.runnerIfElse({ id, branches, elseBranch, matchId: node.matchExprId });
+    return ts.runnerIfElse({
+      id,
+      branches,
+      elseBranch,
+      matchId: node.matchExprId,
+    });
   }
 
   private processForLoopWithSteps(node: ForLoop): TsNode {
@@ -1359,7 +1394,12 @@ export class TypeScriptBuilder {
       }
     }
 
-    return ts.runnerIfElse({ id, branches, elseBranch, matchId: node.matchExprId });
+    return ts.runnerIfElse({
+      id,
+      branches,
+      elseBranch,
+      matchId: node.matchExprId,
+    });
   }
 
   /** Lowered `return` inside a match arm used as an expression. Same
@@ -1393,7 +1433,9 @@ export class TypeScriptBuilder {
     // the value argument of `runner.exitMatch(id, <value>)`. Reject it with a
     // clear compile error rather than emitting invalid TypeScript.
     this.assertMatchArmValueNotGraphNode(node.value);
-    const value = node.value ? this.processNode(node.value) : ts.id("undefined");
+    const value = node.value
+      ? this.processNode(node.value)
+      : ts.id("undefined");
     // Plain-mode (handler) match expressions wrap their arms in an async IIFE
     // (see processMatchExpressionPlain): a yield is a real `return` out of that
     // IIFE, not the stepped `runner.exitMatch` unwind — so the handler never
@@ -1455,7 +1497,10 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
-    const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
+    const from = toCompiledImportPath(
+      node.modulePath,
+      this.outputFile ?? path.resolve(this.moduleId),
+    );
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     // Non-validated value-only-parameterized aliases (e.g. `type
     // OneOf(choices) = string` with only `@jsonSchema`) emit nothing at their
@@ -1475,7 +1520,9 @@ export class TypeScriptBuilder {
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport": {
-          const keptNames = nameType.importedNames.filter((name) => !isInlinedAlias(name));
+          const keptNames = nameType.importedNames.filter(
+            (name) => !isInlinedAlias(name),
+          );
           if (keptNames.length === 0) return ts.empty();
           return ts.importDecl({
             importKind: "named",
@@ -1500,7 +1547,8 @@ export class TypeScriptBuilder {
           });
       }
     });
-    const importNode = imports.length === 1 ? imports[0] : ts.statements(imports);
+    const importNode =
+      imports.length === 1 ? imports[0] : ts.statements(imports);
 
     // Auto-register any AgencyFunction instances imported from .agency files.
     if (node.isAgencyImport) {
@@ -1516,14 +1564,18 @@ export class TypeScriptBuilder {
                 continue;
               }
               const localName = nameType.aliases[name] ?? name;
-              this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
+              this.toolRegistrations.push(
+                ts.raw(`__registerTool(${localName});`),
+              );
             }
             break;
           case "namespaceImport": {
             const ns = nameType.importedNames;
-            this.toolRegistrations.push(ts.raw(
-              `for (const [__k, __v] of Object.entries(${ns})) { __registerTool(__v, __k); }`
-            ));
+            this.toolRegistrations.push(
+              ts.raw(
+                `for (const [__k, __v] of Object.entries(${ns})) { __registerTool(__v, __k); }`,
+              ),
+            );
             break;
           }
         }
@@ -1536,18 +1588,22 @@ export class TypeScriptBuilder {
     return ts.empty(); // handled in preprocess
   }
 
-
   // ------- TsRaw wrapper methods (template-heavy) -------
-
 
   /**
    * Process a block argument into a wrapped AgencyFunction TsNode.
    * Shared by generateFunctionCallExpression and buildCallDescriptor.
    */
-  private processBlockArgument(node: Pick<FunctionCall, "block"> & { functionName?: string }): TsNode {
+  private processBlockArgument(
+    node: Pick<FunctionCall, "block"> & { functionName?: string },
+  ): TsNode {
     const block = node.block!;
-    const fnDef = node.functionName ? this.compilationUnit.functionDefinitions[node.functionName] : undefined;
-    const imported = node.functionName ? this.compilationUnit.importedFunctions[node.functionName] : undefined;
+    const fnDef = node.functionName
+      ? this.compilationUnit.functionDefinitions[node.functionName]
+      : undefined;
+    const imported = node.functionName
+      ? this.compilationUnit.importedFunctions[node.functionName]
+      : undefined;
     const paramList = fnDef?.parameters ?? imported?.parameters;
     const blockType = paramList
       ?.map((p) => p.typeHint)
@@ -1660,7 +1716,10 @@ export class TypeScriptBuilder {
    */
   private paramSchemaContribution(
     param: FunctionParameter,
-  ): { kind: "drop" } | { kind: "scalar"; zod: string } | { kind: "array"; zod: string } {
+  ):
+    | { kind: "drop" }
+    | { kind: "scalar"; zod: string }
+    | { kind: "array"; zod: string } {
     if (isFunctionTyped(param)) return { kind: "drop" };
 
     if (param.variadic) {
@@ -1670,7 +1729,10 @@ export class TypeScriptBuilder {
       const elementHint =
         param.typeHint?.type === "arrayType"
           ? param.typeHint.elementType
-          : param.typeHint ?? { type: "primitiveType" as const, value: "string" };
+          : (param.typeHint ?? {
+              type: "primitiveType" as const,
+              value: "string",
+            });
       const elementZod = this.zodSchemaFor(elementHint);
       return { kind: "array", zod: `z.array(${elementZod})` };
     }
@@ -1710,7 +1772,9 @@ export class TypeScriptBuilder {
   private buildToolDefinition(node: FunctionDefinition): TsNode {
     const { functionName, parameters } = node;
     if (
-      this.compilationUnit.graphNodes.map((n) => n.nodeName).includes(functionName)
+      this.compilationUnit.graphNodes
+        .map((n) => n.nodeName)
+        .includes(functionName)
     ) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`,
@@ -1746,11 +1810,11 @@ export class TypeScriptBuilder {
       name: ts.str(functionName),
       description:
         trimmedDocSegments.length > 0
-          // Flip `topLevel` on every TsScopedVar so the pretty-printer
-          // reads through `__globalCtx` instead of the strict ALS
-          // accessor — this subtree is eagerly evaluated at module
-          // load when no ALS frame is installed.
-          ? markTopLevelScopedVars(
+          ? // Flip `topLevel` on every TsScopedVar so the pretty-printer
+            // reads through `__globalCtx` instead of the strict ALS
+            // accessor — this subtree is eagerly evaluated at module
+            // load when no ALS frame is installed.
+            markTopLevelScopedVars(
               this.generateStringLiteralNode(trimmedDocSegments),
             )
           : ts.str("No description provided."),
@@ -1768,16 +1832,12 @@ export class TypeScriptBuilder {
   private hasDocStringInterpolation(): boolean {
     const fns = Object.values(this.compilationUnit.functionDefinitions);
     for (const fn of fns) {
-      if (
-        fn.docString?.segments.some((s) => s.type === "interpolation")
-      ) {
+      if (fn.docString?.segments.some((s) => s.type === "interpolation")) {
         return true;
       }
     }
     for (const node of this.compilationUnit.graphNodes) {
-      if (
-        node.docString?.segments.some((s) => s.type === "interpolation")
-      ) {
+      if (node.docString?.segments.some((s) => s.type === "interpolation")) {
         return true;
       }
     }
@@ -1796,12 +1856,16 @@ export class TypeScriptBuilder {
     // Builtin tools: wrap as AgencyFunction instances
     for (const toolName of BUILTIN_TOOLS) {
       const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
-      stmts.push(ts.raw(renderBuiltinToolRegistration.default({
-        toolName,
-        toolNameQuoted: JSON.stringify(toolName),
-        moduleIdQuoted: JSON.stringify(this.moduleId),
-        internalName,
-      })));
+      stmts.push(
+        ts.raw(
+          renderBuiltinToolRegistration.default({
+            toolName,
+            toolNameQuoted: JSON.stringify(toolName),
+            moduleIdQuoted: JSON.stringify(this.moduleId),
+            internalName,
+          }),
+        ),
+      );
     }
 
     // No-op assignment for historical clarity. `__toolRegistry` is
@@ -1813,7 +1877,6 @@ export class TypeScriptBuilder {
 
     return ts.statements(stmts);
   }
-
 
   /**
    * For Result-returning functions: emit a pinned checkpoint at function entry
@@ -1871,10 +1934,7 @@ export class TypeScriptBuilder {
     // inside the issuing `runner.step` frame, so a frame is always
     // active here.
     const setupStmts: TsNode[] = [
-      ts.constDecl(
-        "__setupData",
-        $(ts.id("setupFunction")).call([]).done(),
-      ),
+      ts.constDecl("__setupData", $(ts.id("setupFunction")).call([]).done()),
 
       ts.setupEnv({
         stack: $(ts.id("__setupData")).prop("stack").done(),
@@ -1894,9 +1954,7 @@ export class TypeScriptBuilder {
       // already-initialized modules skip init without touching the
       // canonical store.
       ts.if(
-        ts.raw(
-          `!__globals()!.isInitialized(${JSON.stringify(this.moduleId)})`,
-        ),
+        ts.raw(`!__globals()!.isInitialized(${JSON.stringify(this.moduleId)})`),
         ts.await(ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")])),
       ),
 
@@ -1953,10 +2011,7 @@ export class TypeScriptBuilder {
         const vrId = ts.id(vrName);
         validationGuards.push(
           ts.constDecl(vrName, this.validateExpr(param.typeHint, stackArg)),
-          ts.if(
-            ts.not(ts.prop(vrId, "success")),
-            ts.return(vrId),
-          ),
+          ts.if(ts.not(ts.prop(vrId, "success")), ts.return(vrId)),
           ts.assign(stackArg, ts.prop(vrId, "value")),
         );
       }
@@ -1970,19 +2025,21 @@ export class TypeScriptBuilder {
     // would re-fire onFunctionStart on every resume). Callback bodies
     // cannot raise interrupts (statically forbidden by the typechecker —
     // see `checkCallbackBodyInterrupts`).
-    const onFunctionStartHook: TsNode[] = skipHooks ? [] : [
-      ts.runnerHookStep({
-        id: 0,
-        body: [
-          ts.callHook("onFunctionStart", {
-            functionName: ts.str(functionName),
-            args: ts.obj(argsObj),
-            isBuiltin: ts.bool(false),
-            moduleId: ts.str(this.moduleId),
+    const onFunctionStartHook: TsNode[] = skipHooks
+      ? []
+      : [
+          ts.runnerHookStep({
+            id: 0,
+            body: [
+              ts.callHook("onFunctionStart", {
+                functionName: ts.str(functionName),
+                args: ts.obj(argsObj),
+                isBuiltin: ts.bool(false),
+                moduleId: ts.str(this.moduleId),
+              }),
+            ],
           }),
-        ],
-      }),
-    ];
+        ];
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
@@ -2006,10 +2063,7 @@ export class TypeScriptBuilder {
             ctx: ts.id("__ctx"),
             stack: $(ts.id("__setupData")).prop("stateStack").done(),
             threads: $(ts.id("__setupData")).prop("threads").done(),
-            body: [
-              ...onFunctionStartHook,
-              ...bodyCode,
-            ],
+            body: [...onFunctionStartHook, ...bodyCode],
           }),
           ts.raw(
             "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
@@ -2027,19 +2081,21 @@ export class TypeScriptBuilder {
         // without an outer agencyStore.run wrap).
         ts.statements([
           ts.raw("__stateStack()?.pop()"),
-          ...(skipHooks ? [] : [
-            ts.if(
-              ts.id("__functionCompleted"),
-              ts.callHook("onFunctionEnd", {
-                functionName: ts.str(functionName),
-                timeTaken: $(ts.id("performance"))
-                  .prop("now")
-                  .call()
-                  .minus(ts.id("__funcStartTime"))
-                  .done(),
-              }),
-            ),
-          ]),
+          ...(skipHooks
+            ? []
+            : [
+                ts.if(
+                  ts.id("__functionCompleted"),
+                  ts.callHook("onFunctionEnd", {
+                    functionName: ts.str(functionName),
+                    timeTaken: $(ts.id("performance"))
+                      .prop("now")
+                      .call()
+                      .minus(ts.id("__funcStartTime"))
+                      .done(),
+                  }),
+                ),
+              ]),
         ]),
       ),
     );
@@ -2080,11 +2136,22 @@ export class TypeScriptBuilder {
     });
 
     const implName = `__${functionName}_impl`;
-    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: false, hoistedAliases });
-
-    const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
-      async: true,
+    const setupStmts = this.buildFunctionBody({
+      functionName,
+      parameters,
+      bodyCode,
+      skipHooks: false,
+      hoistedAliases,
     });
+
+    const funcDecl = ts.functionDecl(
+      implName,
+      fnParams,
+      ts.statements(setupStmts),
+      {
+        async: true,
+      },
+    );
 
     // Build AgencyFunction.create() params metadata
     // Include all params (including block-typed) so .partial() can bind them by name.
@@ -2105,8 +2172,7 @@ export class TypeScriptBuilder {
     // Build tool definition (Zod schema)
     const toolDef = this.buildToolDefinition(node);
 
-    const createCall = $
-      .id("__AgencyFunction")
+    const createCall = $.id("__AgencyFunction")
       .prop("create")
       .call([
         ts.obj({
@@ -2135,7 +2201,12 @@ export class TypeScriptBuilder {
     return this.processNode(node);
   }
 
-  private interruptTemplateArgs(effect: string, message: string, data: string, origin: string) {
+  private interruptTemplateArgs(
+    effect: string,
+    message: string,
+    data: string,
+    origin: string,
+  ) {
     return {
       effect: JSON.stringify(effect),
       message,
@@ -2144,7 +2215,11 @@ export class TypeScriptBuilder {
     };
   }
 
-  private buildInterruptReturnStructured(effect: string, messageExpr: string, dataExpr: string): TsNode {
+  private buildInterruptReturnStructured(
+    effect: string,
+    messageExpr: string,
+    dataExpr: string,
+  ): TsNode {
     const origin = moduleIdToOrigin(this.moduleId);
     const opts = this.checkpointOpts();
     return ts.raw(
@@ -2157,15 +2232,21 @@ export class TypeScriptBuilder {
     );
   }
 
-  private extractInterruptFields(node: InterruptStatement): { effect: string; messageExpr: string; dataExpr: string } {
+  private extractInterruptFields(node: InterruptStatement): {
+    effect: string;
+    messageExpr: string;
+    dataExpr: string;
+  } {
     return {
       effect: node.effect,
-      messageExpr: node.arguments && node.arguments.length > 0
-        ? this.str(this.processCallArg(node.arguments[0]))
-        : '""',
-      dataExpr: node.arguments && node.arguments.length > 1
-        ? this.str(this.processCallArg(node.arguments[1]))
-        : "{}",
+      messageExpr:
+        node.arguments && node.arguments.length > 0
+          ? this.str(this.processCallArg(node.arguments[0]))
+          : '""',
+      dataExpr:
+        node.arguments && node.arguments.length > 1
+          ? this.str(this.processCallArg(node.arguments[1]))
+          : "{}",
     };
   }
 
@@ -2355,7 +2436,12 @@ export class TypeScriptBuilder {
     }
 
     // Everything else goes through __call runtime dispatch
-    return this.emitRuntimeDispatchCall(node, functionName, shouldAwait, options);
+    return this.emitRuntimeDispatchCall(
+      node,
+      functionName,
+      shouldAwait,
+      options,
+    );
   }
 
   private emitRuntimeDispatchCall(
@@ -2371,7 +2457,12 @@ export class TypeScriptBuilder {
         ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
         : undefined;
     const callee = node.scope
-      ? ts.scopedVar(functionName, node.scope, this.moduleId, calleeBlockFrameVar)
+      ? ts.scopedVar(
+          functionName,
+          node.scope,
+          this.moduleId,
+          calleeBlockFrameVar,
+        )
       : ts.id(functionName);
 
     const callExpr = ts.call(ts.id("__call"), [callee, descriptor]);
@@ -2425,7 +2516,9 @@ export class TypeScriptBuilder {
    * Build a CallType descriptor TsNode for an Agency function call.
    * Determines whether to emit positional or named call type based on arguments.
    */
-  private buildCallDescriptor(node: Pick<FunctionCall, "arguments" | "block">): TsNode {
+  private buildCallDescriptor(
+    node: Pick<FunctionCall, "arguments" | "block">,
+  ): TsNode {
     const args = node.arguments;
     const hasNamedArgs = args.some((a) => a.type === "namedArgument");
 
@@ -2469,7 +2562,10 @@ export class TypeScriptBuilder {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         argNodes.push(
-          this.generateFunctionCallExpression(arg as FunctionCall, "functionArg"),
+          this.generateFunctionCallExpression(
+            arg as FunctionCall,
+            "functionArg",
+          ),
         );
       } else {
         argNodes.push(this.processCallArg(arg));
@@ -2629,7 +2725,10 @@ export class TypeScriptBuilder {
     this.isInsideGraphNode = true;
 
     for (const stmt of body) {
-      if (stmt.type === "functionCall" && this.names.isGraphNode(stmt.functionName)) {
+      if (
+        stmt.type === "functionCall" &&
+        this.names.isGraphNode(stmt.functionName)
+      ) {
         throw new Error(
           `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' must use goto or return, eg: goto ${stmt.functionName}(...)`,
         );
@@ -2813,9 +2912,7 @@ export class TypeScriptBuilder {
 
   private processGotoStatement(node: GotoStatement): TsNode {
     if (!this.isInsideGraphNode) {
-      throw new Error(
-        `goto can only be used inside a node body`,
-      );
+      throw new Error(`goto can only be used inside a node body`);
     }
     if (!this.names.isGraphNode(node.nodeCall.functionName)) {
       throw new Error(
@@ -2831,7 +2928,8 @@ export class TypeScriptBuilder {
     // Bare return (no value)
     if (!node.value) {
       if (this.insideHandlerBody) return ts.return();
-      if (this.scopes.current().type === "block") return ts.runnerHalt(ts.id("undefined"));
+      if (this.scopes.current().type === "block")
+        return ts.runnerHalt(ts.id("undefined"));
       if (this.isInsideGraphNode) return ts.nodeResult(ts.id("undefined"));
       return ts.functionReturn(ts.id("undefined"));
     }
@@ -2892,7 +2990,9 @@ export class TypeScriptBuilder {
         );
         return ts.statements([
           llmNode,
-          ts.nodeResult(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
+          ts.nodeResult(
+            this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME)),
+          ),
         ]);
       }
       const valueNode = this.processNode(node.value);
@@ -2919,7 +3019,9 @@ export class TypeScriptBuilder {
       );
       return ts.statements([
         llmNode,
-        ts.functionReturn(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
+        ts.functionReturn(
+          this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME)),
+        ),
       ]);
     }
     const valueNode = this.processNode(node.value);
@@ -2981,7 +3083,9 @@ export class TypeScriptBuilder {
     if (this.insideHandlerBody) {
       return ts.if(
         this.interruptCheckRaw(this.str(varRef)),
-        ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+        ts.throw(
+          `new Error("Cannot throw an interrupt inside a handler body")`,
+        ),
       );
     }
     // Sync: interrupt check with awaitAll before halt.
@@ -3018,7 +3122,9 @@ export class TypeScriptBuilder {
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (this.isInterruptExpression(value)) {
-      const { effect, messageExpr, dataExpr } = this.extractInterruptFields(value as InterruptStatement);
+      const { effect, messageExpr, dataExpr } = this.extractInterruptFields(
+        value as InterruptStatement,
+      );
       const origin = moduleIdToOrigin(this.moduleId);
       const makeAssign = (val: string) =>
         this.str(
@@ -3251,7 +3357,9 @@ export class TypeScriptBuilder {
         stmts.push(
           ts.if(
             this.interruptCheckRaw(this.str(varRef)),
-            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+            ts.throw(
+              `new Error("Cannot throw an interrupt inside a handler body")`,
+            ),
           ),
         );
       } else {
@@ -3519,9 +3627,8 @@ export class TypeScriptBuilder {
     const destructured = keys.map((k, i) => `${k}: __k${i}`).join(", ");
     // Empty destructured (no excluded keys) collapses the leading comma so
     // we never emit invalid `(({ , ...__r }) => ...)`.
-    const params = destructured.length > 0
-      ? `{ ${destructured}, ...__r }`
-      : `{ ...__r }`;
+    const params =
+      destructured.length > 0 ? `{ ${destructured}, ...__r }` : `{ ...__r }`;
     return `((${params}) => __r)(${sourceJs})`;
   }
 
@@ -3564,7 +3671,12 @@ export class TypeScriptBuilder {
         ? this.scopes.blockFrameVar(handlerBlockDepth ?? 0)
         : undefined;
     const callee = handlerScope
-      ? ts.scopedVar(handlerName, handlerScope, this.moduleId, handlerBlockFrameVar)
+      ? ts.scopedVar(
+          handlerName,
+          handlerScope,
+          this.moduleId,
+          handlerBlockFrameVar,
+        )
       : ts.id(handlerName);
     const callArgs: TsNode[] = [callee, descriptor];
     if (configObj) callArgs.push(configObj);
@@ -3641,13 +3753,9 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
-
   // ── Body processing ──
 
-  private processBodyAsParts(
-    body: AgencyNode[],
-    startId = 0,
-  ): TsNode[] {
+  private processBodyAsParts(body: AgencyNode[], startId = 0): TsNode[] {
     const result: TsNode[] = [];
     const branchKeys: Record<number, string> = {};
 
@@ -3945,9 +4053,7 @@ export class TypeScriptBuilder {
     // interpolation may still see uninitialized values. Synchronous
     // literal globals are populated before the function returns.
     if (this.hasDocStringInterpolation()) {
-      runtimeCtxStatements.push(
-        ts.raw(`__initializeGlobals(__globalCtx);`),
-      );
+      runtimeCtxStatements.push(ts.raw(`__initializeGlobals(__globalCtx);`));
     }
 
     const runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
@@ -4032,7 +4138,9 @@ export class TypeScriptBuilder {
       }[] = [];
       if (args.length > 0) {
         for (const arg of args) {
-          const typeHint = arg.typeHint ? formatTypeHintTs(arg.typeHint) : "any";
+          const typeHint = arg.typeHint
+            ? formatTypeHintTs(arg.typeHint)
+            : "any";
           fnParams.push({ name: arg.name, typeAnnotation: typeHint });
         }
       }
@@ -4067,7 +4175,11 @@ export class TypeScriptBuilder {
               ])
               .done(),
           ),
-          { async: true, export: true, returnType: "Promise<RunNodeResult<any>>" },
+          {
+            async: true,
+            export: true,
+            returnType: "Promise<RunNodeResult<any>>",
+          },
         ),
       );
       result.push(
@@ -4081,7 +4193,9 @@ export class TypeScriptBuilder {
       );
     }
 
-    if (this.compilationUnit.graphNodes.map((n) => n.nodeName).includes("main")) {
+    if (
+      this.compilationUnit.graphNodes.map((n) => n.nodeName).includes("main")
+    ) {
       result.push(
         ts.if(
           ts.binOp(

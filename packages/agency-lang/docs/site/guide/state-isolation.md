@@ -75,7 +75,7 @@ Every call to an Agency agent gets state isolation, so each run has its own copy
 
 ## Todos example
 
-It's a common pattern to design agents that keep track of their work by creating todos. Lets create an agent that keeps track of its todos:
+It's a common pattern to have agents keep track of their work by creating todos. Let's create an agent that keeps track of its todos:
 
 ```ts
 const todos = []
@@ -88,7 +88,7 @@ def getTodos() {
   return todos
 }
 
-def markTodoDone(todo: string) {
+def markDone(todo: string) {
   const index = todos.indexOf(todo)
   if (index !== -1) {
     todos.splice(index, 1)
@@ -96,7 +96,7 @@ def markTodoDone(todo: string) {
 }
 
 node main() {
-  const result = llm("Do some stuff", tools: [addTodo, getTodos])
+  const result = llm("Do some stuff", tools: [addTodo, getTodos, markDone])
 }
 ```
 
@@ -104,7 +104,9 @@ We can just create a global variable, `todos`, and then add todos to it. Each ru
 
 ## Isolation across concurrent branches
 
-The same isolation property also extends to branches. Suppose the user gives you a topic, and you want to run three research agents in parallel to explore this topic in different ways. You want all three agents to keep track of their todos. You can still use the same todos code without worrying about concurrency, because each agent will get their own copy of the `todos` variable.
+Suppose you want to run three research agents in parallel to explore a topic in different ways. You want all three agents to keep track of their todos. *The same isolation property also extends to branches.*
+
+You can still use the same todos code without worrying about concurrency, because each agent will get their own copy of the `todos` variable.
 
 ```ts
 parallel {

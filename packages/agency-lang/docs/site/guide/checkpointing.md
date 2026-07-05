@@ -44,7 +44,7 @@ node main() {
 }
 ```
 
-This will always print "...after one rolls", because if it's a bad roll, we increment the counter but then immediately roll back, which restores the counter back to one:
+This will not work. It will always print "...after one rolls", because if it's a bad roll, we increment the counter but then *immediately roll back*, which restores the counter back to one:
 
 ```ts
 counter++
@@ -65,25 +65,25 @@ This is kind of like saving your progress in a video game and coming back to it 
 
 When you restore, you can optionally provide overrides for any of the variables in that checkpoint. This allows you to retry a section of code with different inputs.
 
-You can override function arguments:
+You can override **function arguments**:
 
 ```ts
 restore(result.checkpoint, { args: { input: "good" } })
 ```
 
-Global variables:
+**Global variables**:
 
 ```ts
 restore(result.checkpoint, { globals: { attempts: 8 } })
 ```
 
-Or local variables:
+Or **local variables**:
 
 ```ts
 restore(result.checkpoint, { locals: { x: 8 } })
 ```
 
-You can also limit the number of times you restore a checkpoint using `maxRestores`. This is useful if you are retrying flaky LLM calls but don't want to retry too many times.
+You can also limit the number of times you restore a checkpoint using `maxRestores`:
 
 
 ```ts

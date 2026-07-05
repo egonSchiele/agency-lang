@@ -153,7 +153,7 @@ When `cancel()` is called
 3. Any remaining interrupt handlers are skipped.
 4. An `AgencyCancelledError` is thrown, which propagates up to the caller.
 
-Cancellation is permanent for that execution. Once cancelled, no further LLM calls can be made on that particular agent run. However, you can start a new agent run. You can read more about Agency's [execution model](/guide/execution-model).
+Cancellation is permanent for that execution. Once cancelled, no further LLM calls can be made on that particular agent run. However, you can start a new agent run.
 
 To catch the abort in TypeScript, you can catch `AgencyCancelledError` (exported from `agency-lang/runtime`) or use the `isAbortError` helper:
 

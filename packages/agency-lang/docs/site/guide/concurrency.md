@@ -89,7 +89,7 @@ node main() {
 
 ## State isolation across branches
 
-Just like each agent **run** gets its own copy of globals and its own message-thread state (see [execution model](./execution-model)), each **branch** of a `parallel`, `fork`, or `race` block gets its own copy too. Branches start with a snapshot of the parent's globals at the moment the fork runs, and any writes a branch makes never leak back to the parent.
+Just like each agent **run** gets its own copy of globals and its own message-thread state (see [state isolation](./state-isolation)), each **branch** of a `parallel`, `fork`, or `race` block gets its own copy too. Branches start with a snapshot of the parent's globals at the moment the fork runs, and any writes a branch makes never leak back to the parent.
 
 This matters because the moment you write something like:
 

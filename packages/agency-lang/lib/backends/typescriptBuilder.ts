@@ -59,7 +59,6 @@ import {
 } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
 import { TryExpression } from "../types/tryExpression.js";
-import { IfExpression } from "../types/ifExpression.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -609,8 +608,6 @@ export class TypeScriptBuilder {
         return this.processDebuggerStatement(node);
       case "tryExpression":
         return this.processTryExpression(node);
-      case "ifExpression":
-        return this.processIfExpression(node);
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
@@ -1157,18 +1154,6 @@ export class TypeScriptBuilder {
   private processPipeExpression(node: BinOpExpression): TsNode {
     const left = this.processNode(node.left);
     return this.pipes.bind(left, node.right);
-  }
-
-  private processIfExpression(node: IfExpression): TsNode {
-    // `if c then a else b` is a plain conditional expression → a TS ternary.
-    // (Flatness — no `if` in a branch — is a semantic restriction enforced by
-    // the type checker, not the parser, so a nested node can reach here in a
-    // program that already has a type error.)
-    return ts.ternary(
-      this.processNode(node.condition),
-      this.processNode(node.thenExpr),
-      this.processNode(node.elseExpr),
-    );
   }
 
   private processTryExpression(node: TryExpression): TsNode {

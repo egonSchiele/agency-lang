@@ -109,8 +109,6 @@ export function expressionChildren(node: AgencyNode): AgencyNode[] {
       return [node.call];
     case "newExpression":
       return node.arguments;
-    case "ifExpression":
-      return [node.condition, node.thenExpr, node.elseExpr];
     default:
       // Leaves (variableName, literals, …), comments, patterns, and nested
       // definitions (function/graphNode) have no expression children here.
@@ -226,8 +224,6 @@ export function expressionToString(expr: Expression): string {
       const args = expr.arguments.map(a => expressionToString(a)).join(", ");
       return `new ${expr.className}(${args})`;
     }
-    case "ifExpression":
-      return `if ${expressionToString(expr.condition)} then ${expressionToString(expr.thenExpr)} else ${expressionToString(expr.elseExpr)}`;
     case "regex":
       return `/${expr.pattern}/${expr.flags}`;
     case "schemaExpression":
@@ -560,13 +556,6 @@ export function* walkNodes(
     } else if (node.type === "binOpExpression") {
       yield* walkNodes([node.left], [...ancestors, node], scopes);
       yield* walkNodes([node.right], [...ancestors, node], scopes);
-    } else if (node.type === "ifExpression") {
-      // Descend into all three sub-expressions so variable references inside
-      // them get their `scope` resolved (otherwise codegen emits bare
-      // identifiers instead of `__stack.args.foo` / `__stack.locals.foo`).
-      yield* walkNodes([node.condition], [...ancestors, node], scopes);
-      yield* walkNodes([node.thenExpr], [...ancestors, node], scopes);
-      yield* walkNodes([node.elseExpr], [...ancestors, node], scopes);
     } else if (node.type === "interruptStatement") {
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);

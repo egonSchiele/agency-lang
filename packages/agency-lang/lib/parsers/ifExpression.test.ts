@@ -2,54 +2,56 @@ import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { AgencyGenerator } from "../backends/agencyGenerator.js";
 
-function firstAssignmentValue(src: string): any {
-  const parsed = parseAgency(src);
+// `false` = skip pattern lowering, so we see the raw `ifElse` value node the
+// parser produced (parseAgency lowers by default, rewriting it to a temp ref).
+function parseRaw(src: string) {
+  const parsed = parseAgency(src, {}, true, false);
   if (!parsed.success) throw new Error(parsed.message);
-  for (const node of parsed.result.nodes as any[]) {
-    const body = node.body ?? [];
-    const assign = body.find((n: any) => n.type === "assignment");
-    if (assign) return assign.value;
-  }
-  throw new Error("no assignment found");
+  return parsed.result;
 }
+function parseErr(src: string, re: RegExp) {
+  const parsed = parseAgency(src, {}, true, false);
+  expect(parsed.success).toBe(false);
+  if (!parsed.success) expect(parsed.message).toMatch(re);
+}
+const WRAP = (rhs: string) => `node main(c: boolean, d: boolean) {\n  const x = ${rhs}\n  return x\n}`;
 
-describe("if expression parsing", () => {
-  it("parses `if c then a else b` into an ifExpression with three sub-expressions", () => {
-    const value = firstAssignmentValue(
-      `node main() {\n  const x = if isProd then "prod" else "local"\n  return x\n}`,
-    );
-    expect(value.type).toBe("ifExpression");
-    expect(value.condition.type).toBe("variableName");
-    expect(value.thenExpr.segments[0].value).toBe("prod");
-    expect(value.elseExpr.segments[0].value).toBe("local");
+describe("if-expression parsing", () => {
+  it("parses `if c then a else b` as an ifElse with single-expression branches", () => {
+    const nodes = parseRaw(WRAP(`if c then "yes" else "no"`)).nodes as any[];
+    const main = nodes.find((n) => n.type === "graphNode");
+    const value = main.body.find((n: any) => n.type === "assignment").value;
+    expect(value.type).toBe("ifElse");
+    expect(value.thenBody).toHaveLength(1);
+    expect(value.elseBody).toHaveLength(1);
+    expect(value.thenBody[0].segments[0].value).toBe("yes");
+    expect(value.elseBody[0].segments[0].value).toBe("no");
   });
 
-  it("parses as an object property value (a plain expression position)", () => {
-    const value = firstAssignmentValue(
-      `node main(age: number) {\n  const p = { kind: if age > 18 then "adult" else "child" }\n  return p\n}`,
-    );
-    expect(value.type).toBe("agencyObject");
-    const kind = value.entries.find((e: any) => e.key === "kind");
-    expect(kind.value.type).toBe("ifExpression");
+  it("is valid in `return` position", () => {
+    parseRaw(`def f(c: boolean): string { return if c then "a" else "b" }`);
   });
 
-  it("does not swallow identifiers that merely start with the keywords", () => {
-    // `iffy` / `thenable` are ordinary identifiers, not `if` / `then`.
-    const value = firstAssignmentValue(
-      `node main(iffy: number) {\n  const x = iffy\n  return x\n}`,
-    );
-    expect(value.type).toBe("variableName");
-    expect(value.value).toBe("iffy");
-  });
+  // Restrictions — all rejected at parse time.
+  it("cannot be an object value (not a general expression)", () =>
+    parseErr(WRAP(`{ k: if c then "a" else "b" }`), /./));
+
+  it("cannot be a function argument", () =>
+    parseErr(`def f(s: string): string { return s }\nnode main(c: boolean) {\n  return f(if c then "a" else "b")\n}`, /./));
+
+  it("a branch cannot itself be an if expression (no nesting)", () =>
+    parseErr(WRAP(`if c then (if d then "x" else "y") else "z"`), /./));
+
+  it("no `else if` chain", () =>
+    parseErr(WRAP(`if c then "x" else if d then "y" else "z"`), /else|if/i));
+
+  it("`else` is required", () =>
+    parseErr(WRAP(`if c then "a"`), /requires an `else`/));
 
   it("round-trips through the formatter", () => {
-    const src = `node main(age: number): string {\n  const kind = if age > 18 then "adult" else "child"\n  return kind\n}`;
-    const parsed = parseAgency(src);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    const out = new AgencyGenerator().generate(parsed.result).output;
-    expect(out).toContain(`if age > 18 then "adult" else "child"`);
-    // and the formatted output re-parses
-    expect(parseAgency(out).success).toBe(true);
+    const src = `node main(c: boolean): string {\n  const kind = if c then "adult" else "child"\n  return kind\n}`;
+    const out = new AgencyGenerator().generate(parseRaw(src)).output;
+    expect(out).toContain(`if c then "adult" else "child"`);
+    expect(parseAgency(out, {}, true, false).success).toBe(true);
   });
 });

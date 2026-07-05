@@ -850,11 +850,6 @@ function checkExpressionsInScope(
       }
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
       checkConditionType(node.condition, info.scope, ctx);
-    } else if (node.type === "ifExpression") {
-      // Same rule as a statement `if`/`while`: the condition must be boolean
-      // (with the same optional-presence-test exception). The branches are
-      // typed at their use site via `synthType`'s `ifExpression` case.
-      checkConditionType(node.condition, info.scope, ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {
       checkCatchDefaultType(node, info.scope, ctx);
     } else if (

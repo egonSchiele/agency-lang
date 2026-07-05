@@ -66,20 +66,22 @@ if (age > 18) {
 ```
 
 Agency has no ternary (`? :`). Instead, `if ... then ... else` can be used as a
-value — it produces whichever branch matches:
+value when assigning to a variable or in a `return`:
 
 ```ts
 const label = if isProd then "Production" else "Local"
 
-const person = {
-  kind: if age > 18 then "adult" else "child",
+def describe(n: number): string {
+  return if n > 100 then "big" else "small"
 }
 ```
 
-The `else` is required (the expression always produces a value). To keep these
-readable, they are deliberately limited: no `else if`, and a branch cannot be
-another `if ... then ... else`. For anything with more than two cases, or nested
-conditions, use [`match`](/guide/pattern-matching) instead.
+The `else` is required (the expression always produces a value). Like `match`
+expressions, an `if` expression is only allowed as a `const`/`let` value or a
+`return` — not nested inside another value such as an object field or an
+argument. To keep them readable they are also deliberately flat: no `else if`,
+and a branch cannot itself be an `if ... then ... else`. For more than two cases,
+or nested conditions, use [`match`](/guide/pattern-matching).
 
 ## Type annotations
 

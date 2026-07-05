@@ -263,9 +263,34 @@ export class TypeChecker {
     }
 
     // 1f. Doc strings must not interpolate function/node parameters.
-    this.checkDocStringParamInterpolation();
-
-    this.checkIfExpressionRestrictions();
+    // The description is built when the tool object is constructed at module
+    // load time — long before the function is ever called — so parameter
+    // values are simply not bound yet. Catch the obvious case here:
+    // `${param}` as a top-level interpolation expression.
+    const checkDocStringParams = (
+      def: FunctionDefinition | GraphNodeDefinition,
+    ) => {
+      if (!def.docString) return;
+      const paramNames = def.parameters.map((p) => p.name);
+      for (const seg of def.docString.segments) {
+        if (
+          seg.type === "interpolation" &&
+          seg.expression.type === "variableName" &&
+          paramNames.includes(seg.expression.value)
+        ) {
+          this.errors.push({
+            message: `Cannot interpolate parameter '${seg.expression.value}' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.`,
+            loc: seg.loc ?? def.docString.loc,
+          });
+        }
+      }
+    };
+    for (const def of Object.values(this.functionDefs)) {
+      checkDocStringParams(def);
+    }
+    for (const def of Object.values(this.nodeDefs)) {
+      checkDocStringParams(def);
+    }
 
     // 2. Infer return types
     inferReturnTypes(ctx);
@@ -367,83 +392,6 @@ export class TypeChecker {
       interruptCallGraph,
       flowEnv: ctx.flowEnv,
     };
-  }
-
-  /**
-   * Keep `if ... then ... else` expressions readable. Two restrictions, both
-   * reported as clear errors (the parser accepts these shapes so they surface
-   * here rather than as a confusing parse failure):
-   *   (a) FLATNESS — none of condition/then/else may itself be an `if`
-   *       expression (this also rules out `else if` chains).
-   *   (b) NO CONDITIONAL SPREAD — an `if` expression may not be a `...` operand
-   *       (`...(if c then {…} else {…})`), the classic unreadable pattern.
-   * For multi-way or nested branching, use `match`.
-   */
-  /**
-   * Doc strings must not interpolate function/node parameters: the description
-   * is built when the tool object is constructed at module load time — long
-   * before the function is ever called — so parameter values are not bound yet.
-   * Catches the obvious case: `${param}` as a top-level interpolation.
-   */
-  private checkDocStringParamInterpolation(): void {
-    const checkDef = (def: FunctionDefinition | GraphNodeDefinition) => {
-      if (!def.docString) return;
-      const paramNames = def.parameters.map((p) => p.name);
-      for (const seg of def.docString.segments) {
-        if (
-          seg.type === "interpolation" &&
-          seg.expression.type === "variableName" &&
-          paramNames.includes(seg.expression.value)
-        ) {
-          this.errors.push({
-            message: `Cannot interpolate parameter '${seg.expression.value}' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.`,
-            loc: seg.loc ?? def.docString.loc,
-          });
-        }
-      }
-    };
-    for (const def of Object.values(this.functionDefs)) {
-      checkDef(def);
-    }
-    for (const def of Object.values(this.nodeDefs)) {
-      checkDef(def);
-    }
-  }
-
-  private checkIfExpressionRestrictions(): void {
-    for (const { node } of walkNodes(this.program.nodes)) {
-      if (node.type === "ifExpression") {
-        const nestedBranch = [node.condition, node.thenExpr, node.elseExpr].find(
-          (branch) => branch.type === "ifExpression",
-        );
-        if (nestedBranch) {
-          this.errors.push({
-            message:
-              "nested `if ... then ... else` is not allowed (this includes `else if`); " +
-              "use `match` for multi-way or nested branching",
-            loc: nestedBranch.loc,
-            severity: "error",
-          });
-        }
-      }
-      const spreadValues =
-        node.type === "agencyObject"
-          ? node.entries.filter((e): e is typeof e & { type: "splat" } => "type" in e && e.type === "splat").map((e) => e.value)
-          : node.type === "agencyArray"
-            ? node.items.filter((i): i is typeof i & { type: "splat" } => i.type === "splat").map((i) => i.value)
-            : [];
-      for (const value of spreadValues) {
-        if (value.type === "ifExpression") {
-          this.errors.push({
-            message:
-              "an `if ... then ... else` expression cannot be spread (`...`); " +
-              "assign it to a variable first, or use `match`",
-            loc: value.loc,
-            severity: "error",
-          });
-        }
-      }
-    }
   }
 
   private applySuppressions(errors: TypeCheckError[]): TypeCheckError[] {

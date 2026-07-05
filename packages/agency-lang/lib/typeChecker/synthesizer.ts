@@ -10,9 +10,7 @@ import type {
 } from "../types/dataStructures.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
-import { isAssignable, isNever, safeResolveType, widenType } from "./assignability.js";
-import { unionTypes } from "./inference.js";
-import { isAnyType } from "./utils.js";
+import { isAssignable, isNever, safeResolveType } from "./assignability.js";
 import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { resultTypeForValidation } from "./validation.js";
@@ -347,8 +345,6 @@ export function synthType(
       return synthValueAccess(expr, scope, ctx);
     case "tryExpression":
       return synthTryExpression(expr, scope, ctx);
-    case "ifExpression":
-      return synthIfExpression(expr, scope, ctx);
     case "schemaExpression":
       // `schema(Type)` is a language built-in that bridges *type space* and
       // *value space*: the parser captures `Type` as a VariableType (not as
@@ -382,30 +378,6 @@ function synthTryExpression(
   if (inner === "any") return inner;
   if (inner.type === "resultType") return inner;
   return { type: "resultType", successType: inner, failureType: ANY_T };
-}
-
-/**
- * An `if <c> then <a> else <b>` expression has the widened union of its two
- * branch types — the same rule a two-arm `match` expression uses (see
- * `computeMatchExprTypes`), so `const x = if c then "a" else "b"` and
- * `match (c) { true => "a"; false => "b" }` type identically. A branch of `any`
- * makes the whole thing `any` (the union can't be narrowed).
- */
-function synthIfExpression(
-  expr: AgencyNode & { type: "ifExpression" },
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): VariableType | "any" {
-  const branchTypes = [
-    synthType(expr.thenExpr, scope, ctx),
-    synthType(expr.elseExpr, scope, ctx),
-  ];
-  if (branchTypes.some((branch) => branch === "any" || isAnyType(branch))) {
-    return "any";
-  }
-  return unionTypes(
-    branchTypes.map((branch) => widenType(branch as VariableType) as VariableType),
-  );
 }
 
 const BOOLEAN_OPS = new Set([

@@ -35,7 +35,6 @@ import { StaticStatement } from "./types/staticStatement.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
 import { NewExpression } from "./types/newExpression.js";
-import { IfExpression } from "./types/ifExpression.js";
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
@@ -75,7 +74,6 @@ export * from "./types/staticStatement.js";
 export * from "./types/base.js";
 export * from "./types/tag.js";
 export type { TryExpression } from "./types/tryExpression.js";
-export type { IfExpression } from "./types/ifExpression.js";
 export * from "./types/newExpression.js";
 export * from "./types/interruptStatement.js";
 export * from "./types/schemaExpression.js";
@@ -89,7 +87,6 @@ export type Expression =
   | AgencyObject
   | TryExpression
   | NewExpression
-  | IfExpression
   | RegexLiteral
   | SchemaExpression
   | InterruptStatement
@@ -327,7 +324,6 @@ export type AgencyNode =
   | Tag
   | TryExpression
   | NewExpression
-  | IfExpression
   | RegexLiteral
   | SchemaExpression
   | InterruptStatement

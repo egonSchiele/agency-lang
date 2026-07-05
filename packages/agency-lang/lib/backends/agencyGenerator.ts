@@ -511,8 +511,6 @@ export class AgencyGenerator {
       case "tryExpression":
         // remove extra indentation
         return `try ${this.processNode(node.call).trim()}`;
-      case "ifExpression":
-        return `if ${this.processNode(node.condition).trim()} then ${this.processNode(node.thenExpr).trim()} else ${this.processNode(node.elseExpr).trim()}`;
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
@@ -799,6 +797,11 @@ export class AgencyGenerator {
     let valueCode = "";
     if (node.value.type === "binOpExpression") {
       valueCode = this.processBinOpExpression(node.value, true).trim();
+    } else if ((node.value as AgencyNode).type === "ifElse") {
+      // An `ifElse` in value position is an `if ... then ... else` expression
+      // (a statement `if` is never an assignment value), so print the
+      // single-line `then` form rather than a braced block.
+      valueCode = this.formatIfExpression(node.value as AgencyNode as IfElse);
     } else {
       valueCode = this.processNode(node.value).trim();
     }
@@ -1304,8 +1307,20 @@ export class AgencyGenerator {
 
   protected processReturnStatement(node: ReturnStatement): string {
     if (!node.value) return this.indentStr("return");
-    const valueCode = this.processNode(node.value).trim();
+    const valueCode =
+      (node.value as AgencyNode).type === "ifElse"
+        ? this.formatIfExpression(node.value as AgencyNode as IfElse)
+        : this.processNode(node.value).trim();
     return this.indentStr(`return ${valueCode}`);
+  }
+
+  /** Print an `if ... then ... else` expression (an `ifElse` in value position)
+   *  as its single-line surface form so it round-trips through the parser. */
+  protected formatIfExpression(node: IfElse): string {
+    const cond = this.processNode(node.condition).trim();
+    const thenCode = this.processNode(node.thenBody[0]).trim();
+    const elseCode = this.processNode((node.elseBody ?? [])[0]).trim();
+    return `if ${cond} then ${thenCode} else ${elseCode}`;
   }
 
   protected processGotoStatement(node: GotoStatement): string {

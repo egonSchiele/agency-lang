@@ -35,17 +35,21 @@ export function getRuntimeConfigOverrides(): Partial<AgencyConfig> | undefined {
 /**
  * Apply runtime config overrides (set per-subprocess via
  * `setRuntimeConfigOverrides`) to the args used to construct a
- * `RuntimeContext`. Today only `log.*` fields and the top-level
- * `observability` flag flow into the statelog config; other
- * `AgencyConfig` fields are ignored because the runtime has its own
- * pathways for them. If a new statelog-relevant override field is added,
- * it will be picked up automatically by the shallow merge below.
+ * `RuntimeContext`. `log.*` fields and the top-level `observability` flag flow
+ * into the statelog config; `client.providerModules` and `maxCallDepth` are
+ * forwarded explicitly (see below). Other `AgencyConfig` fields are ignored
+ * because the runtime has its own pathways for them. If a new statelog-relevant
+ * override field is added, it will be picked up automatically by the shallow
+ * merge below.
  *
- * `client.providerModules` is also honored: `_run` forwards the parent's
+ * `client.providerModules` is honored: `_run` forwards the parent's
  * (absolutized) provider-module paths here so a subprocess loads the same
  * custom/local providers the parent has, regardless of how the child was
  * compiled. They are merged with any baked-in `providerModules` on `args`;
  * `loadProviderModules` de-duplicates by resolved path at load time.
+ *
+ * `maxCallDepth` is honored so a subprocess inherits the parent's runaway-
+ * recursion ceiling rather than falling back to the default.
  */
 export function applyRuntimeConfigOverridesToContextArgs(
   args: RuntimeContextConstructorArgs,

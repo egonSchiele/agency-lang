@@ -475,7 +475,10 @@ export const AgencyConfigSchema = z
     debugger: z.boolean(),
     instrument: z.boolean(),
     checkpoints: z.object({ maxRestores: z.number() }).partial(),
-    maxCallDepth: z.number(),
+    // A positive integer. The guard trips when depth > limit and the first
+    // call is depth 1, so a value < 1 (or a float/NaN) would make every call
+    // throw — reject it at config-load rather than bricking the program.
+    maxCallDepth: z.number().int().positive(),
     trace: z.boolean(),
     traceFile: z.string(),
     traceDir: z.string(),

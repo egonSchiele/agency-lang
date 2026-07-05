@@ -1,27 +1,39 @@
 import { describe, expect, test } from "vitest";
-import { withCallDepth, currentCallDepth } from "./callDepth.js";
-import { CallDepthExceededError } from "./errors.js";
-import { AgencyAbort, readCause } from "./errors.js";
+import { withCallDepth } from "./callDepth.js";
+import { CallDepthExceededError, AgencyAbort, readCause } from "./errors.js";
+import { runInTestContext } from "./asyncContext.js";
+import { makeMockCtx } from "./__tests__/testHelpers.js";
+
+/** Run `fn` inside an execution context whose maxCallDepth is `limit`. The
+ *  call-depth guard resolves its ceiling from the active context, so tests
+ *  exercise the real resolution path rather than an injected value. */
+function withLimit<T>(limit: number, fn: () => Promise<T>): Promise<T> {
+  const ctx = makeMockCtx();
+  ctx.maxCallDepth = limit;
+  return runInTestContext(ctx, ctx.stateStack, ctx.threads, fn);
+}
 
 describe("call-depth guard", () => {
   test("allows nesting up to the limit", async () => {
     const recurse = async (n: number): Promise<number> =>
-      n >= 4 ? 42 : withCallDepth(`f${n}`, 5, () => recurse(n + 1));
-    await expect(recurse(0)).resolves.toBe(42);
+      n >= 4 ? 42 : withCallDepth(`f${n}`, () => recurse(n + 1));
+    await expect(withLimit(5, () => recurse(0))).resolves.toBe(42);
   });
 
   test("throws CallDepthExceededError when nesting exceeds the limit", async () => {
     const recurse = async (n: number): Promise<number> =>
-      withCallDepth(`f${n}`, 3, () => recurse(n + 1));
-    await expect(recurse(0)).rejects.toBeInstanceOf(CallDepthExceededError);
+      withCallDepth(`f${n}`, () => recurse(n + 1));
+    await expect(withLimit(3, () => recurse(0))).rejects.toBeInstanceOf(
+      CallDepthExceededError,
+    );
   });
 
   test("the error is an AgencyAbort carrying a callDepthExceeded cause with the limit", async () => {
     const recurse = async (n: number): Promise<number> =>
-      withCallDepth(`f${n}`, 2, () => recurse(n + 1));
+      withCallDepth(`f${n}`, () => recurse(n + 1));
     let caught: unknown;
     try {
-      await recurse(0);
+      await withLimit(2, () => recurse(0));
     } catch (e) {
       caught = e;
     }
@@ -33,10 +45,10 @@ describe("call-depth guard", () => {
 
   test("the error message includes the recent call chain and the config knob", async () => {
     const recurse = async (n: number): Promise<number> =>
-      withCallDepth(`fn${n}`, 3, () => recurse(n + 1));
+      withCallDepth(`fn${n}`, () => recurse(n + 1));
     let msg = "";
     try {
-      await recurse(0);
+      await withLimit(3, () => recurse(0));
     } catch (e) {
       msg = (e as Error).message;
     }
@@ -52,28 +64,22 @@ describe("call-depth guard", () => {
     // limit of 3. With per-lineage ALS tracking, each sibling independently
     // sees depth 2, so a limit of 3 is never exceeded.
     const run = () =>
-      withCallDepth("root", 3, () =>
+      withCallDepth("root", () =>
         Promise.all(
           Array.from({ length: 10 }, (_, i) =>
-            withCallDepth(`sib${i}`, 3, async () => {
+            withCallDepth(`sib${i}`, async () => {
               await Promise.resolve();
               return "ok";
             }),
           ),
         ),
       );
-    await expect(run()).resolves.toHaveLength(10);
+    await expect(withLimit(3, run)).resolves.toHaveLength(10);
   });
 
-  test("currentCallDepth reflects the active nesting", async () => {
-    expect(currentCallDepth()).toBe(0);
-    const depths: number[] = [];
-    await withCallDepth("a", 10, () =>
-      withCallDepth("b", 10, async () => {
-        depths.push(currentCallDepth());
-        return null;
-      }),
-    );
-    expect(depths).toEqual([2]);
+  test("falls back to the default limit when no context is installed", async () => {
+    // No runInTestContext wrapper → no agencyStore ctx. A shallow call must
+    // still work (guarded by DEFAULT_MAX_CALL_DEPTH), not throw.
+    await expect(withCallDepth("solo", async () => "ok")).resolves.toBe("ok");
   });
 });

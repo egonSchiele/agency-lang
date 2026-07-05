@@ -237,6 +237,7 @@ export function isAbortError(error: unknown): boolean {
       error.name === "AgencyAbort" ||
       error.name === "AgencyCancelledError" ||
       error.name === "GuardExceededError" ||
+      error.name === "CallDepthExceededError" ||
       error.name === "AbortError"
     );
   }

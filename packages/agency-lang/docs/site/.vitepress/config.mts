@@ -95,16 +95,19 @@ export default defineConfig({
         {
           text: "06. Agency's Execution Model",
           items: [
-            { text: "Execution Model", link: "/guide/execution-model" },
+            { text: "Checkpointing", link: "/guide/checkpointing" },
+            { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
+            { text: "State Isolation", link: "/guide/state-isolation" },
             {
               text: "Global vs Static Variables",
               link: "/guide/global-vs-static",
             },
-            { text: "Checkpointing", link: "/guide/checkpointing" },
+
             {
-              text: "Cross-Thread Context Sharing",
-              link: "/guide/cross-thread-context",
+              text: "Global Variable Initialization",
+              link: "/guide/global-var-initialization",
             },
+
             // Initializer dependencies
           ],
         },
@@ -122,6 +125,10 @@ export default defineConfig({
             {
               text: "Custom & local model providers",
               link: "/guide/custom-providers",
+            },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
             },
           ],
         },

@@ -119,27 +119,17 @@ export default defineConfig({
           ],
         },
         {
-          text: "Advanced",
+          text: "08. Advanced",
           items: [
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },
-            { text: "MCP", link: "/guide/mcp" },
-            { text: "Serving Agency Code", link: "/guide/serving" },
-            {
-              text: "Custom & local model providers",
-              link: "/guide/custom-providers",
-            },
-            {
-              text: "Cross-Thread Context Sharing",
-              link: "/guide/cross-thread-context",
-            },
+            { text: "Callbacks", link: "/guide/callbacks" },
           ],
         },
         {
           text: "Appendix",
           items: [
             { text: "VSCode Extension", link: "/guide/vscode-extension" },
-            { text: "Callbacks", link: "/guide/callbacks" },
             {
               text: "Agency vs TypeScript",
               link: "/guide/agency-vs-typescript",
@@ -169,6 +159,16 @@ export default defineConfig({
             {
               text: "Schema Parameter Injection",
               link: "/guide/schema-parameter-injection",
+            },
+            { text: "MCP", link: "/guide/mcp" },
+            { text: "Serving Agency Code", link: "/guide/serving" },
+            {
+              text: "Custom & local model providers",
+              link: "/guide/custom-providers",
+            },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
             },
           ],
         },

@@ -102,10 +102,12 @@ export default defineConfig({
               text: "Global vs Static Variables",
               link: "/guide/global-vs-static",
             },
+
             {
-              text: "Cross-Thread Context Sharing",
-              link: "/guide/cross-thread-context",
+              text: "Global Variable Initialization",
+              link: "/guide/global-var-initialization",
             },
+
             // Initializer dependencies
           ],
         },
@@ -123,6 +125,10 @@ export default defineConfig({
             {
               text: "Custom & local model providers",
               link: "/guide/custom-providers",
+            },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
             },
           ],
         },

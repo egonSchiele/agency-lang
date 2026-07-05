@@ -74,4 +74,3 @@ If you want variables that are shared across all runs but mutable, put them in T
 | `global` | **isolated state** | can be mutable |
 | `static` | shared state | **immutable** |
 | TS code | shared state | can be mutable |
-

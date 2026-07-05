@@ -2505,8 +2505,9 @@ const tryExpressionParser: Parser<TryExpression> =
 // keeps `if`/`then`/`else` from swallowing identifiers like `iffy` or `thenX`.
 // Branches parse as full expressions, so a nested `if ... then ...` (including
 // an `else if` chain) parses into a nested `ifExpression` here; that nesting is
-// rejected as a clear semantic error later (see `checkNoNestedIfExpressions`),
-// steering multi-way branching to `match`.
+// rejected as a clear semantic error later by the type checker
+// (`TypeChecker.checkIfExpressionRestrictions`), steering multi-way branching
+// to `match`.
 const ifExpressionParser: Parser<IfExpression> = seqC(
   set("type", "ifExpression"),
   str("if"),

@@ -43,6 +43,14 @@ describe("if expressions — typing", () => {
     expect(errs.some((e) => /boolean/.test(e))).toBe(true);
   });
 
+  it("a non-boolean condition errors, like a statement `if`", () => {
+    const errs = check(`node main(): string {
+  const x = if 123 then "a" else "b"
+  return x
+}`);
+    expect(errs.some((e) => /not assignable to type 'boolean'/.test(e))).toBe(true);
+  });
+
   it("usable as an object value", () => {
     const errs = check(`node main(age: number): string {
   const person = { kind: if age > 18 then "adult" else "child" }

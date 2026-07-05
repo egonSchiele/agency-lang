@@ -1161,7 +1161,9 @@ export class TypeScriptBuilder {
 
   private processIfExpression(node: IfExpression): TsNode {
     // `if c then a else b` is a plain conditional expression → a TS ternary.
-    // Parsing guarantees the branches are non-conditional, so no nesting.
+    // (Flatness — no `if` in a branch — is a semantic restriction enforced by
+    // the type checker, not the parser, so a nested node can reach here in a
+    // program that already has a type error.)
     return ts.ternary(
       this.processNode(node.condition),
       this.processNode(node.thenExpr),

@@ -81,27 +81,6 @@ Then view the logs
 agency logs view logs.jsonl
 ```
 
-## Syntax gotchas
-
-Agency's parser has a few rules that surprise people coming from other languages. If a file fails to parse or typecheck, check for these common gotchas:
-
-**No comments inside object or array literals.** Comments placed *between* entries of an object/array literal fails to parse:
-
-```ts
-// BAD — comment between entries fails to parse
-const x = {
-  a: 1,
-  // my cool comment
-  b: 2,
-}
-// GOOD — comment above the literal
-// my cool comment
-const x = {
-  a: 1,
-  b: 2
-}
-```
-
 ## `agency doctor`
 
 When in doubt, run `agency doctor <file>` and the Agency agent will try to figure out the issue.

@@ -1,0 +1,8 @@
+{
+  "tests": [
+    { "nodeName": "getLabel", "input": "", "expectedOutput": "\"Production\"", "evaluationCriteria": [{ "type": "exact" }], "description": "module-level const = match works" },
+    { "nodeName": "getBanner", "input": "", "expectedOutput": "\"[Production]\"", "evaluationCriteria": [{ "type": "exact" }], "description": "a global depending on a match-initialized global is ordered correctly" },
+    { "nodeName": "getMode", "input": "", "expectedOutput": "\"live\"", "evaluationCriteria": [{ "type": "exact" }], "description": "module-level let = match works" },
+    { "nodeName": "getRegionName", "input": "", "expectedOutput": "\"United States\"", "evaluationCriteria": [{ "type": "exact" }], "description": "module-level static const = match works and orders static deps" }
+  ]
+}

@@ -255,6 +255,13 @@ export type Assignment = BaseNode & {
    *  and the `MatchBlock` passthrough carry the same tag (see ifElse.ts /
    *  matchBlock.ts). Ignored by codegen. */
   matchExprId?: number;
+  /** Set by pattern lowering on the synthetic temp binding that hoists a
+   *  single-expression match/if arm whose value may interrupt (`"go" => f()`),
+   *  so the call sits at statement position and gets the interrupt-propagation
+   *  check (#430). Codegen re-applies the graph-node-transition guard to a
+   *  binding carrying this tag: the node call is hidden inside a temp here, so
+   *  `processMatchYield` (which reads the yielded value) can no longer see it. */
+  matchArmValueTemp?: boolean;
 };
 
 export function globalScope(): Scope {

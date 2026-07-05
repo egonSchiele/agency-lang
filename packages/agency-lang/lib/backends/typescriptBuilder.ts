@@ -1367,20 +1367,32 @@ export class TypeScriptBuilder {
    *  the match result via `runner.exitMatch` and control unwinds to the owning
    *  ifElse rather than the enclosing function. Never produced by the parser —
    *  only by pattern lowering (Task 6). */
-  private processMatchYield(node: MatchYield): TsNode {
-    // A graph-node call compiles to a goto/halt transition statement (see
-    // generateNodeCallExpression), which is control flow — it cannot serve as
-    // the value argument of `runner.exitMatch(id, <value>)`. Reject it with a
-    // clear compile error rather than emitting invalid TypeScript.
+  /** A graph-node call is a control-flow transition, not a value, so it cannot
+   *  be the result of a match/if arm. `processMatchYield` catches the common
+   *  case where the arm value is yielded directly; but a single-expression arm
+   *  whose value may interrupt is hoisted to a temp binding first (#430), which
+   *  hides the call from that check — so `_processAssignmentInner` re-runs this
+   *  guard on the marked binding. Shared here to keep one error message. */
+  private assertMatchArmValueNotGraphNode(
+    value: Expression | MessageThread | undefined,
+  ): void {
     if (
-      node.value?.type === "functionCall" &&
-      this.names.isGraphNode(node.value.functionName)
+      value?.type === "functionCall" &&
+      this.names.isGraphNode(value.functionName)
     ) {
       throw new Error(
         "a match arm cannot return a graph node transition; a node call is " +
           "control flow, not a value — use if/else statements for node dispatch",
       );
     }
+  }
+
+  private processMatchYield(node: MatchYield): TsNode {
+    // A graph-node call compiles to a goto/halt transition statement (see
+    // generateNodeCallExpression), which is control flow — it cannot serve as
+    // the value argument of `runner.exitMatch(id, <value>)`. Reject it with a
+    // clear compile error rather than emitting invalid TypeScript.
+    this.assertMatchArmValueNotGraphNode(node.value);
     const value = node.value ? this.processNode(node.value) : ts.id("undefined");
     // Plain-mode (handler) match expressions wrap their arms in an async IIFE
     // (see processMatchExpressionPlain): a yield is a real `return` out of that
@@ -2995,6 +3007,13 @@ export class TypeScriptBuilder {
 
   private _processAssignmentInner(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
+
+    // A single-expression match/if arm whose value may interrupt is lowered to
+    // this temp binding so the call sits at statement position (#430). The node
+    // call is now hidden from `processMatchYield`'s guard, so re-apply it here.
+    if (node.matchArmValueTemp) {
+      this.assertMatchArmValueNotGraphNode(value);
+    }
 
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);

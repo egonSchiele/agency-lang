@@ -541,7 +541,34 @@ class PatternLowerer {
     arm: MatchBlockCase,
   ): AgencyNode[] {
     if (body.length === 1 && isExpressionNode(body[0])) {
-      return [{ type: "matchYield", matchId, value: body[0] as Expression, loc: body[0].loc }];
+      const expr = body[0] as Expression;
+      // A call arm (`"go" => confirm()`) must bind its value to a temp at
+      // STATEMENT position, then yield the temp (#430): a bare
+      // `matchYield(await __call(f))` hands the call result straight to
+      // `exitMatch` with no interrupt-propagation check, so an interrupt is
+      // swallowed. Non-call values (literals, refs, ...) stay a bare yield —
+      // they can't interrupt, and keeping them direct preserves the per-arm
+      // unwidened literal check and the graph-node-transition guard, both of
+      // which read the yielded value.
+      if (armValueMayInterrupt(expr)) {
+        const tmp = this.freshName("armval");
+        const binding: Assignment = {
+          type: "assignment",
+          variableName: tmp,
+          declKind: "const",
+          value: expr,
+          loc: expr.loc,
+          matchArmValueTemp: true,
+        };
+        const yielded: MatchYield = {
+          type: "matchYield",
+          matchId,
+          value: varRef(tmp, expr.loc),
+          loc: expr.loc,
+        };
+        return [binding, yielded];
+      }
+      return [{ type: "matchYield", matchId, value: expr, loc: expr.loc }];
     }
     const rewritten = this.rewriteReturnsToYields(body, matchId);
     if (!this.alwaysYields(rewritten)) {
@@ -1096,6 +1123,36 @@ function isExpr(v: unknown): v is Expression {
   // in some fields (e.g. Assignment.value is `Expression | MessageThread`).
   const t = (v as { type: string }).type;
   return t !== "messageThread";
+}
+
+/**
+ * True when a single-expression match-arm value involves a function/method call
+ * — so it may return an interrupt that must propagate rather than be swallowed
+ * by `exitMatch` (#430). Such arms are bound to a temp at statement position
+ * before yielding; everything else (literals, variable refs, plain field/index
+ * access) stays a bare yield, which cannot interrupt and keeps the yielded value
+ * direct for the per-arm unwidened-literal check and the graph-node-transition
+ * guard. `try`/`raise`/binop calls surface as one of these node types too.
+ */
+function armValueMayInterrupt(expr: Expression): boolean {
+  switch (expr.type) {
+    case "functionCall":
+    case "tryExpression":
+    case "interruptStatement":
+      return true;
+    case "valueAccess":
+      return (
+        armValueMayInterrupt(expr.base as Expression) ||
+        expr.chain.some((el) => el.kind === "methodCall" || el.kind === "call")
+      );
+    case "binOpExpression":
+      return (
+        armValueMayInterrupt(expr.left as Expression) ||
+        armValueMayInterrupt(expr.right as Expression)
+      );
+    default:
+      return false;
+  }
 }
 
 /** Location of the first `thread { ... }` block within the arm's return-flow

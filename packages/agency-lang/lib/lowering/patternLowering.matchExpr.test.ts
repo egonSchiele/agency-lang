@@ -144,6 +144,57 @@ describe("expression match lowering", () => {
   });
 });
 
+describe("single-expression arm interrupt hoisting (#430)", () => {
+  function armStmts(arm: string): any[] {
+    const body = lowerBody(`node main(x: any) {
+  const val = match(x) {
+    ${arm}
+    _ => "other"
+  }
+  return val
+}`);
+    const matchStmt = body.find((n: any) => n.type === "matchBlock");
+    return matchStmt.cases.find((c: any) => c.type === "matchBlockCase").body;
+  }
+
+  it("a call arm binds to a temp at statement position, then yields the temp", () => {
+    const stmts = armStmts(`"a" => confirm()`);
+    // [ const __armval_N = confirm();  matchYield(__armval_N) ]
+    const binding = stmts.find((s: any) => s.type === "assignment");
+    expect(binding).toBeDefined();
+    expect(binding.matchArmValueTemp).toBe(true);
+    expect(binding.value.type).toBe("functionCall");
+    expect(binding.value.functionName).toBe("confirm");
+    const y = stmts.find((s: any) => s.type === "matchYield");
+    expect(y.value.type).toBe("variableName");
+    expect(y.value.value).toBe(binding.variableName);
+  });
+
+  it("a literal arm stays a bare yield (no temp binding)", () => {
+    const stmts = armStmts(`"a" => 1`);
+    expect(stmts.some((s: any) => s.type === "assignment")).toBe(false);
+    expect(stmts[0].type).toBe("matchYield");
+    expect(stmts[0].value).toEqual(
+      expect.objectContaining({ type: "number", value: "1" }),
+    );
+  });
+
+  it("a variable-ref arm stays a bare yield (cannot interrupt)", () => {
+    const stmts = armStmts(`"a" => x`);
+    expect(stmts.some((s: any) => s.type === "assignment")).toBe(false);
+    expect(stmts[0].type).toBe("matchYield");
+    expect(stmts[0].value.type).toBe("variableName");
+    expect(stmts[0].value.value).toBe("x");
+  });
+
+  it("a method-call arm binds to a temp (may interrupt)", () => {
+    const stmts = armStmts(`"a" => x.run()`);
+    const binding = stmts.find((s: any) => s.type === "assignment");
+    expect(binding?.matchArmValueTemp).toBe(true);
+    expect(stmts.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+});
+
 describe("expression match lowering errors", () => {
   function expectError(src: string, re: RegExp) {
     const parsed = parseAgency(src);

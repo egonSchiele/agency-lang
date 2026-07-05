@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "main", "input": "\"go\"", "expectedOutput": "\"got:approved\"", "evaluationCriteria": [{ "type": "exact" }], "interruptHandlers": [{ "action": "approve", "expectedMessage": "proceed?" }] },
+    { "nodeName": "main", "input": "\"stop\"", "expectedOutput": "\"got:skip\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

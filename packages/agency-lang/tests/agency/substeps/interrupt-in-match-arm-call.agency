@@ -1,0 +1,16 @@
+// Regression for #430: an interrupt thrown by a function call in a
+// SINGLE-EXPRESSION match arm must pause/resume, not be swallowed. The arm
+// value is bound to a temp at statement position (like a block arm), so the
+// call gets the interrupt-propagation check.
+def confirm(): string {
+  interrupt("proceed?")
+  return "approved"
+}
+
+node main(x: string): string {
+  const val = match(x) {
+    "go" => confirm()
+    _    => "skip"
+  }
+  return "got:${val}"
+}

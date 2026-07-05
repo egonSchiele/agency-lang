@@ -541,7 +541,38 @@ class PatternLowerer {
     arm: MatchBlockCase,
   ): AgencyNode[] {
     if (body.length === 1 && isExpressionNode(body[0])) {
-      return [{ type: "matchYield", matchId, value: body[0] as Expression, loc: body[0].loc }];
+      const expr = body[0] as Expression;
+      // Always bind a single-expression arm's value to a temp at STATEMENT
+      // position, then yield the temp (#430). A bare `matchYield(<expr>)`
+      // compiles to `exitMatch(id, <expr>)`; if the expression is a call that
+      // returns a bubbling interrupt, that interrupt is handed straight to
+      // `exitMatch` with no propagation check and is silently swallowed. At
+      // statement position the value flows through `_processAssignmentInner`,
+      // which emits the `hasInterrupts` halt guard. We hoist unconditionally
+      // rather than trying to detect which values "may interrupt": that
+      // detection is brittle (easy to miss a case) and a missed case silently
+      // reintroduces the swallow. The temp is tagged `matchArmValueTemp` so
+      // codegen re-applies the graph-node-transition guard (the node call is
+      // now hidden from `processMatchYield`, which reads the yielded value).
+      const tmp = this.freshName("armval");
+      const binding: Assignment = {
+        type: "assignment",
+        variableName: tmp,
+        declKind: "const",
+        value: expr,
+        loc: expr.loc,
+        matchArmValueTemp: true,
+      };
+      const yielded: MatchYield = {
+        type: "matchYield",
+        matchId,
+        value: varRef(tmp, expr.loc),
+        // The type checker types the arm from the original expression, not the
+        // temp ref, so literal types and discriminant narrowing survive (#430).
+        typeSource: expr,
+        loc: expr.loc,
+      };
+      return [binding, yielded];
     }
     const rewritten = this.rewriteReturnsToYields(body, matchId);
     if (!this.alwaysYields(rewritten)) {

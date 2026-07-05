@@ -76,6 +76,29 @@ describe("AgencyConfigSchema", () => {
   });
 });
 
+describe("AgencyConfig maxCallDepth key", () => {
+  it("accepts a positive integer", () => {
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 4096 }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects 0 (would make every call throw at depth 1)", () => {
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 0 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects negative and non-integer values", () => {
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: -10 }).success).toBe(
+      false,
+    );
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 12.5 }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe("AgencyConfig typechecker key", () => {
   it("accepts the new typechecker object", () => {
     const result = AgencyConfigSchema.safeParse({

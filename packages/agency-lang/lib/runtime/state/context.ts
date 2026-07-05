@@ -9,6 +9,7 @@ import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
 import { agencyStore } from "../asyncContext.js";
+import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
@@ -165,6 +166,9 @@ export class RuntimeContext<T> {
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
   maxRestores: number;
+  /** Ceiling on logical function-call nesting depth before the runaway-
+   *  recursion guard trips. See lib/runtime/callDepth.ts. */
+  maxCallDepth: number;
 
   // Memory layer (resolved decisions in
   // docs/superpowers/plans/2026-05-12-memory-layer.md and
@@ -192,6 +196,7 @@ export class RuntimeContext<T> {
     providerModules?: string[];
     dirname: string;
     maxRestores?: number;
+    maxCallDepth?: number;
     traceConfig?: TraceConfig;
     verbose?: boolean;
     memory?: MemoryConfig;
@@ -208,6 +213,7 @@ export class RuntimeContext<T> {
 
     this.statelogConfig = statelogConfig;
     this.maxRestores = args.maxRestores ?? 100;
+    this.maxCallDepth = args.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH;
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
@@ -293,6 +299,7 @@ export class RuntimeContext<T> {
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;
+    execCtx.maxCallDepth = this.maxCallDepth;
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     execCtx.handlers = [];
     execCtx.callbacks = {};

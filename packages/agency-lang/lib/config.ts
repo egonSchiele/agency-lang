@@ -250,6 +250,13 @@ export interface AgencyConfig {
     maxRestores?: number;
   };
 
+  /** Maximum logical function-call nesting depth before the runaway-recursion
+   * guard throws CallDepthExceededError. Catches unbounded recursion — most
+   * importantly the async kind, which grows the promise chain until the process
+   * OOMs with no useful diagnostic — before it exhausts memory. Raise this for
+   * programs that legitimately recurse very deeply. Default: 2048. */
+  maxCallDepth?: number;
+
   /** Enable execution tracing — writes checkpoints to a .trace file */
   trace?: boolean;
 
@@ -468,6 +475,10 @@ export const AgencyConfigSchema = z
     debugger: z.boolean(),
     instrument: z.boolean(),
     checkpoints: z.object({ maxRestores: z.number() }).partial(),
+    // A positive integer. The guard trips when depth > limit and the first
+    // call is depth 1, so a value < 1 (or a float/NaN) would make every call
+    // throw — reject it at config-load rather than bricking the program.
+    maxCallDepth: z.number().int().positive(),
     trace: z.boolean(),
     traceFile: z.string(),
     traceDir: z.string(),

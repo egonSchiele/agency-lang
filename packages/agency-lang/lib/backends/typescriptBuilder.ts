@@ -3841,6 +3841,11 @@ export class TypeScriptBuilder {
         String(this.agencyConfig.checkpoints.maxRestores),
       );
     }
+    if (this.agencyConfig.maxCallDepth !== undefined) {
+      runtimeCtxArgs.maxCallDepth = ts.raw(
+        String(this.agencyConfig.maxCallDepth),
+      );
+    }
     if (cfg.client?.maxToolResultChars !== undefined) {
       runtimeCtxArgs.maxToolResultChars = ts.raw(
         String(cfg.client.maxToolResultChars),

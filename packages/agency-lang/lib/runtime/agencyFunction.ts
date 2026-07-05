@@ -2,6 +2,7 @@ import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve } from "./interrupts.js";
 import { agencyStore, withPushedHandler } from "./asyncContext.js";
+import { withCallDepth } from "./callDepth.js";
 import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
@@ -136,10 +137,18 @@ export class AgencyFunction {
   }
 
   async invoke(descriptor: CallType): Promise<unknown> {
-    const args = this._isBound
-      ? this.mergeWithBound(this.resolveArgs(descriptor))
-      : this.resolveArgs(descriptor);
-    return this._fn(...args);
+    // Guard every Agency call against runaway recursion. `invoke()` is the
+    // single chokepoint all calls pass through, so counting logical nesting
+    // here catches the async-recursion case that never trips V8's stack but
+    // grows the promise chain until the process OOMs. The limit (config-
+    // overridable `maxCallDepth`) is resolved from the active execution context
+    // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
+    return withCallDepth(this.name, () => {
+      const args = this._isBound
+        ? this.mergeWithBound(this.resolveArgs(descriptor))
+        : this.resolveArgs(descriptor);
+      return this._fn(...args);
+    });
   }
 
   partial(bindings: Record<string, unknown>): AgencyFunction {

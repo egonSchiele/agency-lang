@@ -105,6 +105,7 @@ export {
   RestoreSignal,
   AgencyAbort,
   AgencyCancelledError,
+  CallDepthExceededError,
   isAbortError,
 } from "./errors.js";
 export { GuardExceededError, isGuardExceededError } from "./guard.js";

@@ -1,0 +1,79 @@
+import { applyAgentCwd } from "std::index"
+import {
+  _gitRun, assertPathsContained,
+  statusArgs, logArgs, commitArgs,
+  parseStatus, parseLog,
+  GitStatus, GitLog,
+ } from "agency-lang/stdlib-lib/git.js"
+
+/** @module
+  Typed, safe git tools. Each tool builds its own argv internally, so the
+  model never supplies a raw flag — closing the `git diff --output=` /
+  `-c core.pager=` class of abuse. Reads raise `std::git::<op>` effects the
+  agent policy can auto-approve; writes prompt. Restrict any tool before
+  handing it to an agent with `.partial()` (e.g. `gitCommit.partial(cwd: repo)`).
+
+  Note: positional values (refs/paths/branches) may not start with "-".
+
+  (This module currently exposes the gitStatus / gitLog / gitCommit slice;
+  the remaining tools are added as the rest of the plan lands.)
+*/
+
+// Read effects
+effect std::git::status { cwd: string }
+effect std::git::log    { cwd: string, ref: string, path: string }
+// Write effects
+effect std::git::commit { cwd: string, message: string }
+
+/** Read-only git effects — auto-approvable. */
+export effectSet GitRead  = <std::git::status, std::git::log>
+/** Mutating git effects — should prompt. */
+export effectSet GitWrite = <std::git::commit>
+/** All git effects. */
+export effectSet Git      = <GitRead, GitWrite>
+
+export def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
+  """
+  Show the working-tree status (branch, ahead/behind, changed files) as
+  structured data. Requires a repo: pass `cwd` or run where the agent
+  working directory is set.
+  @param cwd - Repo directory; resolved against the agent working directory.
+  """
+  const dir = applyAgentCwd(cwd)
+  return interrupt std::git::status("Show git status", { cwd: dir })
+  return parseStatus(_gitRun(dir, statusArgs()))
+}
+
+export def gitLog(
+  n: number = 20, oneline: boolean = false, path: string = "",
+  ref: string = "", author: string = "", allowedPaths: string[] = [],
+  cwd: string = "",
+): GitLog raises <std::git::log> {
+  """
+  Show commit history as structured commits.
+  @param n - Max number of commits (default 20).
+  @param oneline - Omit commit bodies.
+  @param path - Limit to commits touching this path (may not start with "-").
+  @param ref - Start from this revision (e.g. HEAD~5, a branch, a sha).
+  @param author - Filter by author substring.
+  @param allowedPaths - Restrict `path` to these prefixes (bind via .partial()).
+  @param cwd - Repo directory; resolved against the agent working directory.
+  """
+  const dir = applyAgentCwd(cwd)
+  if (path != "") {
+    assertPathsContained([path], allowedPaths, dir)
+  }
+  return interrupt std::git::log("Show git log", { cwd: dir, ref: ref, path: path })
+  return parseLog(_gitRun(dir, logArgs({ n: n, oneline: oneline, path: path, ref: ref, author: author })))
+}
+
+export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
+  """
+  Create a commit from the staged changes.
+  @param message - The commit message.
+  @param cwd - Repo directory; resolved against the agent working directory.
+  """
+  const dir = applyAgentCwd(cwd)
+  return interrupt std::git::commit("Create commit: ${message}", { cwd: dir, message: message })
+  return _gitRun(dir, commitArgs({ message: message }))
+}

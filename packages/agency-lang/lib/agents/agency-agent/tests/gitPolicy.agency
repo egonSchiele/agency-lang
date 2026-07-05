@@ -1,0 +1,31 @@
+/*
+ * The recommended policy auto-approves the read-only git effects; write
+ * effects prompt (never auto-approved). Pure policy logic — no git, no LLM.
+ * (Slice: gitStatus/gitLog reads + gitCommit write. Grows to the full set.)
+ */
+import { checkPolicy } from "std::policy"
+import {
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+ } from "../lib/defaultPolicy.agency"
+
+def intr(effect: string): any {
+  return { effect: effect, data: { cwd: "/repo" } }
+}
+
+node recommendedApprovesStatus(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, intr("std::git::status")).type == "approve"
+}
+
+node recommendedApprovesLog(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, intr("std::git::log")).type == "approve"
+}
+
+node recommendedPromptsCommit(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, intr("std::git::commit")).type != "approve"
+}
+
+node minimalDoesNotApproveStatus(): boolean {
+  // git reads live in the RECOMMENDED policy only, not the minimal one.
+  return checkPolicy(minimalAutoApprovePolicy, intr("std::git::status")).type != "approve"
+}

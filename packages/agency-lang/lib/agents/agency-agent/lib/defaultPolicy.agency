@@ -94,5 +94,11 @@ export static const recommendedAutoApprovePolicy = {
   }],
   "std::clipboardCopy": [{
     action: "approve"
+  }],
+  "std::git::status": [{
+    action: "approve"
+  }],
+  "std::git::log": [{
+    action: "approve"
   }]
 }

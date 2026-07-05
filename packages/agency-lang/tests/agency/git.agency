@@ -1,0 +1,62 @@
+// End-to-end: real interrupt -> approve -> execute against an ISOLATED
+// throwaway repo in the OS temp dir (NOT under this project). `git init`
+// makes `dir` its own repo; every tool call passes an explicit absolute
+// `cwd`, and gitRunImpl refuses an empty/relative cwd (unit-proven), so a
+// bug cannot reach the project repo. (Slice: gitStatus/gitLog/gitCommit.)
+import { exec } from "std::shell"
+import { setAgentCwd } from "std::index"
+import { gitStatus, gitLog, gitCommit } from "std::git"
+
+def makeSandbox(): string {
+  const mk = exec("mktemp", ["-d"]) with approve
+  const dir = mk.stdout.trim()
+  exec("sh", ["-c", "GIT_CEILING_DIRECTORIES=${dir} git init -q && git config user.email t@t.com && git config user.name t && printf hi > a.txt && git add a.txt && git commit -q -m seed"],
+    cwd: dir) with approve
+  return dir
+}
+
+def teardown(dir: string) {
+  if (dir != "") {
+    exec("rm", ["-rf", dir]) with approve
+  }
+}
+
+// Fail-closed preflight: a fresh sandbox has a clean tree. If gitStatus saw a
+// DIFFERENT repo (e.g. this project), entries would be non-empty.
+node preflightSandboxIsClean(): boolean {
+  const dir = makeSandbox()
+  const s = gitStatus(cwd: dir) with approve
+  const ok = s.entries.length == 0
+  teardown(dir)
+  return ok
+}
+
+node readsLog(): boolean {
+  const dir = makeSandbox()
+  const log = gitLog(cwd: dir) with approve
+  const ok = log.commits.length == 1 && log.commits[0].subject == "seed"
+  teardown(dir)
+  return ok
+}
+
+node commitRoundtrips(): boolean {
+  const dir = makeSandbox()
+  exec("sh", ["-c", "printf more > b.txt"], cwd: dir) with approve
+  exec("git", ["add", "b.txt"], cwd: dir) with approve
+  gitCommit("add b", cwd: dir) with approve
+  const s = gitStatus(cwd: dir) with approve
+  const clean = s.entries.length == 0
+  const log = gitLog(cwd: dir) with approve
+  teardown(dir)
+  return clean && log.commits.length == 2 && log.commits[0].subject == "add b"
+}
+
+// With an agent cwd set, gitStatus() with NO cwd arg resolves and works.
+node agentCwdSetLetsStatusOmitCwd(): boolean {
+  const dir = makeSandbox()
+  setAgentCwd(dir)
+  const s = gitStatus() with approve
+  setAgentCwd("")
+  teardown(dir)
+  return s.entries.length == 0
+}

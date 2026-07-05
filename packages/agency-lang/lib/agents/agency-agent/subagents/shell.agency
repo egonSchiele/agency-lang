@@ -1,0 +1,81 @@
+import { bash } from "std::shell"
+import { systemMessage } from "std::thread"
+
+/*
+ * Shell subagent — the quarantined home of raw `bash`.
+ *
+ * The code agent is exec-first: it runs single commands through the
+ * structured, policy-matchable `exec`. Raw shell (pipes, redirects,
+ * `&&`/`;` chaining, builtins) lives ONLY here, behind an explicit
+ * `shellAgent(...)` call, so the general-purpose shell capability is
+ * isolated to one place instead of always being in reach.
+ *
+ * Quarantine, not auto-run: `bash` still raises its `std::bash`
+ * interrupt and is in NO auto-approve policy, so every command prompts
+ * the user. This subagent isolates the capability; it does not
+ * pre-authorize it.
+ */
+
+export static const shellSysPrompt = """
+You are the **shell specialist**. Other agents call you to run shell
+commands they cannot express with structured `exec` — anything that
+needs real shell features:
+
+- pipelines (`a | b | c`)
+- redirects (`> out.log`, `2>&1`, `tee`)
+- chaining (`a && b`, `a; b`)
+- shell builtins (`export`, `source`, `cd` that must persist)
+- subshells, process substitution, heredocs
+
+## How to work
+
+- Run exactly what the caller asked for. Don't second-guess the
+  command or substitute a different one.
+- You have `bash` and `read`. Use `read` only to check a file you
+  need for context; you do not write or edit files — the calling
+  agent owns file changes.
+- Report the result plainly: the command's stdout, stderr, and exit
+  code. If it failed, say so and quote the error — don't paper over
+  a non-zero exit code.
+- Every `bash` command prompts the user for approval. That is
+  expected and correct. Do NOT try to route around the prompt or
+  bundle commands to reduce approvals at the cost of clarity.
+"""
+
+export static const shellTools: any[] = [
+  bash.partial(useAgentCwd: true),
+  read.partial(useAgentCwd: true),
+]
+
+// only add the system message the first time
+let first = true
+
+export def shellAgent(task: string, allowHandoff: boolean): string {
+  """
+  Run a shell command that needs real shell features the structured
+  `exec` tool can't express — pipelines (`a | b`), redirects
+  (`> out.log`, `2>&1`), chaining (`a && b`), shell builtins
+  (`export`, `source`), subshells, or heredocs. For a single command
+  with structured arguments (git, make, a test runner with no pipe),
+  prefer `exec` directly — don't call this.
+
+  Pass a self-contained description of the shell work; this agent
+  starts fresh and does not see your conversation. Each command it
+  runs prompts the user for approval. It returns the command output
+  (stdout / stderr / exit code) as text.
+
+  @param task - the shell work to perform, with any context needed
+  @param allowHandoff - whether this agent is allowed to handoff to
+    other agents.
+  """
+  thread(label: "shell", summarize: true, session: "shell") {
+    if (first) {
+      systemMessage(shellSysPrompt)
+      first = false
+    }
+    reply = llm(task, {
+      tools: shellTools
+    })
+  }
+  return reply
+}

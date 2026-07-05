@@ -44,3 +44,50 @@ node doesNotApproveOtherSubcommands(): boolean {
   // `run` is not in the allow-list, so it must NOT be auto-approved.
   return checkPolicy(minimalAutoApprovePolicy, execIntr("run")).type != "approve"
 }
+
+def gitIntr(subcommand: string): any {
+  // Mirrors `exec("git", [subcommand, ...])`: subcommand = args[0].
+  return {
+    effect: "std::exec",
+    data: {
+      command: "git",
+      subcommand: subcommand,
+      args: [subcommand]
+    }
+  }
+}
+
+node recommendedApprovesGitStatus(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, gitIntr("status")).type == "approve"
+}
+
+node recommendedApprovesGitLog(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, gitIntr("log")).type == "approve"
+}
+
+node recommendedApprovesGitDiff(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, gitIntr("diff")).type == "approve"
+}
+
+node minimalDoesNotApproveGit(): boolean {
+  // Git rules live only in the recommended policy, not the minimal one.
+  return checkPolicy(minimalAutoApprovePolicy, gitIntr("status")).type != "approve"
+}
+
+node recommendedDoesNotApproveGitPush(): boolean {
+  // A mutating subcommand must still prompt.
+  return checkPolicy(recommendedAutoApprovePolicy, gitIntr("push")).type != "approve"
+}
+
+node recommendedDoesNotApproveGitBranch(): boolean {
+  // `branch` is deliberately excluded (`git branch -D` deletes), so
+  // even bare `git branch` must NOT auto-approve — the matcher can't
+  // see the flags.
+  return checkPolicy(recommendedAutoApprovePolicy, gitIntr("branch")).type != "approve"
+}
+
+node recommendedDoesNotApproveGitDashC(): boolean {
+  // `git -C dir log` lands with subcommand "-C" (the first arg), so it
+  // must NOT match and must still prompt.
+  return checkPolicy(recommendedAutoApprovePolicy, gitIntr("-C")).type != "approve"
+}

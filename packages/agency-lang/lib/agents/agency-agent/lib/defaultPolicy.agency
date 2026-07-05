@@ -29,6 +29,55 @@ def agencyExecApproveRules(): any[] {
   }
 }
 
+// Read-only `git` subcommands the code agent runs via `exec`. Same
+// (command + subcommand) matching as the agency rules above — the
+// matcher only sees `args[0]`, never later flags, so this list may
+// contain ONLY subcommands that are read-only regardless of any flag.
+// Flag-dependent ones are deliberately excluded (they would over-
+// approve a destructive form): `branch` (-D deletes), `tag`, `config`
+// (writes without --get), `remote` (add), `stash` (bare = push),
+// `worktree` (add), `reflog` (expire/delete), `symbolic-ref` (writes
+// with two args), and all mutators (commit/push/reset/checkout/...).
+// A global-option prefix (`git -C dir log`, `git -c x=y commit`) lands
+// with subcommand "-C"/"-c" and correctly fails to match, so it still
+// prompts.
+static const GIT_SAFE_SUBCOMMANDS = [
+  "status",
+  "log",
+  "diff",
+  "show",
+  "blame",
+  "describe",
+  "shortlog",
+  "rev-parse",
+  "rev-list",
+  "ls-files",
+  "ls-tree",
+  "cat-file",
+  "for-each-ref",
+  "merge-base",
+  "name-rev",
+  "diff-tree",
+  "diff-index",
+  "diff-files",
+  "whatchanged",
+  "grep",
+  "cherry",
+  "count-objects",
+]
+
+def gitExecApproveRules(): any[] {
+  return map(GIT_SAFE_SUBCOMMANDS) as sub {
+    return {
+      match: {
+        command: "git",
+        subcommand: sub
+      },
+      action: "approve"
+    }
+  }
+}
+
 export static const minimalAutoApprovePolicy = {
   "std::memory::remember": [{
     action: "approve"
@@ -50,6 +99,9 @@ export static const minimalAutoApprovePolicy = {
 
 export static const recommendedAutoApprovePolicy = {
   ...minimalAutoApprovePolicy,
+  // Re-declare `std::exec` (the spread above set it to the agency rules
+  // only) so it carries BOTH the agency and read-only git safelists.
+  "std::exec": [...agencyExecApproveRules(), ...gitExecApproveRules()],
   "std::read": [{
     action: "approve"
   }],

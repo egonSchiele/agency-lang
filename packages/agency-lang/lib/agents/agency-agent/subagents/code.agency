@@ -17,18 +17,19 @@ import { filter } from "std::array"
 import { edit } from "std::fs"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
-import { exec, ls, glob, grep, bash } from "std::shell"
+import { exec, ls, glob, grep } from "std::shell"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
 import { withWebSearch } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
+import { shellAgent } from "./shell.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
 
-// The file-system tools (`read` / `write` / `edit` / `ls` / `glob` /
-// `grep` / `bash`) resolve relative paths against the agent working
+// The file-system / shell tools (`read` / `write` / `edit` / `ls` /
+// `glob` / `grep` / `exec`) resolve relative paths against the agent working
 // directory, which `agent.agency` pins to the user's cwd at startup and
 // the LLM can change via `setAgentCwd`. No per-tool anchoring needed.
 
@@ -47,14 +48,14 @@ static const cliSkill = skillsDir("../docs/cli", "flat") with approve
 export def agencyCli(args: string[]): any {
   """
   Run the `agency` CLI with the given arguments. Returns an object with
-  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). Use this for
+  `stdout`, `stderr`, and `exitCode` (same shape as `exec`). Use this for
   agency subcommands such as `parse`, `ast`, and `typecheck` — e.g.
   agencyCli(["ast", "foo.agency"]) or agencyCli(["typecheck",
   "foo.agency"]). Arguments are passed directly to the executable (no
   shell interpretation), so they cannot be chained or redirected. The
   default agent policies auto-approve the read-only agency subcommands;
-  other subcommands still prompt for approval. Prefer this over `bash`
-  for running agency.
+  other subcommands still prompt for approval. Prefer this over a bare
+  `exec("agency", ...)` for running agency.
 
   @param args - CLI arguments, e.g. ["typecheck", "foo.agency"]. The
     first element is the subcommand.
@@ -224,12 +225,31 @@ live in `.agency` files you can `read` directly.
    more than one change to make to the same file. The user will be
    prompted to approve every write.
 6. After every change, run `typecheck` (rule 3 above) and any
-   relevant tests via `bash`.
-7. Use `bash` to run project-level commands (tests, git, formatters,
-   package managers). Prefer the dedicated file tools above for file
-   operations; use `bash` for everything else. The user is asked to
-   approve each command.
-8. You have a persistent knowledge graph scoped to coding work. Call
+   relevant tests via `exec`.
+7. Run project-level commands (tests, git, formatters, package
+   managers) with `exec` — it takes a command plus a structured array
+   of args (`exec("git", ["status"])`, `exec("make", [])`) and runs
+   with no shell, so it's safe and the recommended policy auto-approves
+   read-only git (`status`, `log`, `diff`, `show`, `blame`, ...). Use
+   the dedicated file tools above for file operations. `exec` is your
+   default for everything else; the user approves each command unless a
+   policy auto-approves it.
+8. `exec` has no shell, so express shell idioms with tools instead of
+   reaching for a shell:
+   - redirect (`cmd > out.log`): `exec` the command, then `write` its
+     `.stdout` to the file.
+   - pipe (`a | b`): `exec(b, stdin: exec(a).stdout)` — `exec` takes a
+     `stdin`. For search/list stages prefer the `grep` / `glob` tools.
+   - chaining (`a && b`): call `exec` in sequence, checking `.exitCode`
+     between steps.
+   - working directory (`cd X && cmd`): pass `cwd` to `exec`.
+   - glob args (`rm *.tmp`): `glob` for the matches, then `exec` with
+     the expanded list.
+   When you genuinely need real shell features — a complex pipeline,
+   builtins like `export`/`source`, subshells, or a heredoc — call
+   `shellAgent(task)`. It owns `bash`; every command it runs prompts
+   the user. Don't reach for it for a single structured command.
+9. You have a persistent knowledge graph scoped to coding work. Call
    `recall(query)` to retrieve anything the user told you in a
    previous session (project conventions, decisions made earlier).
    Call `remember(content)` to persist a fact worth keeping across
@@ -238,7 +258,7 @@ live in `.agency` files you can `read` directly.
    Don't `remember` transient details or things already in
    AGENTS.md. Relevant facts are also auto-injected before each turn,
    so often you don't need to call `recall` explicitly.
-9. For **larger coding tasks that benefit from up-front thinking**
+10. For **larger coding tasks that benefit from up-front thinking**
    — building a new feature, designing a non-trivial component,
    refactoring across multiple files, debugging something the user
    has already tried once — call `superpowersSkill` to read the
@@ -316,7 +336,8 @@ export static const codeTools: any[] = [
   ls.partial(useAgentCwd: true),
   glob.partial(useAgentCwd: true),
   grep.partial(useAgentCwd: true),
-  bash.partial(useAgentCwd: true),
+  exec.partial(useAgentCwd: true),
+  shellAgent.partial(allowHandoff: false),
   agencyCli,
   typecheck,
   parseAST,

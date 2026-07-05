@@ -183,7 +183,8 @@ Configuration for the `agency eval` and `agency eval optimize` commands.
 
 | Option | Description |
 | --- | --- |
-| `runsDir` / `optimizeRunsDir` | Where run artifacts are saved. |
+| `runsDir` | Where `agency eval` saves its run artifacts. Default `runs`. |
+| `optimizeRunsDir` | Where `agency eval optimize` saves its artifacts. Defaults to an `optimize` subdirectory inside `runsDir`. |
 | `optimize.goal` | The optimization objective. |
 | `optimize.graders` | Path to a TS grading module. |
 | `optimize.optimizer` | A built-in optimizer name or a path to your own module. |

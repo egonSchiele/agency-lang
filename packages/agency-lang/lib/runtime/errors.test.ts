@@ -65,6 +65,17 @@ describe("AgencyAbort (unified abort base)", () => {
     });
     expect(isAbortError(crossRealm)).toBe(true);
   });
+
+  it("name-fallback also recognizes a cross-realm CallDepthExceededError", () => {
+    // A runaway-recursion trip crossing the subprocess shim loses its prototype
+    // chain; its name is still "CallDepthExceededError", so isAbortError must
+    // classify it as an abort — otherwise it would be converted to a Failure
+    // instead of propagating and halting the runaway.
+    const crossRealm = Object.assign(new Error("simulated cross-realm depth trip"), {
+      name: "CallDepthExceededError",
+    });
+    expect(isAbortError(crossRealm)).toBe(true);
+  });
 });
 
 describe("CheckpointError", () => {

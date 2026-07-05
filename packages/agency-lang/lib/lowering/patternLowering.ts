@@ -16,6 +16,7 @@ import type {
   Expression,
   ForLoop,
   FunctionCall,
+  FunctionDefinition,
   HandleBlock,
   IfElse,
   MatchBlock,
@@ -113,14 +114,15 @@ class PatternLowerer {
       }
       case "returnStatement": {
         const ret = node as ReturnStatement;
-        // Expression-position match: `return match(E) { ... }`. Hoist the match
-        // region and return the temp it produces. This is allowed inside handler
-        // bodies too: the builder compiles the hoisted region to a self-contained
-        // async IIFE there (plain mode), so it never sets the runner's
-        // `_matchExit` unwind flag that a handler has no `runner.ifElse` to clear.
-        if (ret.value !== undefined && (ret.value as AgencyNode).type === "matchBlock") {
-          const region = this.lowerMatchExpressionCore(ret.value as MatchBlock, ret.loc);
-          return [...region.statements, { ...ret, value: region.valueRef }];
+        // Expression-position `match`/`if`: `return match(E) { ... }` or
+        // `return if c then a else b`. Hoist the region and return the temp it
+        // produces. Allowed inside handler bodies too: the builder compiles the
+        // hoisted region to a self-contained async IIFE there (plain mode), so
+        // it never sets the runner's `_matchExit` unwind flag that a handler has
+        // no `runner.ifElse` to clear.
+        const retRegion = this.expressionRegion(ret.value as AgencyNode | undefined, ret.loc);
+        if (retRegion) {
+          return [...retRegion.statements, { ...ret, value: retRegion.valueRef }];
         }
         return [
           {
@@ -232,20 +234,54 @@ class PatternLowerer {
   // -------------------------------------------------------------------------
 
   private lowerAssignment(node: Assignment): AgencyNode[] {
-    // Expression-position match: `const x = match(E) { ... }`. Hoist the match
-    // region above and rewrite the assignment value to the temp the region
-    // produces. Module-level initializers have no execution frame to unwind, so
-    // they are rejected. Handler bodies ARE allowed: the builder compiles the
-    // hoisted region to a self-contained async IIFE there (plain mode), which
-    // never sets the runner's `_matchExit` flag.
-    if (node.value && (node.value as AgencyNode).type === "matchBlock") {
+    // Expression-position `match`/`if`: `const x = match(E) { ... }` or
+    // `const x = if c then a else b`. Hoist the region above and rewrite the
+    // value to the temp the region produces. Handler bodies ARE allowed: the
+    // builder compiles the hoisted region to a self-contained async IIFE there
+    // (plain mode), which never sets the runner's `_matchExit` flag.
+    const region = this.expressionRegion(node.value as AgencyNode | undefined, node.loc);
+    if (region) {
       if (this.atModuleLevel) {
-        throw new LoweringError(
-          "match expressions are not supported in module-level initializers",
-          node.loc,
-        );
+        // A module-level initializer has no execution frame for the match's
+        // `_matchExit` unwind, so we can't splice the region inline the way we
+        // do inside a function. Instead hoist the region into a synthesized
+        // init function and rewrite the initializer to call it. The result is
+        // exactly the manual `def`-wrapper workaround:
+        //
+        //   const x = match(E) { ... }
+        //     =>  def matchInit$N() { <region>; return __matchval_N }
+        //         const x = matchInit$N()
+        //
+        // `const x = matchInit$N()` is then an ordinary single-expression
+        // initializer that the init-topsort machinery already handles: its
+        // depth-1 call expansion walks the synthesized function's body, so `x`
+        // still depends on whatever the scrutinee and arms read. The `$` cannot
+        // appear in a user identifier (Agency names are [A-Za-z0-9_]), so the
+        // name never collides; and NOT starting with `__` routes the call
+        // through the runtime dispatch that makes an AgencyFunction callable.
+        const fnName = `matchInit$${++this.counter}`;
+        const synthFn: FunctionDefinition = {
+          type: "function",
+          functionName: fnName,
+          parameters: [],
+          returnType: null,
+          body: [
+            ...region.statements,
+            { type: "returnStatement", value: region.valueRef, loc: node.loc },
+          ],
+          loc: node.loc,
+        };
+        const call: FunctionCall = {
+          type: "functionCall",
+          functionName: fnName,
+          arguments: [],
+          loc: node.loc,
+        };
+        return [
+          synthFn,
+          { ...node, value: call, matchExprSource: { matchId: region.matchId } },
+        ];
       }
-      const region = this.lowerMatchExpressionCore(node.value as MatchBlock, node.loc);
       return [
         ...region.statements,
         { ...node, value: region.valueRef, matchExprSource: { matchId: region.matchId } },
@@ -429,6 +465,72 @@ class PatternLowerer {
   }
 
   /**
+   * If `value` is an expression-position control-flow construct (`match(...)` or
+   * `if ... then ... else`), lower it to its hoisted region + value-ref temp;
+   * otherwise null. Shared by the assignment and return lowering paths so both
+   * forms ride the same hoist / module-level machinery.
+   */
+  private expressionRegion(
+    value: AgencyNode | undefined,
+    loc: SourceLocation | undefined,
+  ): { statements: AgencyNode[]; valueRef: Expression; matchId: number } | null {
+    if (!value) return null;
+    if (value.type === "matchBlock") return this.lowerMatchExpressionCore(value as MatchBlock, loc);
+    if (value.type === "ifElse") return this.lowerIfExpressionCore(value as IfElse, loc);
+    return null;
+  }
+
+  /**
+   * Lower an expression-position `if`: `const x = if c then a else b`. It rides
+   * the EXACT machinery a `match` expression uses — an `IfElse` tagged with
+   * `matchExprId` whose branches yield via `matchYield` into the `__matchval_N`
+   * temp, consumed through a `matchExprSource` binding. Because it is the same
+   * stepped `runner.ifElse` a statement `if` compiles to (NOT a ternary),
+   * interrupts / checkpoints inside a branch work. The branches are single
+   * expressions (the parser rejects nested `if`/`else if`), so each becomes one
+   * `matchYield`. An `is`-pattern condition binds into the then-branch, exactly
+   * like a statement `if`.
+   */
+  private lowerIfExpressionCore(
+    node: IfElse,
+    loc: SourceLocation | undefined,
+  ): { statements: AgencyNode[]; valueRef: Expression; matchId: number } {
+    const matchId = ++this.counter;
+    // Lower each branch as a STATEMENT-position temp binding, then yield the
+    // temp. A branch that is a function call (`if c then confirm() else x`) is
+    // then compiled at statement position, where codegen emits the
+    // interrupt/checkpoint propagation — so the branch pauses correctly. A bare
+    // `matchYield(await __call(f))` (the call as an argument to `exitMatch`)
+    // swallows the interrupt, so we never generate that shape.
+    const yieldBranch = (expr: Expression): AgencyNode[] => {
+      const tmp = this.freshName("ifbranch");
+      const binding: Assignment = {
+        type: "assignment",
+        variableName: tmp,
+        declKind: "const",
+        value: this.lowerExpression(expr),
+        loc: expr.loc,
+      };
+      const yielded: MatchYield = { type: "matchYield", matchId, value: varRef(tmp, expr.loc), loc: expr.loc };
+      return [binding, yielded];
+    };
+    const elseBody = yieldBranch((node.elseBody as AgencyNode[])[0] as Expression);
+
+    const condIsExpr = node.condition.type === "isExpression";
+    const isExp = node.condition as IsExpression;
+    const condition = condIsExpr
+      ? patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc)
+      : this.lowerExpression(node.condition);
+    const thenBranch = yieldBranch(node.thenBody[0] as Expression);
+    const thenBody = condIsExpr
+      ? [...this.extractBindings(isExp.pattern, isExp.expression, "const", node.loc), ...thenBranch]
+      : thenBranch;
+
+    const tagged: IfElse = { ...node, condition, thenBody, elseBody, matchExprId: matchId };
+    return { statements: [tagged], valueRef: varRef(matchValName(matchId), loc), matchId };
+  }
+
+  /**
    * Rewrite a single match arm's body so every path yields a value into the
    * owning match (`matchYield`). Throws a `LoweringError` if any path can fall
    * off the end without yielding.
@@ -439,7 +541,38 @@ class PatternLowerer {
     arm: MatchBlockCase,
   ): AgencyNode[] {
     if (body.length === 1 && isExpressionNode(body[0])) {
-      return [{ type: "matchYield", matchId, value: body[0] as Expression, loc: body[0].loc }];
+      const expr = body[0] as Expression;
+      // Always bind a single-expression arm's value to a temp at STATEMENT
+      // position, then yield the temp (#430). A bare `matchYield(<expr>)`
+      // compiles to `exitMatch(id, <expr>)`; if the expression is a call that
+      // returns a bubbling interrupt, that interrupt is handed straight to
+      // `exitMatch` with no propagation check and is silently swallowed. At
+      // statement position the value flows through `_processAssignmentInner`,
+      // which emits the `hasInterrupts` halt guard. We hoist unconditionally
+      // rather than trying to detect which values "may interrupt": that
+      // detection is brittle (easy to miss a case) and a missed case silently
+      // reintroduces the swallow. The temp is tagged `matchArmValueTemp` so
+      // codegen re-applies the graph-node-transition guard (the node call is
+      // now hidden from `processMatchYield`, which reads the yielded value).
+      const tmp = this.freshName("armval");
+      const binding: Assignment = {
+        type: "assignment",
+        variableName: tmp,
+        declKind: "const",
+        value: expr,
+        loc: expr.loc,
+        matchArmValueTemp: true,
+      };
+      const yielded: MatchYield = {
+        type: "matchYield",
+        matchId,
+        value: varRef(tmp, expr.loc),
+        // The type checker types the arm from the original expression, not the
+        // temp ref, so literal types and discriminant narrowing survive (#430).
+        typeSource: expr,
+        loc: expr.loc,
+      };
+      return [binding, yielded];
     }
     const rewritten = this.rewriteReturnsToYields(body, matchId);
     if (!this.alwaysYields(rewritten)) {
@@ -491,12 +624,30 @@ class PatternLowerer {
         out.push(mapBodies(stmt, (b) => this.rewriteReturnsToYields(b, matchId)));
         continue;
       }
-      // Opaque node. A `return` inside a concurrency block would otherwise
-      // survive as a raw function return the `_matchExit` unwind can't reach, so
-      // reject it explicitly.
-      if (isConcurrencyBlock(stmt) && containsReturn(concurrencyBlockBody(stmt))) {
+      // A standalone `seq` inlines into the enclosing body, and `thread` /
+      // `subthread` bodies run inline on this same runner, so a `return` inside
+      // them yields into THIS match — the `_matchExit` lands on the arm's own
+      // runner. Recurse the rewrite into their bodies. (A `seq` that is an arm
+      // of a `parallel` is a concurrent `fork` branch and is never reached here:
+      // we never descend into the `parallelBlock` below.)
+      if (stmt.type === "seqBlock" || stmt.type === "messageThread") {
+        out.push({
+          ...stmt,
+          body: this.rewriteReturnsToYields(
+            (stmt as { body: AgencyNode[] }).body,
+            matchId,
+          ),
+        });
+        continue;
+      }
+      // A `parallel` branch is lifted into a separate `fork` frame whose child
+      // runner the `_matchExit` unwind can't reach, and concurrent branches
+      // would race the scalar flag — so a `return` that would yield this match
+      // is rejected. (A `return` inside a `seq` arm of the parallel is a
+      // branch-local result, not seen by `containsReturn`, and stays legal.)
+      if (stmt.type === "parallelBlock" && containsReturn(stmt.body)) {
         throw new LoweringError(
-          "cannot return from a match arm inside a parallel, fork, race, seq, or thread block",
+          "cannot return from a match arm inside a parallel or fork block",
           stmt.loc,
         );
       }
@@ -513,6 +664,15 @@ class PatternLowerer {
   private alwaysYields(body: AgencyNode[]): boolean {
     for (const stmt of body) {
       if (stmt.type === "matchYield") return true;
+      // A standalone `seq` and a `thread`/`subthread` body run unconditionally
+      // and inline on this runner, so the arm yields on every path iff their
+      // body does.
+      if (
+        (stmt.type === "seqBlock" || stmt.type === "messageThread") &&
+        this.alwaysYields((stmt as { body: AgencyNode[] }).body)
+      ) {
+        return true;
+      }
       if (
         stmt.type === "ifElse" &&
         stmt.elseBody &&
@@ -969,26 +1129,6 @@ function isExpr(v: unknown): v is Expression {
   return t !== "messageThread";
 }
 
-/** True when `node` is a block whose body a `return` cannot legally cross to
- *  reach an enclosing match arm. `parallel`/`seq` branch bodies are lifted into
- *  separate frames (desugared to `fork` calls later); `thread` bodies run
- *  inline in the same frame, but a `return` there is a raw function return the
- *  `_matchExit` unwind cannot reach, so it is rejected the same way. The
- *  fork/race forms in the error message are surface concepts that desugar to
- *  calls before lowering. */
-function isConcurrencyBlock(node: AgencyNode): boolean {
-  return (
-    node.type === "parallelBlock" ||
-    node.type === "seqBlock" ||
-    node.type === "messageThread"
-  );
-}
-
-/** The guarded body of a concurrency/sequencing/thread block. */
-function concurrencyBlockBody(node: AgencyNode): AgencyNode[] {
-  return (node as { body: AgencyNode[] }).body;
-}
-
 /** Location of the first `thread { ... }` block within the arm's return-flow
  *  that hides a `return`, or undefined. Thread bodies run inline in the same
  *  frame, so a `return` there is a genuine function return; statement-position
@@ -1012,12 +1152,18 @@ function threadBlockReturnLoc(nodes: AgencyNode[]): SourceLocation | undefined {
  * THE single source of truth for the match-arm return-flow descent boundary.
  * Returns the child bodies of `node` that a `return` flows through to reach the
  * enclosing arm: the `if`/`else` branches and `for`/`while` loop bodies ONLY.
- * Every other body-bearing node is opaque — a `return` inside a nested
+ * Every other body-bearing node is opaque here — a `return` inside a nested
  * `matchBlock` arm, a `handleBlock` (guarded body OR `with` handler),
- * `blockArgument`/callback body, or concurrency block does NOT flow to this arm
+ * `blockArgument`/callback body, or `parallel` branch does NOT flow to this arm
  * (it belongs to that inner construct / a separate frame). Shared by
  * `rewriteReturnsToYields`, `containsReturn`, and `firstReturnLoc` so their
  * boundaries can never diverge again.
+ *
+ * NOTE: standalone `seq` and `thread`/`subthread` bodies DO flow a `return` to
+ * the enclosing match arm (they run inline on the arm's own runner), but that
+ * transparency is applied explicitly in `rewriteReturnsToYields`/`alwaysYields`
+ * — NOT here — so the statement-arm diagnostics and the `parallel` rejection
+ * that consume this boundary keep treating them as opaque.
  */
 function returnFlowBodies(node: AgencyNode): AgencyNode[][] {
   if (node.type === "ifElse") {

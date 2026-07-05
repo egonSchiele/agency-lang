@@ -1,0 +1,76 @@
+// A `return` inside a standalone `seq` block or a `thread`/`subthread` block
+// yields the value of an enclosing `match` expression arm. These blocks run
+// inline on the arm's own runner, so the match-exit unwind reaches its owner.
+
+// --- The three block types directly in an arm. ---
+node dispatch(x: string): string {
+  const r = match(x) {
+    "seq" => {
+      seq {
+        let v = "from-seq"
+        return v
+      }
+    }
+    "thread" => {
+      thread {
+        return "from-thread"
+      }
+    }
+    "subthread" => {
+      subthread {
+        return "from-subthread"
+      }
+    }
+    _ => "default"
+  }
+  return "got: ${r}"
+}
+
+// --- Nested concurrency blocks: a return in the innermost block still yields
+// the outer match, because every one of these runs inline on the same runner. ---
+node nested(x: string): string {
+  const r = match(x) {
+    "tt" => { thread { thread { return "tt" } } }
+    "st" => { thread { seq { return "st" } } }
+    "ts" => { seq { thread { return "ts" } } }
+    "ss" => { seq { seq { return "ss" } } }
+    _ => "default"
+  }
+  return "got: ${r}"
+}
+
+// --- Combined with ordinary control flow (if / for / while) and nested match. ---
+node controlFlow(x: string): string {
+  const r = match(x) {
+    "if" => {
+      if (x == "if") {
+        thread { return "if-thread" }
+      } else {
+        return "if-else"
+      }
+    }
+    "for" => {
+      for (i in [1, 2]) {
+        seq { return "for-seq" }
+      }
+      return "after-for"
+    }
+    "while" => {
+      let n = 0
+      while (n < 1) {
+        n = n + 1
+        thread { return "while-thread" }
+      }
+      return "after-while"
+    }
+    "nestedmatch" => {
+      const inner = match(x) {
+        "nestedmatch" => { thread { return "inner-thread" } }
+        _ => "inner-default"
+      }
+      return inner
+    }
+    _ => "default"
+  }
+  return "got: ${r}"
+}

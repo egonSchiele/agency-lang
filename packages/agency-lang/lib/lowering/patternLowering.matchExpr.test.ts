@@ -22,9 +22,11 @@ describe("expression match lowering", () => {
     const matchStmt = body.find((n: any) => n.type === "matchBlock");
     expect(matchStmt.matchExprId).toBeTypeOf("number");
     const arm = matchStmt.cases.find((c: any) => c.type === "matchBlockCase");
-    expect(arm.body[0].type).toBe("matchYield");
-    expect(arm.body[0].matchId).toBe(matchStmt.matchExprId);
-    expect(arm.body[0].value).toEqual(expect.objectContaining({ type: "number", value: "1" }));
+    // Every single-expression arm hoists its value to a temp, then yields it.
+    const y = arm.body.find((s: any) => s.type === "matchYield");
+    expect(y.matchId).toBe(matchStmt.matchExprId);
+    // The type checker reads `typeSource` (the original literal), not the temp.
+    expect(y.typeSource).toEqual(expect.objectContaining({ type: "number", value: "1" }));
     const assign = body.find((n: any) => n.type === "assignment" && n.variableName === "val");
     expect(assign.value.value).toBe(`__matchval_${matchStmt.matchExprId}`);
     expect(assign.matchExprSource.matchId).toBe(matchStmt.matchExprId);
@@ -144,6 +146,61 @@ describe("expression match lowering", () => {
   });
 });
 
+describe("single-expression arm interrupt hoisting (#430)", () => {
+  function armStmts(arm: string): any[] {
+    const body = lowerBody(`node main(x: any) {
+  const val = match(x) {
+    ${arm}
+    _ => "other"
+  }
+  return val
+}`);
+    const matchStmt = body.find((n: any) => n.type === "matchBlock");
+    return matchStmt.cases.find((c: any) => c.type === "matchBlockCase").body;
+  }
+
+  // Every single-expression arm is hoisted the same way, regardless of what
+  // the value is: the whole point is NOT to guess which values can interrupt.
+  // The temp binding puts the value at statement position (where codegen emits
+  // the interrupt guard); `typeSource` preserves the original expression for
+  // typing so literals/narrowing survive; `value` is the temp ref for codegen.
+  function expectHoisted(arm: string, valueType: string) {
+    const stmts = armStmts(arm);
+    const binding = stmts.find((s: any) => s.type === "assignment");
+    expect(binding).toBeDefined();
+    expect(binding.matchArmValueTemp).toBe(true);
+    expect(binding.value.type).toBe(valueType);
+    const y = stmts.find((s: any) => s.type === "matchYield");
+    expect(y.value.type).toBe("variableName");
+    expect(y.value.value).toBe(binding.variableName);
+    // The temp binding precedes the yield of that temp.
+    expect(stmts.indexOf(binding)).toBeLessThan(stmts.indexOf(y));
+    // The yield carries the original expression for the type checker.
+    expect(y.typeSource).toEqual(binding.value);
+    return { binding, y };
+  }
+
+  it("a call arm binds to a temp, then yields the temp", () => {
+    const { binding } = expectHoisted(`"a" => confirm()`, "functionCall");
+    expect(binding.value.functionName).toBe("confirm");
+  });
+
+  it("a literal arm also hoists (uniform lowering, not case-detection)", () => {
+    const { y } = expectHoisted(`"a" => 1`, "number");
+    expect(y.typeSource).toEqual(
+      expect.objectContaining({ type: "number", value: "1" }),
+    );
+  });
+
+  it("a variable-ref arm also hoists", () => {
+    expectHoisted(`"a" => x`, "variableName");
+  });
+
+  it("a method-call arm hoists", () => {
+    expectHoisted(`"a" => x.run()`, "valueAccess");
+  });
+});
+
 describe("expression match lowering errors", () => {
   function expectError(src: string, re: RegExp) {
     const parsed = parseAgency(src);
@@ -180,16 +237,179 @@ describe("expression match lowering errors", () => {
     expectError(WRAP(`"a" => { return }`), /must return a value/i));
   it("return inside parallel in an arm errors", () =>
     expectError(WRAP(`"a" => {\n      parallel {\n        return 1\n      }\n    }`), /parallel|concurrency/i));
-  it("return inside a thread block in an expression arm errors", () =>
-    expectError(WRAP(`"a" => {\n      thread {\n        return 1\n      }\n      return 2\n    }`), /thread/i));
   it("thread block without a return inside an expression arm passes", () => {
     const parsed = parseAgency(WRAP(`"a" => {\n      thread {\n        print("hi")\n      }\n      return 2\n    }`));
     expect(parsed.success).toBe(true);
   });
   it("match(x is ...) in expression position errors", () =>
     expectError(`node main(x: any) {\n  const val = match(x is { k }) {\n    _ => 2\n  }\n  return val\n}`, /cannot be used as an expression/i));
-  it("module-level match expression errors", () =>
-    expectError(`const g = match("a") {\n  "a" => 1\n  _ => 2\n}\nnode main() { return g }`, /module-level|top-level/i));
+});
+
+describe("module-level match expression hoisting", () => {
+  it("module-level match hoists to a synthesized function + a call", () => {
+    const parsed = parseAgency(`const label = match("a") {
+  "a" => "A"
+  _ => "other"
+}
+node main(): string { return label }`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const nodes = parsed.result.nodes as any[];
+    // The const now calls a synthesized function instead of holding the match.
+    const decl = nodes.find(
+      (n) => n.type === "assignment" && n.variableName === "label",
+    );
+    expect(decl.value.type).toBe("functionCall");
+    // A matching synthesized function was added at the top level, with the
+    // lowered match region ending in a `return` of the temp, and no declared
+    // return type (inferred).
+    const synth = nodes.find(
+      (n) => n.type === "function" && n.functionName === decl.value.functionName,
+    );
+    expect(synth).toBeDefined();
+    expect(synth.returnType).toBeNull();
+    expect(synth.body.some((s: any) => s.type === "returnStatement")).toBe(true);
+    // No raw match block is left at module level.
+    expect(nodes.some((n) => n.type === "matchBlock")).toBe(false);
+  });
+
+  it("module-level match on a `let` also hoists and preserves declKind", () => {
+    const parsed = parseAgency(`let label = match("a") {
+  "a" => "A"
+  _ => "other"
+}
+node main(): string { return label }`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const decl = (parsed.result.nodes as any[]).find(
+      (n) => n.type === "assignment" && n.variableName === "label",
+    );
+    expect(decl.value.type).toBe("functionCall");
+    expect(decl.declKind).toBe("let");
+  });
+
+  it("synthesized init function name cannot collide with user identifiers", () => {
+    const parsed = parseAgency(`const label = match("a") {
+  "a" => "A"
+  _ => "other"
+}
+node main(): string { return label }`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const decl = (parsed.result.nodes as any[]).find(
+      (n) => n.type === "assignment" && n.variableName === "label",
+    );
+    // `$` is not a legal Agency identifier char, so the name is collision-proof
+    // against user code, and (not `__`-prefixed) it routes through __call.
+    expect(decl.value.functionName).toContain("$");
+    expect(decl.value.functionName.startsWith("__")).toBe(false);
+  });
+});
+
+describe("expression match arm: seq/thread yield to the match", () => {
+  const WRAPN = (arm: string) => `node main(x: any) {
+  const val = match(x) {
+    ${arm}
+    _ => 2
+  }
+  return val
+}`;
+
+  function armBodyOf(src: string): any[] {
+    const body = lowerBody(src);
+    const m = body.find(
+      (n: any) => n.type === "matchBlock" && n.matchExprId !== undefined,
+    );
+    const arm = m.cases.find((c: any) => c.type === "matchBlockCase");
+    return arm.body;
+  }
+
+  it("standalone seq: return rewrites to a matchYield inside the seq", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      seq {\n        return 1\n      }\n    }`));
+    const seq = arm.find((s: any) => s.type === "seqBlock");
+    expect(seq).toBeDefined();
+    const y = seq.body.find((s: any) => s.type === "matchYield");
+    expect(y).toBeDefined();
+    expect(y.value).toEqual(expect.objectContaining({ type: "number", value: "1" }));
+    expect(seq.body.some((s: any) => s.type === "returnStatement")).toBe(false);
+  });
+
+  it("thread: return rewrites to a matchYield inside the thread", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      thread {\n        return 1\n      }\n    }`));
+    const th = arm.find((s: any) => s.type === "messageThread");
+    expect(th).toBeDefined();
+    const y = th.body.find((s: any) => s.type === "matchYield");
+    expect(y).toBeDefined();
+    expect(y.value).toEqual(expect.objectContaining({ type: "number", value: "1" }));
+  });
+
+  it("subthread: return rewrites to a matchYield inside the subthread", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      subthread {\n        return 1\n      }\n    }`));
+    const th = arm.find((s: any) => s.type === "messageThread");
+    expect(th).toBeDefined();
+    expect(th.threadType).toBe("subthread");
+    expect(th.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq nested inside an if branch yields on that path", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      if (true) {\n        seq { return 1 }\n      } else {\n        return 2\n      }\n    }`),
+    );
+    expect(parsed.success).toBe(true);
+  });
+
+  it("thread nested in a thread: matchYield lands in the innermost body", () => {
+    const arm = armBodyOf(WRAPN(`"a" => {\n      thread {\n        thread {\n          return 1\n        }\n      }\n    }`));
+    const outer = arm.find((s: any) => s.type === "messageThread");
+    const inner = outer.body.find((s: any) => s.type === "messageThread");
+    expect(inner).toBeDefined();
+    expect(inner.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq nested in a thread (and vice versa) rewrites the innermost return", () => {
+    const st = armBodyOf(WRAPN(`"a" => { thread { seq { return 1 } } }`));
+    const seqInThread = st
+      .find((s: any) => s.type === "messageThread")
+      .body.find((s: any) => s.type === "seqBlock");
+    expect(seqInThread.body.some((s: any) => s.type === "matchYield")).toBe(true);
+
+    const ts = armBodyOf(WRAPN(`"a" => { seq { thread { return 1 } } }`));
+    const threadInSeq = ts
+      .find((s: any) => s.type === "seqBlock")
+      .body.find((s: any) => s.type === "messageThread");
+    expect(threadInSeq.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("seq inside a for loop body rewrites the return (loop still needs a trailing yield)", () => {
+    const arm = armBodyOf(
+      WRAPN(`"a" => {\n      for (i in [1]) {\n        seq { return 1 }\n      }\n      return 2\n    }`),
+    );
+    const loop = arm.find((s: any) => s.type === "forLoop");
+    const seqInLoop = loop.body.find((s: any) => s.type === "seqBlock");
+    expect(seqInLoop.body.some((s: any) => s.type === "matchYield")).toBe(true);
+  });
+
+  it("a parallel nested inside a standalone seq is still rejected", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      seq {\n        parallel {\n          return 1\n        }\n      }\n    }`),
+    );
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(/parallel/i);
+  });
+
+  it("a seq arm that does not yield on every path still errors", () => {
+    const parsed = parseAgency(WRAPN(`"a" => {\n      seq {\n        print("hi")\n      }\n    }`));
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.message).toMatch(/must return a value/i);
+  });
+
+  it("a seq used as a parallel arm is still rejected (concurrent branch)", () => {
+    const parsed = parseAgency(
+      WRAPN(`"a" => {\n      parallel {\n        seq { return 1 }\n      }\n    }`),
+    );
+    // The parallel block does not yield the match, so the arm has no value.
+    expect(parsed.success).toBe(false);
+  });
 });
 
 describe("statement-position return-in-arm errors", () => {
@@ -392,7 +612,7 @@ describe("expression match inside a handler body lowers like anywhere else", () 
     const matchStmt = body.find((n: any) => n.type === "matchBlock");
     expect(matchStmt.matchExprId).toBeTypeOf("number");
     const arm = matchStmt.cases.find((c: any) => c.type === "matchBlockCase");
-    expect(arm.body[0].type).toBe("matchYield");
+    expect(arm.body.some((s: any) => s.type === "matchYield")).toBe(true);
     const assign = body.find(
       (n: any) => n.type === "assignment" && n.variableName === "x",
     );

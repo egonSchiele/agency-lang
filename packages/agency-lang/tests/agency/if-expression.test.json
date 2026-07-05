@@ -1,0 +1,90 @@
+{
+  "tests": [
+    {
+      "nodeName": "basic",
+      "input": "25",
+      "expectedOutput": "\"adult\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "basic",
+      "input": "10",
+      "expectedOutput": "\"child\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "returnForm",
+      "input": "500",
+      "expectedOutput": "\"big\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "moduleLevel",
+      "input": "",
+      "expectedOutput": "\"PROD\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "withInterrupt",
+      "input": "true",
+      "expectedOutput": "\"got:approved\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "proceed?"
+        }
+      ]
+    },
+    {
+      "nodeName": "withInterrupt",
+      "input": "false",
+      "expectedOutput": "\"got:skipped\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "isCondition",
+      "input": "\"ok\"",
+      "expectedOutput": "42",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "isCondition",
+      "input": "\"x\"",
+      "expectedOutput": "-1",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

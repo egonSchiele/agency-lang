@@ -1,0 +1,35 @@
+// Module-level `const`/`let`/`static const` initializers may now be `match`
+// expressions. The compiler hoists each into a synthesized init function, so
+// the init-topsort machinery still sees one expression per variable and orders
+// dependencies correctly.
+
+const env: string = "prod"
+
+// A plain global const initialized by a match that reads another global.
+const label = match(env) {
+  "prod"  => "Production"
+  "stage" => "Staging"
+  _       => "Local"
+}
+
+// Another global that depends on the match-initialized one.
+const banner = "[${label}]"
+
+// A `let` (mutable global) initializer.
+let mode = match(env) {
+  "prod" => "live"
+  _      => "test"
+}
+
+// A static const initialized by a match that reads another static const.
+static const region = "us"
+static const regionName = match(region) {
+  "us" => "United States"
+  "uk" => "United Kingdom"
+  _    => "Other"
+}
+
+node getLabel(): string { return label }
+node getBanner(): string { return banner }
+node getMode(): string { return mode }
+node getRegionName(): string { return regionName }

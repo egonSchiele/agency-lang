@@ -1,0 +1,13 @@
+// Deep-but-bounded recursion must run to completion. The runaway-recursion
+// guard (maxCallDepth, default 2048) only trips on UNBOUNDED recursion; a
+// program that recurses a few hundred levels and terminates must be unaffected.
+// Regression guard against the call-depth check being too aggressive.
+
+def sumTo(n: number): number {
+  if (n <= 0) { return 0 }
+  return n + sumTo(n - 1)
+}
+
+node main() {
+  return sumTo(300)
+}

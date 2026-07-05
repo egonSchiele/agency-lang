@@ -21,10 +21,12 @@ import { unionTypes } from "./inference.js";
  * `__matchval_` hook in the synthesizer, which reads the already-computed inner
  * entry — so descending order makes the recursion resolve bottom-up.
  *
- * After the table is built for a scope, the recorded scope type of every
- * consumer variable (`const x = match(...)` → tagged `matchExprSource`) is
- * patched to the match's value type when the assignment had no explicit
- * annotation. buildScopes ran before this pass and synthed the `__matchval_`
+ * After the table is built for ALL scopes, a second pass patches the recorded
+ * scope type of every consumer variable (`const x = match(...)` → tagged
+ * `matchExprSource`) to the match's value type when the assignment had no
+ * explicit annotation. The two passes are separate so a consumer whose match
+ * yields live in another scope (a module-level `const x = match(...)` lowers to
+ * a call into a synthesized init function) still resolves regardless of order. buildScopes ran before this pass and synthed the `__matchval_`
  * ref to "any" (the table was empty then), so without this patch a downstream
  * `const y = x` would see `x` as "any".
  */
@@ -46,14 +48,20 @@ export function computeMatchExprTypes(
         .sort((a, b) => b - a);
       for (const id of ids) {
         const yields = yieldsByMatch[id];
-        const types = yields.map((y) =>
-          y.value ? synthType(y.value, info.scope, ctx) : "any",
-        );
+        // A single-expression arm is hoisted to a temp for interrupt
+        // propagation (#430); `typeSource` carries the arm's original
+        // expression so literal types and per-arm narrowing survive typing —
+        // the temp ref in `value` would widen them and lose narrowing.
+        const typeExpr = (y: MatchYield) => y.typeSource ?? y.value;
+        const types = yields.map((y) => {
+          const e = typeExpr(y);
+          return e ? synthType(e, info.scope, ctx) : "any";
+        });
         // Record each yield's UNWIDENED type + loc for CHECKED-position
         // per-arm assignability checking (see `checkMatchExprYields`).
         ctx.matchExprYieldTypes[id] = yields.map((y, i) => ({
           type: types[i],
-          loc: y.value?.loc ?? y.loc,
+          loc: typeExpr(y)?.loc ?? y.loc,
         }));
         // A yield of `any` (the sentinel string OR the `any` primitive) makes
         // the whole match's value type `any` — the union can't be narrowed.
@@ -65,17 +73,27 @@ export function computeMatchExprTypes(
             );
       }
 
-      // Patch each un-annotated consumer binding (`const x = match(...)`) so
-      // downstream uses see the match's value type instead of the "any"
-      // recorded before this pass ran. Two stale copies exist, both eager
-      // snapshots:
-      //  1. the scope entry (buildScopes synthed the `__matchval_` ref to
-      //     "any" while the table was empty), and
-      //  2. the `assign` flow node (buildFlowGraphs snapshotted
-      //     `scope.lookup(...)` at graph-build time — see the flow builder's
-      //     assignment rule / FlowEnvironment.matchConsumerAssignFlows).
-      // Annotated consumers are already correct in both (declared/snapshotted
-      // from the typeHint during buildScopes), so they are skipped.
+    });
+  }
+
+  // Phase 2: patch each un-annotated consumer binding (`const x = match(...)`)
+  // so downstream uses see the match's value type instead of the "any" recorded
+  // before this pass ran. Two stale copies exist, both eager snapshots:
+  //  1. the scope entry (buildScopes synthed the `__matchval_` ref to "any"
+  //     while the table was empty), and
+  //  2. the `assign` flow node (buildFlowGraphs snapshotted `scope.lookup(...)`
+  //     at graph-build time — see the flow builder's assignment rule /
+  //     FlowEnvironment.matchConsumerAssignFlows).
+  // Annotated consumers are already correct in both (declared/snapshotted from
+  // the typeHint during buildScopes), so they are skipped.
+  //
+  // This is a SEPARATE pass over all scopes (rather than patching inside the
+  // compute loop above) so the global `ctx.matchExprTypes` table is fully
+  // populated first: a module-level `const x = match(...)` is lowered to a call
+  // into a synthesized init function, so its consumer lives in a DIFFERENT
+  // scope from the match's yields and must not depend on scope processing order.
+  for (const info of scopes) {
+    ctx.withScope(info.scopeKey, () => {
       for (const { node, scopes: nodeScopes } of walkNodes(info.body)) {
         if (node.type !== "assignment" || !node.matchExprSource) continue;
         if (node.typeHint) continue;

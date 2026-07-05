@@ -59,7 +59,10 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             { text: "Concurrency", link: "/guide/concurrency" },
-            // TS interop part 2, including handling interrupts, cancellation
+            {
+              text: "Interrupts from TypeScript",
+              link: "/guide/interrupts-from-typescript",
+            },
           ],
         },
         {

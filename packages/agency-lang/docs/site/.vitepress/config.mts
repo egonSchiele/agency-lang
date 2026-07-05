@@ -58,6 +58,7 @@ export default defineConfig({
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
+            { text: "Concurrency", link: "/guide/concurrency" },
             // TS interop part 2, including handling interrupts, cancellation
           ],
         },
@@ -83,17 +84,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "05. Safety, Part 2",
-          items: [
-            {
-              text: "Effect Sets and raises",
-              link: "/guide/effects-and-raises",
-            },
-            { text: "Policies", link: "/guide/policies" },
-          ],
-        },
-        {
-          text: "06. Agency's Execution Model",
+          text: "05. Agency's Execution Model",
           items: [
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
@@ -107,17 +98,29 @@ export default defineConfig({
               text: "Global Variable Initialization",
               link: "/guide/global-var-initialization",
             },
-
-            // Initializer dependencies
+          ],
+        },
+        {
+          text: "06. Safety, Part 2",
+          items: [
+            {
+              text: "Effect Sets and raises",
+              link: "/guide/effects-and-raises",
+            },
+            { text: "Policies", link: "/guide/policies" },
+          ],
+        },
+        {
+          text: "07. Testing and Validation",
+          items: [
+            { text: "Testing", link: "/guide/testing" },
+            { text: "Observability", link: "/guide/observability" },
+            { text: "Schemas", link: "/guide/schemas" },
           ],
         },
         {
           text: "Advanced",
           items: [
-            { text: "Testing", link: "/guide/testing" },
-            { text: "Observability", link: "/guide/observability" },
-            { text: "Concurrency", link: "/guide/concurrency" },
-            { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },
             { text: "MCP", link: "/guide/mcp" },

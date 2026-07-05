@@ -72,6 +72,29 @@ raise foo::write(
 - `interrupt` = generic interrupt with effect = "unknown"
 - `foo::write` = interrupt with effect = "foo::write"
 
+## Payload types
+
+You can also define the type for the `data` parameter for an effect. This is called the *payload type*, and you use `effect` to define it.
+
+```
+effect std::read {
+  dir: string,
+  filename: string
+}
+```
+
+This does two things:
+- It enforces that any place that raises a `std::read` effect *must* specify a directory and filename.
+- Gives you better typing for the `data` object in the handler function (including auto-completion if you're using the Agency plugin!)
+
+The payload type just defines the fields you *must* have... you can have other fields as well. For example, there are two different functions in the agency standard library that  defined a `std::read` interrupt:
+- The read function
+- The [typecheckFile](/stdlib/agency) function from `std::agency`.
+
+Both interrupt payloads have `dir` and `filename`, but the `read` function's payload additionally contains `offset` and `limit` as well.
+
+You don't export or interrupt effect types – just import a function from that file and the effect will get imported automatically.
+
 ## References
 - [handlers](./handlers)
 - [policies](./policies)

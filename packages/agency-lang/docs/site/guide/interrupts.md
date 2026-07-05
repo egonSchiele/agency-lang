@@ -130,3 +130,10 @@ const result = llm("summarize README.md", tools: [read, write])
 You wouldn't want it to be able to read and write *any* file on your file system. With interrupts, it will need to ask you for permission before reading or writing any file.
 
 All of these examples so far involve auto-approving or asking the user for input. Let's see other ways to make reads and writes safe without needing user input.
+
+## What happens when you approve or reject an interrupt?
+
+- When you approve, that function or node keeps executing as normal.
+- If you reject, that function or node halts execution immediately, and returns a failure. 
+- If you reject an interrupt during a tool call, the tool halts execution immediately and we send a message to the LLM explaining that the tool call was rejected.
+- If you reject with a message, and the interrupt was raised by a tool call, then your message will get sent to the LLM along with the rejection.

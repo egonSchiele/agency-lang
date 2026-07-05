@@ -5,40 +5,38 @@ description: Declare the interrupt effects a function may raise with a `raises` 
 
 # Effect Sets and `raises`
 
-Every interrupt has an [effect](/guide/effects) — a label like `std::read` or `myapp::deploy`. This chapter adds
-a way to **declare**, in a function's signature, which effects it may
-raise, and to have the typechecker verify that declaration. Catching a
-mismatch at compile time — before you run the program — is much cheaper
-than discovering it at runtime.
+We've already learned about [effects](/guide/effects), which are a name you can give to your interrupt. We've seen how you can raise an interrupt :
 
-## The `raise` statement
+```
+raise foo::bar("Here's an interrupt!")
+```
 
-You already know two ways to raise an interrupt: as an expression you
-capture (`const x = interrupt(...)`) and the `return interrupt(...)` idiom.
-`raise` is a clearer spelling of that idiom:
+Now we're going to see that you can also declare what types of effects a function can raise. If a function raises an effect that you don't expect, this lets you find that out at compile time instead of runtime.
+
+## Declaring what a function raises
+
+Add a `raises` clause to a `def` or `node` to declare its effect set:
 
 ```ts
-def writeFile(path: string, content: string) {
-  raise std::write("Write to ${path}?", { path: path })
-  // ... reaches here only if the interrupt was approved
+// readFile is allowed to raise std::read, but nothing else.
+def readFile(path: string): string raises <std::read> {
+  return read(path)
+}
+
+// or with no return type:
+def readFile(path: string) raises <std::read> {
+  return read(path)
+}
+
+// The main node is allowed to raise std::read and std::write.
+node main() raises <std::read, std::write> {
+  // ...
 }
 ```
 
-- On **reject**, the function exits immediately with a `failure`
-  [Result](./error-handling).
-- On **approve**, execution **continues** to the next statement.
+### Unlabeled effects
 
-Effects don't have to be namespaced — `raise deploy("Ship it?")` is fine,
-as is `raise myapp::deploy(...)`. Use the bare `interrupt(...)` /
-`raise(...)` form when you don't need an effect label.
-
-> `raise` is for interrupts. It is unrelated to the `throw(...)` builtin,
-> which raises a JavaScript exception.
-
-### Unlabeled (`unknown`) effects
-
-An interrupt with no effect label has the effect **`unknown`**. All of
-these produce `unknown`:
+An interrupt with no effect label has the effect **`unknown`**:
 
 ```ts
 interrupt("Continue?")          // expression form
@@ -49,107 +47,91 @@ raise interrupt("Continue?")    // `raise` wrapping an interrupt expression
 `unknown` is an ordinary effect label, so you declare it like any other:
 
 ```ts
-def f() raises <unknown> { raise("Continue?") }   // precise: only unlabeled interrupts
-def g() raises <*>       { raise("Continue?") }   // broad: any effect at all
+def f() raises <unknown> {
+  raise("Continue?")
+}
 ```
 
-Use `raises <unknown>` when a function should raise *only* unlabeled
-interrupts — it's a tighter contract than `<*>`. `unknown` is reserved for
-this purpose, so don't use it as your own effect name.
-
-## Declaring what a function raises
-
-Add a `raises` clause to a `def` or `node` to declare its effect set:
+### Allow any effect (`<*>`)
 
 ```ts
-def readFile(path: string): string raises <std::read> {
-  return read(path)
-}
-
-node main() raises <std::read, std::write> {
-  // ...
+// All effects are allowed
+def f() raises <*> {
+  raise("Continue?")
+  raise std::read("Continue?")
+  raise std::write("Continue?")
 }
 ```
 
-The clause is an **upper bound**: the typechecker infers every effect the
-function actually raises — including effects raised transitively by
-functions it calls — and reports any that exceed the declaration.
+### Allow no effects (`<>`)
 
 ```ts
-def f(): number raises <std::read> {
-  raise std::write("oops", {})   // ❌ error
-  return 1
+// No effects are allowed
+def f() raises <> {
+  raise("Continue?")   // ❌ error
 }
-// Function 'f' raises effect 'std::write', which exceeds its declared
-// 'raises <std::read>'. Add 'std::write' to the clause.
 ```
 
-### Local handling does not exempt declaration
-
-Because [every handler in the chain runs](./handlers), an interrupt your
-function catches locally is **still observed by every ancestor handler**.
-So a locally-handled effect is part of the function's effect set and must
-be declared:
-
-```ts
-def f(): number raises <std::read> {
-  handle { raise std::write("x", {}) } with approve   // still counts!
-  return 1
-}
-// 'std::write' must be in the raises clause even though it is handled here.
-```
-
-### `<>`, `<*>`, and omitting the clause
+### Comparison table
 
 | Clause | Meaning |
 |---|---|
-| `raises <>` | Raises **nothing** (enforced — the body must raise no effects). |
+| `raises <>` | Raises **nothing**.
 | `raises <std::read>` | Raises **at most** `std::read`. |
-| `raises <*>` | Raises **anything** (explicit; no upper bound). |
-| *(omitted)* | Raises anything (no upper bound). |
+| `raises <*>` | Raises **anything** |
+| *(omitted)* | Raises anything |
 
-`raises <>` is a strong contract: it lets you state, and have the compiler
-guarantee, that a function performs no interrupting actions.
+
+## Handlers
+
+Handlers don't exempt effects. Even if your interrupt is handled by a handler, you still need to add it to the effect set.
+
+```ts
+// readFile is allowed to raise std::read, but nothing else.
+def readFile(path: string): string raises <std::read> {
+  handle {
+    /*
+    Function 'readFile' raises effect 'std::write',
+    which exceeds its declared 'raises <std::read>'.
+    Add 'std::write' to the clause.
+    */
+    write(filename: "myfile.txt", content: "Hello, world!")
+  } with approve
+}
+```
+
 
 ## Effect sets
 
-An `effectSet` names a reusable group of effects:
+An `effectSet` is a reusable group of effects:
 
 ```ts
-effectSet FsKinds = <std::read, std::write>
-effectSet NetKinds = <std::http, std::tcp>
-effectSet Unsafe   = <FsKinds, NetKinds, std::shell>   // compose by spreading
+export effectSet FileRead = <std::read, std::grep, std::ls>
+export effectSet FileWrite = <std::write, std::edit, std::rm>
+export effectSet FileSystem = <FileRead, FileWrite>
 ```
 
-Use a named set anywhere a `raises` clause is expected:
+You can use an effect set with `raises`:
 
 ```ts
-def doStuff(): number raises FsKinds { ... }
+def doStuff(): number raises FileRead {
+  // no writes allowed here
+}
 ```
 
-`effectSet`s can be exported and imported like any type:
+`effectSet`s can be exported and imported like any type. Agency's standard library contains a few effect sets in [`std::capabilities`](/stdlib/capabilities). For example, if you want to make sure your code is only raising read interrupts from the standard library (no writes, no network), use `FileRead`:
 
 ```ts
-// capabilities.agency
-export effectSet FsKinds = <std::read, std::write>
-
-// main.agency
-import { FsKinds } from "./capabilities.agency"
-def f(): number raises FsKinds { ... }
+import { FileRead } from "std::capabilities"
+node main() raises FileRead {
+  // do stuff
+}
 ```
 
-This is how you build a capability vocabulary: define the sets once, then
-constrain functions with them — e.g. require that a function `raises <>`
-(does nothing dangerous) or stays within a `ReadOnly` set.
-
-## Function types
+## `raises` on Function types
 
 Function types can carry a `raises` clause too:
 
 ```ts
 type Callback = (string) -> string raises <std::read>
 ```
-
-(In this phase the clause is parsed and preserved, but compatibility of a
-callback argument against a parameter's declared `raises` is not yet
-checked.)

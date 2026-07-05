@@ -58,6 +58,7 @@ export default defineConfig({
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
+            { text: "Concurrency", link: "/guide/concurrency" },
             // TS interop part 2, including handling interrupts, cancellation
           ],
         },
@@ -83,17 +84,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "05. Safety, Part 2",
-          items: [
-            {
-              text: "Effect Sets and raises",
-              link: "/guide/effects-and-raises",
-            },
-            { text: "Policies", link: "/guide/policies" },
-          ],
-        },
-        {
-          text: "06. Agency's Execution Model",
+          text: "05. Agency's Execution Model",
           items: [
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
@@ -107,36 +98,38 @@ export default defineConfig({
               text: "Global Variable Initialization",
               link: "/guide/global-var-initialization",
             },
-
-            // Initializer dependencies
           ],
         },
         {
-          text: "Advanced",
+          text: "06. Safety, Part 2",
+          items: [
+            {
+              text: "Effect Sets and raises",
+              link: "/guide/effects-and-raises",
+            },
+            { text: "Policies", link: "/guide/policies" },
+          ],
+        },
+        {
+          text: "07. Testing and Validation",
           items: [
             { text: "Testing", link: "/guide/testing" },
             { text: "Observability", link: "/guide/observability" },
-            { text: "Concurrency", link: "/guide/concurrency" },
             { text: "Schemas", link: "/guide/schemas" },
+          ],
+        },
+        {
+          text: "08. Advanced",
+          items: [
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },
-            { text: "MCP", link: "/guide/mcp" },
-            { text: "Serving Agency Code", link: "/guide/serving" },
-            {
-              text: "Custom & local model providers",
-              link: "/guide/custom-providers",
-            },
-            {
-              text: "Cross-Thread Context Sharing",
-              link: "/guide/cross-thread-context",
-            },
+            { text: "Callbacks", link: "/guide/callbacks" },
           ],
         },
         {
           text: "Appendix",
           items: [
             { text: "VSCode Extension", link: "/guide/vscode-extension" },
-            { text: "Callbacks", link: "/guide/callbacks" },
             {
               text: "Agency vs TypeScript",
               link: "/guide/agency-vs-typescript",
@@ -166,6 +159,16 @@ export default defineConfig({
             {
               text: "Schema Parameter Injection",
               link: "/guide/schema-parameter-injection",
+            },
+            { text: "MCP", link: "/guide/mcp" },
+            { text: "Serving Agency Code", link: "/guide/serving" },
+            {
+              text: "Custom & local model providers",
+              link: "/guide/custom-providers",
+            },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
             },
           ],
         },

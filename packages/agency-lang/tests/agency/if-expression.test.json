@@ -1,12 +1,10 @@
 {
   "tests": [
-    { "nodeName": "basic", "input": "\"prod\"", "expectedOutput": "\"Production\"", "evaluationCriteria": [{ "type": "exact" }], "description": "then branch" },
-    { "nodeName": "basic", "input": "\"x\"", "expectedOutput": "\"Local\"", "evaluationCriteria": [{ "type": "exact" }], "description": "else branch" },
-    { "nodeName": "chain", "input": "\"b\"", "expectedOutput": "\"B\"", "evaluationCriteria": [{ "type": "exact" }], "description": "else-if middle" },
-    { "nodeName": "chain", "input": "\"z\"", "expectedOutput": "\"C\"", "evaluationCriteria": [{ "type": "exact" }], "description": "else-if terminal else" },
-    { "nodeName": "block", "input": "500", "expectedOutput": "\"size: big\"", "evaluationCriteria": [{ "type": "exact" }], "description": "block branch return yields to if, not fn" },
-    { "nodeName": "returnForm", "input": "true", "expectedOutput": "\"yes\"", "evaluationCriteria": [{ "type": "exact" }], "description": "return if-expr operand" },
-    { "nodeName": "nested", "input": "-3", "expectedOutput": "\"negative\"", "evaluationCriteria": [{ "type": "exact" }], "description": "nested if-expression branch" },
-    { "nodeName": "moduleLevel", "input": "", "expectedOutput": "\"PROD\"", "evaluationCriteria": [{ "type": "exact" }], "description": "module-level if-expression initializer" }
+    { "nodeName": "basic", "input": "25", "expectedOutput": "\"adult\"", "evaluationCriteria": [{ "type": "exact" }], "description": "then branch" },
+    { "nodeName": "basic", "input": "10", "expectedOutput": "\"child\"", "evaluationCriteria": [{ "type": "exact" }], "description": "else branch" },
+    { "nodeName": "objectValue", "input": "25", "expectedOutput": "\"adult/25\"", "evaluationCriteria": [{ "type": "exact" }], "description": "if-expression as an object property value" },
+    { "nodeName": "arg", "input": "500", "expectedOutput": "\"big\"", "evaluationCriteria": [{ "type": "exact" }], "description": "if-expression as a function argument (then branch)" },
+    { "nodeName": "arg", "input": "-5", "expectedOutput": "\"small\"", "evaluationCriteria": [{ "type": "exact" }], "description": "if-expression as a function argument (else branch, clamped to 0)" },
+    { "nodeName": "numeric", "input": "true", "expectedOutput": "101", "evaluationCriteria": [{ "type": "exact" }], "description": "number-typed branches used in arithmetic" }
   ]
 }

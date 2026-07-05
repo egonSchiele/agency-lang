@@ -1,46 +1,29 @@
-// `if` expressions: assignable / returnable, mirroring `match` expressions.
+// `if <cond> then <a> else <b>` — a conditional expression (Agency's readable
+// alternative to a ternary). Compiles to a TS conditional, so it works anywhere
+// an expression can: assignment RHS, object values, function arguments, return.
 
-// Basic const = if, single-expression braced branches.
-node basic(x: string): string {
-  const label = if (x == "prod") { "Production" } else { "Local" }
-  return label
+def label(n: number): string {
+  return if n > 100 then "big" else "small"
 }
 
-// else-if chain (must terminate in else).
-node chain(x: string): string {
-  const label = if (x == "a") { "A" } else if (x == "b") { "B" } else { "C" }
-  return label
+node basic(age: number): string {
+  const kind = if age > 18 then "adult" else "child"
+  return kind
 }
 
-// Block branch with an explicit return (returns from the if, not the fn).
-node block(x: number): string {
-  const size = if (x > 100) {
-    let note = "big"
-    return note
-  } else {
-    return "small"
-  }
-  return "size: ${size}"
+// As an object property value.
+node objectValue(age: number): string {
+  const person = { kind: if age > 18 then "adult" else "child", age: age }
+  return "${person.kind}/${person.age}"
 }
 
-// `return if (...)` operand form.
-def classify(x: boolean): string {
-  return if (x) { "yes" } else { "no" }
-}
-node returnForm(x: boolean): string {
-  return classify(x)
+// As a function argument, and a non-literal (call) branch.
+node arg(n: number): string {
+  return label(if n > 0 then n else 0)
 }
 
-// Nested: the arm of a match is an if-expression value.
-node nested(x: number): string {
-  const r = if (x == 0) {
-    "zero"
-  } else {
-    if (x > 0) { "positive" } else { "negative" }
-  }
-  return r
+// Number-typed branches.
+node numeric(flag: boolean): number {
+  const points = if flag then 100 else 0
+  return points + 1
 }
-
-const envName: string = "prod"
-const moduleLabel = if (envName == "prod") { "PROD" } else { "DEV" }
-node moduleLevel(): string { return moduleLabel }

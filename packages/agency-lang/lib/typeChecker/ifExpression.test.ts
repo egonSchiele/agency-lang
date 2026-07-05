@@ -10,56 +10,80 @@ function check(source: string): string[] {
   return typeCheck(parsed.result, {}, info).errors.map((e) => e.message);
 }
 
-// `if` expressions lower to the same matchYield/matchExprId/matchExprSource
-// machinery as `match` expressions, so union typing + assignability come for
-// free. These lock that in.
-describe("if expressions — union typing + assignability", () => {
-  it("checked position: annotation mismatch errors per branch", () => {
+// `if <c> then <a> else <b>` is a conditional EXPRESSION (compiles to a ternary)
+// typed as the widened union of its two branches — the same rule a two-arm
+// `match` expression uses.
+describe("if expressions — typing", () => {
+  it("checked position: annotation mismatch errors", () => {
     const errs = check(`node main(): number {
   const c = true
-  const n: number = if (c) { "a" } else { "b" }
+  const n: number = if c then "a" else "b"
   return n
 }`);
-    expect(errs.length).toBeGreaterThan(0);
-    expect(errs.some((e) => /number/.test(e))).toBe(true);
+    expect(errs.some((e) => /not assignable/.test(e) && /number/.test(e))).toBe(true);
   });
 
   it("compatible annotation: no errors", () => {
     const errs = check(`node main(): string {
   const c = true
-  const label: string = if (c) { "a" } else { "b" }
+  const label: string = if c then "a" else "b"
   return label
 }`);
     expect(errs).toEqual([]);
   });
 
-  it("synthesis: the branch union flows to downstream uses", () => {
+  it("synthesis: the branch union flows downstream", () => {
     const errs = check(`node main(): boolean {
   const c = true
-  const x = if (c) { 1 } else { "two" }
+  const x = if c then 1 else "two"
   const b: boolean = x
   return b
 }`);
-    expect(errs.length).toBeGreaterThan(0);
     expect(errs.some((e) => /number/.test(e) && /string/.test(e))).toBe(true);
     expect(errs.some((e) => /boolean/.test(e))).toBe(true);
   });
 
-  it("else-if chain unions every branch", () => {
-    const errs = check(`node main(x: number): boolean {
-  const label = if (x == 0) { "z" } else if (x > 0) { "p" } else { 3 }
-  const b: boolean = label
-  return b
+  it("usable as an object value", () => {
+    const errs = check(`node main(age: number): string {
+  const person = { kind: if age > 18 then "adult" else "child" }
+  return person.kind
 }`);
-    // union is string | number, not assignable to boolean
-    expect(errs.some((e) => /boolean/.test(e))).toBe(true);
+    expect(errs).toEqual([]);
+  });
+});
+
+describe("if expressions — flatness restriction", () => {
+  it("a nested if in a branch is an error", () => {
+    const errs = check(`node main(a: boolean, b: boolean): string {
+  const x = if a then (if b then "x" else "y") else "z"
+  return x
+}`);
+    expect(errs.some((e) => /nested `if/.test(e))).toBe(true);
   });
 
-  it("return if-expression is checked against the declared return type", () => {
-    const errs = check(`def f(x: boolean): number {
-  return if (x) { "a" } else { "b" }
-}
-node main(): number { return f(true) }`);
-    expect(errs.some((e) => /number/.test(e))).toBe(true);
+  it("an `else if` chain is an error", () => {
+    const errs = check(`node main(a: boolean, b: boolean): string {
+  const x = if a then "x" else if b then "y" else "z"
+  return x
+}`);
+    expect(errs.some((e) => /nested `if/.test(e) || /else if/.test(e))).toBe(true);
+  });
+
+  it("a nested if in the condition is an error", () => {
+    const errs = check(`node main(a: boolean, b: boolean): string {
+  const x = if (if a then b else a) then "x" else "z"
+  return x
+}`);
+    expect(errs.some((e) => /nested `if/.test(e))).toBe(true);
+  });
+
+  it("an if expression cannot be spread into an object", () => {
+    const errs = check(`node main(c: boolean): string {
+  const a = { x: 1 }
+  const b = { y: 2 }
+  const merged = { ...(if c then a else b) }
+  return "done"
+}`);
+    expect(errs.some((e) => /cannot be spread/.test(e))).toBe(true);
   });
 });

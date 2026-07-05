@@ -65,16 +65,21 @@ if (age > 18) {
 }
 ```
 
-Agency has no ternary (`? :`). Instead, an `if` can be used as an expression — it
-produces the value of whichever branch runs:
+Agency has no ternary (`? :`). Instead, `if ... then ... else` can be used as a
+value — it produces whichever branch matches:
 
 ```ts
-const label = if (isProd) { "Production" } else { "Local" }
+const label = if isProd then "Production" else "Local"
+
+const person = {
+  kind: if age > 18 then "adult" else "child",
+}
 ```
 
-The `else` is required, since the `if` has to produce a value. A branch can also
-be a block that ends in a `return` (which returns the value from the `if`, not
-from the function), just like a `match` expression arm.
+The `else` is required (the expression always produces a value). To keep these
+readable, they are deliberately limited: no `else if`, and a branch cannot be
+another `if ... then ... else`. For anything with more than two cases, or nested
+conditions, use [`match`](/guide/pattern-matching) instead.
 
 ## Type annotations
 

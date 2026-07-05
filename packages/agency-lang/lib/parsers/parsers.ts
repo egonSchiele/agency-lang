@@ -113,6 +113,7 @@ import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { TryExpression } from "../types/tryExpression.js";
 import { NewExpression } from "../types/newExpression.js";
+import { IfExpression } from "../types/ifExpression.js";
 import { SchemaExpression } from "../types/schemaExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -2499,6 +2500,31 @@ const unaryVoidParser = unaryKeywordParser("void");
 const tryExpressionParser: Parser<TryExpression> =
   seqC(set("type", "tryExpression"), str("try"), spaces, capture(or(lazy(() => valueAccessParser), functionCallParser) as Parser<TryExpression["call"]>, "call"));
 
+// Parses: `if <condition> then <thenExpr> else <elseExpr>` — a conditional
+// EXPRESSION (compiles to a TS ternary). `not(varNameChar)` after each keyword
+// keeps `if`/`then`/`else` from swallowing identifiers like `iffy` or `thenX`.
+// Branches parse as full expressions, so a nested `if ... then ...` (including
+// an `else if` chain) parses into a nested `ifExpression` here; that nesting is
+// rejected as a clear semantic error later (see `checkNoNestedIfExpressions`),
+// steering multi-way branching to `match`.
+const ifExpressionParser: Parser<IfExpression> = seqC(
+  set("type", "ifExpression"),
+  str("if"),
+  not(varNameChar),
+  optionalSpacesOrNewline,
+  capture(lazy(() => exprParser), "condition"),
+  optionalSpacesOrNewline,
+  str("then"),
+  not(varNameChar),
+  optionalSpacesOrNewline,
+  capture(lazy(() => exprParser), "thenExpr"),
+  optionalSpacesOrNewline,
+  str("else"),
+  not(varNameChar),
+  optionalSpacesOrNewline,
+  capture(lazy(() => exprParser), "elseExpr"),
+);
+
 // Parses: new ClassName(args)
 export const newExpressionParser: Parser<NewExpression> = (input: string) => {
   const parser = seqC(
@@ -2543,6 +2569,7 @@ const baseAtom: Parser<Expression> = or(
   unaryNotParser,
   tryExpressionParser,
   newExpressionParser,
+  lazy(() => ifExpressionParser),
   schemaExpressionParser,
   lazy(() => interruptExprParser),
   lazy(() => agencyArrayParser),
@@ -2741,7 +2768,7 @@ export const returnStatementParser: Parser<ReturnStatement> = label("a return st
     captureCaptures(
       seqC(
         optionalSpaces,
-        capture(or(lazy(() => matchBlockExprParser), lazy(() => ifParser), exprParser), "value"),
+        capture(or(lazy(() => matchBlockExprParser), exprParser), "value"),
       ),
     ),
   ),
@@ -3464,7 +3491,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), lazy(() => ifParser), exprParser), "value"),
+      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), exprParser), "value"),
       optionalSemicolon,
       optionalSpacesOrNewline,
     ),

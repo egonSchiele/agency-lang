@@ -292,6 +292,50 @@ export class TypeChecker {
       checkDocStringParams(def);
     }
 
+    // 1g. Keep `if ... then ... else` expressions readable — two guards, both
+    // reported as clear errors (the parser accepts these shapes so they surface
+    // here):
+    //   (a) FLATNESS: none of condition/then/else may itself be an `if`
+    //       expression (this also rules out `else if` chains). Multi-way or
+    //       nested branching belongs in `match`.
+    //   (b) NO CONDITIONAL SPREAD: an `if` expression may not be a spread
+    //       operand (`...(if c then {…} else {…})`) — the classic unreadable
+    //       conditional-spread pattern. Assign it to a variable first.
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type === "ifExpression") {
+        const nestedBranch = [node.condition, node.thenExpr, node.elseExpr].find(
+          (branch) => branch.type === "ifExpression",
+        );
+        if (nestedBranch) {
+          this.errors.push({
+            message:
+              "nested `if ... then ... else` is not allowed (this includes `else if`); " +
+              "use `match` for multi-way or nested branching",
+            loc: nestedBranch.loc,
+            severity: "error",
+          });
+        }
+      }
+
+      const spreadValues =
+        node.type === "agencyObject"
+          ? node.entries.filter((e): e is typeof e & { type: "splat" } => "type" in e && e.type === "splat").map((e) => e.value)
+          : node.type === "agencyArray"
+            ? node.items.filter((i): i is typeof i & { type: "splat" } => i.type === "splat").map((i) => i.value)
+            : [];
+      for (const value of spreadValues) {
+        if (value.type === "ifExpression") {
+          this.errors.push({
+            message:
+              "an `if ... then ... else` expression cannot be spread (`...`); " +
+              "assign it to a variable first, or use `match`",
+            loc: value.loc,
+            severity: "error",
+          });
+        }
+      }
+    }
+
     // 2. Infer return types
     inferReturnTypes(ctx);
 

@@ -9,54 +9,54 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
       {
         description: "single parameter with type hint",
         input: "def add(x: number) { x }",
-        expectedOutput: "def add(x: number) {\n  x\n}",
+        expectedOutput: "def add(x: number) {\nx\n}",
       },
       {
         description: "multiple parameters with type hints",
         input: "def add(x: number, y: number) { x }",
-        expectedOutput: "def add(x: number, y: number) {\n  x\n}",
+        expectedOutput: "def add(x: number, y: number) {\nx\n}",
       },
       {
         description: "mixed typed and untyped parameters",
         input: "def mixed(x: number, y) { x }",
-        expectedOutput: "def mixed(x: number, y) {\n  x\n}",
+        expectedOutput: "def mixed(x: number, y) {\nx\n}",
       },
       {
         description: "array type hint",
         input: "def process(items: number[]) { items }",
-        expectedOutput: "def process(items: number[]) {\n  items\n}",
+        expectedOutput: "def process(items: number[]) {\nitems\n}",
       },
       {
         description: "union type hint",
         input: "def flexible(value: string | number) { value }",
-        expectedOutput: "def flexible(value: string | number) {\n  value\n}",
+        expectedOutput: "def flexible(value: string | number) {\nvalue\n}",
       },
       {
         description: "type hint with docstring",
         input:
           'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
         expectedOutput:
-          'def add(x: number, y: number) {\n  """\n  Adds two numbers\n  """\n  x\n}',
+          'def add(x: number, y: number) {\n  """\n  Adds two numbers\n  """\nx\n}',
       },
       {
         description: "multiple array types",
         input: "def multi(arr: string[], count: number) { arr }",
-        expectedOutput: "def multi(arr: string[], count: number) {\n  arr\n}",
+        expectedOutput: "def multi(arr: string[], count: number) {\narr\n}",
       },
       {
         description: "nested array type",
         input: "def nested(matrix: number[][]) { matrix }",
-        expectedOutput: "def nested(matrix: number[][]) {\n  matrix\n}",
+        expectedOutput: "def nested(matrix: number[][]) {\nmatrix\n}",
       },
       {
         description: "custom type name",
         input: "def handle(data: CustomType) { data }",
-        expectedOutput: "def handle(data: CustomType) {\n  data\n}",
+        expectedOutput: "def handle(data: CustomType) {\ndata\n}",
       },
       {
         description: "untyped parameters (backward compatibility)",
         input: "def old(x, y) { x }",
-        expectedOutput: "def old(x, y) {\n  x\n}",
+        expectedOutput: "def old(x, y) {\nx\n}",
       },
     ];
 

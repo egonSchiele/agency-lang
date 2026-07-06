@@ -5,30 +5,50 @@ description: A quick tour of the typecheck, doc, and format commands — static 
 
 # Developer Tools
 
-Alongside compiling and running, Agency ships a few commands that work on your source statically — no execution required. They check your code, generate reference docs from it, and keep it neatly formatted.
+Alongside compiling and running, here are some other useful commands.
 
 ## Type checking
 
-To type check one or more files without compiling them, use `typecheck` (or its shorter alias `tc`):
+Use `typecheck` (or `tc`):
 
 ```bash
 agency typecheck foo.agency
-agency tc src/
+agency tc foo.agency
 ```
 
-With no input, it reads from stdin. Pass `--strict` to treat untyped variables as errors instead of inferring them — handy if you want every variable to carry an explicit type annotation.
+You can give it
+- a file
+- a list of files
+- input on stdin.
 
-You can also turn type checking on during compilation, and tune how strict each check is, via the `typechecker` block in [`agency.json`](/guide/agency-config-file#type-checking). See the [typecheck CLI reference](/cli/typecheck) for more.
+Directories are not supported yet.
+
+Pass `--strict` to treat variables without types as errors.
+
+You can also set options in `agency.json`.
+
+### References
+- [`typecheck` CLI reference](/cli/typecheck)
+- [Agency config file](/guide/agency-config-file#type-checking)
 
 ## Generating docs
 
-`agency doc` auto-generates reference documentation from your source:
+Use `agency doc`:
 
 ```bash
 agency doc lib -o docs
 ```
 
-It documents every top-level type, function, and node, using their docstrings as descriptions. Add a `/** ... */` doc comment above a declaration for more detail:
+Give it a source file or a directory, and it will generate markdown files as docs. You can then feed the markdown files into your favorite documentation generator, such as [VitePress](https://vitepress.dev).
+
+`agency doc` documents:
+- types (if exported)
+- functions (if exported)
+- nodes
+- effects
+- effect sets (if exported)
+
+For functions, `agency doc` uses their docstrings as descriptions. You can also add a `/** ... */` doc comment above any of these for more detail:
 
 ```ts
 /** Greets a person by name. */
@@ -37,7 +57,17 @@ def greet(name: string): string {
 }
 ```
 
-The generated docs also include a `Throws:` line for each function and node, listing the interrupts it may raise (computed by static analysis, including interrupts raised transitively through called functions and `llm()` tools). You can configure the output directory and source-link `baseUrl` in `agency.json`, or pass `-o` and `--base-url` on the command line. Full details are in the [doc CLI reference](/cli/doc).
+Each generated entry links back to its source code. Options:
+
+| Flag | Description |
+| --- | --- |
+| `-o`, `--output <dir>` | Output directory for the generated markdown. Default `docs`. |
+| `--base-url <url>` | Base URL that each entry's source link points to. |
+| `--ignore <dirs...>` | Directory names to skip when scanning a directory recursively. |
+
+### References
+- [`doc` CLI reference](/cli/doc)
+- [Agency config file](/guide/agency-config-file#type-checking)
 
 ## Formatting
 
@@ -48,10 +78,13 @@ agency format foo.agency
 agency fmt src/
 ```
 
-By default the formatted result prints to stdout, and with no input it reads from stdin — easy to wire into an editor or pipeline:
+By default, the formatted result prints to stdout. Pass `-i` / `--in-place` to overwrite the files instead of printing.
+
+`agency fmt` can also read from stdin:
 
 ```bash
 cat foo.agency | agency fmt
 ```
 
-Pass `-i` / `--in-place` to overwrite the files instead of printing. See the [format CLI reference](/cli/format) for more.
+### References
+- [`format` CLI reference](/cli/format)

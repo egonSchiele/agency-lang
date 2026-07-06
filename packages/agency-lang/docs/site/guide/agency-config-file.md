@@ -205,7 +205,7 @@ Odds and ends for other commands.
 | Option | Description |
 | --- | --- |
 | `doc` | Output directory and source-link base URL for `agency doc`. |
-| `pack` | Output `format` (`"esm"` or `"cjs"`), esbuild `target`, and extra `external` specifiers for `agency pack`. |
+| `pack` | Options for `agency pack`: output `format` (`"esm"` or `"cjs"`), esbuild `target` (e.g. `"node20"`), and `external`. `external` is an array of package names to exclude from the bundle and import at runtime instead (for packages that can't be bundled, like native addons). Anything marked external must already be installed wherever the bundle runs. |
 | `viewer` | Color thresholds for `agency logs view`: `slowMs` and `fastMs` for durations, `expensiveUsd` for cost. |
 
 ## References

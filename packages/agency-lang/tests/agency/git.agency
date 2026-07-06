@@ -8,16 +8,23 @@ import { setAgentCwd } from "std::index"
 import { gitStatus, gitLog, gitCommit } from "std::git"
 
 def makeSandbox(): string {
-  const mk = exec("mktemp", ["-d"]) with approve
-  const dir = mk.stdout.trim()
-  exec("sh", ["-c", "GIT_CEILING_DIRECTORIES=${dir} git init -q && git config user.email t@t.com && git config user.name t && printf hi > a.txt && git add a.txt && git commit -q -m seed"],
-    cwd: dir) with approve
+  let dir = ""
+  handle {
+    const made = exec("mktemp", ["-d"])
+    dir = made.stdout.trim()
+    exec("sh", ["-c", "GIT_CEILING_DIRECTORIES=${dir} git init -q && git config user.email t@t.com && git config user.name t && printf hi > a.txt && git add a.txt && git commit -q -m seed"],
+      cwd: dir)
+  } with approve
   return dir
 }
 
+// Defensive: only remove a real, absolute, non-root temp path. Guards against
+// a bug that leaves `dir` empty or "/" (which would rm -rf the filesystem).
 def teardown(dir: string) {
-  if (dir != "") {
-    exec("rm", ["-rf", dir]) with approve
+  if (dir != "" && dir != "/" && dir.startsWith("/")) {
+    handle {
+      exec("rm", ["-rf", dir])
+    } with approve
   }
 }
 
@@ -25,38 +32,51 @@ def teardown(dir: string) {
 // DIFFERENT repo (e.g. this project), entries would be non-empty.
 node preflightSandboxIsClean(): boolean {
   const dir = makeSandbox()
-  const s = gitStatus(cwd: dir) with approve
-  const ok = s.entries.length == 0
+  let clean = false
+  handle {
+    const s = gitStatus(cwd: dir)
+    clean = s.entries.length == 0
+  } with approve
   teardown(dir)
-  return ok
+  return clean
 }
 
 node readsLog(): boolean {
   const dir = makeSandbox()
-  const log = gitLog(cwd: dir) with approve
-  const ok = log.commits.length == 1 && log.commits[0].subject == "seed"
+  let ok = false
+  handle {
+    const log = gitLog(cwd: dir)
+    ok = log.commits.length == 1 && log.commits[0].subject == "seed"
+  } with approve
   teardown(dir)
   return ok
 }
 
 node commitRoundtrips(): boolean {
   const dir = makeSandbox()
-  exec("sh", ["-c", "printf more > b.txt"], cwd: dir) with approve
-  exec("git", ["add", "b.txt"], cwd: dir) with approve
-  gitCommit("add b", cwd: dir) with approve
-  const s = gitStatus(cwd: dir) with approve
-  const clean = s.entries.length == 0
-  const log = gitLog(cwd: dir) with approve
+  let ok = false
+  handle {
+    exec("sh", ["-c", "printf more > b.txt"], cwd: dir)
+    exec("git", ["add", "b.txt"], cwd: dir)
+    gitCommit("add b", cwd: dir)
+    const s = gitStatus(cwd: dir)
+    const log = gitLog(cwd: dir)
+    ok = s.entries.length == 0 && log.commits.length == 2 && log.commits[0].subject == "add b"
+  } with approve
   teardown(dir)
-  return clean && log.commits.length == 2 && log.commits[0].subject == "add b"
+  return ok
 }
 
 // With an agent cwd set, gitStatus() with NO cwd arg resolves and works.
 node agentCwdSetLetsStatusOmitCwd(): boolean {
   const dir = makeSandbox()
   setAgentCwd(dir)
-  const s = gitStatus() with approve
+  let ok = false
+  handle {
+    const s = gitStatus()
+    ok = s.entries.length == 0
+  } with approve
   setAgentCwd("")
   teardown(dir)
-  return s.entries.length == 0
+  return ok
 }

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   hardenPositional, GIT_HARDENING_FLAGS, scrubEnv,
   statusArgs, logArgs, commitArgs,
-  parseStatus, parseLog, FIELD_SEP as FS, RECORD_SEP as RS,
 } from "./gitCore.js";
 
 describe("hardenPositional", () => {
@@ -61,66 +60,19 @@ describe("argv builders", () => {
     expect(statusArgs()).toEqual(["status", "--porcelain=v2", "--branch", "-z"]);
   });
   it("logArgs maps typed params and separates ref (after --end-of-options) and path (after --)", () => {
-    const a = logArgs({ n: 5, oneline: true, path: "src/", ref: "HEAD~3", author: "amy" });
-    expect(a[0]).toBe("log");
-    expect(a).toContain("-n"); expect(a).toContain("5");
-    expect(a).toContain("--author=amy");
-    expect(a).toContain("--end-of-options");
-    expect(a[a.length - 1]).toBe("src/");
-    expect(a[a.length - 2]).toBe("--");
+    const args = logArgs({ count: 5, oneline: true, path: "src/", ref: "HEAD~3", author: "amy" });
+    expect(args[0]).toBe("log");
+    expect(args).toContain("-n"); expect(args).toContain("5");
+    expect(args).toContain("--author=amy");
+    expect(args).toContain("--end-of-options");
+    expect(args[args.length - 1]).toBe("src/");
+    expect(args[args.length - 2]).toBe("--");
   });
   it("logArgs rejects a flag-shaped ref", () => {
-    expect(() => logArgs({ n: 5, oneline: false, path: "", ref: "--output=x", author: "" })).toThrow();
+    expect(() => logArgs({ count: 5, oneline: false, path: "", ref: "--output=x", author: "" })).toThrow();
   });
   it("commitArgs passes the message as the value of -m; rejects empty", () => {
     expect(commitArgs({ message: "--amend looking msg" })).toEqual(["commit", "-m", "--amend looking msg"]);
     expect(() => commitArgs({ message: "" })).toThrow(/empty/);
-  });
-});
-
-describe("parseStatus", () => {
-  it("parses branch headers, modified/added, a space-in-path, a rename, an unmerged record, and untracked", () => {
-    const out = [
-      "# branch.oid abc123",
-      "# branch.head main",
-      "# branch.upstream origin/main",
-      "# branch.ab +2 -1",
-      "1 .M N... 100644 100644 100644 hhh iii src/mod.ts",
-      "1 A. N... 000000 100644 100644 000 jjj my file.ts",   // space in path
-      "2 R. N... 100644 100644 100644 kkk lll R100 dst.ts",
-      "old.ts",                                              // origPath NUL field
-      "u UU N... 100644 100644 100644 100644 m1 m2 m3 conflict.ts",
-      "? untracked.ts",
-    ].join("\0") + "\0";
-    const s = parseStatus(out);
-    expect(s.branch).toBe("main");
-    expect(s.upstream).toBe("origin/main");
-    expect(s.ahead).toBe(2);
-    expect(s.behind).toBe(1);
-    expect(s.entries).toContainEqual({ path: "src/mod.ts", index: ".", worktree: "M" });
-    expect(s.entries).toContainEqual({ path: "my file.ts", index: "A", worktree: "." });
-    expect(s.entries).toContainEqual({ path: "dst.ts", index: "R", worktree: ".", renamedFrom: "old.ts" });
-    expect(s.entries).toContainEqual({ path: "conflict.ts", index: "U", worktree: "U" });
-    expect(s.entries).toContainEqual({ path: "untracked.ts", index: "?", worktree: "?" });
-    expect(s.entries).toHaveLength(5);
-  });
-});
-
-describe("parseLog", () => {
-  it("parses commits with multi-line bodies; tolerates git's inter-record newline", () => {
-    const rec = (f: string[]) => f.join(FS);
-    const out =
-      rec(["sha1", "Amy", "amy@x.com", "2026-01-01T00:00:00Z", "subj one", "body\nline2"]) + RS + "\n" +
-      rec(["sha2", "Bob", "bob@x.com", "2026-01-02T00:00:00Z", "subj two", ""]) + RS + "\n";
-    const log = parseLog(out);
-    expect(log.commits).toHaveLength(2);
-    expect(log.commits[0]).toEqual({
-      sha: "sha1", author: "Amy", email: "amy@x.com",
-      date: "2026-01-01T00:00:00Z", subject: "subj one", body: "body\nline2",
-    });
-    expect(log.commits[1].body).toBe("");
-  });
-  it("returns no commits for empty output", () => {
-    expect(parseLog("").commits).toEqual([]);
   });
 });

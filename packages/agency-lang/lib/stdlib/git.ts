@@ -6,9 +6,10 @@ import { abortableSpawn } from "./abortable.js";
 import { assertContained } from "./assertContained.js";
 import { GIT_HARDENING_FLAGS, scrubEnv } from "./gitCore.js";
 
-// Re-export the pure core so stdlib/git.agency imports everything from one
-// "agency-lang/stdlib-lib/git.js".
+// Re-export the pure core + parsers so stdlib/git.agency imports everything
+// from one "agency-lang/stdlib-lib/git.js".
 export * from "./gitCore.js";
+export * from "./gitParse.js";
 
 // Default 30s wall-clock cap; abortableSpawn maps a timeout to exitCode 1.
 const DEFAULT_GIT_TIMEOUT_MS = 30_000;
@@ -33,13 +34,13 @@ export async function gitRunImpl(
       `git: no repo directory — pass an explicit absolute "cwd" or set the agent working directory (got "${cwd}")`,
     );
   }
-  let st;
+  let stats;
   try {
-    st = statSync(cwd);
+    stats = statSync(cwd);
   } catch {
     throw new Error(`git: repo directory does not exist: ${cwd}`);
   }
-  if (!st.isDirectory()) {
+  if (!stats.isDirectory()) {
     throw new Error(`git: repo directory is not a directory: ${cwd}`);
   }
   const env = scrubEnv(opts?.env ?? process.env);

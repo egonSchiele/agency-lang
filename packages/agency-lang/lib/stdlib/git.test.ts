@@ -61,7 +61,7 @@ describe("format/parser round-trips against real git", () => {
     expect(s.branch.length).toBeGreaterThan(0);
   });
   it("log", async () => {
-    const log = parseLog(await gitRunImpl(repo, logArgs({ n: 10, oneline: false, path: "", ref: "", author: "" })));
+    const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })));
     expect(log.commits[0].subject).toBe("seed subject");
     expect(log.commits[0].sha.length).toBeGreaterThanOrEqual(7);
   });
@@ -69,7 +69,7 @@ describe("format/parser round-trips against real git", () => {
     await fs.writeFile(path.join(repo, "b.txt"), "more\n");
     await pexec("git", ["add", "b.txt"], { cwd: repo });
     await gitRunImpl(repo, commitArgs({ message: "add b" }));
-    const log = parseLog(await gitRunImpl(repo, logArgs({ n: 10, oneline: false, path: "", ref: "", author: "" })));
+    const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })));
     expect(log.commits[0].subject).toBe("add b");
   });
 });

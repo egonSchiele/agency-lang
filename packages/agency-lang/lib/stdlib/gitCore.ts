@@ -1,11 +1,11 @@
-// Pure git helpers: shared types, argv builders, env scrubbing, and output
-// parsers. NO mutable module state, NO process spawning, NO fs, NO
-// AsyncLocalStorage — everything here is request/response so it is trivially
-// unit-testable and safe under Agency's per-run isolation. Path-containment
-// (async + symlink-aware) lives in git.ts, not here.
+// Pure git helpers: shared types, argv builders, and env scrubbing. NO mutable
+// module state, NO process spawning, NO fs, NO AsyncLocalStorage — everything
+// here is request/response so it is trivially unit-testable and safe under
+// Agency's per-run isolation. The output parsers live in gitParse.ts;
+// path-containment (async + symlink-aware) lives in git.ts.
 //
 // This file currently covers the gitStatus / gitLog / gitCommit slice; the
-// remaining builders/parsers are added as the rest of the plan lands.
+// remaining builders are added as the rest of the plan lands.
 
 // git's porcelain change codes are a closed set:
 //   "." = unmodified          "M" = modified
@@ -87,19 +87,19 @@ const SCRUB_ENV_KEYS: string[] = [
 
 /** Shallow copy of `base` with git command-injection vars removed. */
 export function scrubEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = { ...base };
-  for (const key of Object.keys(out)) {
+  const scrubbed: NodeJS.ProcessEnv = { ...base };
+  for (const key of Object.keys(scrubbed)) {
     for (const rule of SCRUB_ENV_KEYS) {
       const matches = rule.endsWith("*")
         ? key.startsWith(rule.slice(0, -1))
         : key === rule;
       if (matches) {
-        delete out[key];
+        delete scrubbed[key];
         break;
       }
     }
   }
-  return out;
+  return scrubbed;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,118 +107,44 @@ export function scrubEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 // flags, i.e. starting with the subcommand. Path-restriction is NOT here
 // (moved to the tool layer's assertPathsContained). The --format/--porcelain
 // strings live here so stdlib/git.agency never emits one.
+//
+// git --format placeholders used below:
+//   %H = full commit hash        %an = author name    %ae = author email
+//   %aI = author date (ISO-8601) %s  = subject         %b  = body
+//   %x1f / %x1e = the field / record separator bytes (FIELD_SEP / RECORD_SEP).
 // ---------------------------------------------------------------------------
 
 export function statusArgs(): string[] {
   return ["status", "--porcelain=v2", "--branch", "-z"];
 }
 
-export function logArgs(o: {
-  n: number; oneline: boolean; path: string; ref: string; author: string;
+export function logArgs(opts: {
+  count: number; oneline: boolean; path: string; ref: string; author: string;
 }): string[] {
   const args: string[] = ["log"];
-  if (o.n > 0) {
-    args.push("-n", String(o.n));
+  if (opts.count > 0) {
+    args.push("-n", String(opts.count));
   }
-  const fmt = o.oneline
+  const format = opts.oneline
     ? `--format=%H${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%s${FIELD_SEP}${RECORD_SEP}`
     : `--format=%H${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%s${FIELD_SEP}%b${RECORD_SEP}`;
-  args.push(fmt);
-  if (o.author) {
-    args.push(`--author=${o.author}`);
+  args.push(format);
+  if (opts.author) {
+    args.push(`--author=${opts.author}`);
   }
   args.push("--end-of-options");
-  if (o.ref) {
-    args.push(hardenPositional(o.ref, "ref"));
+  if (opts.ref) {
+    args.push(hardenPositional(opts.ref, "ref"));
   }
-  if (o.path) {
-    args.push("--", hardenPositional(o.path, "path"));
+  if (opts.path) {
+    args.push("--", hardenPositional(opts.path, "path"));
   }
   return args;
 }
 
-export function commitArgs(o: { message: string }): string[] {
-  if (o.message.length === 0) {
+export function commitArgs(opts: { message: string }): string[] {
+  if (opts.message.length === 0) {
     throw new Error("git: commit message may not be empty");
   }
-  return ["commit", "-m", o.message];
-}
-
-// ---------------------------------------------------------------------------
-// Parsers.
-// ---------------------------------------------------------------------------
-
-/** Split RECORD_SEP-delimited output into per-record FIELD_SEP arrays,
- *  dropping git's inter-record newline and blank records. */
-export function splitRecords(stdout: string): string[][] {
-  return stdout
-    .split(RECORD_SEP)
-    .map((rec) => rec.replace(/^\n/, ""))
-    .filter((rec) => rec.trim() !== "")
-    .map((rec) => rec.split(FIELD_SEP));
-}
-
-function toCode(ch: string): ChangeCode {
-  return (ch === " " ? "." : ch) as ChangeCode;
-}
-
-// porcelain-v2 record layouts (space-separated fields BEFORE the path):
-//   type "1" ordinary:    1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>   -> path at field 8
-//   type "2" rename/copy: 2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <score> <path>  -> path at field 9 (+ origPath = next NUL token)
-//   type "u" unmerged:    u <xy> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path> -> path at field 10
-const ORDINARY_PATH_FIELD = 8;
-const RENAME_PATH_FIELD = 9;
-const UNMERGED_PATH_FIELD = 10;
-
-export function parseStatus(stdout: string): GitStatus {
-  const result: GitStatus = { branch: "", upstream: "", ahead: 0, behind: 0, entries: [] };
-  const tokens = stdout.split("\0");
-  if (tokens.length > 0 && tokens[tokens.length - 1] === "") {
-    tokens.pop(); // trailing empty token after the final NUL (NOT a useless special case)
-  }
-  for (let i = 0; i < tokens.length; i++) {
-    const rec = tokens[i];
-    if (rec.startsWith("# branch.head ")) {
-      result.branch = rec.slice("# branch.head ".length);
-    } else if (rec.startsWith("# branch.upstream ")) {
-      result.upstream = rec.slice("# branch.upstream ".length);
-    } else if (rec.startsWith("# branch.ab ")) {
-      const m = rec.match(/\+(\d+)\s+-(\d+)/);
-      if (m) {
-        result.ahead = Number(m[1]);
-        result.behind = Number(m[2]);
-      }
-    } else if (rec.startsWith("# ")) {
-      // other branch header (branch.oid) — ignore
-    } else if (rec.startsWith("1 ")) {
-      const parts = rec.split(" ");
-      const xy = parts[1];
-      result.entries.push({ path: parts.slice(ORDINARY_PATH_FIELD).join(" "), index: toCode(xy[0]), worktree: toCode(xy[1]) });
-    } else if (rec.startsWith("2 ")) {
-      const parts = rec.split(" ");
-      const xy = parts[1];
-      const renamedFrom = tokens[i + 1] ?? "";
-      i++; // consume the origPath NUL field
-      result.entries.push({ path: parts.slice(RENAME_PATH_FIELD).join(" "), index: toCode(xy[0]), worktree: toCode(xy[1]), renamedFrom });
-    } else if (rec.startsWith("u ")) {
-      result.entries.push({ path: rec.split(" ").slice(UNMERGED_PATH_FIELD).join(" "), index: "U", worktree: "U" });
-    } else if (rec.startsWith("? ")) {
-      result.entries.push({ path: rec.slice(2), index: "?", worktree: "?" });
-    } else if (rec.startsWith("! ")) {
-      result.entries.push({ path: rec.slice(2), index: "!", worktree: "!" });
-    }
-  }
-  return result;
-}
-
-export function parseLog(stdout: string): GitLog {
-  const commits = splitRecords(stdout).map((f) => ({
-    sha: f[0] ?? "",
-    author: f[1] ?? "",
-    email: f[2] ?? "",
-    date: f[3] ?? "",
-    subject: f[4] ?? "",
-    body: (f[5] ?? "").replace(/\n$/, ""),
-  }));
-  return { commits };
+  return ["commit", "-m", opts.message];
 }

@@ -1,0 +1,1 @@
+{ "series": { "docs": [ { "provider_code": "BLS", "dataset_code": "cu", "series_code": "CUUR0000SA0", "series_name": "U.S. city average - All items", "@frequency": "monthly", "period": ["2024-11", "2024-12", "2025-01"], "value": [315.6, 316.4, 317.6] } ] } }

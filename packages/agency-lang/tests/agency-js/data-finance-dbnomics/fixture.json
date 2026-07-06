@@ -1,0 +1,8 @@
+{
+  "path": "series/BLS/cu/CUUR0000SA0?observations=1",
+  "parsed": { "providerCode": "BLS", "datasetCode": "cu", "seriesCode": "CUUR0000SA0", "seriesName": "U.S. city average - All items", "frequency": "monthly", "observations": [ { "period": "2024-11", "value": 315.6 }, { "period": "2024-12", "value": 316.4 }, { "period": "2025-01", "value": 317.6 } ] },
+  "ragged": { "providerCode": "", "datasetCode": "", "seriesCode": "", "seriesName": "", "frequency": "", "observations": [ { "period": "2024-11", "value": 315.6 }, { "period": "2024-12", "value": null } ] },
+  "emptyDocs": "DBnomics returned no series (check the provider/dataset/series codes)",
+  "noSeries": "DBnomics returned no series (check the provider/dataset/series codes)",
+  "fetchError": "DBnomics request failed: boom"
+}

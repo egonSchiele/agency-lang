@@ -1,9 +1,13 @@
 import { getAgentCwd } from "std::index"
 import {
-  _gitRun, assertPathsContained,
-  statusArgs, logArgs, commitArgs,
-  parseStatus, parseLog,
-  GitStatus, GitLog,
+  _gitRun, assertPathsContained, assertBranchAllowed,
+  statusArgs, logArgs, diffArgs, showArgs, branchListArgs,
+  remoteListArgs, blameArgs, stashListArgs,
+  addArgs, commitArgs, checkoutArgs, switchArgs,
+  branchCreateArgs, branchDeleteArgs, stashPushArgs, stashPopArgs, restoreArgs,
+  parseStatus, parseLog, parseDiff, parseBranchList,
+  parseRemoteList, parseBlame, parseStashList,
+  GitStatus, GitLog, GitDiff, GitBranch, BlameLine, GitRemote, GitStash,
  } from "agency-lang/stdlib-lib/git.js"
 
 /** @module
@@ -11,7 +15,9 @@ import {
   model never supplies a raw flag — closing the `git diff --output=` /
   `-c core.pager=` class of abuse. Reads raise `std::git::<op>` effects the
   agent policy can auto-approve; writes prompt. Restrict any tool before
-  handing it to an agent with `.partial()` (e.g. `gitCommit.partial(cwd: repo)`).
+  handing it to an agent with `.partial()` — e.g. `gitCommit.partial(cwd: repo)`,
+  `gitBranchDelete.partial(force: false, protectedBranches: ["main"])`,
+  `gitAdd.partial(all: false, allowedPaths: ["src/"])`.
 
   ## The repo directory
 
@@ -27,23 +33,34 @@ import {
   whatever directory the process happens to be in.
 
   Note: positional values (refs/paths/branches) may not start with "-".
-
-  (This module currently exposes the gitStatus / gitLog / gitCommit slice; the
-  remaining tools are added as the rest of the plan lands.)
 */
 
 // Read effects
-effect std::git::status { cwd: string }
-effect std::git::log    { cwd: string, ref: string, path: string }
+effect std::git::status     { cwd: string }
+effect std::git::log        { cwd: string, ref: string, path: string }
+effect std::git::diff       { cwd: string, ref: string, ref2: string, staged: boolean, path: string }
+effect std::git::show       { cwd: string, ref: string }
+effect std::git::branchList { cwd: string }
+effect std::git::remoteList { cwd: string }
+effect std::git::blame      { cwd: string, path: string }
+effect std::git::stashList  { cwd: string }
 // Write effects
-effect std::git::commit { cwd: string, message: string }
+effect std::git::add          { cwd: string, paths: string[], all: boolean }
+effect std::git::commit       { cwd: string, message: string }
+effect std::git::checkout     { cwd: string, target: string, force: boolean }
+effect std::git::switch       { cwd: string, branch: string, create: boolean }
+effect std::git::branchCreate { cwd: string, branch: string }
+effect std::git::branchDelete { cwd: string, branch: string, force: boolean }
+effect std::git::stashPush    { cwd: string, message: string }
+effect std::git::stashPop     { cwd: string }
+effect std::git::restore      { cwd: string, paths: string[], staged: boolean }
 
 /** Read-only git effects — auto-approvable. */
-export effectSet GitRead  = <std::git::status, std::git::log>
+export effectSet GitRead = <std::git::status, std::git::log, std::git::diff, std::git::show, std::git::branchList, std::git::remoteList, std::git::blame, std::git::stashList>
 /** Mutating git effects — should prompt. */
-export effectSet GitWrite = <std::git::commit>
+export effectSet GitWrite = <std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore>
 /** All git effects. */
-export effectSet Git      = <GitRead, GitWrite>
+export effectSet Git = <GitRead, GitWrite>
 
 // Resolve the repo directory: an explicit cwd is used as given; otherwise fall
 // back to the agent working directory. `_gitRun` rejects an empty/relative
@@ -55,6 +72,8 @@ def repoDir(cwd: string): string {
   }
   return getAgentCwd()
 }
+
+// ---- Reads -----------------------------------------------------------------
 
 export def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
   """
@@ -90,6 +109,98 @@ export def gitLog(
   return parseLog(_gitRun(dir, logArgs({ count: n, oneline: oneline, path: path, ref: ref, author: author })))
 }
 
+export def gitDiff(
+  ref: string = "", ref2: string = "", staged: boolean = false,
+  path: string = "", allowedPaths: string[] = [], cwd: string = "",
+): GitDiff raises <std::git::diff> {
+  """
+  Show a diff as a structured per-file summary plus the raw unified patch.
+  @param ref - Compare against this revision (default: working tree vs index).
+  @param ref2 - Optional second revision to diff ref..ref2.
+  @param staged - Diff the index (staged changes) instead of the working tree.
+  @param path - Limit the diff to this path (may not start with "-").
+  @param allowedPaths - Restrict `path` to these prefixes (bind via .partial()).
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  if (path != "") {
+    assertPathsContained([path], allowedPaths, dir)
+  }
+  return interrupt std::git::diff("Show git diff", { cwd: dir, ref: ref, ref2: ref2, staged: staged, path: path })
+  return parseDiff(_gitRun(dir, diffArgs({ ref: ref, ref2: ref2, staged: staged, path: path })))
+}
+
+export def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show> {
+  """
+  Show a commit as a structured per-file summary plus the raw patch. Line
+  counts are approximate for merge commits (combined diffs are not counted).
+  @param ref - The revision to show (default HEAD).
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::show("Show git commit", { cwd: dir, ref: ref })
+  return parseDiff(_gitRun(dir, showArgs({ ref: ref })))
+}
+
+export def gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList> {
+  """
+  List local branches with their current-marker, upstream, and sha.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::branchList("List git branches", { cwd: dir })
+  return parseBranchList(_gitRun(dir, branchListArgs()))
+}
+
+export def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList> {
+  """
+  List configured remotes with their fetch/push URLs.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::remoteList("List git remotes", { cwd: dir })
+  return parseRemoteList(_gitRun(dir, remoteListArgs()))
+}
+
+export def gitBlame(path: string, ref: string = "", cwd: string = ""): BlameLine[] raises <std::git::blame> {
+  """
+  Show line-by-line authorship for a file.
+  @param path - The file to blame (may not start with "-").
+  @param ref - Optional revision to blame at.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::blame("Show git blame", { cwd: dir, path: path })
+  return parseBlame(_gitRun(dir, blameArgs({ path: path, ref: ref })))
+}
+
+export def gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList> {
+  """
+  List stashes with their ref and description.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::stashList("List git stashes", { cwd: dir })
+  return parseStashList(_gitRun(dir, stashListArgs()))
+}
+
+// ---- Writes ----------------------------------------------------------------
+
+export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::add> {
+  """
+  Stage changes for commit.
+  @param paths - Files to stage (may not start with "-").
+  @param all - Stage all changes (git add -A). Bind `all: false` via .partial() to forbid.
+  @param allowedPaths - Restrict `paths` to these prefixes (bind via .partial()).
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  assertPathsContained(paths, allowedPaths, dir)
+  return interrupt std::git::add("Stage changes", { cwd: dir, paths: paths, all: all })
+  _gitRun(dir, addArgs({ paths: paths, all: all }))
+  return "Staged changes"
+}
+
 export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
   """
   Create a commit from the staged changes.
@@ -99,4 +210,103 @@ export def gitCommit(message: string, cwd: string = ""): string raises <std::git
   const dir = repoDir(cwd)
   return interrupt std::git::commit("Create commit: ${message}", { cwd: dir, message: message })
   return _gitRun(dir, commitArgs({ message: message }))
+}
+
+export def gitCheckout(target: string, force: boolean = false, cwd: string = ""): string raises <std::git::checkout> {
+  """
+  Check out a branch, commit, or path.
+  @param target - The branch/commit/path (may not start with "-").
+  @param force - Discard local changes (git checkout --force). Bind `force: false` via .partial().
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  let message = "Checkout ${target}"
+  if (force) {
+    message = "Force checkout ${target} (DISCARDS local changes, cannot be undone)"
+  }
+  return interrupt std::git::checkout(message, { cwd: dir, target: target, force: force })
+  return _gitRun(dir, checkoutArgs({ target: target, force: force }))
+}
+
+export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""): string raises <std::git::switch> {
+  """
+  Switch to a branch (optionally creating it).
+  @param branch - The branch to switch to (may not start with "-").
+  @param create - Create the branch first (git switch -c).
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::switch("Switch to branch ${branch}", { cwd: dir, branch: branch, create: create })
+  return _gitRun(dir, switchArgs({ branch: branch, create: create }))
+}
+
+export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std::git::branchCreate> {
+  """
+  Create a new branch at HEAD (does not switch to it).
+  @param branch - The new branch name (may not start with "-").
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::branchCreate("Create branch ${branch}", { cwd: dir, branch: branch })
+  _gitRun(dir, branchCreateArgs({ branch: branch }))
+  return "Created branch ${branch}"
+}
+
+export def gitBranchDelete(branch: string, force: boolean = false, protectedBranches: string[] = [], cwd: string = ""): string raises <std::git::branchDelete> {
+  """
+  Delete a local branch.
+  @param branch - The branch to delete (may not start with "-").
+  @param force - Delete even if unmerged (git branch -D). Bind `force: false` via .partial().
+  @param protectedBranches - Branch names that may never be deleted (bind via .partial(), e.g. ["main","master"]).
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  assertBranchAllowed(branch, protectedBranches)
+  let message = "Delete branch ${branch}"
+  if (force) {
+    message = "Force-delete branch ${branch} (may discard unmerged commits, cannot be undone)"
+  }
+  return interrupt std::git::branchDelete(message, { cwd: dir, branch: branch, force: force })
+  _gitRun(dir, branchDeleteArgs({ branch: branch, force: force, protectedBranches: protectedBranches }))
+  return "Deleted branch ${branch}"
+}
+
+export def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
+  """
+  Stash the working-tree changes.
+  @param message - Optional stash message.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::stashPush("Stash changes", { cwd: dir, message: message })
+  return _gitRun(dir, stashPushArgs({ message: message }))
+}
+
+export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
+  """
+  Apply and drop the most recent stash.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::stashPop("Pop the latest stash", { cwd: dir })
+  return _gitRun(dir, stashPopArgs())
+}
+
+export def gitRestore(paths: string[], staged: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::restore> {
+  """
+  Restore files, discarding changes (or unstaging with `staged`).
+  @param paths - Files to restore (may not start with "-").
+  @param staged - Restore the staged version (unstage) instead of discarding working-tree changes.
+  @param allowedPaths - Restrict `paths` to these prefixes (bind via .partial()).
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  """
+  const dir = repoDir(cwd)
+  assertPathsContained(paths, allowedPaths, dir)
+  let message = "Discard working-tree changes to ${paths.length} file(s) (cannot be undone)"
+  if (staged) {
+    message = "Unstage ${paths.length} file(s)"
+  }
+  return interrupt std::git::restore(message, { cwd: dir, paths: paths, staged: staged })
+  _gitRun(dir, restoreArgs({ paths: paths, staged: staged }))
+  return "Restored ${paths.length} file(s)"
 }

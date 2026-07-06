@@ -18,7 +18,11 @@ import { edit } from "std::fs"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
 import { exec, ls, glob, grep, bash } from "std::shell"
-import { gitStatus, gitLog, gitCommit } from "std::git"
+import {
+  gitStatus, gitLog, gitDiff, gitShow, gitBranchList, gitRemoteList, gitBlame, gitStashList,
+  gitAdd, gitCommit, gitCheckout, gitSwitch, gitBranchCreate, gitBranchDelete,
+  gitStashPush, gitStashPop, gitRestore,
+ } from "std::git"
 import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
@@ -320,7 +324,21 @@ export static const codeTools: any[] = [
   bash.partial(useAgentCwd: true),
   gitStatus,
   gitLog,
+  gitDiff,
+  gitShow,
+  gitBranchList,
+  gitRemoteList,
+  gitBlame,
+  gitStashList,
+  gitAdd,
   gitCommit,
+  gitCheckout,
+  gitSwitch,
+  gitBranchCreate,
+  gitBranchDelete,
+  gitStashPush,
+  gitStashPop,
+  gitRestore,
   agencyCli,
   typecheck,
   parseAST,

@@ -1,0 +1,6 @@
+{
+  "articles": [
+    { "url": "https://example.com/a", "title": "Fed holds rates steady", "domain": "example.com", "language": "English", "sourcecountry": "United States", "seendate": "20260701T120000Z" },
+    { "url": "https://news.test/b", "title": "Markets react", "domain": "news.test", "language": "English", "sourcecountry": "United States", "seendate": "20260701T130000Z" }
+  ]
+}

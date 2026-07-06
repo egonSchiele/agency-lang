@@ -1,6 +1,6 @@
 import { getAgentCwd } from "std::index"
 import {
-  _gitRun, assertPathsContained, assertBranchAllowed,
+  _gitRun, assertPathsContained, assertAllNotRestricted, assertBranchAllowed,
   statusArgs, logArgs, diffArgs, showArgs, branchListArgs,
   remoteListArgs, blameArgs, stashListArgs,
   addArgs, commitArgs, checkoutArgs, switchArgs,
@@ -195,6 +195,7 @@ export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: stri
   @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
   """
   const dir = repoDir(cwd)
+  assertAllNotRestricted(all, allowedPaths)
   assertPathsContained(paths, allowedPaths, dir)
   return interrupt std::git::add("Stage changes", { cwd: dir, paths: paths, all: all })
   _gitRun(dir, addArgs({ paths: paths, all: all }))

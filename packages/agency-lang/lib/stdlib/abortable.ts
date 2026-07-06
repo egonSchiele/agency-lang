@@ -49,6 +49,12 @@ export type AbortableSpawnOptions = SpawnOptions & {
   /** When set, an abort fires the same teardown path as the timeout
    *  and the returned promise rejects with `AgencyCancelledError`. */
   signal?: AbortSignal;
+  /** Max stdout to buffer, in UTF-8 bytes. Once exceeded the child is
+   *  killed, stdout is marked truncated (a note is appended), and the
+   *  call resolves successfully with the partial output. 0/undefined =
+   *  unbounded. Keeps auto-approved reads (e.g. a huge `git diff`) from
+   *  buffering unbounded memory. */
+  maxOutputBytes?: number;
 };
 
 /**
@@ -81,13 +87,32 @@ export function abortableSpawn(
 
     let stdout = "";
     let stderr = "";
+    let stdoutBytes = 0;
+    let truncated = false;
     let timedOut = false;
     let aborted = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const maxOutputBytes = options.maxOutputBytes ?? 0;
 
     child.stdout!.setEncoding("utf8");
     child.stderr!.setEncoding("utf8");
-    child.stdout!.on("data", (data: string) => { stdout += data; });
+    child.stdout!.on("data", (data: string) => {
+      if (truncated) return;
+      if (maxOutputBytes > 0) {
+        const chunkBytes = Buffer.byteLength(data, "utf8");
+        if (stdoutBytes + chunkBytes > maxOutputBytes) {
+          // Append only the byte-prefix that fits, then kill the child so
+          // memory stays bounded even if git delivers one large chunk.
+          const remaining = maxOutputBytes - stdoutBytes;
+          stdout += Buffer.from(data, "utf8").subarray(0, remaining).toString("utf8");
+          truncated = true;
+          child.kill("SIGTERM");
+          return;
+        }
+        stdoutBytes += chunkBytes;
+      }
+      stdout += data;
+    });
     child.stderr!.on("data", (data: string) => { stderr += data; });
 
     if (options.input) {
@@ -122,6 +147,10 @@ export function abortableSpawn(
       cleanup();
       if (aborted) {
         reject(leafCancel(`${command} cancelled`, options.signal));
+      } else if (truncated) {
+        // We killed the child on purpose after hitting the byte cap; treat
+        // the partial output as a success rather than a spawn failure.
+        resolve({ stdout: stdout + `\n[output truncated at ${maxOutputBytes} bytes]`, stderr, exitCode: 0 });
       } else if (timedOut) {
         resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 1 });
       } else {

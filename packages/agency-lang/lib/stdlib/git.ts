@@ -44,17 +44,21 @@ export async function gitRunImpl(
     throw new Error(`git: repo directory is not a directory: ${cwd}`);
   }
   const env = scrubEnv(opts?.env ?? process.env);
+  // Bound stdout in abortableSpawn (UTF-8 bytes, kills the child once
+  // exceeded) so an auto-approved read can't buffer unbounded memory.
   const res = await abortableSpawn(
     "git",
     [...GIT_HARDENING_FLAGS, ...args],
-    { cwd, env, signal: opts?.signal, timeout: opts?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS },
+    {
+      cwd,
+      env,
+      signal: opts?.signal,
+      timeout: opts?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS,
+      maxOutputBytes: opts?.maxBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+    },
   );
   if (res.exitCode !== 0) {
     throw new Error(res.stderr.trim() || `git exited with code ${res.exitCode}`);
-  }
-  const cap = opts?.maxBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
-  if (res.stdout.length > cap) {
-    return res.stdout.slice(0, cap) + `\n[git output truncated at ${cap} bytes]`;
   }
   return res.stdout;
 }
@@ -80,5 +84,18 @@ export async function assertPathsContained(
   }
   for (const p of paths) {
     await assertContained(p, allowedPaths, cwd);
+  }
+}
+
+/**
+ * Fail closed: `git add -A` (all=true) stages everything and ignores the
+ * explicit paths list, so `allowedPaths` containment would be a no-op. Reject
+ * the combination rather than silently letting `-A` escape the restriction.
+ */
+export function assertAllNotRestricted(all: boolean, allowedPaths: string[]): void {
+  if (all && allowedPaths.length > 0) {
+    throw new Error(
+      "git: cannot combine all=true with allowedPaths — `git add -A` ignores path restrictions",
+    );
   }
 }

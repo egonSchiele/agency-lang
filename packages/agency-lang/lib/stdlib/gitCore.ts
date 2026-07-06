@@ -102,16 +102,33 @@ export const GIT_HARDENING_FLAGS: string[] = [
   "--no-optional-locks",
 ];
 
-// Env vars that let git run arbitrary commands or load attacker config.
+// Env vars we strip before invoking git. Two classes:
+//   (a) command-execution vectors (run arbitrary code / load attacker config)
+//   (b) repo/worktree overrides that would retarget git away from `cwd` —
+//       these would defeat the explicit-cwd contract AND allowedPaths
+//       containment (which resolves against cwd, not an overridden work tree).
 // A trailing "*" matches any var starting with that prefix.
 const SCRUB_ENV_KEYS: string[] = [
+  // (a) code execution / config injection
   "GIT_EXTERNAL_DIFF",
   "GIT_PAGER",
   "GIT_SSH_COMMAND",
   "GIT_SSH",
   "GIT_PROXY_COMMAND",
-  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_EXEC_PATH",
+  "GIT_EDITOR",
+  "GIT_SEQUENCE_EDITOR",
+  "GIT_ATTR_SOURCE",
   "GIT_CONFIG*", // GIT_CONFIG, GIT_CONFIG_GLOBAL/SYSTEM, GIT_CONFIG_COUNT/KEY_n/VALUE_n
+  // (b) repo / worktree retargeting
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_CEILING_DIRECTORIES",
 ];
 
 /** Shallow copy of `base` with git command-injection vars removed. */
@@ -183,7 +200,7 @@ export function diffArgs(opts: {
     args.push(hardenPositional(opts.ref, "ref"));
   }
   if (opts.ref2) {
-    args.push(hardenPositional(opts.ref2, "ref"));
+    args.push(hardenPositional(opts.ref2, "ref2"));
   }
   if (opts.path) {
     args.push("--", hardenPositional(opts.path, "path"));
@@ -212,10 +229,13 @@ export function remoteListArgs(): string[] {
 }
 
 export function blameArgs(opts: { path: string; ref: string }): string[] {
+  // --line-porcelain (not --porcelain): repeats the author block on EVERY
+  // line, so a non-contiguous line from an already-seen commit is still
+  // attributed correctly (plain --porcelain omits it after first sighting).
   // NOTE: `git blame` (unlike log/diff/show) rejects `--end-of-options`
   // followed by `--`, so we omit it here. The ref is still guarded by
   // hardenPositional (leading "-" rejected) and the path sits after `--`.
-  const args: string[] = ["blame", "--porcelain"];
+  const args: string[] = ["blame", "--line-porcelain"];
   if (opts.ref) {
     args.push(hardenPositional(opts.ref, "ref"));
   }

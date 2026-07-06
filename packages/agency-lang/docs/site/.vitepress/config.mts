@@ -77,11 +77,10 @@ export default defineConfig({
             { text: "Developer Tools", link: "/guide/developer-tools" },
             { text: "Debugging", link: "/guide/debugging" },
             { text: "Observability", link: "/guide/observability" },
-
           ],
         },
         {
-          text: "04. LLMs",
+          text: "05. LLMs",
           items: [
             {
               text: "LLM Calls, Part 2",
@@ -102,7 +101,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "05. Agency's Execution Model",
+          text: "06. Agency's Execution Model",
           items: [
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
@@ -119,7 +118,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "06. Safety, Part 2",
+          text: "07. Safety, Part 2",
           items: [
             {
               text: "Effect Sets and raises",
@@ -129,13 +128,11 @@ export default defineConfig({
           ],
         },
         {
-          text: "07. Testing and Validation",
-          items: [
-            { text: "Schemas", link: "/guide/schemas" },
-          ],
+          text: "08. Testing and Validation",
+          items: [{ text: "Schemas", link: "/guide/schemas" }],
         },
         {
-          text: "08. Advanced",
+          text: "09. Advanced",
           items: [
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },

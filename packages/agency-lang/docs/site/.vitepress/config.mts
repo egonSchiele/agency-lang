@@ -15,6 +15,12 @@ export default defineConfig({
     sidebar: {
       "/guide/": [
         {
+          text: "00. Why Agency?",
+          items: [
+            { text: "Why Agency?", link: "/guide/why-agency" },
+          ]
+        },
+        {
           text: "01. Basics",
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
@@ -63,6 +69,10 @@ export default defineConfig({
               text: "Interrupts from TypeScript",
               link: "/guide/interrupts-from-typescript",
             },
+            {
+              text: "Agency's Standard Library",
+              link: "/guide/agency-stdlib",
+            },
           ],
         },
         {
@@ -74,9 +84,6 @@ export default defineConfig({
             },
             { text: "Agency Config File", link: "/guide/agency-config-file" },
             { text: "Testing", link: "/guide/testing" },
-            { text: "Developer Tools", link: "/guide/developer-tools" },
-            { text: "Debugging", link: "/guide/debugging" },
-            { text: "Observability", link: "/guide/observability" },
           ],
         },
         {
@@ -118,7 +125,16 @@ export default defineConfig({
           ],
         },
         {
-          text: "07. Safety, Part 2",
+          text: "07. Tooling, Part 2",
+          items: [
+            { text: "Developer Tools", link: "/guide/developer-tools" },
+            { text: "Debugging", link: "/guide/debugging" },
+            { text: "Observability", link: "/guide/observability" },
+          ],
+        },
+
+        {
+          text: "08. Safety, Part 2",
           items: [
             {
               text: "Effect Sets and raises",
@@ -128,12 +144,17 @@ export default defineConfig({
           ],
         },
         {
-          text: "08. Advanced",
+          text: "09. Advanced",
           items: [
+            { text: "Callbacks", link: "/guide/callbacks" },
+            {
+              text: "Agency Packages",
+              link: "/guide/agency-packages",
+            },
+
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },
-            { text: "Callbacks", link: "/guide/callbacks" },
           ],
         },
         {
@@ -143,14 +164,6 @@ export default defineConfig({
             {
               text: "Agency vs TypeScript",
               link: "/guide/agency-vs-typescript",
-            },
-            {
-              text: "Agency's Standard Library",
-              link: "/guide/agency-stdlib",
-            },
-            {
-              text: "Agency Packages",
-              link: "/guide/agency-packages",
             },
             {
               text: "Built-in Functions",
@@ -306,8 +319,11 @@ export default defineConfig({
           text: "Packages",
           items: [
             { text: "Overview", link: "/packages/" },
-            { text: "web-fetch", link: "/packages/web-fetch/" },
+            { text: "email", link: "/packages/email/" },
+            { text: "github", link: "/packages/github/" },
             { text: "mcp", link: "/packages/mcp/" },
+            { text: "web-fetch", link: "/packages/web-fetch/" },
+            { text: "whisper-local", link: "/packages/whisper-local/" },
           ],
         },
       ],

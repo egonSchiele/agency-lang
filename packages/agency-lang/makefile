@@ -45,13 +45,16 @@ fixtures:
 doc:
 	rm -rf docs/site/stdlib/ && pnpm run agency doc stdlib -o docs/site/stdlib/
 
+# Documentable packages: each has an index.agency that `agency doc` reads.
+# (brave-search / tui / examples have no library source, so they're skipped.)
+DOC_PACKAGES = web-fetch mcp email github whisper-local
+
 packages-doc:
-	rm -rf docs/site/packages/
-	pnpm run agency doc ../web-fetch -o docs/site/packages/web-fetch/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/web-fetch/
-	pnpm run agency doc ../mcp -o docs/site/packages/mcp/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/mcp/
-	pnpm run agency doc ../email -o docs/site/packages/email/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/email/
-	pnpm run agency doc ../github -o docs/site/packages/github/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/github/
-	pnpm run agency doc ../whisper-local -o docs/site/packages/whisper-local/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/whisper-local/
+	@for pkg in $(DOC_PACKAGES); do \
+	  echo "Generating docs for $$pkg..."; \
+	  rm -rf docs/site/packages/$$pkg/; \
+	  pnpm run agency doc ../$$pkg -o docs/site/packages/$$pkg/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/$$pkg/ || exit 1; \
+	done
 
 test-log:
 	rm -f test-output

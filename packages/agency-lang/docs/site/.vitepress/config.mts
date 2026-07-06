@@ -128,12 +128,9 @@ export default defineConfig({
           ],
         },
         {
-          text: "08. Testing and Validation",
-          items: [{ text: "Schemas", link: "/guide/schemas" }],
-        },
-        {
-          text: "09. Advanced",
+          text: "08. Advanced",
           items: [
+            { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },
             { text: "Callbacks", link: "/guide/callbacks" },

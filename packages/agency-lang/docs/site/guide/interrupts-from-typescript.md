@@ -5,11 +5,14 @@ description: How to run an Agency node from TypeScript, receive the interrupts i
 
 # Responding to Interrupts from TypeScript
 
-When you run an Agency node [from TypeScript](/guide/ts-interop), it might hit an [interrupt](/guide/interrupts) — a point where it pauses to ask for approval or input before doing something like writing a file or calling a tool. Inside Agency you'd catch these with a `handle` block. From the TypeScript side, the node instead **returns the pending interrupts to you**: your code decides how to respond, then resumes the run. This is the building block for approval flows, human-in-the-loop UIs, and API endpoints that pause for confirmation.
+When you run an Agency node [from TypeScript](/guide/ts-interop), it might hit an [interrupt](/guide/interrupts). Inside Agency, you'd handle interrupts with a `handle` block. From the TypeScript side, here's what happens:
+1. The node instead **returns the pending interrupts to you**
+2. You respond to the interrupts
+3. You resume the run, passing your responses.
 
 ## The shape of a result
 
-A compiled node returns a result object with a `data` field. Normally `data` is the node's return value — but if the run paused, `data` is an array of interrupts instead. The exported `hasInterrupts()` helper tells the two apart:
+A compiled node returns a result object with a `data` field. Normally `data` is the node's return value, but if the run paused, `data` is an array of interrupts instead. You can use `hasInterrupts()` to see if the `data` contains interrupts:
 
 ```ts
 import { main, hasInterrupts } from "./agent.js";
@@ -27,16 +30,16 @@ if (hasInterrupts(result.data)) {
 
 Each interrupt in the array describes what the node is waiting on:
 
-- **`message`** — the human-readable prompt, e.g. `"Approve deploy?"`.
-- **`effect`** — which effect raised it, e.g. `"std::write"`.
-- **`data`** — the effect's payload (whatever the interrupt carried).
-- **`interruptId`** — a unique id for this specific interrupt.
+- **`message`** — What you can show to the user.
+- **`effect`** — The interrupt's [effect](/guide/effects).
+- **`data`** — the effect's [payload](/guide/effects#payload-types).
+- **`interruptId`** — a unique id
 
-You'll typically show `message` to a user (or apply a policy) to decide your response.
+[All interrupts have the first three values](/guide/effects). The fourth one is so Agency can match your responses back to the right interrupt when you resume the run.
 
 ## Responding
 
-Build one response per interrupt, **in the same order** as the array, using the exported `approve()` and `reject()` helpers. Then hand the interrupts and your responses to `respondToInterrupts()`:
+You'll always get an array of interrupts, even if there's just one interrupt. Create one response per interrupt, in the same order as the array, using `approve()` and `reject()`, then call `respondToInterrupts()`:
 
 ```ts
 import { main, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
@@ -54,11 +57,11 @@ if (hasInterrupts(result.data)) {
 }
 ```
 
-`respondToInterrupts()` returns another result with a `data` field — just like `main()` did.
+Notice that you need to pass `result.data` to `respondToInterrupts()`. This is what lets Agency resume execution from the right place. See [checkpointing](/guide/checkpointing) and [interrupts part 2](/guide/interrupts-part-2) for more info.
 
 ## Looping until it finishes
 
-A node can pause more than once: resuming it may surface a fresh batch of interrupts. So the robust pattern is a loop that keeps responding until `data` is no longer interrupts:
+`respondToInterrupts()` returns another result with a `data` field, just like `main()` did. Again, `data` could be the final value, or it could be another array of interrupts. You should call your `respondToInterrupts()` in a loop until `data` no longer has interrupts:
 
 ```ts
 import { main, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
@@ -75,23 +78,7 @@ console.log(result.data); // the final return value
 
 ## Approving and rejecting
 
-The helpers mirror what happens inside a `handle` block:
-
-- **`approve()`** — let the action proceed; the paused function or node keeps executing normally.
-- **`reject()`** — deny it; that function or node halts and returns a failure.
-
-Both accept an optional value:
-
-- **`approve(value)`** supplies a value back to the paused call. For example, if the interrupt was a `write`, you can approve with a different filename.
-- **`reject(reason)`** rejects with a specific message instead of the generic "interrupt rejected" error. If the interrupt came from an LLM tool call, that message is sent back to the model explaining why the call was refused.
-
-```ts
-const responses = result.data.map((intr) => {
-  if (intr.message.includes("delete")) {
-    return reject("Deletion is not allowed from this endpoint.");
-  }
-  return approve();
-});
-```
-
-That's the whole loop: run the node, inspect `data`, respond to each interrupt, and resume until you get a real value back.
+- `approve()` - approve
+- `reject()` - reject
+- `approve(value)` - approve with a value
+- `reject(reason)` - reject with a reason

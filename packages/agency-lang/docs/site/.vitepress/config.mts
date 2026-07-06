@@ -15,10 +15,15 @@ export default defineConfig({
     sidebar: {
       "/guide/": [
         {
+          text: "00. Why Agency?",
+          items: [
+            { text: "Why Agency?", link: "/guide/why-agency" },
+          ]
+        },
+        {
           text: "01. Basics",
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
-            { text: "Why Agency?", link: "/guide/why-agency" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
             { text: "Nodes", link: "/guide/nodes" },

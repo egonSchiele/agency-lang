@@ -31,7 +31,9 @@ Building agents is difficult. I created Agency to make the easy parts of buildin
 
 Here are a few examples comparing Agency and TypeScript to show what's possible in both languages. We'll start with simple syntactical sugar, and move to features that would be genuinely hard to do in another language.
 
-## Structured output
+## Syntactical sugar
+
+### Structured output
 
 In Agency, you just write the type, and the compiler turns it into a JSON schema for you. In TypeScript, you declare a schema separately, wire it into the request, and parse the response.
 
@@ -79,7 +81,7 @@ console.log(completion.choices[0].message.parsed?.title)
 </template>
 </CodeCompare>
 
-## Tool calling
+### Tool calling
 
 In Agency, every function *is* a tool. You can just pass it into the LLM call. Agency also orchestrates the full tool loop for you.
 
@@ -148,19 +150,29 @@ while (true) {
 </template>
 </CodeCompare>
 
-## Retries and timeouts
+### Cost and time budgets
 
-Model calls fail and hang. In Agency, resilience is an option on the call. In TypeScript, you write the retry loop, the backoff, and the timeout wrapper yourself.
+Agency lets you set a budget for a block of code. You can set a dollar amount, a timeout, or both. In TypeScript, you would need to check every LLM call yourself. 
+
+
 
 <CodeCompare>
 <template #agency>
 
 ```ts
+import { guard } from "std::thread"
+
 node main() {
-  return llm("Summarize today's news.", {
-    retries: 3,
-    timeout: 5000,
-  })
+  // Cap this whole block at 50 cents and 30 seconds.
+  const result = guard(cost: $0.50, time: 30s) as {
+    const draft = llm("Research renewable energy and write a report.")
+    return factCheck(draft)
+  }
+
+  match(result) {
+    success(report) => print(report)
+    failure(e) => print("Ran out of budget")
+  }
 }
 ```
 
@@ -168,40 +180,52 @@ node main() {
 <template #typescript>
 
 ```ts
-async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), ms)
-    ),
-  ])
+import OpenAI from "openai"
+
+const openai = new OpenAI()
+const BUDGET = 0.50
+const deadline = Date.now() + 30_000
+let spent = 0
+
+// You price each response yourself, from token usage × model rates.
+function priceOf(usage): number { /* ... */ }
+
+async function call(prompt: string, signal: AbortSignal): Promise<string> {
+  const res = await openai.chat.completions.create(
+    { model: "gpt-4o", messages: [{ role: "user", content: prompt }] },
+    { signal },
+  )
+  spent += priceOf(res.usage)
+  if (spent > BUDGET) throw new Error("over budget")
+  return res.choices[0].message.content ?? ""
 }
 
-let delay = 500
-for (let attempt = 0; ; attempt++) {
-  try {
-    const result = await withTimeout(callLLM("Summarize today's news."), 5000)
-    break
-  } catch (err) {
-    if (attempt >= 3) throw err
-    await new Promise((r) => setTimeout(r, delay))
-    delay *= 2 // exponential backoff
-  }
+const ctrl = new AbortController()
+const timer = setTimeout(() => ctrl.abort(), deadline - Date.now())
+try {
+  const draft = await call("Research renewable energy...", ctrl.signal)
+  const report = await call(`Fact-check and tighten: ${draft}`, ctrl.signal)
+} finally {
+  clearTimeout(timer)
 }
+// ...and `spent`, the deadline, and the signal get threaded through
+// every function that might make a call.
 ```
 
 </template>
 </CodeCompare>
 
-The point isn't that any of this is impossible in TypeScript — it's all just code. It's that Agency makes the common shape of agent work a language feature, so you write the interesting part and let the compiler and runtime handle the plumbing.
+All of these things are possible in TypeScript, Agency just provides some tactical sugar for it. Now let's look at some things that would be genuinely hard to do in TypeScript.
 
-## But some things aren't just plumbing
+## Genuinely hard to do
 
-The examples above save you boilerplate. These next ones are different: the TypeScript version isn't "more code" — it's a fair amount of infrastructure, not something a library can bolt on. For these, the TypeScript side is a sketch of what you'd have to build, not a drop-in equivalent.
+The examples above save you boilerplate, but these next ones are different. They would be a lot of work to do in TypeScript... enough work that you would essentially be rebuilding Agency to do them.
 
-### Agents that write and run their own code — safely
+### Agents that write and run their own code
 
-You can build this in Agency in a few lines: an agent that asks the model to write a program, then runs it. The scary part is usually "…and now untrusted, model-written code is executing on my machine." In Agency, the generated code runs in a subprocess, and *every side effect it attempts* — writing a file, hitting the network, spawning more code — raises an interrupt that runs **your** handler in the parent. A [guard](/guide/guards) caps how long it can run and how much it can spend.
+Agency lets you define what an agent can and can't do – no writes, no network requests, etc.  You can enforce these rules at compile time and at run time. The cool part is, *you can enforce them at runtime for any code that your agent writes and runs as well*.
+
+You can build this in Agency in a few lines:
 
 <CodeCompare>
 <template #agency>
@@ -212,19 +236,17 @@ import { guard } from "std::thread"
 
 node main() {
   // The model writes a program to do the task.
-  const source = llm("Write an Agency program whose main node
-                      researches solar power and saves a report.")
+  const prompt = "Write an Agency program that researches solar power."
+  const source = llm(prompt)
   const program = compile(source)
-  if (isFailure(program)) { return "did not compile" }
 
   handle {
-    // Cap the generated code's runtime and spend.
+    // Cap the generated code's running time and cost
     guard(cost: $0.50, time: 30s) as {
       run(program.value, "main")
     }
   } with (intr) {
-    // Every file write, fetch, etc. the generated code
-    // attempts comes here first. We decide what it may do.
+    // reject all writes
     if (intr.effect == "std::write") { return reject() }
     return approve()
   }
@@ -232,31 +254,13 @@ node main() {
 ```
 
 </template>
-<template #typescript>
-
-```ts
-// There's no built-in for "run this code, but govern what it
-// can do." A faithful version means building, roughly:
-//
-//   • a child process to isolate the generated code
-//   • an IPC protocol between parent and child
-//   • interception of every side-effecting call the code
-//     makes (fs, network, subprocess) — missing one is a hole
-//   • routing each of those back to the parent to approve/deny
-//   • metering token spend across the process boundary, live
-//   • wall-clock, memory, and output caps with a hard kill
-//
-// That's closer to a sandbox runtime than a snippet.
-```
-
-</template>
 </CodeCompare>
 
-> **The research.** Code-as-action outperformed JSON tool calls in one controlled comparison ([CodeAct, ICML 2024](https://arxiv.org/abs/2402.01030)), and recent agent-safety work increasingly favors *execution-level, by-design* enforcement over detection-based defenses that adaptive attackers tend to break ([Adaptive Attacks, 2025](https://arxiv.org/abs/2503.00061); [Progent, 2025](https://arxiv.org/abs/2504.11703)). Agency's handler-per-effect model works along those lines, at the language level.
+There are different sandboxing options (eg Deno), but what Agency allows is very precise control. For example, you could say that the agent is only allowed to read files in a specific directory, it's allowed to run `git log` but not `git checkout` ... whatever logic you can write in code. The time and cost guards automatically work too.
 
-### Pausing for a human — and resuming exactly where you left off
+### Pausing for human input
 
-An interrupt pauses execution — even deep inside the model's tool loop — hands control to a handler at the top, and then resumes *right where it paused*, with every local variable intact. Agency snapshots the whole execution state, so you can even serialize the pause, hand it to a web client, and [resume it later](/guide/interrupts-from-typescript).
+Agency lets you pause the agent at any point for human input with a single line. This isn't like getting input on the command line – Agency is actually halting and resuming execution of your agent, which means you could use this code from a web server, and your agent could wait for human input indefinitely without blocking any threads.
 
 <CodeCompare>
 <template #agency>
@@ -269,42 +273,13 @@ def deleteEmails(count: number) {
 }
 
 node main() {
-  handle {
-    llm("Clean up my inbox.", tools: [deleteEmails])
-  } with (intr) {
-    // Fires the instant the model's tool call tries to
-    // delete — deep in the tool loop — then resumes there
-    // once we answer.
-    const answer = input("${intr.message} (y/n) ")
-    if (answer == "y") { return approve() }
-    return reject()
-  }
+  llm("Clean up my inbox.", tools: [deleteEmails])
 }
 ```
-
-</template>
-<template #typescript>
-
-```ts
-// JavaScript can't pause a running call stack and resume it
-// later. You either hoist every approval to the top...
-const plan = await getPlan()
-for (const step of plan) {
-  if (step.risky && !(await askHuman(step))) continue
-  await run(step)
-}
-
-// ...or, to survive a restart, hand-roll a state machine:
-//   • serialize every local variable after each step
-//   • persist it; return a "pending approval" to the caller
-//   • on resume, rehydrate and re-enter at the exact step
-// The deeper the call stack, the more state you thread by hand.
-```
-
 </template>
 </CodeCompare>
 
-> **The research.** Surveys of human-agent systems frame human control injected mid-run as one fix for autonomy's reliability and safety failures ([Zou et al., 2025](https://arxiv.org/abs/2505.00753)) — while noting that the *operator's* approval burden is itself under-studied. Agency's interrupts give you that control channel: resumable, and paired with `preapprove`/[policies](/guide/policies) to help keep the burden low.
+This feature just works. You could write an agent, that calls a sub-agent, that makes several tool calls in parallel, and some of those tool calls need to pause for human input – and when you resume execution, you would still pick up right where you left off. See [interrupts](/guide/interrupts) for more information.
 
 ### Concurrency you don't have to think about
 

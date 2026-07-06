@@ -59,11 +59,28 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             { text: "Concurrency", link: "/guide/concurrency" },
-            // TS interop part 2, including handling interrupts, cancellation
+            {
+              text: "Interrupts from TypeScript",
+              link: "/guide/interrupts-from-typescript",
+            },
           ],
         },
         {
-          text: "04. LLMs",
+          text: "04. Tooling",
+          items: [
+            {
+              text: "Compiling and Running Code",
+              link: "/guide/compiling-and-running",
+            },
+            { text: "Agency Config File", link: "/guide/agency-config-file" },
+            { text: "Testing", link: "/guide/testing" },
+            { text: "Developer Tools", link: "/guide/developer-tools" },
+            { text: "Debugging", link: "/guide/debugging" },
+            { text: "Observability", link: "/guide/observability" },
+          ],
+        },
+        {
+          text: "05. LLMs",
           items: [
             {
               text: "LLM Calls, Part 2",
@@ -84,7 +101,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "05. Agency's Execution Model",
+          text: "06. Agency's Execution Model",
           items: [
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Interrupts, Part 2", link: "/guide/interrupts-part-2" },
@@ -101,7 +118,7 @@ export default defineConfig({
           ],
         },
         {
-          text: "06. Safety, Part 2",
+          text: "07. Safety, Part 2",
           items: [
             {
               text: "Effect Sets and raises",
@@ -111,15 +128,11 @@ export default defineConfig({
           ],
         },
         {
-          text: "07. Testing and Validation",
-          items: [
-            { text: "Testing", link: "/guide/testing" },
-            { text: "Observability", link: "/guide/observability" },
-            { text: "Schemas", link: "/guide/schemas" },
-          ],
+          text: "08. Testing and Validation",
+          items: [{ text: "Schemas", link: "/guide/schemas" }],
         },
         {
-          text: "08. Advanced",
+          text: "09. Advanced",
           items: [
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Memory", link: "/guide/memory" },
@@ -154,7 +167,7 @@ export default defineConfig({
               text: "TypeScript Helpers (agency.*)",
               link: "/guide/ts-helpers",
             },
-            { text: "Agency Config File", link: "/guide/agency-config-file" },
+
             { text: "CLI Argument Parsing", link: "/guide/cli-args" },
             {
               text: "Schema Parameter Injection",
@@ -162,6 +175,7 @@ export default defineConfig({
             },
             { text: "MCP", link: "/guide/mcp" },
             { text: "Serving Agency Code", link: "/guide/serving" },
+            { text: "Build Integration", link: "/guide/build-integration" },
             {
               text: "Custom & local model providers",
               link: "/guide/custom-providers",

@@ -5,8 +5,6 @@ description: How to enable Agency's structured logging for events like node entr
 
 # Observability
 
-If you would like agency to emit structured logs, set `observability: true` in your `agency.json`. Agency will now emit logs for different events such as entering a node, making an LLM call, making a tool call, throwing an interrupt, etc.
-
 ## Enabling observability
 
 In your `agency.json`, set `observability: true` and configure at least one sink:
@@ -26,6 +24,8 @@ Sinks:
 - `host: "stdout"` — prints logs to `console.log`.
 - `logFile: "<path>"` — appends logs to the given file. The parent directory is created automatically.
 - Pick one or both.
+
+Agency will now emit logs for different events such as entering a node, making an LLM call, making a tool call, throwing an interrupt, etc.
 
 ## Inspecting logs
 
@@ -77,9 +77,13 @@ Press `?` in the viewer to see this info.
 | `?` | Show / hide the keybinding help |
 | `q`, `Ctrl+C` | Quit |
 
-### Magnitude coloring
+### Highlighting slow calls
 
-You can set the viewer to highlight slow or expensive LLM calls. Durations over `viewer.slowMs` (default 5s) and costs over `viewer.expensiveUsd` (default $0.01) render in bright-red; durations under `viewer.fastMs` (default 100ms) render in gray. You can configure the thresholds for these in `agency.json`.
+You can set the viewer to highlight slow or expensive LLM calls.
+- Durations over `viewer.slowMs` (default 5s) and costs over `viewer.expensiveUsd` (default $0.01) are rendered in bright-red.
+- Durations under `viewer.fastMs` (default 100ms) render in gray.
+
+You can configure the thresholds for these in `agency.json`.
 
 ```json
 {
@@ -90,3 +94,7 @@ You can set the viewer to highlight slow or expensive LLM calls. Durations over 
   }
 }
 ```
+
+## References
+- [`logs` CLI reference](/cli/logs)
+- [Agency config file](/guide/agency-config-file)

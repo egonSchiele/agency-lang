@@ -11,7 +11,7 @@ Why Agency? Learning a new language is not easy. Adding it to your stack is not 
 
 In the summer of 1956, a few academics came together for two months, with the goal of creating artificial intelligence.
 
-> "We propose that a 2-month, 10-man study of artificial intelligence be carried out during the summer of 1956... An attempt will be made to find how to make machines use language, form, abstractions and concepts, solve kinds of problems now reserved for humans, and improve themselves."
+> "We propose that a 2-month, 10-man study of artificial intelligence be carried out during the summer of 1956... to find how to *make machines use language, form, abstractions and concepts, solve kinds of problems now reserved for humans, and improve themselves*."
 
 They believed they could make significant progress on all of these in a single summer. They were no slouches. Among the group:
 
@@ -19,21 +19,21 @@ They believed they could make significant progress on all of these in a single s
 - Claude Shannon — father of information theory
 - Herbert A. Simon - won both a Turing Award and a Nobel Prize in Economics
 
-Even though they didn't achieve their goal, they set the research agenda for the next 70 years. AI is hard. It was hard then, and it's still hard today.
+Now, with LLMs, we've made progress on all of these goals, but there's still a ways to go, and building agents is still hard today.
 
 ## Building agents is hard
 
-Building an agent is not easy. Even if you start with a great model, building an agent that responds accurately, swiftly, and safely, building an agent that's able to have a long conversation, and still remember context from early in the conversation, is really difficult.
+Building an agent is not easy. Even if you start with a great model, building an agent that responds accurately, swiftly, and safely, is difficult.
 
-These are all genuinely hard engineering problems, and in fact each one is big enough that it's turning into its own area of research.
+People have a baseline level of expectation from using agents like ChatGPT and Claude Code, but that baseline is difficult to achieve. It takes more than strapping a basic harness on a large language model to get there. Just like the Dartmouth summer research project, I think we're seeing that problems like agent memory are harder to solve than we expected.
 
 Building agents is difficult. I created Agency to make the easy parts of building agents simple, and the complex parts tractable.
 
-Here are a few examples comparing Agency and TypeScript to show what's possible in both languages. I have done my best to represent both languages fairly.
+Here are a few examples comparing Agency and TypeScript to show what's possible in both languages. We'll start with simple syntactical sugar, and move to features that would be genuinely hard to do in another language.
 
 ## Structured output
 
-Ask for a typed value and get one back. In Agency, you annotate the result and the compiler turns your type into a JSON schema for you. In TypeScript, you declare a schema separately, wire it into the request, and parse the response.
+In Agency, you just write the type, and the compiler turns it into a JSON schema for you. In TypeScript, you declare a schema separately, wire it into the request, and parse the response.
 
 <CodeCompare>
 <template #agency>
@@ -79,9 +79,11 @@ console.log(completion.choices[0].message.parsed?.title)
 </template>
 </CodeCompare>
 
-## Calling tools
+## Tool calling
 
-Give the model a function it can call. In Agency, a function *is* a tool — pass it in and Agency runs the whole tool loop for you (calling the tool, feeding the result back, repeating until the model is done). In TypeScript, you describe the tool's schema by hand and write that loop yourself.
+In Agency, every function *is* a tool. You can just pass it into the LLM call. Agency also orchestrates the full tool loop for you.
+
+In TypeScript, you have to define the tool schema yourself. When the LLM responds, you have to check for tool calls, and call the appropriate functions yourself.
 
 <CodeCompare>
 <template #agency>
@@ -93,7 +95,7 @@ def getWeather(city: string): string {
 }
 
 node main() {
-  return llm("What should I wear in Paris today?", { tools: [getWeather] })
+  return llm("What should I wear in Mumbai today?", { tools: [getWeather] })
 }
 ```
 
@@ -116,23 +118,24 @@ const tools = [{
       required: ["city"],
     },
   },
-}]
+}];
 
 const messages = [
-  { role: "user", content: "What should I wear in Paris today?" },
-]
+  { role: "user", content: "What should I wear in Mumbai today?" },
+];
 
+let res;
 while (true) {
-  const res = await openai.chat.completions.create({
+  res = await openai.chat.completions.create({
     model: "gpt-4o", messages, tools,
   })
-  const msg = res.choices[0].message
-  messages.push(msg)
+  const msg = res.choices[0].message;
+  messages.push(msg);
 
-  if (!msg.tool_calls) break // model gave a final answer
+  if (!msg.tool_calls) break;
 
   for (const call of msg.tool_calls) {
-    const { city } = JSON.parse(call.function.arguments)
+    const { city } = JSON.parse(call.function.arguments);
     messages.push({
       role: "tool",
       tool_call_id: call.id,

@@ -1,4 +1,4 @@
-import { applyAgentCwd } from "std::index"
+import { getAgentCwd } from "std::index"
 import {
   _gitRun, assertPathsContained,
   statusArgs, logArgs, commitArgs,
@@ -13,10 +13,23 @@ import {
   agent policy can auto-approve; writes prompt. Restrict any tool before
   handing it to an agent with `.partial()` (e.g. `gitCommit.partial(cwd: repo)`).
 
+  ## The repo directory
+
+  Every tool takes `cwd`, the git repo to operate on:
+
+  - Leave it empty (the default) to use the **agent working directory** — the
+    repo the CLI agent is running in (see `setAgentCwd`).
+  - Pass an **absolute path** to target a specific repo (e.g. from a server
+    backend with no agent cwd). `cwd` is used as given; it is NOT joined to the
+    agent working directory.
+
+  If neither is available the tool errors rather than silently running against
+  whatever directory the process happens to be in.
+
   Note: positional values (refs/paths/branches) may not start with "-".
 
-  (This module currently exposes the gitStatus / gitLog / gitCommit slice;
-  the remaining tools are added as the rest of the plan lands.)
+  (This module currently exposes the gitStatus / gitLog / gitCommit slice; the
+  remaining tools are added as the rest of the plan lands.)
 */
 
 // Read effects
@@ -32,14 +45,24 @@ export effectSet GitWrite = <std::git::commit>
 /** All git effects. */
 export effectSet Git      = <GitRead, GitWrite>
 
+// Resolve the repo directory: an explicit cwd is used as given; otherwise fall
+// back to the agent working directory. `_gitRun` rejects an empty/relative
+// result, so "no repo directory" fails loudly instead of targeting the
+// process cwd.
+def repoDir(cwd: string): string {
+  if (cwd != "") {
+    return cwd
+  }
+  return getAgentCwd()
+}
+
 export def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
   """
   Show the working-tree status (branch, ahead/behind, changed files) as
-  structured data. Requires a repo: pass `cwd` or run where the agent
-  working directory is set.
-  @param cwd - Repo directory; resolved against the agent working directory.
+  structured data.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
   """
-  const dir = applyAgentCwd(cwd)
+  const dir = repoDir(cwd)
   return interrupt std::git::status("Show git status", { cwd: dir })
   return parseStatus(_gitRun(dir, statusArgs()))
 }
@@ -57,23 +80,23 @@ export def gitLog(
   @param ref - Start from this revision (e.g. HEAD~5, a branch, a sha).
   @param author - Filter by author substring.
   @param allowedPaths - Restrict `path` to these prefixes (bind via .partial()).
-  @param cwd - Repo directory; resolved against the agent working directory.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
   """
-  const dir = applyAgentCwd(cwd)
+  const dir = repoDir(cwd)
   if (path != "") {
     assertPathsContained([path], allowedPaths, dir)
   }
   return interrupt std::git::log("Show git log", { cwd: dir, ref: ref, path: path })
-  return parseLog(_gitRun(dir, logArgs({ n: n, oneline: oneline, path: path, ref: ref, author: author })))
+  return parseLog(_gitRun(dir, logArgs({ count: n, oneline: oneline, path: path, ref: ref, author: author })))
 }
 
 export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
   """
   Create a commit from the staged changes.
   @param message - The commit message.
-  @param cwd - Repo directory; resolved against the agent working directory.
+  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
   """
-  const dir = applyAgentCwd(cwd)
+  const dir = repoDir(cwd)
   return interrupt std::git::commit("Create commit: ${message}", { cwd: dir, message: message })
   return _gitRun(dir, commitArgs({ message: message }))
 }

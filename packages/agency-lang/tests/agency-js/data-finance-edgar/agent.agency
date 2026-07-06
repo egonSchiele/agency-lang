@@ -1,0 +1,60 @@
+import {
+  buildSubmissionsPath,
+  buildArchiveUrl,
+  parseTickerMap,
+  parseSubmissions,
+  edgarSubmissionsFinalize,
+  edgarFilings
+} from "std::data/finance/edgar"
+
+node tSubPath(): string {
+  return buildSubmissionsPath("0000320193")
+}
+
+node tArchive(): string {
+  return buildArchiveUrl("320193", "0000320193-25-000073", "aapl-20250928.htm")
+}
+
+node tResolve(raw: any): string {
+  return parseTickerMap(raw, "aapl")
+}
+
+node tResolveMissing(raw: any): string {
+  return parseTickerMap(raw, "NOPE")
+}
+
+node tParseAll(raw: any): any {
+  return parseSubmissions("0000320193", raw, "", 20)
+}
+
+node tParse10K(raw: any): any {
+  return parseSubmissions("0000320193", raw, "10-K", 20)
+}
+
+node tParseLimit1(raw: any): any {
+  return parseSubmissions("0000320193", raw, "", 1)
+}
+
+node tParseNoMatch(raw: any): any {
+  return parseSubmissions("0000320193", raw, "S-1", 20)
+}
+
+node tFinalizeNoFilings(): string {
+  const r = edgarSubmissionsFinalize("0000320193", "", 20, success({}))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node tFinalizeFetchError(): string {
+  const r = edgarSubmissionsFinalize("0000320193", "", 20, failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node callEdgar(): any {
+  return edgarFilings("AAPL")
+}

@@ -1,0 +1,171 @@
+import { fetchJSON } from "std::http"
+import { env } from "std::system"
+
+/** @module
+  ## SEC EDGAR — U.S. company filings
+
+  Look up official filings for a U.S.-listed company from the SEC's
+  [EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces).
+  Use this connector for *authoritative, mandated* facts about one company — its 10-K
+  (annual), 10-Q (quarterly), 8-K (material event), and Form 4 (insider trade) filings — the
+  slow-moving ground truth. For news or rumor about a company use `std::data/finance/gdelt`;
+  for economic numbers use fred/dbnomics.
+
+  Returns a list of filings with form type, filing/report dates, and a direct URL to the
+  primary document. No API key required, but the SEC requires a descriptive User-Agent with
+  contact info; set the `SEC_USER_AGENT` environment variable to override the default.
+
+  ### Usage
+
+  ```ts
+  import { edgarFilings } from "std::data/finance/edgar"
+
+  node main() {
+    const filings = edgarFilings("AAPL", "10-K", 5) catch []
+    for (filing in filings) {
+      print("${filing.filingDate}  ${filing.form}  ${filing.url}")
+    }
+  }
+  ```
+*/
+
+effect std::edgar { company: string }
+
+/** One SEC filing. `url` links directly to the primary document. */
+export type Filing = {
+  form: string;
+  filingDate: string;
+  reportDate: string;
+  accessionNumber: string;
+  primaryDocument: string;
+  description: string;
+  url: string
+}
+
+const CIK_WIDTH = 10
+
+// SEC requires a descriptive User-Agent with contact info. Read once at module init;
+// setting SEC_USER_AGENT after the process starts will not take effect.
+const secUserAgent = env("SEC_USER_AGENT") ?? "agency-lang admin@agency-lang.com"
+
+// One preapproved client per host (fetchJSON.partial locks a single baseUrl).
+const tickerClient = fetchJSON.partial(
+  baseUrl: "https://www.sec.gov/",
+  headers: { "User-Agent": secUserAgent },
+  allowedDomains: ["www.sec.gov"]
+).preapprove()
+
+const submissionsClient = fetchJSON.partial(
+  baseUrl: "https://data.sec.gov/",
+  headers: { "User-Agent": secUserAgent },
+  allowedDomains: ["data.sec.gov"]
+).preapprove()
+
+/** Build the submissions path for a 10-digit CIK. Pure — no network. */
+export safe def buildSubmissionsPath(cik10: string): string {
+  return "submissions/CIK${cik10}.json"
+}
+
+/** Build the archive URL for a filing's primary document. Pure — no network. */
+export safe def buildArchiveUrl(cikNoPad: string, accessionNumber: string, primaryDocument: string): string {
+  const accessionNoDashes = accessionNumber.replaceAll("-", "")
+  return "https://www.sec.gov/Archives/edgar/data/${cikNoPad}/${accessionNoDashes}/${primaryDocument}"
+}
+
+/** Find a ticker in company_tickers.json and return its 10-digit CIK, or "" if absent. Pure. */
+export safe def parseTickerMap(raw: any, ticker: string): string {
+  const rows = Object.values(raw)
+  const want = ticker.toUpperCase()
+  const row = find(rows) as r {
+    return (r.ticker ?? "").toUpperCase() == want
+  }
+  if (row == null) {
+    return ""
+  }
+  const cikStr = "${row.cik_str}"
+  return cikStr.padStart(CIK_WIDTH, "0")
+}
+
+/** Reshape a submissions response into Filing[], optionally filtered by form and capped. Pure. */
+export safe def parseSubmissions(cik10: string, raw: any, formType: string, limit: number): Filing[] {
+  const recent = (raw.filings ?? {}).recent ?? {}
+  const forms = recent.form ?? []
+  const accessions = recent.accessionNumber ?? []
+  const filingDates = recent.filingDate ?? []
+  const reportDates = recent.reportDate ?? []
+  const primaryDocs = recent.primaryDocument ?? []
+  const descriptions = recent.primaryDocDescription ?? []
+  // The archive path uses the CIK with leading zeros stripped; Number() does that.
+  const cikNoPad = "${Number(cik10)}"
+  const rows = map(range(forms.length)) as i {
+    return {
+      form: forms[i] ?? "",
+      filingDate: filingDates[i] ?? "",
+      reportDate: reportDates[i] ?? "",
+      accessionNumber: accessions[i] ?? "",
+      primaryDocument: primaryDocs[i] ?? "",
+      description: descriptions[i] ?? "",
+      url: buildArchiveUrl(cikNoPad, accessions[i] ?? "", primaryDocs[i] ?? "")
+    }
+  }
+  const filtered = filter(rows) as f {
+    return (formType == "") || (f.form == formType)
+  }
+  if (limit > 0) {
+    return filtered.slice(0, limit)
+  }
+  return filtered
+}
+
+/** Finalize a submissions fetch into a Result, shared by both orchestrators. Pure. */
+export safe def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number, fetchResult: any): Result {
+  return match (fetchResult) {
+    success(body) => {
+      if (((body.filings ?? null) == null)) {
+        return failure("EDGAR returned no filings for CIK ${cik10}")
+      }
+      return success(parseSubmissions(cik10, body, formType, limit))
+    }
+    failure(err) => failure("EDGAR submissions request failed: ${err}")
+  }
+}
+
+export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: number = 20): Result {
+  """
+  List recent SEC filings for a company by its CIK (Central Index Key). Returns filings with
+  form type, filing/report dates, and a direct URL to each primary document. Optionally filter
+  by form type (e.g. "10-K", "10-Q", "8-K").
+
+  @param cik - The company CIK, with or without leading zeros
+  @param formType - Optional filing form to filter by, e.g. "10-K" (empty for all forms)
+  @param limit - Maximum filings to return (default 20)
+  """
+  const cik10 = cik.padStart(CIK_WIDTH, "0")
+  return interrupt std::edgar("Fetch SEC filings for this company?", { company: cik })
+  const path = buildSubmissionsPath(cik10)
+  return edgarSubmissionsFinalize(cik10, formType, limit, submissionsClient(path: path))
+}
+
+export safe def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result {
+  """
+  List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").
+  Resolves the ticker to a CIK, then returns filings with form type, filing/report dates, and
+  a direct URL to each primary document. Optionally filter by form type (e.g. "10-K", "8-K").
+
+  @param ticker - The company's stock ticker, e.g. "AAPL"
+  @param formType - Optional filing form to filter by, e.g. "10-K" (empty for all forms)
+  @param limit - Maximum filings to return (default 20)
+  """
+  return interrupt std::edgar("Fetch SEC filings for this company?", { company: ticker })
+  return match (tickerClient(path: "files/company_tickers.json")) {
+    success(body) => {
+      const cik10 = parseTickerMap(body, ticker)
+      if (cik10 == "") {
+        return failure("EDGAR: no company found for ticker '${ticker}'")
+      }
+      const path = buildSubmissionsPath(cik10)
+      return edgarSubmissionsFinalize(cik10, formType, limit, submissionsClient(path: path))
+    }
+    failure(err) => failure("EDGAR ticker lookup failed: ${err}")
+  }
+}

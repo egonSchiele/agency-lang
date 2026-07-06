@@ -6,7 +6,7 @@
 import { exec } from "std::shell"
 import { setAgentCwd } from "std::index"
 import {
-  gitStatus, gitLog, gitDiff, gitBranchList, gitStashList,
+  gitStatus, gitLog, gitDiff, gitShow, gitBranchList, gitStashList,
   gitAdd, gitCommit, gitBranchCreate, gitBranchDelete, gitStashPush, gitStashPop,
  } from "std::git"
 
@@ -86,6 +86,17 @@ node diffShowsStagedChange(): boolean {
       }
     }
     ok = foundA
+  } with approve
+  teardown(dir)
+  return ok
+}
+
+node showParsesSeedCommit(): boolean {
+  const dir = makeSandbox()
+  let ok = false
+  handle {
+    const show = gitShow("HEAD", cwd: dir)
+    ok = show.files.length >= 1
   } with approve
   teardown(dir)
   return ok

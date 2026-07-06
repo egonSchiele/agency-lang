@@ -44,22 +44,31 @@ describe("GIT_HARDENING_FLAGS", () => {
 });
 
 describe("scrubEnv", () => {
-  it("drops every listed git command-injection var", () => {
-    const out = scrubEnv({
-      PATH: "/usr/bin",
-      GIT_EXTERNAL_DIFF: "x", GIT_PAGER: "x", GIT_SSH_COMMAND: "x",
-      GIT_SSH: "x", GIT_PROXY_COMMAND: "x", GIT_ALTERNATE_OBJECT_DIRECTORIES: "x",
-      GIT_CONFIG_GLOBAL: "x", GIT_CONFIG_COUNT: "1",
-    });
+  it("drops code-execution AND repo-retargeting git env vars", () => {
+    const dangerous = [
+      // code execution / config injection
+      "GIT_EXTERNAL_DIFF", "GIT_PAGER", "GIT_SSH_COMMAND", "GIT_SSH",
+      "GIT_PROXY_COMMAND", "GIT_EXEC_PATH", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR",
+      "GIT_ATTR_SOURCE", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT",
+      // repo / worktree retargeting
+      "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_NAMESPACE",
+      "GIT_CEILING_DIRECTORIES",
+    ];
+    const base: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
+    for (const k of dangerous) {
+      base[k] = "x";
+    }
+    const out = scrubEnv(base);
     expect(out.PATH).toBe("/usr/bin");
-    for (const k of ["GIT_EXTERNAL_DIFF", "GIT_PAGER", "GIT_SSH_COMMAND", "GIT_SSH",
-      "GIT_PROXY_COMMAND", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT"]) {
+    for (const k of dangerous) {
       expect(out[k]).toBeUndefined();
     }
   });
   it("keeps lookalikes that must survive (boundary)", () => {
-    const out = scrubEnv({ GIT_AUTHOR_NAME: "Amy", GITHUB_TOKEN: "t" });
-    expect(out.GIT_AUTHOR_NAME).toBe("Amy"); // NOT stripped by a too-wide GIT* rule
+    const out = scrubEnv({ GIT_AUTHOR_NAME: "Amy", GIT_COMMITTER_EMAIL: "a@b.c", GITHUB_TOKEN: "t" });
+    expect(out.GIT_AUTHOR_NAME).toBe("Amy"); // commit identity must survive
+    expect(out.GIT_COMMITTER_EMAIL).toBe("a@b.c");
     expect(out.GITHUB_TOKEN).toBe("t");
   });
   it("does not mutate the input", () => {
@@ -105,9 +114,9 @@ describe("argv builders — reads", () => {
   it("showArgs", () => {
     expect(showArgs({ ref: "HEAD" })).toEqual(["show", "--patch", "-M", "--end-of-options", "HEAD"]);
   });
-  it("blameArgs hardens path and (optional) ref; no --end-of-options (git blame rejects it before --)", () => {
-    expect(blameArgs({ path: "a.ts", ref: "" })).toEqual(["blame", "--porcelain", "--", "a.ts"]);
-    expect(blameArgs({ path: "a.ts", ref: "HEAD" })).toEqual(["blame", "--porcelain", "HEAD", "--", "a.ts"]);
+  it("blameArgs uses --line-porcelain, hardens path/ref, no --end-of-options (git blame rejects it before --)", () => {
+    expect(blameArgs({ path: "a.ts", ref: "" })).toEqual(["blame", "--line-porcelain", "--", "a.ts"]);
+    expect(blameArgs({ path: "a.ts", ref: "HEAD" })).toEqual(["blame", "--line-porcelain", "HEAD", "--", "a.ts"]);
     expect(() => blameArgs({ path: "-x", ref: "" })).toThrow(/path/);
   });
 });

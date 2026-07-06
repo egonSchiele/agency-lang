@@ -90,6 +90,17 @@ describe("parseBlame", () => {
       { sha: "9f8e7d6c5b4a3210", author: "Bob", line: 2, content: "const y = 2" },
     ]);
   });
+  it("attributes interleaved commits correctly (--line-porcelain repeats author)", () => {
+    // Line 3 is from commit aaaaaaa (Amy) AFTER a line from bbbbbbb (Bob). With
+    // --line-porcelain the author block repeats, so line 3 must NOT inherit Bob.
+    const out = [
+      "aaaaaaa 1 1 1", "author Amy", "summary s", "\tline one",
+      "bbbbbbb 2 2 1", "author Bob", "summary s", "\tline two",
+      "aaaaaaa 3 3 1", "author Amy", "summary s", "\tline three",
+    ].join("\n") + "\n";
+    const blame = parseBlame(out);
+    expect(blame[2]).toEqual({ sha: "aaaaaaa", author: "Amy", line: 3, content: "line three" });
+  });
 });
 
 describe("parseRemoteList", () => {
@@ -144,5 +155,21 @@ describe("parseDiff (tarsec)", () => {
   });
   it("returns no files for an empty diff (no special-case guard)", () => {
     expect(parseDiff("")).toEqual({ files: [], patch: "" });
+  });
+  it("skips a `git show` commit-header preamble before the first diff --git", () => {
+    const patch = [
+      "commit 1a2b3c4d",
+      "Author: Amy <amy@x.com>",
+      "Date:   Mon Jan 1 00:00:00 2026 +0000",
+      "",
+      "    the subject",
+      "",
+      "diff --git a/mod.ts b/mod.ts",
+      "--- a/mod.ts", "+++ b/mod.ts",
+      "@@ -1 +1,2 @@", " ctx", "+added",
+    ].join("\n") + "\n";
+    const diff = parseDiff(patch);
+    expect(diff.files).toEqual([{ path: "mod.ts", status: "M", additions: 1, deletions: 0 }]);
+    expect(diff.patch).toBe(patch); // full show output retained (header included)
   });
 });

@@ -5,9 +5,9 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import {
-  gitRunImpl, assertPathsContained,
+  gitRunImpl, assertPathsContained, assertAllNotRestricted,
   statusArgs, parseStatus, logArgs, parseLog, commitArgs,
-  diffArgs, parseDiff, branchListArgs, parseBranchList, blameArgs, parseBlame,
+  diffArgs, parseDiff, showArgs, branchListArgs, parseBranchList, blameArgs, parseBlame,
 } from "./git.js";
 
 const pexec = promisify(execFile);
@@ -94,6 +94,40 @@ describe("format/parser round-trips against real git", () => {
     const blame = parseBlame(await gitRunImpl(repo, blameArgs({ path: "a.txt", ref: "" })));
     expect(blame[0].content).toBe("one");
     expect(blame[0].sha.length).toBeGreaterThanOrEqual(7);
+  });
+  it("show (parseDiff skips the commit header preamble)", async () => {
+    const show = parseDiff(await gitRunImpl(repo, showArgs({ ref: "HEAD" })));
+    expect(show.files.length).toBeGreaterThanOrEqual(1); // regression: used to return []
+    expect(show.patch).toContain("commit "); // full show output retained
+  });
+});
+
+describe("gitRunImpl output cap (bytes, not code units)", () => {
+  let repo: string;
+  beforeAll(async () => {
+    repo = await seedRepo();
+    // Multi-byte content so a UTF-16-length cap would misjudge the byte size.
+    await fs.writeFile(path.join(repo, "big.txt"), "é".repeat(5000) + "\n");
+    await pexec("git", ["add", "big.txt"], { cwd: repo });
+    await pexec("git", ["commit", "-q", "-m", "big"], { cwd: repo });
+  });
+  afterAll(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+
+  it("truncates by UTF-8 bytes and still succeeds", async () => {
+    // `git show HEAD` includes the big.txt diff (~10 KB of multi-byte "é").
+    const out = await gitRunImpl(repo, showArgs({ ref: "HEAD" }), { maxBytes: 200 });
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThan(500); // bounded near the 200-byte cap
+    expect(out).toContain("[output truncated");
+  });
+});
+
+describe("assertAllNotRestricted (gitAdd -A + allowedPaths bypass)", () => {
+  it("rejects all=true when allowedPaths is set", () => {
+    expect(() => assertAllNotRestricted(true, ["src"])).toThrow(/allowedPaths/);
+  });
+  it("allows all=true with no restriction, and all=false with a restriction", () => {
+    expect(() => assertAllNotRestricted(true, [])).not.toThrow();
+    expect(() => assertAllNotRestricted(false, ["src"])).not.toThrow();
   });
 });
 

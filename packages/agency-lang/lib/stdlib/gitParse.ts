@@ -276,7 +276,13 @@ function summarizeFile(path: string, lines: string[]): FileDiff {
 }
 
 export function parseDiff(patch: string): GitDiff {
-  const parsed = patchParser(patch);
+  // `git show` prefixes the diff with a "commit <sha>"/author/date header, and
+  // the file grammar must begin at "diff --git"; skip any preamble so both
+  // plain `git diff` and `git show` output parse. `patch` is still returned in
+  // full (header included for show). No match -> no files.
+  const diffStart = patch.indexOf("diff --git ");
+  const parseInput = diffStart >= 0 ? patch.slice(diffStart) : "";
+  const parsed = patchParser(parseInput);
   // tarsec result: { success, rest, result }. Degrade to [] rather than throw.
   const files = parsed.success ? (parsed.result as FileDiff[]) : [];
   return { files, patch };

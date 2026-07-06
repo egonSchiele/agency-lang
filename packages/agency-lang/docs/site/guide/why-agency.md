@@ -194,7 +194,7 @@ The point isn't that any of this is impossible in TypeScript — it's all just c
 
 ## But some things aren't just plumbing
 
-The examples above save you boilerplate. These next ones are different: the TypeScript version isn't "more code" — it's a serious engineering project, because the capability isn't something a library can bolt on. For these, the TypeScript side is an honest sketch of what you'd have to build, not a drop-in equivalent.
+The examples above save you boilerplate. These next ones are different: the TypeScript version isn't "more code" — it's a fair amount of infrastructure, not something a library can bolt on. For these, the TypeScript side is a sketch of what you'd have to build, not a drop-in equivalent.
 
 ### Agents that write and run their own code — safely
 
@@ -237,19 +237,19 @@ node main() {
 //
 //   • a child process to isolate the generated code
 //   • an IPC protocol between parent and child
-//   • interception of EVERY side-effecting call the code
-//     makes (fs, network, subprocess) — you can't miss one
+//   • interception of every side-effecting call the code
+//     makes (fs, network, subprocess) — missing one is a hole
 //   • routing each of those back to the parent to approve/deny
 //   • metering token spend across the process boundary, live
 //   • wall-clock, memory, and output caps with a hard kill
 //
-// That's a sandbox runtime, not a snippet.
+// That's closer to a sandbox runtime than a snippet.
 ```
 
 </template>
 </CodeCompare>
 
-> **The research.** Code-as-action outperforms JSON tool calls ([CodeAct, ICML 2024](https://arxiv.org/abs/2402.01030)), and the agent-safety literature is converging on *execution-level, by-design* enforcement over brittle detection-based defenses ([Adaptive Attacks, 2025](https://arxiv.org/abs/2503.00061); [Progent, 2025](https://arxiv.org/abs/2504.11703)). Agency's handler-per-effect model is exactly that, at the language level.
+> **The research.** Code-as-action outperformed JSON tool calls in one controlled comparison ([CodeAct, ICML 2024](https://arxiv.org/abs/2402.01030)), and recent agent-safety work increasingly favors *execution-level, by-design* enforcement over detection-based defenses that adaptive attackers tend to break ([Adaptive Attacks, 2025](https://arxiv.org/abs/2503.00061); [Progent, 2025](https://arxiv.org/abs/2504.11703)). Agency's handler-per-effect model works along those lines, at the language level.
 
 ### Pausing for a human — and resuming exactly where you left off
 
@@ -301,7 +301,7 @@ for (const step of plan) {
 </template>
 </CodeCompare>
 
-> **The research.** Surveys of human-agent systems frame human control injected mid-run as the fix for autonomy's reliability and safety failures ([Zou et al., 2025](https://arxiv.org/abs/2505.00753)) — while noting that the *operator's* approval burden is itself under-studied. Agency's interrupts are that control channel: resumable, and paired with `preapprove`/[policies](/guide/policies) to keep the burden low.
+> **The research.** Surveys of human-agent systems frame human control injected mid-run as one fix for autonomy's reliability and safety failures ([Zou et al., 2025](https://arxiv.org/abs/2505.00753)) — while noting that the *operator's* approval burden is itself under-studied. Agency's interrupts give you that control channel: resumable, and paired with `preapprove`/[policies](/guide/policies) to help keep the burden low.
 
 ### Concurrency you don't have to think about
 
@@ -329,7 +329,7 @@ node main() {
 ```ts
 // A module-level array is shared by every concurrent
 // request — their todos interleave and corrupt each other.
-const todos: string[] = [] // ❌ shared across all requests
+const todos: string[] = [] // shared across all requests
 
 // So you thread a per-request context through everything:
 function addTodo(ctx: RequestContext, todo: string) {
@@ -343,7 +343,7 @@ function addTodo(ctx: RequestContext, todo: string) {
 
 ### A subagent is just a tool
 
-Want a subagent? Write a function that calls `llm`, give it its own [thread](/guide/message-threads) for a clean context, and hand it to another `llm` call as a tool. That's the whole thing — no graph, no special node type, no framework concepts to learn. Subagents compose exactly like functions, because they *are* functions.
+Want a subagent? Write a function that calls `llm`, give it its own [thread](/guide/message-threads) for a clean context, and hand it to another `llm` call as a tool. That's it — no graph, no special node type, no framework concepts to learn. Subagents compose like ordinary functions, because they *are* functions.
 
 <CodeCompare>
 <template #agency>
@@ -384,6 +384,6 @@ async function researcher(topic: string): Promise<string> {
 </template>
 </CodeCompare>
 
-> **The research.** Multi-agent collaboration measurably helps, but the frameworks that deliver it add real orchestration machinery — roles, standard operating procedures, conversation patterns ([AutoGen, 2023](https://arxiv.org/abs/2308.08155); [MetaGPT, 2023](https://arxiv.org/abs/2308.00352)). In Agency a subagent is just a function you pass as a tool — the composition is free.
+> **The research.** Multi-agent collaboration measurably helps, but the frameworks that deliver it add real orchestration machinery — roles, standard operating procedures, conversation patterns ([AutoGen, 2023](https://arxiv.org/abs/2308.08155); [MetaGPT, 2023](https://arxiv.org/abs/2308.00352)). In Agency a subagent is just a function you pass as a tool, so composing them takes no extra machinery.
 
 And there's more where that came from: [message threads](/guide/message-threads) and [cross-thread context](/guide/cross-thread-context) let a router keep a separate, auto-resuming conversation per topic; [effects and `raises`](/guide/effects-and-raises) let the compiler track and constrain what your code is allowed to do; and [checkpointing](/guide/checkpointing) lets you rewind and retry a run. Each of these is a language-level capability, not a library you wire in.

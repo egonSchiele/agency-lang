@@ -1,8 +1,7 @@
 {
   "tests": [
-    { "nodeName": "recommendedApprovesStatus", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "recommendedApprovesLog", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "recommendedPromptsCommit", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "minimalDoesNotApproveStatus", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "recommendedApprovesEveryRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "recommendedPromptsEveryWrite", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "minimalApprovesNoGitRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

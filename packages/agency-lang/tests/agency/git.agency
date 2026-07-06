@@ -1,16 +1,21 @@
 // End-to-end: real interrupt -> approve -> execute against an ISOLATED
-// throwaway repo in the OS temp dir (NOT under this project). `git init`
-// makes `dir` its own repo; every tool call passes an explicit absolute
-// `cwd`, and gitRunImpl refuses an empty/relative cwd (unit-proven), so a
-// bug cannot reach the project repo. (Slice: gitStatus/gitLog/gitCommit.)
+// throwaway repo under /tmp (NOT under this project). `git init` makes `dir`
+// its own repo; every tool call passes an explicit absolute `cwd`, and
+// gitRunImpl refuses an empty/relative cwd (unit-proven), so a bug cannot
+// reach the project repo. teardown only ever removes paths under /tmp.
 import { exec } from "std::shell"
 import { setAgentCwd } from "std::index"
-import { gitStatus, gitLog, gitCommit } from "std::git"
+import {
+  gitStatus, gitLog, gitDiff, gitBranchList, gitStashList,
+  gitAdd, gitCommit, gitBranchCreate, gitBranchDelete, gitStashPush, gitStashPop,
+ } from "std::git"
 
+// Create the sandbox under /tmp explicitly (mktemp template) so teardown's
+// "/tmp/ only" guard always applies.
 def makeSandbox(): string {
   let dir = ""
   handle {
-    const made = exec("mktemp", ["-d"])
+    const made = exec("mktemp", ["-d", "/tmp/agency-git-test.XXXXXX"])
     dir = made.stdout.trim()
     exec("sh", ["-c", "GIT_CEILING_DIRECTORIES=${dir} git init -q && git config user.email t@t.com && git config user.name t && printf hi > a.txt && git add a.txt && git commit -q -m seed"],
       cwd: dir)
@@ -18,10 +23,10 @@ def makeSandbox(): string {
   return dir
 }
 
-// Defensive: only remove a real, absolute, non-root temp path. Guards against
-// a bug that leaves `dir` empty or "/" (which would rm -rf the filesystem).
+// Defensive: ONLY remove a real path under /tmp/. Guards against a bug that
+// leaves `dir` empty, "/", or anything outside the temp area.
 def teardown(dir: string) {
-  if (dir != "" && dir != "/" && dir.startsWith("/")) {
+  if (dir.startsWith("/tmp/") && dir != "/tmp/") {
     handle {
       exec("rm", ["-rf", dir])
     } with approve
@@ -34,8 +39,8 @@ node preflightSandboxIsClean(): boolean {
   const dir = makeSandbox()
   let clean = false
   handle {
-    const s = gitStatus(cwd: dir)
-    clean = s.entries.length == 0
+    const status = gitStatus(cwd: dir)
+    clean = status.entries.length == 0
   } with approve
   teardown(dir)
   return clean
@@ -52,16 +57,76 @@ node readsLog(): boolean {
   return ok
 }
 
-node commitRoundtrips(): boolean {
+node commitViaToolRoundtrips(): boolean {
   const dir = makeSandbox()
   let ok = false
   handle {
     exec("sh", ["-c", "printf more > b.txt"], cwd: dir)
-    exec("git", ["add", "b.txt"], cwd: dir)
+    gitAdd(["b.txt"], cwd: dir)
     gitCommit("add b", cwd: dir)
-    const s = gitStatus(cwd: dir)
+    const status = gitStatus(cwd: dir)
     const log = gitLog(cwd: dir)
-    ok = s.entries.length == 0 && log.commits.length == 2 && log.commits[0].subject == "add b"
+    ok = status.entries.length == 0 && log.commits.length == 2 && log.commits[0].subject == "add b"
+  } with approve
+  teardown(dir)
+  return ok
+}
+
+node diffShowsStagedChange(): boolean {
+  const dir = makeSandbox()
+  let ok = false
+  handle {
+    exec("sh", ["-c", "printf 'hi\nmore\n' > a.txt"], cwd: dir)
+    gitAdd(["a.txt"], cwd: dir)
+    const diff = gitDiff(staged: true, cwd: dir)
+    let foundA = false
+    for (file in diff.files) {
+      if (file.path == "a.txt" && file.additions != null && file.additions > 0) {
+        foundA = true
+      }
+    }
+    ok = foundA
+  } with approve
+  teardown(dir)
+  return ok
+}
+
+node branchCreateAndList(): boolean {
+  const dir = makeSandbox()
+  let found = false
+  handle {
+    gitBranchCreate("feature/x", cwd: dir)
+    const branches = gitBranchList(cwd: dir)
+    for (branch in branches) {
+      if (branch.name == "feature/x") {
+        found = true
+      }
+    }
+  } with approve
+  teardown(dir)
+  return found
+}
+
+// gitBranchDelete checks assertBranchAllowed BEFORE the interrupt, so this
+// throws with no approval needed and `try` catches it.
+node protectedBranchRejected(): boolean {
+  const dir = makeSandbox()
+  const result = try gitBranchDelete("main", force: true, protectedBranches: ["main"], cwd: dir)
+  teardown(dir)
+  return isFailure(result) && result.error.includes("protected")
+}
+
+node stashRoundtrips(): boolean {
+  const dir = makeSandbox()
+  let ok = false
+  handle {
+    exec("sh", ["-c", "printf 'hi\nchanged\n' > a.txt"], cwd: dir)
+    gitStashPush("wip", cwd: dir)
+    const afterPush = gitStatus(cwd: dir)
+    const stashes = gitStashList(cwd: dir)
+    gitStashPop(cwd: dir)
+    const afterPop = gitStatus(cwd: dir)
+    ok = afterPush.entries.length == 0 && stashes.length == 1 && afterPop.entries.length > 0
   } with approve
   teardown(dir)
   return ok
@@ -73,8 +138,8 @@ node agentCwdSetLetsStatusOmitCwd(): boolean {
   setAgentCwd(dir)
   let ok = false
   handle {
-    const s = gitStatus()
-    ok = s.entries.length == 0
+    const status = gitStatus()
+    ok = status.entries.length == 0
   } with approve
   setAgentCwd("")
   teardown(dir)

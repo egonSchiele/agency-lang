@@ -313,8 +313,11 @@ export default defineConfig({
           text: "Packages",
           items: [
             { text: "Overview", link: "/packages/" },
-            { text: "web-fetch", link: "/packages/web-fetch/" },
+            { text: "email", link: "/packages/email/" },
+            { text: "github", link: "/packages/github/" },
             { text: "mcp", link: "/packages/mcp/" },
+            { text: "web-fetch", link: "/packages/web-fetch/" },
+            { text: "whisper-local", link: "/packages/whisper-local/" },
           ],
         },
       ],

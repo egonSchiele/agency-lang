@@ -13,7 +13,7 @@ For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `rang
 
 | Name | Signature | Description |
 |---|---|---|
-| `llm` | `llm(prompt: any, options?): T` | Send a message to an LLM and return its response. The return type `T` is inferred from the variable annotation at the call site and compiled to a JSON schema. `options` accepts `model`, `provider`, `apiKey`, `maxTokens`, `temperature`, `stream`, `reasoningEffort` (`"low"`/`"medium"`/`"high"`), `thinking` (`{ enabled, budgetTokens? }`), `tools`, `memory`, `metadata`. See [LLMs](/guide/llm). |
+| `llm` | `llm(prompt: any, options?): T` | Send a message to an LLM and return its response. The prompt is a string, or an array mixing text and `image()`/`file()` attachments. The return type `T` is inferred from the variable annotation at the call site and compiled to a JSON schema. `options` accepts `model`, `provider`, `apiKey`, `maxTokens`, `temperature`, `stream`, `reasoningEffort` (`"low"`/`"medium"`/`"high"`), `thinking` (`{ enabled, budgetTokens? }`), `tools`, `hostedTools`, `memory`, `maxToolResultChars`, `retries`, `timeout`, `backoff` (`{ initial?, factor?, max? }`), and `metadata`. The same fields can also be passed as named arguments. See [LLMs](/guide/llm). |
 
 ## Checkpointing
 
@@ -36,8 +36,14 @@ For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `rang
 
 | Name | Signature | Description |
 |---|---|---|
-| `fork` | `fork(labels) as <name> { ... }` | Run multiple branches in parallel and wait for all of them to finish. Returns an array of results, one per label. |
-| `race` | `race(labels) as <name> { ... }` | Like `fork`, but returns as soon as the first branch completes and cancels the rest. See [Concurrency](/guide/concurrency). |
+| `fork` | `fork(items) as <name> { ... }` | Run multiple branches in parallel and wait for all of them to finish. Returns an array of results, one per item. Pass `shared: true` to share globals across branches (they're isolated by default). |
+| `race` | `race(items) as <name> { ... }` | Like `fork`, but returns as soon as the first branch completes and cancels the rest. Also accepts `shared: true`. See [Concurrency](/guide/concurrency). |
+
+## Callbacks
+
+| Name | Signature | Description |
+|---|---|---|
+| `callback` | `callback(eventName) as <data> { ... }` | Register a callback for an event. The block receives the event's data as an argument. See [Callbacks](/guide/callbacks). |
 
 ## Result Type
 
@@ -47,6 +53,23 @@ For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `rang
 | `failure` | `failure(error, value?): Result` | Wrap an error (and optionally a value) in a failed `Result`. |
 | `isSuccess` | `isSuccess(result): boolean` | Check whether a `Result` is a success. |
 | `isFailure` | `isFailure(result): boolean` | Check whether a `Result` is a failure. See [Error Handling](/guide/error-handling). |
+
+## Errors
+
+| Name | Signature | Description |
+|---|---|---|
+| `throw` | `throw(message): void` | Raise an exception, unwinding the current function or node. The argument is coerced to a string for the error message. |
+
+## Function and Tool Methods
+
+These are built-in methods you can call on any Agency function or tool value (they each return a new tool, so they chain).
+
+| Name | Signature | Description |
+|---|---|---|
+| `.partial` | `fn.partial(name: value, ...)` | Bind some of a function's arguments by name, producing a new function that takes the rest. See [Partial Application](/guide/partial-application). |
+| `.describe` | `fn.describe(text): tool` | Override the tool description an LLM sees for this function. |
+| `.rename` | `fn.rename(name): tool` | Give this tool a distinct name (the name the LLM sees). Use when deriving several tools from one function, since `.partial()`/`.describe()`/import aliases keep the base name and would collide in one `llm({ tools })` call. |
+| `.preapprove` | `fn.preapprove(): tool` | Auto-approve every interrupt this function raises. |
 
 ## Types and Schemas
 

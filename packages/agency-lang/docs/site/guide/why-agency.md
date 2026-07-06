@@ -281,87 +281,43 @@ node main() {
 
 This feature just works. You could write an agent, that calls a sub-agent, that makes several tool calls in parallel, and some of those tool calls need to pause for human input – and when you resume execution, you would still pick up right where you left off. See [interrupts](/guide/interrupts) for more information.
 
-### Concurrency you don't have to think about
+### Optimizing agents
 
-Agency globals are *per-run*: every call to an agent — and every parallel branch — gets its own copy. So you can keep mutable state in a plain global and never worry about concurrent requests stepping on each other. (See [state isolation](/guide/state-isolation).)
+Agency has a built-in optimizer. Mark a variable with `optimize`, give it a goal and a few example inputs, and Agency will use a hill-climbing algorithm to improve your agent.
 
-<CodeCompare>
-<template #agency>
+Say your prompt has a bug: it asks for the *area* of a country when you wanted the *capital*.
 
-```ts
-const todos = []
-
-def addTodo(todo: string) { todos.push(todo) }
-def getTodos() { return todos }
-
-node main() {
-  // Five requests can run this at once, each with its
-  // own `todos`. No shared state, no races.
-  return llm("Plan my day.", tools: [addTodo, getTodos])
-}
-```
-
-</template>
-<template #typescript>
-
-```ts
-// A module-level array is shared by every concurrent
-// request — their todos interleave and corrupt each other.
-const todos: string[] = [] // shared across all requests
-
-// So you thread a per-request context through everything:
-function addTodo(ctx: RequestContext, todo: string) {
-  ctx.todos.push(todo)
-}
-// ...and every function that touches state now takes `ctx`.
-```
-
-</template>
-</CodeCompare>
-
-### A subagent is just a tool
-
-Want a subagent? Write a function that calls `llm`, give it its own [thread](/guide/message-threads) for a clean context, and hand it to another `llm` call as a tool. That's it — no graph, no special node type, no framework concepts to learn. Subagents compose like ordinary functions, because they *are* functions.
+Mark the variable with `optimize`:
 
 <CodeCompare>
 <template #agency>
 
 ```ts
-def researcher(topic: string): string {
-  """Research a topic and return a short summary."""
-  let summary = ""
-  thread {
-    // Its own conversation — doesn't pollute the caller's.
-    summary = llm("Research ${topic} and summarize.")
-  }
-  return summary
+node main(country: string) {
+  optimize const prompt = "What is the area of ${country}?"
+  return llm(prompt)
 }
-
-node main() {
-  // The lead agent calls the researcher whenever it needs to.
-  return llm("Write a report on renewable energy.",
-             tools: [researcher])
-}
-```
-
-</template>
-<template #typescript>
-
-```ts
-// The subagent needs its own tool loop and message history...
-async function researcher(topic: string): Promise<string> {
-  const messages = [{ role: "user", content: `Research ${topic}.` }]
-  // ...run a full create()/tool-dispatch loop here (see above)...
-  return finalSummary
-}
-
-// ...then wrap THAT as a tool for the lead agent's loop — so now
-// you're running nested tool loops and juggling two histories.
 ```
 
 </template>
 </CodeCompare>
 
-> **The research.** Multi-agent collaboration measurably helps, but the frameworks that deliver it add real orchestration machinery — roles, standard operating procedures, conversation patterns ([AutoGen, 2023](https://arxiv.org/abs/2308.08155); [MetaGPT, 2023](https://arxiv.org/abs/2308.00352)). In Agency a subagent is just a function you pass as a tool, so composing them takes no extra machinery.
+Then run the optimizer with a goal:
 
-And there's more where that came from: [message threads](/guide/message-threads) and [cross-thread context](/guide/cross-thread-context) let a router keep a separate, auto-resuming conversation per topic; [effects and `raises`](/guide/effects-and-raises) let the compiler track and constrain what your code is allowed to do; and [checkpointing](/guide/checkpointing) lets you rewind and retry a run. Each of these is a language-level capability, not a library you wire in.
+```bash
+agency optimize capitals.agency \
+  --goal "Return the capital of the country"
+```
+
+The optimizer will run your agent, grade the output, and rewrite the prompt in place:
+
+```diff
+- What is the area of ${country}?
++ What is the capital of ${country}?
+```
+
+This is a toy example, but Agency comes with a full [GEPA](https://arxiv.org/abs/2507.19457) optimizer. You can specify different graders and optimizers, you can provide an example set and a validation set. You can optimize a whole program with multiple functions and multiple prompts.
+
+---
+
+I hope that gives you a sense of what Agency can do. Read [the guide](/guide/basic-syntax) for more information!

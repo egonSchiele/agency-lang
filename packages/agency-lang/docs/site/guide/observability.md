@@ -96,5 +96,4 @@ You can configure the thresholds for these in `agency.json`.
 ```
 
 ## References
-- [`logs` CLI reference](/cli/logs)
 - [Agency config file](/guide/agency-config-file)

@@ -1959,3 +1959,22 @@ Two execution options:
 **2. Inline Execution** — execute in this session with checkpoints.
 
 Which approach?
+
+---
+
+## Implementation notes (discovered during execution)
+
+- **`git blame` rejects `--end-of-options` before `--`.** Unlike `log`/`diff`/
+  `show` (which accept `--end-of-options … -- <path>`, verified against real
+  git), `git blame --end-of-options -- <file>` errors with "bad revision". So
+  `blameArgs` omits `--end-of-options`; the ref is still guarded by
+  `hardenPositional` (leading-dash reject) and the path sits after `--`.
+- **`effectSet` declarations must be single-line.** The parser does not accept a
+  newline inside `<…>`; keep each `effectSet` on one line (as
+  `capabilities.agency` does).
+- **Agency execution tests need a `.test.json` companion** listing each `node`
+  with `expectedOutput: "true"` — the runner requires it. (Added for both
+  `gitPolicy` and the `tests/agency/git` e2e.)
+- **Parsers split across two files:** `gitCore.ts` (types, builders, validators,
+  env scrub) and `gitParse.ts` (parsers). Only `parseDiff` uses tarsec; the
+  delimiter-framed parsers use `String.split`.

@@ -1,11 +1,8 @@
-// Pure git helpers: shared types, argv builders, and env scrubbing. NO mutable
+// Pure git helpers: shared types, argv builders, and validators. NO mutable
 // module state, NO process spawning, NO fs, NO AsyncLocalStorage — everything
 // here is request/response so it is trivially unit-testable and safe under
 // Agency's per-run isolation. The output parsers live in gitParse.ts;
 // path-containment (async + symlink-aware) lives in git.ts.
-//
-// This file currently covers the gitStatus / gitLog / gitCommit slice; the
-// remaining builders are added as the rest of the plan lands.
 
 // git's porcelain change codes are a closed set:
 //   "." = unmodified          "M" = modified
@@ -37,6 +34,27 @@ export type GitCommit = {
   body: string;
 };
 export type GitLog = { commits: GitCommit[] };
+export type FileDiff = {
+  path: string;
+  status: ChangeCode;
+  additions: number | null; // null for binary files
+  deletions: number | null;
+};
+export type GitDiff = { files: FileDiff[]; patch: string };
+export type GitBranch = {
+  name: string;
+  current: boolean;
+  upstream: string;
+  sha: string;
+};
+export type BlameLine = {
+  sha: string;
+  author: string;
+  line: number;
+  content: string;
+};
+export type GitRemote = { name: string; url: string; direction: "fetch" | "push" };
+export type GitStash = { ref: string; description: string };
 
 // Record/field separators for our custom --format strings. These bytes are
 // practically never present in paths or commit messages, so splitting on them
@@ -64,6 +82,17 @@ export function hardenPositional(value: string, label: string): string {
     );
   }
   return value;
+}
+
+/**
+ * Reject an operation on a protected branch (e.g. main/master). Empty list =
+ * no restriction. Bound via `.partial(protectedBranches: [...])`. Pure string
+ * comparison, so it stays here rather than in the async git.ts layer.
+ */
+export function assertBranchAllowed(branch: string, protectedBranches: string[]): void {
+  if (protectedBranches.includes(branch)) {
+    throw new Error(`git: branch "${branch}" is protected and may not be modified`);
+  }
 }
 
 /** Config flags prepended to every git invocation (before the subcommand). */
@@ -142,9 +171,125 @@ export function logArgs(opts: {
   return args;
 }
 
+export function diffArgs(opts: {
+  ref: string; ref2: string; staged: boolean; path: string;
+}): string[] {
+  const args: string[] = ["diff", "--patch", "-M"];
+  if (opts.staged) {
+    args.push("--staged");
+  }
+  args.push("--end-of-options");
+  if (opts.ref) {
+    args.push(hardenPositional(opts.ref, "ref"));
+  }
+  if (opts.ref2) {
+    args.push(hardenPositional(opts.ref2, "ref"));
+  }
+  if (opts.path) {
+    args.push("--", hardenPositional(opts.path, "path"));
+  }
+  return args;
+}
+
+export function showArgs(opts: { ref: string }): string[] {
+  const args: string[] = ["show", "--patch", "-M", "--end-of-options"];
+  if (opts.ref) {
+    args.push(hardenPositional(opts.ref, "ref"));
+  }
+  return args;
+}
+
+export function branchListArgs(): string[] {
+  return [
+    "for-each-ref",
+    `--format=%(refname:short)${FIELD_SEP}%(HEAD)${FIELD_SEP}%(upstream:short)${FIELD_SEP}%(objectname)${RECORD_SEP}`,
+    "refs/heads",
+  ];
+}
+
+export function remoteListArgs(): string[] {
+  return ["remote", "-v"];
+}
+
+export function blameArgs(opts: { path: string; ref: string }): string[] {
+  // NOTE: `git blame` (unlike log/diff/show) rejects `--end-of-options`
+  // followed by `--`, so we omit it here. The ref is still guarded by
+  // hardenPositional (leading "-" rejected) and the path sits after `--`.
+  const args: string[] = ["blame", "--porcelain"];
+  if (opts.ref) {
+    args.push(hardenPositional(opts.ref, "ref"));
+  }
+  args.push("--", hardenPositional(opts.path, "path"));
+  return args;
+}
+
+export function stashListArgs(): string[] {
+  return ["stash", "list"];
+}
+
+export function addArgs(opts: { paths: string[]; all: boolean }): string[] {
+  if (opts.all) {
+    return ["add", "-A"];
+  }
+  const hardened = opts.paths.map((p) => hardenPositional(p, "path"));
+  return ["add", "--", ...hardened];
+}
+
 export function commitArgs(opts: { message: string }): string[] {
   if (opts.message.length === 0) {
     throw new Error("git: commit message may not be empty");
   }
   return ["commit", "-m", opts.message];
+}
+
+export function checkoutArgs(opts: { target: string; force: boolean }): string[] {
+  const args: string[] = ["checkout"];
+  if (opts.force) {
+    args.push("--force");
+  }
+  args.push("--end-of-options", hardenPositional(opts.target, "target"));
+  return args;
+}
+
+export function switchArgs(opts: { branch: string; create: boolean }): string[] {
+  const args: string[] = ["switch"];
+  if (opts.create) {
+    args.push("-c");
+  }
+  args.push("--end-of-options", hardenPositional(opts.branch, "branch"));
+  return args;
+}
+
+export function branchCreateArgs(opts: { branch: string }): string[] {
+  return ["branch", "--end-of-options", hardenPositional(opts.branch, "branch")];
+}
+
+export function branchDeleteArgs(opts: {
+  branch: string; force: boolean; protectedBranches: string[];
+}): string[] {
+  assertBranchAllowed(opts.branch, opts.protectedBranches);
+  const flag = opts.force ? "-D" : "-d";
+  return ["branch", flag, "--end-of-options", hardenPositional(opts.branch, "branch")];
+}
+
+export function stashPushArgs(opts: { message: string }): string[] {
+  const args: string[] = ["stash", "push"];
+  if (opts.message) {
+    args.push("-m", opts.message);
+  }
+  return args;
+}
+
+export function stashPopArgs(): string[] {
+  return ["stash", "pop"];
+}
+
+export function restoreArgs(opts: { paths: string[]; staged: boolean }): string[] {
+  const args: string[] = ["restore"];
+  if (opts.staged) {
+    args.push("--staged");
+  }
+  const hardened = opts.paths.map((p) => hardenPositional(p, "path"));
+  args.push("--", ...hardened);
+  return args;
 }

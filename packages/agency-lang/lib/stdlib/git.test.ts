@@ -7,6 +7,7 @@ import { promisify } from "util";
 import {
   gitRunImpl, assertPathsContained,
   statusArgs, parseStatus, logArgs, parseLog, commitArgs,
+  diffArgs, parseDiff, branchListArgs, parseBranchList, blameArgs, parseBlame,
 } from "./git.js";
 
 const pexec = promisify(execFile);
@@ -71,6 +72,28 @@ describe("format/parser round-trips against real git", () => {
     await gitRunImpl(repo, commitArgs({ message: "add b" }));
     const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })));
     expect(log.commits[0].subject).toBe("add b");
+  });
+  it("diff (staged edit -> parseDiff counts)", async () => {
+    await fs.writeFile(path.join(repo, "a.txt"), "one\ntwo\nthree\n");
+    await pexec("git", ["add", "a.txt"], { cwd: repo });
+    const diff = parseDiff(await gitRunImpl(repo, diffArgs({ ref: "", ref2: "", staged: true, path: "" })));
+    const file = diff.files.find((f) => f.path === "a.txt");
+    expect(file).toBeTruthy();
+    expect(file!.additions).toBe(1);
+    expect(file!.deletions).toBe(0);
+  });
+  it("log with a path filter (exercises --end-of-options -- <path>)", async () => {
+    const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "a.txt", ref: "", author: "" })));
+    expect(log.commits.length).toBeGreaterThanOrEqual(1);
+  });
+  it("branchList", async () => {
+    const branches = parseBranchList(await gitRunImpl(repo, branchListArgs()));
+    expect(branches.some((b) => b.current)).toBe(true);
+  });
+  it("blame", async () => {
+    const blame = parseBlame(await gitRunImpl(repo, blameArgs({ path: "a.txt", ref: "" })));
+    expect(blame[0].content).toBe("one");
+    expect(blame[0].sha.length).toBeGreaterThanOrEqual(7);
   });
 });
 

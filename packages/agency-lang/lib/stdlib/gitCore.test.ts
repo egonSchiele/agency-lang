@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  hardenPositional, GIT_HARDENING_FLAGS, scrubEnv,
-  statusArgs, logArgs, commitArgs,
+  hardenPositional, assertBranchAllowed, GIT_HARDENING_FLAGS, scrubEnv,
+  statusArgs, logArgs, diffArgs, showArgs, branchListArgs, remoteListArgs,
+  blameArgs, stashListArgs, addArgs, commitArgs, checkoutArgs, switchArgs,
+  branchCreateArgs, branchDeleteArgs, stashPushArgs, stashPopArgs, restoreArgs,
 } from "./gitCore.js";
 
 describe("hardenPositional", () => {
@@ -16,6 +18,18 @@ describe("hardenPositional", () => {
   });
   it("rejects empty values", () => {
     expect(() => hardenPositional("", "branch")).toThrow(/branch/);
+  });
+});
+
+describe("assertBranchAllowed", () => {
+  it("no-ops when protectedBranches is empty", () => {
+    expect(() => assertBranchAllowed("main", [])).not.toThrow();
+  });
+  it("rejects a protected branch", () => {
+    expect(() => assertBranchAllowed("main", ["main", "master"])).toThrow(/protected/);
+  });
+  it("allows a non-protected branch", () => {
+    expect(() => assertBranchAllowed("feature/x", ["main", "master"])).not.toThrow();
   });
 });
 
@@ -55,9 +69,14 @@ describe("scrubEnv", () => {
   });
 });
 
-describe("argv builders", () => {
+describe("argv builders — reads", () => {
   it("statusArgs", () => {
     expect(statusArgs()).toEqual(["status", "--porcelain=v2", "--branch", "-z"]);
+  });
+  it("branchListArgs / remoteListArgs / stashListArgs are fixed", () => {
+    expect(branchListArgs()[0]).toBe("for-each-ref");
+    expect(remoteListArgs()).toEqual(["remote", "-v"]);
+    expect(stashListArgs()).toEqual(["stash", "list"]);
   });
   it("logArgs maps typed params and separates ref (after --end-of-options) and path (after --)", () => {
     const args = logArgs({ count: 5, oneline: true, path: "src/", ref: "HEAD~3", author: "amy" });
@@ -71,8 +90,56 @@ describe("argv builders", () => {
   it("logArgs rejects a flag-shaped ref", () => {
     expect(() => logArgs({ count: 5, oneline: false, path: "", ref: "--output=x", author: "" })).toThrow();
   });
+  it("diffArgs emits the patch and places -- immediately before the path", () => {
+    const args = diffArgs({ ref: "HEAD", ref2: "", staged: false, path: "src/x.ts" });
+    expect(args[0]).toBe("diff");
+    expect(args).toContain("--patch");
+    expect(args[args.indexOf("src/x.ts") - 1]).toBe("--");
+  });
+  it("diffArgs staged + two refs, in order after --end-of-options", () => {
+    const args = diffArgs({ ref: "A", ref2: "B", staged: true, path: "" });
+    expect(args).toContain("--staged");
+    expect(args.indexOf("A")).toBeGreaterThan(args.indexOf("--end-of-options"));
+    expect(args.indexOf("B")).toBeGreaterThan(args.indexOf("A"));
+  });
+  it("showArgs", () => {
+    expect(showArgs({ ref: "HEAD" })).toEqual(["show", "--patch", "-M", "--end-of-options", "HEAD"]);
+  });
+  it("blameArgs hardens path and (optional) ref; no --end-of-options (git blame rejects it before --)", () => {
+    expect(blameArgs({ path: "a.ts", ref: "" })).toEqual(["blame", "--porcelain", "--", "a.ts"]);
+    expect(blameArgs({ path: "a.ts", ref: "HEAD" })).toEqual(["blame", "--porcelain", "HEAD", "--", "a.ts"]);
+    expect(() => blameArgs({ path: "-x", ref: "" })).toThrow(/path/);
+  });
+});
+
+describe("argv builders — writes", () => {
+  it("addArgs forbids -A only when all=false", () => {
+    expect(addArgs({ paths: ["a.ts"], all: false })).toEqual(["add", "--", "a.ts"]);
+    expect(addArgs({ paths: [], all: true })).toEqual(["add", "-A"]);
+    expect(() => addArgs({ paths: ["-x"], all: false })).toThrow(/path/);
+  });
   it("commitArgs passes the message as the value of -m; rejects empty", () => {
     expect(commitArgs({ message: "--amend looking msg" })).toEqual(["commit", "-m", "--amend looking msg"]);
     expect(() => commitArgs({ message: "" })).toThrow(/empty/);
+  });
+  it("checkoutArgs / switchArgs", () => {
+    expect(checkoutArgs({ target: "main", force: false })).toEqual(["checkout", "--end-of-options", "main"]);
+    expect(checkoutArgs({ target: "main", force: true })).toEqual(["checkout", "--force", "--end-of-options", "main"]);
+    expect(switchArgs({ branch: "x", create: false })).toEqual(["switch", "--end-of-options", "x"]);
+    expect(switchArgs({ branch: "x", create: true })).toEqual(["switch", "-c", "--end-of-options", "x"]);
+  });
+  it("branchCreateArgs / branchDeleteArgs (force + protected)", () => {
+    expect(branchCreateArgs({ branch: "x" })).toEqual(["branch", "--end-of-options", "x"]);
+    expect(branchDeleteArgs({ branch: "x", force: false, protectedBranches: [] })).toEqual(["branch", "-d", "--end-of-options", "x"]);
+    expect(branchDeleteArgs({ branch: "x", force: true, protectedBranches: [] })).toEqual(["branch", "-D", "--end-of-options", "x"]);
+    expect(() => branchDeleteArgs({ branch: "main", force: true, protectedBranches: ["main"] })).toThrow(/protected/);
+  });
+  it("stashPushArgs / stashPopArgs / restoreArgs", () => {
+    expect(stashPushArgs({ message: "" })).toEqual(["stash", "push"]);
+    expect(stashPushArgs({ message: "wip" })).toEqual(["stash", "push", "-m", "wip"]);
+    expect(stashPopArgs()).toEqual(["stash", "pop"]);
+    expect(restoreArgs({ paths: ["a.ts"], staged: false })).toEqual(["restore", "--", "a.ts"]);
+    expect(restoreArgs({ paths: ["a.ts"], staged: true })).toEqual(["restore", "--staged", "--", "a.ts"]);
+    expect(() => restoreArgs({ paths: ["-x"], staged: false })).toThrow(/path/);
   });
 });

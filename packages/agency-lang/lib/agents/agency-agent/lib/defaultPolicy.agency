@@ -94,5 +94,29 @@ export static const recommendedAutoApprovePolicy = {
   }],
   "std::clipboardCopy": [{
     action: "approve"
+  }],
+  "std::git::status": [{
+    action: "approve"
+  }],
+  "std::git::log": [{
+    action: "approve"
+  }],
+  "std::git::diff": [{
+    action: "approve"
+  }],
+  "std::git::show": [{
+    action: "approve"
+  }],
+  "std::git::branchList": [{
+    action: "approve"
+  }],
+  "std::git::remoteList": [{
+    action: "approve"
+  }],
+  "std::git::blame": [{
+    action: "approve"
+  }],
+  "std::git::stashList": [{
+    action: "approve"
   }]
 }

@@ -1,0 +1,53 @@
+/*
+ * The recommended policy auto-approves EVERY read-only git effect; EVERY
+ * write effect prompts (never auto-approved). Pure policy logic — no git, no
+ * LLM. Exhaustive because a write leaking into auto-approve is the worst-case
+ * bug for this module.
+ */
+import { checkPolicy } from "std::policy"
+import {
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+ } from "../lib/defaultPolicy.agency"
+
+static const GIT_READS = [
+  "std::git::status", "std::git::log", "std::git::diff", "std::git::show",
+  "std::git::branchList", "std::git::remoteList", "std::git::blame", "std::git::stashList",
+]
+static const GIT_WRITES = [
+  "std::git::add", "std::git::commit", "std::git::checkout", "std::git::switch",
+  "std::git::branchCreate", "std::git::branchDelete", "std::git::stashPush",
+  "std::git::stashPop", "std::git::restore",
+]
+
+def intr(effect: string): any {
+  return { effect: effect, data: { cwd: "/repo" } }
+}
+
+node recommendedApprovesEveryRead(): boolean {
+  for (effect in GIT_READS) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr(effect)).type != "approve") {
+      return false
+    }
+  }
+  return true
+}
+
+node recommendedPromptsEveryWrite(): boolean {
+  for (effect in GIT_WRITES) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr(effect)).type == "approve") {
+      return false
+    }
+  }
+  return true
+}
+
+node minimalApprovesNoGitRead(): boolean {
+  // git reads live in the RECOMMENDED policy only, not the minimal one.
+  for (effect in GIT_READS) {
+    if (checkPolicy(minimalAutoApprovePolicy, intr(effect)).type == "approve") {
+      return false
+    }
+  }
+  return true
+}

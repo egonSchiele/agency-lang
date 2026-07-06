@@ -1,0 +1,7 @@
+{
+  "tests": [
+    { "nodeName": "recommendedApprovesEveryRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "recommendedPromptsEveryWrite", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "minimalApprovesNoGitRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -83,7 +83,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
         scope: "bar",
         name: "prompt",
         valueKind: "string",
-        constraintText: null,
+        declaredType: null,
         value: "xyz",
       },
       {
@@ -94,7 +94,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
         scope: "global",
         name: "greeting",
         valueKind: "string",
-        constraintText: null,
+        declaredType: null,
         value: "hello ${name}",
       },
       ...extraTargets,
@@ -145,7 +145,7 @@ describe("OptimizeSourceMutator operation validation", () => {
       scope: "global",
       name: "ResultType",
       valueKind: "string",
-      constraintText: null,
+      declaredType: null,
       value: "string",
     } as unknown as OptimizeTarget;
     const diagnostics = previewDiagnostics(
@@ -584,7 +584,7 @@ describe("OptimizeSourceMutator.mutate", () => {
       scope: "global",
       name: "ResultType",
       valueKind: "string",
-      constraintText: null,
+      declaredType: null,
       value: "string",
     } as unknown as OptimizeTarget;
     const mutator = new OptimizeSourceMutator({ targetSet: makeTargetSet([typeTarget]) });
@@ -706,5 +706,66 @@ node main() {}
     expect(preview.files["a.agency"]).toContain("optimize const enabled: boolean = true");
     const refreshed = preview.targetSet.targets.find((target) => target.name === "enabled")!;
     expect(refreshed.value).toBe("true");
+  });
+});
+
+describe("review fixes: checked value must equal written value", () => {
+  function setup(source: string): OptimizeTargetSet {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", source);
+    return discoverOptimizeTargets(entry, { baseDir: dir });
+  }
+
+  it("rejects an unquoted multi-word non-member (quote-recovery must probe the recovered value)", () => {
+    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    // Unquoted multi-word: parses partially ("totally" + rest), recovery wraps
+    // it into the string "totally bogus" — which is NOT a union member and
+    // must be rejected. Probing the raw unquoted text instead would parse as
+    // a bare identifier plus a stray statement and falsely typecheck clean.
+    const preview = mutator.mutate("a.agency:global:status", `totally bogus`);
+    expect(preview.diagnostics[0]?.code).toBe("type-mismatch");
+    expect(preview.files).toEqual({});
+  });
+
+  it("accepts an unquoted multi-word proposal that IS a union member (mirror case)", () => {
+    const set = setup(`type Status = "pass" | "totally bogus"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    const preview = mutator.mutate("a.agency:global:status", `totally bogus`);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["a.agency"]).toContain(`"totally bogus"`);
+  });
+
+  it("rejects containers holding bare identifiers (nested literal gate)", () => {
+    const set = setup(`type P = { n: number }
+optimize const nums: number[] = [1, 2]
+optimize const p: P = { n: 1 }
+node main() {}
+`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    expect(mutator.mutate("a.agency:global:nums", `[x, y]`).diagnostics[0]?.code).toBe("unsupported-value-domain");
+    expect(mutator.mutate("a.agency:global:p", `{ n: someVar }`).diagnostics[0]?.code).toBe("unsupported-value-domain");
+    // Nested literals still pass.
+    expect(mutator.mutate("a.agency:global:nums", `[3, 4]`).diagnostics).toEqual([]);
+    expect(mutator.mutate("a.agency:global:p", `{ n: 2 }`).diagnostics).toEqual([]);
+  });
+
+  it("keeps an unconstrained literal target literal across refreshes (no freeform flip)", () => {
+    const set = setup(`optimize const x: NotDefined = 5\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    // Iter 1: a string proposal is accepted (unconstrained literal).
+    const first = mutator.mutate("a.agency:global:x", `"hi"`);
+    expect(first.diagnostics).toEqual([]);
+    const refreshed = first.targetSet.targets.find((target) => target.name === "x")!;
+    expect(refreshed.valueKind).toBe("literal"); // identity from the declaration, not the champion value
+
+    // Iter 2 against the refreshed set: a number proposal must still be
+    // accepted — the target must not have silently become a freeform string.
+    const second = new OptimizeSourceMutator({ targetSet: first.targetSet }).mutate("a.agency:global:x", `7`);
+    expect(second.diagnostics).toEqual([]);
   });
 });

@@ -7,7 +7,9 @@ import { exprParser } from "@/parsers/parsers.js";
 import type { AgencyProgram, Expression, PromptSegment } from "@/types.js";
 import { formatDiff } from "@/utils/diff.js";
 
-import { checkProposal, hasInterpolation, isLiteralExpression } from "./constraint.js";
+import { generateExpression } from "@/backends/agencyGenerator.js";
+import { hasInterpolation, isLiteralExpression } from "@/utils/node.js";
+import { checkProposal } from "./constraint.js";
 import {
   collectTargets,
   promptSegmentsToString,
@@ -21,7 +23,9 @@ import { validateOptimizedStringValue } from "./validation.js";
 /**
  * Replaces an optimized variable's initializer expression. `value` is
  * Agency source text including the quotes; `expected` optionally guards
- * against stale catalogs by matching the target's current decoded value.
+ * against stale catalogs by matching the target's current value — the
+ * decoded text for string targets, the formatter-exact source text
+ * (quotes intact) for literal targets, i.e. exactly `OptimizeTarget.value`.
  *
  * ```ts
  * { target: "foo.agency:bar:prompt", kind: "variable", op: "replaceInitializer",
@@ -83,8 +87,10 @@ export type OptimizeMutationDiagnostic = {
 };
 
 /**
- * The target-level record of one applied operation, with decoded old/new
- * values (no quotes), as written to `mutation.json`.
+ * The target-level record of one applied operation, as written to
+ * `mutation.json`. Old/new values use the target's value representation:
+ * decoded text (no quotes) for string targets, formatter-exact source
+ * text for literal targets.
  *
  * ```ts
  * { target: "foo.agency:bar:prompt", kind: "variable", op: "replaceInitializer",
@@ -268,7 +274,7 @@ export class OptimizeSourceMutator {
     for (const entry of fileOperations) entriesById[entry.target.id] = entry;
 
     let replacedCount = 0;
-    for (const { target, assignment } of collectTargets(program, file, sourceFile.absoluteFile, this.targetSet.typeAliases)) {
+    for (const { target, assignment } of collectTargets(program, file, sourceFile.absoluteFile, this.targetSet.typeAliases, this.targetsById)) {
       const entry = entriesById[target.id];
       if (!entry) continue;
       assignment.value = entry.replacement;
@@ -286,7 +292,7 @@ export class OptimizeSourceMutator {
     if (!reparsed.success) {
       return errorDiagnostic(file, `Rendered candidate for ${file} does not parse: ${reparsed.message ?? "parse error"}`);
     }
-    const refreshedTargets = collectTargets(reparsed.result, file, sourceFile.absoluteFile, this.targetSet.typeAliases)
+    const refreshedTargets = collectTargets(reparsed.result, file, sourceFile.absoluteFile, this.targetSet.typeAliases, this.targetsById)
       .map((entry) => entry.target);
 
     return { rendered, refreshedTargets };
@@ -355,7 +361,7 @@ export class OptimizeSourceMutator {
     operation: ReplaceVariableInitializerOperation,
     target: OptimizeTarget,
   ): ValidationOutcome {
-    const isFreeformText = target.valueKind !== "literal" && target.constraintText === null;
+    const isFreeformText = target.valueKind !== "literal" && target.declaredType === null;
     let parsed = exprParser(operation.value);
     if ((!parsed.success || parsed.rest.trim() !== "") && target.valueKind !== "literal") {
       // The model frequently returns the raw prompt text without the surrounding
@@ -368,10 +374,14 @@ export class OptimizeSourceMutator {
       if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
     }
     if (!parsed.success || parsed.rest.trim() !== "") {
-      return diagnostic({ operation, code: "invalid-replacement-syntax", message: `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}` });
+      // Keep the text-target message prescriptive — it is retry feedback the
+      // mutator LLM acts on, and "send a quoted string" is the actual fix.
+      const message = target.valueKind === "literal"
+        ? `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}`
+        : `Replacement value for ${operation.target} must be a quoted Agency string literal (e.g. "new prompt"), but it did not parse as one even after wrapping it in quotes. Received: ${JSON.stringify(operation.value)}`;
+      return diagnostic({ operation, code: "invalid-replacement-syntax", message });
     }
     let replacement = parsed.result;
-    let proposalText = operation.value.trim();
 
     if (isFreeformText) {
       // Today's freeform path, byte-identical behavior.
@@ -393,27 +403,33 @@ export class OptimizeSourceMutator {
       return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} contains interpolations (\${...}); interpolated strings are not supported in typed optimize values.` });
     }
 
-    // Literal gate. The probe cannot enforce this — an unknown bare
-    // identifier synthesizes to `any` and typechecks clean — so a bare-word
-    // proposal (`fail` instead of `"fail"`) is recovered by quoting, and
-    // anything else non-literal is rejected outright.
+    // Literal gate, recursive. The probe cannot enforce this — an unknown
+    // bare identifier (top-level or nested inside a container) synthesizes
+    // to `any` and typechecks clean — so a bare-word proposal (`fail`
+    // instead of `"fail"`) is recovered by quoting, and anything else
+    // non-literal is rejected outright.
     if (!isLiteralExpression(replacement)) {
-      const quoted = `"${proposalText}"`;
-      const reparsed = exprParser(quoted);
-      if (!reparsed.success || reparsed.rest.trim() !== "" || reparsed.result.type !== "string") {
-        return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a literal (string, number, boolean, null, object, or array); got ${replacement.type}.` });
+      const quoted = replacement.type === "variableName" ? `"${operation.value.trim()}"` : null;
+      const reparsed = quoted === null ? null : exprParser(quoted);
+      if (!reparsed || !reparsed.success || reparsed.rest.trim() !== "" || reparsed.result.type !== "string") {
+        return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a literal (string, number, boolean, null, object, or array) with no variable references; got ${replacement.type}.` });
       }
       replacement = reparsed.result;
-      proposalText = quoted;
     }
 
-    if (target.constraintText !== null) {
-      const check = checkProposal(target.constraintText, proposalText, this.targetSet.typeAliases);
+    // Probe EXACTLY the value that will be written: the formatter rendering
+    // of the (possibly quote-recovered) replacement. Probing the raw
+    // operation text instead would diverge after recovery — an unquoted
+    // multi-word proposal would probe as a bare identifier plus a stray
+    // statement and falsely typecheck clean.
+    const proposalText = generateExpression(replacement);
+    if (target.declaredType !== null) {
+      const check = checkProposal(target.declaredType, proposalText, this.targetSet.typeAliases);
       if (!check.ok) {
-        return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} does not fit its type ${target.constraintText}: ${check.reason}` });
+        return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} does not fit its type ${target.declaredType}: ${check.reason}` });
       }
     }
-    // constraintText === null with valueKind "literal": unconstrained — any
+    // declaredType === null with valueKind "literal": unconstrained — any
     // parsed literal passes through.
 
     const newValue = (replacement.type === "string" || replacement.type === "multiLineString")

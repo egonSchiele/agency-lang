@@ -1,20 +1,10 @@
-import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, type CompilationUnit } from "@/compilationUnit.js";
 import { parseAgency } from "@/parser.js";
 import { typeCheck } from "@/typeChecker/index.js";
-import type { Expression, TypeAliasEntry, VariableType } from "@/types.js";
+import type { TypeAliasEntry, VariableType } from "@/types.js";
 import { formatTypeHint } from "@/utils/formatType.js";
 
 export type ShapeResult = { ok: true } | { ok: false; reason: string };
-
-/**
- * The parser represents `null` as a variableName node — there is no
- * `{ type: "null" }` in parser output. Single point of truth for the check
- * so no caller ever tests `expr.type === "null"` (dead code).
- */
-export function isNullLiteral(expr: Expression): boolean {
-  return expr.type === "variableName" && expr.value === "null";
-}
 
 /**
  * A minimal CompilationUnit carrying only the alias registry, for
@@ -34,22 +24,12 @@ export function makeProbeUnit(typeAliases: Record<string, TypeAliasEntry>): Comp
   };
 }
 
-const PROBE_VARIABLE = "__optimizeProbe";
+// Chosen to read acceptably if it ever leaks into a diagnostic shown to the
+// mutator LLM ("assignment to 'proposedValue'" is self-explanatory).
+const PROBE_VARIABLE = "proposedValue";
 
 /**
- * Exact source rendering of a literal expression, via the Agency formatter
- * (`processNode` is the same renderer interpolations use, so string quotes
- * and escapes are preserved). NOT `expressionToString`, which drops string
- * quotes and makes `{a: "1"}` and `{a: 1}` render identically. Needed
- * because parsed initializer nodes carry no loc offsets, so the exact text
- * cannot be sliced from the source.
- */
-export function renderLiteralSource(expr: Expression): string {
-  return new AgencyGenerator({}).processNode(expr).trim();
-}
-
-/**
- * Does `valueText` fit the type written as `constraintText`? Decided by the
+ * Does `valueText` fit the type written as `declaredType`? Decided by the
  * language's own typechecker on a one-line probe program — parsed and
  * typechecked in memory, never executed. Any diagnostic (assignability,
  * unknown property, undefined variable inside an interpolation, parse
@@ -62,64 +42,26 @@ export function renderLiteralSource(expr: Expression): string {
  * right direction (a valid value is never wrongly rejected).
  */
 export function checkProposal(
-  constraintText: string,
+  declaredType: string,
   valueText: string,
   typeAliases: Record<string, TypeAliasEntry>,
 ): ShapeResult {
-  const probe = parseAgency(`const ${PROBE_VARIABLE}: ${constraintText} = ${valueText}`, {}, false);
+  const probe = parseAgency(`const ${PROBE_VARIABLE}: ${declaredType} = ${valueText}`, {}, false);
   if (!probe.success) {
+    // The parse failure may be the value OR the rendered type — surface the
+    // parser's own message so retry feedback (and baseline self-test
+    // fallbacks) are debuggable.
     return {
       ok: false,
-      reason: `value does not parse as an Agency expression of type ${constraintText}`,
+      reason: `value does not parse as an Agency expression of type ${declaredType}${probe.message ? `: ${probe.message}` : ""}`,
     };
   }
   const result = typeCheck(probe.result, {}, makeProbeUnit(typeAliases));
   if (result.errors.length === 0) return { ok: true };
   return {
     ok: false,
-    reason: result.errors[0].message.replace(` (assignment to '${PROBE_VARIABLE}')`, ""),
+    reason: result.errors[0].message.replaceAll(` (assignment to '${PROBE_VARIABLE}')`, ""),
   };
-}
-
-const LITERAL_EXPRESSION_TYPES = ["string", "multiLineString", "number", "boolean", "agencyObject", "agencyArray"];
-
-/**
- * True when the expression is a literal an optimize target/proposal may
- * carry: string, number, boolean, null, object, or array. The single gate
- * shared by discovery and the mutator — the probe alone cannot enforce
- * this, because an unknown bare identifier synthesizes to `any` and passes
- * typechecking unflagged.
- */
-export function isLiteralExpression(expr: Expression): boolean {
-  return LITERAL_EXPRESSION_TYPES.includes(expr.type) || isNullLiteral(expr);
-}
-
-/**
- * True when a literal expression contains a string interpolation anywhere —
- * at top level or nested inside object/array literals. Typed replacement
- * values must be self-contained: the mutator cannot know what identifiers
- * exist at the target's declaration site, and the probe's undefined-variable
- * pass does not descend into interpolation segments. Structural traversal
- * only — no type semantics.
- */
-export function hasInterpolation(expr: Expression): boolean {
-  switch (expr.type) {
-    case "string":
-    case "multiLineString":
-      return expr.segments.some((segment) => segment.type !== "text");
-    case "agencyArray":
-      return expr.items.some((item) =>
-        item.type === "splat" ? hasInterpolation(item.value) : hasInterpolation(item),
-      );
-    case "agencyObject":
-      return expr.entries.some((entry) => {
-        if ("type" in entry && entry.type === "splat") return hasInterpolation(entry.value);
-        const kv = entry as { value: Expression };
-        return hasInterpolation(kv.value);
-      });
-    default:
-      return false;
-  }
 }
 
 /**
@@ -128,21 +70,21 @@ export function hasInterpolation(expr: Expression): boolean {
  * round-trip: a rendered type that does not re-parse, or does not accept the
  * target's own original value, leaves the target unconstrained.
  */
-export function renderConstraintText(typeHint: VariableType): string {
+export function renderDeclaredType(typeHint: VariableType): string {
   return formatTypeHint(typeHint);
 }
 
 /**
  * One-line description of a target's allowed values for the mutator prompt.
- * `constraintText === null` means freeform for text targets and
+ * `declaredType === null` means freeform for text targets and
  * unconstrained for literal targets — see the valueKind-first invariant in
  * `OptimizeTarget`.
  */
 export function describeConstraint(target: {
-  constraintText: string | null;
+  declaredType: string | null;
   valueKind: string;
 }): string {
-  if (target.constraintText !== null) return target.constraintText;
+  if (target.declaredType !== null) return target.declaredType;
   if (target.valueKind === "literal") return "any literal value";
   return "free text (any string; keep every ${...} placeholder)";
 }

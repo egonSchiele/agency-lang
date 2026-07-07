@@ -118,7 +118,7 @@ describe("BaseOptimizer.evaluate", () => {
           entryFile: "agent.agency",
           typeAliases: {},
           files: {},
-          targets: [{ id: "t", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "p", valueKind: "string", value: "x", constraintText: null }],
+          targets: [{ id: "t", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "p", valueKind: "string", value: "x", declaredType: null }],
         }),
       },
     );

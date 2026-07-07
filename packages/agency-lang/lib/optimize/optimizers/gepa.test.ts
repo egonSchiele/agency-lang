@@ -35,7 +35,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
 
   const target = (id: string): OptimizeTargetSet["targets"][number] => ({
     id, kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"),
-    scope: "global", name: id, valueKind: "string", value: `"${id}"`, constraintText: null,
+    scope: "global", name: id, valueKind: "string", value: `"${id}"`, declaredType: null,
   });
 
   const fakeSource = (): OptimizeTargetSet => ({

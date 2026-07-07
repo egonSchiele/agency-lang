@@ -32,7 +32,7 @@ function makeTarget(overrides: Partial<OptimizeTarget> & { id: string; name: str
     absoluteFile: "/abs/foo.agency",
     scope: "bar",
     valueKind: "string",
-    constraintText: null,
+    declaredType: null,
     value: "xyz",
     ...overrides,
   };

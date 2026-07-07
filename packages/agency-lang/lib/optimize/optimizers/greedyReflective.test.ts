@@ -34,7 +34,7 @@ describe("GreedyReflective (pointwise)", () => {
     entryFile: "agent.agency",
     typeAliases: {},
     files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "x", sha256: "x" } },
-    targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", constraintText: null }],
+    targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", declaredType: null }],
   });
 
   const deps = (): GreedyDeps => ({
@@ -267,8 +267,21 @@ describe("typed target end-to-end guarantee", () => {
     expect(proposeCalls[1]?.diagnostics?.[0]?.code).toBe("type-mismatch");
     expect(proposeCalls[1]?.diagnostics?.[0]?.message).toContain("exploded");
 
-    // No candidate agent file was ever materialized with the bad value.
-    const iterAgent = path.join(root, "typed-e2e", "iter-1", "agent");
-    expect(fs.existsSync(iterAgent)).toBe(false);
+    // No .agency file anywhere under the run root ever carries the bad
+    // value — covers every path that materializes candidate/workspace
+    // sources, not a specific directory layout. (Diagnostics JSON may
+    // legitimately mention it; agent source must not.)
+    const agencyFiles: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".agency")) agencyFiles.push(full);
+      }
+    };
+    walk(root);
+    for (const file of agencyFiles) {
+      expect(fs.readFileSync(file, "utf8")).not.toContain("exploded");
+    }
   });
 });

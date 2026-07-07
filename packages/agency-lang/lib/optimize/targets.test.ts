@@ -315,7 +315,7 @@ node main() {}
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     const target = targetSet.targets.find((candidate) => candidate.name === "p")!;
 
-    expect(target.constraintText).toBeNull();
+    expect(target.declaredType).toBeNull();
     expect(target.valueKind).toBe("string");
     expect(target.value).toBe("hi ${x}");
   });
@@ -326,7 +326,7 @@ node main() {}
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
-    expect(targetSet.targets[0].constraintText).toBeNull();
+    expect(targetSet.targets[0].declaredType).toBeNull();
   });
 
   it("constrains an annotated boolean; value is the exact source text", () => {
@@ -338,7 +338,7 @@ node main() {}
 
     expect(target.valueKind).toBe("literal");
     expect(target.value).toBe("false");
-    expect(target.constraintText).toBe("boolean");
+    expect(target.declaredType).toBe("boolean");
   });
 
   it("preserves quotes in a record target's value (formatter-exact rendering)", () => {
@@ -355,7 +355,7 @@ node main() {}
     // is that string field values keep their quotes — `"foo"`, not `foo`.
     expect(target.value).toBe(`{\n  name: "foo",\n  age: 0\n}`);
     expect(target.value).toContain(`"foo"`);
-    expect(target.constraintText).toBe("Person");
+    expect(target.declaredType).toBe("Person");
   });
 
   it("accepts a null initializer (variableName representation)", () => {
@@ -379,7 +379,7 @@ node main() {}
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     const target = targetSet.targets.find((candidate) => candidate.name === "x")!;
 
-    expect(target.constraintText).toBeNull();
+    expect(target.declaredType).toBeNull();
     expect(target.valueKind).toBe("literal");
   });
 

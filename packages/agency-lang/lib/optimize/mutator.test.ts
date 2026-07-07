@@ -14,7 +14,7 @@ const targets: OptimizeTarget[] = [
     scope: "global",
     name: "systemPrompt",
     valueKind: "string",
-    constraintText: null,
+    declaredType: null,
     value: "be brief",
   },
   {
@@ -25,7 +25,7 @@ const targets: OptimizeTarget[] = [
     scope: "bar",
     name: "prompt",
     valueKind: "string",
-    constraintText: null,
+    declaredType: null,
     value: "Classify ${text}",
   },
 ];
@@ -183,7 +183,7 @@ describe("renderTargetsSection type descriptions", () => {
         name: "status",
         valueKind: "string",
         value: "pass",
-        constraintText: `"pass" | "fail"`,
+        declaredType: `"pass" | "fail"`,
       },
       {
         id: "a.agency:global:enabled",
@@ -194,7 +194,7 @@ describe("renderTargetsSection type descriptions", () => {
         name: "enabled",
         valueKind: "literal",
         value: "false",
-        constraintText: "boolean",
+        declaredType: "boolean",
       },
     ];
 

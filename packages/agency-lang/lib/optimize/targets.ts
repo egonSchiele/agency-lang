@@ -6,8 +6,9 @@ import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
 import type { AgencyNode, AgencyProgram, Assignment, PromptSegment, TypeAliasEntry, VariableType } from "@/types.js";
-import { expressionToString, walkNodes } from "@/utils/node.js";
-import { checkProposal, isLiteralExpression, renderConstraintText, renderLiteralSource } from "./constraint.js";
+import { generateExpression } from "@/backends/agencyGenerator.js";
+import { expressionToString, isLiteralExpression, walkNodes } from "@/utils/node.js";
+import { checkProposal, renderDeclaredType } from "./constraint.js";
 
 export type OptimizeTarget = {
   id: string;
@@ -25,7 +26,7 @@ export type OptimizeTarget = {
    *  `null` means FREEFORM for text targets (today's string-only semantics,
    *  interpolation rule and all) and UNCONSTRAINED for literal targets (any
    *  literal accepted). Consumers must branch on `valueKind` first. */
-  constraintText: string | null;
+  declaredType: string | null;
 };
 
 export type OptimizeSourceFile = {
@@ -153,14 +154,21 @@ function collectClosureTypeAliases(
   try {
     const symbolTable = SymbolTable.build(absoluteEntryFile);
     const unit = buildCompilationUnit(entry.program, symbolTable, entry.absoluteFile, entry.source);
-    return unit.typeAliases.visibleIn(GLOBAL_SCOPE_KEY);
+    return nullPrototyped(unit.typeAliases.visibleIn(GLOBAL_SCOPE_KEY));
   } catch (error) {
     console.warn(
       `optimize discovery: could not build the type-alias registry for ${absoluteEntryFile} (typed targets will be unconstrained): ${error instanceof Error ? error.message : String(error)}`,
     );
     const unit = buildCompilationUnit(entry.program);
-    return unit.typeAliases.visibleIn(GLOBAL_SCOPE_KEY);
+    return nullPrototyped(unit.typeAliases.visibleIn(GLOBAL_SCOPE_KEY));
   }
+}
+
+/** Null-prototype copy: the registry is keyed by user-defined type names, so
+ *  a name like "__proto__" or "constructor" must land as a plain own
+ *  property (same hardening as optimize/registry.ts and evalCache.ts). */
+function nullPrototyped<T>(record: Record<string, T>): Record<string, T> {
+  return Object.assign(Object.create(null), record);
 }
 
 type ParsedSourceFile = {
@@ -226,6 +234,7 @@ export function collectTargets(
   file: string,
   absoluteFile: string,
   typeAliases: Record<string, TypeAliasEntry>,
+  priorTargets: Record<string, OptimizeTarget> = {},
 ): OptimizeTargetNode[] {
   const collected: OptimizeTargetNode[] = [];
   for (const { node, ancestors } of walkNodes(program.nodes)) {
@@ -239,7 +248,7 @@ export function collectTargets(
     }
 
     collected.push({
-      target: buildTarget(node, file, absoluteFile, scope, typeAliases),
+      target: buildTarget(node, file, absoluteFile, scope, typeAliases, priorTargets),
       assignment: node,
     });
   }
@@ -261,6 +270,7 @@ function buildTarget(
   absoluteFile: string,
   scope: string,
   typeAliases: Record<string, TypeAliasEntry>,
+  priorTargets: Record<string, OptimizeTarget>,
 ): OptimizeTarget {
   const value = assignment.value;
   if (value.type === "messageThread" || !isLiteralExpression(value)) {
@@ -269,27 +279,43 @@ function buildTarget(
     );
   }
 
-  const isText = value.type === "string" || value.type === "multiLineString";
-  const valueKind: OptimizeTarget["valueKind"] = value.type === "multiLineString"
-    ? "multilineString"
-    : value.type === "string" ? "string" : "literal";
+  const id = `${file}:${scope}:${assignment.variableName}`;
+
+  // A target's literal-vs-text identity and its constraint come from the
+  // DECLARATION, decided once at discovery. On refresh collects (the source
+  // mutator re-collecting after a mutation), the prior entry carries them:
+  // re-deriving the identity from the champion's current value would let an
+  // unconstrained literal target flip to freeform when a string value is
+  // accepted, and re-running the baseline self-test would re-typecheck every
+  // typed target on every preview. Within TEXT targets, the string /
+  // multilineString sub-flavor DOES track the current value — it selects the
+  // quote style unquoted proposals are recovered with.
+  const prior = priorTargets[id];
+  const isText = prior
+    ? prior.valueKind !== "literal"
+    : value.type === "string" || value.type === "multiLineString";
+  const valueKind: OptimizeTarget["valueKind"] = !isText
+    ? "literal"
+    : value.type === "multiLineString"
+      ? "multilineString"
+      : "string";
 
   // Text targets keep the decoded representation (the `expected`-guard
   // contract). Literal targets carry formatter-exact source text, quotes
   // intact — parsed initializer nodes have no loc offsets to slice by.
-  const valueSource = renderLiteralSource(value);
-  const valueText = isText
+  const valueSource = generateExpression(value);
+  const valueText = isText && (value.type === "string" || value.type === "multiLineString")
     ? promptSegmentsToString(value.segments)
     : valueSource;
 
-  if (!isText && !assignment.typeHint) {
+  if (!prior && !isText && !assignment.typeHint) {
     throw new Error(
       `Optimize target ${file}:${scope}:${assignment.variableName} is a non-string literal and needs a type annotation, e.g. \`optimize const ${assignment.variableName}: number = ${valueText}\`.`,
     );
   }
 
   return {
-    id: `${file}:${scope}:${assignment.variableName}`,
+    id,
     kind: "variable",
     file,
     absoluteFile,
@@ -297,7 +323,9 @@ function buildTarget(
     name: assignment.variableName,
     valueKind,
     value: valueText,
-    constraintText: resolveConstraintText(assignment.typeHint, valueSource, typeAliases),
+    declaredType: prior
+      ? prior.declaredType
+      : resolveDeclaredType(assignment.typeHint, valueSource, typeAliases),
   };
 }
 
@@ -310,14 +338,14 @@ function buildTarget(
  * pre-existing type warning the user tolerates), the target is unconstrained
  * so mutations are never blocked by a rule the baseline itself fails.
  */
-function resolveConstraintText(
+function resolveDeclaredType(
   typeHint: VariableType | undefined,
   originalValueSource: string,
   typeAliases: Record<string, TypeAliasEntry>,
 ): string | null {
   if (!typeHint) return null;
   if (typeHint.type === "primitiveType" && typeHint.value === "string") return null;
-  const text = renderConstraintText(typeHint);
+  const text = renderDeclaredType(typeHint);
   if (!checkProposal(text, originalValueSource, typeAliases).ok) return null;
   return text;
 }

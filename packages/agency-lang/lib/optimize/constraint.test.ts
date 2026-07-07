@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { exprParser } from "@/parsers/parsers.js";
 import type { TypeAliasEntry, VariableType } from "@/types.js";
+import { hasInterpolation, isNullLiteral } from "@/utils/node.js";
 import {
   checkProposal,
   describeConstraint,
-  hasInterpolation,
-  isNullLiteral,
-  renderConstraintText,
+  renderDeclaredType,
 } from "./constraint.js";
 
 const statusT: VariableType = {
@@ -89,6 +88,22 @@ describe("checkProposal", () => {
     expect(checkProposal("number", `{{{`, {}).ok).toBe(false);
   });
 
+  it("resolves aliases nested inside inline annotations (rendered by name, resolved lazily)", () => {
+    // formatTypeHint renders alias references by NAME ("Status"), and the
+    // probe resolves them against the registry at comparison time — so
+    // annotations that CONTAIN aliases work without any eager expansion.
+    expect(checkProposal(`{ status: Status }`, `{ status: "fail" }`, aliases).ok).toBe(true);
+    expect(checkProposal(`{ status: Status }`, `{ status: "nope" }`, aliases).ok).toBe(false);
+    expect(checkProposal(`Status | null`, `null`, aliases).ok).toBe(true);
+    expect(checkProposal(`Status | null`, `"exploded"`, aliases).ok).toBe(false);
+  });
+
+  it("keeps the internal probe variable out of rejection reasons", () => {
+    const bad = checkProposal("number", `"five"`, {});
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).not.toContain("proposedValue");
+  });
+
   it("accepts anything against an any annotation", () => {
     expect(checkProposal("any", `{ a: 1 }`, {}).ok).toBe(true);
   });
@@ -122,14 +137,14 @@ describe("isNullLiteral", () => {
   });
 });
 
-describe("renderConstraintText + describeConstraint", () => {
+describe("renderDeclaredType + describeConstraint", () => {
   it("renders a union round-trippably and labels freeform / unconstrained", () => {
-    const text = renderConstraintText(statusT);
+    const text = renderDeclaredType(statusT);
     expect(checkProposal(text, `"pass"`, {}).ok).toBe(true);
     expect(checkProposal(text, `"exploded"`, {}).ok).toBe(false);
 
-    expect(describeConstraint({ constraintText: null, valueKind: "string" }).toLowerCase()).toContain("free");
-    expect(describeConstraint({ constraintText: null, valueKind: "literal" }).toLowerCase()).toContain("literal");
-    expect(describeConstraint({ constraintText: "Status", valueKind: "string" })).toBe("Status");
+    expect(describeConstraint({ declaredType: null, valueKind: "string" }).toLowerCase()).toContain("free");
+    expect(describeConstraint({ declaredType: null, valueKind: "literal" }).toLowerCase()).toContain("literal");
+    expect(describeConstraint({ declaredType: "Status", valueKind: "string" })).toBe("Status");
   });
 });

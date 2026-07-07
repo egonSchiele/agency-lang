@@ -15,6 +15,7 @@ describe("WorkspaceManager", () => {
   const sourceFor = (file: string, source: string, sha: string): OptimizeTargetSet => ({
     baseDir: root,
     entryFile: "a.agency",
+    typeAliases: {},
     targets: [],
     files: { "a.agency": { file: "a.agency", absoluteFile: file, source, sha256: sha } },
   });

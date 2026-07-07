@@ -71,7 +71,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
   }
 
   function source(): OptimizeTargetSet {
-    return { baseDir: src, entryFile: "agent.agency", files: {}, targets: [] };
+    return { baseDir: src, entryFile: "agent.agency", files: {}, targets: [], typeAliases: {} };
   }
 
   it("passes seed + overlayFiles to evalRunLoadedInputs; no working_dir on input", async () => {

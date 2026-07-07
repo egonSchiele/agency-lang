@@ -65,6 +65,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
   return {
     baseDir: "/abs",
     entryFile: "foo.agency",
+    typeAliases: {},
     files: {
       "foo.agency": {
         file: "foo.agency",

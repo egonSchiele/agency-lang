@@ -41,6 +41,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   const fakeSource = (): OptimizeTargetSet => ({
     baseDir: src,
     entryFile: "agent.agency",
+    typeAliases: {},
     files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "x", sha256: "x" } },
     targets: [target("t-alpha"), target("t-beta")],
   });

@@ -68,6 +68,7 @@ describe("BaseOptimizer.evaluate", () => {
   const source: OptimizeTargetSet = {
     baseDir: "",
     entryFile: "agent.agency",
+    typeAliases: {},
     files: {},
     targets: [],
   };
@@ -88,6 +89,7 @@ describe("BaseOptimizer.evaluate", () => {
     const scoreSource: OptimizeTargetSet = {
       baseDir: src,
       entryFile: "agent.agency",
+      typeAliases: {},
       files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "node main() {}\n", sha256: "x" } },
       targets: [],
     };
@@ -114,6 +116,7 @@ describe("BaseOptimizer.evaluate", () => {
         discover: () => ({
           baseDir: src,
           entryFile: "agent.agency",
+          typeAliases: {},
           files: {},
           targets: [{ id: "t", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "p", valueKind: "string", value: "x" }],
         }),

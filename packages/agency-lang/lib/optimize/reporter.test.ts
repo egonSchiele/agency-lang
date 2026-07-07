@@ -48,6 +48,7 @@ const systemTarget = makeTarget({
 const targetSet: OptimizeTargetSet = {
   baseDir: "/abs",
   entryFile: "foo.agency",
+  typeAliases: {},
   files: {},
   targets: [promptTarget, systemTarget],
 };

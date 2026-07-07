@@ -224,7 +224,6 @@ await callHook({
               name: name,
               age: age
             },
-            isBuiltin: false,
             moduleId: "interrupt-in-node.agency"
           }
         })

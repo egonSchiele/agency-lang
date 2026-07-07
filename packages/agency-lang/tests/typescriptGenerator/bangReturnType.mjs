@@ -218,7 +218,6 @@ await callHook({
             args: {
               x: x
             },
-            isBuiltin: false,
             moduleId: "bangReturnType.agency"
           }
         })

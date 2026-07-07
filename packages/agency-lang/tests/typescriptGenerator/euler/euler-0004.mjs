@@ -220,7 +220,6 @@ await callHook({
             args: {
               n: n
             },
-            isBuiltin: false,
             moduleId: "euler-0004.agency"
           }
         })

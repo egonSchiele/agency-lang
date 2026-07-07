@@ -220,7 +220,6 @@ await callHook({
             args: {
               id: id
             },
-            isBuiltin: false,
             moduleId: "safe-function.agency"
           }
         })
@@ -363,7 +362,6 @@ await callHook({
             args: {
               id: id
             },
-            isBuiltin: false,
             moduleId: "safe-function.agency"
           }
         })

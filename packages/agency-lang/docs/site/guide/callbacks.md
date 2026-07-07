@@ -5,23 +5,17 @@ description: Documents Agency's callback hooks (e.g. `onNodeStart`) that can be 
 
 # Callbacks
 
-Agency exposes a number of hooks. It's possible to write callbacks for these hooks in Agency files or pass them in when you run the node through TypeScript. Here are both options.
+Agency exposes a number of hooks. It's possible to write callbacks for these hooks in Agency or TypeScript. Here are both options.
 
-## Callbacks in Agency files
+## Callbacks in Agency
 
 ```ts
-import { callback } from "std::agency"
-
 callback("onNodeStart") as data {
   print(`Node ${data.nodeName} started.`)
 }
 ```
 
-Callbacks registered with `callback(name, fn)` are scoped to the dynamic
-extent of the function or node that calls `callback(...)`. When that function
-or node returns, the callback is automatically unregistered. Callbacks
-registered at module top-level (outside any function or node) are active for
-the entire run.
+Callbacks are scoped to the function or node they reside in. Callbacks in the global scope are always active.
 
 ## Callbacks in TypeScript
 
@@ -29,44 +23,33 @@ the entire run.
 import { main } from "agency"
 const callbacks = {
   onNodeStart: (data) => {
-    console.log(`Node ${data.node.id} started.`)
+    console.log(`Node ${data.nodeName} started.`)
   }
 }
 
 const result = main(param1, param2, { callbacks })
 ```
 
-## `interrupt` is not allowed inside a callback body
+The last argument to `main()` is an options object. You can pass in a `callbacks` object here.
 
-Callback bodies cannot raise interrupts. The typechecker rejects any
-`interrupt(...)` call (direct or transitive) inside a `callback(...) {
-... }` body with an error like:
-
-> `interrupt` is not allowed inside a callback body. Callbacks fire as
-> side effects; their body cannot pause execution to ask the user a
-> question. Move the `interrupt` into the calling node/function
-> instead, or use a runtime guard if you wanted budget enforcement.
-
-Callbacks fire as side effects: they run, they may throw a JS error
-(which is caught and logged by the runtime), and that is it. If you
-need to pause the agent for user input, put the `interrupt(...)` in
-the node or function that contains the work, not in a hook callback.
+Note that:
+- Callback bodies cannot raise interrupts. 
+- Callbacks can't change the flow of execution.
 
 ## List of hooks
-Here are all the hooks that Agency provides.
 
 ### onAgentStart
-Called when an agent (graph) starts executing.
+Called when an agent starts executing.
 
 - `nodeName`: the name of the entry node
 - `args`: the arguments passed to the agent
 - `messages`: the initial message history
-- `cancel(reason?)`: call this to cancel the agent before it runs
+- `cancel(reason?)`: call this to cancel the agent at any point.
 
 ### onAgentEnd
 Called when an agent finishes executing.
 
-- `nodeName`: the name of the entry node
+- `nodeName`: the name of the entry node (the same node reported by `onAgentStart`)
 - `result`: the result of running the agent
 
 ### onNodeStart
@@ -81,15 +64,15 @@ Called when a graph node finishes executing.
 - `data`: the data returned by the node
 
 ### onLLMCallStart
-Called before an LLM call is made. You can return a `MessageJSON[]` array to override the messages sent to the LLM.
+Called before an LLM call is made. Side-effect only — the callback's return value is ignored, and it cannot alter the messages sent to the LLM.
 
-- `prompt`: the prompt string
+- `prompt`: the prompt — either a string, or an array of text/attachment parts (redacted for logging)
 - `tools`: the tools available to the LLM, each with `name`, `description`, and `schema`
 - `model`: the model being used
 - `messages`: the messages that will be sent
 
 ### onLLMCallEnd
-Called after an LLM call completes. You can return a `MessageJSON[]` array to override the messages stored in the thread.
+Called after an LLM call completes. Side-effect only — the callback's return value is ignored, and it cannot alter the messages stored in the thread.
 
 - `model`: the model that was used
 - `result`: the full prompt result from the LLM
@@ -99,10 +82,10 @@ Called after an LLM call completes. You can return a `MessageJSON[]` array to ov
 - `messages`: the messages that were sent
 
 ### onLLMRetry
-Called just before the backend waits to retry an LLM call after a transient failure (see [retries and timeouts](../guide/llm.md#resilience-retries-and-timeouts)). Side-effect only — it cannot change whether the retry happens.
+Called just before the backend waits to retry an LLM call after a transient failure (see [retries and timeouts](/guide/llm-part-2#retries-and-timeouts)). Side-effect only — it cannot change whether the retry happens.
 
-- `attempt`: the 1-based retry number (retry 1, 2, …)
-- `maxRetries`: the configured retry count
+- `attempt`: the retry attempt number, starts at 1 (retry 1, 2, …)
+- `maxRetries`: the configured max retry count
 - `delayMs`: how long the backend will wait before this retry
 - `reason`: why we're retrying — `"timeout"`, `"connectionLost"`, `"streamInterrupted"`, `"rateLimit"`, `"serverError"`, or `"overloaded"`
 - `detail`: the raw provider message
@@ -113,12 +96,19 @@ Called whenever an LLM call exceeds its per-call deadline (`timeout`), whether o
 - `limitMs`: the deadline that was exceeded
 - `attempt`: the 0-based attempt that timed out
 
+### onOAuthRequired
+Called when an MCP server needs OAuth authorization before it can be used.
+
+- `serverName`: the name of the server requesting authorization
+- `authUrl`: the URL the user must visit to authorize
+- `complete`: a `Promise<void>` that resolves once authorization finishes
+- `cancel()`: call this to cancel the authorization flow
+
 ### onFunctionStart
-Called when a function (tool) begins executing.
+Called when a function (tool) begins executing. Fires for every Agency `def` — both your own functions and the auto-imported stdlib functions (`print`, `sleep`, `range`, `fetch`, …). It does *not* fire for language built-ins such as `interrupt`, `checkpoint`, `llm`, or `fork`, which compile to dedicated constructs rather than function bodies.
 
 - `functionName`: the name of the function
 - `args`: the arguments passed to the function
-- `isBuiltin`: whether this is a built-in function
 - `moduleId`: the module the function belongs to
 
 ### onFunctionEnd
@@ -160,3 +150,20 @@ Called for each trace line emitted during execution. Providing this callback aut
   - `{ type: "chunk", hash, data }` — content-addressed data block
   - `{ type: "manifest", ... }` — checkpoint reference (one per step)
   - `{ type: "footer", checkpointCount, chunkCount, timestamp }` — emitted when execution completes
+
+### onThreadStart
+Called when a thread or subthread begins.
+
+- `threadId`: the thread's id in slug form (e.g. `"t3"`)
+- `threadType`: either `"thread"` or `"subthread"`
+- `parentThreadId`: the parent thread's id in slug form, when present
+- `label`: the label from `thread(label: "...") { ... }`, if any
+- `isResumption`: `true` when the thread is entered via continue/session
+
+### onThreadEnd
+Called when a thread closes.
+
+- `threadId`: the thread's id in slug form
+- `label`: the thread's label, if any
+- `eagerSummarize`: whether the thread was opened with `thread(summarize: true)`
+- `messages`: a `MessageJSON[]` snapshot of the thread at close

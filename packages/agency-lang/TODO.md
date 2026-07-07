@@ -122,3 +122,15 @@ In fact, the agency generator will actually convert the Success type to a Result
 ---
 
 allow a match expression as an obj value?
+
+---
+
+Ideas for examples:
+- second brain
+- open source alexa
+- stock predictor
+- rewrite to mimick my tone of voice
+- general research tool
+  - finds trends on a cron
+  - tries to find subtle connections (eg connections between different tech companies -- who knows who?)
+- gifting assistant

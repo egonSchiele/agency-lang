@@ -230,7 +230,6 @@ await callHook({
               greeting: greeting,
               punctuation: punctuation
             },
-            isBuiltin: false,
             moduleId: "namedArgsReorder.agency"
           }
         })

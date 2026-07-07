@@ -229,7 +229,6 @@ await callHook({
               input: input,
               s: s
             },
-            isBuiltin: false,
             moduleId: "schemaParamInjection.agency"
           }
         })
@@ -371,7 +370,6 @@ await callHook({
           data: {
             functionName: "wrapper",
             args: {},
-            isBuiltin: false,
             moduleId: "schemaParamInjection.agency"
           }
         })

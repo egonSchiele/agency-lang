@@ -16,9 +16,7 @@ export default defineConfig({
       "/guide/": [
         {
           text: "00. Why Agency?",
-          items: [
-            { text: "Why Agency?", link: "/guide/why-agency" },
-          ]
+          items: [{ text: "Why Agency?", link: "/guide/why-agency" }],
         },
         {
           text: "01. Basics",
@@ -154,6 +152,10 @@ export default defineConfig({
 
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Type Validation", link: "/guide/type-validation" },
+            {
+              text: "Value-Parameterized Types",
+              link: "/guide/value-parameterized-types",
+            },
             { text: "Memory", link: "/guide/memory" },
           ],
         },

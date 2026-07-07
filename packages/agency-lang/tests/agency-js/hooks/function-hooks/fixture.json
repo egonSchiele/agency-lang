@@ -20,8 +20,7 @@
       "functionName": "double",
       "args": {
         "x": 5
-      },
-      "isBuiltin": false
+      }
     },
     {
       "hook": "onFunctionEnd",

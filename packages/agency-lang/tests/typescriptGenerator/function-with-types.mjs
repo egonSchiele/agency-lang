@@ -224,7 +224,6 @@ await callHook({
               x: x,
               y: y
             },
-            isBuiltin: false,
             moduleId: "function-with-types.agency"
           }
         })
@@ -390,7 +389,6 @@ await callHook({
             args: {
               name: name
             },
-            isBuiltin: false,
             moduleId: "function-with-types.agency"
           }
         })
@@ -553,7 +551,6 @@ await callHook({
               count: count,
               label: label
             },
-            isBuiltin: false,
             moduleId: "function-with-types.agency"
           }
         })
@@ -716,7 +713,6 @@ await callHook({
             args: {
               items: items
             },
-            isBuiltin: false,
             moduleId: "function-with-types.agency"
           }
         })
@@ -873,7 +869,6 @@ await callHook({
             args: {
               value: value
             },
-            isBuiltin: false,
             moduleId: "function-with-types.agency"
           }
         })

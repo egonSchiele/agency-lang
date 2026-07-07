@@ -218,7 +218,6 @@ await callHook({
             args: {
               block: block
             },
-            isBuiltin: false,
             moduleId: "blockBasic.agency"
           }
         })

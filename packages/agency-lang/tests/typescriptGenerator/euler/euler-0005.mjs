@@ -226,7 +226,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "euler-0005.agency"
           }
         })
@@ -395,7 +394,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "euler-0005.agency"
           }
         })

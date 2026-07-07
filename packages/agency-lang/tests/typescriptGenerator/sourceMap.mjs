@@ -218,7 +218,6 @@ await callHook({
             args: {
               name: name
             },
-            isBuiltin: false,
             moduleId: "sourceMap.agency"
           }
         })

@@ -211,7 +211,6 @@ await callHook({
           data: {
             functionName: "test",
             args: {},
-            isBuiltin: false,
             moduleId: "function.agency"
           }
         })
@@ -349,7 +348,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "function.agency"
           }
         })

@@ -214,7 +214,6 @@ await callHook({
           data: {
             functionName: "greet",
             args: {},
-            isBuiltin: false,
             moduleId: "multiLineComment.agency"
           }
         })

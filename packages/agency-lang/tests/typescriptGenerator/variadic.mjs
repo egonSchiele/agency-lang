@@ -228,7 +228,6 @@ await callHook({
               prefix: prefix,
               messages: messages
             },
-            isBuiltin: false,
             moduleId: "variadic.agency"
           }
         })

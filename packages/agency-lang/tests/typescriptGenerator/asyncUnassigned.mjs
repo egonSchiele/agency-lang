@@ -224,7 +224,6 @@ await callHook({
               sleepTime: sleepTime,
               value: value
             },
-            isBuiltin: false,
             moduleId: "asyncUnassigned.agency"
           }
         })

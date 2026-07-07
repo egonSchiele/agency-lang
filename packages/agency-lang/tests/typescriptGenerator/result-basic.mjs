@@ -218,7 +218,6 @@ await callHook({
             args: {
               age: age
             },
-            isBuiltin: false,
             moduleId: "result-basic.agency"
           }
         })

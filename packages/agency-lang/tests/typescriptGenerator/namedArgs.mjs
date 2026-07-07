@@ -239,7 +239,6 @@ await callHook({
               name: name,
               greeting: greeting
             },
-            isBuiltin: false,
             moduleId: "namedArgs.agency"
           }
         })

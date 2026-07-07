@@ -5,6 +5,7 @@
     { "title": "Markets react", "url": "https://news.test/b", "domain": "news.test", "language": "English", "sourceCountry": "United States", "seenDate": "20260701T130000Z" }
   ],
   "sparse": [ { "title": "", "url": "", "domain": "", "language": "", "sourceCountry": "", "seenDate": "" } ],
+  "parseNull": [],
   "emptyList": [],
   "missingArticles": [],
   "fetchError": "GDELT request failed (the API may be rate-limited to 1 request / 5s): boom"

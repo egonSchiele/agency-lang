@@ -23,6 +23,14 @@ node tResolveMissing(raw: any): string {
   return parseTickerMap(raw, "NOPE")
 }
 
+node tResolveNull(): string {
+  return parseTickerMap(null, "AAPL")
+}
+
+node tParseSubNull(): any {
+  return parseSubmissions("0000320193", null, "", 20)
+}
+
 node tParseAll(raw: any): any {
   return parseSubmissions("0000320193", raw, "", 20)
 }

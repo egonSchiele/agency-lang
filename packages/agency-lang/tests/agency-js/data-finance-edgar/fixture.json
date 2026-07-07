@@ -3,6 +3,8 @@
   "archive": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250928.htm",
   "resolved": "0000320193",
   "resolvedMissing": "",
+  "resolvedNull": "",
+  "parseSubNull": [],
   "all": [
     { "form": "10-K", "filingDate": "2025-11-01", "reportDate": "2025-09-28", "accessionNumber": "0000320193-25-000073", "primaryDocument": "aapl-20250928.htm", "description": "10-K", "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250928.htm" },
     { "form": "4", "filingDate": "2026-06-17", "reportDate": "2026-06-15", "accessionNumber": "0001140361-26-025622", "primaryDocument": "xslF345X06/form4.xml", "description": "FORM 4", "url": "https://www.sec.gov/Archives/edgar/data/320193/000114036126025622/xslF345X06/form4.xml" }

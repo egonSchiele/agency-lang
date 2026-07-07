@@ -90,7 +90,7 @@ Build the GDELT DOC query path (query is URL-encoded). Pure — no network.
 parseGdelt(raw: any): NewsArticle[]
 ```
 
-Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing fields.
+Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing/null input.
 
 **Parameters:**
 
@@ -100,7 +100,7 @@ Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on miss
 
 **Returns:** `NewsArticle[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L61))
 
 ### gdeltFinalize
 
@@ -118,7 +118,7 @@ Turn a fetchJSON Result into the final Result. Pure — testable with mock Resul
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L76))
 
 ### gdeltNews
 
@@ -147,4 +147,4 @@ Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns rec
 
 **Throws:** `std::gdelt`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L83))

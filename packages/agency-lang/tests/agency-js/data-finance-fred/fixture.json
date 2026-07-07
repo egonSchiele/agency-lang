@@ -6,6 +6,8 @@
   "parsedObs": { "seriesId": "UNRATE", "units": "lin", "observations": [ { "date": "1948-01-01", "value": 3.4 }, { "date": "1948-02-01", "value": 3.8 }, { "date": "1948-03-01", "value": 4.0 } ] },
   "parsedObsSparse": { "seriesId": "X", "units": "", "observations": [ { "date": "2024-01-01", "value": null } ] },
   "parsedInfo": { "id": "UNRATE", "title": "Unemployment Rate", "units": "Percent", "frequency": "Monthly", "observationStart": "1948-01-01", "observationEnd": "2026-06-01", "notes": "The unemployment rate represents the number of unemployed as a percentage of the labor force." },
+  "parsedObsNull": { "seriesId": "X", "units": "", "observations": [] },
+  "parsedInfoNull": { "id": "", "title": "", "units": "", "frequency": "", "observationStart": "", "observationEnd": "", "notes": "" },
   "infoEmpty": "FRED returned no series metadata (check the series id)",
   "obsMissing": "FRED returned no observations for 'BADID' (check the series id)",
   "obsFetchError": "FRED request failed: boom",

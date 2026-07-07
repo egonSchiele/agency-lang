@@ -53,12 +53,13 @@ const gdeltClient = fetchJSON.partial(
 /** Build the GDELT DOC query path (query is URL-encoded). Pure — no network. */
 export safe def buildGdeltPath(query: string, maxRecords: number, timespan: string): string {
   const q = encodeURIComponent(query)
-  return "doc?query=${q}&mode=artlist&format=json&maxrecords=${maxRecords}&timespan=${timespan}"
+  const t = encodeURIComponent(timespan)
+  return "doc?query=${q}&mode=artlist&format=json&maxrecords=${maxRecords}&timespan=${t}"
 }
 
-/** Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing fields. */
+/** Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing/null input. */
 export safe def parseGdelt(raw: any): NewsArticle[] {
-  const articles = raw.articles ?? []
+  const articles = (raw ?? {}).articles ?? []
   return map(articles) as article {
     return {
       title: article.title ?? "",

@@ -12,6 +12,10 @@ node tParseRagged(): any {
   return parseDbnomics({ series: { docs: [{ period: ["2024-11", "2024-12"], value: [315.6] }] } })
 }
 
+node tParseNull(): any {
+  return parseDbnomics(null)
+}
+
 node tFinalizeEmptyDocs(): string {
   const r = dbnomicsFinalize(success({ series: { docs: [] } }))
   if (r is failure(e)) {

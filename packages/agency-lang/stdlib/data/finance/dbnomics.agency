@@ -56,14 +56,14 @@ export safe def buildDbnomicsPath(provider: string, dataset: string, series: str
   return "series/${p}/${d}/${s}?observations=1"
 }
 
-/** Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total. */
+/** Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total on null input. */
 export safe def parseDbnomics(raw: any): DbnomicsSeries {
-  const docs = (raw.series ?? {}).docs ?? []
+  const docs = ((raw ?? {}).series ?? {}).docs ?? []
   const doc = docs[0] ?? {}
   const periods = doc.period ?? []
   const values = doc.value ?? []
   const observations = map(range(periods.length)) as i {
-    return { period: periods[i], value: values[i] ?? null }
+    return { period: periods[i] ?? "", value: values[i] ?? null }
   }
   return {
     providerCode: doc.provider_code ?? "",

@@ -1,4 +1,4 @@
-import { tBuild, tParse, tParseRagged, tFinalizeEmptyDocs, tFinalizeNoSeries, tFinalizeFetchError, callDbnomics, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
+import { tBuild, tParse, tParseRagged, tParseNull, tFinalizeEmptyDocs, tFinalizeNoSeries, tFinalizeFetchError, callDbnomics, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -20,6 +20,7 @@ writeFileSync(
       path: unwrap(await tBuild()),
       parsed: unwrap(await tParse(sample)),
       ragged: unwrap(await tParseRagged()),
+      parseNull: unwrap(await tParseNull()),
       emptyDocs: unwrap(await tFinalizeEmptyDocs()),
       noSeries: unwrap(await tFinalizeNoSeries()),
       fetchError: unwrap(await tFinalizeFetchError()),

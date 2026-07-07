@@ -1,4 +1,4 @@
-import { tSubPath, tArchive, tResolve, tResolveMissing, tParseAll, tParse10K, tParseLimit1, tParseNoMatch, tFinalizeNoFilings, tFinalizeFetchError, callEdgar, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
+import { tSubPath, tArchive, tResolve, tResolveMissing, tResolveNull, tParseSubNull, tParseAll, tParse10K, tParseLimit1, tParseNoMatch, tFinalizeNoFilings, tFinalizeFetchError, callEdgar, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -23,6 +23,8 @@ writeFileSync(
       archive: unwrap(await tArchive()),
       resolved: unwrap(await tResolve(tickers)),
       resolvedMissing: unwrap(await tResolveMissing(tickers)),
+      resolvedNull: unwrap(await tResolveNull()),
+      parseSubNull: unwrap(await tParseSubNull()),
       all: unwrap(await tParseAll(submissions)),
       tenK: unwrap(await tParse10K(submissions)),
       limit1: unwrap(await tParseLimit1(submissions)),

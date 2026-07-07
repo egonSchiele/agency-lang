@@ -1,4 +1,4 @@
-import { tBuild, tParse, tParseSparse, tFinalizeEmptyList, tFinalizeMissingArticles, tFinalizeFetchError, callGdelt, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
+import { tBuild, tParse, tParseSparse, tParseNull, tFinalizeEmptyList, tFinalizeMissingArticles, tFinalizeFetchError, callGdelt, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -22,6 +22,7 @@ writeFileSync(
       path: unwrap(await tBuild("S&P 500 rate cut", 5, "3d")),
       articles: unwrap(await tParse(sample)),
       sparse: unwrap(await tParseSparse()),
+      parseNull: unwrap(await tParseNull()),
       emptyList: unwrap(await tFinalizeEmptyList()),
       missingArticles: unwrap(await tFinalizeMissingArticles()),
       fetchError: unwrap(await tFinalizeFetchError()),

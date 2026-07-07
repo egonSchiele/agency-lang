@@ -12,6 +12,10 @@ node tParseSparse(): any {
   return parseGdelt({ articles: [{}] })
 }
 
+node tParseNull(): any {
+  return parseGdelt(null)
+}
+
 node tFinalizeEmptyList(): any {
   return gdeltFinalize(success({ articles: [] })) catch "FAIL"
 }

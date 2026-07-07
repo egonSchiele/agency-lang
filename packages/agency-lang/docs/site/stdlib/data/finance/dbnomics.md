@@ -103,7 +103,7 @@ Build the DBnomics series path (codes are URL-encoded). Pure — no network.
 parseDbnomics(raw: any): DbnomicsSeries
 ```
 
-Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total.
+Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total on null input.
 
 **Parameters:**
 

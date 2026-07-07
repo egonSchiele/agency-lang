@@ -156,7 +156,7 @@ Build the series (metadata) query path. Pure — no network.
 toFredValue(raw: string): number | null
 ```
 
-Convert a FRED value string to a number, or null for the missing marker ".". Pure.
+Convert a FRED value string to a number, or null for the missing marker "." or a non-number. Pure.
 
 **Parameters:**
 
@@ -174,7 +174,7 @@ Convert a FRED value string to a number, or null for the missing marker ".". Pur
 parseFredObservations(seriesId: string, raw: any): FredSeries
 ```
 
-Reshape a series/observations response. Pure — total on missing fields.
+Reshape a series/observations response. Pure — total on missing/null input.
 
 **Parameters:**
 
@@ -185,7 +185,7 @@ Reshape a series/observations response. Pure — total on missing fields.
 
 **Returns:** [FredSeries](#fredseries)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L115))
 
 ### parseFredInfo
 
@@ -193,7 +193,7 @@ Reshape a series/observations response. Pure — total on missing fields.
 parseFredInfo(raw: any): FredSeriesInfo
 ```
 
-Reshape a series (metadata) response, taking the first series. Pure.
+Reshape a series (metadata) response, taking the first series. Pure — total on null input.
 
 **Parameters:**
 
@@ -203,7 +203,7 @@ Reshape a series (metadata) response, taking the first series. Pure.
 
 **Returns:** [FredSeriesInfo](#fredseriesinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L125))
 
 ### fredObservationsFinalize
 
@@ -222,7 +222,7 @@ Finalize an observations fetch into a Result. Pure.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L140))
 
 ### fredInfoFinalize
 
@@ -240,7 +240,7 @@ Finalize a series-info fetch into a Result. Pure.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L153))
 
 ### fredSeries
 
@@ -276,7 +276,7 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 
 **Throws:** `std::fred`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L166))
 
 ### fredSeriesInfo
 
@@ -299,4 +299,4 @@ Fetch metadata about a FRED series by its id: its human title, display units, fr
 
 **Throws:** `std::fred`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L190))

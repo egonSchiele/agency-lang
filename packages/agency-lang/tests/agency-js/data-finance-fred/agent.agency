@@ -37,6 +37,14 @@ node tParseInfo(raw: any): any {
   return parseFredInfo(raw)
 }
 
+node tParseObsNull(): any {
+  return parseFredObservations("X", null)
+}
+
+node tParseInfoNull(): any {
+  return parseFredInfo(null)
+}
+
 node tInfoEmpty(): string {
   const r = fredInfoFinalize(success({ seriess: [] }))
   if (r is failure(e)) {

@@ -82,7 +82,7 @@ def appendParam(path: string, key: string, value: string): string {
 
 /** Build the series/observations query path. Pure — no network. */
 export safe def buildFredObservationsPath(seriesId: string, apiKey: string, observationStart: string, observationEnd: string, frequency: string, units: string, limit: number): string {
-  let path = "series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${apiKey}&file_type=json"
+  let path = "series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json"
   path = appendParam(path, "observation_start", observationStart)
   path = appendParam(path, "observation_end", observationEnd)
   path = appendParam(path, "frequency", frequency)
@@ -96,29 +96,34 @@ export safe def buildFredObservationsPath(seriesId: string, apiKey: string, obse
 
 /** Build the series (metadata) query path. Pure — no network. */
 export safe def buildFredSeriesPath(seriesId: string, apiKey: string): string {
-  return "series?series_id=${encodeURIComponent(seriesId)}&api_key=${apiKey}&file_type=json"
+  return "series?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json"
 }
 
-/** Convert a FRED value string to a number, or null for the missing marker ".". Pure. */
+/** Convert a FRED value string to a number, or null for the missing marker "." or a non-number. Pure. */
 export safe def toFredValue(raw: string): number | null {
   if (raw == ".") {
     return null
   }
-  return Number(raw)
+  const n = Number(raw)
+  if (isNaN(n)) {
+    return null
+  }
+  return n
 }
 
-/** Reshape a series/observations response. Pure — total on missing fields. */
+/** Reshape a series/observations response. Pure — total on missing/null input. */
 export safe def parseFredObservations(seriesId: string, raw: any): FredSeries {
-  const rawObs = raw.observations ?? []
+  const r = raw ?? {}
+  const rawObs = r.observations ?? []
   const observations = map(rawObs) as obs {
     return { date: obs.date ?? "", value: toFredValue(obs.value ?? ".") }
   }
-  return { seriesId: seriesId, units: raw.units ?? "", observations: observations }
+  return { seriesId: seriesId, units: r.units ?? "", observations: observations }
 }
 
-/** Reshape a series (metadata) response, taking the first series. Pure. */
+/** Reshape a series (metadata) response, taking the first series. Pure — total on null input. */
 export safe def parseFredInfo(raw: any): FredSeriesInfo {
-  const list = raw.seriess ?? []
+  const list = (raw ?? {}).seriess ?? []
   const info = list[0] ?? {}
   return {
     id: info.id ?? "",

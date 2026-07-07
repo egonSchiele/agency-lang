@@ -201,6 +201,8 @@ edgarFilings(ticker: string, formType: string, limit: number): Result
 List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").
   Resolves the ticker to a CIK, then returns filings with form type, filing/report dates, and
   a direct URL to each primary document. Optionally filter by form type (e.g. "10-K", "8-K").
+  This downloads the SEC ticker->CIK map on each call; if you already know the CIK, prefer
+  edgarFilingsByCik to skip that fetch.
 
   @param ticker - The company's stock ticker, e.g. "AAPL"
   @param formType - Optional filing form to filter by, e.g. "10-K" (empty for all forms)

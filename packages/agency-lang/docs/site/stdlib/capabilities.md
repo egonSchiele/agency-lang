@@ -85,10 +85,23 @@ Anything that talks to the outside world over the network.
 
 ```ts
 /** Anything that talks to the outside world over the network. */
-export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary>
+export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L45))
+
+### DataFinance
+
+The std::data/finance connectors (news + macro + filings). Each also raises
+    std::http::fetchJSON, which is covered by the broader Network set.
+
+```ts
+/** The std::data/finance connectors (news + macro + filings). Each also raises
+    std::http::fetchJSON, which is covered by the broader Network set. */
+export effectSet DataFinance = <std::gdelt, std::fred, std::edgar, std::dbnomics>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L49))
 
 ### Messaging
 
@@ -99,7 +112,7 @@ Sending messages to people: email, SMS, and iMessage.
 export effectSet Messaging = <std::sendEmail, std::sendSms, std::sendIMessage>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L52))
 
 ### Secrets
 
@@ -110,7 +123,7 @@ Reading and writing credentials in the system keyring.
 export effectSet Secrets = <std::getSecret, std::setSecret, std::deleteSecret>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L55))
 
 ### Auth
 
@@ -121,7 +134,7 @@ OAuth-style authorization flows: granting, fetching, and revoking access.
 export effectSet Auth = <std::authorize, std::getAccessToken, std::revokeAuth>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L58))
 
 ### Calendar
 
@@ -132,7 +145,7 @@ Calendar access: listing and mutating events (incl. calendar authorization).
 export effectSet Calendar = <std::listEvents, std::createEvent, std::updateEvent, std::deleteEvent, std::authorizeCalendar>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L61))
 
 ### Memory
 
@@ -143,4 +156,4 @@ Agent long-term memory: recall, remember, forget, and enable/disable.
 export effectSet Memory = <std::memory::recall, std::memory::remember, std::memory::forget, std::memory::enableMemory, std::memory::disableMemory>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L64))

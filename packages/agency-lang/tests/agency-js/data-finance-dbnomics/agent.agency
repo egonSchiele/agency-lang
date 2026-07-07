@@ -1,0 +1,45 @@
+import { buildDbnomicsPath, parseDbnomics, dbnomicsFinalize, dbnomicsSeries } from "std::data/finance/dbnomics"
+
+node tBuild(): string {
+  return buildDbnomicsPath("BLS", "cu", "CUUR0000SA0")
+}
+
+node tParse(raw: any): any {
+  return parseDbnomics(raw)
+}
+
+node tParseRagged(): any {
+  return parseDbnomics({ series: { docs: [{ period: ["2024-11", "2024-12"], value: [315.6] }] } })
+}
+
+node tParseNull(): any {
+  return parseDbnomics(null)
+}
+
+node tFinalizeEmptyDocs(): string {
+  const r = dbnomicsFinalize(success({ series: { docs: [] } }))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node tFinalizeNoSeries(): string {
+  const r = dbnomicsFinalize(success({ message: "Provider not found" }))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node tFinalizeFetchError(): string {
+  const r = dbnomicsFinalize(failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node callDbnomics(): any {
+  return dbnomicsSeries("BLS", "cu", "CUUR0000SA0")
+}

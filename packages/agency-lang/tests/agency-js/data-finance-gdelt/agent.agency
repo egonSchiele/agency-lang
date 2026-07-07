@@ -1,0 +1,37 @@
+import { buildGdeltPath, parseGdelt, gdeltFinalize, gdeltNews } from "std::data/finance/gdelt"
+
+node tBuild(query: string, maxRecords: number, timespan: string): string {
+  return buildGdeltPath(query, maxRecords, timespan)
+}
+
+node tParse(raw: any): any {
+  return parseGdelt(raw)
+}
+
+node tParseSparse(): any {
+  return parseGdelt({ articles: [{}] })
+}
+
+node tParseNull(): any {
+  return parseGdelt(null)
+}
+
+node tFinalizeEmptyList(): any {
+  return gdeltFinalize(success({ articles: [] })) catch "FAIL"
+}
+
+node tFinalizeMissingArticles(): any {
+  return gdeltFinalize(success({})) catch "FAIL"
+}
+
+node tFinalizeFetchError(): string {
+  const r = gdeltFinalize(failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node callGdelt(query: string): any {
+  return gdeltNews(query)
+}

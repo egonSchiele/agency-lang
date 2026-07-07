@@ -1,0 +1,12 @@
+{
+  "path": "doc?query=S%26P%20500%20rate%20cut&mode=artlist&format=json&maxrecords=5&timespan=3d",
+  "articles": [
+    { "title": "Fed holds rates steady", "url": "https://example.com/a", "domain": "example.com", "language": "English", "sourceCountry": "United States", "seenDate": "20260701T120000Z" },
+    { "title": "Markets react", "url": "https://news.test/b", "domain": "news.test", "language": "English", "sourceCountry": "United States", "seenDate": "20260701T130000Z" }
+  ],
+  "sparse": [ { "title": "", "url": "", "domain": "", "language": "", "sourceCountry": "", "seenDate": "" } ],
+  "parseNull": [],
+  "emptyList": [],
+  "missingArticles": [],
+  "fetchError": "GDELT request failed (the API may be rate-limited to 1 request / 5s): boom"
+}

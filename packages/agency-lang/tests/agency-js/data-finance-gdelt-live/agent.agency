@@ -1,0 +1,13 @@
+import { gdeltNews } from "std::data/finance/gdelt"
+
+node liveGdelt(): number {
+  handle {
+    const articles = gdeltNews("technology", 3, "1w") catch []
+    return articles.length
+  } with (data) {
+    if (data.effect == "std::gdelt") {
+      return approve()
+    }
+    return reject()
+  }
+}

@@ -1,0 +1,4 @@
+[
+  { "url": "https://api.example.com/*", "return": { "answer": 7 } },
+  { "url": "https://example.com/page.html", "returnFile": "responses/page.html" }
+]

@@ -1,0 +1,38 @@
+{
+  "sourceFile": "fetchMock.agency",
+  "fetchMocks": [
+    { "url": "https://api.example.com/*", "return": { "answer": 42 } },
+    { "url": "https://example.com/page.html", "returnFile": "responses/page.html",
+      "headers": { "content-type": "text/html" } }
+  ],
+  "tests": [
+    {
+      "nodeName": "getAnswer",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "fetchJSON served from an inline object mock"
+    },
+    {
+      "nodeName": "getPage",
+      "input": "",
+      "expectedOutput": "\"<h1>Hi</h1>\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "std::http fetch served from a returnFile mock (raw text)"
+    },
+    {
+      "nodeName": "getMarkdown",
+      "input": "",
+      "expectedOutput": "\"# Hi\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "std::http fetchMarkdown: getReader + text/html content-type + HTML->markdown, all against the mock"
+    },
+    {
+      "nodeName": "fetchUnmatched",
+      "input": "",
+      "expectedOutput": "\"unmatched\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "an un-mocked fetch throws through the pipeline and surfaces as a failure in agency"
+    }
+  ]
+}

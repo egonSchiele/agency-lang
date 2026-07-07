@@ -4,6 +4,7 @@ const onCancel = () => {
   process.exit(0);
 };
 import fs, { readFileSync } from "fs";
+import os from "os";
 import path from "path";
 import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
@@ -27,6 +28,7 @@ import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
+import type { FetchMock } from "../runtime/fetchMock.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -225,6 +227,11 @@ type ExecuteNodeArgs = {
   // Reuse a precompiled `.js` sibling when present instead of recompiling.
   // See RunAgencyNodeArgs.preferCompiled.
   preferCompiled?: boolean;
+  // Fetch mocks for the deterministic fetch shim, already returnFile-inlined by
+  // the caller (lib/cli/fetchMockResolve.ts). Written to a temp file whose path
+  // is passed via AGENCY_FETCH_MOCKS_FILE whenever non-empty — independent of the
+  // LLM deterministic flag.
+  fetchMocks?: FetchMock[];
 };
 
 export type RunAgencyNodeArgs = {
@@ -358,6 +365,7 @@ export async function runAgencyNode({
 export async function executeNodeAsync({
   llmMocks,
   useTestLLMProvider,
+  fetchMocks,
   ...rest
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   const useDeterministic =
@@ -365,7 +373,22 @@ export async function executeNodeAsync({
   const env: Record<string, string> = useDeterministic
     ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
     : {};
-  return runAgencyNode({ ...rest, env });
+
+  let fetchMocksDir: string | undefined;
+  if (fetchMocks && fetchMocks.length > 0) {
+    fetchMocksDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-fetchmocks-"));
+    const mocksFile = path.join(fetchMocksDir, "mocks.json");
+    fs.writeFileSync(mocksFile, JSON.stringify(fetchMocks));
+    env.AGENCY_FETCH_MOCKS_FILE = mocksFile;
+  }
+
+  try {
+    return await runAgencyNode({ ...rest, env });
+  } finally {
+    if (fetchMocksDir) {
+      fs.rmSync(fetchMocksDir, { recursive: true, force: true });
+    }
+  }
 }
 
 export function safeUnlink(filePath: string) {

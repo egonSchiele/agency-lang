@@ -1,0 +1,36 @@
+import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+
+// Each std::http fetch raises an approval interrupt, then calls the real
+// (here: mocked) network. `with approve` auto-approves so the mock is reached.
+
+node getAnswer(): number {
+  const r = fetchJSON("https://api.example.com", "/data") with approve
+  if (r is success(v)) {
+    return v.answer
+  }
+  return 0
+}
+
+node getPage(): string {
+  const r = fetch("https://example.com", "/page.html") with approve
+  if (r is success(v)) {
+    return v
+  }
+  return "FAIL"
+}
+
+node getMarkdown(): string {
+  const r = fetchMarkdown("https://example.com", "/page.html") with approve
+  if (r is success(v)) {
+    return v
+  }
+  return "FAIL"
+}
+
+node fetchUnmatched(): string {
+  const r = fetch("https://unmocked.example.com", "/x") with approve
+  if (r is success(v)) {
+    return v
+  }
+  return "unmatched"
+}

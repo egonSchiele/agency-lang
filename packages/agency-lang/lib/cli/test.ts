@@ -2,6 +2,7 @@ import { parseAgency } from "@/parser.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { getNodesOfType } from "@/utils/node.js";
 import fs from "fs";
+import os from "os";
 import prompts from "prompts";
 import {
   execFileAsync,
@@ -21,6 +22,8 @@ import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
+import type { FetchMock } from "../runtime/fetchMock.js";
+import { resolveFetchMocks } from "./fetchMockResolve.js";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -63,10 +66,14 @@ type TestCase = {
   // agent — handy for testing CLI flag parsers (std::args) and any
   // other code that reads argv. Defaults to no extra args.
   argv?: string[];
+  // Per-test fetch mocks; merged over file-level `fetchMocks` (this wins).
+  fetchMocks?: FetchMock[];
 };
 type Tests = {
   sourceFile?: string;
   tests: TestCase[];
+  // File-level fetch mocks applied to every test; overridden per-test.
+  fetchMocks?: FetchMock[];
   // If true, skip every test in this file. Equivalent to setting `skip: true`
   // on each test case individually.
   skip?: boolean;
@@ -560,6 +567,7 @@ async function runSingleTest(
   config: AgencyConfig,
   testFile: string,
   testCase: TestCase,
+  fetchMocks: FetchMock[],
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
@@ -580,6 +588,7 @@ async function runSingleTest(
       llmMocks: testCase.llmMocks,
       useTestLLMProvider: testCase.useTestLLMProvider,
       argv: testCase.argv,
+      fetchMocks,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -673,6 +682,7 @@ async function runTestWithRetries(
   config: AgencyConfig,
   testFile: string,
   testCase: TestCase,
+  fetchMocks: FetchMock[],
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
@@ -684,7 +694,7 @@ async function runTestWithRetries(
       log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
     }
     try {
-      outcome = await runSingleTest(config, testFile, testCase, timeoutMs, signal, log);
+      outcome = await runSingleTest(config, testFile, testCase, fetchMocks, timeoutMs, signal, log);
       if (outcome === "passed" || outcome === "aborted") break;
     } catch (e) {
       exitIfSignal(e);
@@ -791,12 +801,18 @@ async function runTestFile(
         continue;
       }
 
+      const fetchMocks = resolveFetchMocks(
+        tests.fetchMocks,
+        testCase.fetchMocks,
+        path.dirname(testFile),
+      );
       const timeoutMs = resolveTimeoutMs(testCase, tests);
       const startTime = performance.now();
       const outcome = await runTestWithRetries(
         config,
         testFile,
         testCase,
+        fetchMocks,
         timeoutMs,
         suite.abortController.signal,
         log,
@@ -1027,6 +1043,21 @@ async function runTsTestDir(
       mocksEnv = { AGENCY_LLM_MOCKS: mocks };
     }
 
+    // Fetch mocks activate independently of the LLM deterministic flag: their
+    // mere presence turns the fetch shim on. returnFile paths resolve relative
+    // to the test directory. Resolved mocks go through a temp FILE (not an env
+    // value) so a large returnFile body can't exceed the exec ARG_MAX limit.
+    let fetchMocksTmpDir: string | undefined;
+    const fetchMocksFile = path.join(dir, "fetchMocks.json");
+    if (fs.existsSync(fetchMocksFile)) {
+      const raw = JSON.parse(fs.readFileSync(fetchMocksFile, "utf-8")) as FetchMock[];
+      const resolved = resolveFetchMocks(undefined, raw, dir);
+      fetchMocksTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-fetchmocks-"));
+      const resolvedFile = path.join(fetchMocksTmpDir, "mocks.json");
+      fs.writeFileSync(resolvedFile, JSON.stringify(resolved));
+      mocksEnv.AGENCY_FETCH_MOCKS_FILE = resolvedFile;
+    }
+
     const testFile = "test.js";
     try {
       const { stdout, stderr } = await execFileAsync("node", [testFile], {
@@ -1040,6 +1071,10 @@ async function runTsTestDir(
       exitIfSignal(e);
       log(color.red(`  ✗ Test script execution failed: ${e}`));
       return { success: false, dir };
+    } finally {
+      if (fetchMocksTmpDir) {
+        fs.rmSync(fetchMocksTmpDir, { recursive: true, force: true });
+      }
     }
 
     if (!fs.existsSync(resultFile)) {

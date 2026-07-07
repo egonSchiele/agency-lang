@@ -65,7 +65,7 @@ remember("Alice is a senior engineer who prefers TypeScript. She mentors Bob.") 
 ```
 
 Behind the scenes an LLM turns that sentence into structured facts, running in
-its own [thread](/guide/threads) so it never shows up in your agent's main
+its own [thread](/guide/message-threads) so it never shows up in your agent's main
 conversation.
 
 ### `recall(query)`

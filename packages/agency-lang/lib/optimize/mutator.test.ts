@@ -14,6 +14,7 @@ const targets: OptimizeTarget[] = [
     scope: "global",
     name: "systemPrompt",
     valueKind: "string",
+    constraintText: null,
     value: "be brief",
   },
   {
@@ -24,6 +25,7 @@ const targets: OptimizeTarget[] = [
     scope: "bar",
     name: "prompt",
     valueKind: "string",
+    constraintText: null,
     value: "Classify ${text}",
   },
 ];

@@ -266,7 +266,7 @@ export class OptimizeSourceMutator {
     for (const entry of fileOperations) entriesById[entry.target.id] = entry;
 
     let replacedCount = 0;
-    for (const { target, assignment } of collectTargets(program, file, sourceFile.absoluteFile)) {
+    for (const { target, assignment } of collectTargets(program, file, sourceFile.absoluteFile, this.targetSet.typeAliases)) {
       const entry = entriesById[target.id];
       if (!entry) continue;
       assignment.value = entry.replacement;
@@ -284,7 +284,7 @@ export class OptimizeSourceMutator {
     if (!reparsed.success) {
       return errorDiagnostic(file, `Rendered candidate for ${file} does not parse: ${reparsed.message ?? "parse error"}`);
     }
-    const refreshedTargets = collectTargets(reparsed.result, file, sourceFile.absoluteFile)
+    const refreshedTargets = collectTargets(reparsed.result, file, sourceFile.absoluteFile, this.targetSet.typeAliases)
       .map((entry) => entry.target);
 
     return { rendered, refreshedTargets };

@@ -83,6 +83,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
         scope: "bar",
         name: "prompt",
         valueKind: "string",
+        constraintText: null,
         value: "xyz",
       },
       {
@@ -93,6 +94,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
         scope: "global",
         name: "greeting",
         valueKind: "string",
+        constraintText: null,
         value: "hello ${name}",
       },
       ...extraTargets,
@@ -143,6 +145,7 @@ describe("OptimizeSourceMutator operation validation", () => {
       scope: "global",
       name: "ResultType",
       valueKind: "string",
+      constraintText: null,
       value: "string",
     } as unknown as OptimizeTarget;
     const diagnostics = previewDiagnostics(
@@ -581,6 +584,7 @@ describe("OptimizeSourceMutator.mutate", () => {
       scope: "global",
       name: "ResultType",
       valueKind: "string",
+      constraintText: null,
       value: "string",
     } as unknown as OptimizeTarget;
     const mutator = new OptimizeSourceMutator({ targetSet: makeTargetSet([typeTarget]) });

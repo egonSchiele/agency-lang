@@ -1,3 +1,4 @@
+import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, type CompilationUnit } from "@/compilationUnit.js";
 import { parseAgency } from "@/parser.js";
 import { typeCheck } from "@/typeChecker/index.js";
@@ -34,6 +35,18 @@ export function makeProbeUnit(typeAliases: Record<string, TypeAliasEntry>): Comp
 }
 
 const PROBE_VARIABLE = "__optimizeProbe";
+
+/**
+ * Exact source rendering of a literal expression, via the Agency formatter
+ * (`processNode` is the same renderer interpolations use, so string quotes
+ * and escapes are preserved). NOT `expressionToString`, which drops string
+ * quotes and makes `{a: "1"}` and `{a: 1}` render identically. Needed
+ * because parsed initializer nodes carry no loc offsets, so the exact text
+ * cannot be sliced from the source.
+ */
+export function renderLiteralSource(expr: Expression): string {
+  return new AgencyGenerator({}).processNode(expr).trim();
+}
 
 /**
  * Does `valueText` fit the type written as `constraintText`? Decided by the

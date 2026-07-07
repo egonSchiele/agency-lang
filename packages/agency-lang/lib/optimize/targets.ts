@@ -5,8 +5,9 @@ import { GLOBAL_SCOPE_KEY, buildCompilationUnit } from "@/compilationUnit.js";
 import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
-import type { AgencyNode, AgencyProgram, Assignment, PromptSegment, TypeAliasEntry } from "@/types.js";
+import type { AgencyNode, AgencyProgram, Assignment, PromptSegment, TypeAliasEntry, VariableType } from "@/types.js";
 import { expressionToString, walkNodes } from "@/utils/node.js";
+import { checkProposal, isNullLiteral, renderConstraintText, renderLiteralSource } from "./constraint.js";
 
 export type OptimizeTarget = {
   id: string;
@@ -15,8 +16,16 @@ export type OptimizeTarget = {
   absoluteFile: string;
   scope: string;
   name: string;
-  valueKind: "string" | "multilineString";
+  valueKind: "string" | "multilineString" | "literal";
+  /** Decoded text for text targets (interpolations rendered as `${...}` —
+   *  the `expected`-guard contract); the EXACT source slice, quotes intact,
+   *  for literal targets. */
   value: string;
+  /** Parseable type text proposals are probed against (constraint.ts).
+   *  `null` means FREEFORM for text targets (today's string-only semantics,
+   *  interpolation rule and all) and UNCONSTRAINED for literal targets (any
+   *  literal accepted). Consumers must branch on `valueKind` first. */
+  constraintText: string | null;
 };
 
 export type OptimizeSourceFile = {
@@ -104,7 +113,10 @@ function buildTargetSet(
       sha256: sha256Text(parsed.source),
     };
     rejectLegacyOptimizeTags(parsed.program, file);
-    targets.push(...collectTargets(parsed.program, file, parsed.absoluteFile).map((entry) => entry.target));
+    targets.push(
+      ...collectTargets(parsed.program, file, parsed.absoluteFile, typeAliases)
+        .map((entry) => entry.target),
+    );
   }
 
   targets.sort((a, b) => a.id.localeCompare(b.id));
@@ -213,6 +225,7 @@ export function collectTargets(
   program: AgencyProgram,
   file: string,
   absoluteFile: string,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): OptimizeTargetNode[] {
   const collected: OptimizeTargetNode[] = [];
   for (const { node, ancestors } of walkNodes(program.nodes)) {
@@ -225,7 +238,10 @@ export function collectTargets(
       );
     }
 
-    collected.push({ target: buildTarget(node, file, absoluteFile, scope), assignment: node });
+    collected.push({
+      target: buildTarget(node, file, absoluteFile, scope, typeAliases),
+      assignment: node,
+    });
   }
   return collected;
 }
@@ -239,15 +255,38 @@ function directOptimizeScope(ancestors: AgencyNode[]): string | null {
   return null;
 }
 
+const LITERAL_VALUE_TYPES = ["string", "multiLineString", "number", "boolean", "agencyObject", "agencyArray"];
+
 function buildTarget(
   assignment: Assignment,
   file: string,
   absoluteFile: string,
   scope: string,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): OptimizeTarget {
-  if (assignment.value.type !== "string" && assignment.value.type !== "multiLineString") {
+  const value = assignment.value;
+  if (value.type === "messageThread" || !(LITERAL_VALUE_TYPES.includes(value.type) || isNullLiteral(value))) {
     throw new Error(
-      `Unsupported optimize target ${file}:${scope}:${assignment.variableName}. Only string and multiline string initializers are supported today.`,
+      `Unsupported optimize target ${file}:${scope}:${assignment.variableName}. Its value must be a literal (string, number, boolean, null, object, or array).`,
+    );
+  }
+
+  const isText = value.type === "string" || value.type === "multiLineString";
+  const valueKind: OptimizeTarget["valueKind"] = value.type === "multiLineString"
+    ? "multilineString"
+    : value.type === "string" ? "string" : "literal";
+
+  // Text targets keep the decoded representation (the `expected`-guard
+  // contract). Literal targets carry formatter-exact source text, quotes
+  // intact — parsed initializer nodes have no loc offsets to slice by.
+  const valueSource = renderLiteralSource(value);
+  const valueText = isText
+    ? promptSegmentsToString(value.segments)
+    : valueSource;
+
+  if (!isText && !assignment.typeHint) {
+    throw new Error(
+      `Optimize target ${file}:${scope}:${assignment.variableName} is a non-string literal and needs a type annotation, e.g. \`optimize const ${assignment.variableName}: number = ${valueText}\`.`,
     );
   }
 
@@ -258,9 +297,31 @@ function buildTarget(
     absoluteFile,
     scope,
     name: assignment.variableName,
-    valueKind: assignment.value.type === "multiLineString" ? "multilineString" : "string",
-    value: promptSegmentsToString(assignment.value.segments),
+    valueKind,
+    value: valueText,
+    constraintText: resolveConstraintText(assignment.typeHint, valueSource, typeAliases),
   };
+}
+
+/**
+ * The type text stored on a target, or null (freeform for text targets,
+ * unconstrained for literal targets). Two rules beyond "use the annotation":
+ * a plain `string` annotation is freeform, and the BASELINE SELF-TEST — if
+ * the target's ORIGINAL initializer does not pass the probe against its own
+ * annotation (unresolvable alias, exotic type, unrenderable annotation, a
+ * pre-existing type warning the user tolerates), the target is unconstrained
+ * so mutations are never blocked by a rule the baseline itself fails.
+ */
+function resolveConstraintText(
+  typeHint: VariableType | undefined,
+  originalValueSource: string,
+  typeAliases: Record<string, TypeAliasEntry>,
+): string | null {
+  if (!typeHint) return null;
+  if (typeHint.type === "primitiveType" && typeHint.value === "string") return null;
+  const text = renderConstraintText(typeHint);
+  if (!checkProposal(text, originalValueSource, typeAliases).ok) return null;
+  return text;
 }
 
 function rejectDuplicateTargetIds(targets: OptimizeTarget[]): void {

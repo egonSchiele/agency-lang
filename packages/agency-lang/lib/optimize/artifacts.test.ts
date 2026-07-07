@@ -63,6 +63,7 @@ describe("createOptimizeArtifacts", () => {
         scope: "global",
         name: "prompt",
         valueKind: "string",
+        constraintText: null,
         value: "hi",
       }],
     };

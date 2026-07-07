@@ -128,6 +128,7 @@ export default defineConfig({
             { text: "Developer Tools", link: "/guide/developer-tools" },
             { text: "Debugging", link: "/guide/debugging" },
             { text: "Observability", link: "/guide/observability" },
+            { text: "Tags and Redaction", link: "/guide/tags" },
           ],
         },
 

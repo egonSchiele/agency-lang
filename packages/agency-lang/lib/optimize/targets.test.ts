@@ -288,6 +288,20 @@ node main() {
     );
   });
 
+  it("exposes aliases from the whole import closure, including imported ones", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    writeAgency(dir, "types.agency", `export type Status = "pass" | "fail"\n`);
+    const entry = writeAgency(dir, "agent.agency", `
+import { Status } from "./types.agency"
+optimize const status: Status = "pass"
+node main() {}
+`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+
+    expect(targetSet.typeAliases.Status?.body.type).toBe("unionType");
+  });
+
   it("rejects legacy @optimize tags", () => {
     const dir = makeTempDir();
     const entry = writeAgency(dir, "foo.agency", `

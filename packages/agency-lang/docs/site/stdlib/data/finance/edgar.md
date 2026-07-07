@@ -81,7 +81,7 @@ Build the submissions path for a 10-digit CIK. Pure — no network.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L61))
 
 ### buildArchiveUrl
 
@@ -101,7 +101,7 @@ Build the archive URL for a filing's primary document. Pure — no network.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L66))
 
 ### parseTickerMap
 
@@ -120,7 +120,7 @@ Find a ticker in company_tickers.json and return its 10-digit CIK, or "" if abse
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L72))
 
 ### parseSubmissions
 
@@ -141,7 +141,7 @@ Reshape a submissions response into Filing[], optionally filtered by form and ca
 
 **Returns:** `Filing[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L86))
 
 ### edgarSubmissionsFinalize
 
@@ -162,7 +162,7 @@ Finalize a submissions fetch into a Result, shared by both orchestrators. Pure.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L119))
 
 ### edgarFilingsByCik
 
@@ -190,12 +190,12 @@ List recent SEC filings for a company by its CIK (Central Index Key). Returns fi
 
 **Throws:** `std::edgar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L131))
 
 ### edgarFilings
 
 ```ts
-edgarFilings(ticker: string, formType: string, limit: number): Result
+edgarFilings(ticker: string, formType: string, limit: number): Result<Filing[]>
 ```
 
 List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").
@@ -216,8 +216,8 @@ List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AA
 | formType | `string` | "" |
 | limit | `number` | 20 |
 
-**Returns:** `Result`
+**Returns:** `Result<Filing[]>`
 
 **Throws:** `std::edgar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L149))

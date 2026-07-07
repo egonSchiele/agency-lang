@@ -95,7 +95,7 @@ Build the DBnomics series path (codes are URL-encoded). Pure — no network.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L51))
 
 ### parseDbnomics
 
@@ -113,7 +113,7 @@ Reshape a DBnomics series response (zips parallel period/value arrays). Pure —
 
 **Returns:** [DbnomicsSeries](#dbnomicsseries)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L59))
 
 ### dbnomicsFinalize
 
@@ -160,4 +160,4 @@ Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series c
 
 **Throws:** `std::dbnomics`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L95))

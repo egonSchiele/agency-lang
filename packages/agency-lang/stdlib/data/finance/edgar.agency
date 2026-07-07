@@ -48,19 +48,14 @@ const CIK_WIDTH = 10
 // setting SEC_USER_AGENT after the process starts will not take effect.
 const secUserAgent = env("SEC_USER_AGENT") ?? "agency-lang admin@agency-lang.com"
 
-// One client per host (fetchJSON.partial locks a single baseUrl). Not preapproved:
-// callers see both std::edgar and the std::http::fetchJSON interrupt(s).
-const tickerClient = fetchJSON.partial(
-  baseUrl: "https://www.sec.gov/",
-  headers: { "User-Agent": secUserAgent },
-  allowedDomains: ["www.sec.gov"]
-)
-
-const submissionsClient = fetchJSON.partial(
-  baseUrl: "https://data.sec.gov/",
-  headers: { "User-Agent": secUserAgent },
-  allowedDomains: ["data.sec.gov"]
-)
+// Per-host fetch config. Not preapproved: callers see both std::edgar and the
+// std::http::fetchJSON interrupt(s). The ticker map lives on www.sec.gov; submissions on
+// data.sec.gov.
+const SEC_HEADERS = { "User-Agent": secUserAgent }
+const SEC_TICKER_BASE = "https://www.sec.gov/"
+const SEC_TICKER_DOMAINS = ["www.sec.gov"]
+const SEC_DATA_BASE = "https://data.sec.gov/"
+const SEC_DATA_DOMAINS = ["data.sec.gov"]
 
 /** Build the submissions path for a 10-digit CIK. Pure — no network. */
 export safe def buildSubmissionsPath(cik10: string): string {
@@ -89,7 +84,9 @@ export safe def parseTickerMap(raw: any, ticker: string): string {
 
 /** Reshape a submissions response into Filing[], optionally filtered by form and capped. Pure. */
 export safe def parseSubmissions(cik10: string, raw: any, formType: string, limit: number): Filing[] {
-  const recent = ((raw ?? {}).filings ?? {}).recent ?? {}
+  const r: any = raw ?? {}
+  const filings: any = r.filings ?? {}
+  const recent: any = filings.recent ?? {}
   const forms = recent.form ?? []
   const accessions = recent.accessionNumber ?? []
   const filingDates = recent.filingDate ?? []
@@ -145,11 +142,11 @@ export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: num
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: cik })
   const path = buildSubmissionsPath(cik10)
   // Bind the fetch to its own statement so std::http::fetchJSON fires at statement level.
-  const result = submissionsClient(path: path)
+  const result = fetchJSON(baseUrl: SEC_DATA_BASE, path: path, headers: SEC_HEADERS, allowedDomains: SEC_DATA_DOMAINS)
   return edgarSubmissionsFinalize(cik10, formType, limit, result)
 }
 
-export safe def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result {
+export safe def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
   List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").
   Resolves the ticker to a CIK, then returns filings with form type, filing/report dates, and
@@ -164,14 +161,12 @@ export safe def edgarFilings(ticker: string, formType: string = "", limit: numbe
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: ticker })
   // Each fetch is bound to its own statement (never a match scrutinee or call argument) so
   // the std::http::fetchJSON interrupts fire at statement level and resume reliably.
-  const tickersResult = tickerClient(path: "files/company_tickers.json")
-  if (tickersResult is failure(err)) {
-    return failure("EDGAR ticker lookup failed: ${err}")
-  }
-  const cik10 = parseTickerMap(tickersResult.value, ticker)
+  const tickersResult = fetchJSON(baseUrl: SEC_TICKER_BASE, path: "files/company_tickers.json", headers: SEC_HEADERS, allowedDomains: SEC_TICKER_DOMAINS)
+  const tickerMap = tickersResult catch {}
+  const cik10 = parseTickerMap(tickerMap, ticker)
   if (cik10 == "") {
-    return failure("EDGAR: no company found for ticker '${ticker}'")
+    return failure("EDGAR: no company found for ticker '${ticker}' (or the ticker lookup failed)")
   }
-  const subResult = submissionsClient(path: buildSubmissionsPath(cik10))
+  const subResult = fetchJSON(baseUrl: SEC_DATA_BASE, path: buildSubmissionsPath(cik10), headers: SEC_HEADERS, allowedDomains: SEC_DATA_DOMAINS)
   return edgarSubmissionsFinalize(cik10, formType, limit, subResult)
 }

@@ -40,15 +40,13 @@ export type NewsArticle = {
   seenDate: string
 }
 
-// One module-level constrained client. Not preapproved: the caller sees both the
-// std::gdelt interrupt (semantic "search GDELT?") and the std::http::fetchJSON interrupt
-// (concrete "fetch this URL?"), and can gate either. The baseUrl ends at ".../doc" (not
-// ".../doc/doc") because resolveUrl inserts a "/" before the path, and buildGdeltPath
+// Fetch config. We call fetchJSON directly (not a preapproved partial), so the caller sees
+// both the std::gdelt interrupt (semantic "search GDELT?") and the std::http::fetchJSON
+// interrupt (concrete "fetch this URL?") and can gate either. The baseUrl ends at ".../doc"
+// (not ".../doc/doc") because resolveUrl inserts a "/" before the path, and buildGdeltPath
 // returns a path beginning "doc?..." (see resolveUrl in lib/stdlib/http.ts).
-const gdeltClient = fetchJSON.partial(
-  baseUrl: "https://api.gdeltproject.org/api/v2/doc",
-  allowedDomains: ["api.gdeltproject.org"]
-)
+const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc"
+const GDELT_DOMAINS = ["api.gdeltproject.org"]
 
 /** Build the GDELT DOC query path (query is URL-encoded). Pure — no network. */
 export safe def buildGdeltPath(query: string, maxRecords: number, timespan: string): string {
@@ -59,7 +57,8 @@ export safe def buildGdeltPath(query: string, maxRecords: number, timespan: stri
 
 /** Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing/null input. */
 export safe def parseGdelt(raw: any): NewsArticle[] {
-  const articles = (raw ?? {}).articles ?? []
+  const r: any = raw ?? {}
+  const articles = r.articles ?? []
   return map(articles) as article {
     return {
       title: article.title ?? "",
@@ -94,6 +93,6 @@ export safe def gdeltNews(query: string, maxRecords: number = 25, timespan: stri
   return interrupt std::gdelt("Search GDELT news for this query?", { query: query })
   // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at
   // statement level (resumable) rather than inside a match scrutinee or call argument.
-  const result = gdeltClient(path: buildGdeltPath(query, maxRecords, timespan))
+  const result = fetchJSON(baseUrl: GDELT_BASE, path: buildGdeltPath(query, maxRecords, timespan), allowedDomains: GDELT_DOMAINS)
   return gdeltFinalize(result)
 }

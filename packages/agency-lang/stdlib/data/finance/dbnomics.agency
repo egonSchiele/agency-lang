@@ -44,10 +44,8 @@ export type DbnomicsSeries = {
 }
 
 // Not preapproved: callers see both std::dbnomics and the std::http::fetchJSON interrupt.
-const dbnomicsClient = fetchJSON.partial(
-  baseUrl: "https://api.db.nomics.world/v22/",
-  allowedDomains: ["api.db.nomics.world"]
-)
+const DBNOMICS_BASE = "https://api.db.nomics.world/v22/"
+const DBNOMICS_DOMAINS = ["api.db.nomics.world"]
 
 /** Build the DBnomics series path (codes are URL-encoded). Pure — no network. */
 export safe def buildDbnomicsPath(provider: string, dataset: string, series: string): string {
@@ -59,8 +57,10 @@ export safe def buildDbnomicsPath(provider: string, dataset: string, series: str
 
 /** Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total on null input. */
 export safe def parseDbnomics(raw: any): DbnomicsSeries {
-  const docs = ((raw ?? {}).series ?? {}).docs ?? []
-  const doc = docs[0] ?? {}
+  const r: any = raw ?? {}
+  const series: any = r.series ?? {}
+  const docs = series.docs ?? []
+  const doc: any = docs[0] ?? {}
   const periods = doc.period ?? []
   const values = doc.value ?? []
   const observations = map(range(periods.length)) as i {
@@ -80,7 +80,9 @@ export safe def parseDbnomics(raw: any): DbnomicsSeries {
 export safe def dbnomicsFinalize(fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
-      const docs = (body.series ?? {}).docs ?? []
+      const b: any = body ?? {}
+      const series: any = b.series ?? {}
+      const docs = series.docs ?? []
       if (docs.length == 0) {
         return failure("DBnomics returned no series (check the provider/dataset/series codes)")
       }
@@ -108,6 +110,6 @@ export safe def dbnomicsSeries(provider: string, dataset: string, series: string
   })
   const path = buildDbnomicsPath(provider, dataset, series)
   // Bind the fetch to its own statement so std::http::fetchJSON fires at statement level.
-  const result = dbnomicsClient(path: path)
+  const result = fetchJSON(baseUrl: DBNOMICS_BASE, path: path, allowedDomains: DBNOMICS_DOMAINS)
   return dbnomicsFinalize(result)
 }

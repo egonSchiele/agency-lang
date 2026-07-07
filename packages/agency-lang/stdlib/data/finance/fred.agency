@@ -68,10 +68,8 @@ export type FredSeriesInfo = {
 }
 
 // Not preapproved: callers see both std::fred and the std::http::fetchJSON interrupt.
-const fredClient = fetchJSON.partial(
-  baseUrl: "https://api.stlouisfed.org/fred/",
-  allowedDomains: ["api.stlouisfed.org"]
-)
+const FRED_BASE = "https://api.stlouisfed.org/fred/"
+const FRED_DOMAINS = ["api.stlouisfed.org"]
 
 /** Append "&key=value" only when value is non-empty (value is URL-encoded). Pure. */
 def appendParam(path: string, key: string, value: string): string {
@@ -114,7 +112,7 @@ export safe def toFredValue(raw: string): number | null {
 
 /** Reshape a series/observations response. Pure — total on missing/null input. */
 export safe def parseFredObservations(seriesId: string, raw: any): FredSeries {
-  const r = raw ?? {}
+  const r: any = raw ?? {}
   const rawObs = r.observations ?? []
   const observations = map(rawObs) as obs {
     return { date: obs.date ?? "", value: toFredValue(obs.value ?? ".") }
@@ -124,8 +122,9 @@ export safe def parseFredObservations(seriesId: string, raw: any): FredSeries {
 
 /** Reshape a series (metadata) response, taking the first series. Pure — total on null input. */
 export safe def parseFredInfo(raw: any): FredSeriesInfo {
-  const list = (raw ?? {}).seriess ?? []
-  const info = list[0] ?? {}
+  const r: any = raw ?? {}
+  const list = r.seriess ?? []
+  const info: any = list[0] ?? {}
   return {
     id: info.id ?? "",
     title: info.title ?? "",
@@ -187,7 +186,7 @@ export safe def fredSeries(seriesId: string, observationStart: string = "", obse
   const path = buildFredObservationsPath(seriesId, apiKey, observationStart, observationEnd, frequency, units, limit)
   // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at
   // statement level (resumable), not inside a call argument.
-  const result = fredClient(path: path)
+  const result = fetchJSON(baseUrl: FRED_BASE, path: path, allowedDomains: FRED_DOMAINS)
   return fredObservationsFinalize(seriesId, result)
 }
 
@@ -204,6 +203,6 @@ export safe def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises 
   }
   return interrupt std::fred("Fetch this FRED series metadata?", { seriesId: seriesId })
   const path = buildFredSeriesPath(seriesId, apiKey)
-  const result = fredClient(path: path)
+  const result = fetchJSON(baseUrl: FRED_BASE, path: path, allowedDomains: FRED_DOMAINS)
   return fredInfoFinalize(result)
 }

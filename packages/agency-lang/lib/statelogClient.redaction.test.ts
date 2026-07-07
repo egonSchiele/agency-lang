@@ -7,6 +7,7 @@ function makeStdoutCtx() {
   return new RuntimeContext({
     statelogConfig: {
       host: "stdout",
+      apiKey: "test-api-key",
       projectId: "test-project",
       debugMode: false,
       observability: true,
@@ -17,7 +18,7 @@ function makeStdoutCtx() {
 }
 
 function printed(spy: ReturnType<typeof vi.spyOn>): string {
-  return spy.mock.calls.map((c) => String(c[0])).join("\n");
+  return spy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 }
 
 afterEach(() => vi.restoreAllMocks());

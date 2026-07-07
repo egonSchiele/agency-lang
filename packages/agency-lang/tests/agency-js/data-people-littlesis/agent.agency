@@ -77,8 +77,8 @@ node tError(): string {
   return littlesisError("boom")
 }
 
-// Plain caller: no fetch-level handler. Raises std::littlesis; with Option C, approving it would
-// resume into the internally-approved fetch (a real network call), so tests only inspect/reject it.
+// Plain caller: no fetch-level handler. Raises std::littlesis; approving it would resume into the
+// internally-approved fetch (a real network call), so tests only inspect/reject it.
 node callSearch(name: string): any {
   return littlesisSearch(name)
 }

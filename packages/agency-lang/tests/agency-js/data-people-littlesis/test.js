@@ -1,5 +1,4 @@
-import { tCatIdToName, tCatNameToId, tSearchPath, tEntityPath, tRelPath, tConnPath, tParseEntities, tParseEntity, tParseRelationships, tParseEmpty, tParseNull, tSearchFinalizeErr, tEntityFinalizeMissing, tRelFinalizeEmpty, tError, callRelBadCategory } from "./agent.js";
-import { hasInterrupts, approve, reject, respondToInterrupts, callSearch, callSearchGoverned } from "./agent.js";
+import { tCatIdToName, tCatNameToId, tSearchPath, tEntityPath, tRelPath, tConnPath, tParseEntities, tParseEntity, tParseRelationships, tParseEmpty, tParseNull, tSearchFinalizeErr, tEntityFinalizeMissing, tRelFinalizeEmpty, tError, callRelBadCategory, hasInterrupts, approve, reject, respondToInterrupts, callSearch, callSearchGoverned } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -22,15 +21,15 @@ if (iv.data.op !== "search") throw new Error("wrong op discriminant: " + iv.data
 const rejected = await respondToInterrupts(i1.data, [reject()]);
 if (hasInterrupts(rejected.data)) throw new Error("rejecting std::littlesis must short-circuit before any fetch");
 
-// (B) Option C ergonomics: a plain caller (no fetch handler) sees ONLY std::littlesis. We do NOT
-// approve here (Option C would resume into the internally-approved fetch = a real network call).
+// (B) Single-prompt ergonomics: a plain caller (no fetch handler) sees ONLY std::littlesis. We do NOT
+// approve here (approving would resume into the internally-approved fetch = a real network call).
 if (i1.data.filter((x) => x.effect && x.effect !== "std::littlesis").length > 0) {
   throw new Error("plain caller must see only std::littlesis at the first hop");
 }
 
 // (C) Governance + offline URL wiring: the governed caller approves std::littlesis and PROPAGATES
 // the fetch, so std::http::fetchJSON surfaces with its { baseUrl, path }. This proves (a) an outer
-// handler still receives the fetch effect despite Option C's internal approve, and (b) the built
+// handler still receives the fetch effect despite the connector's internal approve, and (b) the built
 // URL is correct — asserted OFFLINE, then rejected so no network call happens.
 const g1 = await callSearchGoverned("Andreessen Horowitz");
 if (!hasInterrupts(g1.data)) throw new Error("governed caller should surface std::http::fetchJSON via propagate()");

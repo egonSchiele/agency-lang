@@ -38,11 +38,11 @@ import { fetchJSON } from "std::http"
 
 effect std::littlesis { op: string, query: string }
 
-const LITTLESIS_BASE = "https://littlesis.org/api"
-const LITTLESIS_DOMAINS = ["littlesis.org"]
+static const LITTLESIS_BASE = "https://littlesis.org/api"
+static const LITTLESIS_DOMAINS = ["littlesis.org"]
 
 // Index 0 is unused ("" sentinel); indices 1–12 are LittleSis category_id values.
-const CATEGORY_NAMES = ["", "position", "education", "membership", "family", "donation", "transaction", "lobbying", "social", "professional", "ownership", "hierarchy", "generic"]
+static const CATEGORY_NAMES = ["", "position", "education", "membership", "family", "donation", "transaction", "lobbying", "social", "professional", "ownership", "hierarchy", "generic"]
 
 /** A LittleSis person or organization. `type` is "Person" or "Org" (from primary_ext).
     `relationshipId`/`relationshipCategory` are populated only on connections results. */
@@ -209,11 +209,10 @@ safe def resolveCategoryId(category: string): Result<number> {
   return success(id)
 }
 
-/** Fetch a LittleSis path and return the parsed-JSON Result. Option C: this raises
-    std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's
-    std::littlesis prompt while any OUTER fetch handler still receives (and can reject/propagate)
-    the fetch — those beat this approve(). allowedDomains is enforced inside fetchJSON regardless.
-    Factored out so the Option-C gating "how" lives in ONE place. Private. */
+/** Fetch a LittleSis path and return the parsed-JSON Result. Raises std::http::fetchJSON but
+    approves it internally, so a plain caller sees only the connector's own std::littlesis prompt,
+    while any OUTER fetch handler still receives (and can reject or propagate) the fetch — those
+    beat this approve(). allowedDomains is enforced inside fetchJSON regardless. Private. */
 safe def littlesisFetch(path: string): Result raises <std::http::fetchJSON> {
   handle {
     return fetchJSON(baseUrl: LITTLESIS_BASE, path: path, allowedDomains: LITTLESIS_DOMAINS)
@@ -226,7 +225,7 @@ safe def littlesisFetch(path: string): Result raises <std::http::fetchJSON> {
 
 /** Turn a fetchJSON Result into an entity-list Result. Used by BOTH search and connections
     (identical shape). Pure — testable with mock Results. */
-export safe def entityListFinalize(fetchResult: any): Result {
+export safe def entityListFinalize(fetchResult: any): Result<Entity[]> {
   return match (fetchResult) {
     success(body) => success(parseEntities(body))
     failure(err) => failure(littlesisError(err))
@@ -234,7 +233,7 @@ export safe def entityListFinalize(fetchResult: any): Result {
 }
 
 /** Turn a fetchJSON Result into a single-entity Result; missing data → failure. Pure. */
-export safe def entityFinalize(fetchResult: any): Result {
+export safe def entityFinalize(fetchResult: any): Result<Entity> {
   return match (fetchResult) {
     success(body) => {
       const bodyObj: any = body ?? {}
@@ -248,7 +247,7 @@ export safe def entityFinalize(fetchResult: any): Result {
 }
 
 /** Turn a fetchJSON Result into a relationships Result. Pure. */
-export safe def relationshipsFinalize(fetchResult: any): Result {
+export safe def relationshipsFinalize(fetchResult: any): Result<Relationship[]> {
   return match (fetchResult) {
     success(body) => success(parseRelationships(body))
     failure(err) => failure(littlesisError(err))

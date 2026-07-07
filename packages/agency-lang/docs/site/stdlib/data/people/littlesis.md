@@ -292,7 +292,7 @@ Shared failure message for a failed LittleSis fetch. Pure.
 ### entityListFinalize
 
 ```ts
-entityListFinalize(fetchResult: any): Result
+entityListFinalize(fetchResult: any): Result<Entity[]>
 ```
 
 Turn a fetchJSON Result into an entity-list Result. Used by BOTH search and connections
@@ -304,14 +304,14 @@ Turn a fetchJSON Result into an entity-list Result. Used by BOTH search and conn
 |---|---|---|
 | fetchResult | `any` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<Entity[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L228))
 
 ### entityFinalize
 
 ```ts
-entityFinalize(fetchResult: any): Result
+entityFinalize(fetchResult: any): Result<Entity>
 ```
 
 Turn a fetchJSON Result into a single-entity Result; missing data → failure. Pure.
@@ -322,14 +322,14 @@ Turn a fetchJSON Result into a single-entity Result; missing data → failure. P
 |---|---|---|
 | fetchResult | `any` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<Entity>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L237))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L236))
 
 ### relationshipsFinalize
 
 ```ts
-relationshipsFinalize(fetchResult: any): Result
+relationshipsFinalize(fetchResult: any): Result<Relationship[]>
 ```
 
 Turn a fetchJSON Result into a relationships Result. Pure.
@@ -340,9 +340,9 @@ Turn a fetchJSON Result into a relationships Result. Pure.
 |---|---|---|
 | fetchResult | `any` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<Relationship[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L251))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L250))
 
 ### littlesisSearch
 
@@ -368,7 +368,7 @@ Search LittleSis for people and organizations by name. Returns matching entities
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L258))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L257))
 
 ### littlesisEntity
 
@@ -391,7 +391,7 @@ Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L273))
 
 ### littlesisRelationships
 
@@ -419,7 +419,7 @@ List an entity's relationships (typed edges) by its id. Each edge carries the tw
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L285))
 
 ### littlesisConnections
 
@@ -445,4 +445,4 @@ List the entities connected to an entity (neighbors, by name), optionally filter
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L310))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L309))

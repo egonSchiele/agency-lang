@@ -1,0 +1,8 @@
+{
+  "tests": [
+    { "nodeName": "valueKeyed", "input": "", "expectedOutput": "\"blue\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "redactSetsTag", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "objectByReference", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "forkInheritsPrimitiveTag", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

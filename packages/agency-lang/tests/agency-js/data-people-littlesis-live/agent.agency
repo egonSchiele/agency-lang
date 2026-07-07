@@ -1,0 +1,19 @@
+import { littlesisSearch } from "std::data/people/littlesis"
+
+node liveSearch(): number {
+  handle {
+    const hits = littlesisSearch("Andreessen Horowitz") catch []
+    return hits.length
+  } with (data) {
+    // Option C: approve BOTH effects. std::littlesis is the connector's own gate; std::http::fetchJSON
+    // still reaches this outer handler (Option C only suppresses the prompt for callers WITHOUT a
+    // handler), and this handler's catch-all reject() would beat the connector's internal approve.
+    if (data.effect == "std::littlesis") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+    return reject()
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "ownershipId": 10,
+  "donationName": "donation",
+  "positionId": 1,
+  "unknownName": -1,
+  "unknownId": "",
+  "zeroId": "",
+  "searchPath": "/entities/search?q=Andreessen%20Horowitz",
+  "searchPathPaged": "/entities/search?q=a%20b&page=3",
+  "entityPath": "/entities/41946",
+  "relPathPlain": "/entities/41946/relationships",
+  "relPathCat": "/entities/41946/relationships?category_id=10",
+  "relPathCatSort": "/entities/41946/relationships?category_id=10&sort=amount",
+  "relPathSort": "/entities/41946/relationships?sort=recent",
+  "connPathPlain": "/entities/41946/connections",
+  "connPathCat": "/entities/41946/connections?category_id=10",
+  "entities": [
+    { "id": 41946, "name": "a16z", "type": "Org", "blurb": "Venture capital firm founded in 2009 by Ben Horowitz and Marc Andreessen", "types": ["Organization", "Business"], "aliases": ["Andreessen Horowitz", "a16z"], "website": "", "url": "https://littlesis.org/entities/41946-a16z", "relationshipId": null, "relationshipCategory": "" }
+  ],
+  "entity": { "id": 13503, "name": "Marc Andreessen", "type": "Person", "blurb": "Co-founder of Andreessen Horowitz", "types": ["Person", "Business Person"], "aliases": ["Marc Andreessen"], "website": "https://a16z.com", "url": "https://littlesis.org/entities/13503-Marc_Andreessen", "relationshipId": null, "relationshipCategory": "" },
+  "relationships": [
+    { "id": 999001, "category": "ownership", "categoryId": 10, "entity1Id": 41946, "entity2Id": 55555, "description1": "Investor", "description2": "Investee", "amount": 25000000, "startDate": "2021-01-01", "endDate": "", "isCurrent": true }
+  ],
+  "connections": [
+    { "id": 55555, "name": "Example Portfolio Co", "type": "Org", "blurb": "A company", "types": ["Organization"], "aliases": [], "website": "", "url": "https://littlesis.org/entities/55555-Example", "relationshipId": 999001, "relationshipCategory": "ownership" }
+  ],
+  "empty": [],
+  "parseNull": [],
+  "searchFinalizeErr": "LittleSis request failed (the API may be rate-limited; HTTP 503 = Rate Limit Exceeded): boom",
+  "entityFinalizeMissing": "LittleSis returned no entity",
+  "relFinalizeEmpty": [],
+  "errorMsg": "LittleSis request failed (the API may be rate-limited; HTTP 503 = Rate Limit Exceeded): boom",
+  "badCategory": "unknown category 'bogus'; valid: position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, generic"
+}

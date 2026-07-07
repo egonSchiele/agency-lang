@@ -1,0 +1,17 @@
+{
+  "meta": { "apiVersion": "1.0" },
+  "data": {
+    "type": "entities",
+    "id": 13503,
+    "attributes": {
+      "id": 13503,
+      "name": "Marc Andreessen",
+      "blurb": "Co-founder of Andreessen Horowitz",
+      "website": "https://a16z.com",
+      "primary_ext": "Person",
+      "aliases": ["Marc Andreessen"],
+      "types": ["Person", "Business Person"]
+    },
+    "links": { "self": "https://littlesis.org/entities/13503-Marc_Andreessen" }
+  }
+}

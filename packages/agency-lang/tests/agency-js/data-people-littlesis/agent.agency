@@ -1,0 +1,111 @@
+import { categoryIdToName, categoryNameToId, buildSearchPath, buildEntityPath, buildRelationshipsPath, buildConnectionsPath, parseEntity, parseEntities, parseRelationships, entityListFinalize, entityFinalize, relationshipsFinalize, littlesisError, littlesisSearch, littlesisRelationships } from "std::data/people/littlesis"
+import { Network } from "std::capabilities"
+
+// Compile-time capability assertion: littlesisSearch raises std::littlesis + std::http::fetchJSON,
+// so this compiles only if BOTH are covered by Network. Never called at runtime.
+node netCheck() raises <Network> {
+  const r = littlesisSearch("x") catch []
+  return r.length
+}
+
+node tCatIdToName(id: number): string {
+  return categoryIdToName(id)
+}
+
+node tCatNameToId(name: string): number {
+  return categoryNameToId(name)
+}
+
+node tSearchPath(name: string, page: number): string {
+  return buildSearchPath(name, page)
+}
+
+node tEntityPath(id: number): string {
+  return buildEntityPath(id)
+}
+
+node tRelPath(id: number, categoryId: number, sort: string): string {
+  return buildRelationshipsPath(id, categoryId, sort)
+}
+
+node tConnPath(id: number, categoryId: number): string {
+  return buildConnectionsPath(id, categoryId)
+}
+
+node tParseEntities(raw: any): any {
+  return parseEntities(raw)
+}
+
+node tParseEntity(raw: any): any {
+  const r: any = raw
+  return parseEntity(r.data)
+}
+
+node tParseRelationships(raw: any): any {
+  return parseRelationships(raw)
+}
+
+node tParseEmpty(): any {
+  return parseEntities({ data: [] })
+}
+
+node tParseNull(): any {
+  return parseEntities(null)
+}
+
+node tSearchFinalizeErr(): string {
+  const r = entityListFinalize(failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node tEntityFinalizeMissing(): string {
+  const r = entityFinalize(success({}))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node tRelFinalizeEmpty(): any {
+  return relationshipsFinalize(success({ data: [] })) catch "FAIL"
+}
+
+node tError(): string {
+  return littlesisError("boom")
+}
+
+// Plain caller: no fetch-level handler. Raises std::littlesis; with Option C, approving it would
+// resume into the internally-approved fetch (a real network call), so tests only inspect/reject it.
+node callSearch(name: string): any {
+  return littlesisSearch(name)
+}
+
+// Governed caller: approves std::littlesis, then PROPAGATES the fetch. propagate() beats the
+// connector's internal approve(), so std::http::fetchJSON surfaces to the agency-js caller — which
+// (a) proves an outer handler still receives the fetch effect, and (b) lets us assert the built
+// URL ({ baseUrl, path }) OFFLINE, then reject it so no network call happens.
+node callSearchGoverned(name: string): any {
+  handle {
+    return littlesisSearch(name)
+  } with (data) {
+    if (data.effect == "std::littlesis") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
+}
+
+// Bad category now fails BEFORE the interrupt, so this returns a failure Result offline (no fetch,
+// no interrupt) — and its message exercises the derived categoryNamesList() valid-list string.
+node callRelBadCategory(id: number): string {
+  const r = littlesisRelationships(id, "bogus")
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS_OR_INTERRUPT"
+}

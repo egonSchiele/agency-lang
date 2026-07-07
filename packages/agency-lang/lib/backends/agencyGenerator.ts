@@ -695,6 +695,12 @@ export class AgencyGenerator {
       const props = aliasedType.properties;
       for (let i = 0; i < props.length; i++) {
         this.emitTriviaAt(aliasedType.trivia, i, lines);
+        // `@validate(...)` / `@jsonSchema(...)` annotations render on their
+        // own lines above the property, matching source layout. `formatTag`
+        // already applies the current (property-level) indentation.
+        for (const tag of props[i].tags ?? []) {
+          lines.push(this.formatTag(tag));
+        }
         const sep = i === props.length - 1 ? "" : ";";
         lines.push(this.indentStr(this.stringifyProp(props[i])) + sep);
       }

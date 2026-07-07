@@ -224,7 +224,6 @@ await callHook({
               items: items,
               block: block
             },
-            isBuiltin: false,
             moduleId: "inlineBlockParams.agency"
           }
         })

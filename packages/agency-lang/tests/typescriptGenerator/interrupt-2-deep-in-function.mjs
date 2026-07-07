@@ -224,7 +224,6 @@ await callHook({
               name: name,
               age: age
             },
-            isBuiltin: false,
             moduleId: "interrupt-2-deep-in-function.agency"
           }
         })
@@ -417,7 +416,6 @@ await callHook({
               name: name,
               age: age
             },
-            isBuiltin: false,
             moduleId: "interrupt-2-deep-in-function.agency"
           }
         })

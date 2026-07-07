@@ -250,7 +250,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "tests/debugger/function-call-test.agency"
           }
         })

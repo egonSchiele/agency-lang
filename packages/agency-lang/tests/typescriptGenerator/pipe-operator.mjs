@@ -218,7 +218,6 @@ await callHook({
             args: {
               x: x
             },
-            isBuiltin: false,
             moduleId: "pipe-operator.agency"
           }
         })
@@ -364,7 +363,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "pipe-operator.agency"
           }
         })
@@ -516,7 +514,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "pipe-operator.agency"
           }
         })

@@ -218,7 +218,6 @@ await callHook({
             args: {
               r: r
             },
-            isBuiltin: false,
             moduleId: "result-guards.agency"
           }
         })

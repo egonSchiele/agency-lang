@@ -211,7 +211,6 @@ await callHook({
           data: {
             functionName: "foo",
             args: {},
-            isBuiltin: false,
             moduleId: "threadsAndSubthreads.agency"
           }
         })

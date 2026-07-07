@@ -223,7 +223,6 @@ await callHook({
             args: {
               data: data
             },
-            isBuiltin: false,
             moduleId: "bangParams.agency"
           }
         })

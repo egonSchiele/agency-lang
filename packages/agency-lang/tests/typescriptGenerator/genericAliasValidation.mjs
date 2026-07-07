@@ -224,7 +224,6 @@ await callHook({
             args: {
               c: c
             },
-            isBuiltin: false,
             moduleId: "genericAliasValidation.agency"
           }
         })

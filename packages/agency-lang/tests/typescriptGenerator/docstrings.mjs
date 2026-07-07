@@ -227,7 +227,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "docstrings.agency"
           }
         })
@@ -369,7 +368,6 @@ await callHook({
             args: {
               name: name
             },
-            isBuiltin: false,
             moduleId: "docstrings.agency"
           }
         })
@@ -510,7 +508,6 @@ await callHook({
               width: width,
               height: height
             },
-            isBuiltin: false,
             moduleId: "docstrings.agency"
           }
         })
@@ -650,7 +647,6 @@ await callHook({
           data: {
             functionName: "processData",
             args: {},
-            isBuiltin: false,
             moduleId: "docstrings.agency"
           }
         })
@@ -772,7 +768,6 @@ await callHook({
           data: {
             functionName: "versionedTool",
             args: {},
-            isBuiltin: false,
             moduleId: "docstrings.agency"
           }
         })

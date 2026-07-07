@@ -16,8 +16,8 @@ const callbacks = {
   onNodeEnd: ({ nodeName }) => {
     hookLog.push({ hook: "onNodeEnd", nodeName });
   },
-  onFunctionStart: ({ functionName, args, isBuiltin }) => {
-    hookLog.push({ hook: "onFunctionStart", functionName, args, isBuiltin });
+  onFunctionStart: ({ functionName, args }) => {
+    hookLog.push({ hook: "onFunctionStart", functionName, args });
   },
   onFunctionEnd: ({ functionName, timeTaken }) => {
     hookLog.push({

@@ -12,7 +12,7 @@ All hooks are fully typed via the `AgencyCallbacks` type exported from `agency-l
 | `onAgentEnd` | Agent function returns | `{ nodeName, result }` |
 | `onNodeStart` | A graph node begins executing | `{ nodeName }` |
 | `onNodeEnd` | A graph node finishes executing | `{ nodeName, data }` |
-| `onFunctionStart` | A `def` function begins executing | `{ functionName, args, isBuiltin }` |
+| `onFunctionStart` | A `def` function begins executing | `{ functionName, args, moduleId }` |
 | `onFunctionEnd` | A `def` function finishes executing | `{ functionName, timeTaken }` |
 | `onLLMCallStart` | Before an LLM call is made | `{ prompt, tools, model, messages }` |
 | `onLLMCallEnd` | After an LLM response is received | `{ model, result, usage, cost, timeTaken, messages }` |
@@ -59,7 +59,7 @@ const callbacks: AgencyCallbacks = {
   onNodeEnd: ({ nodeName, data }) => {
     console.log(`Exiting node: ${nodeName}`, data);
   },
-  onFunctionStart: ({ functionName, args, isBuiltin }) => {
+  onFunctionStart: ({ functionName, args }) => {
     console.log(`Calling function: ${functionName}`, args);
   },
   onFunctionEnd: ({ functionName, timeTaken }) => {
@@ -140,7 +140,7 @@ Fires when a `def` function begins executing.
 |-------|------|-------------|
 | `functionName` | `string` | Name of the function |
 | `args` | `Record<string, any>` | Arguments passed to the function |
-| `isBuiltin` | `boolean` | Whether this is a built-in function |
+| `moduleId` | `string` | The module the function belongs to |
 
 ### `onFunctionEnd`
 

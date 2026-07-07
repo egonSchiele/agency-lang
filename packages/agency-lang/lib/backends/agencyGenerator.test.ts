@@ -271,6 +271,45 @@ describe("AgencyGenerator - Doc Comments", () => {
   });
 });
 
+describe("AgencyGenerator - object property tags", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("preserves @validate and @jsonSchema annotations on type properties", () => {
+    const input = `type Person = {
+  name: string;
+
+  @validate(isPositive)
+  @jsonSchema({ minimum: 1 })
+  age: number
+}`;
+    const output = formatAgency(input);
+    expect(output).toContain("@validate(isPositive)");
+    // Object-literal tag arguments render however the shared literal
+    // formatter decides (currently multi-line); assert preservation of the
+    // annotation and its contents, not the exact layout.
+    expect(output).toContain("@jsonSchema(");
+    expect(output).toContain("minimum: 1");
+  });
+
+  it("round-trips property tags without dropping them", () => {
+    const input = `type Person = {
+  @validate(isPositive)
+  age: number
+}`;
+    // Formatting twice must be stable and must retain the annotation.
+    const once = formatAgency(input);
+    const twice = formatAgency(once);
+    expect(once).toContain("@validate(isPositive)");
+    expect(twice).toBe(once);
+  });
+});
+
 describe("AgencyGenerator - optimize modifier", () => {
   function formatAgency(input: string): string {
     const parseResult = parseAgency(input, {}, false);

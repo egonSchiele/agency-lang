@@ -244,7 +244,6 @@ await callHook({
             args: {
               n: n
             },
-            isBuiltin: false,
             moduleId: "tests/debugger/nested-calls-test.agency"
           }
         })
@@ -393,7 +392,6 @@ await callHook({
               a: a,
               b: b
             },
-            isBuiltin: false,
             moduleId: "tests/debugger/nested-calls-test.agency"
           }
         })

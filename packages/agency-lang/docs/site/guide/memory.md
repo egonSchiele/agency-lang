@@ -1,38 +1,38 @@
 ---
 name: Memory
-description: Documents Agency's built-in memory layer — a JSON-backed knowledge graph of entities, observations, and relations — that lets agents recall facts across runs and auto-inject context into LLM calls.
+description: How to give an agent long-term memory — remembering facts across runs, recalling them on demand, auto-injecting them into LLM calls, and approving what gets written.
 ---
 
 # Memory
 
-Agency ships with a built-in memory layer that lets agents remember facts
-across runs, recall them on demand, and inject relevant context into
-their LLM calls automatically.
+Memory lets your agent remember things between runs — a user's preferences, past
+decisions, who's who — and pull them back up when they're relevant.
 
-Under the hood, memory is a **knowledge graph** of entities,
-observations, and relations, backed by JSON files on disk. The
-extraction (turning text into structured facts) and retrieval (turning a
-query into a ranked list of facts) steps both use the LLM, but they run
-in isolated message threads so they never pollute the agent's main
-conversation.
+```ts
+setMemoryId("alice")
+remember("Alice prefers concise, technical answers.") with approve
+const reply = llm("Summarize today's standup", { memory: true })
+```
+
+That's the whole loop: you **remember** facts, and `llm({ memory: true })`
+**recalls** the relevant ones for you. The `with approve` on that `remember`
+line is doing something important — we'll get to it under
+[Approval](#approval-memory-asks-before-it-acts).
 
 ## When should I use memory?
 
-- You are building an agent that talks to the same user (or set of
-  users) over multiple sessions and want it to recall preferences,
-  history, and prior decisions.
-- You want the LLM to have access to long-term context without paying
-  to keep it in the main message thread on every call.
-- You want extraction to happen automatically: feed in raw text, get
-  structured entities back without writing parsing code yourself.
+- Your agent talks to the same user (or users) across sessions and should
+  recall their preferences, history, and prior decisions.
+- You want long-term context available to the LLM without paying to keep it in
+  the message history on every call.
 
-If you only need to remember a few values for a single run, just use a
-local variable. If you need durable structured storage across runs,
-this is the layer for you.
+If you only need to remember a few values for a single run, use a normal
+variable. Memory is for durable, structured knowledge that outlives the run.
 
-## Enabling memory
+## Turning it on
 
-Memory is opt-in. Add a `memory` block to your `agency.json`:
+Memory is opt-in. Add a `memory` block to your `agency.json` with a directory
+to store things in:
 
 ```json
 {
@@ -42,57 +42,140 @@ Memory is opt-in. Add a `memory` block to your `agency.json`:
 }
 ```
 
-That single field is enough to turn the layer on. Once enabled:
+That one field is enough. Until you add it, every `std::memory` function is a
+no-op (no error, no warning) — so the same agency code runs with or without
+memory configured. Everything else is optional; see
+[Full configuration](#full-configuration) for the rest.
 
-- Every agent run gets its own `MemoryManager` on the runtime context.
-- The `std::memory` module's functions become live (without
-  configuration they are no-ops).
-- `llm({ memory: true })` injects relevant facts before the prompt.
+## Remembering and recalling
 
-The `dir` is where memory writes its JSON files. One subdirectory per
-[memory scope](#memory-scopes-memoryid) is created on first write.
+Import what you need from `std::memory`:
 
-### Full configuration
+```ts
+import { setMemoryId, remember, recall, forget } from "std::memory"
+```
 
-All other fields are optional with sensible defaults:
+### `remember(content)`
 
-```json
-{
-  "memory": {
-    "dir": ".agency-memory",
-    "model": "gpt-4o-mini",
-    "autoExtract": {
-      "interval": 5
-    },
-    "compaction": {
-      "trigger": "messages",
-      "threshold": 50
-    },
-    "embeddings": {
-      "model": "text-embedding-3-small"
-    }
-  }
+Give `remember` plain text and it extracts the facts for you — the people,
+the details about them, and how they relate:
+
+```ts
+remember("Alice is a senior engineer who prefers TypeScript. She mentors Bob.") with approve
+```
+
+Behind the scenes an LLM turns that sentence into structured facts, running in
+its own [thread](/guide/threads) so it never shows up in your agent's main
+conversation.
+
+### `recall(query)`
+
+Ask for what you need in plain language. `recall` returns the matching facts as
+a formatted string:
+
+```ts
+const context = recall("alice's preferences") with approve
+// Alice (person):
+//   - Senior engineer
+//   - Prefers TypeScript
+```
+
+It returns up to 10 entities, ranked by relevance, or an empty string if
+nothing matches (or memory is off).
+
+### `forget(query)`
+
+`forget` removes matching facts — but softly. Nothing is erased; the facts are
+just marked expired, so they drop out of `recall` while the history stays on
+disk:
+
+```ts
+forget("alice's old job title") with approve
+```
+
+## Automatic recall with `llm({ memory: true })`
+
+The easiest way to use memory is to not call `recall` yourself at all. Pass
+`memory: true` to any `llm()` call and Agency recalls facts relevant to your
+prompt and slips them in as a system message before the model sees it:
+
+```ts
+remember("Alice prefers concise technical summaries.") with approve
+const reply = llm("Summarize today's standup notes: ...", { memory: true })
+```
+
+The model sees a system message starting with `Relevant context from memory:`
+followed by the matches. If nothing matches, nothing is injected. Because the
+flag is per-call, you only pay the recall cost on the calls that actually need
+long-term context.
+
+## Approval: memory asks before it acts
+
+You might be wondering — does `remember()` really pause and ask every time? By
+default, **yes**. Writing to or reading from memory is a real action, so
+`remember`, `recall`, `forget`, `enableMemory`, and `disableMemory` each raise
+an [interrupt](/guide/interrupts) for approval before they run. Without a
+response, the run pauses.
+
+That's why every example above ends in `with approve` — the shorthand that
+auto-approves the interrupt:
+
+```ts
+remember("Alice mentors Bob.") with approve
+```
+
+When you want a human in the loop instead, handle it yourself:
+
+```ts
+handle {
+  remember(userMessage)
+} with (data) {
+  const ok = input(`Save this to memory? (yes/no) `)
+  if (ok == "yes") { return approve() }
+  return reject()
 }
 ```
 
-| Field | Purpose |
-|---|---|
-| `dir` | Required. Directory for per-scope JSON files. |
-| `model` | Default model for extraction, compaction, and LLM-tier recall. Falls back to the project's default model. |
-| `autoExtract.interval` | Number of LLM turns between automatic extraction passes. Default: `5`. |
-| `compaction.trigger` | `"messages"` (raw count) or `"token"` (estimated tokens) — what to measure when deciding to compact. |
-| `compaction.threshold` | Threshold above which compaction runs. |
-| `embeddings.model` | Embedding model name (forwarded to smoltalk's `embed`). |
+See [Interrupts](/guide/interrupts) for every way to approve — `with approve`,
+`handle` blocks, `.preapprove()`, and policies.
 
-## Configuring memory in code
+**One important exception:** the *automatic* path never interrupts.
+`llm({ memory: true })` injection and [background extraction](#working-in-the-background)
+recall and write on their own, without asking. Only the memory functions you
+call directly in your code raise approval interrupts. (`recall` is also `safe`,
+so the LLM may call it as a tool — pair it with `.preapprove()` if you don't
+want each tool-driven recall to prompt.)
 
-You can also enable, reconfigure, or disable memory directly from
-Agency code. This is useful for multi-tenant agents that want a
-different store per user, library helpers that want a side store
-without affecting the caller, and fork branches that each want their
-own memory.
+## Scopes: keeping users separate
 
-Three functions live in `std::memory`:
+A **scope** is an independent slice of memory. Set one with `setMemoryId` and
+every `remember` / `recall` / `forget` after it reads and writes that slice
+only:
+
+```ts
+node main() {
+  setMemoryId("alice")
+  // everything below is scoped to Alice
+}
+```
+
+Scopes are just strings — use whatever uniquely identifies the slice: a user,
+a channel, a workspace, even a time window (`"alice-2026-Q2"`). If you never
+call `setMemoryId`, the scope is `"default"`. You can read the current one back
+with `getMemoryId()`.
+
+The active scope is part of the run's state, so it survives interrupt/resume —
+an agent paused mid-run comes back to the same scope it left.
+
+One scope has at most one writer at a time across processes. Concurrent writes
+to the same scope aren't coordinated for you; if you need that, serialize
+access at the application layer (one queue per scope is the simplest pattern).
+
+## Configuring memory from code
+
+Sometimes `agency.json` isn't enough — a multi-tenant agent wants a different
+store per user, or a library helper wants a scratch store without disturbing
+the caller. Three functions let you configure memory inline:
 
 ```ts
 import { enableMemory, disableMemory, memory } from "std::memory"
@@ -100,239 +183,167 @@ import { enableMemory, disableMemory, memory } from "std::memory"
 
 ### `enableMemory(config)`
 
-Push a memory frame onto the active branch. Subsequent
-`remember`/`recall`/`forget` calls in this branch use the new
-config.
+Turn memory on (or switch stores) for the current branch:
 
 ```ts
-enableMemory({ dir: "./mem-user-alice" })
-remember("alice's favourite colour is blue")
+enableMemory({ dir: "./mem/alice" }) with approve
+remember("Alice's favourite colour is blue") with approve
 ```
 
-- `dir` is resolved against the **current working directory** (the
-  same as `agency.json`'s `memory.dir`, deliberately NOT the module
-  dir like `read`/`write`).
-- The directory is auto-created.
-- Storage is shared process-wide by absolute dir, so multiple calls
-  (or multiple runs) using the same `dir` share one underlying
-  store.
-- Pushing the same `dir` as the current top is a no-op (safe to call
-  in `main()` even when a `static const _ = enableMemory({...})`
-  already ran).
-- Pushing a different `dir` stacks the new frame on top.
+Call it again with the same `dir` and nothing happens — so it's safe to enable
+in `main()` even if a `static const _ = enableMemory({...})` already ran. Call
+it with a *different* `dir` and you switch stores. The `dir` is resolved against
+your working directory (the same as `agency.json`'s `memory.dir`, and
+deliberately *not* the module dir like `read`/`write`), and it's created if it
+doesn't exist.
 
 ### `disableMemory()`
 
-Pop the top memory frame from the active branch. Frame-scoped: a
-`disableMemory()` inside a fork branch only affects that branch.
-
-> **Warning:** `disableMemory()` pops whatever is on top, including
-> the JSON-seeded bottom frame from `agency.json`. Library authors
-> should not call this casually — they will shadow the caller's
-> configured memory. Prefer the block form below for lexical scoping.
+Turn the most recent config back off. Be careful: this pops whatever is on top,
+including the one from `agency.json`. Library authors shouldn't call it casually
+— you'd shadow the caller's memory. Prefer the block form below, which cleans up
+after itself.
 
 ### `memory(config) as { ... }`
 
-The block form. Pushes a frame on entry, pops it on exit (including
-on throw / interrupt).
+The block form is the safe one. It turns on the config for the duration of the
+block and restores whatever was there before when the block ends — even if the
+block throws or interrupts:
 
 ```ts
-memory({ dir: "./mem-user-alice" }) as {
-  remember("alice's favourite colour is blue")
-  print(recall("alice"))
+const result = memory({ dir: "./mem/alice" }) as {
+  remember("Alice's favourite colour is blue") with approve
+  recall("alice") with approve
 }
-// Frame is popped here — the next remember/recall sees whatever was
-// active before this block.
 ```
 
-### Precedence
+It returns a [`Result`](/guide/error-handling) — success holds the block's
+value, failure holds an error raised inside it.
 
-Code wins over `agency.json`. The JSON config is seeded as the
-bottom-of-stack frame on every run; any `enableMemory(...)` or
-`memory({...}) as { ... }` pushes on top. The active frame is always
-the top of the stack.
+### How configs stack
+
+Memory configs stack like a pile of plates. Your `agency.json` config sits on
+the bottom; each `enableMemory(...)` or `memory({...}) as { ... }` sets a new
+plate on top, and the top plate is the one in effect. That's why code always
+wins over `agency.json`, and why a block cleanly restores what was underneath
+when it ends.
+
+Scope (`memoryId`) is separate from this stack. Switching stores doesn't reset
+the scope — a helper that opens a side store won't clobber the caller's
+`setMemoryId`. If you want a fresh scope with a new store, call `setMemoryId`
+yourself inside the block.
+
+Not sure whether memory is on right now? `isMemoryActive()` returns `true` when
+a real store is reachable on the current branch:
+
+```ts
+if (isMemoryActive()) {
+  remember(note) with approve
+}
+```
 
 ### Per-fork memory
 
-Because each fork branch has its own state stack, frames pushed in
-one branch never bleed into siblings:
+Each [fork](/guide/concurrency) branch gets its own copy of this stack, so a
+config set in one branch never leaks into its siblings:
 
 ```ts
-const dirs = ["./mem-a", "./mem-b"]
+const dirs = ["./mem/a", "./mem/b"]
 fork(dirs) as dir {
   memory({ dir: dir }) as {
-    remember("a fact scoped to this branch")
+    remember("a fact scoped to this branch") with approve
   }
 }
 ```
 
-Both branches share the process-wide *store* cache, so two branches
-that resolve to the same physical `dir` share one `FileMemoryStore`
-instance. Each execCtx still wraps that store in its own
-`MemoryManager` (with its own statelog client and log level), so the
-sharing is at the on-disk layer only.
+Two branches pointing at the same physical `dir` share the underlying files on
+disk, but each keeps its own view — so they don't step on each other.
 
-### `setMemoryId` is orthogonal
+## Working in the background
 
-`setMemoryId(...)` updates the active scope id (lives on the
-state stack's `other.memoryId`) and is *independent* of which frame
-is on top. A library helper that opens a side store does not
-clobber the caller's `setMemoryId`. If you want a fresh scope when
-switching stores, call `setMemoryId(...)` explicitly inside the
-block.
+Two things happen on their own once memory is on. Neither asks for approval.
 
-## The `std::memory` module
+**Automatic extraction.** Every few LLM turns (5 by default, set with
+`autoExtract.interval`), memory reads the recent conversation and pulls out
+facts for you — no explicit `remember` needed. An agent that just *chats* still
+builds up memory as it goes.
 
-Import the functions you need from `std::memory`:
+**Compaction.** As the stored conversation grows, memory summarizes the older
+messages so context stays bounded and recall stays fast. `compaction.trigger`
+chooses what to measure — `"messages"` (a raw count) or `"token"` (estimated
+tokens) — and `compaction.threshold` is the point at which it kicks in.
 
-```ts
-import { setMemoryId, remember, recall, forget } from "std::memory"
-```
+## How it works
 
-### `setMemoryId(id)`
+Under the hood, memory is a **knowledge graph**. Facts are stored as
+*entities* (a person, a project, a thing), each carrying *observations* (facts
+about it) and *relations* (links to other entities). Extraction turns your text
+into that graph; recall turns a query back into a ranked list of facts. Both
+steps use the LLM, in isolated threads, so they never touch your agent's main
+conversation — though their cost and tokens still flow through the run's
+accounting, so you'll see them in `onLLMCallEnd` callbacks and traces.
 
-Sets the **memory scope** for the current run. All subsequent
-`remember` / `recall` / `forget` calls operate inside this scope. If you
-never call this, the scope defaults to `"default"`.
+`recall` blends three strategies and returns the top 10:
 
-```ts
-node main() {
-  setMemoryId("user-42")
-  // …everything below reads/writes the user-42 scope
-}
-```
+1. **Name match** — substring match on entity names.
+2. **Semantic search** — vector similarity over observations.
+3. **LLM re-ranking** — the model picks the most relevant of what's left.
 
-A new scope is materialized on its first write — there's no setup or
-migration step.
+Semantic search needs a provider with an embedding model (OpenAI, Google,
+Ollama). On providers without one (Anthropic, llama.cpp, custom), that tier is
+skipped and recall leans on the other two — worth knowing if your matches feel
+thinner than expected.
 
-### `remember(content)`
+### Storage layout
 
-Extracts structured facts from natural language and stores them in the
-knowledge graph. The LLM identifies entities, observations about each
-entity, and relations between entities.
-
-```ts
-node main() {
-  setMemoryId("user-42")
-  remember("Alice is a senior engineer who prefers TypeScript and works on the search team. She mentors Bob.")
-}
-```
-
-The extraction runs in an isolated `thread {}` block, so the agent's
-main conversation history is unaffected. Cost and tokens still flow
-through the per-run accounting (you'll see them in
-`onLLMCallEnd` callbacks and traces).
-
-### `recall(query)`
-
-Returns relevant facts as a formatted string. `recall` is `safe`, so the
-LLM can call it as a tool without prompting for confirmation.
-
-```ts
-node main() {
-  setMemoryId("user-42")
-  const ctx = recall("alice's preferences")
-  // ctx might be:
-  //   Alice (person):
-  //     - Senior engineer
-  //     - Prefers TypeScript
-  //     - Works on the search team
-}
-```
-
-`recall` combines three retrieval strategies:
-
-1. **Structured lookup** — substring match on entity names.
-2. **Embedding similarity** — vector search over observations.
-3. **LLM re-ranking** — selects the top entities most relevant to the
-   query.
-
-Results are limited to the top 10 entities. Returns the empty string
-if memory is not configured or nothing matches.
-
-### `forget(query)`
-
-Soft-deletes facts matching the query. Affected observations get a
-`validTo` timestamp instead of being erased, so the audit trail is
-preserved. Like `remember`, the LLM call runs in an isolated thread.
-
-```ts
-node main() {
-  setMemoryId("user-42")
-  forget("alice's old job title")
-}
-```
-
-## Automatic injection: `llm({ memory: true })`
-
-The most ergonomic way to use memory is to let `llm()` handle it for
-you. With `memory: true`, the runtime queries memory using the prompt
-as the query and prepends a system message with the matching facts:
-
-```ts
-node main() {
-  setMemoryId("user-42")
-  remember("Alice prefers concise technical summaries.")
-  const reply = llm("Summarize today's standup notes: ...", { memory: true })
-}
-```
-
-The LLM sees a system message that begins with `Relevant context from
-memory:` followed by the recall results. Nothing is injected if recall
-returns empty.
-
-The `memory: true` flag is per-call, so you only pay the recall cost on
-LLM calls that actually need long-term context.
-
-## Memory scopes (`memoryId`)
-
-Each scope is an independent slice of memory. Use scopes to isolate:
-
-- **users** — `setMemoryId(currentUser.id)`
-- **threads / channels** — `setMemoryId(channel.id)`
-- **workspaces / projects** — `setMemoryId(workspace.id)`
-- **calendar windows** — `setMemoryId("user-42-2026-Q2")`
-
-Scopes are strings. Pick whatever uniquely identifies the slice.
-
-The active `memoryId` is part of the per-run state stack — it survives
-interrupt/resume, so an agent paused mid-run resumes against the same
-scope it was using before.
-
-A given scope can have at most one writer at a time across processes.
-Concurrent writes to the same scope are not currently coordinated. If
-you need shared scopes, serialize access at the application layer (one
-queue per scope is the simplest pattern).
-
-## Concurrent agent runs
-
-The memory layer is per-run, not global. Two `runNode` calls that
-happen to share the same Node.js process each get their own
-`MemoryManager`, so calling `setMemoryId("A")` in one agent does not
-affect what `recall` sees in another agent running concurrently — even
-if both touch the same `memoryId` directory on disk.
-
-This means it's safe to use Agency's memory layer in long-lived host
-processes: web servers, CLI daemons, agent platforms, etc.
-
-## Storage layout
-
-Each scope is a directory under your configured `dir`:
+Each scope is a directory of plain JSON under your configured `dir`:
 
 ```
 .agency-memory/
-├── user-42/
-│   ├── entities.json
-│   ├── relations.json
-│   ├── observations.json
-│   └── messages.json
-└── user-43/
+├── alice/
+│   ├── graph.json       # entities, their observations, and relations
+│   ├── embeddings.json  # vectors for semantic search
+│   └── summary.json     # compacted older conversation, if any
+└── bob/
     └── …
 ```
 
-The format is plain JSON — easy to inspect, diff, and back up. You can
-delete a scope by removing its directory; `setMemoryId` will recreate
-the files on the next write.
+It's plain JSON on purpose — easy to inspect, diff, and back up. Delete a
+scope by removing its directory; the files are recreated on the next write.
+
+## Full configuration
+
+Every field beyond `dir` is optional:
+
+```json
+{
+  "memory": {
+    "dir": ".agency-memory",
+    "model": "gpt-4o-mini",
+    "autoExtract": { "interval": 5 },
+    "compaction": { "trigger": "messages", "threshold": 50 },
+    "embeddings": { "model": "text-embedding-3-small" }
+  }
+}
+```
+
+| Field | Default | What it does |
+|---|---|---|
+| `dir` | *(required)* | Directory for per-scope JSON files. |
+| `model` | `agency.json` default, else `gpt-4o-mini` | Model for memory's own LLM work: extraction, recall re-ranking, forget, and compaction. |
+| `autoExtract.interval` | `5` | LLM turns between automatic extraction passes. |
+| `compaction.trigger` | `"messages"` | What the threshold counts — `"messages"` or `"token"`. |
+| `compaction.threshold` | — | Compact once the conversation grows past this. |
+| `embeddings.model` | derived from provider | Embedding model for semantic search. Omit to derive it from your LLM provider; some providers have none (see above). |
+| `embeddings.provider` | derived | Override the embedding provider for `embeddings.model`. |
+
+## Concurrent agent runs
+
+Memory is per-run, not global. Two runs sharing one Node.js process each keep
+their own view, so `setMemoryId("A")` in one agent doesn't change what `recall`
+sees in another running alongside it — even when both point at the same scope on
+disk. That makes memory safe to use inside long-lived hosts: web servers, CLI
+daemons, agent platforms.
 
 ## A complete example
 
@@ -340,14 +351,14 @@ the files on the next write.
 import { setMemoryId, remember, recall } from "std::memory"
 
 node onboarding() {
-  setMemoryId("user-42")
+  setMemoryId("alice")
   const intro = input("Tell me a bit about yourself: ")
-  remember(intro)
-  goto(chat)
+  remember(intro) with approve
+  goto chat()
 }
 
 node chat() {
-  setMemoryId("user-42")
+  setMemoryId("alice")
   while (true) {
     const message = input("you: ")
     const reply = llm(message, { memory: true })
@@ -356,33 +367,35 @@ node chat() {
 }
 ```
 
-The first time the user runs `onboarding`, the system extracts facts
-from their introduction. Every subsequent `chat` turn injects the
-relevant ones into the LLM call automatically — no manual recall, no
-manual prompt construction.
+The first run through `onboarding` extracts facts from the introduction. Every
+later `chat` turn injects the relevant ones automatically — no manual recall, no
+prompt-building. And with background extraction on, the conversation keeps
+teaching memory as it goes.
 
 ## Gotchas
 
-- **Memory must be enabled in `agency.json`.** Without the `memory`
-  block, every `std::memory` function is a no-op (no error, no warning
-  — they just return empty/undefined). This is intentional so the same
-  agency code can run with or without memory configured.
-- **Mixed scopes are easy to forget.** If you call `setMemoryId` in one
-  node but not another, the second node falls back to the previously-set
-  id (or `"default"`). Set the id once at the top of every entry node
-  to be safe.
-- **Tests need a deterministic LLM client.** End-to-end tests of memory
-  in `tests/agency/memory/` set `AGENCY_USE_TEST_LLM_PROVIDER=1` so
-  extraction and recall don't hit real providers. See that
-  directory's `README.md` for the full pattern.
-- **`forget` is soft-delete.** Observations get a `validTo` timestamp;
-  they're filtered out of recall but the audit trail remains on disk.
-  If you need a hard delete, remove the scope's JSON files directly.
+- **Memory must be enabled first.** Without the `memory` block in `agency.json`
+  (or an `enableMemory` call), `remember`/`forget` do nothing and `recall`
+  returns `""`. This is intentional, so the same code runs either way.
+- **Direct calls ask for approval; automatic recall doesn't.** `remember`,
+  `recall`, `forget`, `enableMemory`, and `disableMemory` raise approval
+  interrupts when you call them. `llm({ memory: true })` and background
+  extraction don't. See [Approval](#approval-memory-asks-before-it-acts).
+- **Set the scope in every entry node.** If you `setMemoryId` in one node but
+  not another, the second falls back to the last id set (or `"default"`). Set it
+  at the top of each entry node to be safe.
+- **`forget` is a soft delete.** Facts are marked expired, not erased. To hard
+  delete, remove the scope's JSON files directly.
+- **Tests need a deterministic LLM client.** End-to-end memory tests in
+  `tests/agency/memory/` set `AGENCY_USE_TEST_LLM_PROVIDER=1` so extraction and
+  recall don't hit real providers. See that directory's `README.md`.
 
 ## Related
 
-- [`std::memory` module reference](/stdlib/memory) — generated function
-  signatures and parameter types.
-- [LLMs](./llm) — full reference for `llm()` options, including
+- [`std::memory` module reference](/stdlib/memory) — generated signatures and
+  parameter types.
+- [Interrupts](/guide/interrupts) — every way to approve or reject memory's
+  approval prompts.
+- [LLMs](/guide/llm) — full reference for `llm()` options, including
   `memory: true`.
-- [Concurrency](./concurrency) — how multiple agent runs share state.
+- [Concurrency](/guide/concurrency) — how multiple runs share state.

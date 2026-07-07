@@ -1,17 +1,9 @@
-import { applyPatch } from "std::fs"
-import { guard } from "std::thread"
-
+import { enableMemory, remember } from "std::memory"
 node main() {
-  const result = guard(cost: $0.0) {
-    const category = llm("classify this email: I love you")
-    const reply = llm("draft a reply")
-    return category
-  }
-
-  raise std::edit("Are you sure you want to continue?")
-
-  match(result) {
-    success(value) => print("Category: ${value}")
-    failure(error) => printJSON(error)
-  }
+  handle {
+    enableMemory({
+      dir: "./memtest"
+    })
+    remember("adit's favourite colour is blue")
+  } with approve
 }

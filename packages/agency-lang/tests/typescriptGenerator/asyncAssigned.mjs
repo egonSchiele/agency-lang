@@ -218,7 +218,6 @@ await callHook({
             args: {
               val: val
             },
-            isBuiltin: false,
             moduleId: "asyncAssigned.agency"
           }
         })

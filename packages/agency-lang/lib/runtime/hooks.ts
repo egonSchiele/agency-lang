@@ -47,7 +47,6 @@ export type CallbackMap = {
   onFunctionStart: {
     functionName: string;
     args: Record<string, any>;
-    isBuiltin: boolean;
     moduleId: string;
   };
   onFunctionEnd: { functionName: string; timeTaken: number };

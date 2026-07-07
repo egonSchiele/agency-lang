@@ -7,6 +7,7 @@ import { exprParser } from "@/parsers/parsers.js";
 import type { AgencyProgram, Expression, PromptSegment } from "@/types.js";
 import { formatDiff } from "@/utils/diff.js";
 
+import { checkProposal, hasInterpolation, isLiteralExpression } from "./constraint.js";
 import {
   collectTargets,
   promptSegmentsToString,
@@ -75,6 +76,7 @@ export type OptimizeMutationDiagnostic = {
     | "invalid-replacement-syntax"
     | "unsupported-value-domain"
     | "interpolation-mismatch"
+    | "type-mismatch"
     | "duplicate-target-operation"
     | "parse-failed";
   message: string;
@@ -124,7 +126,7 @@ export type OptimizeMutationPreview = {
 type ResolvedOperation = {
   operation: ReplaceVariableInitializerOperation;
   target: OptimizeTarget;
-  replacement: Expression & { segments: PromptSegment[] };
+  replacement: Expression;
   newValue: string;
 };
 
@@ -353,8 +355,9 @@ export class OptimizeSourceMutator {
     operation: ReplaceVariableInitializerOperation,
     target: OptimizeTarget,
   ): ValidationOutcome {
+    const isFreeformText = target.valueKind !== "literal" && target.constraintText === null;
     let parsed = exprParser(operation.value);
-    if (!parsed.success || parsed.rest.trim() !== "") {
+    if ((!parsed.success || parsed.rest.trim() !== "") && target.valueKind !== "literal") {
       // The model frequently returns the raw prompt text without the surrounding
       // quotes. Recover by wrapping it in the target's quote style and re-parsing.
       // This is self-validating — values that don't wrap into a clean single
@@ -362,20 +365,60 @@ export class OptimizeSourceMutator {
       // fall through to the diagnostic, so we never emit broken source.
       const quote = target.valueKind === "multilineString" ? `"""` : `"`;
       const wrapped = exprParser(`${quote}${operation.value}${quote}`);
-      if (!wrapped.success || wrapped.rest.trim() !== "") {
-        return diagnostic({ operation, code: "invalid-replacement-syntax", message: `Replacement value for ${operation.target} must be a quoted Agency string literal (e.g. "new prompt"), but it did not parse as one even after wrapping it in quotes. Received: ${JSON.stringify(operation.value)}` });
+      if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
+    }
+    if (!parsed.success || parsed.rest.trim() !== "") {
+      return diagnostic({ operation, code: "invalid-replacement-syntax", message: `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}` });
+    }
+    let replacement = parsed.result;
+    let proposalText = operation.value.trim();
+
+    if (isFreeformText) {
+      // Today's freeform path, byte-identical behavior.
+      if (replacement.type !== "string" && replacement.type !== "multiLineString") {
+        return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a string or multiline string expression; got ${replacement.type}.` });
       }
-      parsed = wrapped;
+      const newValue = promptSegmentsToString(replacement.segments);
+      const validation = validateOptimizedStringValue(target.value, newValue);
+      if (!validation.ok) {
+        return diagnostic({ operation, code: "interpolation-mismatch", message: `Replacement value for ${operation.target} is invalid: ${validation.reason}` });
+      }
+      return { resolved: { operation, target, replacement, newValue } };
     }
-    const replacement = parsed.result;
-    if (replacement.type !== "string" && replacement.type !== "multiLineString") {
-      return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a string or multiline string expression in v1; got ${replacement.type}.` });
+
+    // Typed values must be self-contained: the mutator cannot know what
+    // identifiers exist at the declaration site, and the probe's
+    // undefined-variable pass does not descend into interpolation segments.
+    if (hasInterpolation(replacement)) {
+      return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} contains interpolations (\${...}); interpolated strings are not supported in typed optimize values.` });
     }
-    const newValue = promptSegmentsToString(replacement.segments);
-    const validation = validateOptimizedStringValue(target.value, newValue);
-    if (!validation.ok) {
-      return diagnostic({ operation, code: "interpolation-mismatch", message: `Replacement value for ${operation.target} is invalid: ${validation.reason}` });
+
+    // Literal gate. The probe cannot enforce this — an unknown bare
+    // identifier synthesizes to `any` and typechecks clean — so a bare-word
+    // proposal (`fail` instead of `"fail"`) is recovered by quoting, and
+    // anything else non-literal is rejected outright.
+    if (!isLiteralExpression(replacement)) {
+      const quoted = `"${proposalText}"`;
+      const reparsed = exprParser(quoted);
+      if (!reparsed.success || reparsed.rest.trim() !== "" || reparsed.result.type !== "string") {
+        return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a literal (string, number, boolean, null, object, or array); got ${replacement.type}.` });
+      }
+      replacement = reparsed.result;
+      proposalText = quoted;
     }
+
+    if (target.constraintText !== null) {
+      const check = checkProposal(target.constraintText, proposalText, this.targetSet.typeAliases);
+      if (!check.ok) {
+        return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} does not fit its type ${target.constraintText}: ${check.reason}` });
+      }
+    }
+    // constraintText === null with valueKind "literal": unconstrained — any
+    // parsed literal passes through.
+
+    const newValue = (replacement.type === "string" || replacement.type === "multiLineString")
+      ? promptSegmentsToString(replacement.segments)
+      : proposalText;
     return { resolved: { operation, target, replacement, newValue } };
   }
 }

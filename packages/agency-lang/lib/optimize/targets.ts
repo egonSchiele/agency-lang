@@ -7,7 +7,7 @@ import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
 import type { AgencyNode, AgencyProgram, Assignment, PromptSegment, TypeAliasEntry, VariableType } from "@/types.js";
 import { expressionToString, walkNodes } from "@/utils/node.js";
-import { checkProposal, isNullLiteral, renderConstraintText, renderLiteralSource } from "./constraint.js";
+import { checkProposal, isLiteralExpression, renderConstraintText, renderLiteralSource } from "./constraint.js";
 
 export type OptimizeTarget = {
   id: string;
@@ -255,8 +255,6 @@ function directOptimizeScope(ancestors: AgencyNode[]): string | null {
   return null;
 }
 
-const LITERAL_VALUE_TYPES = ["string", "multiLineString", "number", "boolean", "agencyObject", "agencyArray"];
-
 function buildTarget(
   assignment: Assignment,
   file: string,
@@ -265,7 +263,7 @@ function buildTarget(
   typeAliases: Record<string, TypeAliasEntry>,
 ): OptimizeTarget {
   const value = assignment.value;
-  if (value.type === "messageThread" || !(LITERAL_VALUE_TYPES.includes(value.type) || isNullLiteral(value))) {
+  if (value.type === "messageThread" || !isLiteralExpression(value)) {
     throw new Error(
       `Unsupported optimize target ${file}:${scope}:${assignment.variableName}. Its value must be a literal (string, number, boolean, null, object, or array).`,
     );

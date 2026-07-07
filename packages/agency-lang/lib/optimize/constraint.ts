@@ -81,6 +81,19 @@ export function checkProposal(
   };
 }
 
+const LITERAL_EXPRESSION_TYPES = ["string", "multiLineString", "number", "boolean", "agencyObject", "agencyArray"];
+
+/**
+ * True when the expression is a literal an optimize target/proposal may
+ * carry: string, number, boolean, null, object, or array. The single gate
+ * shared by discovery and the mutator — the probe alone cannot enforce
+ * this, because an unknown bare identifier synthesizes to `any` and passes
+ * typechecking unflagged.
+ */
+export function isLiteralExpression(expr: Expression): boolean {
+  return LITERAL_EXPRESSION_TYPES.includes(expr.type) || isNullLiteral(expr);
+}
+
 /**
  * True when a literal expression contains a string interpolation anywhere —
  * at top level or nested inside object/array literals. Typed replacement

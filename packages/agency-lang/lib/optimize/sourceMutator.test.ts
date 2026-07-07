@@ -631,3 +631,80 @@ describe("OptimizeSourceMutator.apply", () => {
     expect(fs.existsSync(destination)).toBe(false);
   });
 });
+
+describe("typed target shape checking", () => {
+  function setup(source: string): OptimizeTargetSet {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", source);
+    return discoverOptimizeTargets(entry, { baseDir: dir });
+  }
+
+  it("accepts in-shape and rejects out-of-shape union values", () => {
+    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    const ok = mutator.mutate("a.agency:global:status", `"fail"`);
+    expect(ok.diagnostics).toEqual([]);
+    expect(ok.files["a.agency"]).toContain(`"fail"`);
+
+    expect(mutator.mutate("a.agency:global:status", `"exploded"`).diagnostics[0]?.code).toBe("type-mismatch");
+  });
+
+  it("recovers an unquoted bare-word proposal for a string-y constraint", () => {
+    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    expect(mutator.mutate("a.agency:global:status", `fail`).diagnostics).toEqual([]);
+  });
+
+  it("handles boolean and nullable-number targets", () => {
+    const set = setup(`optimize const enabled: boolean = false\noptimize const n: number | null = 5\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    expect(mutator.mutate("a.agency:global:enabled", `true`).diagnostics).toEqual([]);
+    expect(mutator.mutate("a.agency:global:n", `null`).diagnostics).toEqual([]);
+    expect(mutator.mutate("a.agency:global:n", `6`).diagnostics).toEqual([]);
+    expect(mutator.mutate("a.agency:global:enabled", `"yes"`).diagnostics[0]?.code).toBe("type-mismatch");
+    expect(mutator.mutate("a.agency:global:n", `"six"`).diagnostics[0]?.code).toBe("type-mismatch");
+  });
+
+  it("records: wrong field type and unknown field rejected; nullable omission accepted", () => {
+    const set = setup(`type P = { name: string; age: number | null }
+optimize const p: P = { name: "a", age: 0 }
+node main() {}
+`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    expect(mutator.mutate("a.agency:global:p", `{ name: "b" }`).diagnostics).toEqual([]);
+    expect(mutator.mutate("a.agency:global:p", `{ name: 5 }`).diagnostics[0]?.code).toBe("type-mismatch");
+    expect(mutator.mutate("a.agency:global:p", `{ name: "b", zzz: 1 }`).diagnostics[0]?.code).toBe("type-mismatch");
+  });
+
+  it("rejects interpolated strings in typed values with an honest message", () => {
+    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    const diagnostic = mutator.mutate("a.agency:global:status", `"pass \${x}"`).diagnostics[0];
+    expect(diagnostic?.code).toBe("type-mismatch");
+    expect(diagnostic?.message.toLowerCase()).toContain("interpolat");
+  });
+
+  it("unconstrained literal target (failed baseline) accepts any literal, still not garbage", () => {
+    const set = setup(`optimize const x: NotDefined = 5\nnode main() {}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    expect(mutator.mutate("a.agency:global:x", `"anything"`).diagnostics).toEqual([]);
+    expect(mutator.mutate("a.agency:global:x", `{{{`).diagnostics[0]?.code).toBe("invalid-replacement-syntax");
+  });
+
+  it("writes a typed replacement into the rendered candidate", () => {
+    const set = setup(`optimize const enabled: boolean = false\nnode main() {\n  return enabled\n}\n`);
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    const preview = mutator.mutate("a.agency:global:enabled", `true`);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["a.agency"]).toContain("optimize const enabled: boolean = true");
+    const refreshed = preview.targetSet.targets.find((target) => target.name === "enabled")!;
+    expect(refreshed.value).toBe("true");
+  });
+});

@@ -72,12 +72,17 @@ describe("checkProposal", () => {
     expect(checkProposal("Job", `{ status: "nope", priority: null }`, aliases).ok).toBe(true);
   });
 
-  it("rejects bare variable references, but NOT interpolations (the mutator gates those)", () => {
-    expect(checkProposal("Status", `somevar`, {}).ok).toBe(false);
-    // The undefined-variable pass does not descend into interpolation
-    // segments, so the probe alone accepts this — which is why the mutator
-    // applies the explicit hasInterpolation gate before probing.
+  it("does NOT reject bare identifiers or interpolations — the mutator gates those", () => {
+    // An unknown bare identifier synthesizes to `any` and typechecks clean,
+    // and the undefined-variable pass does not descend into interpolation
+    // segments. Both are handled by the mutator's isLiteralExpression /
+    // hasInterpolation gates, not by the probe. Pinned so nobody assumes
+    // the probe covers them.
+    expect(checkProposal("Status", `somevar`, aliases).ok).toBe(true);
     expect(checkProposal("string", `"hi \${x}"`, {}).ok).toBe(true);
+    // With an EMPTY registry the same proposal is rejected — but only
+    // because the alias itself is unknown, not because of the identifier.
+    expect(checkProposal("Status", `somevar`, {}).ok).toBe(false);
   });
 
   it("rejects values that do not parse", () => {

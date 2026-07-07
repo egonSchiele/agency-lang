@@ -257,6 +257,19 @@ export default defineConfig({
             { text: "capabilities", link: "/stdlib/capabilities" },
             { text: "clipboard", link: "/stdlib/clipboard" },
             { text: "concurrency", link: "/stdlib/concurrency" },
+            {
+              text: "data",
+              collapsed: false,
+              items: [
+                { text: "data/finance/gdelt", link: "/stdlib/data/finance/gdelt" },
+                { text: "data/finance/fred", link: "/stdlib/data/finance/fred" },
+                { text: "data/finance/edgar", link: "/stdlib/data/finance/edgar" },
+                {
+                  text: "data/finance/dbnomics",
+                  link: "/stdlib/data/finance/dbnomics",
+                },
+              ],
+            },
             { text: "date", link: "/stdlib/date" },
             { text: "fs", link: "/stdlib/fs" },
             { text: "http", link: "/stdlib/http" },

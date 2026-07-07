@@ -1,0 +1,74 @@
+import {
+  buildFredObservationsPath,
+  buildFredSeriesPath,
+  toFredValue,
+  parseFredObservations,
+  parseFredInfo,
+  fredObservationsFinalize,
+  fredInfoFinalize,
+  fredSeries
+} from "std::data/finance/fred"
+
+node tToFredMissing(): any {
+  return toFredValue(".")
+}
+
+node tToFredNum(): any {
+  return toFredValue("3.4")
+}
+
+node tBuildObs(): string {
+  return buildFredObservationsPath("UNRATE", "KEY", "2024-01-01", "", "m", "", 100)
+}
+
+node tBuildSeries(): string {
+  return buildFredSeriesPath("UNRATE", "KEY")
+}
+
+node tParseObs(raw: any): any {
+  return parseFredObservations("UNRATE", raw)
+}
+
+node tParseObsSparse(): any {
+  return parseFredObservations("X", { observations: [{ date: "2024-01-01" }] })
+}
+
+node tParseInfo(raw: any): any {
+  return parseFredInfo(raw)
+}
+
+node tInfoEmpty(): string {
+  const r = fredInfoFinalize(success({ seriess: [] }))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node tObsMissing(): string {
+  const r = fredObservationsFinalize("BADID", success({}))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node tObsFetchError(): string {
+  const r = fredObservationsFinalize("X", failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node tNoKey(): string {
+  const r = fredSeries("UNRATE")
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED"
+}
+
+node callFred(id: string): any {
+  return fredSeries(id)
+}

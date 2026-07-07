@@ -67,10 +67,11 @@ export type FredSeriesInfo = {
   notes: string
 }
 
+// Not preapproved: callers see both std::fred and the std::http::fetchJSON interrupt.
 const fredClient = fetchJSON.partial(
   baseUrl: "https://api.stlouisfed.org/fred/",
   allowedDomains: ["api.stlouisfed.org"]
-).preapprove()
+)
 
 /** Append "&key=value" only when value is non-empty (value is URL-encoded). Pure. */
 def appendParam(path: string, key: string, value: string): string {
@@ -163,7 +164,7 @@ export safe def fredInfoFinalize(fetchResult: any): Result {
   }
 }
 
-export safe def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: string = "", units: string = "", limit: number = 0): Result {
+export safe def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: string = "", units: string = "", limit: number = 0): Result<FredSeries> raises <std::fred, std::http::fetchJSON> {
   """
   Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
   unemployment rate, "CPIAUCSL" for CPI, "FEDFUNDS" for the fed funds rate). Returns the
@@ -184,10 +185,13 @@ export safe def fredSeries(seriesId: string, observationStart: string = "", obse
   }
   return interrupt std::fred("Fetch this FRED series?", { seriesId: seriesId })
   const path = buildFredObservationsPath(seriesId, apiKey, observationStart, observationEnd, frequency, units, limit)
-  return fredObservationsFinalize(seriesId, fredClient(path: path))
+  // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at
+  // statement level (resumable), not inside a call argument.
+  const result = fredClient(path: path)
+  return fredObservationsFinalize(seriesId, result)
 }
 
-export safe def fredSeriesInfo(seriesId: string): Result {
+export safe def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::http::fetchJSON> {
   """
   Fetch metadata about a FRED series by its id: its human title, display units, frequency, and
   the date range it covers. Requires the FRED_API_KEY environment variable.
@@ -200,5 +204,6 @@ export safe def fredSeriesInfo(seriesId: string): Result {
   }
   return interrupt std::fred("Fetch this FRED series metadata?", { seriesId: seriesId })
   const path = buildFredSeriesPath(seriesId, apiKey)
-  return fredInfoFinalize(fredClient(path: path))
+  const result = fredClient(path: path)
+  return fredInfoFinalize(result)
 }

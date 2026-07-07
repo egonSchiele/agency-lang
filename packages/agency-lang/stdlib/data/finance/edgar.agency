@@ -48,18 +48,19 @@ const CIK_WIDTH = 10
 // setting SEC_USER_AGENT after the process starts will not take effect.
 const secUserAgent = env("SEC_USER_AGENT") ?? "agency-lang admin@agency-lang.com"
 
-// One preapproved client per host (fetchJSON.partial locks a single baseUrl).
+// One client per host (fetchJSON.partial locks a single baseUrl). Not preapproved:
+// callers see both std::edgar and the std::http::fetchJSON interrupt(s).
 const tickerClient = fetchJSON.partial(
   baseUrl: "https://www.sec.gov/",
   headers: { "User-Agent": secUserAgent },
   allowedDomains: ["www.sec.gov"]
-).preapprove()
+)
 
 const submissionsClient = fetchJSON.partial(
   baseUrl: "https://data.sec.gov/",
   headers: { "User-Agent": secUserAgent },
   allowedDomains: ["data.sec.gov"]
-).preapprove()
+)
 
 /** Build the submissions path for a 10-digit CIK. Pure — no network. */
 export safe def buildSubmissionsPath(cik10: string): string {
@@ -130,7 +131,7 @@ export safe def edgarSubmissionsFinalize(cik10: string, formType: string, limit:
   }
 }
 
-export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: number = 20): Result {
+export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
   List recent SEC filings for a company by its CIK (Central Index Key). Returns filings with
   form type, filing/report dates, and a direct URL to each primary document. Optionally filter
@@ -143,7 +144,9 @@ export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: num
   const cik10 = cik.padStart(CIK_WIDTH, "0")
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: cik })
   const path = buildSubmissionsPath(cik10)
-  return edgarSubmissionsFinalize(cik10, formType, limit, submissionsClient(path: path))
+  // Bind the fetch to its own statement so std::http::fetchJSON fires at statement level.
+  const result = submissionsClient(path: path)
+  return edgarSubmissionsFinalize(cik10, formType, limit, result)
 }
 
 export safe def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result {
@@ -159,15 +162,16 @@ export safe def edgarFilings(ticker: string, formType: string = "", limit: numbe
   @param limit - Maximum filings to return (default 20)
   """
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: ticker })
-  return match (tickerClient(path: "files/company_tickers.json")) {
-    success(body) => {
-      const cik10 = parseTickerMap(body, ticker)
-      if (cik10 == "") {
-        return failure("EDGAR: no company found for ticker '${ticker}'")
-      }
-      const path = buildSubmissionsPath(cik10)
-      return edgarSubmissionsFinalize(cik10, formType, limit, submissionsClient(path: path))
-    }
-    failure(err) => failure("EDGAR ticker lookup failed: ${err}")
+  // Each fetch is bound to its own statement (never a match scrutinee or call argument) so
+  // the std::http::fetchJSON interrupts fire at statement level and resume reliably.
+  const tickersResult = tickerClient(path: "files/company_tickers.json")
+  if (tickersResult is failure(err)) {
+    return failure("EDGAR ticker lookup failed: ${err}")
   }
+  const cik10 = parseTickerMap(tickersResult.value, ticker)
+  if (cik10 == "") {
+    return failure("EDGAR: no company found for ticker '${ticker}'")
+  }
+  const subResult = submissionsClient(path: buildSubmissionsPath(cik10))
+  return edgarSubmissionsFinalize(cik10, formType, limit, subResult)
 }

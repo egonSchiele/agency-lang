@@ -123,7 +123,7 @@ Turn a fetchJSON Result into the final Result. Pure — testable with mock Resul
 ### gdeltNews
 
 ```ts
-gdeltNews(query: string, maxRecords: number, timespan: string): Result
+gdeltNews(query: string, maxRecords: number, timespan: string): Result<NewsArticle[]>
 ```
 
 Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns recent
@@ -143,7 +143,7 @@ Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns rec
 | maxRecords | `number` | 25 |
 | timespan | `string` | "3d" |
 
-**Returns:** `Result`
+**Returns:** `Result<NewsArticle[]>`
 
 **Throws:** `std::gdelt`
 

@@ -129,7 +129,7 @@ Build the series/observations query path. Pure — no network.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L85))
 
 ### buildFredSeriesPath
 
@@ -148,7 +148,7 @@ Build the series (metadata) query path. Pure — no network.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L99))
 
 ### toFredValue
 
@@ -166,7 +166,7 @@ Convert a FRED value string to a number, or null for the missing marker "." or a
 
 **Returns:** `number | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L104))
 
 ### parseFredObservations
 
@@ -185,7 +185,7 @@ Reshape a series/observations response. Pure — total on missing/null input.
 
 **Returns:** [FredSeries](#fredseries)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L116))
 
 ### parseFredInfo
 
@@ -203,7 +203,7 @@ Reshape a series (metadata) response, taking the first series. Pure — total on
 
 **Returns:** [FredSeriesInfo](#fredseriesinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L126))
 
 ### fredObservationsFinalize
 
@@ -222,7 +222,7 @@ Finalize an observations fetch into a Result. Pure.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L141))
 
 ### fredInfoFinalize
 
@@ -240,12 +240,12 @@ Finalize a series-info fetch into a Result. Pure.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L154))
 
 ### fredSeries
 
 ```ts
-fredSeries(seriesId: string, observationStart: string, observationEnd: string, frequency: string, units: string, limit: number): Result
+fredSeries(seriesId: string, observationStart: string, observationEnd: string, frequency: string, units: string, limit: number): Result<FredSeries>
 ```
 
 Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
@@ -272,16 +272,16 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 | units | `string` | "" |
 | limit | `number` | 0 |
 
-**Returns:** `Result`
+**Returns:** `Result<FredSeries>`
 
 **Throws:** `std::fred`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L167))
 
 ### fredSeriesInfo
 
 ```ts
-fredSeriesInfo(seriesId: string): Result
+fredSeriesInfo(seriesId: string): Result<FredSeriesInfo>
 ```
 
 Fetch metadata about a FRED series by its id: its human title, display units, frequency, and
@@ -295,8 +295,8 @@ Fetch metadata about a FRED series by its id: its human title, display units, fr
 |---|---|---|
 | seriesId | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<FredSeriesInfo>`
 
 **Throws:** `std::fred`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L194))

@@ -95,7 +95,7 @@ Build the DBnomics series path (codes are URL-encoded). Pure — no network.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L53))
 
 ### parseDbnomics
 
@@ -113,7 +113,7 @@ Reshape a DBnomics series response (zips parallel period/value arrays). Pure —
 
 **Returns:** [DbnomicsSeries](#dbnomicsseries)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L61))
 
 ### dbnomicsFinalize
 
@@ -131,12 +131,12 @@ Finalize a DBnomics fetch into a Result. Pure — total on missing `series`.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L80))
 
 ### dbnomicsSeries
 
 ```ts
-dbnomicsSeries(provider: string, dataset: string, series: string): Result
+dbnomicsSeries(provider: string, dataset: string, series: string): Result<DbnomicsSeries>
 ```
 
 Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series codes
@@ -156,8 +156,8 @@ Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series c
 | dataset | `string` |  |
 | series | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<DbnomicsSeries>`
 
 **Throws:** `std::dbnomics`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L93))

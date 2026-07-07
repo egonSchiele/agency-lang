@@ -1,4 +1,4 @@
-import { tSubPath, tArchive, tResolve, tResolveMissing, tResolveNull, tParseSubNull, tParseAll, tParse10K, tParseLimit1, tParseNoMatch, tFinalizeNoFilings, tFinalizeFetchError, callEdgar, hasInterrupts, reject, respondToInterrupts } from "./agent.js";
+import { tSubPath, tArchive, tResolve, tResolveMissing, tResolveNull, tParseSubNull, tParseAll, tParse10K, tParseLimit1, tParseNoMatch, tFinalizeNoFilings, tFinalizeFetchError, callEdgar, hasInterrupts, approve, reject, respondToInterrupts } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -13,7 +13,11 @@ if (iv.effect !== "std::edgar") throw new Error("wrong effect: " + iv.effect);
 if (iv.message !== "Fetch SEC filings for this company?") throw new Error("wrong message: " + iv.message);
 if (iv.data.company !== "AAPL") throw new Error("wrong payload company: " + JSON.stringify(iv.data));
 const rejected = await respondToInterrupts(interrupted.data, [reject()]);
-if (hasInterrupts(rejected.data)) throw new Error("expected a final (rejected) result");
+if (hasInterrupts(rejected.data)) throw new Error("rejecting std::edgar should short-circuit before any fetch");
+// Not preapproved: approving std::edgar resumes into the ticker fetch -> std::http::fetchJSON. Stop here (no network).
+const edgarI2 = await respondToInterrupts((await callEdgar()).data, [approve()]);
+if (!hasInterrupts(edgarI2.data)) throw new Error("expected std::http::fetchJSON after approving std::edgar");
+if (edgarI2.data[0].effect !== "std::http::fetchJSON") throw new Error("wrong second EDGAR effect: " + edgarI2.data[0].effect);
 
 writeFileSync(
   "__result.json",

@@ -43,10 +43,11 @@ export type DbnomicsSeries = {
   observations: DbnomicsObservation[]
 }
 
+// Not preapproved: callers see both std::dbnomics and the std::http::fetchJSON interrupt.
 const dbnomicsClient = fetchJSON.partial(
   baseUrl: "https://api.db.nomics.world/v22/",
   allowedDomains: ["api.db.nomics.world"]
-).preapprove()
+)
 
 /** Build the DBnomics series path (codes are URL-encoded). Pure — no network. */
 export safe def buildDbnomicsPath(provider: string, dataset: string, series: string): string {
@@ -89,7 +90,7 @@ export safe def dbnomicsFinalize(fetchResult: any): Result {
   }
 }
 
-export safe def dbnomicsSeries(provider: string, dataset: string, series: string): Result {
+export safe def dbnomicsSeries(provider: string, dataset: string, series: string): Result<DbnomicsSeries> raises <std::dbnomics, std::http::fetchJSON> {
   """
   Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series codes
   (e.g. provider "BLS", dataset "cu", series "CUUR0000SA0" for U.S. CPI). Returns the series
@@ -106,5 +107,7 @@ export safe def dbnomicsSeries(provider: string, dataset: string, series: string
     series: series
   })
   const path = buildDbnomicsPath(provider, dataset, series)
-  return dbnomicsFinalize(dbnomicsClient(path: path))
+  // Bind the fetch to its own statement so std::http::fetchJSON fires at statement level.
+  const result = dbnomicsClient(path: path)
+  return dbnomicsFinalize(result)
 }

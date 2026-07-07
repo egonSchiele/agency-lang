@@ -170,3 +170,42 @@ describe("proposeMutation", () => {
     }
   });
 });
+
+describe("renderTargetsSection type descriptions", () => {
+  it("describes a union target's allowed values and a boolean target", () => {
+    const typed: OptimizeTarget[] = [
+      {
+        id: "a.agency:global:status",
+        kind: "variable",
+        file: "a.agency",
+        absoluteFile: "/abs/a.agency",
+        scope: "global",
+        name: "status",
+        valueKind: "string",
+        value: "pass",
+        constraintText: `"pass" | "fail"`,
+      },
+      {
+        id: "a.agency:global:enabled",
+        kind: "variable",
+        file: "a.agency",
+        absoluteFile: "/abs/a.agency",
+        scope: "global",
+        name: "enabled",
+        valueKind: "literal",
+        value: "false",
+        constraintText: "boolean",
+      },
+    ];
+
+    const sections = buildMutatorSections({ targets: typed, inputs: [], history: "" });
+
+    expect(sections.targets).toContain(`type: "pass" | "fail"`);
+    expect(sections.targets).toContain("type: boolean");
+  });
+
+  it("labels freeform and unconstrained targets", () => {
+    const sections = buildMutatorSections({ targets, inputs: [], history: "" });
+    expect(sections.targets.toLowerCase()).toContain("free text");
+  });
+});

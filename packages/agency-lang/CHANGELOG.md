@@ -1,55 +1,50 @@
-## Unreleased
+## Jul 8 2026 — v0.7.0
 
 ### Language / Typechecker
-- Discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch; `match` arms narrow bound fields via the lowered scrutinee. Composes with `!`/`&&`/`||`/early-return/`while`.
-  - **Migration (typechecker-enabled projects only):** inside such a guard, accessing a property that exists on a *different* member is now an error — previously union property access was lenient. This is the intended behavior; update the access or guard accordingly.
-- `match` is now an expression, usable as an assignment RHS (`const x = match(...) { ... }`) or a `return` operand (`return match(...) { ... }`), and match arms may be a braced block of statements (not just a single statement/expression) that yields via an explicit `return`.
-  - **Breaking:** `return` inside a match arm now yields the arm's value **to the match**, not the enclosing function. A `return` anywhere inside a *statement-position* match arm (where the match's value would otherwise be discarded) is now a compile error, so the break is loud rather than a silent behavior change. Hoist the `return` in front of the match instead:
-    ```agency
-    // before (old behavior: each `return` exited the function)
-    match(r) {
-        success(v) => return "got ${v}"
-        failure(e) => return "err"
-    }
+- Lots of narrowing everywhere, like discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch. Same for `match` arms.
+- Single-line `if` expressions — `if (cond) x else y`. Can be used in assignments and returns.
+- `for` over a record now iterates its key and value.
+- Definite-return checking.
 
-    // after
-    return match(r) {
-        success(v) => "got ${v}"
-        failure(e) => "err"
-    }
-    ```
-    Matches that mix function-exit arms with effect-only arms can't be mechanically hoisted this way and need restructuring by hand. A match-expression arm also can't dispatch to a graph node (a node call is control flow, not a value) — use an `if`/`else` chain for node dispatch instead.
-  - Exhaustiveness is a hard error in expression position regardless of `typechecker.matchExhaustiveness`; statement-position matches still honor that config. See the [pattern matching guide](docs/site/guide/pattern-matching.md#match-expressions) for the full v1 restrictions (expression position is limited to those two capture sites, `match(x is pattern)` stays statement-only, module-level `const x = match(...)` initializers aren't supported, match expressions can't appear inside a `with` handler body, and returns can't cross a concurrency boundary inside an arm).
+#### Lots of `match` improvements
+- `match` is now an expression, can be used in assignments and returns.
+- `match` arms support blocks now instead of just single-expression bodies.
+- **Breaking:** `return` inside a match arm now yields the arm's value **to the match**, not the enclosing function.
+- Exhaustiveness checking for `match`.
+- `interrupt`, `goto`, and `thread`/`subthread`/`seq` are now allowed inside arms
+- `match` statements are allowed at the module level
+- `match` expressions may appear inside a `with` handler body.
 
 ### Standard Library
-- **Image generation** — new `std::image` module: `generateImage(prompt, ...opts)`
-  returns a `Result<{ base64, mimeType }>` from a hosted provider (OpenAI, Google,
-  or an open-source model via LiteLLM / Together). Supports edits/variations via
-  `images:`. Cost participates in `getCost()` / `guard(cost:)` and is traced via a
-  new `imageGeneration` statelog event. Compose with `std::thread`'s
-  `image(base64, mimeType, base64: true)` to feed a generated image back into an
-  `llm()` call.
-- **`writeBinary(filename, base64, dir?, mode?, useAgentCwd?)`** — new auto-imported
-  primitive that decodes base64 and writes raw bytes (images, audio, video, PDFs),
-  unlike `write()` which writes UTF-8 text. Interrupt-gated via a new
-  **`std::writeBinary`** effect (a member of the `FileWrite` effectSet); like
-  `std::write`, it is not auto-approved by default.
-- **Breaking — `readImage` renamed to `readBinary`.** The function is a generic
-  `file → base64` reader (it never had image-specific behavior), so the name now
-  reflects that it works for any binary file (images, audio, video, PDFs). The
-  interrupt effect `std::readImage` is likewise renamed to `std::readBinary` —
-  update any `handle`/effectSet/policy that referenced the old effect name
-  (`std::readBinary` is a member of the `FileRead` effectSet). No compatibility shim.
-- Reorganized the standard library into capability-grouped modules. Generic-named modules now live under a domain prefix, and two coupled pairs/trios were merged. Distinctive names (`std::syntax`, `std::markdown`, `std::http`, `std::wikipedia`, `std::weather`, `std::math`, and the agent core) stay flat.
-  - **Breaking — update your imports:**
-    - `std::threads` → `std::thread` (merged; the current-thread and cross-thread APIs now live in one module)
-    - `std::types`, `std::schemas`, `std::validators` → `std::validation` (folded into one module)
-    - `std::layout`, `std::table`, `std::chart`, `std::cli` → `std::ui/layout`, `std::ui/table`, `std::ui/chart`, `std::ui/cli` (the interactive `std::ui` module is unchanged)
-    - `std::keyring`, `std::oauth` → `std::auth/keyring`, `std::auth/oauth`
-    - `std::email`, `std::sms`, `std::imessage` → `std::messaging/email`, `std::messaging/sms`, `std::messaging/imessage`
-    - `std::search`, `std::browser` → `std::web/search`, `std::web/browser`
-  - There is no compatibility shim — old paths no longer resolve.
-  - Effect identifiers are unchanged: the `std::search` **effect** (used in `raises`/`interrupt`/policy) keeps its name even though the module moved to `std::web/search`, because effect names are a separate namespace.
+- **Image generation** — new `std::image` module with `generateImage(prompt, ...opts)` function. Supports edits too.
+- **`writeBinary(filename, base64, dir?, mode?, useAgentCwd?)`** — new auto-imported function that decodes base64 and writes raw bytes.
+- Tools can attach images to their reply via `attachToReply`.
+- **Breaking — `readImage` renamed to `readBinary`.** The function is a generic `file → base64` reader.
+- Reorganized the standard library into capability-grouped modules, changed some module names, and moved some functions around.
+- Added **`std::git`** — new module of typed, safe git tools. Safer than running `bash` commands, since several git commands allow flags that mutate files.
+- **`std::tag`** — attach arbitrary tags to primitives / objects / arrays. Also exposes a new `redact` function that users can use to redact sensitive information before logging it using Statelog.
+- New **`std::data` connectors** – `people/littlesis`, `finance` (GDELT, FRED, EDGAR, DBnomics), and `tech/{yc, hackernews}`.
+- **`std::ui/layout`** — `raw` has wrapping, wrapping syntax highlighted text doesn't color the box border, and containers shrink-to-fit by default.
+- **`std::http`** — `fetch*` functions now return a failure type on a non-2xx HTTP status.
+- **`std::index`** — `map` / `filter` / `reduce` are now auto-imported into all agency files.
+
+### Testing
+- `fetch` mocks
+- `import test { … }` lets a test import non-exported functions for testing.
+
+### Runtime
+- A default `maxCallDepth` guard to catch infinite recursion.
+- Subprocesses launched via `run()` now propagate interrupts to the user. They also work with guards and callbacks.
+- The `onStream` callback now fires for `llm()` calls made from Agency code (bug fix).
+- Changed the shape of the `apiKey` parameter to the `llm()` function to accept an object instead of a string.
+- Bumped smoltalk to v0.8.1.
+
+### Eval / Optimize
+- Users can constrain what mutations an optimizer can make by setting a type annotation on a variable marked `optimize`.
+
+### Agency Agent
+- The agent uses the typed `std::git` tools instead of `bash` for git, so read-only git operations run without a permission prompt.
+- The agent can generate images, and users can attach images to send to the agent.
 
 ## Jun 24 2026 — v0.6.4
 

@@ -16,6 +16,12 @@ import { AgencyProgram } from "./types.js";
  *  - Keyed by absolute path; an entry is valid only while the file's
  *    `mtimeMs` AND `size` both match (size guards against same-mtime edits
  *    on filesystems with coarse timestamp granularity).
+ *    Residual risk, accepted: an edit that keeps the byte count identical
+ *    AND lands within the same filesystem timestamp granule serves a stale
+ *    AST. Impossible mid-CI (files don't change during a run) but real for
+ *    long-lived processes (watch mode, `agency serve`, a future REPL). If
+ *    it ever bites, switch the validity check to a content hash — still far
+ *    cheaper than a re-parse.
  *  - `applyTemplate` is part of the key: the same file parses to different
  *    programs with and without the CLI template prelude.
  *  - Returns a `structuredClone` of the cached program on every read —

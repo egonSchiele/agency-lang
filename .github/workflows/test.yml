@@ -28,6 +28,14 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        # Don't write GITHUB_TOKEN into .git/config: no step does
+        # authenticated git operations afterward (the coverage comment
+        # authenticates via github-script's injected client), and these
+        # jobs execute PR-controlled code — the agency tests compile and
+        # run programs from the PR — which could otherwise read the
+        # persisted token.
+        persist-credentials: false
 
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -116,6 +124,14 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        # Don't write GITHUB_TOKEN into .git/config: no step does
+        # authenticated git operations afterward (the coverage comment
+        # authenticates via github-script's injected client), and these
+        # jobs execute PR-controlled code — the agency tests compile and
+        # run programs from the PR — which could otherwise read the
+        # persisted token.
+        persist-credentials: false
 
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -217,6 +233,8 @@ jobs:
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 9

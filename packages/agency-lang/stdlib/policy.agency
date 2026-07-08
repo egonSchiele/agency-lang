@@ -15,121 +15,33 @@ import {
 
 
 /** @module
-  ## Overview
+  Decide whether to approve or reject the interrupts an agent raises,
+  without prompting the user every time. A `Policy` is an ordered list of
+  glob-pattern rules per interrupt effect, evaluated first-match-wins.
 
-  A `Policy` is an ordered list of rules per interrupt effect that decides,
-  without prompting the user, whether to approve or reject each interrupt
-  an agent raises. Rules use glob patterns ("match objects") against the
-  interrupt's `data` fields. Evaluation is first-match-wins.
-
-  This module gives you two layers:
-
-  1. **Pure primitives** for building / loading / validating policies
-     and writing your own handler:
-     `checkPolicy`, `validatePolicy`, `parsePolicyFile`,
-     `writePolicyFile`, `recordRule`, `recordScopedRule`,
-     `buildScopedMatch`.
-
-  2. **CLI sugar** — `cliPolicyHandler` — drops in as a handler for
-     interactive agents. It loads `policy.json` on first use, prompts
-     the user with (a)/(r)/(aa)/(ap)/(rr) for each new interrupt
-     effect, records "always" decisions to disk, and replays matching
-     rules on subsequent interrupts so the user is only asked once
-     per pattern.
-
-  ## Usage: the CLI handler (most common)
+  `cliPolicyHandler` is the common entry point: it loads a policy file,
+  prompts the user on each new interrupt, remembers "always" decisions, and
+  replays matching rules so each pattern is only asked about once.
 
   ```ts
-  import { cliPolicyHandler, ScopedRuleFields } from "std::policy"
-
-  // Per-effect config controlling the "approve always here (ap)" option.
-  // For every effect you list, the (ap) prompt offers to pin the listed
-  // data fields. `matchSubpaths: true` brace-expands the value so
-  // `/tmp/x` also matches `/tmp/x/anything`.
-  const FIELDS: ScopedRuleFields = {
-    "std::read":  [{ field: "dir", matchSubpaths: true }],
-    "std::write": [{ field: "dir", matchSubpaths: true }],
-    "std::exec":  [
-      { field: "command",    matchSubpaths: false },
-      { field: "subcommand", matchSubpaths: false },
-    ],
-  }
+  import { cliPolicyHandler } from "std::policy"
 
   node main() {
-    // Bind to a local variable so `handle ... with handler` parses
-    // (the `with` clause only accepts an identifier).
+    // Bind to a variable — the `with` clause only accepts an identifier.
     const handler = cliPolicyHandler(
       file: "${env("HOME")}/.myapp/policy.json",
-      fields: FIELDS,
+      fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
     )
     handle {
-      // Every interrupt the inner code raises is filtered through the
-      // policy. New effects prompt the user; "aa" / "ap" decisions are
-      // persisted so the next run starts pre-approved.
       llm("hi", { tools: [...] })
     } with handler
   }
   ```
 
-  ## Usage: writing your own handler
-
-  If you want different UI (a web prompt, a Slack bot, a non-interactive
-  CI mode), build on the pure primitives:
-
-  ```ts
-  import { Policy, checkPolicy, recordRule } from "std::policy"
-
-  let myPolicy: Policy = {}
-
-  def myHandler(intr) {
-    const decision = checkPolicy(myPolicy, intr)
-    if (decision.type == "approve") { return approve() }
-    if (decision.type == "reject")  { return reject() }
-    // decision.type == "propagate" -- no rule matches. Ask your UI:
-    const choice = askUserSomehow(intr)
-    if (choice == "always-approve") {
-      myPolicy = recordRule(myPolicy, intr.effect, "approve")
-      return approve()
-    }
-    return choice == "approve" ? approve() : reject()
-  }
-  ```
-
-  ## How "matches" work
-
-  Each rule has an optional `match` map. The values are glob patterns
-  (via picomatch); evaluation passes when every key in `match` exists
-  in `intr.data` and its value matches the pattern. A rule with no
-  `match` is a catch-all for that effect.
-
-  Example: this rule auto-approves reads under `/tmp` (and any subdir):
-
-  ```ts
-  {
-    "std::read": [
-      { match: { dir: "{/tmp,/tmp/**}" }, action: "approve" }
-    ]
-  }
-  ```
-
-  `buildScopedMatch` constructs these match maps from a
-  `ScopedRuleFields` config — that's all the "scoped" helpers do.
-
-  ## Precedence trap
-
-  `recordRule` **appends** a catch-all rule. Because evaluation is
-  first-match-wins, a new approve rule will be ignored if an earlier
-  catch-all already covers the effect:
-
-  ```ts
-  let p = recordRule({}, "std::read", "reject")
-  p = recordRule(p, "std::read", "approve")  // dead — the reject wins
-  ```
-
-  `recordScopedRule` **prepends**, so a freshly-recorded scoped rule
-  always wins over an older catch-all. If you're letting users
-  flip decisions, either inspect the existing rules and replace
-  them, or start from an empty `Policy`.
+  For a different UI (a web prompt, a Slack bot, a non-interactive CI mode),
+  build your own handler on the pure primitives: `checkPolicy`, `recordRule`,
+  `recordScopedRule`, `parsePolicyFile`, `writePolicyFile`, `validatePolicy`,
+  and `buildScopedMatch`.
 */
 
 /** Key of an interrupt's `data` object (e.g. `"dir"`, `"command"`). */
@@ -137,7 +49,7 @@ export type InterruptDataKey = string
 
 /**
  * Glob pattern used to match an interrupt-data value. Patterns are
- * picomatch globs — supports `*`, `**`, and brace-expansion like
+ * picomatch globs. They support `*`, `**`, and brace-expansion like
  * `{a,b}` for unions. A literal string with no glob metacharacters
  * matches only that exact value.
  */
@@ -171,10 +83,10 @@ export type Policy = Record<InterruptEffect, PolicyRule[]>
 /**
  * The five answers `cliPolicyHandler`'s prompt accepts:
  * - `"approve"` / `"reject"` — one-off (a) / (r).
- * - `"approve-always"` / `"reject-always"` — (aa) / (rr); records a
- *   catch-all rule for the effect so future interrupts of this effect
+ * - `"approve-always"` / `"reject-always"` — (aa) / (rr). Records a
+ *   catch-all rule for the effect, so future interrupts of this effect
  *   resolve without prompting.
- * - `"approve-always-here"` — (ap); records a scoped rule pinned to
+ * - `"approve-always-here"` — (ap). Records a scoped rule pinned to
  *   whichever fields you listed in `ScopedRuleFields` for this effect.
  *   Only offered when the effect has an entry in the config.
  */
@@ -193,7 +105,7 @@ export type Decision =
  * - `matchSubpaths` — when `true`, brace-expand the value so the
  *   rule matches both the exact value AND any nested path under it.
  *   Pass `true` for directory-like fields (so approving `/tmp/x`
- *   also approves `/tmp/x/sub/file.txt`); pass `false` for opaque
+ *   also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
  *   identifiers (commands, IDs, env names) that shouldn't fan out.
  */
 export type ScopedField = {
@@ -205,7 +117,7 @@ export type ScopedField = {
  * Per-effect configuration consumed by `buildScopedMatch` and the
  * `cliPolicyHandler`. Maps each interrupt effect to the fields its
  * "approve-always-here" rule should pin. Effects not present in this
- * map don't offer the (ap) prompt option — the user falls back to
+ * map don't offer the (ap) prompt option. The user falls back to
  * (a) / (r) / (aa) / (rr).
  *
  * Example:
@@ -226,7 +138,7 @@ type CliPolicyOpts = {
   fields: ScopedRuleFields
 }
 
-// Internal state for `cliPolicyHandler`. Singleton — calling
+// Internal state for `cliPolicyHandler`. Singleton. Calling
 // `cliPolicyHandler` more than once silently overwrites these.
 let globalCliPolicyOpts: CliPolicyOpts = {
   file: "",
@@ -238,7 +150,7 @@ let _pendingSave: boolean = false
 // True only while the handler is reading or writing its OWN policy file
 // (inside maybeLoadPolicy / maybeFlush / flushPolicy). Those file ops
 // raise std::read / std::write interrupts that re-enter this same
-// handler. We approve them directly (see `_handler`) — otherwise the
+// handler. We approve them directly (see `_handler`). Otherwise the
 // `_policy == null` default-reject would veto the `with approve` on the
 // file op (any handler can veto an interrupt), the load/save would fail,
 // and every real interrupt would fall through to prompting.
@@ -259,7 +171,10 @@ export def checkPolicy(
   interrupt: Record<string, any>,
 ) {
   """
-  Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule. Policy is a JSON object keyed by interrupt effect, where each effect maps to an ordered array of rules with optional match fields (glob patterns) and an action.
+  Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule.
+
+  @param policy - Ordered rules keyed by interrupt effect; each rule has optional glob-pattern match fields and an action.
+  @param interrupt - The interrupt to evaluate.
   """
   return _checkPolicy(policy, interrupt)
 }
@@ -275,7 +190,9 @@ export def checkPolicy(
  */
 export def validatePolicy(policy: Record<string, any>): Result<void> {
   """
-  Validate that a policy object is well-formed. Returns { success: true } if valid, or { success: false, error: "..." } with a description of the problem.
+  Validate that a policy object is well-formed. Returns { success: true } if valid, or { success: false, error } describing the problem.
+
+  @param policy - The policy object to validate.
   """
   return _validatePolicy(policy)
 }
@@ -302,7 +219,7 @@ export def validatePolicy(policy: Record<string, any>): Result<void> {
  * are skipped silently. Effects not present in `fields` return `{}`.
  *
  * Most callers should use `recordScopedRule` instead, which calls
- * this internally; `buildScopedMatch` is exposed for callers
+ * this internally. `buildScopedMatch` is exposed for callers
  * assembling rules by hand or implementing a custom UI that needs
  * to preview the match before recording.
  */
@@ -311,9 +228,10 @@ export def buildScopedMatch(
   fields: ScopedRuleFields,
 ): Record<string, string> {
   """
-  Given the per-effect ScopedField[] config, build a match object pinned
-  to the meaningful fields of this interrupt. Returns {} when the effect
-  isn't in the fields map. Pure.
+  Build a match object for an interrupt, pinned to the configured fields. Returns {} when the effect has no configured fields.
+
+  @param intr - The interrupt whose data fields to pin.
+  @param fields - Per-effect config naming which data fields to pin.
   """
   let specs: ScopedField[] = []
   if (fields[intr.effect] != undefined) {
@@ -361,13 +279,11 @@ export def recordRule(
   action: "approve" | "reject",
 ): Policy {
   """
-  Return a new policy with a catch-all rule for `effect` appended.
-  First-match-wins inside `checkPolicy`, so a single bare rule covers
-  every future interrupt of that effect. Pure — no I/O.
+  Return a new policy with a catch-all rule for an effect appended. A single bare rule covers every future interrupt of that effect.
 
-  WARNING: append order matters. A second call for the same effect with
-  a different action is dead — the earlier rule wins. Reset the effect's
-  rules first if you want to flip a previous decision.
+  @param policy - The policy to extend (not mutated).
+  @param effect - The interrupt effect the rule applies to.
+  @param action - Whether to approve or reject matching interrupts.
   """
   const existing = policy[effect] || []
   const next: Policy = {
@@ -390,9 +306,9 @@ export def recordRule(
  * broader rejection: the scoped approval applies first when it
  * matches, otherwise the catch-all takes over.
  *
- * The action is always `"approve"` — the (ap) UI affordance only
- * makes sense in the affirmative direction. Build a scoped reject
- * by hand if you need one.
+ * The action is always `"approve"`, because the (ap) UI affordance
+ * only makes sense in the affirmative direction. Build a scoped
+ * reject by hand if you need one.
  */
 export def recordScopedRule(
   policy: Policy,
@@ -400,9 +316,11 @@ export def recordScopedRule(
   fields: ScopedRuleFields,
 ): Policy {
   """
-  Return a new policy with a scoped approve rule prepended for the
-  interrupt's effect. Prepended (not appended) so the more-specific
-  rule wins over any later catch-all in first-match-wins order. Pure.
+  Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the configured fields, so it approves only future interrupts matching this one's field values.
+
+  @param policy - The policy to extend (not mutated).
+  @param intr - The interrupt whose field values to pin.
+  @param fields - Per-effect config naming which data fields to pin.
   """
   const match = buildScopedMatch(intr, fields)
   const existing = policy[intr.effect] || []
@@ -429,13 +347,13 @@ export type ParsePolicyFailure = {
 
 /**
  * Read + JSON-parse + validate a policy file from disk. Returns `{}`
- * (an empty policy) on any failure — missing file, unreadable
- * permissions, malformed JSON, or schema-validation error — after
- * printing a warning so the user knows their saved decisions did
- * not carry over.
+ * (an empty policy) on any failure: a missing file, unreadable
+ * permissions, malformed JSON, or a schema-validation error. It also
+ * prints a warning so the user knows their saved decisions did not
+ * carry over.
  *
  * Raises `std::read` (so the caller's handler chain controls
- * whether the read is approved); the CLI handler auto-approves
+ * whether the read is approved). The CLI handler auto-approves
  * this via `with approve`.
  */
 export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
@@ -491,12 +409,12 @@ export def setPolicy(path: string, policy: Policy) {
 
 /**
  * Validate a `Policy` and write it as JSON to `path`. Throws (returns
- * `Failure`) if validation fails — invalid policies are never
+ * `Failure`) if validation fails. Invalid policies are never
  * persisted.
  *
  * `allowedPaths` is a defense-in-depth allow-list passed straight
  * through to the underlying `write`. Pass `[]` (the default) only
- * when the path is trusted; otherwise restrict it to a known
+ * when the path is trusted. Otherwise restrict it to a known
  * directory like `["${env("HOME")}/.myapp"]`.
  */
 export def writePolicyFile(
@@ -505,11 +423,11 @@ export def writePolicyFile(
   allowedPaths: string[] = [],
 ) {
   """
-  Validate and write a policy to a JSON file. Throws if the policy is invalid. Set allowedPaths to restrict where the policy file may be written.
+  Validate and write a policy to a JSON file. Throws if the policy is invalid.
 
-  @param path - The destination file path
-  @param policy - The policy to write
-  @param allowedPaths - Only allow writing under these path prefixes
+  @param path - The destination file path.
+  @param policy - The policy to write.
+  @param allowedPaths - Restrict writes to these path prefixes; empty allows any path.
   """
   return try _writePolicyFile(path, policy, allowedPaths)
 }
@@ -517,7 +435,7 @@ export def writePolicyFile(
 // Lazy-load the on-disk policy on first handler invocation. Uses
 // flip-flag-first so the std::read interrupt's chain re-entry sees
 // `_policyLoaded == true` and returns without recursing. Missing or
-// invalid policy files start from an empty policy; direct callers can
+// invalid policy files start from an empty policy. Direct callers can
 // inspect `parsePolicyFile` for the exact failure status.
 def maybeLoadPolicy() {
   if (!_policyLoaded) {
@@ -537,7 +455,7 @@ def maybeLoadPolicy() {
 // as `maybeLoad`. Runs at the top of every handler invocation so a
 // decision recorded on turn N is on disk before turn N+1's first
 // interrupt fires. Decisions on the FINAL interrupt of a session
-// may not flush — `flushPolicy()` is the escape hatch for that.
+// may not flush. `flushPolicy()` is the escape hatch for that.
 def maybeFlush() {
   if (_pendingSave) {
     // flip FIRST
@@ -551,7 +469,7 @@ def maybeFlush() {
 /**
  * Force-write the `cliPolicyHandler`'s in-memory policy to disk
  * now. Use between user turns when you want the **last** decision
- * of a session persisted: the handler's own auto-flush runs at the
+ * of a session persisted. The handler's own auto-flush runs at the
  * top of the next interrupt, so a decision recorded on the final
  * interrupt of a turn won't survive a crash unless you call this.
  *
@@ -569,7 +487,7 @@ export def flushPolicy() {
 }
 
 // Human-readable summary of the match `buildScopedMatch` would
-// produce — shown next to the (ap) prompt so the user sees the
+// produce, shown next to the (ap) prompt so the user sees the
 // exact rule they're agreeing to before they say yes.
 def describeScopedMatch(intr: any): string {
   const match = buildScopedMatch(intr, globalCliPolicyOpts.fields)
@@ -588,8 +506,8 @@ def describeScopedMatch(intr: any): string {
  * Result returned by `askUser`. When the user picks a known key,
  * `action` is the corresponding `Decision` and `reason` is null.
  * When `allowFreeText` lets the user type a free-form rejection
- * reason, `action` is `"reject"` and `reason` is the typed text —
- * the handler uses it as the reject reason directly, skipping the
+ * reason, `action` is `"reject"` and `reason` is the typed text.
+ * The handler uses it as the reject reason directly, skipping the
  * follow-up "Why are you rejecting?" prompt.
  */
 type AskUserResult = {
@@ -598,8 +516,8 @@ type AskUserResult = {
 }
 
 // Render a `std::edit` interrupt's payload as a colored diff. `payload` is
-// the interrupt's `data` ({filename, before, after, ...}). The filename is
-// shown as a header; the change itself is rendered as a unified diff.
+// the interrupt's `data` ({filename, before, after, ...}). It shows the
+// filename as a header and renders the change as a unified diff.
 def renderEditDiff(payload: any): string {
   let lines = []
   lines.push(color.yellow("⏺ Edit: ${payload.filename}"))
@@ -620,11 +538,11 @@ def renderEditDiff(payload: any): string {
 // Render the data of one interrupt for the approval prompt. `data` is the
 // interrupt's payload (`intr.data`); `effect` is `intr.effect`, used to
 // special-case effects that have a nicer representation than a key/value
-// table — currently `std::edit`, which renders as a diff.
+// table, currently `std::edit`, which renders as a diff.
 def prettyPrintInterruptData(data: any, effect: string = ""): string {
-  // `null` is reported as `typeof == "object"` by JS, so guard
-  // explicitly — otherwise `for (key in data)` would throw and crash
-  // the interrupt prompt.
+  // JS reports `null` as `typeof == "object"`, so guard explicitly.
+  // Otherwise `for (key in data)` would throw and crash the interrupt
+  // prompt.
   if (data == null) {
     return ""
   }
@@ -634,9 +552,9 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
   }
 
   // An edit reads best as a diff. Show any non-content metadata (e.g.
-  // `dir`) as a table, then the change as a colored diff. `before`/`after`
-  // (huge, shown in the diff), `edits` (the raw op list, redundant with the
-  // diff), and `filename` (already in the diff header) are excluded.
+  // `dir`) as a table, then the change as a colored diff. We exclude
+  // `before`/`after` (huge, shown in the diff), `edits` (the raw op list,
+  // redundant with the diff), and `filename` (already in the diff header).
   if (effect == "std::edit") {
     const meta = renderObjAsTable(data, excludeKeys: ["before", "after", "filename", "edits"])
     const editDiff = renderEditDiff(data)
@@ -647,7 +565,7 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields
-  // the ELEMENTS, not indices — so the object branch below would pass a
+  // the ELEMENTS, not indices, so the object branch below would pass a
   // non-string element straight into `text()` and crash `render` with
   // `content.split is not a function`. Handle arrays explicitly, keyed
   // by index, recursing into each element.
@@ -694,8 +612,8 @@ def renderObjAsTable(obj: Record<string, any>, excludeKeys: string[] = null): st
 // Renders as a modal over the active repl(); falls back to plain print
 // + input when no REPL is running (e.g. headless agent runs).
 //
-// `allowFreeText: true` is passed to `chooseOption` so the user can
-// type a rejection reason instead of picking a key — that single
+// We pass `allowFreeText: true` to `chooseOption` so the user can
+// type a rejection reason instead of picking a key. That single
 // keystroke flow replaces the old two-step "(r), then type reason".
 def askUser(intr: any): AskUserResult {
   // `!= null` compiles to `!== null` (Agency strict equality), so an
@@ -738,8 +656,8 @@ def askUser(intr: any): AskUserResult {
 
   // `allowCancel: true` makes Escape cancel the whole request (raises a
   // cancellation that unwinds the turn back to the REPL prompt) instead of
-  // re-prompting. Rejecting a single action (and optionally telling the
-  // agent what to do instead) is still available via the "r" option.
+  // re-prompting. The "r" option still lets you reject a single action
+  // (and optionally tell the agent what to do instead).
   const answer = withLock("std::tty") as {
     return chooseOption(title, body, items, allowFreeText: true, allowCancel: true)
   }
@@ -781,8 +699,8 @@ export def _handler(intr: any): any {
   // Re-entrancy guard: while we read/write our OWN policy file (inside
   // maybeLoadPolicy / maybeFlush below), that file op raises a nested
   // std::read / std::write that re-enters this handler. Approve it
-  // directly so the file op's own `with approve` actually takes effect
-  // — without this, the `_policy == null` default-reject (or a no-match
+  // directly so the file op's own `with approve` actually takes effect.
+  // Without this, the `_policy == null` default-reject (or a no-match
   // propagate) would veto it and the load/save would silently fail,
   // making every real interrupt prompt. See `_internalIo`.
   if (_internalIo) {
@@ -882,7 +800,7 @@ export def _handler(intr: any): any {
  *
  * Internal state (loaded policy, pending-save flag, options) is
  * module-level. Calling `cliPolicyHandler` more than once in the
- * same program silently overwrites the previous options — only the
+ * same program silently overwrites the previous options. Only the
  * last `file` / `fields` win. For multi-policy agents, fork the
  * module or use the pure primitives directly.
  *
@@ -892,29 +810,20 @@ export def _handler(intr: any): any {
  * expression), so you MUST bind the return value to a `const`
  * before using it. This also bypasses the typechecker's
  * handler-raises-interrupt rule, which only resolves direct
- * functionRef names — runtime safety is provided by the
- * flip-flag-first pattern inside the handler.
+ * functionRef names. The flip-flag-first pattern inside the handler
+ * provides runtime safety.
  *
  * @param file - Path to the on-disk policy file. Created on first
- *   save; the containing directory must already exist.
+ *   save. The containing directory must already exist.
  * @param fields - Per-effect config controlling the (ap) prompt
  *   option. Effects not present here don't offer (ap).
  */
 export def cliPolicyHandler(file: string, fields: ScopedRuleFields): any {
   """
-  CLI sugar for an interactive policy handler. Owns load + save +
-  prompt + record + return approve/reject. Install on the outermost
-  `handle`. Call exactly ONCE per program — internal state is module-
-  level.
+  CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
 
-  Users of this helper should bind the returned handler to a variable
-  before using it with `handle ... with`, e.g.:
-
-  const handler = cliPolicyHandler(file: ..., fields: ...)
-  handle { ... } with handler
-
-  @param file - Path to the on-disk policy file
-  @param fields - Per-effect config controlling the "approve-always-here" option
+  @param file - Path to the on-disk policy file.
+  @param fields - Per-effect config controlling the "approve-always-here" prompt option.
   """
   globalCliPolicyOpts = {
     file: file,

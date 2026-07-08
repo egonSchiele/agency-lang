@@ -4,15 +4,23 @@ name: "llm"
 
 # llm
 
-Pick which model and options `llm()` calls use at runtime.
+Choose which model and options your `llm()` calls use at runtime.
 
-`setModel` / `setLlmOptions` set defaults for subsequent `llm()` calls;
-`pickProvider` detects an available provider from API-key env vars.
+`setModel` and `setLlmOptions` set defaults for later `llm()` calls,
+and `pickProvider` finds an available provider from your API-key
+environment variables. Defaults are branch-scoped and survive
+interrupt/resume. A per-call `llm(..., { ... })` option always wins.
 
-Defaults are branch-scoped — a `fork`/`race` branch inherits the
-run-wide default, but a `setModel` inside the branch stays local — and
-they survive interrupt/resume. A per-call `llm(..., { ... })` option
-always overrides these defaults.
+```ts
+import { setModel, setLlmOptions } from "std::llm"
+
+node main() {
+  setModel("claude-opus-4-8")
+  setLlmOptions({ temperature: 0.2 })
+  const answer: string = llm("Say hello")
+  print(answer)
+}
+```
 
 ## Types
 
@@ -20,13 +28,13 @@ always overrides these defaults.
 
 Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
- *  model name — set it only when the name doesn't imply a provider (e.g.
+ *  model name. Set it only when the name doesn't imply a provider (e.g.
  *  a custom or local model).
 
 ```ts
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
- *  model name — set it only when the name doesn't imply a provider (e.g.
+ *  model name. Set it only when the name doesn't imply a provider (e.g.
  *  a custom or local model). */
 export type LlmDefaults = {
   model?: string;
@@ -38,7 +46,7 @@ export type LlmDefaults = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L35))
 
 ### HostedModelInfo
 
@@ -54,7 +62,7 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L134))
 
 ## Functions
 
@@ -65,7 +73,7 @@ setLlmOptions(opts: LlmDefaults)
 ```
 
 Set default options for subsequent llm() calls. Only the fields you
-  pass are changed; a per-call llm(..., { ... }) option overrides them.
+  pass are changed. A per-call llm(..., { ... }) option overrides them.
 
   @param opts - The default LLM options to merge in
 
@@ -75,7 +83,7 @@ Set default options for subsequent llm() calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L44))
 
 ### setModel
 
@@ -93,7 +101,7 @@ Set the default model for subsequent llm() calls.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L54))
 
 ### envVarFor
 
@@ -105,7 +113,7 @@ Return the environment variable that holds the API key for a recognized
   provider, or "" for an unrecognized name. Recognized: "anthropic"
   (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai" (OPENAI_API_KEY),
   "openrouter" (OPENROUTER_API_KEY), "litellm" (LITELLM_API_KEY). Note that
-  "litellm" also requires a base URL (LITELLM_BASE_URL); this returns only
+  "litellm" also requires a base URL (LITELLM_BASE_URL). This returns only
   the API-key var.
 
   @param provider - The provider name to map
@@ -118,7 +126,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L63))
 
 ### pickProvider
 
@@ -127,9 +135,9 @@ pickProvider(order: string[]): Result<string>
 ```
 
 Return the first provider in `order` whose API-key environment variable
-  is set, or a failure if none are. A provider is checkable when `envVarFor`
-  knows its key var (anthropic, google, openai, openrouter, litellm);
-  unrecognized names in `order` are skipped.
+  is set, or a failure if none are. Checkable providers are anthropic,
+  google, openai, openrouter, and litellm; unrecognized names in `order`
+  are skipped.
 
   @param order - Providers to check, highest preference first
 
@@ -141,7 +149,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L92))
 
 ### registerProviderModule
 
@@ -160,7 +168,7 @@ Load a provider module by path at runtime and register its custom provider
 |---|---|---|
 | path | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L122))
 
 ### listHostedModels
 
@@ -168,12 +176,12 @@ Load a provider module by path at runtime and register its custom provider
 listHostedModels(): HostedModelInfo[]
 ```
 
-All known hosted text models (baked catalog plus any refreshed data), for
-  discovery and model pickers. Backed by smoltalk's getAllModels.
+Return all known hosted text models (the built-in catalog plus any
+  refreshed data) for model discovery and pickers.
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L144))
 
 ### hostedModelInfo
 
@@ -194,7 +202,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L152))
 
 ### modelSupportsInput
 
@@ -204,8 +212,8 @@ modelSupportsInput(model: string, modality: string): boolean | null
 
 Whether a model accepts a given input modality ("image" or "pdf").
   Tri-state: true / false when the model catalog says so, null when the
-  model or its modality data is unknown. Treat null as "do not gate" —
-  that is the same rule llm() applies at send time.
+  model or its modality data is unknown. Treat null as "do not gate",
+  the same rule llm() applies at send time.
 
   @param model - The model name (e.g. "gpt-4o-mini")
   @param modality - "image" or "pdf"
@@ -219,7 +227,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L162))
 
 ### loadModelData
 
@@ -227,11 +235,10 @@ Whether a model accepts a given input modality ("image" or "pdf").
 loadModelData(path: string): Result<number>
 ```
 
-Load model data from a JSON file (the shape `agency models refresh` prints)
-  and register it for this program, so `llm()` and the model catalog
-  (`listHostedModels` / `hostedModelInfo`) recognize those models. Multiple
-  loads accumulate. Returns the number of models loaded, or a failure if the
-  file cannot be read.
+Load model data from a JSON file (the shape `agency models refresh`
+  prints) and register it so `llm()` and the model catalog recognize
+  those models. Multiple loads accumulate. Returns the number of models
+  loaded, or a failure if the file cannot be read.
 
   @param path - Path to a model-data JSON file
 
@@ -243,4 +250,4 @@ Load model data from a JSON file (the shape `agency models refresh` prints)
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L174))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L182))

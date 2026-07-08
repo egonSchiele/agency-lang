@@ -28,139 +28,42 @@ import {
  } from "agency-lang/stdlib-lib/ui.js"
 
 
-/**
-  ## Overview
-
-  Declarative terminal UI for interactive CLI agents. Two layers
-  cooperate so you can pick the level of abstraction that fits the
-  task:
-
-  - **Layer 1 — Builders + runLoop.** Pure-function builders
-    (`column`, `row`, `box`, `line`, `text`, `list`, `textInput`)
-    assemble an `Element` tree; `runLoop` owns the render → key →
-    re-render cycle and returns the final state when `isDone`
-    returns true.
-  - **Layer 2 — `repl()`.** A drop-in widget for chat-style agents.
-    Owns one transcript buffer plus a live status line, a slash
-    command palette, and a history-aware input bar. Submitted
-    prompts, `pushMessage(...)`, and string replies from `onSubmit`
-    all append to the transcript buffer; rendering projects that
-    buffer into the output pane. Backed by Layer 1; integrates with
-    `std::policy.cliPolicyHandler` so interrupt prompts render
-    through the active screen instead of fighting with the input bar.
-  - **Line-mode prompts — `select` / `autocomplete` / `prompt` /
-    `confirm`.** Thin wrappers over the `prompts` package for quick
-    one-off questions in plain line-buffered output (no alt-screen).
-    Use these when you do not have a `repl()` running and just need
-    to ask the user a single question. They throw if invoked inside
-    a `repl()` or when stdout is not a TTY. `prompt` (free-form text
-    input) accepts a `validate` callback designed for partial-
-    application capability constraint when handing the function to
-    an LLM as a tool. Note: named `prompt` rather than `text` to
-    avoid colliding with the Layer 1 `text` element builder above.
-
-  ### See also
-
-  `std::ui/layout` is the sibling module for *static* terminal output —
-  splash screens, summary panels, side-by-side columns. It exports
-  `box`, `row`, `column`, and several leaves with the same names as
-  this module; if you import from both, alias one set on import.
-
-  ## Usage: Layer 1 (custom widgets)
-
-  ```ts
-  import { runLoop, column, line, KeyEvent, Element } from "std::ui"
-
-  type S = { n: number; done: boolean }
-
-  def view(s: S): Element {
-    return column() as col {
-      col.line("count = ${s.n}", bold: true)
-      col.line("(↑ / ↓ to change, q to quit)")
-    }
-  }
-
-  def reduce(s: S, k: KeyEvent): S {
-    if (k.key == "up")   { return { ...s, n: s.n + 1 } }
-    if (k.key == "down") { return { ...s, n: s.n - 1 } }
-    if (k.key == "q")    { return { ...s, done: true } }
-    return s
-  }
-
-  def isDone(s: S): boolean { return s.done }
-
-  node main(): number {
-    const final = runLoop(initialState: { n: 0, done: false },
-                          render: view, handleKey: reduce, isDone: isDone)
-    return final.n
-  }
-  ```
-
-  ## Usage: Layer 2 (chat-style agent REPL)
+/** @module
+  Builds interactive terminal UIs for CLI agents. Assemble a screen from
+  builders like `column`, `row`, `box`, `text`, and `textInput`, then drive
+  the render loop with `runLoop`. For chat-style agents, `repl()` is a
+  drop-in widget bundling a scrollable transcript, a live status line, a
+  slash-command palette, and an input bar with history. For quick one-off
+  questions outside a `repl()`, use the line-mode prompts `select`,
+  `autocomplete`, `prompt`, and `confirm`.
 
   ```ts
   import { repl } from "std::ui"
-  import { cliPolicyHandler } from "std::policy"
 
-  def status(): { left: string, right: string } {
-    return { left: "agent", right: "" }
+  def status(): string {
+    return "ready"
   }
 
-  def onSubmitPrompt(prompt: string): any {
-    if (prompt == "/exit") {
-      return false
-    }
-    // ...call your model / route / tools here...
-    return "agent: <reply>"
+  def onLine(line: string): any {
+    return "you said: " + line
   }
 
   node main() {
-    const handler = cliPolicyHandler(file: ".policy.json", fields: {})
-    handle {
-      repl(status: status, onSubmit: onSubmitPrompt,
-           paletteCommands: { "/exit": "Exit" })
-    } with handler
-  }
-  ```
-
-  ## Usage: line-mode prompts
-
-  ```ts
-  import { select, prompt, confirm } from "std::ui"
-  import { isFailure, isSuccess } from "std::result"
-
-  node main() {
-    const pickResult = select(
-      message: "Pick a database",
-      items: [
-        { key: "pg",    label: "Postgres" },
-        { key: "mysql", label: "MySQL" },
-      ],
-    )
-    if (isFailure(pickResult)) { return }
-
-    // PFA capability constraint: bind `validate` before exposing
-    // `prompt` as an LLM tool so the LLM cannot override it.
-    const askName = prompt.partial(
-      validate: def(v: string): any {
-        if (v.length < 1) { return "name required" }
-        return true
-      },
-    )
-    const nameResult = askName(message: "Your name?")
-
-    const ok = confirm(message: "Proceed?")
-    if (isSuccess(ok) && ok.value) {
-      // ...go...
-    }
+    repl(status: status, onSubmit: onLine)
   }
   ```
 */
 
+// `repl()` integrates with `std::policy.cliPolicyHandler` so interrupt
+// prompts render through the active screen instead of fighting the input
+// bar. The line-mode `prompt` is named `prompt` (not `text`) to avoid
+// colliding with the `text` element builder.
+
+
 /**
- * Opaque tree node. Produced only by the builder functions below;
- * consumed only by `runLoop` and `renderOnce`. Users do not
- * construct one directly.
+ * Opaque tree node. The builder functions below produce it. Only
+ * `runLoop` and `renderOnce` consume it. Users do not construct one
+ * directly.
  */
 export type Element = {
   type: string;
@@ -199,8 +102,8 @@ export type KeyEvent = {
  * methods (`line`, `text`, `list`, `textInput`) don't.
  *
  * The methods are typed `any` because each one accepts a different
- * named-arg signature; full signatures are documented on the
- * top-level builders (`column`, `row`, etc.).
+ * named-arg signature. The top-level builders (`column`, `row`, etc.)
+ * document the full signatures.
  */
 export type Builder = {
   row: any;
@@ -215,18 +118,16 @@ export type Builder = {
 // ---- Leaf builders ----
 
 /**
- * A plain text element. No layout sizing — embed inside a `box` or
- * `column` for layout. Prefer `line` when you want a single-row
- * height-1 element.
+ * A plain text element. It carries no layout sizing, so embed it
+ * inside a `box` or `column` for layout. Prefer `line` when you want a
+ * single-row height-1 element.
  *
  * @param content - The text to render
  */
 export safe def text(content: string): Element {
   """
-  Build a plain text element. No layout sizing — embed inside a `box`
-  or `column` for layout. Prefer `line` when you want a single-row
-  height-1 element. Returns an opaque tree node; pass it to `runLoop`,
-  `renderOnce`, or a `Builder` method.
+  Build a plain text element. It carries no layout sizing of its own,
+  so nest it inside a container to position it.
 
   @param content - The text to render
   """
@@ -258,7 +159,7 @@ def _setStyleIfSet(style: any, key: string, value: any) {
 /**
  * A single-line text element with `height: 1`. The default keeps it
  * from stretching via flex when placed inside a `column`. Caller-
- * provided style is merged on top.
+ * provided style merges on top.
  *
  * @param content - The text to render
  */
@@ -273,10 +174,9 @@ export safe def line(
   fill: string = "",
 ): Element {
   """
-  Build a single-line text element with `height: 1`. The default keeps
-  it from stretching via flex when placed inside a `column`. Style
-  fields (`fg`, `bg`, `bold`) and layout fields (`flex`, `width`,
-  `height`) merge on top of the height-1 default.
+  Build a single-line text element (height 1) so it does not stretch
+  vertically inside a container. Style and layout fields merge on top
+  of that default.
 
   Set `fill` to a single character (e.g. `"─"`) to repeat that
   character across the unused width, turning an empty-content line
@@ -312,8 +212,8 @@ export safe def line(
 }
 
 /**
- * A scrollable selectable list. `selectedIndex` highlights one row;
- * out-of-range values are clamped by the renderer.
+ * A scrollable selectable list. `selectedIndex` highlights one row.
+ * The renderer clamps out-of-range values.
  *
  * @param items - The strings to display, one per row
  * @param selectedIndex - 0-based row to highlight (default 0)
@@ -330,7 +230,7 @@ export safe def list(
 ): Element {
   """
   Build a scrollable selectable list. `selectedIndex` highlights one
-  row; out-of-range values are clamped by the renderer. When `height`
+  row, and the renderer clamps out-of-range values. When `height`
   is smaller than `items.length`, the list auto-scrolls so the
   selected row stays visible.
 
@@ -362,8 +262,8 @@ export safe def list(
 
 /**
  * A single-line text input. The renderer displays `value` with a
- * cursor; key handling is the caller's responsibility (use `runLoop`'s
- * `handleKey` to append characters / handle backspace).
+ * cursor. The caller owns key handling; use `runLoop`'s `handleKey`
+ * to append characters and handle backspace.
  *
  * @param value - Current contents of the buffer
  */
@@ -377,9 +277,8 @@ export def textInput(
 ): Element {
   """
   Build a single-line text input. The renderer displays `value` with
-  a cursor; key handling is the caller's responsibility — use
-  `runLoop`'s `handleKey` to append printable characters and process
-  backspace / enter as the state machine sees fit.
+  a cursor. The caller owns key handling: append printable characters
+  and process backspace / enter in the loop's key handler.
 
   @param value - Current contents of the buffer
   @param flex - Flex grow factor (typical: 1 inside a row)
@@ -456,6 +355,9 @@ def _makeBuilder(kids: any[]): Builder {
 /**
  * A vertical container. Children stack top-to-bottom. The trailing
  * block receives a fresh `Builder` to populate the column.
+ *
+ * Always pass at least one named arg: `column() as col { ... }` parses
+ * positionally, which lands the block in `flex`.
  */
 export safe def column(
   flex: number = null,
@@ -471,14 +373,9 @@ export safe def column(
   block: (Builder) -> void = null,
 ): Element {
   """
-  Build a vertical container. Children stack top-to-bottom. Pass a
-  trailing `as name { ... }` block to receive a fresh `Builder` that
-  appends children in source order. Container chaining is the primary
-  way to compose multi-section layouts.
-
-  Use named args for any layout/styling option (the parser otherwise
-  treats `column() as col { ... }` positionally and the block lands
-  in `flex`).
+  Build a vertical container; children stack top-to-bottom. Pass a
+  trailing `as name { ... }` block whose builder appends children in
+  source order.
 
   @param flex - Flex grow factor when nested inside a parent
   @param width - Fixed character width
@@ -493,7 +390,7 @@ export safe def column(
   @param block - Builder callback; appended children populate the column
   """
   const kids: any[] = []
-  // `block` is optional — guard so empty containers (and parser
+  // `block` is optional. Guard so empty containers (and parser
   // mis-binds that leave `block` null) don't crash at runtime.
   if (block != null) {
     block(_makeBuilder(kids))
@@ -535,10 +432,9 @@ export safe def row(
   block: (Builder) -> void = null,
 ): Element {
   """
-  Build a horizontal container. Children stack left-to-right. Pass a
-  trailing `as name { ... }` block to receive a `Builder` for the
-  row's contents. All other arguments mirror `column`; see that
-  function for full parameter docs.
+  Build a horizontal container; children stack left-to-right. Pass a
+  trailing `as name { ... }` block whose builder appends children in
+  source order.
 
   @param flex - Flex grow factor when nested inside a parent
   @param width - Fixed character width
@@ -593,11 +489,9 @@ export safe def box(
   block: (Builder) -> void = null,
 ): Element {
   """
-  Build a direction-neutral container. Use when you want to apply
-  styling (border, padding, background) without forcing a row/column
-  layout, e.g. as a flex spacer (`box(flex: 1) as _ {}`). All other
-  arguments mirror `column`; see that function for full parameter
-  docs.
+  Build a direction-neutral container. Use it to apply styling
+  (border, padding, background) without forcing a row/column layout,
+  e.g. as a flex spacer (`box(flex: 1) as _ {}`).
 
   @param flex - Flex grow factor when nested inside a parent
   @param width - Fixed character width
@@ -816,10 +710,9 @@ def _addTextInput(
 export def renderOnce(tree: Element) {
   """
   Render a single Element tree to the screen and return immediately.
-  Useful for static UI or first-paint scenarios. For interactive UI,
-  use `runLoop` instead.
+  Useful for static UI or first-paint scenarios.
 
-  @param tree - Opaque tree node built via the `column`/`row`/`box`/`line`/`text`/`list`/`textInput` builders
+  @param tree - The element tree to render
   """
   _renderOnce(tree)
 }
@@ -831,11 +724,9 @@ export def renderOnce(tree: Element) {
  */
 export def readKey(): KeyEvent {
   """
-  Read one key from the terminal. Blocks until a key is pressed.
-  Use sparingly — prefer `runLoop` for anything beyond a single
-  one-shot blocking prompt. Returns a `KeyEvent` whose `key` field
-  is either a named special key (`"up"`, `"enter"`, `"escape"`, ...)
-  or a single printable character.
+  Read one key from the terminal, blocking until a key is pressed.
+  Returns a `KeyEvent` whose `key` field is either a named special key
+  (`"up"`, `"enter"`, `"escape"`, ...) or a single printable character.
   """
   return _readKey()
 }
@@ -848,8 +739,8 @@ export def readKey(): KeyEvent {
  *
  * When `tickMs` is set, the loop also re-renders periodically even
  * if no key is pressed. This is what makes a live status line tick.
- * `handleKey` does NOT fire on ticks — `render` does (re-evaluates
- * any impure state your view reads).
+ * `handleKey` does NOT fire on ticks. Only `render` does,
+ * re-evaluating any impure state your view reads.
  *
  * @param initialState - The opening state record
  * @param render       - Pure (state) -> Element. Re-runs every tick / key.
@@ -871,7 +762,7 @@ export def runLoop(
   state.
 
   When `tickMs` is set, the loop also re-renders periodically even
-  if no key is pressed — what makes a live status line tick.
+  if no key is pressed. This is what makes a live status line tick.
   `handleKey` does NOT fire on ticks; only `render` does (so it can
   re-read any impure state your view depends on).
 
@@ -889,7 +780,7 @@ export def runLoop(
 //
 // An opinionated REPL with a status line, scrollable output area, a
 // command palette triggered by `/`, and a persistent input history.
-// Owns the full terminal (alt-screen via `_runLoop`) — output lines
+// Owns the full terminal (alt-screen via `_runLoop`). Output lines
 // render into a flex:1 list region at the top of the column rather
 // than streaming into the native scroll region. Tradeoff: no native
 // scrollback / copy-paste while the REPL is running, but the layout
@@ -977,12 +868,10 @@ let _activeRepl: any = null
 
 export def pushMessage(message: string) {
   """
-  Append a styled message to the active repl() transcript. The
-  message renders on the next frame. The string may include std::ui
-  style markup or text returned by helpers such as color(...);
-  pushMessage stores it unchanged. When no repl() is active the call
-  falls back to print(), so the message is still surfaced — just
-  without REPL framing.
+  Append a message to the active REPL transcript. It renders on the
+  next frame. The string may include style markup, which the
+  transcript stores unchanged. When no REPL is active, the message
+  prints normally instead.
 
   @param message - Styled or plain text to append to the transcript
   """
@@ -998,9 +887,9 @@ export def pushMessage(message: string) {
 
 export def clearMessages() {
   """
-  Remove all messages from the active repl() transcript. Intended
-  for explicit "clear conversation" commands inside interactive
-  agents. Silent no-op when no repl() is active.
+  Remove all messages from the active REPL transcript. Use it for an
+  explicit "clear conversation" command. Silent no-op when no REPL is
+  active.
   """
   if (_activeRepl == null) {
     return
@@ -1013,6 +902,11 @@ export def clearMessages() {
   _triggerRender()
 }
 
+/**
+ * Raises if a `repl()` owns the screen, or if stdout is not a TTY.
+ * When a `repl()` owns the screen, use an in-TUI modal prompt instead.
+ * Non-TTY output has no fallback, so the caller must script around it.
+ */
 export def select(
   message: string,
   items: ChoiceItem[],
@@ -1020,26 +914,23 @@ export def select(
   hint: string = "",
 ): Result<string> {
   """
-  Line-mode arrow-key picker, backed by the `prompts` package. Returns
-  `success(key)` with the picked item's `key`, or `failure("cancelled")`
-  if the user pressed Ctrl+C / Escape. Unlike `autocomplete`, there is
-  no type-to-filter — only arrow-key navigation. When `allowFreeText`
-  is true, an extra `→ enter free text…` row is appended; picking it
-  triggers a follow-up text prompt whose value is returned instead of
-  a key.
-
-  Raises if called while a `repl()` owns the screen (use `chooseOption`
-  for in-TUI prompts) or if `process.stdout.isTTY` is false (non-TTY
-  output has no fallback; the caller must script around it).
+  Ask the user to pick from a list with arrow keys (no type-to-filter).
+  Returns `success(key)` with the chosen item's `key`, or
+  `failure("cancelled")` if the user pressed Ctrl+C / Escape. When
+  `allowFreeText` is true, the list appends an extra "enter free text"
+  row. Picking it prompts for text and returns that instead of a key.
 
   @param message - The question shown above the choices
-  @param items - The {key, label} rows
-  @param allowFreeText - Append a free-text sentinel row
+  @param items - The {key, label} rows to choose from
+  @param allowFreeText - Append a free-text entry row
   @param hint - Dim hint shown after the message
   """
   return _promptsSelect(message, items, allowFreeText, hint)
 }
 
+/**
+ * Raises if a `repl()` owns the screen or if stdout is not a TTY.
+ */
 export def autocomplete(
   message: string,
   items: ChoiceItem[],
@@ -1048,29 +939,32 @@ export def autocomplete(
   cancelOnEscape: boolean = false,
 ): Result<string> {
   """
-  Line-mode type-to-filter picker, backed by `prompts.autocomplete`.
-  Same return shape as `select`: `success(key)` on resolve,
-  `failure("cancelled")` on Ctrl+C / Escape. The filter matches each
-  item's `key` OR `label` (substring, case-insensitive). When
-  `allowFreeText` is true and the typed input matches nothing, a
-  synthetic `→ use as reason: "<input>"` row appears; picking it
-  returns the typed text verbatim instead of a key.
-
-  Raises on active `repl()` or non-TTY (see `select` for the same
-  contract).
+  Ask the user to pick from a list, filtering by typed text. Returns
+  `success(key)` with the chosen item's `key`, or `failure("cancelled")`
+  on Ctrl+C / Escape. The filter matches each item's `key` or `label`
+  (substring, case-insensitive). When `allowFreeText` is true and the
+  typed input matches no item, picking it returns the typed text
+  verbatim instead of a key.
 
   @param message - The question shown above the choices
-  @param items - The {key, label} rows
-  @param allowFreeText - Allow returning the typed input verbatim when no item matches
+  @param items - The {key, label} rows to choose from
+  @param allowFreeText - Return the typed input verbatim when no item matches
   @param hint - Dim hint shown after the message
-  @param cancelOnEscape - When true, pressing Escape raises a cancellation
-    (AgencyCancelledError) that unwinds the current run instead of
-    returning `failure("cancelled")`. Use for prompts where Escape should
-    abort the whole request rather than be re-asked.
+  @param cancelOnEscape - When true, Escape raises a cancellation that
+    unwinds the current run instead of returning `failure("cancelled")`.
+    Use it where Escape should abort the whole request rather than re-ask
   """
   return _promptsAutocomplete(message, items, allowFreeText, hint, cancelOnEscape)
 }
 
+/**
+ * Named `prompt` rather than `text` to avoid colliding with the Layer 1
+ * `text` element builder. Raises if a `repl()` owns the screen or if
+ * stdout is not a TTY.
+ *
+ * Bind `validate` via `.partial()` before handing `prompt` to an LLM as
+ * a tool so the LLM cannot override the constraint.
+ */
 export def prompt(
   message: string,
   initial: string = "",
@@ -1078,21 +972,11 @@ export def prompt(
   validate: any = null,
 ): Result<string> {
   """
-  Line-mode free-form text prompt, backed by `prompts.text`. Returns
-  `success(typed)` or `failure("cancelled")`. The empty string is a
-  legitimate value; check the Result tag, not truthiness.
-
-  Named `prompt` rather than `text` to avoid colliding with the
-  Layer 1 `text` element builder. Mental model: "prompt the user".
-
-  Raises on active `repl()` or non-TTY.
-
-  `validate`, when supplied, is `(value: string) => boolean | string`.
-  Return `true` to accept; return a string to reject and show that
-  string as the error message; `prompts` re-asks until the user
-  submits a valid value or cancels. Designed for partial-application
-  capability constraint: bind `validate` before handing `prompt` to
-  an LLM as a tool so the LLM cannot override it.
+  Ask the user for a line of free-form text. Returns `success(typed)`
+  or `failure("cancelled")`. The empty string is a legitimate value, so
+  check the Result tag rather than truthiness. When `validate` is
+  supplied, it runs on each submission: return `true` to accept, or an
+  error string to reject and re-ask.
 
   @param message - The question shown to the user
   @param initial - Pre-filled value
@@ -1102,13 +986,14 @@ export def prompt(
   return _promptsText(message, initial, hint, validate)
 }
 
+/**
+ * Raises if a `repl()` owns the screen or if stdout is not a TTY.
+ */
 export def confirm(message: string, initial: boolean = false): Result<boolean> {
   """
-  Line-mode yes/no toggle, backed by `prompts.toggle`. Returns
-  `success(true)` / `success(false)` / `failure("cancelled")`. Use the
-  Result tag — there are three outcomes, not two.
-
-  Raises on active `repl()` or non-TTY.
+  Ask the user a yes/no question. Returns `success(true)`,
+  `success(false)`, or `failure("cancelled")`. That is three outcomes,
+  so check the Result tag rather than treating it as a boolean.
 
   @param message - The question shown to the user
   @param initial - Default position (false = "no")
@@ -1138,6 +1023,12 @@ def indent(str: string): string {
   return res.join("\n")
 }
 
+/**
+ * When no `repl()` is running, falls back to a plain print + input
+ * loop that re-asks until the user answers. std::policy uses it to
+ * surface its approve/reject menus through the active REPL without
+ * fighting the input bar.
+ */
 export def chooseOption(
   title: string,
   body: string,
@@ -1146,34 +1037,20 @@ export def chooseOption(
   allowCancel: boolean = false,
 ): string {
   """
-  Show a modal choice prompt over the active repl() and block until
-  the user picks one. Returns the picked item's `key`. The modal
-  takes over key input — the REPL's input bar, palette, and history
-  navigation are inactive until the user confirms (Enter) or cancels
-  (Escape). The filter input narrows the visible items by substring
-  match on either `key` or `label`.
-
-  When no repl() is currently running, falls back to a plain
-  `print` + `input` loop that reprompts until the user types one of
-  the valid `key`s. Used by std::policy to surface its approve/reject
-  menus through the active REPL without fighting with the input bar.
-
-  When `allowFreeText` is true and the user's typed input doesn't
-  match any item key, the prompt resolves with the typed text
-  instead of reprompting. In the TUI modal this fires on Enter when
-  the typed filter narrows the visible items to zero; in line-mode
-  fallback it fires on any non-empty input that isn't a known key.
-  Empty input still reprompts. Callers (notably std::policy) use this
-  to collapse "pick reject + then type reason" into a single step.
+  Show a modal choice prompt and block until the user picks one. Returns
+  the chosen item's `key`. The modal takes over key input until the user
+  confirms (Enter) or cancels (Escape). Typing narrows the visible items
+  by substring match on `key` or `label`. When `allowFreeText` is true
+  and the typed text matches no item, it resolves with that text instead
+  of re-prompting (empty input still re-prompts).
 
   @param title - Modal heading (e.g. "Approve interrupt: shell::exec")
   @param body - Multi-line context shown above the choices (or "")
   @param items - The set of {key, label} choices to pick from
   @param allowFreeText - Accept free-form text in addition to item keys
-  @param allowCancel - When true, Escape cancels the whole request
-    (raises a cancellation that unwinds the run) instead of re-prompting,
-    and the menu shows an "Esc to cancel" hint. Default false preserves
-    the "must answer" contract for callers where skipping isn't safe.
+  @param allowCancel - When true, Escape cancels the whole request,
+    raising a cancellation that unwinds the run, instead of re-prompting.
+    The default of false enforces a "must answer" contract
   """
   if (_activeRepl != null) {
     return _openChoicePrompt(
@@ -1214,14 +1091,14 @@ export def chooseOption(
   // No-REPL fallback. Print the title/body banner ourselves, then
   // delegate to the new `autocomplete` primitive. We loop on
   // `failure("cancelled")` to preserve chooseOption's "must answer"
-  // contract — safety-critical callers like std::policy depend on
+  // contract. Safety-critical callers like std::policy depend on
   // Escape never letting the user skip the prompt. The non-TTY
   // throw lives inside `autocomplete()` (in TS); we don't need to
   // repeat it here.
   print("\n")
   // Cyan rule across the terminal as a visual divider before the
   // title/body banner. Inlined to avoid duplicating an exported
-  // `hline` here — the public one lives in `std::ui/cli`, and
+  // `hline` here. The public one lives in `std::ui/cli`, and
   // re-importing it would introduce a std::ui ↔ std::ui/cli cycle.
   // The string literal is bound to a `const` first because the
   // parser doesn't accept method calls directly on a string literal
@@ -1302,9 +1179,9 @@ def _busyLine(state: ReplState): string {
 
 /**
  * View: the full terminal. `state.transcript.messages` is the single
- * output buffer and is projected into an auto-scrolling list at the
- * top. Palette + status + input pin to the bottom because none of
- * them are flex; standard `flex-start` column layout packs flex:1
+ * output buffer, and the view projects it into an auto-scrolling list
+ * at the top. Palette + status + input pin to the bottom because none
+ * of them are flex. Standard `flex-start` column layout packs flex:1
  * first, then the fixed-height tail items.
  */
 // Maximum height of an open choice modal. Generous enough to fit a
@@ -1350,7 +1227,7 @@ def _choiceProjection(state: ReplState): any {
   if (cursor < 0) {
     cursor = 0
   }
-  // Pad short keys so the labels line up — most choice menus mix
+  // Pad short keys so the labels line up. Most choice menus mix
   // single-char keys (`a`) with two-char keys (`aa`). 4 wide gives
   // room for up to three-char keys (`yes`) with a trailing space.
   let itemLabels: string[] = []
@@ -1379,7 +1256,7 @@ def _choiceProjection(state: ReplState): any {
 
 def _replView(state: ReplState): Element {
   const status: { left: string; right: string; context: string | undefined } = state.config.status()
-  // `status.context` is optional — callers that pre-date the second
+  // `status.context` is optional. Callers that pre-date the second
   // status line return just `{left, right}`, so default to "".
   const contextLine: string = status.context ?? ""
   const paletteKeys = _filteredPaletteKeys(state)
@@ -1409,8 +1286,8 @@ def _replView(state: ReplState): Element {
   // as a positional call where the block lands in `flex`.
   return column(visible: true) as mainCol {
     mainCol.list(items: visibleMessages, selectedIndex: followIndex, flex: 1)
-    // Choice modal: bordered column above the status line. Keys are
-    // routed to `_replReduceChoice` when this is open, so the input
+    // Choice modal: bordered column above the status line. Keys
+    // route to `_replReduceChoice` when this is open, so the input
     // bar / palette / history navigation can't fire. When closed the
     // column collapses to zero rows via `visible: false`.
     mainCol.column(
@@ -1641,7 +1518,7 @@ def _appendInputCharacter(state: ReplState, character: string): ReplState {
 // Extract the text payload from a `key: "paste"` `KeyEvent`,
 // defaulting to the empty string when the terminal sent a paste
 // marker with no body. Pulled out so the `_appendPaste` call site
-// can stay a single expression inside a match arm — the typechecker
+// can stay a single expression inside a match arm. The typechecker
 // doesn't narrow `keyEvent.text` to `string` across the arm's
 // `if (keyEvent.text != null)` guard, and `keyEvent.text ?? ""`
 // synths as `number` (no special case for `??` in synthType yet).
@@ -1652,10 +1529,10 @@ def _pasteText(keyEvent: any): string {
   return keyEvent.text
 }
 
-// Append pasted text to the input buffer wholesale. Newlines are
-// preserved as `\n` (the input box grows to fit), so a paste of a
+// Append pasted text to the input buffer wholesale. It preserves
+// newlines as `\n` (the input box grows to fit), so a paste of a
 // multi-line snippet shows up exactly as it was on the clipboard.
-// Windows-style `\r\n` and bare `\r` are folded to `\n` so the
+// It folds Windows-style `\r\n` and bare `\r` to `\n` so the
 // renderer + reducer only have to think about one line terminator.
 def _appendPaste(state: ReplState, pasted: string): ReplState {
   let normalized = pasted.replaceAll("\r\n", "\n")
@@ -1670,8 +1547,9 @@ def _appendPaste(state: ReplState, pasted: string): ReplState {
 }
 
 // Clear the entire input buffer in one step. Bound to Ctrl+U to match
-// the bash readline / GNU Readline convention. Doesn't touch history
-// — the cleared content is gone, not pushed onto the history stack.
+// the bash readline / GNU Readline convention. Doesn't touch
+// history. The cleared content is gone, not pushed onto the history
+// stack.
 def _clearInputBuffer(state: ReplState): ReplState {
   return {
     ...state,
@@ -1824,8 +1702,8 @@ def _replReduceChoice(state: ReplState, keyEvent: KeyEvent): ReplState {
 }
 
 // Sync the modal slot from the TS bridge. The bridge owns the
-// pending-request slot because reducer states are returned as new
-// records on every keypress — TS cannot mutate them directly. The
+// pending-request slot because the reducer returns new records on
+// every keypress, so TS cannot mutate them directly. The
 // reducer copies the bridge's request into `state.choice` once
 // (when a prompt opens) and clears it once (when a prompt is
 // resolved/cancelled externally or torn down by _runReplLoop).
@@ -1856,7 +1734,7 @@ def _syncChoiceFromBridge(state: ReplState): ReplState {
 
 def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
   const state = _syncChoiceFromBridge(replState)
-  // Choice modal takes priority — locks out the input bar, palette,
+  // Choice modal takes priority. It locks out the input bar, palette,
   // and history navigation until the user picks (Enter) or cancels
   // (Escape). Ctrl-C still exits the whole REPL via the catch-all
   // path below; we don't special-case it here.
@@ -1882,7 +1760,7 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => _recallNextHistory(state)
     { key: "backspace" } if (state.input.buffer != "") => _removeInputCharacter(state)
     // Shift+Enter inserts a literal newline. Must come before the
-    // plain `enter` arms — match arms with more specific predicates
+    // plain `enter` arms. Match arms with more specific predicates
     // win, but only when listed before the more general one.
     { key: "enter", shift: true } => _appendInputCharacter(state, "\n")
     // Empty-buffer Enter is a no-op: skip writing a blank "You" row
@@ -1898,13 +1776,18 @@ def _replIsDone(state: ReplState): boolean {
   // Bridge signal (set by `_beginSubmit` when onSubmit returns false)
   // takes priority. We can't rely on mutating `state.done` from TS
   // because reducer states are returned as fresh records and `done`
-  // is a primitive — see `_signalReplExit` in lib/stdlib/ui.ts.
+  // is a primitive. See `_signalReplExit` in lib/stdlib/ui.ts.
   if (_peekReplExitSignal()) {
     return true
   }
   return state.done
 }
 
+/**
+ * A positive `tickMs` enables live status / spinner updates between
+ * keys but currently leaks one pinned runtime checkpoint per render,
+ * so prefer the event-driven default.
+ */
 export def repl(
   status: any,
   onSubmit: any,
@@ -1915,27 +1798,23 @@ export def repl(
   tickMs: number = null,
 ) {
   """
-  Drop-in REPL widget for interactive CLI agents. Bundles a
-  scrollable output area, a live status line, a slash-command
-  palette (triggered by `/`), and an input line with history
-  navigation. Owns the full terminal via runLoop (alt-screen) and
-  owns one transcript buffer. Submitted prompts, pushMessage(...),
-  and string replies from onSubmit all append to that buffer.
-  Returning false from onSubmit exits the REPL. While the REPL is
-  active, console.log / .warn / .error and raw stdout/stderr writes
-  from any code running underneath are captured and appended to the
-  transcript instead of being dropped behind the alt-screen.
+  Drop-in REPL widget for interactive CLI agents. Bundles a scrollable
+  output area, a live status line, a slash-command palette (triggered
+  by `/`), and an input line with history navigation. It owns the full
+  terminal (alt-screen) and one transcript buffer. Submitted prompts,
+  appended messages, and string replies from `onSubmit` all show up in
+  that buffer. Returning false from `onSubmit` exits. While it is
+  active, the transcript captures any console / stdout / stderr writes
+  from code running underneath, instead of losing them behind the
+  alt-screen.
 
   @param status - Re-evaluated every render; populates the status line
   @param onSubmit - Called with the submitted line; return a string to append or false to exit
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Reserved for future use (history persistence is v2)
-  @param historyMax - Trim oldest entries beyond this count
+  @param historyMax - Trim oldest history entries beyond this count
   @param paletteCommands - Map of /cmd -> description, iterated in order
-  @param tickMs - Render cadence in ms. Default null = event-driven
-  (status only re-renders on key events). A positive value enables
-  live status / spinner updates between keys but currently leaks
-  one pinned runtime checkpoint per render, so prefer the default.
+  @param tickMs - Render cadence in ms; null (default) is event-driven
   """
   let paletteCommandMap = paletteCommands
   if (paletteCommandMap == null) {
@@ -1974,7 +1853,7 @@ export def repl(
   _activeRepl = initial
   // `_runReplLoop` is the TS wrapper that installs the console
   // capture, runs the loop, and ALWAYS uninstalls in a finally
-  // block — even if the loop or any user callback throws. Agency
+  // block, even if the loop or any user callback throws. Agency
   // has no `try`/`finally`, so doing the install/uninstall here
   // directly would leave `console.log` / `process.stdout` rerouted
   // for the rest of the process on the error path. The transcript

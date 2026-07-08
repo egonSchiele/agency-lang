@@ -4,107 +4,35 @@ name: "calendar"
 
 # calendar
 
-## Usage
+Read and write Google Calendar events from Agency code. Authorizes once
+  via Google OAuth, then lists, creates, updates, and deletes events.
+
+  Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (OAuth 2.0 desktop
+  credentials from the Google Cloud console). The first run opens a browser
+  for consent. Agency stores the tokens locally and refreshes them automatically.
 
   ```ts
   import { authorizeCalendar, isCalendarAuthorized, listEvents, createEvent } from "std::calendar"
   import { env } from "std::system"
 
   node main() {
-    // One-time: opens browser for Google OAuth consent.
-    // This uses std::auth/oauth under the hood — tokens are encrypted and
-    // stored locally, and refreshed automatically on future runs.
     if (!isCalendarAuthorized()) {
       authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
     }
 
-    // List upcoming events
-    const events = listEvents()
-    print(events)
+    print(listEvents())
 
-    // Create a new event
-    const event = createEvent(
+    createEvent(
       summary: "Team meeting",
       start: "2026-05-10T10:00:00-07:00",
-      end: "2026-05-10T11:00:00-07:00",
-      description: "Weekly sync",
-      location: "Conference Room A"
+      end: "2026-05-10T11:00:00-07:00"
     )
-    print(event)
   }
   ```
 
-  ### Using std::date for convenient date construction
-
-  ```ts
-  import { createEvent, listEvents } from "std::calendar"
-  import { tomorrow, atTime, addMinutes, nextDayOfWeek, startOfWeek, endOfWeek } from "std::date"
-
-  node main() {
-    const tz = "America/Los_Angeles"
-
-    // "Tomorrow at 3pm for 1 hour"
-    const start = atTime(tomorrow(tz), "15:00", tz)
-    createEvent(summary: "Dentist", start: start, end: addMinutes(start, 60))
-
-    // "Next Monday at 10am for 30 min"
-    const monday = atTime(nextDayOfWeek("monday", tz), "10:00", tz)
-    createEvent(summary: "1:1 with manager", start: monday, end: addMinutes(monday, 30))
-
-    // List all events this week
-    const events = listEvents(timeMin: startOfWeek(), timeMax: endOfWeek())
-    print(events)
-  }
-  ```
-
-  You can also use `std::auth/oauth` directly for more control over the
-  authorization flow (e.g. custom scopes, port, or extra params):
-
-  ```ts
-  import { authorize, isAuthorized } from "std::auth/oauth"
-  import { env } from "std::system"
-  import { listEvents } from "std::calendar"
-
-  node main() {
-    if (!isAuthorized("google-calendar")) {
-      const clientId = env("GOOGLE_CLIENT_ID") catch ""
-      const clientSecret = env("GOOGLE_CLIENT_SECRET") catch ""
-      authorize("google-calendar",
-        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-        tokenUrl: "https://oauth2.googleapis.com/token",
-        clientId: clientId,
-        clientSecret: clientSecret,
-        scopes: "https://www.googleapis.com/auth/calendar",
-        extraAuthParams: "access_type=offline prompt=consent"
-      )
-    }
-
-    const events = listEvents()
-    print(events)
-  }
-  ```
-
-  ## Setup
-  1. Go to https://console.cloud.google.com
-  2. Create a project (or use an existing one)
-  3. Enable the Google Calendar API
-  4. Create OAuth 2.0 credentials (Desktop app type)
-  5. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars
-  6. Run your agent — it will open a browser for consent on first use
-
-  ## Authentication
-  `authorizeCalendar` is a convenience wrapper around `std::auth/oauth`. It handles
-  the OAuth 2.0 authorization code flow with PKCE, stores tokens in
-  `~/.agency/oauth/google-calendar.json`, and automatically refreshes expired
-  tokens. Tokens are encrypted at rest if a system keyring (macOS Keychain /
-  Linux Secret Service) or `AGENCY_OAUTH_KEY` env var is available; otherwise
-  they are stored as plaintext.
-
-  ## Date/time formats
-  - For timed events: ISO 8601 with timezone, e.g. "2026-05-10T10:00:00-07:00"
-  - For all-day events: date only, e.g. "2026-05-10"
-  - Note: for all-day events, `end` is exclusive. A single-day event on May 10
-    should have start="2026-05-10" and end="2026-05-11".
+  Times use ISO 8601 with a timezone (e.g. "2026-05-10T10:00:00-07:00"), or a
+  date only (e.g. "2026-05-10") for all-day events. Pair with `std::date`
+  helpers like `tomorrow` and `atTime` for convenient date construction.
 
 ## Types
 
@@ -118,7 +46,7 @@ effect std::authorizeCalendar {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L52))
 
 ### std::listEvents
 
@@ -130,7 +58,7 @@ effect std::listEvents {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L53))
 
 ### std::createEvent
 
@@ -144,7 +72,7 @@ effect std::createEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L54))
 
 ### std::updateEvent
 
@@ -157,7 +85,7 @@ effect std::updateEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L55))
 
 ### std::deleteEvent
 
@@ -168,7 +96,7 @@ effect std::deleteEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L56))
 
 ## Functions
 
@@ -178,7 +106,7 @@ effect std::deleteEvent {
 authorizeCalendar(clientId: string, clientSecret: string): Result
 ```
 
-Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once — tokens are stored locally and refreshed automatically.
+Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once. Agency stores the tokens locally and refreshes them automatically.
 
   @param clientId - Google OAuth client ID
   @param clientSecret - Google OAuth client secret
@@ -194,7 +122,7 @@ Authorize access to Google Calendar. Opens a browser for the user to sign in and
 
 **Throws:** `std::authorizeCalendar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L58))
 
 ### isCalendarAuthorized
 
@@ -206,7 +134,7 @@ Check if Google Calendar has been authorized. Returns true if OAuth tokens exist
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L72))
 
 ### listEvents
 
@@ -214,7 +142,7 @@ Check if Google Calendar has been authorized. Returns true if OAuth tokens exist
 listEvents(maxResults: number, timeMin: string, timeMax: string, query: string, calendarId: string): Result
 ```
 
-List upcoming events from Google Calendar. Returns an array of events with id, summary, description, location, start, end, and htmlLink. Parameters: maxResults (default 10), timeMin/timeMax (ISO 8601 datetime to filter range), query (free-text search), calendarId (default "primary").
+List upcoming events from Google Calendar. Returns an array of events, each with id, summary, description, location, start, end, and htmlLink.
 
   @param maxResults - Maximum number of events to return
   @param timeMin - Start of time range (ISO 8601)
@@ -236,7 +164,7 @@ List upcoming events from Google Calendar. Returns an array of events with id, s
 
 **Throws:** `std::listEvents`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L79))
 
 ### createEvent
 
@@ -244,7 +172,7 @@ List upcoming events from Google Calendar. Returns an array of events with id, s
 createEvent(summary: string, start: string, end: string, description: string, location: string, calendarId: string): Result
 ```
 
-Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8601 datetime or YYYY-MM-DD for all-day), end (same format), description (optional), location (optional), calendarId (default "primary"). Returns the created event.
+Create a new event on Google Calendar. Returns the created event.
 
   @param summary - Event title
   @param start - Start time (ISO 8601 or YYYY-MM-DD)
@@ -268,7 +196,7 @@ Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8
 
 **Throws:** `std::createEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L104))
 
 ### updateEvent
 
@@ -276,7 +204,7 @@ Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8
 updateEvent(eventId: string, summary: string, start: string, end: string, description: string, location: string, calendarId: string): Result
 ```
 
-Update an existing event on Google Calendar. Pass the eventId and any fields to change. Empty strings are treated as "don't change". Returns the updated event.
+Update an existing event on Google Calendar. Pass the eventId and any fields to change. An empty string means "don't change". Returns the updated event.
 
   @param eventId - ID of the event to update
   @param summary - New title (empty to keep)
@@ -302,7 +230,7 @@ Update an existing event on Google Calendar. Pass the eventId and any fields to 
 
 **Throws:** `std::updateEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L133))
 
 ### deleteEvent
 
@@ -326,4 +254,4 @@ Delete an event from Google Calendar by its event ID. Returns { deleted: true } 
 
 **Throws:** `std::deleteEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L163))

@@ -4,6 +4,25 @@ name: "memory"
 
 # memory
 
+Give an agent long-term memory. `remember` extracts facts from text
+and saves them to a knowledge graph, and `recall` retrieves the
+relevant ones later. Memory is off until you turn it on with
+`enableMemory`, and it stays local to the current branch.
+
+Memory reads and writes raise an approval interrupt, so call them
+`with approve` (or your own policy) to let them through.
+
+```ts
+import { enableMemory, remember, recall } from "std::memory"
+
+node main() {
+  enableMemory({ dir: "./mem" }) with approve
+  remember("Alice's favorite color is blue") with approve
+  const facts: string = recall("What is Alice's favorite color?") with approve
+  print(facts)
+}
+```
+
 ## Types
 
 ### MemoryConfig
@@ -18,7 +37,7 @@ export type MemoryConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L62))
 
 ## Effects
 
@@ -30,7 +49,7 @@ effect std::memory::enableMemory {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L70))
 
 ### std::memory::disableMemory
 
@@ -38,7 +57,7 @@ effect std::memory::enableMemory {
 effect std::memory::disableMemory {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L71))
 
 ### std::memory::remember
 
@@ -48,7 +67,7 @@ effect std::memory::remember {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L72))
 
 ### std::memory::recall
 
@@ -58,7 +77,7 @@ effect std::memory::recall {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L73))
 
 ### std::memory::forget
 
@@ -68,7 +87,7 @@ effect std::memory::forget {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L74))
 
 ## Functions
 
@@ -78,19 +97,17 @@ effect std::memory::forget {
 isMemoryActive(): boolean
 ```
 
-Return `true` iff there is an active memory frame on the current
-  branch's stateStack — i.e. memory is on and `remember`/`recall` will
-  reach a real store. Returns `false` when memory was never enabled,
-  was explicitly turned off via `disableMemory()`, or the call is
-  outside any runtime frame.
+Return `true` when memory is on for the current branch and reads and
+  writes will reach a real store. Returns `false` when memory was never
+  enabled, was turned off, or the call is outside any runtime frame.
 
-  Useful for branching in user code (`if (isMemoryActive()) { ... }`)
-  and for integration tests that want to verify push/pop semantics
-  without poking at the stateStack directly.
+Useful for branching in user code (`if (isMemoryActive()) { ... }`)
+ *  and for tests that verify memory is on without inspecting internal
+ *  state.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L79))
 
 ### setMemoryId
 
@@ -98,23 +115,18 @@ Return `true` iff there is an active memory frame on the current
 setMemoryId(id: string)
 ```
 
-Set the memory scope for this agent run. Call this before other
-  memory operations to scope reads and writes to a specific user,
-  thread, or workspace. If never called, the scope defaults to "default".
-
-  Memory must be enabled (either via `agency.json` or via
-  `enableMemory(...)`) for this to do anything; without configuration
-  this is a no-op.
-
-  The id is orthogonal to which memory frame is active — it persists
-  across `enableMemory` / `disableMemory` calls. If you want a fresh
-  scope when switching stores, call `setMemoryId(...)` explicitly.
-
-  Branch-scoped: a fork/race branch inherits the id active at fork
-  time, but a `setMemoryId(...)` inside a branch affects only that
-  branch — it does not leak to siblings or the parent after join.
+Set the memory scope for this agent run, so reads and writes target a
+  specific user, thread, or workspace. Call before other memory
+  operations. The scope defaults to "default" if never set. Memory must
+  be enabled for this to have any effect.
 
   @param id - A unique identifier for the memory scope (e.g. user ID)
+
+The id is independent of which memory configuration is active. It
+ *  persists as memory is turned on and off. Re-set it explicitly when
+ *  switching stores. Branch-scoped: a fork/race branch inherits the id
+ *  active at fork time, and a change inside a branch stays local to that
+ *  branch.
 
 **Parameters:**
 
@@ -122,7 +134,7 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L93))
 
 ### getMemoryId
 
@@ -130,15 +142,14 @@ Set the memory scope for this agent run. Call this before other
 getMemoryId(): string
 ```
 
-Return the current memory scope id (the value last passed to
-  `setMemoryId`, or "default" if it was never set or memory is not
-  active). Reads the scope visible to the current execution branch.
+Return the current memory scope id, or "default" if it was never set
+  or memory is not active.
 
   @returns The active memory scope id
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L105))
 
 ### enableMemory
 
@@ -146,29 +157,26 @@ Return the current memory scope id (the value last passed to
 enableMemory(config: MemoryConfig)
 ```
 
-Turn memory on for the current execution branch using `config`.
-
-  Pushes a new memory frame onto the active stateStack. Storage is
-  shared process-wide by absolute directory, so multiple calls
-  (across runs, forks, or modules) that point at the same dir share
-  one underlying store.
-
-  Same-dir push is a no-op — the common pattern of declaring
-  `static const _ = enableMemory({...})` AND calling
-  `enableMemory({...})` from `main()` is safe. Pushing a different
-  dir stacks the new frame on top; pop with `disableMemory()` or
-  use the block form `memory({...}) as { ... }` for lexical scoping.
-
-  `config.dir` is resolved against `process.cwd()` (NOT the module
-  dir, deliberately — mirrors how `agency.json`'s `memory.dir` is
-  resolved so the same string in JSON and in code points at the same
-  place). The directory is auto-created if missing.
-
-  Branch-scoped: a fork/race branch inherits the memory config active
-  at fork time, but `enableMemory`/`disableMemory` inside a branch
-  affect only that branch — not its siblings or the parent after join.
+Turn memory on for the current execution branch using `config`. The
+  directory in `config.dir` is created if missing. Enabling a directory
+  that is already active is a no-op.
 
   @param config - Memory configuration with `dir` required
+
+Storage is shared process-wide by absolute directory, so calls
+ *  (across runs, forks, or modules) that point at the same dir share one
+ *  store. Enabling the same dir again is a no-op, so declaring
+ *  `static const _ = enableMemory({...})` AND calling it from `main()` is
+ *  safe. Enabling a different dir stacks on top. Turn it off with
+ *  `disableMemory()` or use the block form for lexical scoping.
+ *
+ *  `config.dir` is resolved against `process.cwd()`, not the module dir.
+ *  This deliberately mirrors how `agency.json`'s `memory.dir` resolves, so
+ *  the same string in JSON and in code points at the same place.
+ *
+ *  Branch-scoped: a fork/race branch inherits the config active at fork
+ *  time, and enabling/disabling inside a branch stays local to that
+ *  branch.
 
 **Parameters:**
 
@@ -178,7 +186,7 @@ Turn memory on for the current execution branch using `config`.
 
 **Throws:** `std::memory::enableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L129))
 
 ### disableMemory
 
@@ -186,20 +194,19 @@ Turn memory on for the current execution branch using `config`.
 disableMemory()
 ```
 
-Pop the top memory frame from the current branch's stateStack.
+Turn off memory for the current branch by removing the most recently
+  enabled memory configuration.
 
-  Frame-scoped: a `disableMemory()` inside a fork branch only
-  affects that branch.
-
-  WARNING: this pops whatever is on top, including the JSON-seeded
-  bottom frame from `agency.json`. Library authors should not call
-  this casually — they will shadow the caller's configured memory.
-  Prefer the block form `memory({...}) as { ... }` for lexical
-  scoping, which restores the previous frame on exit.
+Removes whatever memory configuration is on top, including a bottom
+ *  frame seeded from `agency.json`. Library authors should not call this
+ *  casually. It shadows the caller's configured memory. Prefer the block
+ *  form `memory({...}) as { ... }`, which restores the previous
+ *  configuration on exit. Branch-scoped: a call inside a fork branch stays
+ *  local to that branch.
 
 **Throws:** `std::memory::disableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L150))
 
 ### memory
 
@@ -207,20 +214,10 @@ Pop the top memory frame from the current branch's stateStack.
 memory(config: MemoryConfig, block: () => any): Result
 ```
 
-Run `block` with `config` pushed as the active memory frame; pop
-  the frame when the block returns (or fails). Mirrors the `guard()`
-  pattern in `std::thread` so push/pop balancing flows through the
-  same `try` expression — Agency has no `finally`, so the agency-side
-  body uses `try block()` to capture the result and runs `pop` after.
-
-  The pop only fires when the push actually happened: `_pushMemoryFrame`
-  returns `false` if the new frame's dir matches the current top
-  (dedup), and the matching no-pop preserves the caller's frame
-  instead of unbalancing it. This fixes the prior `_memoryBlock`
-  unbalanced-pop bug.
-
-  Returns a `Result` (success holds the block's return value, failure
-  holds an error from inside the block). Same convention as `guard()`.
+Run `block` with `config` as the active memory configuration, then
+  restore the previous configuration when the block returns or fails.
+  Returns a `Result`: success holds the block's return value, failure
+  holds an error raised inside the block.
 
   Example:
   const r = memory({ dir: "./mem-user-a" }) as {
@@ -228,7 +225,7 @@ Run `block` with `config` pushed as the active memory frame; pop
   }
 
   @param config - Memory configuration with `dir` required
-  @param block - The code to run with the frame active
+  @param block - The code to run with the configuration active
 
 **Parameters:**
 
@@ -239,7 +236,7 @@ Run `block` with `config` pushed as the active memory frame; pop
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L160))
 
 ### remember
 
@@ -247,14 +244,8 @@ Run `block` with `config` pushed as the active memory frame; pop
 remember(content: string)
 ```
 
-Extract and store structured facts from the given text into the
-  knowledge graph. Uses the LLM to identify entities, observations,
-  and relations.
-
-  The LLM call is wrapped in a thread block so memory's prompts run
-  on an isolated message history and don't pollute the agent's main
-  conversation. Cost and tokens still flow through the runtime's
-  per-run accounting.
+Extract structured facts (entities, observations, and relations) from
+  the given text and store them in the knowledge graph.
 
   @param content - Natural language text containing facts to remember
 
@@ -266,7 +257,7 @@ Extract and store structured facts from the given text into the
 
 **Throws:** `std::memory::remember`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L183))
 
 ### recall
 
@@ -276,7 +267,7 @@ recall(query: string): string
 
 Retrieve relevant facts from the knowledge graph as a formatted
   string. Combines structured lookup, embedding similarity, and
-  LLM-powered retrieval; returns up to 10 entities ranked by match
+  LLM-powered retrieval. Returns up to 10 entities ranked by match
   quality.
 
   Returns an empty string if memory is not configured or nothing matches.
@@ -293,7 +284,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Throws:** `std::memory::recall`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L203))
 
 ### forget
 
@@ -301,13 +292,9 @@ Retrieve relevant facts from the knowledge graph as a formatted
 forget(query: string)
 ```
 
-Soft-delete facts matching the query from the knowledge graph.
-  Does not erase data — affected observations are marked with a
-  validTo timestamp so the audit trail is preserved.
-
-  The LLM call is wrapped in a thread block so memory's prompts run
-  on an isolated message history and don't pollute the agent's main
-  conversation.
+Soft-delete facts matching the query from the knowledge graph. Data is
+  not erased. Affected observations are marked with a validTo timestamp,
+  preserving the audit trail.
 
   @param query - A natural language description of what to forget
 
@@ -319,4 +306,4 @@ Soft-delete facts matching the query from the knowledge graph.
 
 **Throws:** `std::memory::forget`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L221))

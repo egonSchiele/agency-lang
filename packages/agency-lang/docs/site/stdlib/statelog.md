@@ -4,6 +4,22 @@ name: "statelog"
 
 # statelog
 
+Record and read back eval data from the statelog. Call `evalValue` and
+  `evalOutput` inside an agent to mark its user-facing input and response,
+  then read them from a saved trace with `evalValues`, `evalOutputs`,
+  `finalEvalOutput`, or the full `evalRecord`. `emit` sends a custom event
+  straight to the host.
+
+  ```ts
+  import { evalValue, evalOutput } from "std::statelog"
+
+  node main(question: string) {
+    evalValue(question)
+    let answer: string = llm(question)
+    evalOutput(answer)
+  }
+  ```
+
 ## Types
 
 ### StatelogEvalValue
@@ -17,7 +33,7 @@ export type StatelogEvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L28))
 
 ### StatelogEvalRecord
 
@@ -40,7 +56,7 @@ export type StatelogEvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L35))
 
 ## Functions
 
@@ -50,7 +66,11 @@ export type StatelogEvalRecord = {
 emit(data: any)
 ```
 
-Emit a custom event to the calling TypeScript code via the onEmit callback.
+Emit a custom event to the calling TypeScript code.
+
+  @param data - The event payload to emit.
+
+Delivered to the host via the `onEmit` callback.
 
 **Parameters:**
 
@@ -58,7 +78,7 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L53))
 
 ### evalValue
 
@@ -66,27 +86,21 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 evalValue(value: any)
 ```
 
-Record an eval value — a value that should be considered part of
-  the user-facing input to this agent. Captured in the statelog as
-  an `evalValueRecorded` event and surfaced by `agency eval extract`
-  on the `evalValues[]` field of the produced record.
+Record a value as part of the user-facing input to this agent. May be called multiple times per trace; all firings are collected in order.
 
-  Call this once per discrete recorded value. May be called multiple
-  times in a single trace; all firings are collected in order. The
-  consuming eval / judge / input definition decides what to do with
-  multiple firings.
+  @param value - The value to record. Any JSON-serializable type is accepted.
 
-  When no eval annotation exists in a trace, `eval extract` falls
-  back to a heuristic (first user-role message of the first LLM
-  call) and emits a warning. Annotating explicitly is preferred.
-
-  @param value - The value to record. Any JSON-serializable type is
-    accepted; stored as `unknown` in the eval record. Top-level
-    `undefined` records as `null`; top-level functions and symbols
-    throw a TypeError; nested functions, `undefined`, and symbols
-    follow JSON serialization rules; circular references and `bigint`
-    throw at the call site (with your stack), not later inside the
-    log writer.
+* Records the value in the statelog as an `evalValueRecorded` event, which
+ * `agency eval extract` surfaces on the `evalValues[]` field. When no eval
+ * annotation exists in a trace, `eval extract` falls back to a heuristic
+ * (first user-role message of the first LLM call) and emits a warning.
+ * Annotating explicitly is preferred. The consuming eval / judge / input
+ * definition decides what to do with multiple firings.
+ *
+ * Serialization: the value is stored as `unknown`. Top-level `undefined`
+ * records as `null`. Top-level functions and symbols throw a TypeError.
+ * Nested functions, `undefined`, and symbols follow JSON rules. Circular
+ * references and `bigint` throw at the call site.
 
 **Parameters:**
 
@@ -94,7 +108,7 @@ Record an eval value — a value that should be considered part of
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L75))
 
 ### evalOutput
 
@@ -102,25 +116,19 @@ Record an eval value — a value that should be considered part of
 evalOutput(value: any)
 ```
 
-Record an eval output — a value that should be considered the
-  agent's user-facing response. Captured in the statelog as an
-  `evalOutputRecorded` event and surfaced by `agency eval extract`
-  on the `evalOutputs[]` field of the produced record.
+Record a value as the agent's user-facing response. May be called multiple times per trace; all firings are collected in order.
 
-  Call this once per discrete user-facing response. May be called
-  multiple times in a single trace; all firings are collected in
-  order. The consuming eval / judge / task definition decides what
-  to do with multiple firings (e.g. a pairwise judge can use the
-  last firing).
+  @param value - The value to record. Any JSON-serializable type is accepted.
 
-  When no eval annotation exists in a trace, `eval extract` falls
-  back to a heuristic (last LLM completion on the top-level thread)
-  and emits a warning. Annotating explicitly is preferred — the
-  heuristic does NOT account for post-LLM processing the agent
-  applies before showing a response to the user.
-
-  @param value - The value to record. Any JSON-serializable type is
-    accepted; same serialization rules as `evalValue`.
+* Records the value in the statelog as an `evalOutputRecorded` event, which
+ * `agency eval extract` surfaces on the `evalOutputs[]` field. When no eval
+ * annotation exists in a trace, `eval extract` falls back to a heuristic
+ * (last LLM completion on the top-level thread) and emits a warning.
+ * Annotating explicitly is preferred, since the heuristic does not account
+ * for post-LLM processing the agent applies before showing a response. The
+ * consuming eval / judge / task definition decides what to do with multiple
+ * firings (e.g. a pairwise judge can use the last firing). Same
+ * serialization rules as `evalValue`.
 
 **Parameters:**
 
@@ -128,7 +136,7 @@ Record an eval output — a value that should be considered the
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L95))
 
 ### evalRecord
 
@@ -153,7 +161,7 @@ Parse a statelog JSONL file and return the same structured EvalRecord
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L104))
 
 ### evalValues
 
@@ -162,10 +170,11 @@ evalValues(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
 ```
 
 Parse a statelog JSONL file and return the values recorded as eval values.
-  This mirrors `new StatelogParser(path).evalValues()` in TypeScript.
 
-  @param statelogPath - Path to the statelog JSONL file to parse
-  @param allowedPaths - Optional allow-list of path prefixes
+  @param statelogPath - Path to the statelog JSONL file to parse.
+  @param allowedPaths - Optional allow-list of path prefixes; statelogPath must resolve under one.
+
+Mirrors `new StatelogParser(path).evalValues()` in TypeScript.
 
 **Parameters:**
 
@@ -176,7 +185,7 @@ Parse a statelog JSONL file and return the values recorded as eval values.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L118))
 
 ### evalOutputs
 
@@ -185,10 +194,11 @@ evalOutputs(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
 ```
 
 Parse a statelog JSONL file and return the values recorded as eval outputs.
-  This mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
 
-  @param statelogPath - Path to the statelog JSONL file to parse
-  @param allowedPaths - Optional allow-list of path prefixes
+  @param statelogPath - Path to the statelog JSONL file to parse.
+  @param allowedPaths - Optional allow-list of path prefixes; statelogPath must resolve under one.
+
+Mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
 
 **Parameters:**
 
@@ -199,7 +209,7 @@ Parse a statelog JSONL file and return the values recorded as eval outputs.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L129))
 
 ### finalEvalOutput
 
@@ -223,4 +233,4 @@ Parse a statelog JSONL file and return the final eval output, or null when
 
 **Returns:** `StatelogEvalValue | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L139))

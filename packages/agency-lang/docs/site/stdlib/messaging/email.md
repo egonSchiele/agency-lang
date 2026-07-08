@@ -4,10 +4,13 @@ name: "email"
 
 # email
 
-## Usage
+Send email from Agency code through Resend, SendGrid, or Mailgun. Each
+  provider reads its own API key from the environment: `RESEND_API_KEY`,
+  `SENDGRID_API_KEY`, or `MAILGUN_API_KEY` plus `MAILGUN_DOMAIN` (and optional
+  `MAILGUN_REGION` = "us" | "eu").
 
   ```ts
-  import { sendWithResend, sendWithSendGrid, sendWithMailgun } from "std::messaging/email"
+  import { sendWithResend } from "std::messaging/email"
 
   node main() {
     const result = sendWithResend(
@@ -20,23 +23,14 @@ name: "email"
   }
   ```
 
-  ## Partial Application for Safety
+  Use `.partial` to lock down who an agent can email:
 
   ```ts
-  // Create a constrained email sender that only sends to your team
   const teamEmail = sendWithResend.partial(
     from: "noreply@myco.com",
     allowList: ["team@myco.com", "alerts@myco.com"]
   )
-
-  // Now the agent can only email approved addresses
-  teamEmail(to: "team@myco.com", subject: "Deploy complete", text: "v2.1 is live")
   ```
-
-  ## Environment Variables
-  - Resend: `RESEND_API_KEY`
-  - SendGrid: `SENDGRID_API_KEY`
-  - Mailgun: `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` (optionally `MAILGUN_REGION` = "us" | "eu")
 
 ## Types
 
@@ -52,7 +46,7 @@ effect std::sendEmail {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L38))
 
 ## Functions
 
@@ -62,7 +56,7 @@ effect std::sendEmail {
 sendWithResend(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Set allowList to restrict recipients to specific addresses. Set blockList to reject specific addresses.
+Send an email using the Resend API.
 
   @param from - Sender email address
   @param to - Recipient email address
@@ -98,7 +92,7 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L41))
 
 ### sendWithSendGrid
 
@@ -106,7 +100,7 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 sendWithSendGrid(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass apiKey directly. Set allowList to restrict recipients to specific addresses. Set blockList to reject specific addresses.
+Send an email using the SendGrid API.
 
   @param from - Sender email address
   @param to - Recipient email address
@@ -142,7 +136,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L80))
 
 ### sendWithMailgun
 
@@ -150,7 +144,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 sendWithMailgun(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, domain: string, region: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN env vars, or pass them directly. Set allowList to restrict recipients to specific addresses. Set blockList to reject specific addresses.
+Send an email using the Mailgun API.
 
   @param from - Sender email address
   @param to - Recipient email address
@@ -190,4 +184,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L119))

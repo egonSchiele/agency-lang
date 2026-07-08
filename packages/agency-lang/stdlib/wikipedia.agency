@@ -1,3 +1,17 @@
+/** @module
+  Search Wikipedia and read article summaries or full text from Agency code.
+
+  ```ts
+  import { search, summary } from "std::wikipedia"
+
+  node main() {
+    const results = search("Ada Lovelace")
+    const intro = summary(results[0].title)
+    print(intro.extract)
+  }
+  ```
+*/
+
 import { _search, _summary, _article } from "agency-lang/stdlib-lib/wikipedia.js"
 
 type WikiSearchResult = {
@@ -25,7 +39,10 @@ effect std::wikipedia::article { title: string }
 
 export safe def search(query: string, limit: number = 5): WikiSearchResult[] {
   """
-  Search Wikipedia for articles matching the given query. Returns up to limit results (default 5).
+  Search Wikipedia for articles matching a query. Each result has a title, description, and excerpt.
+
+  @param query - The search query
+  @param limit - Maximum number of results to return
   """
   return interrupt std::wikipedia::search("Are you sure you want to search Wikipedia?", {
     query: query,
@@ -37,7 +54,9 @@ export safe def search(query: string, limit: number = 5): WikiSearchResult[] {
 
 export safe def summary(title: string): WikiSummary {
   """
-  Get a summary of a Wikipedia article by its title. Returns the title, description, intro extract, and URL.
+  Get a summary of a Wikipedia article. Returns the title, description, intro extract, and URL.
+
+  @param title - The article title
   """
   return interrupt std::wikipedia::summary("Are you sure you want to fetch this Wikipedia article summary?", {
     title: title
@@ -48,7 +67,9 @@ export safe def summary(title: string): WikiSummary {
 
 export safe def article(title: string): WikiArticle {
   """
-  Get the full text of a Wikipedia article by its title. Returns the title, full plain text content, and URL.
+  Get the full text of a Wikipedia article. Returns the title, plain-text content, and URL.
+
+  @param title - The article title
   """
   return interrupt std::wikipedia::article("Are you sure you want to fetch this Wikipedia article?", {
     title: title

@@ -134,3 +134,7 @@ Ideas for examples:
   - finds trends on a cron
   - tries to find subtle connections (eg connections between different tech companies -- who knows who?)
 - gifting assistant
+
+---
+
+Add a function in stdlib/agency.agency that can write the agency code that then gets compiled and executed by the other functions

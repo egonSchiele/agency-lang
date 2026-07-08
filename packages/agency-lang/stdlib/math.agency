@@ -1,8 +1,15 @@
+/** @module
+Small deterministic arithmetic helpers: round, add, subtract, multiply,
+and a divide that returns a Result so you can handle division by zero.
+*/
 import { _round } from "agency-lang/stdlib-lib/builtins.js"
 
 export safe def round(num: number, precision: number): number {
   """
-  A tool for rounding a number to a specified number of decimal places.
+  Round a number to a given number of decimal places.
+
+  @param num - The number to round
+  @param precision - The number of decimal places
   """
   return _round(num, precision)
 }

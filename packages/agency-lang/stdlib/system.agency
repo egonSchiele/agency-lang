@@ -13,6 +13,20 @@ import {
  } from "agency-lang/stdlib-lib/system.js"
 import { _notify } from "agency-lang/stdlib-lib/builtins.js"
 
+/** @module Talk to the host OS: read command-line args and environment
+variables, find the current directory, show notifications, take screenshots,
+open URLs, and read from stdin.
+
+  ```ts
+  import { args, env, notify } from "std::system"
+
+  node main() {
+    const home = env("HOME")
+    notify("Done", "Processed ${args().length} arguments")
+  }
+  ```
+*/
+
 effect std::screenshot { filepath: string }
 effect std::exit { code: number }
 effect std::setEnv { name: string, value: string }
@@ -21,7 +35,10 @@ effect std::notify { title: string, body: string }
 
 export def notify(title: string, message: string): boolean {
   """
-  A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
+  Show a native OS notification. Returns true if the notification was sent.
+
+  @param title - The notification title
+  @param message - The notification body text
   """
   return interrupt std::notify("Are you sure you want to show this notification?", {
     title: title,
@@ -30,6 +47,8 @@ export def notify(title: string, message: string): boolean {
   return _notify(title, message)
 }
 
+/** Ctrl-C, a race loss, or a time-guard abort interrupts an in-progress
+screencapture. */
 export def screenshot(
   filepath: string,
   x: number = -1,
@@ -39,15 +58,13 @@ export def screenshot(
   allowedPaths: string[] = [],
 ) {
   """
-  A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region. Set allowedPaths to restrict where the screenshot file may be written.
-
-  Cancellation: an in-progress screencapture is interrupted on Ctrl-C, race-loser, or time-guard abort.
+  Take a screenshot and save it to a file. Pass x, y, width, and height to capture a specific region.
 
   @param filepath - Path to save the screenshot
-  @param x - X coordinate of capture region
-  @param y - Y coordinate of capture region
-  @param width - Width of capture region
-  @param height - Height of capture region
+  @param x - X coordinate of the capture region; -1 for the full screen
+  @param y - Y coordinate of the capture region; -1 for the full screen
+  @param width - Width of the capture region; -1 for the full screen
+  @param height - Height of the capture region; -1 for the full screen
   @param allowedPaths - Only allow saving under these path prefixes
   """
   return interrupt std::screenshot("Are you sure you want to take a screenshot? This will capture the screen contents, which may include sensitive information.", {
@@ -59,7 +76,7 @@ export def screenshot(
 
 export def exit(code: number = 0) {
   """
-  Terminate the process immediately with the given exit code. Use with caution — this skips any cleanup or pending operations.
+  Terminate the process immediately with the given exit code. Use with caution. This skips any cleanup or pending operations.
   @param code - Exit code (0 for success, non-zero for failure)
   """
   return interrupt std::exit("Are you sure you want to exit the process?", {
@@ -82,20 +99,22 @@ export safe def cwd(): string {
   return _cwd()
 }
 
+/**
+ * By convention the compiled-JS directory is the same directory as the source
+ * `.agency` file. Use this to build paths to resources shipped alongside your
+ * Agency file (prompts, fixtures, etc.):
+ *
+ *   import { dirname } from "std::system"
+ *   import { join } from "std::path"
+ *   const promptDir = join(dirname(), "prompts")
+ *   const prompt = read("system.md", promptDir)
+ *
+ * Falls back to the current working directory when called outside any Agency
+ * execution frame (e.g. from non-Agency host code).
+ */
 export safe def dirname(): string {
   """
-  Return the absolute path of the directory containing the *compiled
-  JavaScript* of this Agency module. By convention this is the same
-  directory as the source `.agency` file. Use this to build paths to
-  resources shipped alongside your Agency file (prompts, fixtures, etc.):
-
-  import { dirname } from "std::system"
-  import { join } from "std::path"
-  const promptDir = join(dirname(), "prompts")
-  const prompt = read("system.md", promptDir)
-
-  Falls back to the current working directory when called outside any
-  Agency execution frame (e.g. from non-Agency host code).
+  Return the absolute path of the directory containing this Agency module's compiled JavaScript.
   """
   return _dirname()
 }
@@ -130,16 +149,18 @@ export safe def isTTY(): boolean {
 
 export safe def readStdin(): string {
   """
-  Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program; pair with `isTTY()` to decide whether to read.
+  Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program.
   """
   return _readStdin()
 }
 
+/** macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
+`open` subprocess. */
 export def openUrl(url: string): Result {
   """
-  Open a URL in the user's default browser. Currently macOS-only.
+  Open a URL in the user's default browser.
 
-  Cancellation: the in-flight `open` subprocess is killed on Ctrl-C, race-loser, or time-guard abort.
+  @param url - The URL to open
   """
   return interrupt std::openUrl("Are you sure you want to open this URL in the browser?", {
     url: url

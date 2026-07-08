@@ -4,6 +4,17 @@ name: "syntax"
 
 # syntax
 
+Syntax-highlight code, detect its language, and render colored diffs
+and patches for the terminal or the web.
+
+  ```ts
+  import { highlight } from "std::syntax"
+
+  node main() {
+    print(highlight("const x = 1", language: "typescript"))
+  }
+  ```
+
 ## Types
 
 ### HighlightMode
@@ -12,7 +23,7 @@ name: "syntax"
 export type HighlightMode = "shell" | "web"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L21))
 
 ### Style
 
@@ -23,18 +34,18 @@ A text style modifier applied to a token's color.
 export type Style = "bold" | "italic" | "underline" | "dim"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L36))
 
 ### TokenStyle
 
 * The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
- * termcolors named color (e.g. "red", "brightGreen"); `styles` optionally adds
+ * termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
  * bold / italic / underline / dim.
 
 ```ts
 /**
  * The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
- * termcolors named color (e.g. "red", "brightGreen"); `styles` optionally adds
+ * termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
  * bold / italic / underline / dim.
  */
 export type TokenStyle = {
@@ -43,18 +54,18 @@ export type TokenStyle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L43))
 
 ### ColorScheme
 
-* A custom color scheme. Each field is a highlight.js token class; the
+* A custom color scheme. Each field is a highlight.js token class. The
  * non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
  * `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
  * "vscode-dark" scheme.
 
 ```ts
 /**
- * A custom color scheme. Each field is a highlight.js token class; the
+ * A custom color scheme. Each field is a highlight.js token class. The
  * non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
  * `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
  * "vscode-dark" scheme.
@@ -105,7 +116,7 @@ export type ColorScheme = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L54))
 
 ## Constants
 
@@ -117,7 +128,7 @@ export static const colorSchemes: string[] = _builtinThemeNames
 
 **Type:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L100))
 
 ## Functions
 
@@ -130,7 +141,7 @@ detectLanguage(code: string): string
 Guess the programming language of a code snippet. Returns a highlight.js
   language name (e.g. "typescript", "python", "json"), or "plaintext" when it
   can't tell. Detection is heuristic and less reliable on short or ambiguous
-  snippets. Pass the result as the `language` argument to `highlight`.
+  snippets.
 
   @param code - The code snippet to detect the language of
 
@@ -142,7 +153,7 @@ Guess the programming language of a code snippet. Returns a highlight.js
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L23))
 
 ### highlight
 
@@ -150,28 +161,23 @@ Guess the programming language of a code snippet. Returns a highlight.js
 highlight(code: string, language: string, mode: HighlightMode, theme: string | ColorScheme): string
 ```
 
-A tool for syntax highlighting code snippets. Specify the programming language for accurate highlighting (e.g., "javascript", "python", "json"). Defaults to plain text if no language is provided.
-
-  Pick a color scheme by name, or pass a custom one. Named schemes:
-  "vscode-dark" (default), "github-dark", "monokai", "dracula", "nord",
-  "github" (light), "a11y-dark", "a11y-light" (accessible).
-
-  A custom scheme maps token classes to colors, merged over "vscode-dark":
-
-      highlight(code, "ts", theme: {
-        keyword: { color: "#C586C0", styles: ["bold"] },
-        comment: { color: "#6A9955", styles: ["italic"] },
-        string:  { color: "green" }
-      })
-
-  An unknown scheme name or an invalid color (bad hex / unknown color name)
-  returns a failure. The `theme` applies to code highlighting; when
-  `language` is "markdown", fenced code blocks use the default palette.
+Syntax-highlight a code snippet and return the highlighted string.
 
   @param code - The code snippet to highlight
-  @param language - The programming language of the code (e.g. "javascript", "python"). Use "auto" to auto-detect it (heuristic; less reliable on short snippets). Defaults to "plaintext".
-  @param mode - The output format for the highlighted code: "shell" for terminal output
-  @param theme - A named color scheme (e.g. "dracula") or a custom ColorScheme object
+  @param language - The programming language of the code (e.g. "javascript", "python", "json"). Use "auto" to auto-detect it (heuristic; less reliable on short snippets). Defaults to "plaintext".
+  @param mode - Output format: "shell" for terminal output, "web" for web output
+  @param theme - A named color scheme ("vscode-dark", "github-dark", "monokai", "dracula", "nord", "github", "a11y-dark", "a11y-light") or a custom ColorScheme object. An unknown scheme name or an invalid color returns a failure.
+
+* A custom `theme` maps token classes to colors, merged over "vscode-dark":
+ *
+ *     highlight(code, "ts", theme: {
+ *       keyword: { color: "#C586C0", styles: ["bold"] },
+ *       comment: { color: "#6A9955", styles: ["italic"] },
+ *       string:  { color: "green" }
+ *     })
+ *
+ * When `language` is "markdown", fenced code blocks use the default palette
+ * regardless of `theme`.
 
 **Parameters:**
 
@@ -184,7 +190,7 @@ A tool for syntax highlighting code snippets. Specify the programming language f
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L114))
 
 ### diff
 
@@ -228,7 +234,7 @@ Produce a human-readable diff of two strings and return it as a string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L131))
 
 ### patch
 
@@ -236,10 +242,9 @@ Produce a human-readable diff of two strings and return it as a string.
 patch(oldText: string, newText: string, filename: string, context: number, ignoreWhitespace: boolean, newFilename: string): string
 ```
 
-Produce a standard unified diff that std::fs::applyPatch (or `git apply`)
-  can apply, and return it as a string. Pass the file's path as `filename`;
-  an empty `oldText` produces a file-creation patch and an empty `newText`
-  a deletion patch.
+Produce a standard unified diff and return it as a string, in a format that
+  `git apply` can apply. Pass the file's path as `filename`; an empty `oldText`
+  produces a file-creation patch and an empty `newText` a deletion patch.
 
   @param oldText - The original file contents
   @param newText - The updated file contents
@@ -261,4 +266,4 @@ Produce a standard unified diff that std::fs::applyPatch (or `git apply`)
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L179))

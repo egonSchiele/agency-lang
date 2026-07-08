@@ -44,8 +44,8 @@ export type Filing = {
 
 const CIK_WIDTH = 10
 
-// SEC requires a descriptive User-Agent with contact info. Read once at module init;
-// setting SEC_USER_AGENT after the process starts will not take effect.
+// SEC requires a descriptive User-Agent with contact info. We read it once at
+// module init, so setting SEC_USER_AGENT after the process starts has no effect.
 const secUserAgent = env("SEC_USER_AGENT") ?? "agency-lang admin@agency-lang.com"
 
 // Per-host fetch config. Not preapproved: callers see both std::edgar and the
@@ -159,7 +159,7 @@ export safe def edgarFilings(ticker: string, formType: string = "", limit: numbe
   @param limit - Maximum filings to return (default 20)
   """
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: ticker })
-  // Each fetch is bound to its own statement (never a match scrutinee or call argument) so
+  // We bind each fetch to its own statement (never a match scrutinee or call argument) so
   // the std::http::fetchJSON interrupts fire at statement level and resume reliably.
   const tickersResult = fetchJSON(baseUrl: SEC_TICKER_BASE, path: "files/company_tickers.json", headers: SEC_HEADERS, allowedDomains: SEC_TICKER_DOMAINS)
   const tickerMap = tickersResult catch {}

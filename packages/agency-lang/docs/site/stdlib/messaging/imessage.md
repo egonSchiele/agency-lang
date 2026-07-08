@@ -4,7 +4,8 @@ name: "imessage"
 
 # imessage
 
-## Usage
+Send an iMessage from Agency code via the macOS Messages app. Works on
+  macOS only, with Messages.app signed in to iMessage. No API key required.
 
   ```ts
   import { sendIMessage } from "std::messaging/imessage"
@@ -14,11 +15,6 @@ name: "imessage"
     print(result)
   }
   ```
-
-  ## Requirements
-  - macOS only
-  - Messages.app must be signed in to iMessage
-  - No API key required
 
 ## Types
 
@@ -32,7 +28,7 @@ effect std::sendIMessage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L21))
 
 ## Functions
 
@@ -42,12 +38,14 @@ effect std::sendIMessage {
 sendIMessage(to: string, message: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Set allowList to restrict recipients to specific addresses/numbers. Set blockList to reject specific addresses/numbers.
+Send an iMessage via the macOS Messages app.
 
   @param to - Phone number or email of the recipient
   @param message - The text to send
   @param allowList - Only allow sending to these addresses/numbers
   @param blockList - Block sending to these addresses/numbers
+
+Only works on macOS with Messages.app signed in to iMessage. No API key required.
 
 **Parameters:**
 
@@ -62,4 +60,4 @@ Send an iMessage via the macOS Messages app. Only works on macOS with Messages.a
 
 **Throws:** `std::sendIMessage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L24))

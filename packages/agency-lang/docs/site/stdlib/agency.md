@@ -4,6 +4,21 @@ name: "agency"
 
 # agency
 
+Tools for compiling, type-checking, running, formatting, and inspecting
+  Agency programs from Agency code. Compile and run source in a sandboxed
+  subprocess, type-check or format it, and walk its AST to find imports,
+  functions, or nodes.
+
+  ```ts
+  import { compile, run } from "std::agency"
+
+  node main() {
+    const program = compile("export node main() { return 42 }")
+    const result = run(program, "main")
+    print(result)
+  }
+  ```
+
 ## Types
 
 ### CompiledProgram
@@ -14,7 +29,30 @@ export type CompiledProgram = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L55))
+
+### AST
+
+A parsed Agency program, the value `parseAST` returns on success.
+  `type` is always "agencyProgram". `nodes` holds the top-level
+  declarations (imports, functions, graph nodes, type aliases, ...). Each
+  is an object with a `type` discriminant field. Its remaining fields
+  vary by node type, so nodes stay untyped.
+
+```ts
+/** A parsed Agency program, the value `parseAST` returns on success.
+  `type` is always "agencyProgram". `nodes` holds the top-level
+  declarations (imports, functions, graph nodes, type aliases, ...). Each
+  is an object with a `type` discriminant field. Its remaining fields
+  vary by node type, so nodes stay untyped. */
+export type AST = {
+  type: "agencyProgram";
+  nodes: any[];
+  docComment?: any
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L243))
 
 ## Effects
 
@@ -27,7 +65,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L37))
 
 ### std::write
 
@@ -38,7 +76,7 @@ effect std::write {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L41))
 
 ### std::run
 
@@ -54,7 +92,7 @@ effect std::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L45))
 
 ## Functions
 
@@ -64,7 +102,8 @@ effect std::run {
 compile(source: string): Result
 ```
 
-Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Only standard library (std::) imports are allowed in the compiled code.
+Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Only standard library (`std::`) imports are allowed in the compiled code.
+
   @param source - Agency source code as a string
 
 **Parameters:**
@@ -75,7 +114,7 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L80))
 
 ### run
 
@@ -83,22 +122,28 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 run(compiled: CompiledProgram, node: string, args: Record<string, any>, wallClock: number, memory: number, ipcPayload: number, stdout: number, logFile: string, cwd: string, maxDepth: number): Result
 ```
 
-Execute a compiled Agency program in a subprocess. The parent's handler chain extends to the subprocess — subprocess interrupts run through both the subprocess's and the parent's handlers, and any interrupt no handler resolves surfaces to the user; responding resumes the subprocess exactly where it paused. Returns the subprocess node's result on success.
+Execute a compiled Agency program in a subprocess and return the node's result.
 
-  Resource limits clamp the subprocess: it is killed and a limit_exceeded failure is returned if it exceeds wallClock, memory, ipcPayload, or stdout (each budget applies per execution segment). Subprocesses may themselves call run() — nesting is gated by the std::run interrupt at every level (its data includes the prospective depth) and hard-capped by maxDepth.
-
-  Enclosing cost guards meter the subprocess: each paid call inside it is charged to the parent's guard(cost:) budgets in real time, and a tripped budget terminates the subprocess and fails the guard block.
-
-  @param compiled - A CompiledProgram from compile()
+  @param compiled - A compiled Agency program
   @param node - Which exported node to run
-  @param args - Arguments to pass to the node (defaults to no args)
+  @param args - Arguments to pass to the node
   @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
   @param memory - Max V8 heap size (default 512mb, max 4gb)
   @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
   @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
-  @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10); tighter ancestor caps always win
+  @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
+
+Runs agent-generated Agency code in a child process.
+Any interrupts and guards defined in the parent process will
+apply to the child process. Any callbacks in scope will also apply.
+Exceeding a resource limit kills the subprocess and returns a
+limit_exceeded failure.
+
+For `maxDepth`, if an ancestor process has a lower maxDepth,
+the lower value is used. For example, if a parent process has maxDepth=3
+and a child process has maxDepth=5, maxDepth=3 is used.
 
 **Parameters:**
 
@@ -119,7 +164,7 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L99))
 
 ### runFile
 
@@ -127,22 +172,21 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 runFile(dir: string, filename: string, node: string, args: Record<string, any>, wallClock: number, memory: number, ipcPayload: number, stdout: number): Result
 ```
 
-Compile and execute an Agency file in a subprocess. The file is read from dir/filename and compiled with the same stdlib-only import restrictions as compile() before being handed to run() — so the subprocess code can only call into the Agency standard library, not local files, npm packages, or Node modules.
+Compile and execute an Agency file in a subprocess and return the node's result.
+  Only standard-library (`std::`) imports are allowed in the file.
 
-  The dir argument is the sandbox boundary: filename cannot escape it via absolute paths or .. segments (and symlinks are followed and re-checked). dir is required (no default) so the caller must consciously specify the sandbox.
-
-  Use partial application to bind dir to a sandbox directory once, then pass only filename + node at the call site, e.g. const safeRun = runFile.bind(dir: "/safe/dir").
-
-  Resource limits clamp the subprocess: see run() for the full list of caps.
-
-  @param dir - The sandbox directory. filename is resolved against this and must stay inside it.
-  @param filename - The agency file to compile and run, resolved relative to dir
-  @param node - Which exported node to run
-  @param args - Arguments to pass to the node (defaults to no args)
+  @param dir - The directory containing the file
+  @param filename - The agency file to compile and run
+  @param node - Which node to run
+  @param args - Arguments to pass to the node
   @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
   @param memory - Max V8 heap size (default 512mb, max 4gb)
   @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
   @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+
+Just like `run`, any interrupts and guards defined in the parent process
+will apply to the child process. Any callbacks in scope will also apply.
+Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
 
 **Parameters:**
 
@@ -161,7 +205,7 @@ Compile and execute an Agency file in a subprocess. The file is read from dir/fi
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L167))
 
 ### typecheck
 
@@ -169,11 +213,13 @@ Compile and execute an Agency file in a subprocess. The file is read from dir/fi
 typecheck(source: string): Result<TypeCheckReport>
 ```
 
-Type-check Agency source code without compiling or running it. Returns a TypeCheckReport with separate `errors` and `warnings` arrays — a successful Result with a non-empty `errors` array means the type-checker ran and found problems. A failure Result means the type-checker could not run at all (parse error or unresolved import).
-
-  Unlike compile(), this does NOT restrict imports — type-checking is read-only and does not execute code. Note that std:: and pkg:: imports resolve normally, but relative imports (./foo.agency) cannot be resolved when calling typecheck() with a source string, since there is no on-disk location to resolve them against. Use typecheckFile() for source that contains relative imports.
+Type-check Agency source code.
 
   @param source - Agency source code as a string
+
+Unlike some of the other functions in this module,
+`typecheck` does not restrict imports to the standard library only.
+Relative imports (./foo.agency) cannot be resolved from a source string.
 
 **Parameters:**
 
@@ -183,17 +229,40 @@ Type-check Agency source code without compiling or running it. Returns a TypeChe
 
 **Returns:** `Result<TypeCheckReport>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L209))
+
+### typecheckFile
+
+```ts
+typecheckFile(dir: string, filename: string): Result
+```
+
+Type-check an Agency file on disk. The file is read from dir/filename,
+  with relative imports inside it resolved against the file's directory.
+
+  @param dir - The directory containing the file
+  @param filename - The agency file to type-check
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | `string` |  |
+| filename | `string` |  |
+
+**Returns:** `Result`
+
+**Throws:** `std::read`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L223))
 
 ### parseAST
 
 ```ts
-parseAST(source: string): Result
+parseAST(source: string): Result<AST>
 ```
 
-Parse Agency source code into an abstract syntax tree. Returns the raw AST as a JSON-serializable object on success, or a failure with the parse error message.
-
-  The AST shape is the parser output with `applyTemplate: false, lower: false`, which matches what the formatter consumes — so an AST round-tripped through writeAST() / format() produces canonical Agency source.
+Parse Agency source code into an abstract syntax tree.
 
   @param source - Agency source code as a string
 
@@ -203,32 +272,32 @@ Parse Agency source code into an abstract syntax tree. Returns the raw AST as a 
 |---|---|---|
 | source | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<AST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L249))
 
 ### writeAST
 
 ```ts
-writeAST(ast: any, dir: string, filename: string, overwrite: boolean): Result
+writeAST(ast: AST, dir: string, filename: string, overwrite: boolean): Result
 ```
 
-Format an AST as Agency source and write it to dir/filename. The AST is typically obtained from parseAST() and optionally transformed before being written.
+Format an AST as Agency source and write it to dir/filename. Absolute paths and .. segments cannot escape dir. Symlinks on existing files are followed and re-checked.
 
-  The output is canonical formatter output: comments are preserved (they live in the AST as nodes), but whitespace and formatting are normalized to the AgencyGenerator's style — the same style produced by `pnpm run fmt`.
-
-  The dir argument is the sandbox boundary: filename cannot escape it via absolute paths or .. segments (symlinks on existing files are followed and re-checked).
-
-  @param ast - The AST to write (typically from parseAST)
+  @param ast - The AST to write (typically a parsed Agency AST)
   @param dir - The sandbox directory
   @param filename - The agency file to write, resolved relative to dir
   @param overwrite - If false, fail when the file already exists (default true)
+
+Output is canonical formatter output (the same style as `pnpm run fmt`):
+  the formatter preserves comments (they live in the AST as nodes) but
+  normalizes whitespace and formatting.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| ast | `any` |  |
+| ast | [AST](#ast) |  |
 | dir | `string` |  |
 | filename | `string` |  |
 | overwrite | `boolean` | true |
@@ -237,7 +306,7 @@ Format an AST as Agency source and write it to dir/filename. The AST is typicall
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L261))
 
 ### format
 
@@ -245,9 +314,7 @@ Format an AST as Agency source and write it to dir/filename. The AST is typicall
 format(source: string): Result
 ```
 
-Format Agency source code using the standard Agency formatter (the same one used by `pnpm run fmt`). Returns the formatted source on success, or a failure with a parse error.
-
-  Comments are preserved. Whitespace and formatting are canonicalized — this is a lossy transformation for whitespace but not for semantics or comments.
+Format Agency source code with the standard Agency formatter.
 
   @param source - Agency source code as a string
 
@@ -259,7 +326,7 @@ Format Agency source code using the standard Agency formatter (the same one used
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L283))
 
 ### formatFile
 
@@ -267,14 +334,13 @@ Format Agency source code using the standard Agency formatter (the same one used
 formatFile(dir: string, filename: string): Result
 ```
 
-Format an Agency file in place. Reads dir/filename, formats it with the standard Agency formatter, and writes the result back to the same path. If the file is already formatted, no write occurs (mtime is preserved).
+Format an Agency file in place using the standard Agency formatter.
 
-  The dir argument is the sandbox boundary: filename cannot escape it via absolute paths or .. segments (symlinks are followed and re-checked). Both the read and the write happen inside the same interrupt — approving the interrupt approves both.
+  @param dir - The directory containing the file
+  @param filename - The agency file to format
 
-  Returns success(true) on a successful format (whether or not a write was needed), or a failure if parsing or I/O fails.
-
-  @param dir - The sandbox directory. filename is resolved against this and must stay inside it.
-  @param filename - The agency file to format, resolved relative to dir
+Read and write happen inside the same interrupt, so approving it approves both.
+  If the file is already formatted, no write occurs and its mtime is preserved.
 
 **Parameters:**
 
@@ -287,45 +353,46 @@ Format an Agency file in place. Reads dir/filename, formats it with the standard
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L294))
 
 ### walkAST
 
 ```ts
-walkAST(ast: any, visitor: (any, any) => any): any
+walkAST(ast: AST, visitor: (node: any, ancestors: any[]) => any): AST
 ```
 
-Walk every node in a deep-cloned copy of the AST, invoking the visitor with each (node, ancestors) pair. The visitor may mutate the node in place; mutations land in the returned AST. The original AST passed in is never modified.
+Walk every node in a deep-cloned copy of the AST, invoking the visitor
+  with each (node, ancestors) pair, and return the modified clone.
+  The visitor may mutate nodes in place. This will not modify the original tree.
+  The ancestors array lists every enclosing node from the root outward, excluding the node itself.
 
-  Iteration order is pre-order: a node is visited before its children. The set of nodes to visit is determined upfront — if the visitor adds new children (e.g. by appending to a function's body), those new children will NOT be visited on this walk. Similarly, if the visitor replaces a child reference (e.g. node.body = [newNode]), the visitor will still be called on the OLD body's nodes (which are already in the buffered visit list). To re-walk a transformed AST, call walkAST again.
+  @param ast - The AST to walk
+  @param visitor - Called once per node as visitor(node, ancestors). Mutate node in place, return value is ignored.
 
-  The ancestors array lists every enclosing node from the root outward (excluding `node` itself). For nodes inside a block argument (e.g. inside `map(arr) as x { ... }`), the block argument appears in ancestors as a node with `type: "blockArgument"`.
-
-  @param ast - The AST to walk (typically from parseAST)
-  @param visitor - Called once per node as visitor(node, ancestors). Return value is ignored.
+- Iteration is pre-order (a node is visited before its children)
+- The visit list is fixed upfront: nodes the visitor adds during
+  the walk are not visited. Replacing a child reference still visits the old subtree.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| ast | `any` |  |
-| visitor | `(any, any) => any` |  |
+| ast | [AST](#ast) |  |
+| visitor | `(node: any, ancestors: any[]) => any` |  |
 
-**Returns:** `any`
+**Returns:** [AST](#ast)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L247))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L313))
 
 ### getNodesOfType
 
 ```ts
-getNodesOfType(source: string, types: string[]): Result
+getNodesOfType(source: string, types: string[]): Result<any[]>
 ```
 
-Parse Agency source code and return all AST nodes whose `type` field matches any of the provided types. Walks the entire tree (not just top-level), so e.g. getNodesOfType(src, ["functionCall"]) returns every function call anywhere in the program.
+Parse Agency source code and return every AST node whose `type` field matches any of the provided types.
 
-  The returned nodes are references into a freshly-parsed AST; safe to mutate, but mutations do not write back to disk. Use writeAST() with the parsed AST to persist changes.
-
-  @param source - Agency source code as a string
+  @param source - Agency source code
   @param types - List of AST type strings to match (e.g. ["function", "graphNode"])
 
 **Parameters:**
@@ -335,19 +402,19 @@ Parse Agency source code and return all AST nodes whose `type` field matches any
 | source | `string` |  |
 | types | `string[]` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L265))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L333))
 
 ### getImports
 
 ```ts
-getImports(source: string): Result
+getImports(source: string): Result<any[]>
 ```
 
-Return all import statements in the source (i.e. `import { x } from "..."`).
+Return every import statement in the source (i.e. `import { x } from "..."`).
 
-  @param source - Agency source code as a string
+  @param source - Agency source code
 
 **Parameters:**
 
@@ -355,19 +422,19 @@ Return all import statements in the source (i.e. `import { x } from "..."`).
 |---|---|---|
 | source | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L277))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L343))
 
 ### getFunctions
 
 ```ts
-getFunctions(source: string): Result
+getFunctions(source: string): Result<any[]>
 ```
 
-Return all function definitions (`def foo(...) { ... }`) in the source.
+Return every function definition (`def foo(...) { ... }`) in the source.
 
-  @param source - Agency source code as a string
+  @param source - Agency source code
 
 **Parameters:**
 
@@ -375,19 +442,19 @@ Return all function definitions (`def foo(...) { ... }`) in the source.
 |---|---|---|
 | source | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L352))
 
 ### getGraphNodes
 
 ```ts
-getGraphNodes(source: string): Result
+getGraphNodes(source: string): Result<any[]>
 ```
 
-Return all graph node definitions (`node main() { ... }`) in the source. Note: "graph nodes" here means Agency's `node` declarations, not generic AST nodes — see getNodesOfType for the latter.
+Return every graph node definition (`node main() { ... }`) in the source.
 
-  @param source - Agency source code as a string
+  @param source - Agency source code
 
 **Parameters:**
 
@@ -395,15 +462,24 @@ Return all graph node definitions (`node main() { ... }`) in the source. Note: "
 |---|---|---|
 | source | `string` |  |
 
-**Returns:** `Result`
+**Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L295))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L361))
 
 ### filterImports
 
 ```ts
-filterImports(source: string, allowedPackages: string[], excludedPackages: string[], allowKinds: string[], excludeKinds: string[]): Result
+filterImports(source: string, allowedPackages: string[], excludedPackages: string[], allowKinds: string[], excludeKinds: string[]): Result<{ source: string; filtered: boolean }>
 ```
+
+Filter imports in Agency source code according to the given policy.
+  Returns the filtered source and a boolean indicating whether any imports were dropped.
+
+  @param source - Agency source code
+  @param allowedPackages - Glob patterns; matched imports are allowed (subject to excludes)
+  @param excludedPackages - Glob patterns; matched imports are dropped
+  @param allowKinds - Kind strings ("stdlib" | "pkg" | "local" | "node") to allow
+  @param excludeKinds - Kind strings to drop
 
 Parse Agency source, drop imports that fail the policy, and return the resulting source plus a flag indicating whether anything was dropped.
 
@@ -418,15 +494,9 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
   - `allowKinds` / `excludeKinds` accept the kind strings above.
   - Exclude rules always win: if a path matches anything in `excludedPackages` or `excludeKinds`, it is dropped.
   - When all four lists are empty, every import is allowed (default-allow).
-  - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty — only stdlib passes.
+  - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty, only stdlib passes.
 
-  The returned source is regenerated via the Agency formatter, so whitespace and formatting are canonicalized. Comments are preserved (see writeAST docstring for details).
-
-  @param source - Agency source code as a string
-  @param allowedPackages - Glob patterns; matched imports are allowed (subject to excludes)
-  @param excludedPackages - Glob patterns; matched imports are dropped
-  @param allowKinds - Kind strings ("stdlib" | "pkg" | "local" | "node") to allow
-  @param excludeKinds - Kind strings to drop
+  We format the source with the Agency formatter before returning it.
 
 **Parameters:**
 
@@ -438,39 +508,9 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
 | allowKinds | `string[]` | [] |
 | excludeKinds | `string[]` | [] |
 
-**Returns:** `Result`
+**Returns:** `Result<{ source: string; filtered: boolean }>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L304))
-
-### typecheckFile
-
-```ts
-typecheckFile(dir: string, filename: string): Result
-```
-
-Type-check an Agency file on disk. The file is read from dir/filename, and relative imports inside the file are resolved against the file's directory.
-
-  The dir argument is the sandbox boundary for the entry file: filename cannot escape it via absolute paths or .. segments (and symlinks are followed and re-checked). Note that transitive imports from the entry file are NOT confined to dir — type-checking is read-only, so the sandbox only governs which file the caller can ask to be type-checked.
-
-  Use partial application to bind dir once, e.g. const tc = typecheckFile.partial(dir: "/safe/dir").
-
-  Returns a TypeCheckReport with `errors` and `warnings` arrays on success; returns a failure when the file cannot be read, the sandbox is violated, or the source cannot be parsed.
-
-  @param dir - The sandbox directory. filename is resolved against this and must stay inside it.
-  @param filename - The agency file to type-check, resolved relative to dir
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
-
-**Returns:** `Result`
-
-**Throws:** `std::read`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L344))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L388))
 
 ### getVersion
 
@@ -482,4 +522,4 @@ Get the current version of the Agency standard library.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L364))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L414))

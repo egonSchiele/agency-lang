@@ -4,7 +4,9 @@ name: "sms"
 
 # sms
 
-## Usage
+Send SMS text messages from Agency code via Twilio. Set `TWILIO_ACCOUNT_SID`,
+  `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` (e.g. "+15550001234"), or pass
+  them directly.
 
   ```ts
   import { sendSms } from "std::messaging/sms"
@@ -14,11 +16,6 @@ name: "sms"
     print(result)
   }
   ```
-
-  ## Environment Variables
-  - `TWILIO_ACCOUNT_SID` — Your Twilio Account SID
-  - `TWILIO_AUTH_TOKEN` — Your Twilio Auth Token
-  - `TWILIO_FROM_NUMBER` — Your Twilio phone number (e.g. "+15550001234")
 
 ## Types
 
@@ -32,7 +29,7 @@ effect std::sendSms {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L23))
 
 ## Functions
 
@@ -42,7 +39,7 @@ effect std::sendSms {
 sendSms(to: string, body: string, from: string, accountSid: string, authToken: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Set allowList to restrict recipients to specific numbers. Set blockList to reject specific numbers.
+Send an SMS text message via the Twilio API.
 
   @param to - Recipient phone number (E.164 format)
   @param body - Message text
@@ -51,6 +48,8 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
   @param authToken - Twilio auth token
   @param allowList - Only allow sending to these numbers
   @param blockList - Block sending to these numbers
+
+Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env vars, or pass them directly.
 
 **Parameters:**
 
@@ -68,4 +67,4 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
 
 **Throws:** `std::sendSms`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L26))

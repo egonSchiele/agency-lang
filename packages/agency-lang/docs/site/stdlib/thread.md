@@ -4,13 +4,12 @@ name: "thread"
 
 # thread
 
-Current-thread message history, cost/token accounting, and
-guards, plus cross-thread context sharing: `listThreads()` enumerates
-every thread in the current run (active + closed), `getThread(id,
-offset, limit)` reads a slice of a thread's messages. The registry is
-built on the public `agency.threads.*` primitives — the same surface
-you'd reach for to build your own variants (tag-threads, thread-diff,
-etc.) in user space.
+Read and share LLM conversation history across a run. Inspect the
+current thread's messages, cost, and token usage, and reach into
+other threads. `listThreads()` lists every thread in the run, active
+and closed. `getThread(id, offset, limit)` reads a slice of one
+thread's messages. These build on the public `agency.threads.*`
+primitives, so you can compose your own variants in user code.
 
   ```ts
   import { listThreads, getThread } from "std::thread"
@@ -21,23 +20,6 @@ etc.) in user space.
   // Read a slice of a prior thread's messages:
   const lines = getThread("t1", 0, 20)
   ```
-
-`label` is set at `thread {}` create time (template-level intent set
-via `thread(label: "...") { ... }`); `summary` is per-instance and
-generated lazily on first `listThreads()` call against a closed
-thread. Both fields live directly on the underlying `MessageThread`
-so the registry is per-run and survives interrupt-resume via the
-existing checkpoint serialization.
-
-The eager-summarize flag (`thread(summarize: true) { ... }`) is
-parsed and forwarded to the `onThreadEnd` hook payload as
-`eagerSummarize: true`. A global TS-side `onThreadEnd` hook
-registered in `lib/stdlib/threads.ts` consumes the payload and
-triggers a one-shot LLM summarize at close time, stashing the
-result on the underlying `MessageThread`. Threads that did NOT opt
-in eagerly fall back to the lazy summarize path in `summaryFor()`
-below, which runs on the first `listThreads()` call against a
-closed thread.
 
 ## Types
 
@@ -52,7 +34,7 @@ export type AttachmentSource =
   | { kind: "base64"; base64: string; mimeType: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L54))
 
 ### Attachment
 
@@ -63,7 +45,7 @@ export type Attachment =
   | null }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L59))
 
 ### ModelCost
 
@@ -76,7 +58,7 @@ export type ModelCost = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L162))
 
 ### GuardFailureData
 
@@ -90,7 +72,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L181))
 
 ### ThreadMessage
 
@@ -101,7 +83,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L298))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L253))
 
 ### ThreadInfo
 
@@ -117,7 +99,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L303))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L258))
 
 ## Functions
 
@@ -139,7 +121,7 @@ Add a system message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L63))
 
 ### userMessage
 
@@ -147,12 +129,11 @@ Add a system message to the current thread's message history.
 userMessage(msg: string | (string | Attachment)[])
 ```
 
-Add a user message to the current thread's message history. Accepts a
-  plain string, or an array mixing text strings and image()/file()
-  attachments. Use this when you want to seed the conversation with prior
-  user context that wasn't actually typed by the user this turn.
+Add a user message to the current thread's message history. Use this
+  to seed the conversation with prior user context that wasn't actually
+  typed by the user this turn.
 
-  @param msg - The user message content: a string, or an array of strings and attachments.
+  @param msg - The user message content: a string, or an array mixing text strings and attachments.
 
 **Parameters:**
 
@@ -160,7 +141,7 @@ Add a user message to the current thread's message history. Accepts a
 |---|---|---|
 | msg | `string \| (string \| Attachment)[]` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L74))
 
 ### image
 
@@ -168,12 +149,10 @@ Add a user message to the current thread's message history. Accepts a
 image(source: string, mimeType: string, base64: boolean): Attachment
 ```
 
-Build an image attachment for a multimodal llm() call or userMessage().
-  `source` is a local path, an http(s) URL, or a data: URI. Pass base64: true
-  to treat `source` as raw base64 data (a mimeType is then required).
-  smoltalk reads/fetches and MIME-infers the source at send time.
+Build an image attachment for a multimodal llm() call. The source is
+  read, fetched, and MIME-inferred when the message is sent.
 
-  @param source - Path, http(s) URL, data: URI, or raw base64 (with base64: true)
+  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
   @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
 
@@ -187,7 +166,7 @@ Build an image attachment for a multimodal llm() call or userMessage().
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L85))
 
 ### file
 
@@ -195,12 +174,9 @@ Build an image attachment for a multimodal llm() call or userMessage().
 file(source: string, filename: string, mimeType: string, base64: boolean): Attachment
 ```
 
-Build a file (e.g. PDF) attachment for a multimodal llm() call or
-  userMessage(). `source` is a local path, an http(s) URL, or a data: URI.
-  Pass base64: true to treat `source` as raw base64 data (mimeType required).
-  `filename` defaults to the source's basename.
+Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
-  @param source - Path, http(s) URL, data: URI, or raw base64 (with base64: true)
+  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
   @param filename - Name shown to the model; defaults to the source basename.
   @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
@@ -216,7 +192,7 @@ Build a file (e.g. PDF) attachment for a multimodal llm() call or
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L101))
 
 ### attachToReply
 
@@ -224,16 +200,13 @@ Build a file (e.g. PDF) attachment for a multimodal llm() call or
 attachToReply(attachment: Attachment)
 ```
 
-Queue an attachment (from image() / file()) to be shown to the model
-  after the current tool call completes. Only meaningful while running
-  as a tool inside an llm() call: the tool's text result is delivered
-  as usual with a marker naming the attachment, and the attachment
-  follows as a user message the model can see. Prefer path sources
-  (e.g. image("/abs/chart.png")) — the bytes are inlined when the
-  message is built. Outside a tool invocation the attachment is
-  dropped with a statelog error.
+Queue an attachment to be shown to the model after the current tool
+  call completes. Only meaningful while running as a tool inside an
+  llm() call: the attachment follows the tool's text result as a user
+  message the model can see. Prefer path-based sources. Outside a tool
+  invocation the attachment is dropped.
 
-  @param attachment - The attachment to show the model (from image() / file())
+  @param attachment - The attachment to show the model
 
 **Parameters:**
 
@@ -241,7 +214,7 @@ Queue an attachment (from image() / file()) to be shown to the model
 |---|---|---|
 | attachment | [Attachment](#attachment) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L118))
 
 ### assistantMessage
 
@@ -261,7 +234,7 @@ Add an assistant message to the current thread's message history.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L131))
 
 ### getCost
 
@@ -269,23 +242,18 @@ Add an assistant message to the current thread's message history.
 getCost(): number
 ```
 
-Get the cumulative cost (USD, floating point) of all LLM calls
-  contributing to the current execution branch.
+Return the cumulative cost in USD of all LLM calls contributing to the
+  current execution branch.
 
-  Inside a fork/race branch, this returns the parent's accumulated
-  cost plus the cost incurred so far inside this branch. After all
-  branches join, the parent sees the sum of its own cost plus every
-  branch's cost (race losers included — their LLM calls really
-  happened and cost real money).
-
-  To measure a specific section, capture getCost() before and after:
-  const before = getCost()
-  // ... do work ...
-  const sectionCost = getCost() - before
+Inside a fork/race branch this includes the parent's accumulated cost
+ *  plus what this branch has spent so far. After branches join, the parent
+ *  sees its own cost plus every branch's cost, including race losers.
+ *  Their LLM calls really happened and cost real money. To measure a
+ *  section, capture the value before and after and subtract.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L147))
 
 ### getTokens
 
@@ -293,12 +261,11 @@ Get the cumulative cost (USD, floating point) of all LLM calls
 getTokens(): number
 ```
 
-Get the cumulative token count for the current execution branch.
-  Same per-branch semantics as getCost().
+Return the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L155))
 
 ### getModelCosts
 
@@ -306,20 +273,17 @@ Get the cumulative token count for the current execution branch.
 getModelCosts(): ModelCost[]
 ```
 
-Get a per-model breakdown of cumulative LLM usage, one entry per
-  model that has been called, sorted by cost descending.
+Return a per-model breakdown of cumulative LLM usage across the whole
+  process, one entry per model that has been called, sorted by cost
+  descending.
 
-  Unlike getCost()/getTokens() (which read the per-branch accumulator),
-  this reads the process-wide totals across every branch — including
-  subagents and tool calls that run on a different model. Useful for a
-  cost summary that attributes spend per model.
-
-  Each entry has `model` (the model name), `inputTokens`,
-  `outputTokens`, and `cost` (USD).
+Unlike the per-branch cost/token accessors, this reads process-wide
+ *  totals across every branch, so it attributes spend per model even for
+ *  subagents and tool calls that run on a different model.
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L172))
 
 ### guard
 
@@ -327,42 +291,15 @@ Get a per-model breakdown of cumulative LLM usage, one entry per
 guard(cost: number | null, time: number | null, block: () => any): Result
 ```
 
-Run a block under a cost limit, a time limit, or both. The block
-  aborts as soon as either limit is exceeded; whichever fires first
-  wins. At least one of `cost` or `time` must be supplied.
+Run a block under a cost limit, a time limit, or both, aborting the
+  block as soon as either limit is exceeded. At least one of `cost` or
+  `time` must be supplied.
 
-  On success, returns `success(blockReturnValue)`. The block's local
-  variables are scoped to the block — only the block's return value
-  is observable from the caller. Use isFailure(result) to branch on
-  the trip; inspect `result.error.type` to distinguish:
-  - "guardFailure" — cumulative LLM cost exceeded `cost`. Read
-  `result.error.maxCost` and `result.error.actualCost`.
-  - "timeoutFailure" — compute time inside the block exceeded
-  `time`. Read `result.error.maxTime` and `result.error.actualTime`
-  (milliseconds).
-
-  Time semantics are compute-time: wall clock only ticks while a
-  Runner is actively executing inside the guarded scope. Time spent
-  paused on an interrupt (e.g. waiting for user input) does NOT count
-  against the budget; on resume the timer is re-armed with the
-  remaining budget.
-
-  Nested guards are independent: an inner trip does not trip an outer
-  guard. Fork/race branches: cost guards are cloned per branch (each
-  branch independently tracks cost-since-push); time guards are NOT
-  cloned — the parent's timer is the single source of truth and the
-  abort cascade propagates to every branch.
-
-  `thread { ... }` and `subthread { ... }` isolate message history
-  but NOT cost or abort plumbing. A guard wrapping a thread block
-  sees every LLM call inside it.
-
-  Limitations: tool calls whose body is a JS function (rather than
-  Agency code) cannot be aborted mid-execution — the JS function runs
-  to completion in the background and its result is discarded. Memory
-  layer LLM calls (memory.text / memory.embed) currently bypass cost
-  guards. Cost deltas from inside a fork only propagate to an outer
-  cost guard at fork completion, not mid-flight.
+  Returns a `Result`. On success it holds the block's return value. On a
+  trip it holds a failure whose `error.type` is either "guardFailure"
+  (cost exceeded, read `error.maxCost` and `error.actualCost`) or
+  "timeoutFailure" (compute time exceeded, read `error.maxTime` and
+  `error.actualTime`, in milliseconds).
 
   @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null = no cost limit.
   @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null = no time limit.
@@ -383,6 +320,24 @@ Run a block under a cost limit, a time limit, or both. The block
   }
   ```
 
+* Time semantics are compute-time: the clock only ticks while a Runner is
+ * actively executing inside the guarded scope. Time spent paused on an
+ * interrupt (e.g. waiting for user input) does not count. On resume the
+ * timer is re-armed with the remaining budget.
+ *
+ * Nested guards are independent. An inner trip does not trip an outer
+ * guard. Across fork/race branches, cost guards are cloned per branch, so
+ * each tracks its own cost-since-push. The time guard is shared: the
+ * parent's timer is the single source of truth, and its abort cascade
+ * reaches every branch. `thread`/`subthread` isolate message history but
+ * not cost or abort plumbing, so a guard sees every LLM call inside them.
+ *
+ * Limitations: a tool whose body is a JS function (not Agency code) cannot
+ * be aborted mid-execution. It runs to completion in the background, and
+ * its result is discarded. Memory-layer LLM calls currently bypass cost
+ * guards. Cost from inside a fork only propagates to an outer cost guard at
+ * fork completion, not mid-flight.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -393,7 +348,7 @@ Run a block under a cost limit, a time limit, or both. The block
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L212))
 
 ### listThreads
 
@@ -401,34 +356,22 @@ Run a block under a cost limit, a time limit, or both. The block
 listThreads(lazySummarize: boolean): Result
 ```
 
-Return every thread in the current run, including the active one.
+Return every thread in the current run, including the active one, as a
+  `Result`: success holds `ThreadInfo[]`, failure holds the error (e.g.
+  called outside an Agency frame). Each closed thread carries a short
+  summary; the active thread is not summarized.
 
-  Summary generation: threads opened with `thread(summarize: true)`
-  are summarized eagerly when they close (see the global onThreadEnd
-  hook in `lib/stdlib/threads.ts`), so their summary is already
-  cached by the time `listThreads()` runs. Threads that did NOT opt
-  in eagerly trigger exactly one LLM round-trip the first time
-  `listThreads()` is called on them (the "lazy" path). Active
-  threads are skipped on both paths so the in-flight conversation
-  is not summarized mid-stream. The computed summary is stashed on
-  the underlying `MessageThread` so subsequent calls read it back
-  without re-prompting.
+  @param lazySummarize - When true (default), generate a summary
+                         on-demand for any closed thread that lacks one.
+                         When false, skip the LLM call and fall back to
+                         the thread's label (or `""`).
 
-  Pass `lazySummarize: false` to skip the on-demand LLM round-trip
-  entirely. Threads without a cached summary fall back to their
-  label (or `""` if no label is set), so the call stays free even
-  when no eager summary is available. Useful in tests and in
-  performance-sensitive surfaces where you'd rather see "no summary
-  yet" than pay for one synchronously.
-
-  Returns a `Result` — success holds `ThreadInfo[]`, failure holds
-  the error (e.g. called outside an Agency frame). See
-  [error handling](https://agency-lang.com/guide/error-handling).
-
-  @param lazySummarize - When true (default), generate summaries
-                         on-demand for any thread that doesn't have
-                         one cached. When false, fall back to the
-                         label (or `""`).
+Summary sourcing: threads opened with `thread(summarize: true)` are
+ *  summarized eagerly when they close, so their summary is already cached
+ *  here. Other closed threads are summarized on first read via one LLM
+ *  round-trip, and the result is cached for later calls. The active thread
+ *  is never summarized (the in-flight conversation should not be
+ *  summarized mid-stream). A cached summary is reused without re-prompting.
 
 **Parameters:**
 
@@ -438,7 +381,7 @@ Return every thread in the current run, including the active one.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L354))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L315))
 
 ### currentThreadId
 
@@ -453,7 +396,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L426))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L368))
 
 ### getThread
 
@@ -485,4 +428,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L436))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L378))

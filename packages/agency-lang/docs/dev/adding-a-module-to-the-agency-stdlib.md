@@ -1,7 +1,7 @@
 # Adding a new module to the agency standard library
 
 Adding a new module to the agency standard library follows a general pattern.
-1. All new agency standard library modules go into the stdlib/ directory and require an agency file. A typescript file may also be necessary for much of the backing functionality, which would otherwise be harder to write in Agency. 
+1. All new agency standard library modules go into the stdlib/ directory and require an agency file. A typescript file may also be necessary for some of the backing functionality, but is not required.
 2. For functions that require multiple optional options with defaults, please use Agency's default args when writing these function definitions. Agency supports named parameters, so it's easy for users to override only the options that they want. 
 3. Please include doc comments explaining usage where it makes sense. There are two ways to document your functions: one is with docstrings, and the other is with doc comments. Docstrings also get sent to the LLM as part of the tool description if an LLM calls this function as a tool. Doc comments, on the other hand, are just documentation for users. If you think it would be helpful, add usage examples in doc comment for the functions you add. You can also add an overall doc comment section to the top of the file that documents the overall file. This is a good place to explain generally what this module is useful for, including basic usage, examples to get the user started, and gotchas to be aware of, if there are any.
 4. Be aware that in agency, all functions are also tools that can be used by an LLM. There are a couple of pieces of functionality that agency has to make tool calls safer. One is the `safe` keyword. If a function can be called multiple times without any side effects, you can go ahead and mark it `safe`. This tells the LLM that this tool is safe to rerun if it gets an intermittent error.
@@ -53,3 +53,245 @@ it("works", async () => {
   );
 });
 ```
+
+## More on writing docs
+
+### How to write a good docstring
+
+1. remove any implementation-specific details, such as "done as part of plan X" or "was broken but works now". The doc string will be sent as the tool description to an LLM, so think about what information about this tool the LLM will care about.
+
+2. Remove any information that is not specific to this tool. For example, "Branch-scoped: a fork/race/parallel branch can change it without affecting the parent." This is true of every tool, not specific to this tool, so we shouldn't include it in the tool description
+
+3. Use active voice instead of passive voice, and say what the tool does, not what the tool is.
+
+Bad:
+```
+A tool for printing an object as formatted JSON to the console.
+```
+
+Good:
+```
+Print an object as formatted JSON to the console.
+```
+
+Bad:
+```
+A tool for prompting the user for input and returning their response.
+```
+
+Good:
+```
+Prompt the user for input and return their response.
+```
+
+4. Make sure all the parameters are documented in the format expected by PFA: https://agency-lang.com/guide/partial-application.html.
+
+Bad:
+```
+export safe def input(prompt: string): string {
+  """
+  Prompt the user for input by printing the `prompt` string
+  """
+}
+```
+
+Good:
+```
+export safe def input(prompt: string): string {
+  """
+  Prompt the user for input.
+
+  @param prompt - The string to print for the prompt
+  """
+}
+```
+
+5. Try to avoid mentioning the parameters Outside the PFA format if possible Because if the user uses PFA, the parameters Mentioned in the PFA format will get stripped out, but other parameters in the description won't, which could be confusing for the LLM.
+
+Bad:
+```
+export safe def read(
+  filename: string,
+  dir: string = ".",
+  offset: number = 0,
+  limit: number = 0,
+  useAgentCwd: boolean = false,
+): Result {
+  """
+  A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
+
+  By default the full file is returned. Pass `offset` (1-indexed) and/or
+  `limit` to paginate a large file — when either is set, a truncation
+  note is appended naming the line range and total line count. `0` for
+  either argument means "unset" (Agency does not have undefined
+  arguments).
+```
+
+Good:
+```
+export safe def read(
+  filename: string,
+  dir: string = ".",
+  offset: number = 0,
+  limit: number = 0,
+  useAgentCwd: boolean = false,
+): Result {
+  """
+  A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
+
+  @param filename - The file to read
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param offset - 1-indexed line to start at (0 means start of file)
+  @param limit - Maximum number of lines to return (0 means read to end of file)
+```
+
+6. If a parameter should be an enum, set an enum as its type instead of putting enum information in the doc string.
+
+Bad:
+```
+export def write(
+  filename: string,
+  dir: string = ".",
+  mode: string = "overwrite",
+): Result {
+  """
+  Write data to a file
+
+  @param filename - The file to write
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
+
+```
+
+Good:
+```
+export type WriteMode = "overwrite" | "append" | "create-only"
+
+export def write(
+  filename: string,
+  dir: string = ".",
+  mode: WriteMode = "overwrite",
+): Result {
+  """
+  Write data to a file
+
+  @param filename - The file to write
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file
+```
+
+7. Don't mention other functions in the doc string as the agent may not have access to them.
+
+8. Remove unnecessary words. Keep the docstring readable and easy to understand, but concise.
+
+Bad:
+```
+export def filter(arr: any[], func: (any) -> any): any[] {
+  """
+  Return a new array containing only the elements for which the function returns true.
+
+  @param arr - The array to filter
+  @param func - The function that returns true for elements to keep
+  """
+```
+
+Good:
+```
+export def filter(arr: any[], func: (any) -> any): any[] {
+  """
+  Return a new array containing only the elements for which the function returns true.
+
+  @param arr - The array to filter
+  @param func - The filter function
+  """
+```
+
+Remember that all the parameter names and types in the function name will get sent to the LLM as well, so try to make those descriptive enough that the LLM can understand what the function does without needing too much text in the docstring. Any text you add takes up space in the context and we don't want to bloat the context unnecessarily.
+
+9. Try to narrow your types where possible. Don't use `any` where a more specific type will do. Don't use `string` where you actually need a union of strings.
+
+### Move information to the doc comment.
+If there are any details that would be good for a *developer* using Agency to know, as opposed to information that the *tool* needs to know, please put that information in doc comments instead.
+
+## General writing tips
+
+1. Avoid garden path sentences.
+
+Bad: a sentence that begins like this:
+
+```
+The name lists partition
+```
+
+When you read the sentence, what do you think it means? I think it means that a name lists some partitions. Here is the full sentence:
+
+```
+The name lists partition the catalog's managed (`source:"remote"`) entries by what changed.
+```
+
+It turns out that there is something called a "name list", which partitions something in the catalog. Avoid sentences like this, because they make the reader realize halfway through reading the sentence that it doesn't that the words don't mean what the reader thought they meant, and they have to re-read the sentence to take into account the information they gained in the second half of the sentence. A classic garden path sentence begins with the words "the old man". What do you think it's going to tell us about the old man? Actually, the full sentence is "the old man the boat". Notice how the first half of the sentence makes you think it's talking about an old man, and it's not until you read the second half that you realize that it's talking about elderly people as a group.
+
+Good: 
+
+```
+The catalog's entries are partitioned by name lists.
+```
+
+2. Use active voice, avoid passive voice.
+
+Bad: "The man was bitten by the dog."
+Good: "The dog bit the man."
+
+Passive voice makes you focus on the person or object receiving the action, rather than the person or object performing it. Passive voice is typically harder to read and less interesting.
+
+Other examples:
+
+Bad: "Enclosing guard(cost:) budgets meter the subprocess in real time"
+Good "The subprocess is metered in real time by enclosing guard(cost:) budgets."
+
+Bad: "filename cannot escape dir via absolute paths or .. segments (symlinks are followed and re-checked)."
+Good: "Absolute paths and .. segments cannot escape dir. Symlinks are followed and re-checked."
+
+3. Avoid introducing too many concepts in a single sentence.
+
+If you find yourself using multiple commas, semicolons, or conjunctions in a sentence, consider breaking it up into multiple sentences.
+
+Bad:
+```
+The name lists partition the catalog's managed (`source:"remote"`) entries by what changed.
+```
+
+Notice how the sentence tries to squeeze in the `source:"remote"` qualifier to an already complicated sentence. If you need to parenthesize something in your sentence, consider whether it would be clearer as two sentences instead.
+
+```
+Parse command-line flags with strict number coercion, required flags and defaults, mutually-exclusive groups, and auto-generated `--help` / `--version`.
+```
+
+This sentence introduces so many things that by the time the reader has reached the end of the sentence, they have already forgotten the beginning of the sentence.
+
+```
+any interrupt no handler resolves surfaces to the user; responding resumes the subprocess exactly where it paused.
+```
+
+Here is an example where two sentences would have been clearer than one with a semicolon.
+
+4. Emdash overuse
+
+An emdash used sparingly can make the text more lively, but used all the time, it becomes jarring. If you are using an emdash, consider using a comma instead.
+
+Bad: "The AST shape is the parser output, which matches what the formatter consumes — so an AST round-tripped through writeAST() produces canonical Agency source."
+Good: "The AST shape is the parser output, which matches what the formatter consumes, so an AST round-tripped through writeAST() produces canonical Agency source."
+
+Or use a conjunction instead of an emdash:
+Bad: "Read and write happen inside the same interrupt — approving it approves both."
+Good: "Read and write happen inside the same interrupt, so approving it approves both."
+
+5. Consider whether this level of detail is actually required in the sentence.
+
+You have a habit of trying to add more information in parentheses. Often, it's not needed, and actually hinders understanding by making the sentence longer.
+
+Bad: "Exceeding a resource limit (wallClock, memory, ipcPayload, or stdout) kills the subprocess and returns a limit_exceeded failure."
+Good: "Exceeding a resource limit kills the subprocess and returns a limit_exceeded failure."
+
+Every time you add something in parentheses, consider that the user's brain is going to need to pause and add a new frame to their mental "stack" to capture this new information. Is that speed bump worth the information you're trying to convey?
+

@@ -1,68 +1,27 @@
 import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max, _minLength, _maxLength, _matches } from "agency-lang/stdlib-lib/validators.js"
 
 /** @module
-  Validation surface: validator functions for `@validate(...)`, pre-baked
-  `@jsonSchema(...)` format fragments, and opaque validated type aliases
-  that combine the two.
+  Validators and format helpers for constrained types. Pair a validator with
+  `@validate(...)` to check values at runtime, spread the pre-baked
+  `@jsonSchema(...)` format fragments into your own schemas, or reach for the
+  ready-made type aliases (`Email`, `URLString`, `UUIDString`, …) that combine
+  both. Each validator takes a value and returns a `Result`.
 
-  Each validator takes a single value and returns a `Result` — `success(value)`
-  if the value is valid (optionally transformed), or `failure(reason)` if not.
-
-  Single-argument validators (`isEmail`, `isUrl`, …) can be used directly:
+  Single-argument validators plug straight in. Parameterized ones bind their
+  config via partial application:
 
   ```ts
-  import { isEmail } from "std::validation"
+  import { isEmail, min, max } from "std::validation"
 
   @validate(isEmail)
   type Email = string
-  ```
-
-  Parameterized validators (`min`, `max`, `minLength`, `maxLength`,
-  `matches`) take their configuration as a first argument. Bind the
-  configuration parameter via Agency [partial
-  application](../guide/partial-application.html) so the result is a
-  single-argument validator the chain can call with each value:
-
-  ```ts
-  import { min, max } from "std::validation"
 
   @validate(min.partial(n: 0), max.partial(n: 150))
   type Age = number
   ```
 
-  Validators only run for types annotated with `!` (the bang operator).
-  See the [type validation guide](../guide/type-validation.md) for full
-  details on `@validate(...)` and how it integrates with `!` validation.
-
-  The `@jsonSchema(...)` format fragments are plain object constants —
-  nothing magic. Spread them into your own `@jsonSchema(...)` annotations
-  to attach the matching JSON Schema `format` field:
-
-  ```ts
-  import { emailFormat } from "std::validation"
-
-  @jsonSchema({ ...emailFormat, description: "primary contact" })
-  type Email = string
-  ```
-
-  They exist to spare callers from typing `{ format: "..." }` every time
-  and to keep format names consistent across a codebase.
-
-  The type aliases combine `@validate(...)` and `@jsonSchema(...)` for the
-  most common string-shaped opaque types. Use them in place of plain
-  `string` whenever the value must conform to one of these formats:
-
-  ```ts
-  import { Email } from "std::validation"
-
-  def main() {
-    const e: Email! = "user@example.com"   // validated at runtime
-  }
-  ```
-
-  Aliases here only carry annotations — they are still plain `string` from
-  TypeScript's perspective. Validation runs on `!` sites; structured-output
-  LLM calls get the JSON Schema `format` hint via `.meta(...)`.
+  Validators only run on types annotated with `!` (the bang operator). See the
+  [type validation guide](../guide/type-validation.md) for full details.
 */
 
 export safe def isEmail(value: string): Result {
@@ -123,10 +82,10 @@ export safe def isNegative(value: number): Result {
   return _isNegative(value)
 }
 
+/** Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(min.partial(n: 0))`. */
 export safe def min(n: number, value: number): Result {
   """
-  Returns success if `value >= n`, failure otherwise. Bind `n` via PFA
-  before passing to `@validate(...)`, e.g. `@validate(min.partial(n: 0))`.
+  Returns success if `value >= n`, failure otherwise.
 
   @param n - The inclusive minimum allowed value.
   @param value - The number to check.
@@ -134,10 +93,10 @@ export safe def min(n: number, value: number): Result {
   return _min(n, value)
 }
 
+/** Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(max.partial(n: 150))`. */
 export safe def max(n: number, value: number): Result {
   """
-  Returns success if `value <= n`, failure otherwise. Bind `n` via PFA
-  before passing to `@validate(...)`, e.g. `@validate(max.partial(n: 150))`.
+  Returns success if `value <= n`, failure otherwise.
 
   @param n - The inclusive maximum allowed value.
   @param value - The number to check.
@@ -145,11 +104,10 @@ export safe def max(n: number, value: number): Result {
   return _max(n, value)
 }
 
+/** Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(minLength.partial(n: 3))`. */
 export safe def minLength(n: number, value: string): Result {
   """
-  Returns success if `value.length >= n`, failure otherwise. Bind `n`
-  via PFA before passing to `@validate(...)`, e.g.
-  `@validate(minLength.partial(n: 3))`.
+  Returns success if `value.length >= n`, failure otherwise.
 
   @param n - The inclusive minimum allowed length.
   @param value - The string to check.
@@ -157,11 +115,10 @@ export safe def minLength(n: number, value: string): Result {
   return _minLength(n, value)
 }
 
+/** Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(maxLength.partial(n: 80))`. */
 export safe def maxLength(n: number, value: string): Result {
   """
-  Returns success if `value.length <= n`, failure otherwise. Bind `n`
-  via PFA before passing to `@validate(...)`, e.g.
-  `@validate(maxLength.partial(n: 80))`.
+  Returns success if `value.length <= n`, failure otherwise.
 
   @param n - The inclusive maximum allowed length.
   @param value - The string to check.
@@ -169,11 +126,10 @@ export safe def maxLength(n: number, value: string): Result {
   return _maxLength(n, value)
 }
 
+/** Bind `pattern` via PFA before use in `@validate(...)`, e.g. `@validate(matches.partial(pattern: "^[A-Z]"))`. */
 export safe def matches(pattern: string, value: string): Result {
   """
-  Returns success if `value` matches the regular expression `pattern`,
-  failure otherwise. Bind `pattern` via PFA before passing to
-  `@validate(...)`, e.g. `@validate(matches.partial(pattern: "^[A-Z]"))`.
+  Returns success if `value` matches the regular expression `pattern`, failure otherwise.
 
   @param pattern - The regular expression source to match against.
   @param value - The string to check.
@@ -220,7 +176,7 @@ export type URLString = string
 export type UUIDString = string
 
 /** A number that must lie within the inclusive range `[low, high]`.
-    Use as `NumberInRange(0, 100)` etc. — both bounds substitute into the
+    Use as `NumberInRange(0, 100)` etc. Both bounds substitute into the
     `@validate(...)` and `@jsonSchema(...)` tags at the use site. */
 @validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })

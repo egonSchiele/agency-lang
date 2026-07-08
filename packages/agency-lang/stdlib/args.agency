@@ -1,29 +1,18 @@
 import { _parseArgs } from "agency-lang/stdlib-lib/args.js"
 
 /** @module
+  Parse command-line flags.
+  Features:
+  - required flags
+  - default values
+  - mutually-exclusive groups
+  - auto-generated `--help` / `--version`
+  - number coercion
 
-  ## Module: std::args
+  Call `parseArgs` as the first thing in `main`.
 
-  Parse the program's command-line flags. Thin wrapper over Node's
-  built-in `node:util.parseArgs` with Agency-friendly defaults:
-
-  - Number coercion with strict parsing (rejects `0x10`, whitespace,
-    `NaN`, `Infinity`, etc.).
-  - Required-flag and default-value handling.
-  - Auto-generated `--help` / `--version`.
-  - Mutually-exclusive / required-together flag groups.
-  - On parse error: writes a formatted message + usage to stderr and
-    exits 2. On `--help` / `--version`: writes to stdout and exits 0.
-
-  ## Usage contract
-
-  Call `parseArgs` as the **first thing** in `main`, before installing
-  handlers, before starting a REPL (`std::ui` / `std::ui/cli`), before
-  any side-effectful initialization. The function exits the process
-  on usage errors and on `--help`; running it before any handlers /
-  checkpoints / TUI exist keeps that exit safe.
-
-  ## Example
+  On a usage error it prints to stderr and exits 2.
+  On `--help` / `--version` it prints to stdout and exits 0.
 
   ```ts
   import { parseArgs } from "std::args"
@@ -45,19 +34,17 @@ import { _parseArgs } from "agency-lang/stdlib-lib/args.js"
     }
   }
   ```
-***/
+*/
 
 /** Description of a single flag.
 
-    `type` declares the value shape. `short` is a single-character alias.
-    `default` is applied when the flag is absent (mutually exclusive with
-    `required`). `choices` constrains string flags to a fixed set of
-    case-sensitive values. `hidden` flags still parse but are omitted
-    from `--help`. `optional` (string flags only, no `choices`) lets
-    the value be omitted: a bare `--flag` yields "" instead of a
-    missing-value error, so "present but empty" is a distinct state from
-    absent — useful for "show me the choices" affordances. */
-type FlagSpec = {
+- `short` = single-character alias (eg `-n` for `--name`).
+- `default` and `required` are mutually exclusive.
+- `choices` constrains string flags to a fixed set of values.
+- `hidden` flags still parse but are omitted from `--help`.
+- a bare `--flag` is a missing-value error unless `optional` is set,
+  in which case it yields "" instead of an error. */
+export type FlagSpec = {
   type: "string" | "number" | "boolean";
   short?: string;
   default?: string | number | boolean;
@@ -69,20 +56,19 @@ type FlagSpec = {
 }
 
 /** Optional flag-group constraints. `exclusive` declares sets of
-    flags where at most one may be set; `requiredTogether` declares
+    flags where at most one may be set. `requiredTogether` declares
     sets where setting one requires setting all. A flag with a
     `default` counts as "set" for group purposes. */
-type FlagGroups = {
+export type FlagGroups = {
   exclusive?: string[][];
   requiredTogether?: string[][]
 }
 
 /** Full schema for one call to `parseArgs`.
-
-    `programName` defaults to `process.argv[1]`'s basename if omitted —
-    set it explicitly when running under the agency CLI or a bundled
+    `programName` defaults to `process.argv[1]`'s basename if omitted.
+    Set it explicitly when running under the agency CLI or a bundled
     agent. Setting `version` enables auto-generated `--version` / `-V`. */
-type ArgsSchema = {
+export type ArgsSchema = {
   programName?: string;
   description?: string;
   version?: string;
@@ -92,31 +78,18 @@ type ArgsSchema = {
 }
 
 /** Result of a successful parse.
-
-    `flags` is a null-prototype map of declared flag names to coerced
+    `flags` is a map of declared flag names to coerced
     values (string / number / boolean per the schema). `positionals` is
     every argv token that wasn't a flag or flag-value, in original
     order, plus everything after `--`. */
-type ParsedArgs = {
+export type ParsedArgs = {
   flags: Record<string, any>;
   positionals: string[]
 }
 
-/** Parse `process.argv` against `schema`.
-
-    See the module docstring for the usage contract — call this before
-    installing handlers or starting a REPL.
-
-    Returns `{ flags, positionals }`. On usage error, writes a message
-    + usage block to stderr and exits 2. On `--help` / `--version`,
-    writes to stdout and exits 0. Schema bugs (duplicate `short`,
-    `required` + `default`, etc.) throw at call time before any argv
-    is touched.
-
-    @param schema - Flag schema describing the program's CLI. See
-    `FlagSpec` and `ArgsSchema` for the field reference.
-    @returns Parsed `{ flags, positionals }`.
-*/
 export def parseArgs(schema: ArgsSchema): ParsedArgs {
+  """
+  Given the schema, parse `process.argv`.
+  """
   return _parseArgs(schema)
 }

@@ -5,45 +5,30 @@ import {
   _clearHistory,
  } from "agency-lang/stdlib-lib/cli.js"
 
-/*
-  ## Module: std::ui/cli (line-mode REPL)
-
-  Line-mode sibling of `std::ui`. Provides `repl`, `pushMessage`, and
-  `clearMessages` — driven by Node's `readline` instead of the
-  alt-screen TUI engine.
-
-  The user-facing trade is documented in the spec at
-  `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`:
-
-  - **Lost**: pinned status line, live spinner, modal choice prompts,
-    in-app scroll. The screen is the host terminal's scrollback —
-    every prompt and reply is a fresh line appended to it.
-  - **Gained for free**: native scrollback + search + copy/paste +
-    mouse-select + `Cmd`/`Ctrl`-click on links, readline's full line
-    editor and history, bracketed paste — all delivered by the
-    terminal and `readline`, no TUI re-implementation.
-
-  Picking a mode is a one-line `import` change. The agent has:
+/** @module
+  A line-mode REPL for CLI agents, driven by Node's `readline` instead of
+  the alt-screen TUI engine in `std::ui`. It gives up the pinned status
+  line, live spinner, and in-app scrolling. In exchange, every prompt
+  and reply is a plain line in the terminal's scrollback, so you get
+  native search, copy/paste, link clicks, line editing, and history for
+  free. It shares `std::ui`'s `repl` call signature, so switching modes is
+  a one-line import change:
 
   ```ts
-  // TUI mode (today's default)
+  // TUI mode (alt-screen)
   import { repl } from "std::ui"
 
-  // Line mode
+  // Line mode (scrollback)
   import { repl } from "std::ui/cli"
   ```
-
-  `pushMessage` and `clearMessages` are re-exported directly from
-  `std::ui` — the line-mode REPL never sets `_activeRepl`, so those
-  functions' existing `_activeRepl == null` fallback branches *are*
-  the line-mode behavior (straight `print`, silent no-op).
-
-  `chooseOption` is intentionally NOT re-exported here (see the note
-  on the `export` statement below). Consumers that need it — notably
-  `std::policy` — should `import { chooseOption } from "std::ui"`
-  directly. Its own `_activeRepl == null` fallback is the line-mode
-  behavior, so it works seamlessly with `std::ui/cli`'s `repl()`.
 */
+
+// `pushMessage` / `clearMessages` are re-exported from `std::ui`: the
+// line-mode REPL never sets `_activeRepl`, so their `_activeRepl == null`
+// fallbacks (straight print, silent no-op) are the line-mode behavior.
+// `chooseOption` is intentionally NOT re-exported (see the note on the
+// `export` below); consumers like `std::policy` import it from `std::ui`
+// directly and rely on its own null-repl fallback.
 
 // Re-export the line-mode-compatible parts of `std::ui`. The line
 // mode REPL never sets `_activeRepl`, so each of these falls through
@@ -54,7 +39,7 @@ import {
 // schema references the `ChoiceItem` type alias from `std::ui` and
 // re-exporting through the value pathway doesn't bring the type
 // along (the generated `cli.js` references `ChoiceItem` unqualified
-// and crashes at load time). Consumers — notably `std::policy` —
+// and crashes at load time). Consumers, notably `std::policy`,
 // already import `chooseOption` directly from `std::ui`, and the
 // fallback path inside `chooseOption` (active when `_activeRepl` is
 // null) is exactly the line-mode behavior. So nothing actually
@@ -64,9 +49,15 @@ export { pushMessage, clearMessages } from "std::ui"
 // The active `repl()` session's history-file path, held as an Agency module
 // global so it lives in the execution model (serialized, module-isolated)
 // rather than captured in a TS closure. `clearHistory()` reads it to know
-// which file to clear — the runtime remembers the path, not a TS hook.
+// which file to clear. The runtime remembers the path, not a TS hook.
 let _historyFile: string = ""
 
+/**
+ * Line-mode sibling of the std::ui TUI repl. Current limitations:
+ * `status` is accepted for signature parity but not yet rendered;
+ * `paletteCommands` has no tab completion yet; there is no busy
+ * spinner and no Ctrl+C cancel of an in-flight turn.
+ */
 export def repl(
   status: any,
   onSubmit: any,
@@ -76,44 +67,23 @@ export def repl(
   paletteCommands: any = null,
 ) {
   """
-  Line-mode REPL. Same call signature as `std::ui.repl` so swapping
-  modes is a one-line import change in the calling agent.
+  Line-mode REPL with the same call signature as the std::ui TUI repl,
+  so switching modes is a one-line import change.
 
-  Per iteration: print `prompt`, await one line of input (via Node's
-  `readline` — full line editing, history, bracketed paste), call
-  `onSubmit(line)`. If `onSubmit` returns `false`, exit. If it
-  returns a non-empty string, print the string to stdout. Anything
-  else (e.g. the agent's `_runTurn` returning `true` after calling
-  `pushMessage`) is silently ignored — the reply already reached
-  stdout via the underlying `print` path.
+  Each iteration prints `prompt`, awaits one line of input (full line
+  editing, history, bracketed paste), and calls `onSubmit(line)`.
+  Returning false exits; returning a non-empty string prints it;
+  anything else is ignored. Also exits on Ctrl+D (EOF) or Ctrl+C at an
+  idle prompt. Type `/paste` (TTY only) to open a multi-line editor:
+  Enter inserts a newline, Ctrl+D submits the whole buffer as one
+  message, and Ctrl+C / Esc cancels.
 
-  Exits on `onSubmit` returning `false`, on Ctrl+D (EOF) at the
-  prompt, or on Ctrl+C at an idle prompt.
-
-  Built-in `/paste` (TTY only): opens a multi-line editor (à la Node's
-  REPL `.editor`). Enter inserts a newline, Ctrl+D submits the whole
-  buffer as one message, and Ctrl+C / Esc cancels. Because Enter no
-  longer submits while in this mode, pasting a multi-line block lands
-  intact instead of firing one turn per line.
-
-  Round-one limitations (intentional, see the spec):
-  - `status` is accepted for signature parity but not yet rendered.
-  WL2 will turn it into a per-turn footer.
-  - `paletteCommands` is accepted but no tab completion yet (WL6).
-  - No spinner during the busy window (WL3).
-  - No Ctrl+C cancel of an in-flight turn (WL7).
-
-  @param status - Callback returning {left, right, context}; reserved
-  for the WL2 per-turn footer
-  @param onSubmit - Called with the submitted line; return `false` to
-  exit or a string to print
+  @param status - Callback returning {left, right, context}
+  @param onSubmit - Called with the submitted line; return false to exit or a string to print
   @param prompt - String shown before the input buffer (default "> ")
-  @param historyFile - Path to a JSON history file (array of entries);
-  loaded at start and saved on exit. Empty string disables
-  persistence.
+  @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
-  @param paletteCommands - Map of /cmd -> description; reserved for
-  WL6 tab completion
+  @param paletteCommands - Map of /cmd -> description
   """
   // Publish the path to the execution-model global so `clearHistory()` can
   // resolve which file to clear from Agency state rather than a TS closure.
@@ -133,12 +103,9 @@ export def clearScreen() {
 }
 
 export def clearHistory() {
-  """Clear the input history of the **currently running** `repl()` session —
-  both its in-session up-arrow recall and the `historyFile` that session was
-  started with. The file path comes from the `_historyFile` execution-model
-  global (set by `repl()`), so the runtime remembers which file to clear; the
-  live up-arrow recall is wiped via the active REPL. A no-op when called
-  outside an interactive `repl()`."""
+  """Clear the input history of the currently running `repl()` session: both
+  its in-session up-arrow recall and the `historyFile` that session was started
+  with. A no-op when called outside an interactive `repl()`."""
   _clearHistory(_historyFile)
 }
 

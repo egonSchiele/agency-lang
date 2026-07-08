@@ -4,6 +4,19 @@ name: "speech"
 
 # speech
 
+Speak text aloud, record from the microphone, and transcribe audio
+to text.
+
+  ```ts
+  import { record, transcribe, speak } from "std::speech"
+
+  node main() {
+    const audio = record()
+    const text = transcribe(audio)
+    speak("You said: ${text}")
+  }
+  ```
+
 ## Effects
 
 ### std::speak
@@ -14,7 +27,7 @@ effect std::speak {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L28))
 
 ### std::record
 
@@ -22,7 +35,7 @@ effect std::speak {
 effect std::record {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L29))
 
 ### std::transcribe
 
@@ -32,7 +45,7 @@ effect std::transcribe {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L30))
 
 ## Functions
 
@@ -42,15 +55,16 @@ effect std::transcribe {
 speak(text: string, voice: string, rate: number, outputFile: string, allowedPaths: string[])
 ```
 
-A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it. Set allowedPaths to restrict where the output file may be written.
-
-  Cancellation: in-progress speech playback is stopped on Ctrl-C, race-loser, or time-guard abort.
+Speak text aloud using text-to-speech.
 
   @param text - The text to speak
-  @param voice - Voice name
-  @param rate - Words per minute
-  @param outputFile - File path to save audio to
+  @param voice - Voice name to use
+  @param rate - Speaking rate in words per minute
+  @param outputFile - When set, save the audio to this file instead of playing it
   @param allowedPaths - Only allow saving under these path prefixes
+
+Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
+playback.
 
 **Parameters:**
 
@@ -64,7 +78,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 
 **Throws:** `std::speak`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L34))
 
 ### record
 
@@ -72,21 +86,20 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 record(outputFile: string, silenceTimeout: number, allowedPaths: string[]): string
 ```
 
-Record audio from the microphone. Stops when the user presses Enter,
-  or after the specified silence timeout. Set silenceTimeout to 0 to
-  disable silence detection (recording stops only on Enter).
+Record audio from the microphone. Recording stops when the user presses Enter, or after the silence timeout elapses.
 
-  The silenceTimeout parameter is in milliseconds, so you can use
-  Agency's unit literals: record(silenceTimeout: 3s), record(silenceTimeout: 500ms).
-  Set to 0 for no timeout.
+  @param outputFile - File path to save audio to (auto-generated in the temp directory if empty)
+  @param silenceTimeout - Silence before auto-stopping, in milliseconds; 0 disables silence detection so recording stops only on Enter
+  @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
 
-  Cancellation: an in-progress recording is stopped on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
-
-  Set allowedPaths to restrict where a non-empty outputFile may be written; an empty outputFile is auto-generated under the system temp directory and is not subject to the allow-list.
-
-  @param outputFile - File path to save audio to (auto-generated if empty)
-  @param silenceTimeout - Silence before auto-stopping in ms (0 to disable)
-  @param allowedPaths - Only allow saving under these path prefixes
+* `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
+ * `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
+ *
+ * Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
+ * which surfaces as an AgencyCancelledError.
+ *
+ * An empty `outputFile` is auto-generated under the system temp directory and
+ * is not subject to the `allowedPaths` allow-list.
 
 **Parameters:**
 
@@ -100,7 +113,7 @@ Record audio from the microphone. Stops when the user presses Enter,
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L61))
 
 ### transcribe
 
@@ -108,13 +121,14 @@ Record audio from the microphone. Stops when the user presses Enter,
 transcribe(filepath: string, language: string, allowedPaths: string[]): string
 ```
 
-A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy. Set allowedPaths to restrict which audio files may be uploaded.
-
-  Cancellation: an in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard abort.
+Transcribe an audio file to text using OpenAI's Whisper API.
 
   @param filepath - Path to the audio file
-  @param language - Language code for better accuracy
+  @param language - Language code (e.g. "en") for better accuracy
   @param allowedPaths - Only allow reading audio files under these path prefixes
+
+An in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard
+abort.
 
 **Parameters:**
 
@@ -128,4 +142,4 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L76))

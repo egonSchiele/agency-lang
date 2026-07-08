@@ -1,8 +1,28 @@
+/** @module
+Helpers for working with objects: read their keys, values, and entries,
+and transform them with `mapValues`, `mapEntries`, and `filterEntries`.
+
+```ts
+import { keys, mapValues } from "std::object"
+
+node main() {
+  const scores = { alice: 1, bob: 2 }
+  print(keys(scores))   // ["alice", "bob"]
+
+  const scaled = mapValues(scores) as (value, key) {
+    return value * 10
+  }
+  print(scaled)         // { alice: 10, bob: 20 }
+}
+```
+*/
 import { _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
 
 export safe def keys(obj: any): string[] {
   """
   Return an array of an object's own enumerable property names.
+
+  @param obj - The object
   """
   return _keys(obj)
 }
@@ -10,6 +30,8 @@ export safe def keys(obj: any): string[] {
 export safe def values(obj: any): any[] {
   """
   Return an array of an object's own enumerable property values.
+
+  @param obj - The object
   """
   return _values(obj)
 }
@@ -17,13 +39,15 @@ export safe def values(obj: any): any[] {
 export safe def entries(obj: any): any[] {
   """
   Return an array of an object's own enumerable entries, each as { key, value }.
+
+  @param obj - The object
   """
   return _entries(obj)
 }
 
 export def mapValues(obj: any, func: (any, string) -> any): any {
   """
-  Return a new object with the same keys, but with each value transformed by the function. The function receives (value, key).
+  Return a new object with the same keys, but with each value transformed by the function.
 
   @param obj - The object to transform
   @param func - The function receiving (value, key)
@@ -37,7 +61,7 @@ export def mapValues(obj: any, func: (any, string) -> any): any {
 
 export def mapEntries(obj: any, func: (any, string) -> any): any {
   """
-  Return a new object by applying the function to each entry. The function receives (value, key) and should return { key, value }.
+  Return a new object by applying the function to each entry.
 
   @param obj - The object to transform
   @param func - The function receiving (value, key) returning {key, value}
@@ -52,7 +76,7 @@ export def mapEntries(obj: any, func: (any, string) -> any): any {
 
 export def filterEntries(obj: any, func: (any, string) -> boolean): any {
   """
-  Return a new object containing only the entries for which the function returns true. The function receives (value, key).
+  Return a new object containing only the entries for which the function returns true.
 
   @param obj - The object to filter
   @param func - The predicate receiving (value, key)
@@ -68,7 +92,7 @@ export def filterEntries(obj: any, func: (any, string) -> boolean): any {
 
 export def everyEntry(obj: any, func: (any, string) -> boolean): boolean {
   """
-  Return true if the function returns true for every entry in the object. The function receives (value, key).
+  Return true if the function returns true for every entry in the object.
 
   @param obj - The object to test
   @param func - The predicate receiving (value, key)
@@ -83,7 +107,7 @@ export def everyEntry(obj: any, func: (any, string) -> boolean): boolean {
 
 export def someEntry(obj: any, func: (any, string) -> boolean): boolean {
   """
-  Return true if the function returns true for at least one entry in the object. The function receives (value, key).
+  Return true if the function returns true for at least one entry in the object.
 
   @param obj - The object to test
   @param func - The predicate receiving (value, key)

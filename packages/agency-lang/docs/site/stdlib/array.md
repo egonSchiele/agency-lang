@@ -4,21 +4,7 @@ name: "array"
 
 # array
 
-## Array helpers
-
-  The array collection helpers — `map`, `filter`, `reduce`, `find`,
-  `findIndex`, `flatMap`, `exclude`, `every`, `some`, `count`, `sortBy`,
-  `unique`, and `groupBy` — now live in `std::index` and are
-  **auto-imported into every `.agency` file**, so you can call them
-  without importing anything. (Agency has no `.map()` method syntax, so
-  these free functions are the only way to operate on arrays — which is
-  why they belong in the always-available set.) See the `std::index`
-  reference for their signatures.
-
-  This module re-exports them for backward compatibility: existing code
-  that does `import { map, filter, ... } from "std::array"` keeps working.
-
-  `std::array` is deliberately excluded from the auto-import prelude (see
-  `isNonTemplatedStdlib` in the compiler): a prelude-wrapped module cannot
-  re-export a name the prelude also auto-imports without the generated
-  tool registration tripping over the re-export's temporal dead zone.
+Re-exports the array helpers (`map`, `filter`, `reduce`, and friends) so
+that `import { map, filter, ... } from "std::array"` keeps working. These
+helpers now live in `std::index` and are auto-imported into every
+`.agency` file, so you rarely need to import them at all.

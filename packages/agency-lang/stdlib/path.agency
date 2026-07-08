@@ -1,8 +1,25 @@
 import { _join, _resolve, _basename, _dirname, _extname, _relative, _isAbsolute } from "agency-lang/stdlib-lib/path.js"
 
+/** @module
+  Pure helpers for building and taking apart file paths: join, resolve,
+  basename, dirname, extname, relative, and isAbsolute. None of these touch the
+  filesystem.
+
+  ```ts
+  import { join, extname } from "std::path"
+
+  node main() {
+    const p = join("src", "main.agency")
+    print(extname(p))
+  }
+  ```
+*/
+
 export safe def join(...parts: string[]): string {
   """
-  Join path segments using the platform separator, normalizing the result.
+  Join path segments using the platform separator and normalize the result.
+
+  @param parts - Path segments to join
   """
   return _join(parts)
 }
@@ -10,16 +27,18 @@ export safe def join(...parts: string[]): string {
 export safe def resolve(...parts: string[]): string {
   """
   Resolve path segments into an absolute path, relative to the current working directory.
+
+  @param parts - Path segments to resolve
   """
   return _resolve(parts)
 }
 
 export safe def basename(p: string, ext: string = ""): string {
   """
-  Return the last portion of a path. If ext is given and the path ends with it, ext is trimmed off.
+  Return the last portion of a path.
 
   @param p - The file path
-  @param ext - Extension to strip from the result
+  @param ext - If given and the path ends with this extension, it is trimmed off the result
   """
   return _basename(p, ext)
 }
@@ -27,6 +46,8 @@ export safe def basename(p: string, ext: string = ""): string {
 export safe def dirname(p: string): string {
   """
   Return the directory portion of a path.
+
+  @param p - The file path
   """
   return _dirname(p)
 }
@@ -34,13 +55,15 @@ export safe def dirname(p: string): string {
 export safe def extname(p: string): string {
   """
   Return the extension of a path (including the leading dot), or an empty string if there is none.
+
+  @param p - The file path
   """
   return _extname(p)
 }
 
 export safe def relative(from: string, to: string): string {
   """
-  Return the relative path from 'from' to 'to'.
+  Return the relative path from one path to another.
 
   @param from - The starting path
   @param to - The target path
@@ -51,6 +74,8 @@ export safe def relative(from: string, to: string): string {
 export safe def isAbsolute(p: string): boolean {
   """
   Return true if the path is absolute.
+
+  @param p - The path to check
   """
   return _isAbsolute(p)
 }

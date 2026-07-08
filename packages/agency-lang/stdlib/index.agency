@@ -1,24 +1,7 @@
-/**
-The imports from this file get auto-imported into every .agency file, so you can use these tools without needing to import them manually.
-
-HTTP fetching (`fetch`, `fetchJSON`, `fetchMarkdown`) lives in `std::http` —
-you must import it explicitly so that (a) users can opt out by importing
-nothing, and (b) the JavaScript built-in `fetch` is not silently
-shadowed inside js-bodied function bodies.
-
-```ts
-import { fetchJSON } from "std::http"
-
-// Create a constrained API client that only fetches from GitHub
-const githubAPI = fetchJSON.partial(
-  baseUrl: "https://api.github.com",
-  headers: { "Authorization": "Bearer ${token}" },
-  allowedDomains: ["api.github.com"]
-)
-
-// Now the agent can only reach GitHub
-const repos = githubAPI(path: "/user/repos")
-```
+/** @module
+The always-available prelude: printing, input, file I/O, and the array
+helpers. Every `.agency` file auto-imports these, so you can call them
+without an import.
 */
 import { _callback } from "agency-lang/stdlib-lib/agency.js"
 import {
@@ -38,10 +21,10 @@ import {
  } from "agency-lang/stdlib-lib/syntax.js"
 
 // Payload types for the interrupt effects raised by this module.
-// `std::read`/`std::write` are shared file-access effects (also raised by
-// `std::agency`); their canonical payload is the file identity a policy
-// keys on — `{ dir, filename }` — while per-call extras (content, mode,
-// offset, ...) are permitted at individual raise sites.
+// `std::read`/`std::write` are shared file-access effects, also raised by
+// `std::agency`. Their canonical payload is `{ dir, filename }`, the file
+// identity a policy keys on. Individual raise sites may add per-call extras
+// like content, mode, and offset.
 effect std::read {
   dir: string;
   filename: string
@@ -55,9 +38,16 @@ effect std::readImage {
   filename: string
 }
 
+/** How an existing file is handled on write:
+  "overwrite" replaces it, "append" adds to it, "create-only" fails if it
+  already exists. */
+export type WriteMode = "overwrite" | "append" | "create-only"
+
 export safe def print(...messages) {
   """
-  A tool for printing a message to the console.
+  Print a message to the console.
+
+  @param messages - The values to print
   """
   _print(...messages)
   return "Message printed."
@@ -65,7 +55,7 @@ export safe def print(...messages) {
 
 // The agent's working directory: a branch-scoped override that
 // path-taking stdlib tools resolve relative paths against. Empty string
-// means "unset" — tools keep their default base. Distinct from `cwd()`
+// means "unset", so tools keep their default base. Distinct from `cwd()`
 // (the OS process cwd) on purpose: an agent sets this to point the file
 // and shell tools at the user's directory without changing the process.
 // Lives here in `std::index` (not `std::system`) because `index` is the
@@ -74,32 +64,33 @@ export safe def print(...messages) {
 // would create a circular dependency back into `index`.
 let _agentCwd = ""
 
+/**
+  Set the agent working directory. Path-taking tools (read, write, edit,
+  ls, glob, grep, exec, bash, ...) can resolve relative paths against
+  the agent working directory if you pass in `useAgentCwd: true` to them.
+
+  This is useful if you're building a coding agent,
+  to set the current working directory for the agent.
+*/
 export safe def setAgentCwd(dir: string) {
   """
-  Set the agent working directory. Path-taking tools (read, write, edit,
-  ls, glob, grep, exec, bash, ...) resolve relative paths against it.
-  Pass an absolute path. Branch-scoped: a fork/race/parallel branch can
-  change it without affecting the parent.
+  Set the working directory that path-taking tools resolve relative paths against.
 
-  @param dir - Absolute directory to use as the agent working directory.
+  @param dir - The absolute directory to use as the agent working directory
   """
   _agentCwd = dir
 }
 
 export safe def getAgentCwd(): string {
   """
-  Return the agent working directory, or an empty string when none is
-  set. See setAgentCwd.
+  Return the agent working directory, or an empty string if none is set.
   """
   return _agentCwd
 }
 
-// Internal plumbing, not an agent tool: no docstring, so it is not exposed
-// as an LLM-callable tool. Resolve `dir` against the agent working directory
-// when one is set; otherwise return `dir` unchanged. Used by the path-taking
-// stdlib wrappers so a set agent cwd overrides their default base. `_resolve`
-// short-circuits on an absolute `dir`, and resolve(base, "") returns base, so
-// this works for both the fs default (".") and shell default ("").
+/** Used by read, write, and other functions to resolve
+relative paths against the agent working directory.
+*/
 export safe def applyAgentCwd(dir: string): string {
   const base = getAgentCwd()
   if (base == "") {
@@ -110,7 +101,10 @@ export safe def applyAgentCwd(dir: string): string {
 
 export safe def printJSON(obj: any, highlight: boolean = false) {
   """
-  A tool for printing an object as formatted JSON to the console.
+  Print an object as formatted JSON to the console.
+
+  @param obj - The object to print
+  @param highlight - Whether to syntax-highlight the output
   """
   if (highlight) {
     _print(_syntaxHighlight(JSON.stringify(obj, null, 2), "json"))
@@ -120,20 +114,24 @@ export safe def printJSON(obj: any, highlight: boolean = false) {
   return "JSON printed."
 }
 
+/** Ctrl-C, race-loser, or time-guard abort releases a blocked input
+prompt, which surfaces as an AgencyCancelledError. */
 export safe def input(prompt: string): string {
   """
-  A tool for prompting the user for input and returning their response.
+  Prompt the user for input and return their response.
 
-  Cancellation: a blocked input prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
+  @param prompt - The message to show the user
   """
   return _input(prompt)
 }
 
+/** Use unit literals for clarity: sleep(1s), sleep(500ms), sleep(2m).
+A long sleep wakes immediately on Ctrl-C, race-loser, or time-guard abort. */
 export safe def sleep(ms: number) {
   """
-  Pause execution for the given duration in milliseconds. Use with unit literals for clarity: sleep(1s), sleep(500ms), sleep(2m).
+  Pause execution for the given duration in milliseconds.
 
-  Cancellation: a long sleep wakes up immediately on Ctrl-C, race-loser, or time-guard abort.
+  @param ms - The number of milliseconds to pause
   """
   _sleep(ms)
 }
@@ -146,19 +144,13 @@ export safe def read(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
-
-  By default the full file is returned. Pass `offset` (1-indexed) and/or
-  `limit` to paginate a large file — when either is set, a truncation
-  note is appended naming the line range and total line count. `0` for
-  either argument means "unset" (Agency does not have undefined
-  arguments).
+  Read the contents of a file and return it as a string.
 
   @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
-  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Opt-in: defaults to false so behavior is unchanged for everyone who hasn't intentionally enabled it.
+  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -176,22 +168,17 @@ export def write(
   filename: string,
   content: string,
   dir: string = ".",
-  mode: string = "overwrite",
+  mode: WriteMode = "overwrite",
   useAgentCwd: boolean = false,
 ): Result {
   """
-  A tool for writing content to a file. The filename is resolved relative to dir.
-
-  The `mode` parameter controls how an existing file is handled:
-  - "overwrite" (default): replace the file if it exists, create it if not
-  - "append": append to the file if it exists, create it if not
-  - "create-only": fail if the file already exists
+  Write content to a file.
 
   @param filename - The file to write
   @param content - The content to write
   @param dir - The directory to resolve the filename against (defaults to ".")
-  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
-  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param mode - How to handle an existing file
+  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -209,24 +196,18 @@ export def writeBinary(
   filename: string,
   base64: string,
   dir: string = ".",
-  mode: string = "overwrite",
+  mode: WriteMode = "overwrite",
   useAgentCwd: boolean = false,
 ): Result {
   """
-  Write base64-encoded binary data to a file (images, audio, video, PDFs, any
-  binary). Decodes the base64 and writes raw bytes — unlike write(), which
-  writes UTF-8 text. The filename is resolved relative to dir.
-
-  The `mode` parameter controls how an existing file is handled:
-  - "overwrite" (default): replace the file if it exists, create it if not
-  - "append": append to the file if it exists, create it if not
-  - "create-only": fail if the file already exists
+  Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
+  binary. Decodes the base64 and writes raw bytes rather than UTF-8 text.
 
   @param filename - The file to write
-  @param base64 - The binary content, base64-encoded (e.g. from generateImage() or readBinary())
+  @param base64 - The binary content, base64-encoded
   @param dir - The directory to resolve the filename against (defaults to ".")
-  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
-  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param mode - How to handle an existing file
+  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -246,12 +227,11 @@ export safe def readBinary(
 ): Result {
   """
   Read a file and return its contents as a Base64-encoded string. Works for any
-  binary file (images, audio, video, PDFs). The filename is resolved relative to
-  dir. Pair with writeBinary() to round-trip binary data.
+  binary file: images, audio, video, PDFs.
 
   @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
-  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -265,7 +245,11 @@ export safe def readBinary(
 
 export safe def range(start: number, end: number = -1): number[] {
   """
-  Generate an array of numbers. With one argument, generates from 0 to start-1. With two arguments, generates from start to end-1.
+  Generate an array of numbers. With one argument, counts from 0 to start-1;
+  with two, from start to end-1.
+
+  @param start - The count with one argument, or the starting number with two
+  @param end - The exclusive end number (omit to count up from 0)
   """
   if (end == -1) {
     return _range(start)
@@ -276,7 +260,7 @@ export safe def range(start: number, end: number = -1): number[] {
 // --- Array helpers (auto-imported) ---------------------------------------
 // These collection primitives live in `std::index` so they ride the single
 // auto-import prelude line into every file. Agency has no `.map()` method
-// syntax, so these free functions are the only way to operate on arrays —
+// syntax, so these free functions are the only way to operate on arrays,
 // which is why they belong in the always-available set. `std::array`
 // re-exports them for backward compatibility.
 
@@ -285,7 +269,7 @@ export def map(arr: any[], func: (any) -> any): any[] {
   Map a function over an array, returning a new array of results.
 
   @param arr - The array to map over
-  @param func - The function to apply to each element
+  @param func - The mapping function
   """
   const newArr = []
   for (item in arr) {
@@ -299,7 +283,7 @@ export def filter(arr: any[], func: (any) -> any): any[] {
   Return a new array containing only the elements for which the function returns true.
 
   @param arr - The array to filter
-  @param func - The function that returns true for elements to keep
+  @param func - The filter function
   """
   const result = []
   for (item in arr) {
@@ -312,10 +296,10 @@ export def filter(arr: any[], func: (any) -> any): any[] {
 
 export def exclude(arr: any[], func: (any) -> any): any[] {
   """
-  Return a new array excluding elements for which the function returns true. Inverse of filter.
+  Return a new array excluding elements for which the function returns true.
 
   @param arr - The array to filter
-  @param func - The function that returns true for elements to exclude
+  @param func - The exclusion predicate
   """
   const result = []
   for (item in arr) {
@@ -331,7 +315,7 @@ export def find(arr: any[], func: (any) -> any): any {
   Return the first element for which the function returns true, or null if none match.
 
   @param arr - The array to search
-  @param func - The function that returns true for the desired element
+  @param func - The predicate function
   """
   for (item in arr) {
     if (func(item)) {
@@ -346,7 +330,7 @@ export def findIndex(arr: any[], func: (any) -> any): number {
   Return the index of the first element for which the function returns true, or -1 if none match.
 
   @param arr - The array to search
-  @param func - The function that returns true for the desired element
+  @param func - The predicate function
   """
   for (item, index in arr) {
     if (func(item)) {
@@ -376,7 +360,7 @@ export def flatMap(arr: any[], func: (any) -> any): any[] {
   Map a function over an array and flatten the results by one level.
 
   @param arr - The array to map over
-  @param func - The function to apply to each element
+  @param func - The mapping function
   """
   const result = []
   for (item in arr) {
@@ -439,7 +423,7 @@ export def sortBy(arr: any[], func: (any) -> any): any[] {
   Return a new array sorted by the values returned by the function, in ascending order.
 
   @param arr - The array to sort
-  @param func - The function returning the sort key for each element
+  @param func - The sort-key function
   """
   const result = []
   for (item in arr) {
@@ -466,7 +450,7 @@ export def unique(arr: any[], func: (any) -> any): any[] {
   Return a new array with duplicate elements removed, using the function to determine the identity of each element.
 
   @param arr - The array to deduplicate
-  @param func - The function returning the identity key for each element
+  @param func - The identity-key function
   """
   const result = []
   const seen = []
@@ -491,7 +475,7 @@ export def groupBy(arr: any[], func: (any) -> any): any {
   Group elements of an array by the value returned by the function. Returns an object where keys are group names and values are arrays of elements.
 
   @param arr - The array to group
-  @param func - The function returning the group key for each element
+  @param func - The group-key function
   """
   // Null-prototype object so a user-supplied key like "__proto__" or
   // "constructor" is stored as a plain own property instead of hitting
@@ -508,11 +492,11 @@ export def groupBy(arr: any[], func: (any) -> any): any {
 
 export def callback(name: string, fn: any) {
   """
-  Register a scoped callback for the dynamic extent of the calling function or node.
-  When the caller returns, the callback is automatically removed. Top-level callbacks
-  (registered outside any function or node) are active for the whole run.
+  Register a callback for a lifecycle event. A callback registered inside a
+  function or node is removed when that returns. One registered at the top
+  level stays active for the whole run.
 
-  @param name - One of the Agency callback hook names (e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd")
+  @param name - The callback hook name, e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd"
   @param fn - A function that receives the event data
   """
   _callback(name, fn)

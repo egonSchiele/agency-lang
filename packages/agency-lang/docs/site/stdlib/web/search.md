@@ -4,6 +4,18 @@ name: "search"
 
 # search
 
+Search the web from Agency code, backed by the Brave Search API
+  (https://brave.com/search/api/). Use `tavilySearch` for AI-optimized results.
+
+  ```ts
+  import { search } from "std::web/search"
+
+  node main() {
+    const results = search("agency language programming")
+    print(results)
+  }
+  ```
+
 ## Types
 
 ## Effects
@@ -21,7 +33,7 @@ effect std::search {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L23))
 
 ### std::tavilySearch
 
@@ -34,7 +46,7 @@ effect std::tavilySearch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L24))
 
 ## Functions
 
@@ -44,15 +56,15 @@ effect std::tavilySearch {
 search(query: string, count: number, apiKey: string, country: string, searchLang: string, safesearch: string, freshness: string): SearchResult[]
 ```
 
-Search the web. Returns a list of results with title, url, and description. Set BRAVE_API_KEY env var or pass apiKey directly. Backed by the Brave Search API (https://brave.com/search/api/).
+Search the web. Returns a list of results with title, url, and description.
 
   @param query - The search query
-  @param count - Number of results to return (default 5)
-  @param apiKey - Brave Search API key (defaults to BRAVE_API_KEY env var)
+  @param count - Number of results to return
+  @param apiKey - Brave Search API key (defaults to the BRAVE_API_KEY env var)
   @param country - Two-letter country code to localize results (e.g. "US")
   @param searchLang - Language code for results (e.g. "en")
-  @param safesearch - Safe search level ("off", "moderate", "strict")
-  @param freshness - Time-based filter ("pd" past day, "pw" past week, "pm" past month, "py" past year)
+  @param safesearch - Safe search level: "off", "moderate", or "strict"
+  @param freshness - Time filter: "pd" (past day), "pw" (past week), "pm" (past month), "py" (past year)
 
 **Parameters:**
 
@@ -70,7 +82,7 @@ Search the web. Returns a list of results with title, url, and description. Set 
 
 **Throws:** `std::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L26))
 
 ### tavilySearch
 
@@ -78,13 +90,15 @@ Search the web. Returns a list of results with title, url, and description. Set 
 tavilySearch(query: string, count: number, apiKey: string, searchDepth: string, topic: string): SearchResult[]
 ```
 
-Search the web with Tavily, a search API built for AI agents. Returns a list of results with title, url, and description. Set TAVILY_API_KEY env var or pass apiKey directly. A free key (no credit card) is available at https://tavily.com.
+Search the web with Tavily, a search API built for AI agents. Returns a list of results with title, url, and description.
 
   @param query - The search query
-  @param count - Number of results to return (default 5)
-  @param apiKey - Tavily API key (defaults to TAVILY_API_KEY env var)
-  @param searchDepth - Depth of the search ("basic" for fast results, "advanced" for deeper retrieval)
-  @param topic - Category of the search ("general" or "news")
+  @param count - Number of results to return
+  @param apiKey - Tavily API key (defaults to the TAVILY_API_KEY env var)
+  @param searchDepth - "basic" for fast results or "advanced" for deeper retrieval
+  @param topic - "general" or "news"
+
+Get a free Tavily key (no credit card) at https://tavily.com.
 
 **Parameters:**
 
@@ -100,4 +114,4 @@ Search the web with Tavily, a search API built for AI agents. Returns a list of 
 
 **Throws:** `std::tavilySearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L70))

@@ -9,20 +9,28 @@ import {
 import { env } from "std::system"
 
 /** @module
-Pick which model and options `llm()` calls use at runtime.
+Choose which model and options your `llm()` calls use at runtime.
 
-`setModel` / `setLlmOptions` set defaults for subsequent `llm()` calls;
-`pickProvider` detects an available provider from API-key env vars.
+`setModel` and `setLlmOptions` set defaults for later `llm()` calls,
+and `pickProvider` finds an available provider from your API-key
+environment variables. Defaults are branch-scoped and survive
+interrupt/resume. A per-call `llm(..., { ... })` option always wins.
 
-Defaults are branch-scoped — a `fork`/`race` branch inherits the
-run-wide default, but a `setModel` inside the branch stays local — and
-they survive interrupt/resume. A per-call `llm(..., { ... })` option
-always overrides these defaults.
+```ts
+import { setModel, setLlmOptions } from "std::llm"
+
+node main() {
+  setModel("claude-opus-4-8")
+  setLlmOptions({ temperature: 0.2 })
+  const answer: string = llm("Say hello")
+  print(answer)
+}
+```
 */
 
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
- *  model name — set it only when the name doesn't imply a provider (e.g.
+ *  model name. Set it only when the name doesn't imply a provider (e.g.
  *  a custom or local model). */
 export type LlmDefaults = {
   model?: string;
@@ -36,7 +44,7 @@ export type LlmDefaults = {
 export def setLlmOptions(opts: LlmDefaults) {
   """
   Set default options for subsequent llm() calls. Only the fields you
-  pass are changed; a per-call llm(..., { ... }) option overrides them.
+  pass are changed. A per-call llm(..., { ... }) option overrides them.
 
   @param opts - The default LLM options to merge in
   """
@@ -58,7 +66,7 @@ export def envVarFor(provider: string): string {
   provider, or "" for an unrecognized name. Recognized: "anthropic"
   (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai" (OPENAI_API_KEY),
   "openrouter" (OPENROUTER_API_KEY), "litellm" (LITELLM_API_KEY). Note that
-  "litellm" also requires a base URL (LITELLM_BASE_URL); this returns only
+  "litellm" also requires a base URL (LITELLM_BASE_URL). This returns only
   the API-key var.
 
   @param provider - The provider name to map
@@ -84,9 +92,9 @@ export def envVarFor(provider: string): string {
 export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Result<string, string> {
   """
   Return the first provider in `order` whose API-key environment variable
-  is set, or a failure if none are. A provider is checkable when `envVarFor`
-  knows its key var (anthropic, google, openai, openrouter, litellm);
-  unrecognized names in `order` are skipped.
+  is set, or a failure if none are. Checkable providers are anthropic,
+  google, openai, openrouter, and litellm; unrecognized names in `order`
+  are skipped.
 
   @param order - Providers to check, highest preference first
   """
@@ -121,8 +129,8 @@ export def registerProviderModule(path: string) {
   _registerProviderModule(path)
 }
 
-// Field order is mirrored by the TS HostedModelInfo in lib/stdlib/llm.ts and is
-// JSON-compared by callers in tests; do not reorder.
+// The TS HostedModelInfo in lib/stdlib/llm.ts mirrors this field order, and
+// callers JSON-compare it in tests. Do not reorder.
 export type HostedModelInfo = {
   name: string;
   provider: string;
@@ -135,8 +143,8 @@ export type HostedModelInfo = {
 
 export def listHostedModels(): HostedModelInfo[] {
   """
-  All known hosted text models (baked catalog plus any refreshed data), for
-  discovery and model pickers. Backed by smoltalk's getAllModels.
+  Return all known hosted text models (the built-in catalog plus any
+  refreshed data) for model discovery and pickers.
   """
   return _listHostedModels()
 }
@@ -155,8 +163,8 @@ export safe def modelSupportsInput(model: string, modality: string): boolean | n
   """
   Whether a model accepts a given input modality ("image" or "pdf").
   Tri-state: true / false when the model catalog says so, null when the
-  model or its modality data is unknown. Treat null as "do not gate" —
-  that is the same rule llm() applies at send time.
+  model or its modality data is unknown. Treat null as "do not gate",
+  the same rule llm() applies at send time.
 
   @param model - The model name (e.g. "gpt-4o-mini")
   @param modality - "image" or "pdf"
@@ -173,11 +181,10 @@ export safe def modelSupportsInput(model: string, modality: string): boolean | n
 // is resolved relative to the working directory, or used as-is if absolute.
 export def loadModelData(path: string): Result<number, string> {
   """
-  Load model data from a JSON file (the shape `agency models refresh` prints)
-  and register it for this program, so `llm()` and the model catalog
-  (`listHostedModels` / `hostedModelInfo`) recognize those models. Multiple
-  loads accumulate. Returns the number of models loaded, or a failure if the
-  file cannot be read.
+  Load model data from a JSON file (the shape `agency models refresh`
+  prints) and register it so `llm()` and the model catalog recognize
+  those models. Multiple loads accumulate. Returns the number of models
+  loaded, or a failure if the file cannot be read.
 
   @param path - Path to a model-data JSON file
   """

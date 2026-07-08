@@ -1,8 +1,26 @@
 import { _mostCommon } from "agency-lang/stdlib-lib/builtins.js"
 
+/** @module
+Run a block several times and combine the results. `sample` collects
+every result, `consensus` takes the majority vote, and `retry` /
+`retryWithFeedback` re-run a block until one result passes a test.
+
+```ts
+import { consensus } from "std::strategy"
+
+node main() {
+  // Run the same prompt 5 times and keep the majority answer.
+  let answer = consensus(5) as {
+    return llm("Is 17 prime? Answer yes or no.")
+  }
+  print(answer)
+}
+```
+*/
+
 // Private helper: return the most common element in an array (majority vote).
-// `mostCommon` used to be a public auto-imported stdlib function; it was
-// removed as too niche to auto-import, and consensus() is its only consumer.
+// `mostCommon` used to be a public auto-imported stdlib function. We removed
+// it as too niche to auto-import, and consensus() is now its only consumer.
 def mostCommon(items: any[]): any {
   return _mostCommon(items)
 }

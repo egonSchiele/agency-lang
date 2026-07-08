@@ -4,7 +4,10 @@ name: "oauth"
 
 # oauth
 
-## Usage
+Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your
+  agent can call APIs on the user's behalf. Register an app with the provider to
+  get a client ID and secret. Then authorize once and fetch fresh access tokens
+  as needed.
 
   ```ts
   import { authorize, getAccessToken, isAuthorized } from "std::auth/oauth"
@@ -30,22 +33,8 @@ name: "oauth"
   }
   ```
 
-  ## Setup
-
-  To use OAuth with a provider, you need:
-  1. Register an app with the provider (e.g. Google Cloud Console)
-  2. Get a client ID and client secret
-  3. Set them as env vars or pass directly
-
-  Tokens are stored in `~/.agency/oauth/{name}.json`.
-  The authorization flow uses PKCE for security.
-
-  ## Token encryption
-  Token files are encrypted at rest using AES-256-GCM.
-  The encryption key is resolved in this order:
-  1. `AGENCY_OAUTH_KEY` env var (for servers/CI)
-  2. System keyring (macOS Keychain / Linux Secret Service) — key is auto-generated on first use
-  3. If neither is available, tokens are stored unencrypted
+  The flow uses PKCE. Tokens are saved per provider under
+  `~/.agency/oauth/{name}.json`, encrypted at rest when a key is available.
 
 ## Effects
 
@@ -59,7 +48,7 @@ effect std::authorize {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L38))
 
 ### std::getAccessToken
 
@@ -69,7 +58,7 @@ effect std::getAccessToken {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L39))
 
 ### std::revokeAuth
 
@@ -79,7 +68,7 @@ effect std::revokeAuth {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L40))
 
 ## Functions
 
@@ -89,16 +78,16 @@ effect std::revokeAuth {
 authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number, extraAuthParams: string): Result
 ```
 
-Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier like "google-calendar"), authUrl (authorization endpoint), tokenUrl (token endpoint), clientId, clientSecret, scopes (space-separated), port (callback port, default 8914), extraAuthParams (space-separated key=value pairs for provider-specific params like "access_type=offline prompt=consent").
+Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider.
 
-  @param name - Provider identifier
+  @param name - Provider identifier like "google-calendar"
   @param authUrl - Authorization endpoint URL
   @param tokenUrl - Token endpoint URL
   @param clientId - OAuth client ID
   @param clientSecret - OAuth client secret
-  @param scopes - Space-separated scopes
-  @param port - Callback port
-  @param extraAuthParams - Extra key=value pairs for the auth request
+  @param scopes - Space-separated OAuth scopes
+  @param port - Local port the callback listener binds to
+  @param extraAuthParams - Space-separated key=value pairs for provider-specific auth params, e.g. "access_type=offline prompt=consent"
 
 **Parameters:**
 
@@ -117,7 +106,7 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Throws:** `std::authorize`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L42))
 
 ### getAccessToken
 
@@ -125,9 +114,9 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 getAccessToken(name: string): Result
 ```
 
-Get a valid OAuth access token for a previously authorized provider. Automatically refreshes the token if it has expired. Returns the access token string. Throws if not yet authorized.
+Get a valid OAuth access token for a previously authorized provider. Refreshes the token automatically if it has expired. Returns the access token string; throws if the provider is not yet authorized.
 
-  Cancellation: an in-flight refresh-token fetch is torn down on Ctrl-C, race-loser, or time-guard abort.
+  @param name - Provider identifier
 
 **Parameters:**
 
@@ -139,7 +128,7 @@ Get a valid OAuth access token for a previously authorized provider. Automatical
 
 **Throws:** `std::getAccessToken`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L72))
 
 ### isAuthorized
 
@@ -147,7 +136,9 @@ Get a valid OAuth access token for a previously authorized provider. Automatical
 isAuthorized(name: string): boolean
 ```
 
-Check if OAuth tokens exist for a given provider name. Returns true if tokens are stored locally (does not verify they are still valid).
+Check whether OAuth tokens are stored for a provider. Returns true if tokens exist locally; does not verify they are still valid.
+
+  @param name - Provider identifier
 
 **Parameters:**
 
@@ -157,7 +148,7 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L85))
 
 ### revokeAuth
 
@@ -165,7 +156,9 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 revokeAuth(name: string): Result
 ```
 
-Delete stored OAuth tokens for a provider. The user will need to run authorize again to re-authenticate.
+Delete stored OAuth tokens for a provider. Re-authorization is required before the provider can be used again.
+
+  @param name - Provider identifier
 
 **Parameters:**
 
@@ -177,4 +170,4 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L94))

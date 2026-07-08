@@ -11,20 +11,34 @@ import {
   _transcribe,
 } from "agency-lang/stdlib-lib/speech.js"
 
+/** @module Speak text aloud, record from the microphone, and transcribe audio
+to text.
+
+  ```ts
+  import { record, transcribe, speak } from "std::speech"
+
+  node main() {
+    const audio = record()
+    const text = transcribe(audio)
+    speak("You said: ${text}")
+  }
+  ```
+*/
+
 effect std::speak { textLength: number }
 effect std::record {}
 effect std::transcribe { filepath: string }
 
+/** Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
+playback. */
 export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "", allowedPaths: string[] = []) {
   """
-  A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it. Set allowedPaths to restrict where the output file may be written.
-
-  Cancellation: in-progress speech playback is stopped on Ctrl-C, race-loser, or time-guard abort.
+  Speak text aloud using text-to-speech.
 
   @param text - The text to speak
-  @param voice - Voice name
-  @param rate - Words per minute
-  @param outputFile - File path to save audio to
+  @param voice - Voice name to use
+  @param rate - Speaking rate in words per minute
+  @param outputFile - When set, save the audio to this file instead of playing it
   @param allowedPaths - Only allow saving under these path prefixes
   """
   return interrupt std::speak("Are you sure you want to use text-to-speech?", {
@@ -34,37 +48,37 @@ export def speak(text: string, voice: string = "", rate: number = 0, outputFile:
   _speak(text, voice, rate, outputFile, allowedPaths)
 }
 
+/**
+ * `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
+ * `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
+ *
+ * Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
+ * which surfaces as an AgencyCancelledError.
+ *
+ * An empty `outputFile` is auto-generated under the system temp directory and
+ * is not subject to the `allowedPaths` allow-list.
+ */
 export def record(outputFile: string = "", silenceTimeout: number = 2000, allowedPaths: string[] = []): string {
   """
-  Record audio from the microphone. Stops when the user presses Enter,
-  or after the specified silence timeout. Set silenceTimeout to 0 to
-  disable silence detection (recording stops only on Enter).
+  Record audio from the microphone. Recording stops when the user presses Enter, or after the silence timeout elapses.
 
-  The silenceTimeout parameter is in milliseconds, so you can use
-  Agency's unit literals: record(silenceTimeout: 3s), record(silenceTimeout: 500ms).
-  Set to 0 for no timeout.
-
-  Cancellation: an in-progress recording is stopped on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
-
-  Set allowedPaths to restrict where a non-empty outputFile may be written; an empty outputFile is auto-generated under the system temp directory and is not subject to the allow-list.
-
-  @param outputFile - File path to save audio to (auto-generated if empty)
-  @param silenceTimeout - Silence before auto-stopping in ms (0 to disable)
-  @param allowedPaths - Only allow saving under these path prefixes
+  @param outputFile - File path to save audio to (auto-generated in the temp directory if empty)
+  @param silenceTimeout - Silence before auto-stopping, in milliseconds; 0 disables silence detection so recording stops only on Enter
+  @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
   """
   return interrupt std::record("Allow microphone recording?", {})
 
   return _record(outputFile, silenceTimeout, allowedPaths)
 }
 
+/** An in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard
+abort. */
 export def transcribe(filepath: string, language: string = "", allowedPaths: string[] = []): string {
   """
-  A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy. Set allowedPaths to restrict which audio files may be uploaded.
-
-  Cancellation: an in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard abort.
+  Transcribe an audio file to text using OpenAI's Whisper API.
 
   @param filepath - Path to the audio file
-  @param language - Language code for better accuracy
+  @param language - Language code (e.g. "en") for better accuracy
   @param allowedPaths - Only allow reading audio files under these path prefixes
   """
   return interrupt std::transcribe("Are you sure you want to send this audio file to the OpenAI Whisper API for transcription?", {

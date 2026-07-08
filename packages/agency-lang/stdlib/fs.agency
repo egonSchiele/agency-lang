@@ -2,6 +2,23 @@ import { _multiedit, _previewEdit, _applyPatch, _mkdir, _copy, _move, _remove } 
 import { bash, glob, ls, grep } from "std::shell"
 import { applyAgentCwd } from "std::index"
 
+/** @module
+  Tools for editing files and managing directories: apply text edits and
+  patches, and create, copy, move, or remove files. Every operation raises an
+  approval interrupt before it touches the disk, so nothing is written until a
+  handler approves it.
+
+  ```ts
+  import { edit } from "std::fs"
+
+  node main() {
+    const result = edit("notes.txt", [
+      { oldText: "draft", newText: "final", replaceAll: true },
+    ]) with approve
+  }
+  ```
+*/
+
 type Edit = {
   oldText: string;
   newText: string;
@@ -21,18 +38,22 @@ effect std::copy { src: string, dest: string }
 effect std::move { src: string, dest: string }
 effect std::remove { target: string }
 
+/**
+ * The `std::edit` interrupt carries the full `before` and `after` file contents
+ * in its data, so a handler can render a diff itself. A handler receives the
+ * whole interrupt object, so the contents are at `data.data.before` /
+ * `data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
+ */
 export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd: boolean = false): Result {
   """
-  Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.
+  Edit a single file by applying one or more text replacements atomically. Each edit's oldText must match a unique, non-overlapping region of the file as it stands when that edit runs (after earlier edits in the same call). If any edit fails, nothing is written.
 
-  Prefer one `edit` call with multiple entries over many `edit` calls. Keep each `oldText` as small as possible while still being unique — do not pad with unchanged context just to connect distant changes; instead, split them into separate entries in the same `edits` array.
-
-  The `std::edit` interrupt carries the full `before` and `after` file contents in its data, so a handler can render a diff itself. A handler receives the whole interrupt object, so the contents are at `data.data.before` / `data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
+  Prefer one call with multiple edits over many separate calls. Keep each oldText as small as possible while still matching uniquely. Do not pad with unchanged context to bridge distant changes; split them into separate edits instead.
 
   @param filename - The file to edit
-  @param edits - Array of edit objects with oldText, newText, replaceAll
-  @param dir - The directory to resolve the filename against (defaults to ".")
-  @param useAgentCwd - When true, resolve relative paths against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param edits - Text replacements to apply in order; each has oldText, newText, and replaceAll (replace every occurrence when true)
+  @param dir - The directory to resolve the filename against
+  @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -56,7 +77,7 @@ type PatchResult = {
 
 export def applyPatch(patch: string, allowedPaths: string[] = []): Result {
   """
-  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents. Set allowedPaths to restrict which path prefixes can be touched by the patch.
+  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
 
   @param patch - The unified diff to apply
   @param allowedPaths - Only allow patches that touch files under these prefixes
@@ -70,11 +91,11 @@ export def applyPatch(patch: string, allowedPaths: string[] = []): Result {
 
 export def mkdir(dir: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
-  Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors. Set allowedPaths to restrict which path prefixes are permitted.
+  Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
 
   @param dir - The directory to create
   @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve a relative dir against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -88,12 +109,12 @@ export def mkdir(dir: string, allowedPaths: string[] = [], useAgentCwd: boolean 
 
 export def copy(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
-  Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written. Set allowedPaths to restrict which path prefixes are permitted.
+  Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
 
   @param src - The source path
   @param dest - The destination path
   @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory if one is set
   """
   if (useAgentCwd) {
     src = applyAgentCwd(src)
@@ -109,12 +130,12 @@ export def copy(src: string, dest: string, allowedPaths: string[] = [], useAgent
 
 export def move(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
-  Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist. Set allowedPaths to restrict which path prefixes are permitted.
+  Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
 
   @param src - The source path
   @param dest - The destination path
   @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory if one is set
   """
   if (useAgentCwd) {
     src = applyAgentCwd(src)
@@ -130,11 +151,11 @@ export def move(src: string, dest: string, allowedPaths: string[] = [], useAgent
 
 export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
-  Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist. Set allowedPaths to restrict which path prefixes are permitted.
+  Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.
 
   @param target - The path to delete
   @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve a relative target against the agent working directory (see setAgentCwd) if one is set. Defaults to false.
+  @param useAgentCwd - When true, resolve a relative target against the agent working directory if one is set
   """
   if (useAgentCwd) {
     target = applyAgentCwd(target)

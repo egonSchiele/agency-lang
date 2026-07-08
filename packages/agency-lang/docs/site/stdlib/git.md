@@ -4,52 +4,51 @@ name: "git"
 
 # git
 
-Typed, safe git tools. Each tool builds its own argv internally, so the
-  model never supplies a raw flag — closing the `git diff --output=` /
-  `-c core.pager=` class of abuse. Reads raise `std::git::<op>` effects the
-  agent policy can auto-approve; writes prompt. Restrict any tool before
-  handing it to an agent with `.partial()` — e.g. `gitCommit.partial(cwd: repo)`,
-  `gitBranchDelete.partial(force: false, protectedBranches: ["main"])`,
-  `gitAdd.partial(all: false, allowedPaths: ["src/"])`.
+Typed, safe git tools for agents. Each tool builds its own git command
+  internally, so the model never supplies a raw flag. Read tools (status, log,
+  diff, ...) raise effects an agent policy can auto-approve. Write tools (add,
+  commit, checkout, ...) prompt for approval. Tighten any tool before handing it
+  to an agent with `.partial()`, e.g.
+  `gitAdd.partial(all: false, allowedPaths: ["src/"])` or
+  `gitBranchDelete.partial(force: false, protectedBranches: ["main"])`.
 
-  ## The repo directory
+  Every tool takes an optional `cwd`, the repo to operate on. It defaults to the
+  agent working directory (see `setAgentCwd`). Pass an absolute path to target a
+  different repo.
 
-  Every tool takes `cwd`, the git repo to operate on:
+  ```ts
+  import { gitStatus, gitCommit } from "std::git"
 
-  - Leave it empty (the default) to use the **agent working directory** — the
-    repo the CLI agent is running in (see `setAgentCwd`).
-  - Pass an **absolute path** to target a specific repo (e.g. from a server
-    backend with no agent cwd). `cwd` is used as given; it is NOT joined to the
-    agent working directory.
-
-  If neither is available the tool errors rather than silently running against
-  whatever directory the process happens to be in.
-
-  Note: positional values (refs/paths/branches) may not start with "-".
+  node main() {
+    const status = gitStatus()             // read: auto-approvable
+    print(status.branch)
+    gitCommit("Update docs") with approve  // write: prompts for approval
+  }
+  ```
 
 ## Types
 
 ### GitRead
 
-Read-only git effects — auto-approvable.
+Read-only git effects, auto-approvable.
 
 ```ts
-/** Read-only git effects — auto-approvable. */
+/** Read-only git effects, auto-approvable. */
 export effectSet GitRead = <std::git::status, std::git::log, std::git::diff, std::git::show, std::git::branchList, std::git::remoteList, std::git::blame, std::git::stashList>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L61))
 
 ### GitWrite
 
-Mutating git effects — should prompt.
+Mutating git effects, should prompt.
 
 ```ts
-/** Mutating git effects — should prompt. */
+/** Mutating git effects, should prompt. */
 export effectSet GitWrite = <std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L63))
 
 ### Git
 
@@ -60,7 +59,7 @@ All git effects.
 export effectSet Git = <GitRead, GitWrite>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L65))
 
 ## Effects
 
@@ -72,7 +71,7 @@ effect std::git::status {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L41))
 
 ### std::git::log
 
@@ -84,7 +83,7 @@ effect std::git::log {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L42))
 
 ### std::git::diff
 
@@ -98,7 +97,7 @@ effect std::git::diff {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L43))
 
 ### std::git::show
 
@@ -109,7 +108,7 @@ effect std::git::show {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L44))
 
 ### std::git::branchList
 
@@ -119,7 +118,7 @@ effect std::git::branchList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L45))
 
 ### std::git::remoteList
 
@@ -129,7 +128,7 @@ effect std::git::remoteList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L46))
 
 ### std::git::blame
 
@@ -140,7 +139,7 @@ effect std::git::blame {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L47))
 
 ### std::git::stashList
 
@@ -150,7 +149,7 @@ effect std::git::stashList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L48))
 
 ### std::git::add
 
@@ -162,7 +161,7 @@ effect std::git::add {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L50))
 
 ### std::git::commit
 
@@ -173,7 +172,7 @@ effect std::git::commit {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L51))
 
 ### std::git::checkout
 
@@ -185,7 +184,7 @@ effect std::git::checkout {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L52))
 
 ### std::git::switch
 
@@ -197,7 +196,7 @@ effect std::git::switch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L53))
 
 ### std::git::branchCreate
 
@@ -208,7 +207,7 @@ effect std::git::branchCreate {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L54))
 
 ### std::git::branchDelete
 
@@ -220,7 +219,7 @@ effect std::git::branchDelete {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L55))
 
 ### std::git::stashPush
 
@@ -231,7 +230,7 @@ effect std::git::stashPush {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L56))
 
 ### std::git::stashPop
 
@@ -241,7 +240,7 @@ effect std::git::stashPop {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L57))
 
 ### std::git::restore
 
@@ -253,7 +252,7 @@ effect std::git::restore {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L58))
 
 ## Functions
 
@@ -263,9 +262,9 @@ effect std::git::restore {
 gitStatus(cwd: string): GitStatus
 ```
 
-Show the working-tree status (branch, ahead/behind, changed files) as
-  structured data.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+Show the working-tree status: current branch, ahead/behind counts, and
+  changed files.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -277,7 +276,7 @@ Show the working-tree status (branch, ahead/behind, changed files) as
 
 **Throws:** `std::git::status`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L80))
 
 ### gitLog
 
@@ -291,8 +290,11 @@ Show commit history as structured commits.
   @param path - Limit to commits touching this path (may not start with "-").
   @param ref - Start from this revision (e.g. HEAD~5, a branch, a sha).
   @param author - Filter by author substring.
-  @param allowedPaths - Restrict `path` to these prefixes (bind via .partial()).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param allowedPaths - If non-empty, path must fall under one of these prefixes.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+
+`allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
+    to constrain which paths the model may query.
 
 **Parameters:**
 
@@ -310,7 +312,7 @@ Show commit history as structured commits.
 
 **Throws:** `std::git::log`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L93))
 
 ### gitDiff
 
@@ -323,8 +325,11 @@ Show a diff as a structured per-file summary plus the raw unified patch.
   @param ref2 - Optional second revision to diff ref..ref2.
   @param staged - Diff the index (staged changes) instead of the working tree.
   @param path - Limit the diff to this path (may not start with "-").
-  @param allowedPaths - Restrict `path` to these prefixes (bind via .partial()).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param allowedPaths - If non-empty, path must fall under one of these prefixes.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+
+`allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
+    to constrain which paths the model may diff.
 
 **Parameters:**
 
@@ -341,7 +346,7 @@ Show a diff as a structured per-file summary plus the raw unified patch.
 
 **Throws:** `std::git::diff`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L118))
 
 ### gitShow
 
@@ -352,7 +357,7 @@ gitShow(ref: string, cwd: string): GitDiff
 Show a commit as a structured per-file summary plus the raw patch. Line
   counts are approximate for merge commits (combined diffs are not counted).
   @param ref - The revision to show (default HEAD).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -365,7 +370,7 @@ Show a commit as a structured per-file summary plus the raw patch. Line
 
 **Throws:** `std::git::show`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L139))
 
 ### gitBranchList
 
@@ -374,7 +379,7 @@ gitBranchList(cwd: string): GitBranch[]
 ```
 
 List local branches with their current-marker, upstream, and sha.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -386,7 +391,7 @@ List local branches with their current-marker, upstream, and sha.
 
 **Throws:** `std::git::branchList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L151))
 
 ### gitRemoteList
 
@@ -395,7 +400,7 @@ gitRemoteList(cwd: string): GitRemote[]
 ```
 
 List configured remotes with their fetch/push URLs.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -407,7 +412,7 @@ List configured remotes with their fetch/push URLs.
 
 **Throws:** `std::git::remoteList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L161))
 
 ### gitBlame
 
@@ -418,7 +423,7 @@ gitBlame(path: string, ref: string, cwd: string): BlameLine[]
 Show line-by-line authorship for a file.
   @param path - The file to blame (may not start with "-").
   @param ref - Optional revision to blame at.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -432,7 +437,7 @@ Show line-by-line authorship for a file.
 
 **Throws:** `std::git::blame`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L171))
 
 ### gitStashList
 
@@ -441,7 +446,7 @@ gitStashList(cwd: string): GitStash[]
 ```
 
 List stashes with their ref and description.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -453,7 +458,7 @@ List stashes with their ref and description.
 
 **Throws:** `std::git::stashList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L183))
 
 ### gitAdd
 
@@ -463,9 +468,13 @@ gitAdd(paths: string[], all: boolean, allowedPaths: string[], cwd: string): stri
 
 Stage changes for commit.
   @param paths - Files to stage (may not start with "-").
-  @param all - Stage all changes (git add -A). Bind `all: false` via .partial() to forbid.
-  @param allowedPaths - Restrict `paths` to these prefixes (bind via .partial()).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param all - Stage every change in the repo (git add -A).
+  @param allowedPaths - If non-empty, each path must fall under one of these prefixes.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+
+`all` and `allowedPaths` are developer guardrails: bind `all: false` and/or
+    a prefix list for `allowedPaths` via `.partial()` before handing this to an
+    agent.
 
 **Parameters:**
 
@@ -480,7 +489,7 @@ Stage changes for commit.
 
 **Throws:** `std::git::add`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L198))
 
 ### gitCommit
 
@@ -490,7 +499,7 @@ gitCommit(message: string, cwd: string): string
 
 Create a commit from the staged changes.
   @param message - The commit message.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -503,7 +512,7 @@ Create a commit from the staged changes.
 
 **Throws:** `std::git::commit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L205))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L214))
 
 ### gitCheckout
 
@@ -513,8 +522,10 @@ gitCheckout(target: string, force: boolean, cwd: string): string
 
 Check out a branch, commit, or path.
   @param target - The branch/commit/path (may not start with "-").
-  @param force - Discard local changes (git checkout --force). Bind `force: false` via .partial().
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param force - Discard local changes while checking out (git checkout --force).
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+
+Bind `force: false` via `.partial()` to forbid discarding local changes.
 
 **Parameters:**
 
@@ -528,7 +539,7 @@ Check out a branch, commit, or path.
 
 **Throws:** `std::git::checkout`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L226))
 
 ### gitSwitch
 
@@ -536,10 +547,10 @@ Check out a branch, commit, or path.
 gitSwitch(branch: string, create: boolean, cwd: string): string
 ```
 
-Switch to a branch (optionally creating it).
+Switch to a branch.
   @param branch - The branch to switch to (may not start with "-").
   @param create - Create the branch first (git switch -c).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -553,7 +564,7 @@ Switch to a branch (optionally creating it).
 
 **Throws:** `std::git::switch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L242))
 
 ### gitBranchCreate
 
@@ -563,7 +574,7 @@ gitBranchCreate(branch: string, cwd: string): string
 
 Create a new branch at HEAD (does not switch to it).
   @param branch - The new branch name (may not start with "-").
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -576,7 +587,7 @@ Create a new branch at HEAD (does not switch to it).
 
 **Throws:** `std::git::branchCreate`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L254))
 
 ### gitBranchDelete
 
@@ -586,9 +597,12 @@ gitBranchDelete(branch: string, force: boolean, protectedBranches: string[], cwd
 
 Delete a local branch.
   @param branch - The branch to delete (may not start with "-").
-  @param force - Delete even if unmerged (git branch -D). Bind `force: false` via .partial().
-  @param protectedBranches - Branch names that may never be deleted (bind via .partial(), e.g. ["main","master"]).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param force - Delete even if the branch is unmerged (git branch -D).
+  @param protectedBranches - Branch names that may never be deleted (e.g. ["main", "master"]).
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+
+Guardrails: bind `force: false` and/or a `protectedBranches` list via
+    `.partial()` before handing this to an agent.
 
 **Parameters:**
 
@@ -603,7 +617,7 @@ Delete a local branch.
 
 **Throws:** `std::git::branchDelete`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L256))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L268))
 
 ### gitStashPush
 
@@ -613,7 +627,7 @@ gitStashPush(message: string, cwd: string): string
 
 Stash the working-tree changes.
   @param message - Optional stash message.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -626,7 +640,7 @@ Stash the working-tree changes.
 
 **Throws:** `std::git::stashPush`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L287))
 
 ### gitStashPop
 
@@ -635,7 +649,7 @@ gitStashPop(cwd: string): string
 ```
 
 Apply and drop the most recent stash.
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
 
 **Parameters:**
 
@@ -647,7 +661,7 @@ Apply and drop the most recent stash.
 
 **Throws:** `std::git::stashPop`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L298))
 
 ### gitRestore
 
@@ -655,11 +669,14 @@ Apply and drop the most recent stash.
 gitRestore(paths: string[], staged: boolean, allowedPaths: string[], cwd: string): string
 ```
 
-Restore files, discarding changes (or unstaging with `staged`).
+Restore files to a previous state.
   @param paths - Files to restore (may not start with "-").
-  @param staged - Restore the staged version (unstage) instead of discarding working-tree changes.
-  @param allowedPaths - Restrict `paths` to these prefixes (bind via .partial()).
-  @param cwd - The git repo directory. Defaults to the agent working directory; pass an absolute path to target a different repo.
+  @param staged - Unstage the files instead of discarding working-tree changes.
+  @param allowedPaths - If non-empty, each path must fall under one of these prefixes.
+  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+
+`allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
+    to constrain which paths the model may restore.
 
 **Parameters:**
 
@@ -674,4 +691,4 @@ Restore files, discarding changes (or unstaging with `staged`).
 
 **Throws:** `std::git::restore`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L296))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L310))

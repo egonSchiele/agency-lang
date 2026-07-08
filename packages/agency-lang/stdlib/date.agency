@@ -1,84 +1,33 @@
 import { _now, _today, _tomorrow, _add, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "agency-lang/stdlib-lib/date.js"
 
 /** @module
-  ## Date and Time Utilities
+Builds timezone-aware ISO 8601 date strings, the format that APIs like Google
+Calendar expect. Every function returns a string, not a Date object. Most
+accept an optional IANA `timezone` (e.g. "America/New_York"). Omit it to
+use your local timezone.
 
-  Helpers for constructing timezone-aware ISO 8601 date strings — the format
-  used by APIs like Google Calendar. All functions return strings, not Date objects.
+```ts
+import { atTime, addMinutes, tomorrow } from "std::date"
+import { createEvent } from "std::calendar"
 
-  ### Getting the current time
-
-  ```ts
-  import { now, today, tomorrow } from "std::date"
-
-  node main() {
-    print(now())        // "2026-05-05T10:30:00-07:00"
-    print(today())      // "2026-05-05"
-    print(tomorrow())   // "2026-05-06"
-  }
-  ```
-
-  ### Building dates for calendar events
-
-  ```ts
-  import { atTime, addMinutes, tomorrow, nextDayOfWeek } from "std::date"
-  import { createEvent } from "std::calendar"
-
-  node main() {
-    // "Tomorrow at 3pm Pacific for 1 hour"
-    const tz = "America/Los_Angeles"
-    const start = atTime(tomorrow(tz), "15:00", tz)
-    createEvent(summary: "Dentist", start: start, end: addMinutes(start, 60))
-
-    // "Next Tuesday at 10am for 30 min"
-    const tuesday = nextDayOfWeek("tuesday", tz)
-    const meetingStart = atTime(tuesday, "10:00", tz)
-    createEvent(summary: "Team sync", start: meetingStart, end: addMinutes(meetingStart, 30))
-  }
-  ```
-
-  ### Querying date ranges
-
-  ```ts
-  import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "std::date"
-  import { listEvents } from "std::calendar"
-
-  node main() {
-    // All events this week
-    const events = listEvents(timeMin: startOfWeek(), timeMax: endOfWeek())
-    print(events)
-
-    // All events this month
-    const monthly = listEvents(timeMin: startOfMonth(), timeMax: endOfMonth())
-    print(monthly)
-  }
-  ```
-
-  ### Date arithmetic
-
-  ```ts
-  import { now, addHours, addDays, addMinutes } from "std::date"
-
-  node main() {
-    const inTwoHours = addHours(now(), 2)
-    const nextWeek = addDays(now(), 7)
-    const in90min = addMinutes(now(), 90)
-    print(inTwoHours)
-    print(nextWeek)
-    print(in90min)
-  }
-  ```
-
-  ### Timezone parameter
-  Most functions accept an optional `timezone` parameter (IANA timezone name).
-  If omitted, your system's local timezone is used.
-  Examples: "America/New_York", "Europe/London", "Asia/Tokyo", "America/Los_Angeles"
+node main() {
+  // Tomorrow at 3pm Pacific for one hour
+  const tz = "America/Los_Angeles"
+  const start = atTime(tomorrow(tz), "15:00", tz)
+  createEvent(summary: "Dentist", start: start, end: addMinutes(start, 60))
+}
+```
 */
+
+/** A day of the week, lowercase. */
+export type DayOfWeek = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday"
 
 /** Get the current date and time as an ISO 8601 string with timezone offset. */
 export safe def now(timezone: string = ""): string {
   """
-  Get the current date and time as a timezone-aware ISO 8601 string (e.g. "2026-05-05T10:30:00-07:00"). Uses local timezone by default, or pass a timezone like "America/New_York".
+  Get the current date and time as a timezone-aware ISO 8601 string (e.g. "2026-05-05T10:30:00-07:00").
+
+  @param timezone - IANA timezone name like "America/New_York" (defaults to the local timezone)
   """
   return _now(timezone)
 }
@@ -86,7 +35,9 @@ export safe def now(timezone: string = ""): string {
 /** Get today's date as a YYYY-MM-DD string. */
 export safe def today(timezone: string = ""): string {
   """
-  Get today's date as a YYYY-MM-DD string (e.g. "2026-05-05"). Uses local timezone by default.
+  Get today's date as a YYYY-MM-DD string (e.g. "2026-05-05").
+
+  @param timezone - IANA timezone name (defaults to the local timezone)
   """
   return _today(timezone)
 }
@@ -94,7 +45,9 @@ export safe def today(timezone: string = ""): string {
 /** Get tomorrow's date as a YYYY-MM-DD string. */
 export safe def tomorrow(timezone: string = ""): string {
   """
-  Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06"). Uses local timezone by default.
+  Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06").
+
+  @param timezone - IANA timezone name (defaults to the local timezone)
   """
   return _tomorrow(timezone)
 }
@@ -102,10 +55,10 @@ export safe def tomorrow(timezone: string = ""): string {
 /** Add a duration to a datetime string. Use with unit literals: add(now(), 2h), add(start, 7d) */
 export safe def add(datetime: string, ms: number): string {
   """
-  Add a duration in milliseconds to a datetime string. Returns a new ISO 8601 datetime string. Use with unit literals for clarity: add(now(), 2h), add(start, 30m), add(start, 7d). Negative values subtract.
+  Add a duration in milliseconds to a datetime string, returning a new ISO 8601 datetime string. Negative values subtract.
 
   @param datetime - The ISO 8601 datetime string
-  @param ms - Duration in milliseconds (e.g. 2h, 30m, 7d)
+  @param ms - The number of milliseconds to add (negative to subtract)
   """
   return _add(datetime, ms)
 }
@@ -135,7 +88,7 @@ export safe def addHours(datetime: string, hours: number): string {
 /** Add days to a datetime string and return the new datetime. Note: adds a fixed 24 hours per day, which may shift the wall-clock time by an hour on DST transition days. For DST-safe day arithmetic, use atTime with a date string instead. */
 export safe def addDays(datetime: string, days: number): string {
   """
-  Add days to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract days. Note: adds a fixed 24 hours per day — on DST transition days the wall-clock time may shift by an hour. For DST-safe day arithmetic, compute the target date separately and use atTime().
+  Add days to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract days. Note: adds a fixed 24 hours per day. On DST transition days the wall-clock time may shift by an hour. For DST-safe day arithmetic, compute the target date separately and use atTime().
 
   @param datetime - The ISO 8601 datetime string
   @param days - Number of days to add (negative to subtract)
@@ -144,12 +97,12 @@ export safe def addDays(datetime: string, days: number): string {
 }
 
 /** Get the date of the next occurrence of a day of the week (e.g. "monday"). */
-export safe def nextDayOfWeek(day: string, timezone: string = ""): string {
+export safe def nextDayOfWeek(day: DayOfWeek, timezone: string = ""): string {
   """
-  Get the next occurrence of a given day of the week as a YYYY-MM-DD string. For example, nextDayOfWeek("tuesday") returns the date of next Tuesday. Valid days: sunday, monday, tuesday, wednesday, thursday, friday, saturday.
+  Get the next occurrence of a given day of the week as a YYYY-MM-DD string. For example, passing "tuesday" returns the date of next Tuesday.
 
   @param day - The day of the week
-  @param timezone - The timezone to use
+  @param timezone - IANA timezone name (defaults to the local timezone)
   """
   return _nextDayOfWeek(day, timezone)
 }

@@ -4,6 +4,22 @@ name: "strategy"
 
 # strategy
 
+Run a block several times and combine the results. `sample` collects
+every result, `consensus` takes the majority vote, and `retry` /
+`retryWithFeedback` re-run a block until one result passes a test.
+
+```ts
+import { consensus } from "std::strategy"
+
+node main() {
+  // Run the same prompt 5 times and keep the majority answer.
+  let answer = consensus(5) as {
+    return llm("Is 17 prime? Answer yes or no.")
+  }
+  print(answer)
+}
+```
+
 ## Functions
 
 ### sample
@@ -26,7 +42,7 @@ Run a block n times in parallel. Returns an array of all results.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L28))
 
 ### consensus
 
@@ -48,7 +64,7 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L40))
 
 ### retry
 
@@ -72,7 +88,7 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L51))
 
 ### retryWithFeedback
 
@@ -96,7 +112,7 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L69))
 
 ### firstValid
 
@@ -120,4 +136,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L93))

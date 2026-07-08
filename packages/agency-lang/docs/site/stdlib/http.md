@@ -4,6 +4,19 @@ name: "http"
 
 # http
 
+Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
+  Aborting tears down the in-flight request.
+
+  ```ts
+  import { fetch, fetchJSON } from "std::http"
+
+  node main() {
+    const page = fetch("https://example.com")
+    const data = fetchJSON("https://api.example.com/status")
+    print(page)
+  }
+  ```
+
 ## Effects
 
 ### std::http::fetch
@@ -15,7 +28,7 @@ effect std::http::fetch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L24))
 
 ### std::http::fetchJSON
 
@@ -26,7 +39,7 @@ effect std::http::fetchJSON {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L13))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L25))
 
 ### std::http::fetchMarkdown
 
@@ -37,7 +50,7 @@ effect std::http::fetchMarkdown {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L26))
 
 ## Functions
 
@@ -47,14 +60,16 @@ effect std::http::fetchMarkdown {
 fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
 ```
 
-A tool for fetching a URL and returning the response as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
-
-  Cancellation: an aborted run (e.g. user Ctrl-C, race loser, time guard) tears down the in-flight HTTP request and body read, surfacing as an AgencyCancelledError that propagates out of the surrounding `try`.
+Fetch a URL and return the response as text.
 
   @param baseUrl - The base URL to fetch
   @param path - Optional path appended to baseUrl
   @param headers - Custom request headers
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
+
+On abort, Agency tears down the in-flight HTTP request and body read. The
+  abort surfaces as an AgencyCancelledError that propagates out of the
+  surrounding `try`.
 
 **Parameters:**
 
@@ -69,7 +84,7 @@ A tool for fetching a URL and returning the response as text. Provide baseUrl an
 
 **Throws:** `std::http::fetch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L33))
 
 ### fetchJSON
 
@@ -77,14 +92,16 @@ A tool for fetching a URL and returning the response as text. Provide baseUrl an
 fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
 ```
 
-A tool for fetching a URL and returning the response as parsed JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
-
-  Cancellation: an aborted run (e.g. user Ctrl-C, race loser, time guard) tears down the in-flight HTTP request and body read, surfacing as an AgencyCancelledError that propagates out of the surrounding `try`.
+Fetch a URL and return the response parsed as JSON.
 
   @param baseUrl - The base URL to fetch
   @param path - Optional path appended to baseUrl
   @param headers - Custom request headers
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
+
+On abort, Agency tears down the in-flight HTTP request and body read. The
+  abort surfaces as an AgencyCancelledError that propagates out of the
+  surrounding `try`.
 
 **Parameters:**
 
@@ -99,7 +116,7 @@ A tool for fetching a URL and returning the response as parsed JSON. Provide bas
 
 **Throws:** `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L59))
 
 ### fetchMarkdown
 
@@ -107,14 +124,16 @@ A tool for fetching a URL and returning the response as parsed JSON. Provide bas
 fetchMarkdown(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
 ```
 
-Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Useful for extracting page content for an LLM. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
-
-  Cancellation: an aborted run (e.g. user Ctrl-C, race loser, time guard) tears down the in-flight HTTP request and body read, surfacing as an AgencyCancelledError that propagates out of the surrounding `try`.
+Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
 
   @param baseUrl - The base URL to fetch
   @param path - Optional path appended to baseUrl
   @param headers - Custom request headers
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
+
+On abort, Agency tears down the in-flight HTTP request and body read. The
+  abort surfaces as an AgencyCancelledError that propagates out of the
+  surrounding `try`.
 
 **Parameters:**
 
@@ -129,4 +148,4 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
 
 **Throws:** `std::http::fetchMarkdown`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L85))

@@ -4,7 +4,22 @@ name: "concurrency"
 
 # concurrency
 
-Concurrency primitives for coordinating work inside one Agency run.
+Concurrency primitives for coordinating work inside one Agency run. Use
+  `withLock` to guard a shared resource so branches take turns instead of
+  clobbering each other.
+
+  ```ts
+  import { withLock } from "std::concurrency"
+
+  node main() {
+    fork(range(5), shared: true) as _ {
+      withLock("counter") as {
+        // only one branch runs this block at a time
+        updateSharedState()
+      }
+    }
+  }
+  ```
 
 ## Functions
 
@@ -14,28 +29,26 @@ Concurrency primitives for coordinating work inside one Agency run.
 withLock(name: string, timeoutMs: number | null, warnAfterMs: number | null, block: () => any): any
 ```
 
-Run a block while holding a named per-run mutex. Concurrent branches
-  of the same run that use the same lock name execute this block one
-  at a time; branches using different names can continue concurrently.
+Run a block while holding a named per-run mutex. Branches of the same run
+  that use the same lock name execute this block one at a time. Branches
+  using different names continue concurrently. The lock is released
+  automatically when the block returns, throws, or unwinds for an interrupt.
 
-  Locks are released automatically when the block returns, throws, or
-  unwinds for an interrupt. In subprocesses launched with std::agency.run(),
-  the lock is coordinated by the parent process so parent and child code
-  share the same mutex.
+  @param name - Lock name; use stable names like "std::tty" for shared resources
+  @param timeoutMs - Maximum time to wait before failing without acquiring the lock; null waits indefinitely
+  @param warnAfterMs - Wait time before printing a diagnostic warning; defaults to 30s
+  @param block - The work to run while holding the lock
 
-  Same-owner reentrancy on the same lock throws immediately. Multi-lock
-  deadlock cycles are not detected automatically; use timeoutMs when a
-  bounded wait is required.
-
-  Fork branches can run inside a lock as long as they do not reacquire the
-  same lock. Reacquiring the same lock from a fork spawned inside the lock
-  can deadlock because the outer scope waits for the fork to finish while
-  the branch waits for the outer lock to release.
-
-  @param name - Lock name. Use stable names like "std::tty" for shared resources.
-  @param timeoutMs - Optional maximum time to wait before failing without acquiring the lock.
-  @param warnAfterMs - Optional wait time before printing a diagnostic warning. Defaults to 30s.
-  @param block - The work to run while holding the lock.
+Caller notes:
+    - In subprocesses launched with `std::agency.run()`, the lock is coordinated by
+      the parent process, so parent and child code share the same mutex.
+    - Same-owner reentrancy on the same lock throws immediately.
+    - Multi-lock deadlock cycles are not detected automatically; use `timeoutMs`
+      when a bounded wait is required.
+    - A fork branch may run inside a lock as long as it does not reacquire the same
+      lock. Reacquiring the same lock from a fork spawned inside the lock can deadlock,
+      because the outer scope waits for the fork while the branch waits for the outer
+      lock to release.
 
 **Parameters:**
 
@@ -48,4 +61,4 @@ Run a block while holding a named per-run mutex. Concurrent branches
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L7))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L32))

@@ -5,13 +5,31 @@ import { frontmatter } from "std::markdown"
 // ("scan this directory for skills?"). Reading the matched files is part
 // of fulfilling that approval, so we glob + read them with the
 // non-interrupt primitives (`_glob` / `_read`) rather than the
-// interrupt-raising `glob` / `read` — otherwise every file would raise
+// interrupt-raising `glob` / `read`. Otherwise every file would raise
 // its own std::glob / std::read interrupt, re-prompting the user (and,
 // for an agent that bundles 100+ doc files, flooding the handler chain
 // and statelog at startup). `try` keeps the same `Result` return shape
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
+
+/** @module
+  Give an LLM access to a directory of skills, and support Claude-Code-style
+  slash commands. `skillsDir` builds a tool that lets the model read skill
+  files on demand. `commandsDir` and `expandSlash` load prompt-template
+  commands and expand a user's `/command` into its body.
+
+  ```ts
+  import { skillsDir, commandsDir, expandSlash } from "std::skills"
+
+  static const commands = commandsDir("${cwd()}/.claude/commands") with approve
+
+  node main(msg: string) {
+    const prompt = expandSlash(msg, commands)
+    let reply: string = llm(prompt, { tools: [skillsDir("${cwd()}/skills")] })
+  }
+  ```
+*/
 
 type SkillEntry = {
   name: string;
@@ -23,7 +41,7 @@ def xmlEscape(s: string): string {
   """
   Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
   XML text or attribute values. Used before splicing frontmatter or
-  filenames into the `<available_skills>` block — without this, a
+  filenames into the `<available_skills>` block. Without this, a
   description containing `&` or a closing tag would produce malformed
   markup and could inject extra tags into the prompt.
 
@@ -42,8 +60,8 @@ def renderEntry(entry: SkillEntry): string {
   """
   Render one SkillEntry as a `<skill>` XML block. All string fields are
   XML-escaped because they originate from user-authored frontmatter or
-  filenames, and an unescaped `<` or `&` would corrupt the surrounding
-  `<available_skills>` markup.
+  filenames. An unescaped `<` or `&` would otherwise corrupt the
+  surrounding `<available_skills>` markup.
 
   @param entry - The skill entry to render.
   """
@@ -77,9 +95,9 @@ def skillToolName(dir: string): string {
   """
   Derive a unique, readable LLM tool name from a skills directory. The
   returned tool is `read.partial(dir)`, and `.partial()` keeps the base
-  name `read`, so two `skillsDir(...)` results in one `tools:` list would
-  collide (providers require unique tool names). Naming each after its
-  directory keeps them distinct AND makes tool-call traces legible.
+  name `read`. So two `skillsDir(...)` results in one `tools:` list would
+  collide, because providers require unique tool names. Naming each after
+  its directory keeps them distinct AND makes tool-call traces legible.
 
   @param dir - The skills directory the tool reads from.
   """
@@ -226,13 +244,14 @@ def stripFm(raw: string): string {
  * }
  * ```
  *
- * Only the `description` and `argument-hint` frontmatter fields are
- * read; all other CC fields (`allowed-tools`, `model`, `effort`,
- * `context: fork`, `disable-model-invocation`, `user-invocable`,
- * `hooks`, `paths`, `shell`, ...) are silently ignored. `commandsDir`
- * is a pure prompt-template loader, not an executor.
+ * `commandsDir` reads only the `description` and `argument-hint`
+ * frontmatter fields. It silently ignores all other CC fields
+ * (`allowed-tools`, `model`, `effort`, `context: fork`,
+ * `disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
+ * `shell`, ...). `commandsDir` is a pure prompt-template loader, not an
+ * executor.
  *
- * Files with no frontmatter still dispatch — `description` and
+ * Files with no frontmatter still dispatch. `description` and
  * `argHint` default to `""` (never null/undefined). Missing or empty
  * `dir` returns `[]`.
  *
@@ -293,18 +312,17 @@ export def commandsDir(dir: string): any[] {
  *   through to the LLM as plain text, again matching CC.
  *
  * Args are split off at the first whitespace (space, tab, or
- * newline) after `/<name>`. Leading and trailing whitespace on `msg`
- * are tolerated so piped invocations (`echo /foo | agency agent`,
- * yielding `"/foo\n"`) dispatch correctly.
+ * newline) after `/<name>`. `expandSlash` tolerates leading and
+ * trailing whitespace on `msg`, so piped invocations (`echo /foo |
+ * agency agent`, yielding `"/foo\n"`) dispatch correctly.
  */
 export def expandSlash(msg: string, commands: any[]): string {
   """
-  Expand a /command in `msg` using a `commandsDir(...)` result.
-  Returns the rendered command body, or `msg` unchanged if no
-  command matches.
+  Expand a /command in `msg` into its command body. Returns the rendered
+  body with $ARGUMENTS substituted, or `msg` unchanged if no command matches.
 
   @param msg - The raw input line (may have leading/trailing whitespace or newlines).
-  @param commands - Array returned by `commandsDir(...)`.
+  @param commands - Array of command records to match against.
   """
   const trimmed = msg.trim()
   if (!trimmed.startsWith("/")) {

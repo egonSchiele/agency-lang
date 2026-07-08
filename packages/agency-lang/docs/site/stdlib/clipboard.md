@@ -4,6 +4,17 @@ name: "clipboard"
 
 # clipboard
 
+Read and write the system clipboard.
+
+  ```ts
+  import { copy, paste } from "std::clipboard"
+
+  node main() {
+    copy("hello")
+    const text = paste()
+  }
+  ```
+
 ## Effects
 
 ### std::clipboardCopy
@@ -12,7 +23,7 @@ name: "clipboard"
 effect std::clipboardCopy {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L15))
 
 ### std::clipboardPaste
 
@@ -20,7 +31,7 @@ effect std::clipboardCopy {}
 effect std::clipboardPaste {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L4))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L16))
 
 ## Functions
 
@@ -30,7 +41,9 @@ effect std::clipboardPaste {}
 copy(text: string)
 ```
 
-A tool for copying text to the system clipboard.
+Copy text to the system clipboard.
+
+  @param text - The text to copy
 
 **Parameters:**
 
@@ -40,7 +53,7 @@ A tool for copying text to the system clipboard.
 
 **Throws:** `std::clipboardCopy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L6))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L18))
 
 ### paste
 
@@ -48,10 +61,10 @@ A tool for copying text to the system clipboard.
 paste(): string
 ```
 
-A tool for reading text from the system clipboard.
+Read text from the system clipboard and return it.
 
 **Returns:** `string`
 
 **Throws:** `std::clipboardPaste`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L29))

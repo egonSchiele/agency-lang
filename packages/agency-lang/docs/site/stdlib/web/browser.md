@@ -4,7 +4,8 @@ name: "browser"
 
 # browser
 
-Usage from Agency code:
+Run browser automation tasks described in plain language via the Browser Use
+  cloud API.
 
   ```ts
   import { browserUse } from "std::web/browser"
@@ -15,9 +16,8 @@ Usage from Agency code:
   }
   ```
 
-  Environment Variables:
-  Set `BROWSER_USE_API_KEY` to your Browser Use API key.
-  Get one at https://cloud.browser-use.com/settings.
+  Set `BROWSER_USE_API_KEY` to your Browser Use API key. Get one at
+  https://cloud.browser-use.com/settings.
 
 ## Types
 
@@ -32,7 +32,7 @@ effect std::browserUse {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L26))
 
 ## Functions
 
@@ -42,15 +42,15 @@ effect std::browserUse {
 browserUse(task: string, model: string, maxCostUsd: number, proxyCountryCode: string, timeout: number, apiKey: string, allowedDomains: string[]): Result
 ```
 
-Run a browser automation task using natural language via the Browser Use cloud API. Sends the task to a managed browser with stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID. Requires a BROWSER_USE_API_KEY environment variable or pass apiKey directly. Available models: "bu-mini" (default), "bu-max", "bu-ultra". Set maxCostUsd to limit spending. Set proxyCountryCode (e.g. "US", "DE") to control geographic routing. Set timeout to control how long to wait for completion (default: 120000ms / 2 minutes). Set allowedDomains to instruct the browser to only visit specific domains.
+Run a browser automation task described in natural language via the Browser Use cloud API. The managed browser has stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID.
 
   @param task - Natural language description of the browser task
-  @param model - Model to use ("bu-mini", "bu-max", "bu-ultra")
-  @param maxCostUsd - Maximum cost limit
-  @param proxyCountryCode - Geographic routing code
-  @param timeout - Timeout in milliseconds
-  @param apiKey - Browser Use API key
-  @param allowedDomains - Instruct browser to only visit these domains
+  @param model - Model to use: "bu-mini" (default), "bu-max", or "bu-ultra"
+  @param maxCostUsd - Maximum spend limit in USD
+  @param proxyCountryCode - Two-letter country code for geographic routing (e.g. "US", "DE")
+  @param timeout - Timeout in milliseconds (default 120000)
+  @param apiKey - Browser Use API key (defaults to the BROWSER_USE_API_KEY env var)
+  @param allowedDomains - Restrict the browser to only visit these domains
 
 **Parameters:**
 
@@ -68,4 +68,4 @@ Run a browser automation task using natural language via the Browser Use cloud A
 
 **Throws:** `std::browserUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L28))

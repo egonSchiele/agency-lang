@@ -1,7 +1,9 @@
 import { _sendSms } from "agency-lang/stdlib-lib/sms.js"
 
 /** @module
-  ## Usage
+  Send SMS text messages from Agency code via Twilio. Set `TWILIO_ACCOUNT_SID`,
+  `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` (e.g. "+15550001234"), or pass
+  them directly.
 
   ```ts
   import { sendSms } from "std::messaging/sms"
@@ -11,11 +13,6 @@ import { _sendSms } from "agency-lang/stdlib-lib/sms.js"
     print(result)
   }
   ```
-
-  ## Environment Variables
-  - `TWILIO_ACCOUNT_SID` — Your Twilio Account SID
-  - `TWILIO_AUTH_TOKEN` — Your Twilio Auth Token
-  - `TWILIO_FROM_NUMBER` — Your Twilio phone number (e.g. "+15550001234")
 */
 
 type SmsResult = {
@@ -25,9 +22,10 @@ type SmsResult = {
 
 effect std::sendSms { to: string }
 
+/** Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env vars, or pass them directly. */
 export def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """
-  Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Set allowList to restrict recipients to specific numbers. Set blockList to reject specific numbers.
+  Send an SMS text message via the Twilio API.
 
   @param to - Recipient phone number (E.164 format)
   @param body - Message text

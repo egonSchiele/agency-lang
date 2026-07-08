@@ -4,37 +4,21 @@ name: "agent"
 
 # agent
 
-## Overview
-
-  Helpers for building user-facing agents. Three independent
-  features live here:
-
-  - **`route`** — a multi-specialist dispatcher. Wire two or more
-    "specialist" agents (each with its own system prompt, tool set,
-    and optional memory scope) into one entry point. Each user
-    message stays in its current specialist unless the LLM calls
-    `handoff()` to re-route it. See below for usage.
-  - **`question`** — ask the user a question via an interrupt so
-    the host UI (CLI, web, etc.) can render the prompt.
-  - **`todoWrite` / `todoList`** — a tiny in-process todo list an
-    LLM can use to track multi-step work across turns.
-
-  ## Router usage
+Helpers for building user-facing agents. This module offers three
+independent tools:
+- `route` dispatches each user message to one of
+several specialist agents (and lets the LLM hand off between them),
+- `question` asks the user something through an interrupt the host UI
+can render, and
+- `todoWrite` / `todoList` give the LLM a small todo
+list to track multi-step work across turns.
 
   ```ts
   import { route } from "std::agent"
 
-  // Two specialists, each with its own system prompt + tools.
-  const codeAgent = {
-    systemPrompt: "You write and edit code...",
-    tools: [readFile, writeFile, typecheck],
-    memory: true,
-  }
-  const researchAgent = {
-    systemPrompt: "You answer questions by reading docs...",
-    tools: [fetchUrl, wikipediaSearch],
-    memory: true,
-  }
+  // Two specialists, each with its own system prompt and tools.
+  const codeAgent = { systemPrompt: "You write and edit code...", tools: [readFile, writeFile] }
+  const researchAgent = { systemPrompt: "You answer questions from docs...", tools: [fetchUrl] }
 
   node main() {
     let msg = input("> ")
@@ -49,35 +33,6 @@ name: "agent"
     }
   }
   ```
-
-  ### How handoff works
-
-  Inside `route`, each specialist's tool set is augmented with a
-  `handoff(category, reason)` tool. When the LLM calls it, the
-  current LLM call ends and `route` re-runs the same user message
-  in the named specialist's thread. The handoff cannot target the
-  current specialist (PFA prevents self-targets).
-
-  The cap `maxHops` bounds ping-pong: when reached, the next call
-  is made WITHOUT the handoff tool so the LLM is forced to answer.
-
-  ### Per-specialist state
-
-  Each specialist runs inside its own `thread(session: <category>)`
-  block, so conversation history is partitioned. When `memory: true`,
-  `setMemoryId(<category>)` is also called so `remember`/`recall`
-  inside the specialist's tools land in a per-specialist knowledge
-  graph. Enable the memory subsystem first via `enableMemory(...)`
-  in `std::memory`.
-
-  ### Limits
-
-  Router state (handoff signal, first-entry flags) lives in
-  module-level `let`s, which live in the per-program GlobalStore.
-  Concurrent calls to `route` in **separate** RuntimeContexts are
-  fine; concurrent calls in the **same** program / RuntimeContext
-  (e.g. parallel runners inside one process) will race. Not
-  supported in v1.
 
 ## Types
 
@@ -119,7 +74,7 @@ export type PromptSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L120))
 
 ### AgentSpec
 
@@ -131,7 +86,7 @@ export type AgentSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L127))
 
 ### RouterConfig
 
@@ -175,7 +130,7 @@ export type RouterConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L149))
 
 ## Effects
 
@@ -187,9 +142,46 @@ effect std::question {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L45))
 
 ## Functions
+
+### todoAdd
+
+```ts
+todoAdd(todo: Todo): Todo[]
+```
+
+Add a new todo to the list.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| todo | [Todo](#todo) |  |
+
+**Returns:** `Todo[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L49))
+
+### todoUpdate
+
+```ts
+todoUpdate(id: string, status: "pending" | "in_progress" | "completed"): Todo[]
+```
+
+Update the status of a todo by id.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| id | `string` |  |
+| status | `"pending" \| "in_progress" \| "completed"` |  |
+
+**Returns:** `Todo[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L57))
 
 ### todoWrite
 
@@ -197,7 +189,7 @@ effect std::question {
 todoWrite(todos: Todo[]): Todo[]
 ```
 
-Replace the current todo list. Each todo has an id, text, and status (one of 'pending', 'in_progress', 'completed'). Use this to track multi-step work as you go: mark a todo 'in_progress' before starting it and 'completed' when done. Returns the new list.
+Replace the current todo list.
 
 **Parameters:**
 
@@ -207,7 +199,7 @@ Replace the current todo list. Each todo has an id, text, and status (one of 'pe
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L73))
 
 ### todoList
 
@@ -219,7 +211,7 @@ Return the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L81))
 
 ### question
 
@@ -227,7 +219,12 @@ Return the current todo list.
 question(prompt: string): string
 ```
 
-Ask the user a question and wait for their reply. Unlike input(), this raises an interrupt so the host (CLI, web UI, etc.) can present the prompt in its own way; the host resolves the interrupt with the answer string.
+Ask the user a question and wait for their reply.
+
+  @param prompt - The question to show the user
+
+Alternative to the `input` function, raises an interrupt instead,
+so it can be used anywhere (eg a web server) instead of just the CLI.
 
 **Parameters:**
 
@@ -239,7 +236,7 @@ Ask the user a question and wait for their reply. Unlike input(), this raises an
 
 **Throws:** `std::question`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L92))
 
 ### handoff
 
@@ -250,7 +247,7 @@ handoff(category: string, reason: string, validCategories: string[]): string
 Re-route the user's current message to a different specialist.
   After you call this, your turn closes and the original message
   is re-routed to the chosen specialist. Anything you say after
-  `handoff()` is discarded — return immediately.
+  `handoff()` is discarded, so return immediately.
 
   Bias toward staying: most follow-ups are continuations of the
   current topic. Only call this when the message clearly needs
@@ -266,12 +263,12 @@ Re-route the user's current message to a different specialist.
  * categories.
  *
  * When called, sets the module-level handoff target. The current
- * LLM call returns; `route` reads the target via `consumeHandoff`
+ * LLM call returns. `route` reads the target via `consumeHandoff`
  * and re-runs the user's original message in the new specialist's
- * thread. The handoff is rejected (with an error string the LLM
- * sees as the tool's result) if `category` isn't in
- * `validCategories`, so the LLM can't accidentally hand off to
- * itself or to an unregistered specialist.
+ * thread. If `category` isn't in `validCategories`, the handoff is
+ * rejected and the LLM sees an error string as the tool's result.
+ * This keeps the LLM from accidentally handing off to itself or to
+ * an unregistered specialist.
 
 **Parameters:**
 
@@ -283,7 +280,7 @@ Re-route the user's current message to a different specialist.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L194))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L181))
 
 ### consumeHandoff
 
@@ -291,9 +288,8 @@ Re-route the user's current message to a different specialist.
 consumeHandoff(): string
 ```
 
-Read and clear the pending handoff target. Returns "" when no
-  handoff was requested. Used internally by `route()`; exposed for
-  tests + advanced users writing custom dispatch loops.
+Read and clear the pending handoff target. Returns "" when no handoff
+  was requested.
 
 * Read and clear the pending handoff target. Used internally by
  * `route` after each LLM call. Exposed for tests and for advanced
@@ -302,7 +298,7 @@ Read and clear the pending handoff target. Returns "" when no
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L227))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L214))
 
 ### route
 
@@ -355,4 +351,4 @@ Run one user turn through a multi-specialist agent. Owns the hop
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L350))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L336))

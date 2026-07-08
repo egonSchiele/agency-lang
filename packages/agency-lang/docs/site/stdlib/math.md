@@ -4,6 +4,9 @@ name: "math"
 
 # math
 
+Small deterministic arithmetic helpers: round, add, subtract, multiply,
+and a divide that returns a Result so you can handle division by zero.
+
 ## Functions
 
 ### round
@@ -12,7 +15,10 @@ name: "math"
 round(num: number, precision: number): number
 ```
 
-A tool for rounding a number to a specified number of decimal places.
+Round a number to a given number of decimal places.
+
+  @param num - The number to round
+  @param precision - The number of decimal places
 
 **Parameters:**
 
@@ -23,7 +29,7 @@ A tool for rounding a number to a specified number of decimal places.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L7))
 
 ### add
 
@@ -40,7 +46,7 @@ add(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L17))
 
 ### subtract
 
@@ -57,7 +63,7 @@ subtract(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L21))
 
 ### multiply
 
@@ -74,7 +80,7 @@ multiply(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L25))
 
 ### divide
 
@@ -91,4 +97,4 @@ divide(a: number, b: number): Result<number>
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L29))

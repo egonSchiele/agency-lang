@@ -11,39 +11,53 @@ import {
   _registerLocalModel,
   _printLocalCatalog,
   _refreshCatalog,
-} from "agency-lang/stdlib-lib/localModels.js"
+ } from "agency-lang/stdlib-lib/localModels.js"
 
 /** @module
-  Manage and run local models (GGUF via smoltalk-llama-cpp). Download by
-  curated short name or Hugging Face URI, alias names, list/remove downloads,
-  and register the local provider for `llm()` calls. Requires the
-  smoltalk-llama-cpp package to be installed.
+  Manage and run local GGUF models. Download models by curated short name or
+  Hugging Face URI, alias them, list or remove downloads, and register the local
+  provider so `llm()` calls can use them. Requires the smoltalk-llama-cpp
+  package.
+
+  ```ts
+  import { registerLocalModel } from "std::agency/local"
+
+  node main() {
+    // download if needed, register the provider, and get the local path
+    const model = registerLocalModel("smollm2-135m")
+    print(model)
+  }
+  ```
 */
 
-export type DownloadedModel = { name: string, path: string, sizeBytes: number }
+export type DownloadedModel = {
+  name: string;
+  path: string;
+  sizeBytes: number
+}
 
-/** A listed model name. Curated entries carry full metadata; user aliases
- *  carry only `name`/`target`/`source` (the metadata fields are undefined). */
 export type ModelName = {
-  name: string,
-  target: string,
-  source: string,
-  params: string | undefined,
-  sizeBytes: number | undefined,
-  category: string | undefined,
-  description: string | undefined,
-  contextWindow: number | undefined,
-  license: string | undefined,
+  name: string;
+  target: string;
+  source: string;
+  params?: string;
+  sizeBytes?: number;
+  category?: string;
+  description?: string;
+  contextWindow?: number;
+  license?: string
 }
 
 export def localModelsSupported(): bool {
-  """True if smoltalk-llama-cpp is installed."""
+  """
+  True if smoltalk-llama-cpp is installed.
+  """
   return _localModelsSupported()
 }
 
 export def resolveModelName(value: string): string {
   """
-  Map a curated short name or alias to its Hugging Face URI; pass URIs and
+  Map a curated short name or alias to its Hugging Face URI. Pass URIs and
   .gguf paths through unchanged.
 
   @param value - name, alias, hf: URI, or .gguf path
@@ -53,8 +67,8 @@ export def resolveModelName(value: string): string {
 
 export def downloadModel(value: string, cacheDir: string = ""): string {
   """
-  Download a model (curated name, alias, hf: URI) if not cached and return its
-  local .gguf path.
+  Download a model and return its local .gguf path.
+  Skips the download if the file already exists in the cache dir.
 
   @param value - what to download
   @param cacheDir - download dir (empty string = per-user cache)
@@ -72,13 +86,16 @@ export def listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
 }
 
 export def listModelNames(): ModelName[] {
-  """List usable short names: curated built-ins and your aliases."""
+  """
+  List usable short names: curated built-ins and your aliases.
+  """
   return _listModelNames()
 }
 
 export def aliasModel(name: string, uri: string): string {
   """
-  Add a short-name alias for a model URI; returns the edited agency.json path.
+  Add a short-name alias for a model URI
+  Returns the path to the agency.json file that the alias was written to.
 
   @param name - the alias
   @param uri - the hf: URI it maps to
@@ -88,8 +105,8 @@ export def aliasModel(name: string, uri: string): string {
 
 export def unaliasModel(name: string): string {
   """
-  Remove a short-name alias; returns the inspected agency.json path (file
-  unchanged if the alias was missing).
+  Remove a short-name alias.
+  Returns the path to the agency.json file that was modified.
 
   @param name - the alias to remove
   """
@@ -98,7 +115,8 @@ export def unaliasModel(name: string): string {
 
 export def removeModel(name: string, cacheDir: string = ""): bool {
   """
-  Delete a downloaded model file; false if it was not present.
+  Delete a downloaded model file.
+  Returns false if the model was not present.
 
   @param name - the .gguf filename
   @param cacheDir - models dir (empty string = per-user cache)
@@ -107,14 +125,16 @@ export def removeModel(name: string, cacheDir: string = ""): bool {
 }
 
 export def registerLocalProvider() {
-  """Register the llama-cpp provider so local models can be used by llm()."""
+  """
+  Register the llama-cpp provider so local models can be used for LLM calls.
+  """
   _registerLocalProvider()
 }
 
 export def registerLocalModel(value: string, cacheDir: string = ""): string {
   """
-  Register the provider and ensure the model is downloaded; returns the local
-  .gguf path to pass to setModel/setLlmOptions with provider "llama-cpp".
+  Register the provider and ensure the model is downloaded. Returns the local
+  .gguf path to use as the model for LLM calls with provider "llama-cpp".
 
   @param value - name, alias, hf: URI, or .gguf path
   @param cacheDir - download dir (empty string = per-user cache)
@@ -123,47 +143,47 @@ export def registerLocalModel(value: string, cacheDir: string = ""): string {
 }
 
 export def printLocalCatalog() {
-  """Print the usable-model catalog (curated names + your aliases) as an
-  aligned table — the same listing as `agency local alias list`."""
+  """
+  Print the usable-model catalog (curated names + your aliases) as an
+    aligned table, the same listing as `agency local alias list`.
+  """
   _printLocalCatalog()
 }
 
-/** A catalog model whose name collided with one of your own aliases: refresh
- *  kept your alias (`keptUri`) and did not write the catalog's `remoteUri`. */
+/** Used when refreshing the model catalog. If a catalog model's name collides with one of your own aliases,
+    we'll keep your alias and skip the catalog entry. This type describes what was skipped. */
 export type SkippedAlias = {
-  name: string,
-  keptUri: string,
-  remoteUri: string,
+  name: string;
+  keptUri: string;
+  remoteUri: string
 }
 
-/** The outcome of `refreshCatalog`. The name lists partition the catalog's
- *  managed (`source:"remote"`) entries by what changed; `skipped` are entries
- *  yielded to your own aliases; `modelCount` is the total catalog size, so
- *  `added + updated + unchanged + skipped == modelCount`. */
+/** The outcome of `refreshCatalog`. modelCount = total catalog size. */
 export type RefreshResult = {
-  url: string,
-  file: string,
-  added: string[],
-  updated: string[],
-  unchanged: string[],
-  removed: string[],
-  skipped: SkippedAlias[],
-  modelCount: number,
+  url: string;
+  file: string;
+  added: string[];
+  updated: string[];
+  unchanged: string[];
+  removed: string[];
+  skipped: SkippedAlias[];
+  modelCount: number
 }
 
+/** Same operation as the `agency local refresh` CLI command. */
 export def refreshCatalog(url: string = ""): RefreshResult {
   """
   Fetch the remote model catalog and update the `source:"remote"` aliases in
   the nearest `agency.json` from it. Adds/updates models from the catalog,
-  removes ones it dropped, and skips (keeping yours) any name you've aliased
+  removes ones it dropped, and skips any name you've aliased
   yourself. Your hand-added aliases are never overwritten. Throws on a
   fetch/parse/validation failure, leaving `agency.json` untouched.
-
-  This is the same operation as the `agency local refresh` CLI command.
 
   @param url - catalog URL override; empty string uses the
     `AGENCY_MODEL_CATALOG_URL` env var, then `client.modelCatalogUrl` in
     `agency.json`, then the built-in default.
   """
-  return _refreshCatalog({ url: url })
+  return _refreshCatalog({
+    url: url
+  })
 }

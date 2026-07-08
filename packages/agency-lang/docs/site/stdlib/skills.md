@@ -4,6 +4,22 @@ name: "skills"
 
 # skills
 
+Give an LLM access to a directory of skills, and support Claude-Code-style
+  slash commands. `skillsDir` builds a tool that lets the model read skill
+  files on demand. `commandsDir` and `expandSlash` load prompt-template
+  commands and expand a user's `/command` into its body.
+
+  ```ts
+  import { skillsDir, commandsDir, expandSlash } from "std::skills"
+
+  static const commands = commandsDir("${cwd()}/.claude/commands") with approve
+
+  node main(msg: string) {
+    const prompt = expandSlash(msg, commands)
+    let reply: string = llm(prompt, { tools: [skillsDir("${cwd()}/skills")] })
+  }
+  ```
+
 ## Types
 
 ## Effects
@@ -42,7 +58,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L154))
 
 ### std::skills::commandsDir
 
@@ -52,7 +68,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L155))
 
 ## Functions
 
@@ -76,7 +92,7 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L157))
 
 ### commandsDir
 
@@ -105,13 +121,14 @@ Discover .md files under `dir` and parse each as a slash-command
  * }
  * ```
  *
- * Only the `description` and `argument-hint` frontmatter fields are
- * read; all other CC fields (`allowed-tools`, `model`, `effort`,
- * `context: fork`, `disable-model-invocation`, `user-invocable`,
- * `hooks`, `paths`, `shell`, ...) are silently ignored. `commandsDir`
- * is a pure prompt-template loader, not an executor.
+ * `commandsDir` reads only the `description` and `argument-hint`
+ * frontmatter fields. It silently ignores all other CC fields
+ * (`allowed-tools`, `model`, `effort`, `context: fork`,
+ * `disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
+ * `shell`, ...). `commandsDir` is a pure prompt-template loader, not an
+ * executor.
  *
- * Files with no frontmatter still dispatch — `description` and
+ * Files with no frontmatter still dispatch. `description` and
  * `argHint` default to `""` (never null/undefined). Missing or empty
  * `dir` returns `[]`.
  *
@@ -129,7 +146,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L243))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L262))
 
 ### expandSlash
 
@@ -137,12 +154,11 @@ Discover .md files under `dir` and parse each as a slash-command
 expandSlash(msg: string, commands: any[]): string
 ```
 
-Expand a /command in `msg` using a `commandsDir(...)` result.
-  Returns the rendered command body, or `msg` unchanged if no
-  command matches.
+Expand a /command in `msg` into its command body. Returns the rendered
+  body with $ARGUMENTS substituted, or `msg` unchanged if no command matches.
 
   @param msg - The raw input line (may have leading/trailing whitespace or newlines).
-  @param commands - Array returned by `commandsDir(...)`.
+  @param commands - Array of command records to match against.
 
 * Expand a user-typed slash command against a `commandsDir` result.
  *
@@ -156,9 +172,9 @@ Expand a /command in `msg` using a `commandsDir(...)` result.
  *   through to the LLM as plain text, again matching CC.
  *
  * Args are split off at the first whitespace (space, tab, or
- * newline) after `/<name>`. Leading and trailing whitespace on `msg`
- * are tolerated so piped invocations (`echo /foo | agency agent`,
- * yielding `"/foo\n"`) dispatch correctly.
+ * newline) after `/<name>`. `expandSlash` tolerates leading and
+ * trailing whitespace on `msg`, so piped invocations (`echo /foo |
+ * agency agent`, yielding `"/foo\n"`) dispatch correctly.
 
 **Parameters:**
 
@@ -169,4 +185,4 @@ Expand a /command in `msg` using a `commandsDir(...)` result.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L300))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L319))

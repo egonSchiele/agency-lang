@@ -270,6 +270,10 @@ export default defineConfig({
                   text: "data/finance/dbnomics",
                   link: "/stdlib/data/finance/dbnomics",
                 },
+                {
+                  text: "data/people/littlesis",
+                  link: "/stdlib/data/people/littlesis",
+                },
               ],
             },
             { text: "date", link: "/stdlib/date" },

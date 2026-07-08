@@ -1,0 +1,21 @@
+{
+  "meta": { "currentPage": 1, "apiVersion": "1.0" },
+  "data": [
+    {
+      "type": "entities",
+      "id": 55555,
+      "attributes": {
+        "id": 55555,
+        "name": "Example Portfolio Co",
+        "blurb": "A company",
+        "website": null,
+        "primary_ext": "Org",
+        "aliases": [],
+        "types": ["Organization"],
+        "relationship_id": 999001,
+        "relationship_category_id": 10
+      },
+      "links": { "self": "https://littlesis.org/entities/55555-Example" }
+    }
+  ]
+}

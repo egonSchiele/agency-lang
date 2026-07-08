@@ -275,6 +275,14 @@ export default defineConfig({
                   text: "data/people/littlesis",
                   link: "/stdlib/data/people/littlesis",
                 },
+                {
+                  text: "data/tech/yc",
+                  link: "/stdlib/data/tech/yc",
+                },
+                {
+                  text: "data/tech/hackernews",
+                  link: "/stdlib/data/tech/hackernews",
+                },
               ],
             },
             { text: "date", link: "/stdlib/date" },

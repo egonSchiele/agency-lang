@@ -360,12 +360,9 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
-  const resolvedProgram = resolveImports(
-    reExportedProgram,
-    symbolTable,
-    absoluteInputFile,
-    { allowTestImports: options?.allowTestImports ?? false },
-  );
+  const resolvedProgram = resolveImports(reExportedProgram, symbolTable, absoluteInputFile, {
+    allowTestImports: options?.allowTestImports ?? false,
+  });
   // Lift `callback("onX") { ... }` block bodies to top-level defs.
   // Must run BEFORE buildCompilationUnit and typecheck so the lifted defs
   // appear in functionDefinitions and get their bodies typechecked.

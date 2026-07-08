@@ -17,6 +17,10 @@ export type SizingContext = {
   // The width that percentages and "full" compute against. Undefined
   // when no enclosing ancestor has a resolved width.
   percentBasis: number | undefined;
+  // The max width content may occupy before it must wrap. A content-driven
+  // leaf with no imposed width wraps at this ceiling instead of overflowing.
+  // Optional: table cell contexts impose explicit widths and omit it.
+  availableWidth?: number | undefined;
 };
 
 // One node type's two behaviors, paired. `size` is phase 1 (resolve

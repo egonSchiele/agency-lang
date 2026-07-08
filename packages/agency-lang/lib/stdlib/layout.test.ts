@@ -176,14 +176,52 @@ describe("resolveSizes", () => {
     expect(row.children.map((child) => child.attrs.resolvedWidth)).toEqual([20, 20]);
   });
 
-  test("row does not give full width to every unsized child", () => {
+  test("row caps unsized children at its width but does not fill them", () => {
     const tree = node("row", { width: 20 }, [
       node("text", { content: "first child is long" }),
       node("text", { content: "second child is long" }),
     ]);
     const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // Ceiling = row inner width (20, gap 0); children wrap at it but stay
+    // content-driven (no defaultWidth → not stretched to fill).
+    expect(resolved.children[0].attrs.wrapWidth).toBe(20);
+    expect(resolved.children[1].attrs.wrapWidth).toBe(20);
+  });
+
+  test("unsized box wraps content at the available width (shrink-to-fit ceiling)", () => {
+    // ceiling = viewport 40 − box chrome (2 border, 0 padding) = 38.
+    const tree = node("box", { padding: 0 }, [node("text", { content: "x" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 40, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBe(38);
+  });
+
+  test("unsized box ceiling subtracts padding on both sides", () => {
+    // chrome = 2 border + 2*2 padding = 6; ceiling = 40 − 6 = 34.
+    const tree = node("box", { padding: 2 }, [node("text", { content: "x" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 40, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBe(34);
+  });
+
+  test("nested unsized boxes subtract chrome at each level", () => {
+    const tree = node("box", { padding: 0 }, [
+      node("box", { padding: 0 }, [node("text", { content: "x" })]),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 40, rows: 24 });
+    // outer ceiling 40−2 = 38; inner ceiling 38−2 = 36.
+    expect(resolved.children[0].children[0].attrs.wrapWidth).toBe(36);
+  });
+
+  test("unsized column wraps its children at the available width", () => {
+    const tree = node("column", {}, [node("text", { content: "x" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 30, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBe(30);
+  });
+
+  test("never assigns wrapWidth ≤ 0 — content degrades to overflow, not to nothing", () => {
+    // chrome 2 + 2*20 = 42 > viewport 30 → ceiling clamps to 0 → no wrapWidth.
+    const tree = node("box", { padding: 20 }, [node("text", { content: "hello" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 30, rows: 24 });
     expect(resolved.children[0].attrs.wrapWidth).toBeUndefined();
-    expect(resolved.children[1].attrs.wrapWidth).toBeUndefined();
   });
 
   test("uses clamped integer padding and gap when resolving child width", () => {

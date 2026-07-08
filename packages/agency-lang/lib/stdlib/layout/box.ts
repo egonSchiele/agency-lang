@@ -39,11 +39,19 @@ export function composeBox(node: LayoutNode): Block {
 function sizeBox(node: LayoutNode, ctx: SizingContext): LayoutNode {
   const own = resolveOwnWidth(node, ctx);
   const padding = nonNegativeInteger(node.attrs.padding);
-  const inner = innerWidthAfterChrome(own, BORDER_CELLS + 2 * padding);
+  const chrome = BORDER_CELLS + 2 * padding;
+  const inner = innerWidthAfterChrome(own, chrome);
   // Box children either occupy the inner width directly (single child)
   // or are wrapped in an implicit column, which itself fills the inner
-  // width. Either way, children fill.
-  return resolveContainer(node, own, { defaultWidth: inner, percentBasis: inner });
+  // width. Either way, children fill. When unsized, the wrap ceiling is
+  // the parent ceiling minus this box's chrome (`own ?? ctx.availableWidth`
+  // collapses both the sized and unsized cases).
+  const available = innerWidthAfterChrome(own ?? ctx.availableWidth, chrome);
+  return resolveContainer(node, own, {
+    defaultWidth: inner,
+    percentBasis: inner,
+    availableWidth: available,
+  });
 }
 
 export const box: NodeHandler = { size: sizeBox, render: composeBox };

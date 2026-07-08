@@ -148,12 +148,22 @@ export const LEAF_RENDERERS: Record<
   },
 };
 
-function sizeText(node: LayoutNode, ctx: SizingContext): LayoutNode {
-  // Text doesn't track a resolvedWidth; instead it gets a wrapWidth so
-  // its content wraps to the inline space the parent allocated.
+// The wrap width a leaf should use: its imposed width if any, else the
+// available ceiling. Returns undefined when unbounded OR when the width is
+// ≤ 0 (chrome ≥ available), so the leaf degrades to overflow — never to
+// empty (wrapText returns [] for width ≤ 0).
+function wrapWidthFor(node: LayoutNode, ctx: SizingContext): number | undefined {
   const own = resolveOwnWidth(node, ctx);
-  if (own === undefined) return node;
-  return setAttr(node, "wrapWidth", own);
+  const width = own ?? ctx.availableWidth;
+  return width !== undefined && width > 0 ? width : undefined;
+}
+
+function sizeText(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  // Text doesn't track a resolvedWidth; instead it gets a wrapWidth so its
+  // content wraps to the inline space the parent allocated (or the ceiling).
+  const width = wrapWidthFor(node, ctx);
+  if (width === undefined) return node;
+  return setAttr(node, "wrapWidth", width);
 }
 
 function passthrough(node: LayoutNode, _ctx: SizingContext): LayoutNode {

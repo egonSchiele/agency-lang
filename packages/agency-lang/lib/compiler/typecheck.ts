@@ -103,7 +103,14 @@ export function typeCheckSource(
   return withSourcePath(source, sourcePath, (syntheticPath) => {
     const symbolTable = SymbolTable.build(syntheticPath, {});
     const reExported = resolveReExports(program, symbolTable, syntheticPath);
-    const resolved = resolveImports(reExported, symbolTable, syntheticPath);
+    // `typeCheckSource` is agent-reachable (std::agency typecheck), not just
+    // an editor path — so it must agree with execution: code that run()/
+    // compileSource would reject should not typecheck as valid. Deny
+    // `import test` here; the LSP (lib/lsp/diagnostics.ts) independently
+    // allows it for editor support.
+    const resolved = resolveImports(reExported, symbolTable, syntheticPath, {
+      allowTestImports: false,
+    });
     const lifted = liftCallbackBlocks(resolved);
     const info = buildCompilationUnit(lifted, symbolTable, syntheticPath, source);
     const { errors } = typeCheck(lifted, { typechecker: { enabled: true } }, info);

@@ -5,6 +5,10 @@ export type ImportStatement = BaseNode & {
   importedNames: ImportNameType[];
   modulePath: string;
   isAgencyImport: boolean;
+  /** True when written `import test { … }`. Absent (never null/false) on
+   *  normal imports so exact-match AST comparisons and JSON output stay
+   *  clean. Honored only under the test harness (see resolveImports). */
+  testOnly?: boolean;
 };
 
 export type ImportNameType = NamedImport | NamespaceImport | DefaultImport;

@@ -336,4 +336,101 @@ describe("resolveImports", () => {
       resolveImports(program, symbolTable, "/project/main.agency"),
     ).toThrow(/'safe' modifier cannot be applied to node 'greet'/);
   });
+
+  // Test-only imports: `import test { ... }`
+  function testImport(names: string[], modulePath: string): ImportStatement {
+    return { ...makeImportStatement(names, modulePath), testOnly: true };
+  }
+
+  it("import test bypasses the export check for functions in test mode", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "./utils.agency")],
+    };
+    const symbolTable = table({
+      "/project/utils.agency": { helper: fn("helper", { exported: false }) },
+    });
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      allowTestImports: true,
+    });
+    const node = result.nodes[0] as ImportStatement;
+    expect(node.type).toBe("importStatement");
+    if (node.importedNames[0].type === "namedImport") {
+      expect(node.importedNames[0].importedNames).toEqual(["helper"]);
+    }
+  });
+
+  it("import test bypasses the export check for a non-exported type in test mode", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["Secret"], "./types.agency")],
+    };
+    const symbolTable = table({
+      "/project/types.agency": {
+        Secret: {
+          kind: "type",
+          name: "Secret",
+          exported: false,
+          aliasedType: { type: "primitiveType", value: "string" },
+        },
+      },
+    });
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      allowTestImports: true,
+    });
+    expect((result.nodes[0] as ImportStatement).type).toBe("importStatement");
+  });
+
+  it("import test is rejected outside test mode (default is deny)", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "./utils.agency")],
+    };
+    const symbolTable = table({
+      "/project/utils.agency": { helper: fn("helper", { exported: false }) },
+    });
+    // 3-arg call: no opts at all — pins the default-deny security property.
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency"),
+    ).toThrow(/only allowed under the test harness/);
+  });
+
+  it("import test is rejected for pkg:: imports even in test mode", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "pkg::some-package")],
+    };
+    const symbolTable = table({}); // empty: the gate must fire before symbol lookup
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency", {
+        allowTestImports: true,
+      }),
+    ).toThrow(/cannot be used with pkg:: imports/);
+  });
+
+  it("import test is rejected for TypeScript imports even in test mode", () => {
+    // Non-Agency paths skip the resolver entirely for plain imports; the
+    // testOnly gate must still fire so the keyword never silently no-ops.
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "./foo.ts")],
+    };
+    const symbolTable = table({});
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency", {
+        allowTestImports: true,
+      }),
+    ).toThrow(/cannot be used with TypeScript or npm imports/);
+  });
+
+  it("import test is rejected for bare npm imports outside test mode too", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["debounce"], "lodash")],
+    };
+    const symbolTable = table({});
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency"),
+    ).toThrow(/cannot be used with TypeScript or npm imports/);
+  });
 });

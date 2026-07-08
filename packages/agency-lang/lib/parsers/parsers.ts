@@ -3315,6 +3315,16 @@ export const importStatmentParser: Parser<ImportStatement> = map(
         parseError(
           "expected a statement of the form `import { x, y } from 'filename'`",
           spaces,
+          // `import test { … }` marks a test-only import. The peek({)
+          // disambiguates from a default import named `test` (`import test
+          // from …`, `import test, { bar } from …`): `optional` backtracks
+          // fully when `test` is not immediately followed by `{` (same
+          // precedent as the `static const` lookahead in
+          // optimizeAssignmentPrefixParser).
+          capture(
+            optional(map(seqC(str("test"), spaces, peek(char("{"))), () => true)),
+            "testOnly",
+          ),
           capture(importNameTypeParser, "importedNames"),
           spaces,
           str("from"),
@@ -3328,7 +3338,19 @@ export const importStatmentParser: Parser<ImportStatement> = map(
       ),
     ),
   ),
-  (result) => ({ ...result, isAgencyImport: isAgencyImport(result.modulePath) }),
+  (result) => {
+    // `optional` records null on failure; keep the key absent on normal
+    // imports so exact-match AST comparisons and `agency ast` JSON stay clean.
+    const { testOnly, ...rest } = result;
+    const out: ImportStatement = {
+      ...rest,
+      isAgencyImport: isAgencyImport(result.modulePath),
+    };
+    if (testOnly) {
+      out.testOnly = true;
+    }
+    return out;
+  },
 );
 
 // =============================================================================

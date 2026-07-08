@@ -297,7 +297,7 @@ return failure(
     }
   }
 }
-const double = __AgencyFunction.create({
+export const double = __AgencyFunction.create({
   name: "double",
   module: "pipe-operator.agency",
   fn: __double_impl,
@@ -442,7 +442,7 @@ return failure(
     }
   }
 }
-const multiply = __AgencyFunction.create({
+export const multiply = __AgencyFunction.create({
   name: "multiply",
   module: "pipe-operator.agency",
   fn: __multiply_impl,
@@ -607,7 +607,7 @@ return failure(
     }
   }
 }
-const safeDivide = __AgencyFunction.create({
+export const safeDivide = __AgencyFunction.create({
   name: "safeDivide",
   module: "pipe-operator.agency",
   fn: __safeDivide_impl,

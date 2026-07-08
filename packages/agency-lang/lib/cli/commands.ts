@@ -267,6 +267,10 @@ export function compile(
     importStrategy?: ImportStrategy;
     /** Suppress the per-file `input → output (in Nms)` progress line. */
     quiet?: boolean;
+    /** Test-harness only. Honors `import test { … }`. Never set outside the
+     *  test runner / analysis paths — kept off AgencyConfig so agent source
+     *  cannot enable it. */
+    allowTestImports?: boolean;
   },
 ): string | null {
   if (!fs.existsSync(inputFile)) {
@@ -356,11 +360,9 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
-  const resolvedProgram = resolveImports(
-    reExportedProgram,
-    symbolTable,
-    absoluteInputFile,
-  );
+  const resolvedProgram = resolveImports(reExportedProgram, symbolTable, absoluteInputFile, {
+    allowTestImports: options?.allowTestImports ?? false,
+  });
   // Lift `callback("onX") { ... }` block bodies to top-level defs.
   // Must run BEFORE buildCompilationUnit and typecheck so the lifted defs
   // appear in functionDefinitions and get their bodies typechecked.

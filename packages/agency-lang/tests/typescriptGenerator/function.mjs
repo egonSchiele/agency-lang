@@ -288,7 +288,7 @@ return failure(
     }
   }
 }
-const test = __AgencyFunction.create({
+export const test = __AgencyFunction.create({
   name: "test",
   module: "function.agency",
   fn: __test_impl,
@@ -425,7 +425,7 @@ return failure(
     }
   }
 }
-const add = __AgencyFunction.create({
+export const add = __AgencyFunction.create({
   name: "add",
   module: "function.agency",
   fn: __add_impl,

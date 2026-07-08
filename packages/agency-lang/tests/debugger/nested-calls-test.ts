@@ -30,6 +30,7 @@ import {
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
+  installFetchMock as __installFetchMock,
   createLogger as __createLogger,
 } from "agency-lang/runtime";
 
@@ -116,6 +117,17 @@ if (__process.env.AGENCY_LLM_MOCKS) {
   __globalCtx.setLLMClient(
     new __DeterministicClient(JSON.parse(__process.env.AGENCY_LLM_MOCKS))
   );
+}
+
+// Auto-activate fetch mocking when AGENCY_FETCH_MOCKS_FILE points at a mocks
+// file. The runner writes resolved mocks (returnFile bodies already inlined) to
+// a temp file and passes its path — a file, not an inline env value, so a large
+// response body can't blow the exec arg/env size limit (ARG_MAX). Independent of
+// AGENCY_LLM_MOCKS — a test may mock the network while using a real LLM, or vice
+// versa. Installed before any node runs, ahead of any http.ts / stdlib / interop
+// fetch.
+if (__process.env.AGENCY_FETCH_MOCKS_FILE) {
+  __installFetchMock(JSON.parse(readFileSync(__process.env.AGENCY_FETCH_MOCKS_FILE, "utf-8")));
 }
 
 // Share a single registry object across every compiled module. With
@@ -314,7 +326,7 @@ return failure(
     }
   }
 }
-const double = __AgencyFunction.create({
+export const double = __AgencyFunction.create({
   name: "double",
   module: "tests/debugger/nested-calls-test.agency",
   fn: __double_impl,
@@ -473,7 +485,7 @@ return failure(
     }
   }
 }
-const addAndDouble = __AgencyFunction.create({
+export const addAndDouble = __AgencyFunction.create({
   name: "addAndDouble",
   module: "tests/debugger/nested-calls-test.agency",
   fn: __addAndDouble_impl,

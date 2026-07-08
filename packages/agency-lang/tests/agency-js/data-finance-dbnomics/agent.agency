@@ -1,4 +1,4 @@
-import { buildDbnomicsPath, parseDbnomics, dbnomicsFinalize, dbnomicsSeries } from "std::data/finance/dbnomics"
+import test { buildDbnomicsPath, parseDbnomics, dbnomicsFinalize, dbnomicsSeries } from "std::data/finance/dbnomics"
 
 node tBuild(): string {
   return buildDbnomicsPath("BLS", "cu", "CUUR0000SA0")

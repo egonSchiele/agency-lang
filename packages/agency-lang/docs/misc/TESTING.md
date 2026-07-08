@@ -105,6 +105,13 @@ These tests compile and execute Agency code against an LLM, then compare the out
 
 **Location:** `tests/agency/`
 
+**Testing non-exported helpers:** to unit-test an internal helper from an
+agency or agency-js test, import it with `import test { … }` instead of
+exporting it solely for the test. `import test` may name non-exported symbols
+from first-party (`std::` and local) modules and is honored only under the
+test harness — normal programs and the `run()` sandbox reject it. See the
+"Test-only imports" section of `docs/site/guide/imports-and-packages.md`.
+
 Each test is a pair:
 - `example.agency` — Agency source code
 - `example.test.json` — test cases with inputs and expected outputs

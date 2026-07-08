@@ -426,7 +426,7 @@ return failure(
     }
   }
 }
-const toDigit = __AgencyFunction.create({
+export const toDigit = __AgencyFunction.create({
   name: "toDigit",
   module: "euler-0008.agency",
   fn: __toDigit_impl,

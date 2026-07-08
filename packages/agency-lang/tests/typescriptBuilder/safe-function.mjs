@@ -302,7 +302,7 @@ return failure(
     }
   }
 }
-const safeLookup = __AgencyFunction.create({
+export const safeLookup = __AgencyFunction.create({
   name: "safeLookup",
   module: "safe-function.agency",
   fn: __safeLookup_impl,
@@ -456,7 +456,7 @@ return failure(
     }
   }
 }
-const unsafeSave = __AgencyFunction.create({
+export const unsafeSave = __AgencyFunction.create({
   name: "unsafeSave",
   module: "safe-function.agency",
   fn: __unsafeSave_impl,

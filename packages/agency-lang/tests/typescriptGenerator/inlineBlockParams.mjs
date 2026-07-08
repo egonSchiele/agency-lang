@@ -325,7 +325,7 @@ return failure(
     }
   }
 }
-const mapItems = __AgencyFunction.create({
+export const mapItems = __AgencyFunction.create({
   name: "mapItems",
   module: "inlineBlockParams.agency",
   fn: __mapItems_impl,

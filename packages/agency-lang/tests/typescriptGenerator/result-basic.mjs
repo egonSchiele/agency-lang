@@ -311,7 +311,7 @@ return failure(
     }
   }
 }
-const checkAge = __AgencyFunction.create({
+export const checkAge = __AgencyFunction.create({
   name: "checkAge",
   module: "result-basic.agency",
   fn: __checkAge_impl,

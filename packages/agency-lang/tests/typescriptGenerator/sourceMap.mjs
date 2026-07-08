@@ -314,7 +314,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "sourceMap.agency",
   fn: __greet_impl,

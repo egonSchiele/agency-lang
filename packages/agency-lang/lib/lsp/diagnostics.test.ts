@@ -82,3 +82,40 @@ describe("runDiagnostics — stdlib auto-import parity with CLI", () => {
     }
   });
 });
+
+describe("runDiagnostics — test-only imports", () => {
+  // The LSP is an analysis-only path: it must honor `import test` so
+  // migrated test files keep full editor support instead of dying on a
+  // single 0:0 "only allowed under the test harness" error with no program.
+  it("does not fatal-error on import test of a non-exported symbol", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-testimp-"));
+    try {
+      const helperFile = path.join(tmpDir, "helpers.agency");
+      fs.writeFileSync(
+        helperFile,
+        ["safe def secretDouble(n: number): number {", "  return n * 2", "}", ""].join("\n"),
+      );
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        'import test { secretDouble } from "./helpers.agency"',
+        "node main() {",
+        "  return secretDouble(21)",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      expect(program).not.toBeNull();
+      const harnessErrors = diagnostics.filter((d) =>
+        /only allowed under the test harness/.test(d.message),
+      );
+      expect(harnessErrors).toHaveLength(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});

@@ -487,3 +487,13 @@ node main(x: string) {
     );
   });
 });
+
+describe("function wrapper JS export", () => {
+  it("always JS-exports a non-exported function wrapper, keeping exported:false metadata", () => {
+    const out = generateWithBuilder(`def helper(): number { return 1 }`);
+    expect(out).toContain("export const helper");
+    // The Agency-level visibility must still be recorded at runtime even
+    // though the JS export no longer reflects it.
+    expect(out).toContain("exported: false");
+  });
+});

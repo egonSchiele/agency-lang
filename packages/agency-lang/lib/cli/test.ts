@@ -281,6 +281,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
     nodeName,
     hasArgs,
     argsString,
+    allowTestImports: true,
   });
 
   // Handle interrupt discovery
@@ -370,6 +371,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
       nodeName,
       hasArgs,
       argsString,
+      allowTestImports: true,
       interruptHandlers,
     });
   }
@@ -581,6 +583,7 @@ async function runSingleTest(
       nodeName: testCase.nodeName,
       hasArgs,
       argsString: testCase.input,
+      allowTestImports: true,
       interruptHandlers: testCase.interruptHandlers,
       timeoutMs,
       signal,
@@ -1009,7 +1012,7 @@ async function runTsTestDir(
       mergedConfig = { ...config, ...loadConfig(localConfigPath) };
     }
     try {
-      compile(mergedConfig, agencyPath);
+      compile(mergedConfig, agencyPath, undefined, { allowTestImports: true });
     } catch (e) {
       log(color.red(`  ✗ Compilation failed: ${e}`));
       return { success: false, dir };

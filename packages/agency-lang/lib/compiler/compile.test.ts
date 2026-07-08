@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compileSource } from "./compile.js";
+import { compileSource, typeCheckSource } from "./compile.js";
 
 describe("compileSource", () => {
   it("compiles valid Agency source to JavaScript", () => {
@@ -212,5 +212,35 @@ node main() { return 1 }
         expect(err).not.toMatch(/'pkg::y' is not allowed/);
       }
     }
+  });
+});
+
+describe("compileSource test-only imports", () => {
+  // Regression guard for the sandbox trust boundary, added while green:
+  // compileSource must never honor `import test` (it compiles agent-authored
+  // source for the run() subprocess sandbox). `littlesisFetch` is a REAL
+  // non-exported stdlib symbol, so if the privilege ever leaks, compilation
+  // would SUCCEED and the success assertion below fails unambiguously.
+  it("rejects import test under compileSource (subprocess sandbox never gets test-mode privilege)", () => {
+    const source = `
+import test { littlesisFetch } from "std::data/people/littlesis"
+node main() { return 1 }
+`;
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0]).toContain("only allowed under the test harness");
+    }
+  });
+
+  // typeCheckSource is agent-reachable via std::agency typecheck, so it must
+  // agree with execution: import test code that run() rejects must not
+  // typecheck as valid. (The LSP allows it independently for editor DX.)
+  it("rejects import test under typeCheckSource (agent-reachable typecheck agrees with execution)", () => {
+    const source = `
+import test { littlesisFetch } from "std::data/people/littlesis"
+node main() { return 1 }
+`;
+    expect(() => typeCheckSource(source)).toThrow(/only allowed under the test harness/);
   });
 });

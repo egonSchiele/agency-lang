@@ -876,3 +876,28 @@ describe("AgencyGenerator - literal comment trivia (issue #317)", () => {
     expect(twice).toBe(once);
   });
 });
+
+describe("AgencyGenerator - test-only imports", () => {
+  it("preserves the test keyword when formatting an import test statement", () => {
+    const parseResult = parseAgency('import test { foo } from "std::x"', {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+
+    const generator = new AgencyGenerator();
+    const result = generator.generate(parseResult.result);
+
+    expect(result.output).toContain('import test { foo } from "std::x"');
+  });
+
+  it("does not emit the test keyword for a normal import", () => {
+    const parseResult = parseAgency('import { foo } from "std::x"', {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+
+    const generator = new AgencyGenerator();
+    const result = generator.generate(parseResult.result);
+
+    expect(result.output).toContain('import { foo } from "std::x"');
+    expect(result.output).not.toContain("import test");
+  });
+});

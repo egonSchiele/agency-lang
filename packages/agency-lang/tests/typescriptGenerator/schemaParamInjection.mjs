@@ -311,7 +311,7 @@ return failure(
     }
   }
 }
-const parseValue = __AgencyFunction.create({
+export const parseValue = __AgencyFunction.create({
   name: "parseValue",
   module: "schemaParamInjection.agency",
   fn: __parseValue_impl,
@@ -458,7 +458,7 @@ return failure(
     }
   }
 }
-const wrapper = __AgencyFunction.create({
+export const wrapper = __AgencyFunction.create({
   name: "wrapper",
   module: "schemaParamInjection.agency",
   fn: __wrapper_impl,

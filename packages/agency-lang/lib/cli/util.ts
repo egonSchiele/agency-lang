@@ -233,6 +233,10 @@ type ExecuteNodeArgs = {
   // path is passed in AGENCY_FETCH_MOCKS_FILE, independent of the LLM
   // deterministic flag. `undefined` means "no fetchMocks declared" — no shim.
   fetchMocks?: FetchMock[];
+  // Test-harness only: honor `import test { … }` when compiling the agent.
+  // Set solely by the test runner (lib/cli/test.ts); every other caller
+  // omits it, so it defaults to deny.
+  allowTestImports?: boolean;
 };
 
 export type RunAgencyNodeArgs = {
@@ -257,6 +261,9 @@ export type RunAgencyNodeArgs = {
    * skip the redundant compile. No-op when running from uncompiled source.
    */
   preferCompiled?: boolean;
+  /** Test-harness only: honor `import test { … }` when compiling. Inert on
+   *  the distDir/preferCompiled branches (nothing is compiled there). */
+  allowTestImports?: boolean;
 };
 
 /**
@@ -280,6 +287,7 @@ export async function runAgencyNode({
   quietCompile,
   env,
   preferCompiled,
+  allowTestImports,
 }: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -298,6 +306,7 @@ export async function runAgencyNode({
       compiledPath = compile(config, agencyFile, undefined, {
         importStrategy: new RunStrategy(),
         quiet: quietCompile,
+        allowTestImports,
       })!;
     }
 
@@ -415,6 +424,7 @@ export function executeNode(args: ExecuteNodeArgs): {
   } else {
     compiledPath = compile(args.config, args.agencyFile, undefined, {
       importStrategy: new RunStrategy(),
+      allowTestImports: args.allowTestImports,
     })!;
   }
 

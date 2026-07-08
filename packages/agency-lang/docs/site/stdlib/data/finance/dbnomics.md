@@ -77,62 +77,6 @@ effect std::dbnomics {
 
 ## Functions
 
-### buildDbnomicsPath
-
-```ts
-buildDbnomicsPath(provider: string, dataset: string, series: string): string
-```
-
-Build the DBnomics series path (codes are URL-encoded). Pure — no network.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| provider | `string` |  |
-| dataset | `string` |  |
-| series | `string` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L51))
-
-### parseDbnomics
-
-```ts
-parseDbnomics(raw: any): DbnomicsSeries
-```
-
-Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total on null input.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| raw | `any` |  |
-
-**Returns:** [DbnomicsSeries](#dbnomicsseries)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L59))
-
-### dbnomicsFinalize
-
-```ts
-dbnomicsFinalize(fetchResult: any): Result
-```
-
-Finalize a DBnomics fetch into a Result. Pure — total on missing `series`.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| fetchResult | `any` |  |
-
-**Returns:** `Result`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L80))
-
 ### dbnomicsSeries
 
 ```ts

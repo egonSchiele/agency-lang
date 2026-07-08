@@ -2188,7 +2188,12 @@ export class TypeScriptBuilder {
       .done();
 
     const constDecl = ts.varDecl("const", functionName, createCall);
-    const exportedConst = node.exported ? ts.export(constDecl) : constDecl;
+    // JS-export the callable wrapper unconditionally so cross-file imports
+    // (including `import test`) link even when the function is not Agency-
+    // `export`ed. Agency-level visibility is enforced at import resolution
+    // (assertImportable) and in the docs generator; the `exported` metadata
+    // on AgencyFunction.create above still records the true visibility.
+    const exportedConst = ts.export(constDecl);
 
     return ts.statements([funcDecl, exportedConst]);
   }

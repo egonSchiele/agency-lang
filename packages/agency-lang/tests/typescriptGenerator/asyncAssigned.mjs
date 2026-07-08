@@ -308,7 +308,7 @@ return failure(
     }
   }
 }
-const compute = __AgencyFunction.create({
+export const compute = __AgencyFunction.create({
   name: "compute",
   module: "asyncAssigned.agency",
   fn: __compute_impl,

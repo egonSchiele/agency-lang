@@ -1,4 +1,4 @@
-import { buildGdeltPath, parseGdelt, gdeltFinalize, gdeltNews } from "std::data/finance/gdelt"
+import test { buildGdeltPath, parseGdelt, gdeltFinalize, gdeltNews } from "std::data/finance/gdelt"
 
 node tBuild(query: string, maxRecords: number, timespan: string): string {
   return buildGdeltPath(query, maxRecords, timespan)

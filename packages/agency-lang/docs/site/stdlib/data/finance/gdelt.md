@@ -64,62 +64,6 @@ effect std::gdelt {
 
 ## Functions
 
-### buildGdeltPath
-
-```ts
-buildGdeltPath(query: string, maxRecords: number, timespan: string): string
-```
-
-Build the GDELT DOC query path (query is URL-encoded). Pure — no network.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| maxRecords | `number` |  |
-| timespan | `string` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L52))
-
-### parseGdelt
-
-```ts
-parseGdelt(raw: any): NewsArticle[]
-```
-
-Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing/null input.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| raw | `any` |  |
-
-**Returns:** `NewsArticle[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L59))
-
-### gdeltFinalize
-
-```ts
-gdeltFinalize(fetchResult: any): Result
-```
-
-Turn a fetchJSON Result into the final Result. Pure — testable with mock Results.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| fetchResult | `any` |  |
-
-**Returns:** `Result`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L75))
-
 ### gdeltNews
 
 ```ts

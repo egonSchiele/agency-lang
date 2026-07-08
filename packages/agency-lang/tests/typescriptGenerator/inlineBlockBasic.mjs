@@ -319,7 +319,7 @@ return failure(
     }
   }
 }
-const twice = __AgencyFunction.create({
+export const twice = __AgencyFunction.create({
   name: "twice",
   module: "inlineBlockBasic.agency",
   fn: __twice_impl,

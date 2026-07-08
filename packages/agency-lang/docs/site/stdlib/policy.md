@@ -543,13 +543,14 @@ flushPolicy()
 ### cliPolicyHandler
 
 ```ts
-cliPolicyHandler(file: string, fields: ScopedRuleFields): any
+cliPolicyHandler(file: string, fields: ScopedRuleFields, policy: Policy | null): any
 ```
 
 CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
 
   @param file - Path to the on-disk policy file.
   @param fields - Per-effect config controlling the "approve-always-here" prompt option.
+  @param policy - Optional in-memory policy to use directly instead of loading `file` on startup.
 
 * Drop-in policy handler for interactive CLI agents. Returns a
  * function ref you bind to a local variable and install on a `handle`
@@ -600,6 +601,13 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
  *   save. The containing directory must already exist.
  * @param fields - Per-effect config controlling the (ap) prompt
  *   option. Effects not present here don't offer (ap).
+ * @param policy - Optional in-memory policy to start from. When
+ *   provided, the handler uses it directly and does NOT read `file` on
+ *   startup (so there is no load-time `std::read` and no dependency on
+ *   `file` existing). New "always" decisions still persist to `file`.
+ *   Use for a per-run override that must not be seeded from — or written
+ *   over — a saved policy on disk. Omit (null) for the normal
+ *   load-from-`file` behavior.
 
 **Parameters:**
 
@@ -607,7 +615,8 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 |---|---|---|
 | file | `string` |  |
 | fields | [ScopedRuleFields](#scopedrulefields) |  |
+| policy | `Policy \| null` | null |
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L827))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L834))

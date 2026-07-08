@@ -7,6 +7,11 @@ export static const POLICY_FILE = "policy.json"
 export static const HISTORY_FILE = "history"
 export static const POLICY_DIR = path.join(os.homedir(), ".agency-agent")
 export static const POLICY_PATH = path.join(POLICY_DIR, POLICY_FILE)
+// A --policy built-in is materialized here (not to POLICY_PATH) so a
+// one-off override never clobbers the user's saved policy, and a
+// cwd-scoped built-in can't leak into a later run from another directory.
+export static const SESSION_POLICY_FILE = "session-policy.json"
+export static const SESSION_POLICY_PATH = path.join(POLICY_DIR, SESSION_POLICY_FILE)
 export static const HISTORY_PATH = path.join(POLICY_DIR, HISTORY_FILE)
 export static const SETTINGS_FILE = "settings.json"
 export static const SETTINGS_PATH = path.join(POLICY_DIR, SETTINGS_FILE)

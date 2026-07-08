@@ -823,20 +823,35 @@ def _handler(intr: any): any {
  *   save. The containing directory must already exist.
  * @param fields - Per-effect config controlling the (ap) prompt
  *   option. Effects not present here don't offer (ap).
+ * @param policy - Optional in-memory policy to start from. When
+ *   provided, the handler uses it directly and does NOT read `file` on
+ *   startup (so there is no load-time `std::read` and no dependency on
+ *   `file` existing). New "always" decisions still persist to `file`.
+ *   Use for a per-run override that must not be seeded from — or written
+ *   over — a saved policy on disk. Omit (null) for the normal
+ *   load-from-`file` behavior.
  */
-export def cliPolicyHandler(file: string, fields: ScopedRuleFields): any {
+export def cliPolicyHandler(file: string, fields: ScopedRuleFields, policy: Policy | null = null): any {
   """
   CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
 
   @param file - Path to the on-disk policy file.
   @param fields - Per-effect config controlling the "approve-always-here" prompt option.
+  @param policy - Optional in-memory policy to use directly instead of loading `file` on startup.
   """
   globalCliPolicyOpts = {
     file: file,
     fields: fields
   }
-  _policy = null
-  _policyLoaded = false
+  if (policy != null) {
+    // Seed from the caller and mark loaded so `maybeLoadPolicy` skips the
+    // file read; persistence of later decisions still targets `file`.
+    _policy = policy
+    _policyLoaded = true
+  } else {
+    _policy = null
+    _policyLoaded = false
+  }
   _pendingSave = false
   return _handler
 }

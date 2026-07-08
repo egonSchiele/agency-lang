@@ -120,3 +120,100 @@ export static const recommendedAutoApprovePolicy = {
     action: "approve"
   }]
 }
+
+// Glob that matches a directory and everything under it. This is the
+// same convention `std::policy`'s `buildScopedMatch` uses for the
+// interactive "approve-always-here" rule: the exact path OR any nested
+// path. `baseDir` must be absolute (the agent pins it to the launch cwd
+// via `setAgentCwd(cwd())`), so relative paths the model passes resolve
+// into this range and outside paths fall through to prompting.
+def dirScope(baseDir: string): string {
+  return "{${baseDir},${baseDir}/**}"
+}
+
+// `recommended` plus auto-approval of the mutating file-system and
+// git-write effects, each SCOPED to `baseDir` and its children. Writes
+// (or git actions) whose path lands outside `baseDir` still prompt.
+//
+// The scope is matched on each effect's path field: `dir` for
+// write/edit/mkdir, `target` for remove, `src`+`dest` for copy/move, and
+// `cwd` for the git commands (which resolve an empty cwd to the agent
+// working directory before raising the interrupt). This mirrors the
+// fields `ALWAYS_FIELDS` pins for the interactive "here" rule.
+//
+// This is a genuine confinement for file writes, guarded on two layers:
+// (1) `std::write`/`std::edit`/`std::writeBinary` run their `filename`
+// through `resolvePath`, which rejects `..`, absolute paths, `~`, and
+// symlink escapes at runtime — so `dir` matching `baseDir` really does
+// pin the write inside it; and (2) the scope glob itself won't match a
+// value containing `..` (picomatch, dot:false), so effects matched on a
+// whole-path field (remove/copy/move/mkdir) can't be approved for a
+// `..`-escaping path either. Absolute paths outside `baseDir` simply
+// don't match and fall through to prompting.
+export def withWritesPolicy(baseDir: string) {
+  const scope = dirScope(baseDir)
+  const dirRule = [{ match: { dir: scope }, action: "approve" }]
+  const cwdRule = [{ match: { cwd: scope }, action: "approve" }]
+  return {
+    ...recommendedAutoApprovePolicy,
+    "std::write": dirRule,
+    "std::writeBinary": dirRule,
+    "std::edit": dirRule,
+    "std::mkdir": dirRule,
+    "std::remove": [{ match: { target: scope }, action: "approve" }],
+    "std::copy": [{ match: { src: scope, dest: scope }, action: "approve" }],
+    "std::move": [{ match: { src: scope, dest: scope }, action: "approve" }],
+    "std::git::add": cwdRule,
+    "std::git::commit": cwdRule,
+    "std::git::checkout": cwdRule,
+    "std::git::switch": cwdRule,
+    "std::git::branchCreate": cwdRule,
+    "std::git::branchDelete": cwdRule,
+    "std::git::stashPush": cwdRule,
+    "std::git::stashPop": cwdRule,
+    "std::git::restore": cwdRule
+  }
+}
+
+// `with-writes` plus auto-approval of `std::bash`, scoped to `baseDir`
+// on the command's `cwd`. NOTE: a shell command can still reach outside
+// `baseDir` via an absolute path or `cd` inside the command string —
+// the policy matches the declared `cwd`, not the shell's actual effects,
+// so this is best-effort confinement, not a hard sandbox. It exists so
+// autonomous / sandbox runs (e.g. a benchmark container) can drive the
+// shell without a human answering every approval.
+export def withBashPolicy(baseDir: string) {
+  const scope = dirScope(baseDir)
+  return {
+    ...withWritesPolicy(baseDir),
+    "std::bash": [{ match: { cwd: scope }, action: "approve" }]
+  }
+}
+
+// Built-in policy names accepted by the `--policy` flag (anything else
+// is treated as a path to a policy JSON file).
+export static const BUILTIN_POLICY_NAMES = [
+  "minimal",
+  "recommended",
+  "with-writes",
+  "with-bash",
+]
+
+// Resolve a built-in policy name to a concrete `Policy`, scoping the
+// cwd-relative variants to `baseDir`. Returns null for an unknown name
+// so the caller can fall back to treating the argument as a file path.
+export def builtinPolicy(name: string, baseDir: string) {
+  if (name == "minimal") {
+    return minimalAutoApprovePolicy
+  }
+  if (name == "recommended") {
+    return recommendedAutoApprovePolicy
+  }
+  if (name == "with-writes") {
+    return withWritesPolicy(baseDir)
+  }
+  if (name == "with-bash") {
+    return withBashPolicy(baseDir)
+  }
+  return null
+}

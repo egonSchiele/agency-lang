@@ -6,21 +6,13 @@ import {
  } from "std::agency/local"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
-import {
-  clearMessages,
-  pushMessage,
-  repl,
-  clearScreen,
-  clearHistory,
- } from "std::ui/cli"
 import { today } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
-import { keys } from "std::object"
-import { basename, dirname } from "std::path"
-import { box, render } from "std::ui/layout"
 import { listHostedModels, hostedModelInfo } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
+import { keys } from "std::object"
+import { basename, dirname } from "std::path"
 import {
   ScopedRuleFields,
   cliPolicyHandler,
@@ -31,15 +23,37 @@ import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { Attachment, attachToReply, getCost, getModelCosts, image, systemMessage } from "std::thread"
+import {
+  Attachment,
+  attachToReply,
+  getCost,
+  getModelCosts,
+  image,
+  systemMessage,
+ } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
+import {
+  clearMessages,
+  pushMessage,
+  repl,
+  clearScreen,
+  clearHistory,
+ } from "std::ui/cli"
+import { box, render } from "std::ui/layout"
 
 import { figs, title } from "./images/images.agency"
 import { detectAttachments, modalityFilter } from "./lib/attachments.agency"
-import { POLICY_PATH, HISTORY_PATH, ALWAYS_FIELDS } from "./lib/config.agency"
+import {
+  POLICY_PATH,
+  SESSION_POLICY_PATH,
+  HISTORY_PATH,
+  ALWAYS_FIELDS,
+ } from "./lib/config.agency"
 import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
+  builtinPolicy,
+  BUILTIN_POLICY_NAMES,
  } from "./lib/defaultPolicy.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
 import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
@@ -127,6 +141,11 @@ let VERBOSE: boolean = false
 // before any tool calls happen, so the callbacks below can suppress
 // scroll-output writes when stdout is destined for a Unix pipe.
 let _isInteractive: boolean = true
+
+// The `--policy` argument (a built-in name or a policy-file path), or ""
+// when the flag is absent. Set in main() before `setupSession` runs;
+// consumed there to override the saved policy for this run only.
+let _policyArg: string = ""
 
 // Live tool-call tracing. Always shown in the interactive REPL; in
 // one-shot mode it's suppressed so piped output is just the reply,
@@ -856,7 +875,12 @@ export def generateImageFile(
   // writeBinary rejects an absolute filename when dir is set, so split
   // path into (dir, name); useAgentCwd resolves a relative dir against
   // the agent cwd (absolute dirs pass through untouched).
-  const written = writeBinary(basename(path), generated.value.base64, dirname(path), useAgentCwd: true)
+  const written = writeBinary(
+    basename(path),
+    generated.value.base64,
+    dirname(path),
+    useAgentCwd: true,
+  )
   if (isFailure(written)) {
     return "Generated the image, but saving to ${path} failed: ${written.error}"
   }
@@ -921,7 +945,9 @@ export def agentReplyVia(target: string, userMsg: string): string {
   // every attach and every skip prints a visible line.
   const detected = modalityFilter(detectAttachments(expanded))
   for (skippedFile in detected.skipped) {
-    pushMessage(color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"))
+    pushMessage(
+      color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"),
+    )
   }
   if (detected.attached.length == 0) {
     // Deliberate special case: a text-only turn stays a bare string. A
@@ -1034,25 +1060,66 @@ def setupSession(interactive: boolean): any {
   const projectContext = loadAgentsMd(cwd()) with approve
   _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
 
-  const policy = parsePolicyFile(POLICY_PATH)
-  if (policy is failure(f)) {
-    if (f.status == "doesnt-exist") {
-      if (interactive) {
-        print(color.yellow("No existing policy found at ${POLICY_PATH}."))
-        setPolicy(POLICY_PATH, givePolicyChoice())
-      } else {
-        setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
-      }
+  // Which file the handler persists against, and an optional in-memory
+  // policy to start from. Normally the user's saved policy loaded from
+  // POLICY_PATH; a `--policy` override redirects this (see below) so the
+  // saved policy is never read or written.
+  let policyFile = POLICY_PATH
+  let sessionPolicy: any = null
+
+  if (_policyArg != "") {
+    // `--policy` override: a built-in name or a path to a policy file.
+    // The cwd-scoped built-ins pin the launch directory, so we resolve
+    // them against `cwd()` (what `setAgentCwd` just stored, and what the
+    // write/git/bash interrupts resolve their default paths back to).
+    const builtin = builtinPolicy(_policyArg, cwd())
+    if (builtin != null) {
+      // Hand the policy to the handler in memory (no disk write): a
+      // one-off, cwd-scoped override must not clobber the saved policy
+      // or leak into a later run from a different directory. Any new
+      // interactive "always" decision persists to the session file.
+      policyFile = SESSION_POLICY_PATH
+      sessionPolicy = builtin
     } else {
-      print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
-      process.exit(1)
+      // Not a built-in name — treat it as a policy file path and use it
+      // directly (the handler loads/persists it). Validate up front so a
+      // typo fails fast instead of silently starting from empty.
+      const loaded = parsePolicyFile(_policyArg)
+      if (loaded is failure(f)) {
+        print(
+          color.red(
+          "--policy '${_policyArg}' is neither a built-in policy (${BUILTIN_POLICY_NAMES.join(", ")}) nor a readable policy file (${f.status}).",
+        ),
+        )
+        process.exit(1)
+      }
+      policyFile = _policyArg
     }
   } else {
-    setPolicy(POLICY_PATH, policy.value)
+    const policy = parsePolicyFile(POLICY_PATH)
+    if (policy is failure(f)) {
+      if (f.status == "doesnt-exist") {
+        if (interactive) {
+          print(color.yellow("No existing policy found at ${POLICY_PATH}."))
+          setPolicy(POLICY_PATH, givePolicyChoice())
+        } else {
+          setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
+        }
+      } else {
+        print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
+        process.exit(1)
+      }
+    } else {
+      setPolicy(POLICY_PATH, policy.value)
+    }
   }
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
-  return cliPolicyHandler(file: POLICY_PATH, fields: ALWAYS_FIELDS)
+  return cliPolicyHandler(
+    file: policyFile,
+    fields: ALWAYS_FIELDS,
+    policy: sessionPolicy,
+  )
 }
 
 // One-shot entry: run a single turn through the same `mainAgent` the
@@ -1170,6 +1237,10 @@ node main() {
         type: "string",
         description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
       },
+      policy: {
+        type: "string",
+        description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, with-bash) or a path to a policy JSON file. with-writes/with-bash auto-approve writes (and, for with-bash, shell) scoped to the current directory and its children. Overrides the saved policy without persisting it."
+      },
       local: {
         type: "string",
         optional: true,
@@ -1190,6 +1261,7 @@ node main() {
   if (args.flags.verbose) {
     VERBOSE = true
   }
+  _policyArg = args.flags.policy ?? ""
 
   // Model setup. `--local` (deprecated alias: `--local-model`) is an optional-
   // value flag with three states: absent (null); bare empty-string for guided
@@ -1352,4 +1424,3 @@ node main() {
   const handler = setupSession(true)
   startInteractive(handler, "", "")
 }
-

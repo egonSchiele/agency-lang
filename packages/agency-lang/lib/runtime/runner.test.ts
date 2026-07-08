@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
+import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext } from "./asyncContext.js";
@@ -86,6 +87,26 @@ describe("safeStatelogValue", () => {
     const a: any = {};
     a.self = a;
     expect(safeStatelogValue(a)).toBe("[unserializable]");
+  });
+
+  it("preserves a durable redact tag on the clone (redaction runs on this copy)", () => {
+    // A plain JSON round-trip would strip the on-object tag and the statelog
+    // redaction replacer would leak the branch value into forkBranchEnd.
+    const gs = new GlobalStore();
+    const secret = { apiKey: "sk-secret" };
+    gs.setTag(secret, "redact", true);
+    const out = safeStatelogValue({ wrapped: secret }) as {
+      wrapped: object;
+    };
+    expect(out.wrapped).toEqual({ apiKey: "sk-secret" });
+    expect(gs.isRedacted(out.wrapped)).toBe(true); // tag survived the clone
+  });
+
+  it("preserves native types (Date) through the clone", () => {
+    const out = safeStatelogValue({
+      when: new Date("2026-01-01T00:00:00.000Z"),
+    }) as { when: Date };
+    expect(out.when).toBeInstanceOf(Date);
   });
 });
 

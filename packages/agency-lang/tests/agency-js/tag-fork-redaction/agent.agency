@@ -1,0 +1,18 @@
+import { redact } from "std::tag"
+
+// The branch redact()s a plain object and returns it BY REFERENCE to the
+// parent. Parent-side statelog events that include it (forkBranchEnd, node
+// results) must stay redacted — which requires the branch's durable-tag flag
+// to propagate to the parent store at settle.
+def tagInBranch(item: string) {
+  const secret = { apiKey: "sk-branch-secret" }
+  redact(secret)
+  return secret
+}
+
+node main() {
+  const results = fork(["only"]) as item {
+    return tagInBranch(item)
+  }
+  return results
+}

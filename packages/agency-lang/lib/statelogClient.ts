@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
 import { makeRedactReplacer } from "./runtime/redactForStatelog.js";
+import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { __globals } from "./runtime/asyncContext.js";
 
 // Bump this when the wire format changes in a way the viewer needs
@@ -132,6 +133,13 @@ export class StatelogClient {
   private spanStorage = new AsyncLocalStorage<SpanContext[]>();
   private metadata?: RunMetadata;
   private requestTimeoutMs: number;
+  // Fallback tag-store accessor for posts that fire OUTSIDE any ALS frame
+  // (agentEnd and the resume-path finalization events post after the run's
+  // agencyStore frame has ended). Wired by the execution context to read the
+  // CURRENT top-level GlobalStore — a getter, not a captured reference,
+  // because checkpoint restore reassigns execCtx.globals. Branch posts are
+  // unaffected: they run inside an ALS frame, where __globals() wins.
+  private fallbackGlobals: (() => GlobalStore | undefined) | null = null;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
@@ -1139,6 +1147,12 @@ export class StatelogClient {
     });
   }
 
+  /** Wire the out-of-frame redaction fallback (see the field's docstring).
+   *  Called by the execution context right after this client is created. */
+  setFallbackGlobals(fn: () => GlobalStore | undefined): void {
+    this.fallbackGlobals = fn;
+  }
+
   // === Post (wire format) ===
 
   async post(
@@ -1180,11 +1194,12 @@ export class StatelogClient {
     // must not throw like getRuntimeContext() would). hasAnyTags() skips the
     // whole redaction pass when nothing is tagged, so the common case is one
     // stringify, byte-identical to before. Events posted outside an ALS frame
-    // (__globals() undefined) are not redacted — a documented boundary, not a
-    // secrecy guarantee. See docs/dev/globalstore.md on per-branch isolation:
+    // fall back to the execution's top-level store (fallbackGlobals) — the
+    // result-bearing agentEnd event posts after the run's frame has ended and
+    // must still redact. See docs/dev/globalstore.md on per-branch isolation:
     // __globals() returns the branch-local clone, so each branch redacts using
     // its own tags.
-    const globals = __globals();
+    const globals = __globals() ?? this.fallbackGlobals?.();
     const rawData = { ...body, timestamp: new Date().toISOString() };
     const data =
       globals && globals.hasAnyTags()

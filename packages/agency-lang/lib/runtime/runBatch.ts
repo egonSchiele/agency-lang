@@ -369,21 +369,37 @@ function runInBranchAlsFrame<T>(
       moduleDir: parent.moduleDir,
     },
     async () => {
-      // Capture-on-INTERRUPT discipline: snapshot the per-branch
-      // globals + active-thread pointer only when the body settles
-      // as an `Interrupt[]`. Successful returns are discarded at
-      // join, so capturing then is pure waste (a JSON round-trip per
-      // branch). Throws naturally skip the capture and propagate —
-      // error-path branches are torn down rather than resumed.
-      //
-      // Only meaningful for the corresponding isolated dial.
-      // Pointer-shared dials have nothing to snapshot.
-      const value = await fn();
-      if (hasInterrupts(value)) {
-        if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
-        if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
+      try {
+        // Capture-on-INTERRUPT discipline: snapshot the per-branch
+        // globals + active-thread pointer only when the body settles
+        // as an `Interrupt[]`. Successful returns are discarded at
+        // join, so capturing then is pure waste (a JSON round-trip per
+        // branch). Throws naturally skip the capture and propagate —
+        // error-path branches are torn down rather than resumed.
+        //
+        // Only meaningful for the corresponding isolated dial.
+        // Pointer-shared dials have nothing to snapshot.
+        const value = await fn();
+        if (hasInterrupts(value)) {
+          if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
+          if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
+        }
+        return value;
+      } finally {
+        // Durable object tags set inside the branch travel back on the
+        // returned value (by reference), but the branch's presence flag
+        // lives on its discarded cloned store. OR it into the parent so
+        // the parent's statelog redaction gate still fires. In a `finally`
+        // so value, interrupt, AND throw settles all propagate — a thrown
+        // error can reference a branch-tagged object that the parent
+        // catches and logs. (The snapshot above deliberately skips throws,
+        // but that logic is about resume state; the monotonic flag has no
+        // reason to skip.) One idempotent write; pointer-shared globals
+        // need nothing (same store).
+        if (!shareGlobals && branchGlobals.hasDurableObjectTagFlag()) {
+          parent.globals.setDurableObjectTagFlag();
+        }
       }
-      return value;
     },
   );
 }

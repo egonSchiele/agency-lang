@@ -6,6 +6,7 @@ import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
+import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -52,14 +53,20 @@ const FORK_VALUE_CHAR_CAP = 4000;
  *  WITHOUT ever throwing — telemetry must not break execution. Returns:
  *  - `undefined` when there is no value (non-success outcome, or a value
  *    JSON can't represent, e.g. a function);
- *  - a deep JSON clone for normal small values (so it renders cleanly);
+ *  - a deep clone for normal small values (so it renders cleanly);
  *  - a truncated string for oversized values;
- *  - `"[unserializable]"` when stringification throws (e.g. a cycle). */
+ *  - `"[unserializable]"` when (de)serialization throws (e.g. a cycle).
+ *
+ *  The clone goes through the shared nativeTypeReplacer/nativeTypeReviver
+ *  pair (like deepClone) rather than plain JSON: a plain round-trip would
+ *  strip a durable redact tag off a branch-returned object, and the
+ *  statelog redaction replacer — which runs on this clone at post() time —
+ *  would then leak the value into the forkBranchEnd event. */
 export function safeStatelogValue(value: unknown): unknown {
   if (value === undefined) return undefined;
   let json: string | undefined;
   try {
-    json = JSON.stringify(value);
+    json = JSON.stringify(value, nativeTypeReplacer);
   } catch {
     return "[unserializable]";
   }
@@ -67,7 +74,13 @@ export function safeStatelogValue(value: unknown): unknown {
   if (json.length > FORK_VALUE_CHAR_CAP) {
     return json.slice(0, FORK_VALUE_CHAR_CAP) + "…[truncated]";
   }
-  return JSON.parse(json);
+  try {
+    return JSON.parse(json, nativeTypeReviver);
+  } catch {
+    // e.g. a FunctionRef whose registry entry is gone — telemetry must
+    // degrade, not throw.
+    return "[unserializable]";
+  }
 }
 
 /**

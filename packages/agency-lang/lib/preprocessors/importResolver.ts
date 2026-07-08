@@ -4,7 +4,11 @@ import type {
   ImportStatement,
 } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
-import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
+import {
+  resolveAgencyImportPath,
+  isAgencyImport,
+  isPkgImport,
+} from "../importPaths.js";
 
 /**
  * Resolve unified imports: rewrite `import { x, y } from "./foo.agency"`
@@ -15,12 +19,23 @@ import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
  * (.agency files, std:: imports, or pkg:: imports).
  * Leaves import node / import tool statements and non-Agency imports untouched.
  */
-function assertExported(
+
+/**
+ * May this import see this symbol? A test-only import (`import test { … }`,
+ * honored only under the test harness — the per-statement gate in
+ * resolveImports enforces that plus the first-party restriction) may see
+ * non-exported symbols; a plain import may not.
+ */
+function assertImportable(
   name: string,
   modulePath: string,
-  exported?: boolean,
+  exported: boolean | undefined,
+  testOnly: boolean | undefined,
   symbolKind = "Function",
 ): void {
+  if (testOnly) {
+    return;
+  }
   if (!exported) {
     throw new Error(
       `${symbolKind} '${name}' in '${modulePath}' is not exported. Add the 'export' keyword to its definition.`,
@@ -32,13 +47,28 @@ export function resolveImports(
   program: AgencyProgram,
   symbolTable: SymbolTable,
   currentFile: string,
+  opts: { allowTestImports?: boolean } = {},
 ): AgencyProgram {
+  const allowTestImports = opts.allowTestImports ?? false;
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
     if (node.type !== "importStatement" || !isAgencyImport(node.modulePath)) {
       newNodes.push(node);
       continue;
+    }
+
+    // Per-statement gate for test-only imports. Must run before symbol
+    // lookup so a pkg:: rejection does not depend on the package resolving.
+    if (node.testOnly) {
+      if (isPkgImport(node.modulePath)) {
+        throw new Error(
+          "`import test` cannot be used with pkg:: imports; it is only for first-party (std:: and local) modules.",
+        );
+      }
+      if (!allowTestImports) {
+        throw new Error("`import test` is only allowed under the test harness.");
+      }
     }
 
     const importedFilePath = resolveAgencyImportPath(
@@ -83,7 +113,7 @@ export function resolveImports(
             nodeNames.push(name);
             break;
           case "function":
-            assertExported(name, node.modulePath, symbol.exported);
+            assertImportable(name, node.modulePath, symbol.exported, node.testOnly);
             functionNames.push(name);
             // Mark as safe if the function definition is safe OR if the
             // original import explicitly marked it safe
@@ -92,11 +122,11 @@ export function resolveImports(
             }
             break;
           case "type":
-            assertExported(name, node.modulePath, symbol.exported, "Type");
+            assertImportable(name, node.modulePath, symbol.exported, node.testOnly, "Type");
             typeNames.push(name);
             break;
           case "constant":
-            assertExported(name, node.modulePath, symbol.exported, "Constant");
+            assertImportable(name, node.modulePath, symbol.exported, node.testOnly, "Constant");
             constantNames.push(name);
             break;
         }

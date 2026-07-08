@@ -32,6 +32,7 @@ import {
   type ImportStrategy,
 } from "../importStrategy.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
+import { parseAgencyFileCached } from "../parseCache.js";
 import { fileURLToPath, pathToFileURL } from "url";
 import {
   classifyInstall,
@@ -187,6 +188,45 @@ export function resetCompilationCache(): void {
 }
 
 /**
+ * Compile a set of entry files under ONE union closure, like the
+ * directory branch of `compile()` does. Callers with many entry points
+ * (the test runner's precompile pass) use this instead of per-file
+ * `compile()` calls, which would rebuild the closure once per entry via
+ * `ensureCompiledClosure`'s covers-check.
+ *
+ * Unlike the CLI directory branch, closure errors THROW
+ * (`CompileClosureError`) instead of exiting, so programmatic callers
+ * can attach context. Parse/typecheck failures inside per-file
+ * `compile()` keep their existing exit behavior.
+ *
+ * `options.closure` lets a caller that already built the union closure
+ * (e.g. to run analyses over `closure.programs`) hand it in rather than
+ * paying for a rebuild. It MUST cover every file in `files`, otherwise
+ * `ensureCompiledClosure` clears the session cache mid-loop and the
+ * one-compile-per-module guarantee is lost.
+ */
+export function compileMany(
+  config: AgencyConfig,
+  files: string[],
+  options?: {
+    closure?: CompiledClosure;
+    quiet?: boolean;
+    allowTestImports?: boolean;
+  },
+): void {
+  const absFiles = files.map((f) => path.resolve(f));
+  if (absFiles.length === 0) return;
+  currentClosure = options?.closure ?? buildCompiledClosure(absFiles, config);
+  compiledFiles.clear();
+  for (const file of absFiles) {
+    compile(config, file, undefined, {
+      quiet: options?.quiet,
+      allowTestImports: options?.allowTestImports,
+    });
+  }
+}
+
+/**
  * Build the import-closure analysis once per compile session — at the
  * outermost call, before any recursive per-file compile() runs. The
  * recursive children reuse the cached closure to get per-module init
@@ -255,6 +295,26 @@ function runTypecheck(
   } else {
     console.warn(formatErrors(errors, "warning"));
   }
+}
+
+// Cached-parse counterpart of `parse()`: same exit-on-failure contract the
+// CLI pipeline expects, but reads through the process-wide parse cache.
+function parseFileOrExit(
+  absPath: string,
+  config: AgencyConfig,
+  applyTemplate: boolean,
+  contents: string,
+): AgencyProgram {
+  const parseResult = parseAgencyFileCached(absPath, config, applyTemplate);
+  if (!parseResult.success) {
+    if (parseResult.message) {
+      console.error(`Failed to parse Agency program: ${parseResult.message}`);
+    } else {
+      console.error("Failed to parse Agency program.", contents.slice(0, 400));
+    }
+    process.exit(1);
+  }
+  return parseResult.result;
 }
 
 export function compile(
@@ -345,7 +405,7 @@ export function compile(
 
   const contents = readFile(inputFile);
   const applyTemplate = !isNonTemplatedStdlib(absoluteInputFile);
-  const parsedProgram = parse(contents, config, applyTemplate);
+  const parsedProgram = parseFileOrExit(absoluteInputFile, config, applyTemplate, contents);
 
   const symbolTableStartTime = performance.now();
   const symbolTable =

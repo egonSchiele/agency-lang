@@ -5,8 +5,11 @@ export type ScopeType = VariableType | "any";
 export class Scope {
   readonly key: string;
   readonly parent?: Scope;
-  private readonly vars: Record<string, ScopeType> = {};
-  private readonly consts: Record<string, boolean> = {};
+  // Null-prototype dictionaries: variable names are user-controlled, and on
+  // a plain `{}` assigning the key "__proto__" invokes the prototype setter
+  // (losing the binding and mutating the map) instead of storing an entry.
+  private readonly vars: Record<string, ScopeType> = Object.create(null);
+  private readonly consts: Record<string, boolean> = Object.create(null);
   private readonly isFunctionBoundary: boolean;
 
   constructor(key: string, parent?: Scope, isFunctionBoundary: boolean = false) {

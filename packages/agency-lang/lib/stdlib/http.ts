@@ -67,6 +67,21 @@ function validateUrl(
 }
 
 /**
+ * Throw on a non-2xx response so std::http's `try`-wrapped callers surface a
+ * `failure` instead of treating an error page / JSON error body as success.
+ * `Response.ok` is true iff the status is in [200, 300). The body has already
+ * been read (and size-capped) by the caller, so include a snippet — most APIs
+ * put the failure reason in the body.
+ */
+function ensureOkStatus(result: Response, url: string, body: string): void {
+  if (!result.ok) {
+    throw new Error(
+      `HTTP ${result.status} ${result.statusText} from ${url}: ${body.slice(0, 500)}`,
+    );
+  }
+}
+
+/**
  * Run an HTTP request, translating any abort-shaped error into the
  * runtime's `AgencyCancelledError`. Node's `fetch` surfaces an
  * aborted request as a `DOMException` with `name === "AbortError"`,
@@ -122,12 +137,15 @@ async function fetchImpl(
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(async () => {
     const result = await fetch(url, { headers, signal });
+    let body: string;
     try {
-      return await readBodyCapped(result, url, signal);
+      body = await readBodyCapped(result, url, signal);
     } catch (e) {
       if (isAbortError(e)) throw e;
       throw new Error(`Failed to get text from ${url}: ${e}`);
     }
+    ensureOkStatus(result, url, body);
+    return body;
   }, url);
 }
 
@@ -169,6 +187,7 @@ async function fetchJSONImpl(
   return await runHttp(async () => {
     const result = await fetch(url, { headers, signal });
     const text = await readBodyCapped(result, url, signal);
+    ensureOkStatus(result, url, text);
     try {
       return JSON.parse(text);
     } catch (e) {
@@ -215,6 +234,7 @@ async function fetchMarkdownImpl(
     const result = await fetch(url, { headers, signal });
     const contentType = result.headers.get("content-type") ?? "";
     const body = await readBodyCapped(result, url, signal);
+    ensureOkStatus(result, url, body);
     if (contentType.includes("text/html")) {
       return htmlToMarkdown(body);
     }

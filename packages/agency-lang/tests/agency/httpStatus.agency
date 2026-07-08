@@ -1,0 +1,61 @@
+import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+
+// std::http fetch functions must fail on a non-2xx status instead of returning the
+// error body as success. Each node returns a stable marker (not the raw message,
+// whose statusText/url text can vary) so the .test.json can assert exactly.
+// `with approve` auto-approves the fetch interrupt so the mocked response is reached.
+
+// 404 with a VALID JSON body: the status check must fire BEFORE JSON.parse, so this
+// is a failure (not success({error:...})), and the message carries the status + body.
+node jsonNotFound(): string {
+  const r = fetchJSON("https://api.example.com", "/x") with approve
+  if (r is failure(e)) {
+    if (e.includes("HTTP 404") && e.includes("nope")) {
+      return "OK"
+    }
+    return "BAD: ${e}"
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node jsonServerError(): string {
+  const r = fetchJSON("https://api.example.com", "/err500") with approve
+  if (r is failure(e)) {
+    if (e.includes("HTTP 500")) {
+      return "OK"
+    }
+    return "BAD: ${e}"
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node fetchNotFound(): string {
+  const r = fetch("https://api.example.com", "/page") with approve
+  if (r is failure(e)) {
+    if (e.includes("HTTP 404")) {
+      return "OK"
+    }
+    return "BAD: ${e}"
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node markdownGone(): string {
+  const r = fetchMarkdown("https://api.example.com", "/md") with approve
+  if (r is failure(e)) {
+    if (e.includes("HTTP 503")) {
+      return "OK"
+    }
+    return "BAD: ${e}"
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+// Regression guard: a 200 still succeeds and returns the parsed body.
+node jsonOk(): number {
+  const r = fetchJSON("https://api.example.com", "/ok") with approve
+  if (r is success(v)) {
+    return v.answer
+  }
+  return -1
+}

@@ -352,8 +352,16 @@ export function printTs(node: TsNode, indent = 0): string {
       // Always pass an opts object so Runner.thread has a single,
       // uniform signature: legacy callers see `{}` and the
       // hook-firing path can treat opts as required.
-      const optsArg = optsParts.length === 0 ? "{}" : `{ ${optsParts.join(", ")} }`;
-      return `await runner.thread(${node.id}, "${node.method}", ${optsArg}, async (runner) => {\n${body}\n${ind(indent)}});`;
+      //
+      // The opts object is emitted as a thunk (`async () => (<opts>)`) so its
+      // value expressions (`label`, `session`, ...) are evaluated inside
+      // `runner.thread`, AFTER its halt/skip guards. An early `return` earlier
+      // in the function halts the runner and skips the steps that assign the
+      // locals those expressions reference; evaluating them eagerly here would
+      // then dereference an unset local and throw. Deferring lets the early
+      // return win — same fix as `runnerLoop`.
+      const optsObj = optsParts.length === 0 ? "{}" : `{ ${optsParts.join(", ")} }`;
+      return `await runner.thread(${node.id}, "${node.method}", async () => (${optsObj}), async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerHandle": {
@@ -427,10 +435,23 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "runnerLoop": {
-      const items = printTs(node.items, indent);
+      // The iterable is emitted as a thunk (`async () => (<expr>)`) so its
+      // expression is evaluated inside `runner.loop`, AFTER the halt/skip
+      // guards. An early `return` earlier in the function halts the runner and
+      // skips the steps that assign the iterable's backing locals; evaluating
+      // the iterable eagerly here would then dereference an unset local and
+      // throw. Deferring it lets the early return win. Mirrors how
+      // `runnerWhileLoop` wraps its condition.
+      //
+      // The expression MUST be parenthesized: a bare `async () => ${items}`
+      // breaks when the iterable prints as an object literal (record
+      // iteration over a literal, e.g. `for (k in { a: 1 })`) — `async () => {
+      // a: 1 }` parses as a function BODY block, not an object. The parens
+      // force expression context. (Same reason `runnerThread` wraps its opts.)
+      const items = printTs(node.items, indent + 1);
       const idxVar = node.indexVar ?? "_";
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.loop(${node.id}, ${items}, async (${node.itemVar}, ${idxVar}, runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.loop(${node.id}, async () => (${items}), async (${node.itemVar}, ${idxVar}, runner) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerWhileLoop": {

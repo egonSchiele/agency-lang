@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "earlyReturnWhile",
+      "description": "Early return must skip a following while loop whose condition (i < d.limit) references a skipped local; the condition thunk must not be evaluated after the halt.",
+      "input": "",
+      "expectedOutput": "\"early\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runsWhile",
+      "description": "Normal path: the while loop must actually run, summing 0+1+2 -> while-3. Guards against a broken condition thunk that never enters the loop (while-0).",
+      "input": "",
+      "expectedOutput": "\"while-3\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

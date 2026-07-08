@@ -243,7 +243,7 @@ await callHook({
       await runner.step(1, async (runner) => {
 __stack.locals.results = [];
       });
-      await runner.loop(2, __stack.args.items, async (item, _, runner) => {
+      await runner.loop(2, async () => (__stack.args.items), async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(__stack.args.block, {
             type: "positional",

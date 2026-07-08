@@ -1,0 +1,38 @@
+// Guard test for a sibling of the loop/thread early-return bug.
+//
+// `while` loops are ALREADY safe from that bug because `runner.whileLoop`
+// receives its condition as a thunk (`async () => (<cond>)`), so the
+// condition is only evaluated inside the halt guard. This test pins that
+// property: if the condition were ever emitted eagerly, an early `return`
+// followed by a `while` whose condition references the skipped local would
+// throw (dereferencing the never-assigned `d`).
+//
+// Two paths:
+//   f("x") -> "early": halt path. An eager condition throws here (`d.limit`
+//             on a skipped/undefined `d`).
+//   f("y") -> "while-3": normal path. The loop must run (0+1+2) so the test
+//             also fails if the condition thunk is broken to a no-op.
+
+def whileLoop(t: string): string {
+  if (t == "x") {
+    return "early"
+  }
+  const d = {
+    limit: 3
+  }
+  let i = 0
+  let total = 0
+  while (i < d.limit) {
+    total = total + i
+    i = i + 1
+  }
+  return "while-" + total
+}
+
+node earlyReturnWhile(): string {
+  return whileLoop("x")
+}
+
+node runsWhile(): string {
+  return whileLoop("y")
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "earlyReturn",
+      "description": "An early return inside an if must skip a following thread block whose named-arg opts reference a skipped local declaration, rather than eagerly evaluating those opts and throwing.",
+      "input": "",
+      "expectedOutput": "\"early\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runsThread",
+      "description": "When there is no early return, the thunked thread opts must actually be evaluated so the created thread carries label d.name == 'worker' (read back via listThreads). Guards against a regression where the opts thunk is never resolved and the label is dropped.",
+      "input": "",
+      "expectedOutput": "\"worker\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

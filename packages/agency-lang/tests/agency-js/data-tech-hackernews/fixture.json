@@ -1,0 +1,113 @@
+{
+  "listTop": "topstories",
+  "listJob": "jobstories",
+  "listBad": "FAIL: unknown list 'bogus'; valid: top, new, best, ask, show, job",
+  "sortRel": "search",
+  "sortRecent": "search_by_date",
+  "sortBad": "FAIL: unknown sort 'bogus'; valid: relevance, recent",
+  "capUnder": 30,
+  "capOver": 100,
+  "capNeg": 0,
+  "takeSome": [10, 20],
+  "takeOver": [10],
+  "takeZero": [],
+  "storyListPath": "/topstories.json",
+  "itemPath": "/item/8863.json",
+  "userPath": "/user/pg.json",
+  "searchPath": "/search?query=rust%20async&tags=story&hitsPerPage=20",
+  "searchPathClamped": "/search_by_date?query=ai&tags=story&hitsPerPage=50",
+  "story": {
+    "id": 8863,
+    "title": "My YC app: Dropbox - Throw away your USB drive",
+    "url": "http://www.getdropbox.com/u/2/screencast.html",
+    "by": "dhouston",
+    "score": 111,
+    "time": 1175714200,
+    "descendants": 71,
+    "type": "story"
+  },
+  "item": {
+    "id": 8863,
+    "type": "story",
+    "by": "dhouston",
+    "time": 1175714200,
+    "title": "My YC app: Dropbox - Throw away your USB drive",
+    "url": "http://www.getdropbox.com/u/2/screencast.html",
+    "text": "",
+    "score": 111,
+    "descendants": 71,
+    "parent": null,
+    "kids": [8952, 9224]
+  },
+  "user": {
+    "id": "pg",
+    "created": 1160418092,
+    "karma": 155111,
+    "about": "Bug fixer.",
+    "submitted": [1, 2, 3]
+  },
+  "hits": [
+    {
+      "id": 8863,
+      "title": "Dropbox",
+      "url": "http://getdropbox.com",
+      "by": "dhouston",
+      "score": 111,
+      "time": 1175714200,
+      "descendants": 71,
+      "type": "story"
+    }
+  ],
+  "hitsNull": [],
+  "itemFinalizeNull": "Hacker News returned no item",
+  "searchFinalizeErr": "Hacker News request failed (the API may be rate-limited): boom",
+  "errorMsg": "Hacker News request failed (the API may be rate-limited): boom",
+  "mockStories": [
+    {
+      "id": 8863,
+      "title": "My YC app: Dropbox - Throw away your USB drive",
+      "url": "http://www.getdropbox.com/u/2/screencast.html",
+      "by": "dhouston",
+      "score": 111,
+      "time": 1175714200,
+      "descendants": 71,
+      "type": "story"
+    },
+    {
+      "id": 8952,
+      "title": "Second story",
+      "url": "http://example.com/2",
+      "by": "pg",
+      "score": 50,
+      "time": 1175718200,
+      "descendants": 10,
+      "type": "story"
+    }
+  ],
+  "mockItem": {
+    "id": 8863,
+    "type": "story",
+    "by": "dhouston",
+    "time": 1175714200,
+    "title": "My YC app: Dropbox - Throw away your USB drive",
+    "url": "http://www.getdropbox.com/u/2/screencast.html",
+    "text": "",
+    "score": 111,
+    "descendants": 71,
+    "parent": null,
+    "kids": [8952, 9224]
+  },
+  "mockItemNull": "GOT_FAILURE",
+  "mockSearch": [
+    {
+      "id": 8863,
+      "title": "Dropbox",
+      "url": "http://getdropbox.com",
+      "by": "dhouston",
+      "score": 111,
+      "time": 1175714200,
+      "descendants": 71,
+      "type": "story"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+[
+  { "url": "https://hacker-news.firebaseio.com/v0/topstories.json", "return": [8863, 8952] },
+  { "url": "https://hacker-news.firebaseio.com/v0/item/8863.json", "returnFile": "sample-item.json" },
+  { "url": "https://hacker-news.firebaseio.com/v0/item/8952.json", "return": { "id": 8952, "type": "story", "by": "pg", "time": 1175718200, "title": "Second story", "url": "http://example.com/2", "score": 50, "descendants": 10 } },
+  { "url": "https://hacker-news.firebaseio.com/v0/item/999.json", "return": null },
+  { "urlPattern": "hn\\.algolia\\.com/api/v1/search\\?query=dropbox", "returnFile": "sample-search.json" }
+]

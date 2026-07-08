@@ -124,7 +124,11 @@ export function compileSource(
     // 3. Build symbol table and resolve imports
     const symbolTable = SymbolTable.build(syntheticPath, config);
     const reExportedProgram = resolveReExports(program, symbolTable, syntheticPath);
-    const resolvedProgram = resolveImports(reExportedProgram, symbolTable, syntheticPath);
+    // Sandbox trust boundary: compileSource compiles agent-authored source
+    // for the run() subprocess sandbox and must NEVER honor `import test`.
+    const resolvedProgram = resolveImports(reExportedProgram, symbolTable, syntheticPath, {
+      allowTestImports: false,
+    });
 
     // 3a. Lift `callback("onX") { ... }` block bodies to top-level defs.
     // Must run BEFORE buildCompilationUnit (so lifted defs appear in

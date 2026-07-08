@@ -103,7 +103,12 @@ export function typeCheckSource(
   return withSourcePath(source, sourcePath, (syntheticPath) => {
     const symbolTable = SymbolTable.build(syntheticPath, {});
     const reExported = resolveReExports(program, symbolTable, syntheticPath);
-    const resolved = resolveImports(reExported, symbolTable, syntheticPath);
+    // Analysis-only path (never executes anything): honor `import test` so
+    // test files can be type-checked. The execution trust boundary lives in
+    // compileSource / compile(), which default to deny.
+    const resolved = resolveImports(reExported, symbolTable, syntheticPath, {
+      allowTestImports: true,
+    });
     const lifted = liftCallbackBlocks(resolved);
     const info = buildCompilationUnit(lifted, symbolTable, syntheticPath, source);
     const { errors } = typeCheck(lifted, { typechecker: { enabled: true } }, info);

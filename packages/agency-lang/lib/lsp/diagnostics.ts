@@ -121,7 +121,12 @@ export function runDiagnostics(
 
   try {
     program = resolveReExports(program, symbolTable, fsPath);
-    program = resolveImports(program, symbolTable, fsPath);
+    // Analysis-only path (the LSP never executes anything): honor
+    // `import test` so migrated test files keep full editor support instead
+    // of dying on a single 0:0 error. Execution paths still default to deny.
+    program = resolveImports(program, symbolTable, fsPath, {
+      allowTestImports: true,
+    });
   } catch (err) {
     diagnostics.push({
       severity: DiagnosticSeverity.Error,

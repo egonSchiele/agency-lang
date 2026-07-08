@@ -4,6 +4,7 @@ import {
   readCause,
 } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { failure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -67,6 +68,41 @@ function validateUrl(
 }
 
 /**
+ * A structured `failure` for a non-2xx response, or `null` when the status is
+ * ok (`Response.ok`, i.e. in [200, 300)). Returning a `failure` — rather than
+ * throwing — lets std::http's `try`-wrapped callers pass the Result through
+ * intact (see `__tryCall`), so callers see the structured `error`
+ * `{ status, statusText, url, body, message }` instead of a flat string. The
+ * body is already read (and size-capped); the snippet is whitespace-collapsed
+ * and truncated so the message stays stable and log-friendly.
+ */
+function httpStatusFailure(
+  result: Response,
+  url: string,
+  body: string,
+): ResultFailure | null {
+  if (result.ok) return null;
+  const snippet = normalizeSnippet(body);
+  const statusText = result.statusText ? ` ${result.statusText}` : "";
+  const message =
+    `HTTP ${result.status}${statusText} from ${url}` +
+    (snippet ? `: ${snippet}` : "");
+  return failure({
+    status: result.status,
+    statusText: result.statusText,
+    url,
+    body: snippet,
+    message,
+  });
+}
+
+/** Collapse whitespace and truncate a response body into a failure snippet. */
+function normalizeSnippet(body: string, max = 300): string {
+  const collapsed = body.replace(/\s+/g, " ").trim();
+  return collapsed.length > max ? `${collapsed.slice(0, max)}…` : collapsed;
+}
+
+/**
  * Run an HTTP request, translating any abort-shaped error into the
  * runtime's `AgencyCancelledError`. Node's `fetch` surfaces an
  * aborted request as a `DOMException` with `name === "AbortError"`,
@@ -117,17 +153,21 @@ async function fetchImpl(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-): Promise<string> {
+): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(async () => {
     const result = await fetch(url, { headers, signal });
+    let body: string;
     try {
-      return await readBodyCapped(result, url, signal);
+      body = await readBodyCapped(result, url, signal);
     } catch (e) {
       if (isAbortError(e)) throw e;
       throw new Error(`Failed to get text from ${url}: ${e}`);
     }
+    const statusFailure = httpStatusFailure(result, url, body);
+    if (statusFailure) return statusFailure;
+    return body;
   }, url);
 }
 
@@ -141,7 +181,7 @@ export async function __internal_fetch(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-): Promise<string> {
+): Promise<string | ResultFailure> {
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
 }
 
@@ -151,7 +191,7 @@ export async function _fetch(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-): Promise<string> {
+): Promise<string | ResultFailure> {
   const { ctx, stack } = getRuntimeContext();
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
 }
@@ -169,6 +209,8 @@ async function fetchJSONImpl(
   return await runHttp(async () => {
     const result = await fetch(url, { headers, signal });
     const text = await readBodyCapped(result, url, signal);
+    const statusFailure = httpStatusFailure(result, url, text);
+    if (statusFailure) return statusFailure;
     try {
       return JSON.parse(text);
     } catch (e) {
@@ -208,13 +250,15 @@ async function fetchMarkdownImpl(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-): Promise<string> {
+): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(async () => {
     const result = await fetch(url, { headers, signal });
     const contentType = result.headers.get("content-type") ?? "";
     const body = await readBodyCapped(result, url, signal);
+    const statusFailure = httpStatusFailure(result, url, body);
+    if (statusFailure) return statusFailure;
     if (contentType.includes("text/html")) {
       return htmlToMarkdown(body);
     }
@@ -231,7 +275,7 @@ export async function __internal_fetchMarkdown(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-): Promise<string> {
+): Promise<string | ResultFailure> {
   return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
 }
 
@@ -241,7 +285,7 @@ export async function _fetchMarkdown(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-): Promise<string> {
+): Promise<string | ResultFailure> {
   const { ctx, stack } = getRuntimeContext();
   return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
 }

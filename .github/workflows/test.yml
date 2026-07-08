@@ -12,24 +12,13 @@ on:
 permissions:
   contents: read
 
+# The test suites are split across two parallel jobs (`build` and
+# `agency-tests`) to cut wall-clock time. Each job is self-contained — it
+# runs its own `pnpm install && make` (~2 min) rather than sharing a build
+# artifact, which would serialize the jobs and cost about as much in
+# upload/download as it saves.
 jobs:
   build:
-    # `pull-requests: write` is required so the coverage reporter can post
-    # a sticky comment on PRs.
-    #
-    # Security notes:
-    #   * This workflow uses `pull_request`, NOT `pull_request_target`. PRs
-    #     from forks therefore receive a read-only `GITHUB_TOKEN` regardless
-    #     of the `permissions:` block, so a fork cannot abuse this scope.
-    #   * For same-repo PRs the author already has push access, so the
-    #     incremental risk of granting comment-write to that PR's workflow
-    #     run is minimal.
-    #   * The post step is wrapped with `continue-on-error: true` so that a
-    #     missing/restricted token never fails the build.
-    permissions:
-      contents: read
-      pull-requests: write
-
     runs-on: ubuntu-latest
 
     strategy:
@@ -39,6 +28,14 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        # Don't write GITHUB_TOKEN into .git/config: no step does
+        # authenticated git operations afterward (the coverage comment
+        # authenticates via github-script's injected client), and these
+        # jobs execute PR-controlled code — the agency tests compile and
+        # run programs from the PR — which could otherwise read the
+        # persisted token.
+        persist-credentials: false
 
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -90,6 +87,65 @@ jobs:
         CI: "true"
       run: node tests/integration/stdlib-sandbox/run.mjs
       timeout-minutes: 10
+    - name: Built-in agent tests
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+      # Smoke tests for the agents bundled under lib/agents/ (deterministic
+      # LLM provider, no API key). Catches wiring regressions like duplicate
+      # tool names that only surface when an agent actually issues an LLM
+      # call. Lives in this job (not agency-tests) for load balance — it
+      # collects no coverage, so it has no coupling to the coverage steps.
+      run: pnpm run test:agents
+
+  agency-tests:
+    # `pull-requests: write` is required so the coverage reporter can post
+    # a sticky comment on PRs.
+    #
+    # Security notes:
+    #   * This workflow uses `pull_request`, NOT `pull_request_target`. PRs
+    #     from forks therefore receive a read-only `GITHUB_TOKEN` regardless
+    #     of the `permissions:` block, so a fork cannot abuse this scope.
+    #   * For same-repo PRs the author already has push access, so the
+    #     incremental risk of granting comment-write to that PR's workflow
+    #     run is minimal.
+    #   * The post step is wrapped with `continue-on-error: true` so that a
+    #     missing/restricted token never fails the build.
+    permissions:
+      contents: read
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x, 23.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        # Don't write GITHUB_TOKEN into .git/config: no step does
+        # authenticated git operations afterward (the coverage comment
+        # authenticates via github-script's injected client), and these
+        # jobs execute PR-controlled code — the agency tests compile and
+        # run programs from the PR — which could otherwise read the
+        # persisted token.
+        persist-credentials: false
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'pnpm'
+    - run: pnpm install
+    - run: make
     - name: Agency execution tests
       working-directory: packages/agency-lang
       env:
@@ -113,14 +169,6 @@ jobs:
         else
           pnpm run test:agency-js
         fi
-    - name: Built-in agent tests
-      working-directory: packages/agency-lang
-      env:
-        AGENCY_USE_TEST_LLM_PROVIDER: "1"
-      # Smoke tests for the agents bundled under lib/agents/ (deterministic
-      # LLM provider, no API key). Catches wiring regressions like duplicate
-      # tool names that only surface when an agent actually issues an LLM call.
-      run: pnpm run test:agents
     - name: Generate stdlib coverage report
       if: matrix.node-version == '22.x' && always() && !cancelled()
       working-directory: packages/agency-lang
@@ -185,6 +233,8 @@ jobs:
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 9

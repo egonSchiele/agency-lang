@@ -20,6 +20,8 @@ import { formatDiff } from "@/utils/diff.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
+import { precompileTestSources } from "./precompile.js";
+import { CompileClosureError } from "../compiler/compileClosure.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
 import { resolveFetchMocks, writeFetchMocksTempFile } from "./fetchMockResolve.js";
@@ -584,6 +586,10 @@ async function runSingleTest(
       hasArgs,
       argsString: testCase.input,
       allowTestImports: true,
+      // The precompile pass in test() already compiled this source (with
+      // allowTestImports enforcement); reuse the sibling .js instead of
+      // recompiling for every test case.
+      preferCompiled: true,
       interruptHandlers: testCase.interruptHandlers,
       timeoutMs,
       signal,
@@ -892,6 +898,21 @@ export async function test(
   const testFiles: string[] = [];
   for (const inputPath of inputPaths) {
     testFiles.push(...collectTestFiles(inputPath));
+  }
+
+  // Compile every unique source exactly once, up front (grouped by merged
+  // config). Test cases then run with `preferCompiled: true` and reuse the
+  // sibling `.js` instead of recompiling per case. Parse/typecheck failures
+  // exit here, matching the old per-case compile behavior (those compiles
+  // ran in this process and exited too).
+  try {
+    precompileTestSources(config, testFiles);
+  } catch (e) {
+    if (e instanceof CompileClosureError) {
+      console.error(color.red(e.message));
+      process.exit(1);
+    }
+    throw e;
   }
 
   const suite = createSuiteContext(testFiles);

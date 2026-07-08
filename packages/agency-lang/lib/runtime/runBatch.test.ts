@@ -761,6 +761,24 @@ describe("runBatch — durable object-tag flag propagation", () => {
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
   });
 
+  it("propagates the flag when the branch settles as INTERRUPTS (payload may reference a tagged object)", async () => {
+    const ctx = makeTagCtx();
+    const result = await runInTestContext(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      () =>
+        runBatch(
+          batchOpts(ctx, async () => {
+            getRuntimeContext().globals.setTag({ secret: "s" }, "redact", true);
+            return [fakeInterrupt("t", 9)];
+          }),
+        ),
+    );
+    expect(result.kind).toBe("interrupts");
+    expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
+  });
+
   it("does not set the parent flag when the branch tagged nothing durable", async () => {
     const ctx = makeTagCtx();
     await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>

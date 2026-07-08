@@ -1,0 +1,13 @@
+import { redact } from "std::tag"
+
+// The node redact()s a plain object BEFORE interrupting. Resume revives both
+// the object (from the checkpoint's serialized state stack) and the globals
+// store (carrying the durable-tag gate flag) from JSON. Every post-resume
+// statelog event that includes the object — node result, agentEnd — must
+// still show [REDACTED].
+node main() {
+  const secret = { apiKey: "sk-resume-secret" }
+  redact(secret)
+  const check = interrupt("Do you approve?")
+  return secret
+}

@@ -188,6 +188,23 @@ describe("GlobalStore tags", () => {
       expect(weakOnly.clone().hasAnyTags()).toBe(false); // WeakMap bit resets
     });
 
+    it("a tagged object stored IN a global survives toJSON/fromJSON with its tag", () => {
+      // Distinct from deepClone-ing the object directly: here the Tagged
+      // wrapper is embedded inside the serialized STORE (the path a tagged
+      // global takes through clone() and interrupt save/restore).
+      const gs = new GlobalStore();
+      const creds = { user: "alice", pass: "hunter2" };
+      gs.setTag(creds, "redact", true);
+      gs.set("m", "creds", creds);
+      const restored = GlobalStore.fromJSON(gs.toJSON());
+      const revived = restored.get("m", "creds");
+      expect(revived).not.toBe(creds); // new identity
+      expect(revived).toEqual(creds);
+      expect(restored.getTagsFor(revived)).toEqual({ redact: true });
+      expect(restored.isRedacted(revived)).toBe(true);
+      expect(restored.hasAnyTags()).toBe(true); // gate flag rode along
+    });
+
     it("adding a tag to an object tagged by ANOTHER store sets this store's durable flag", () => {
       // The durable record rides ON the object, so a store can adopt one it
       // never created (object arrived by reference, e.g. from a settled

@@ -1,0 +1,47 @@
+{
+  "sourceFile": "httpStatus.agency",
+  "fetchMocks": [
+    { "url": "https://api.example.com/x", "return": "{\"error\":\"nope\"}", "status": 404 },
+    { "url": "https://api.example.com/err500", "return": "{\"error\":\"boom\"}", "status": 500 },
+    { "url": "https://api.example.com/page", "return": "not found", "status": 404 },
+    { "url": "https://api.example.com/md", "return": "gone", "status": 503 },
+    { "url": "https://api.example.com/ok", "return": { "answer": 7 }, "status": 200 }
+  ],
+  "tests": [
+    {
+      "nodeName": "jsonNotFound",
+      "input": "",
+      "expectedOutput": "\"OK\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "fetchJSON: 404 with a valid JSON body fails before parse; message carries status + body snippet"
+    },
+    {
+      "nodeName": "jsonServerError",
+      "input": "",
+      "expectedOutput": "\"OK\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "fetchJSON: 500 becomes a failure"
+    },
+    {
+      "nodeName": "fetchNotFound",
+      "input": "",
+      "expectedOutput": "\"OK\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "fetch: 404 error page becomes a failure"
+    },
+    {
+      "nodeName": "markdownGone",
+      "input": "",
+      "expectedOutput": "\"OK\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "fetchMarkdown: 503 becomes a failure"
+    },
+    {
+      "nodeName": "jsonOk",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "regression: a 200 still succeeds and parses the body"
+    }
+  ]
+}

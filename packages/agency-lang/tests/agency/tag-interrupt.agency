@@ -1,0 +1,36 @@
+import { redact, getTags } from "std::tag"
+
+// Interrupt/resume is the real serialization boundary for tags: the
+// checkpoint stores stateStack.toJSON() + globals.toJSON() at interrupt time,
+// and resume revives BOTH from JSON — object identity is destroyed, exactly
+// like the date-interrupt fixture pins for Date. These nodes prove tags ride
+// that round-trip (fork alone does NOT prove it: a fork branch reads the
+// parent's live locals by reference on the happy path).
+
+def confirm() {
+  return interrupt("confirm")
+}
+
+node objectTagSurvivesResume(): boolean {
+  const o = { id: 1 }
+  redact(o)
+  const r = confirm()
+  // After resume, o is a REVIVED copy (new identity). The tag must be on it.
+  const t = getTags(o)
+  return t["redact"] == true
+}
+
+node arrayTagSurvivesResume(): boolean {
+  const arr = [1, 2, 3]
+  redact(arr)
+  const r = confirm()
+  const t = getTags(arr)
+  return t["redact"] == true
+}
+
+node primitiveTagSurvivesResume(): boolean {
+  redact("sk-resume-secret")
+  const r = confirm()
+  const t = getTags("sk-resume-secret")
+  return t["redact"] == true
+}

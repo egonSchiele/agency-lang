@@ -80,8 +80,11 @@ export function styleOf(attrs: Record<string, unknown>): Style {
 // (width = own width). The block is always returned as a tidy
 // rectangle (every line padded to the same width) so downstream
 // `beside` / `above` composition is well-behaved.
-export function alignedTextBlock(content: string, align: Align): Block {
-  const block = Block.of(content);
+// Wrap (or split on newlines) then align-pad to a tidy rectangle. Shared by
+// `text` and `raw`; `text` additionally wraps the result in `styled`.
+function wrappedBlock(content: string, wrapWidth: number | undefined, align: Align): Block {
+  const lines = wrapWidth !== undefined ? wrapText(content, wrapWidth) : content.split("\n");
+  const block = Block.of(lines);
   return pad(block, block.width, block.height, align, "start");
 }
 
@@ -109,14 +112,15 @@ export const LEAF_RENDERERS: Record<
     const content   = asString(n.attrs.content);
     const align     = (n.attrs.align as Align) ?? "start";
     const wrapWidth = n.attrs.wrapWidth as number | undefined;
-    const lines = wrapWidth !== undefined ? wrapText(content, wrapWidth) : content.split("\n");
-    const block = Block.of(lines);
-    return styled(pad(block, block.width, block.height, align, "start"), styleOf(n.attrs));
+    return styled(wrappedBlock(content, wrapWidth, align), styleOf(n.attrs));
   },
   raw: (n) => {
-    const content = asString(n.attrs.content);
-    const align   = (n.attrs.align as Align) ?? "start";
-    return alignedTextBlock(content, align);
+    const content   = asString(n.attrs.content);
+    const align     = (n.attrs.align as Align) ?? "start";
+    const wrapWidth = n.attrs.wrapWidth as number | undefined;
+    // No `styled` wrapper: raw carries its own ANSI and must not have
+    // styling re-applied over it.
+    return wrappedBlock(content, wrapWidth, align);
   },
   space: (_n) => {
     throw new Error(
@@ -166,12 +170,21 @@ function sizeText(node: LayoutNode, ctx: SizingContext): LayoutNode {
   return setAttr(node, "wrapWidth", width);
 }
 
+function sizeRaw(node: LayoutNode, ctx: SizingContext): LayoutNode {
+  // wrap:false preserves exact layout (ASCII art / pre-rendered tables):
+  // no wrapWidth, so the renderer splits on newlines only.
+  if (node.attrs.wrap === false) return node;
+  const width = wrapWidthFor(node, ctx);
+  if (width === undefined) return node;
+  return setAttr(node, "wrapWidth", width);
+}
+
 function passthrough(node: LayoutNode, _ctx: SizingContext): LayoutNode {
   return node;
 }
 
 export const text:  NodeHandler = { size: sizeText,    render: LEAF_RENDERERS.text };
-export const raw:   NodeHandler = { size: passthrough, render: LEAF_RENDERERS.raw };
+export const raw:   NodeHandler = { size: sizeRaw,     render: LEAF_RENDERERS.raw };
 export const space: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.space };
 export const hline: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.hline };
 export const vline: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.vline };

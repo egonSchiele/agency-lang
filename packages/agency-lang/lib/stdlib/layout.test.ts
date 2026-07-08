@@ -828,9 +828,11 @@ describe("box renderer", () => {
     expect(lines).toContain("│the quick brown   │");
     expect(lines).toContain("│fox jumps         │");
   });
-  test("fixed-width box leaves raw content unwrapped", () => {
+  test("fixed-width box leaves raw content unwrapped when wrap:false", () => {
+    // raw wraps to the box by default now; wrap:false preserves the exact,
+    // unwrapped line (ASCII art / pre-rendered content).
     const tree = node("box", { width: 10 }, [
-      node("raw", { content: "ABCDEFGHIJKLMNOP" }),
+      node("raw", { content: "ABCDEFGHIJKLMNOP", wrap: false }),
     ]);
     const lines = render(tree, { cols: 80, rows: 24 }).split("\n");
     expect(_internal.visualWidth(lines[0])).toBe(10);
@@ -1586,5 +1588,75 @@ describe("table — _validateTable", () => {
     expect(v.header[0].type).toBe("text");
     expect(v.header[0].attrs.content).toBe("A");
     expect((v.body[0][0].attrs as { bold: boolean }).bold).toBe(true);
+  });
+});
+
+describe("raw", () => {
+  test("wraps by default (gets a wrapWidth) but not when wrap:false", () => {
+    const wrapped = _internal.resolveSizes(
+      node("box", { width: 30 }, [node("raw", { content: "x", wrap: true })]),
+      { cols: 80, rows: 24 },
+    );
+    expect(wrapped.children[0].attrs.wrapWidth).toBe(28);
+
+    const preserved = _internal.resolveSizes(
+      node("box", { width: 30 }, [node("raw", { content: "x", wrap: false })]),
+      { cols: 80, rows: 24 },
+    );
+    expect(preserved.children[0].attrs.wrapWidth).toBeUndefined();
+  });
+
+  test("raw wraps content to the box exactly like text, adding no styling", () => {
+    const out = render(
+      node("box", { width: 12, padding: 1 }, [
+        node("raw", { content: "the quick brown fox" }),
+      ]),
+      { cols: 80, rows: 24 },
+    );
+    expect(out).toBe(
+      [
+        "╭──────────╮",
+        "│          │",
+        "│ the      │",
+        "│ quick    │",
+        "│ brown    │",
+        "│ fox      │",
+        "│          │",
+        "╰──────────╯",
+      ].join("\n"),
+    );
+  });
+
+  test("wrapped colored content survives AND never leaves an open SGR at a line boundary", () => {
+    const colored = "\x1b[31malpha beta gamma delta epsilon\x1b[0m";
+    const out = _render(
+      node("box", { width: 16, padding: 1 }, [node("raw", { content: colored })]),
+      true, 80, 24,
+    );
+    // Colors survive (kills a "strip all ANSI" render bug).
+    expect(out).toContain("\x1b[31m");
+    // No style bleeds past a line boundary -> borders/padding stay uncolored.
+    // Independent re-implementation of the scan on purpose: a bug shared with
+    // updateActiveSgr would otherwise mask itself in this oracle.
+    const openAtEnd = (line: string): string => {
+      let active = "";
+      for (const match of line.matchAll(/\x1b\[[\d;]*m/g)) {
+        const params = match[0].slice(2, -1);
+        active = params === "" || params === "0" ? "" : active + match[0];
+      }
+      return active;
+    };
+    for (const line of out.split("\n")) expect(openAtEnd(line)).toBe("");
+  });
+
+  test("raw right-aligns short wrapped lines when align:end", () => {
+    const out = render(
+      node("box", { width: 10, padding: 0 }, [
+        node("raw", { content: "a\nbbbb", align: "end" }),
+      ]),
+      { cols: 80, rows: 24 },
+    );
+    // "a" is padded on the LEFT to line up under "bbbb" (right alignment).
+    expect(out).toContain("   a");
   });
 });

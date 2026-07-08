@@ -1,0 +1,13 @@
+{
+  "last_updated": "2026-07-07T02:09:17.762Z",
+  "batches": {
+    "winter-2025": { "name": "Winter 2025", "count": 100, "api": "x" },
+    "spring-2025": { "name": "Spring 2025", "count": 90, "api": "x" }
+  },
+  "industries": {
+    "fintech": { "name": "Fintech", "count": 500, "api": "x" }
+  },
+  "tags": {
+    "ai": { "name": "AI", "count": 800, "api": "x" }
+  }
+}

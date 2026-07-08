@@ -1,0 +1,30 @@
+[
+  {
+    "id": 271,
+    "name": "Airbnb",
+    "slug": "airbnb",
+    "former_names": [],
+    "small_logo_thumb_url": "https://logo.example/airbnb.png",
+    "website": "http://airbnb.com",
+    "all_locations": "San Francisco, CA, USA",
+    "long_description": "A marketplace for space.",
+    "one_liner": "Book rooms with locals.",
+    "team_size": 6132,
+    "highlight_women": false,
+    "industry": "Consumer",
+    "subindustry": "Consumer -> Travel",
+    "launched_at": 1234567890,
+    "tags": ["Marketplace", "Travel"],
+    "top_company": true,
+    "isHiring": false,
+    "nonprofit": false,
+    "batch": "Winter 2009",
+    "status": "Public",
+    "industries": ["Consumer", "Travel"],
+    "regions": ["United States of America"],
+    "stage": "Public",
+    "app_answers": null,
+    "url": "https://www.ycombinator.com/companies/airbnb",
+    "api": "https://yc-oss.github.io/api/companies/airbnb.json"
+  }
+]

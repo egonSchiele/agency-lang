@@ -1,0 +1,344 @@
+import { fetchJSON } from "std::http"
+
+/** @module
+  ## Hacker News — front page, items, users, and search
+
+  Read [Hacker News](https://github.com/HackerNews/API) via its official Firebase API (ranked story
+  lists, items, and user profiles) and its [Algolia search](https://hn.algolia.com/api) index
+  (keyword full-text search). Use this connector to see what the tech community is discussing right
+  now (`hnStories`) or to find HN threads about a topic (`hnSearch`).
+
+  No API key required. `hnStories` fetches a list of item IDs and then one request per item to
+  hydrate it, so a large `limit` means many requests (it is capped at 100).
+
+  ### Usage
+
+  ```ts
+  import { hnStories, hnSearch } from "std::data/tech/hackernews"
+
+  node main() {
+    const front = hnStories("top", 10) catch []
+    for (s in front) {
+      print("${s.score}  ${s.title}  (${s.by})")
+    }
+    const hits = hnSearch("rust async", "recent") catch []
+    for (h in hits) { print(h.title) }
+  }
+  ```
+*/
+
+effect std::hackernews { op: string, query: string }
+
+static const HN_BASE = "https://hacker-news.firebaseio.com/v0"
+static const HN_DOMAINS = ["hacker-news.firebaseio.com"]
+static const HN_ALGOLIA_BASE = "https://hn.algolia.com/api/v1"
+static const HN_ALGOLIA_DOMAINS = ["hn.algolia.com"]
+
+// Friendly list names, and the Firebase filename each maps to (parallel arrays).
+static const HN_LISTS = ["top", "new", "best", "ask", "show", "job"]
+static const HN_LIST_FILES = ["topstories", "newstories", "beststories", "askstories", "showstories", "jobstories"]
+
+// Friendly sort names, and the Algolia endpoint each maps to (parallel arrays).
+static const HN_SORTS = ["relevance", "recent"]
+static const HN_SORT_ENDPOINTS = ["search", "search_by_date"]
+
+/** A Hacker News story (the hydrated list / search shape). `time` is a Unix timestamp. */
+export type Story = {
+  id: number;
+  title: string;
+  url: string;
+  by: string;
+  score: number;
+  time: number;
+  descendants: number;
+  type: string
+}
+
+/** A full Hacker News item — story, comment, job, or poll. `kids` are direct child comment ids. */
+export type Item = {
+  id: number;
+  type: string;
+  by: string;
+  time: number;
+  title: string;
+  url: string;
+  text: string;
+  score: number;
+  descendants: number;
+  parent: number | null;
+  kids: number[]
+}
+
+/** A Hacker News user profile. `submitted` are the ids of items the user posted. */
+export type User = {
+  id: string;
+  created: number;
+  karma: number;
+  about: string;
+  submitted: number[]
+}
+
+/** Validate a friendly list name and map it to its Firebase filename. Unknown → failure. Pure. */
+safe def parseStoryList(list: string): Result<string> {
+  const idx = HN_LISTS.indexOf(list)
+  if (idx < 0) {
+    return failure("unknown list '${list}'; valid: ${HN_LISTS.join(", ")}")
+  }
+  return success(HN_LIST_FILES[idx])
+}
+
+/** Validate a friendly sort name and map it to its Algolia endpoint. Unknown → failure. Pure. */
+safe def parseSort(sort: string): Result<string> {
+  const idx = HN_SORTS.indexOf(sort)
+  if (idx < 0) {
+    return failure("unknown sort '${sort}'; valid: ${HN_SORTS.join(", ")}")
+  }
+  return success(HN_SORT_ENDPOINTS[idx])
+}
+
+/** Clamp n into [0, cap]. Pure. */
+safe def capLimit(n: number, cap: number): number {
+  if (n > cap) {
+    return cap
+  }
+  if (n < 0) {
+    return 0
+  }
+  return n
+}
+
+/** The first n ids (n clamped to ≥ 0; slice naturally clamps the high end). Pure/total. */
+safe def takeFirst(ids: number[], n: number): number[] {
+  if (n <= 0) {
+    return []
+  }
+  return ids.slice(0, n)
+}
+
+/** Build a Firebase story-list path (file already mapped by parseStoryList). Pure. */
+safe def buildStoryListPath(file: string): string {
+  return "/${file}.json"
+}
+
+/** Build a Firebase item path. Pure. */
+safe def buildItemPath(id: number): string {
+  return "/item/${id}.json"
+}
+
+/** Build a Firebase user path. Pure. */
+safe def buildUserPath(username: string): string {
+  return "/user/${encodeURIComponent(username)}.json"
+}
+
+/** Build an Algolia search path (endpoint already mapped by parseSort; limit clamped to 50). Pure. */
+safe def buildSearchPath(endpoint: string, query: string, tags: string, limit: number): string {
+  const q = encodeURIComponent(query)
+  const t = encodeURIComponent(tags)
+  const n = capLimit(limit, 50)
+  return "/${endpoint}?query=${q}&tags=${t}&hitsPerPage=${n}"
+}
+
+/** Reshape a Firebase item into a Story (front-page/list shape). Pure/total. */
+safe def parseStory(raw: any): Story {
+  const r: any = raw ?? {}
+  return {
+    id: r.id ?? 0,
+    title: r.title ?? "",
+    url: r.url ?? "",
+    by: r.by ?? "",
+    score: r.score ?? 0,
+    time: r.time ?? 0,
+    descendants: r.descendants ?? 0,
+    type: r.type ?? "story"
+  }
+}
+
+/** Reshape a Firebase item into the full Item (story/comment/job/poll). Pure/total. */
+safe def parseItem(raw: any): Item {
+  const r: any = raw ?? {}
+  return {
+    id: r.id ?? 0,
+    type: r.type ?? "",
+    by: r.by ?? "",
+    time: r.time ?? 0,
+    title: r.title ?? "",
+    url: r.url ?? "",
+    text: r.text ?? "",
+    score: r.score ?? 0,
+    descendants: r.descendants ?? 0,
+    parent: r.parent ?? null,
+    kids: r.kids ?? []
+  }
+}
+
+/** Reshape a Firebase user into a User. Pure/total. */
+safe def parseUser(raw: any): User {
+  const r: any = raw ?? {}
+  return {
+    id: r.id ?? "",
+    created: r.created ?? 0,
+    karma: r.karma ?? 0,
+    about: r.about ?? "",
+    submitted: r.submitted ?? []
+  }
+}
+
+/** Reshape an Algolia search body into Story[]. Hits map onto Story (objectID→id, author→by,
+    points→score, num_comments→descendants, created_at_i→time). Pure/total. */
+safe def parseAlgoliaHits(raw: any): Story[] {
+  const r: any = raw ?? {}
+  const hits = r.hits ?? []
+  return map(hits) as h {
+    const hit: any = h ?? {}
+    return {
+      id: Number(hit.objectID ?? hit.story_id ?? 0),
+      title: hit.title ?? "",
+      url: hit.url ?? "",
+      by: hit.author ?? "",
+      score: hit.points ?? 0,
+      time: hit.created_at_i ?? 0,
+      descendants: hit.num_comments ?? 0,
+      type: "story"
+    }
+  }
+}
+
+/** Shared failure message for a failed HN fetch. Pure. */
+safe def hnError(err: any): string {
+  return "Hacker News request failed (the API may be rate-limited): ${err.message ?? err}"
+}
+
+/** Turn a fetch Result into an Item Result; a null body (unknown id) → failure. Pure. */
+safe def itemFinalize(fetchResult: any): Result<Item> {
+  return match (fetchResult) {
+    success(body) => {
+      const b: any = body ?? null
+      if (b == null) {
+        return failure("Hacker News returned no item")
+      }
+      return success(parseItem(b))
+    }
+    failure(err) => failure(hnError(err))
+  }
+}
+
+/** Turn a fetch Result into a User Result; a null body (unknown user) → failure. Pure. */
+safe def userFinalize(fetchResult: any): Result<User> {
+  return match (fetchResult) {
+    success(body) => {
+      const b: any = body ?? null
+      if (b == null) {
+        return failure("Hacker News returned no user")
+      }
+      return success(parseUser(b))
+    }
+    failure(err) => failure(hnError(err))
+  }
+}
+
+/** Turn an Algolia fetch Result into a Story[] Result. Pure. */
+safe def searchFinalize(fetchResult: any): Result<Story[]> {
+  return match (fetchResult) {
+    success(body) => success(parseAlgoliaHits(body))
+    failure(err) => failure(hnError(err))
+  }
+}
+
+/** Fetch an HN path (Firebase or Algolia) and return the parsed-JSON Result. Raises
+    std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's own
+    std::hackernews prompt while any OUTER fetch handler still receives (and can reject or propagate)
+    the fetch. allowedDomains is enforced inside fetchJSON regardless. Private. */
+safe def hnFetch(base: string, domains: string[], path: string): Result raises <std::http::fetchJSON> {
+  handle {
+    return fetchJSON(baseUrl: base, path: path, allowedDomains: domains)
+  } with (data) {
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+  }
+}
+
+/** Hydrate the first `limit` story ids into Story records via one item fetch each. Items that fail
+    to fetch are skipped. Private. */
+safe def hydrateStories(ids: number[], limit: number): Story[] raises <std::http::fetchJSON> {
+  let stories: Story[] = []
+  for (id in takeFirst(ids, limit)) {
+    const itemResult = hnFetch(HN_BASE, HN_DOMAINS, buildItemPath(id))
+    if (itemResult is success(body)) {
+      stories.push(parseStory(body))
+    }
+  }
+  return stories
+}
+
+/** Turn the id-list fetch Result into hydrated Story[] (matched here, in a helper taking `any`, so it
+    narrows correctly even though hnStories calls it after `return interrupt`). Private. */
+safe def storiesFromFetch(idsResult: any, limit: number): Result<Story[]> raises <std::http::fetchJSON> {
+  return match (idsResult) {
+    success(body) => success(hydrateStories(body ?? [], limit))
+    failure(err) => failure(hnError(err))
+  }
+}
+
+export safe def hnStories(list: string = "top", limit: number = 30): Result<Story[]> raises <std::hackernews, std::http::fetchJSON> {
+  """
+  Fetch a Hacker News story list and hydrate the top items into full stories (title, url, author,
+  score, comment count). Fetches the id list plus one request per item, so a large limit means many
+  requests (capped at 100).
+
+  @param list - Which ranked list to read: "top", "new", "best", "ask", "show", or "job"
+  @param limit - How many stories to hydrate (capped at 100)
+  """
+  const listResult = parseStoryList(list)
+  if (listResult is failure(msg)) {
+    return failure(msg)
+  }
+  const file = listResult.value
+  return interrupt std::hackernews("Fetch this Hacker News story list?", { op: "stories", query: list })
+  const idsResult = hnFetch(HN_BASE, HN_DOMAINS, buildStoryListPath(file))
+  return storiesFromFetch(idsResult, capLimit(limit, 100))
+}
+
+export safe def hnItem(id: number): Result<Item> raises <std::hackernews, std::http::fetchJSON> {
+  """
+  Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its text, author,
+  score, and the ids of its direct child comments. An unknown id returns a failure.
+
+  @param id - The Hacker News item id
+  """
+  return interrupt std::hackernews("Fetch this Hacker News item?", { op: "item", query: "${id}" })
+  const result = hnFetch(HN_BASE, HN_DOMAINS, buildItemPath(id))
+  return itemFinalize(result)
+}
+
+export safe def hnUser(username: string): Result<User> raises <std::hackernews, std::http::fetchJSON> {
+  """
+  Fetch a Hacker News user's public profile: karma, account age, about text, and submitted item
+  ids. An unknown username returns a failure.
+
+  @param username - The Hacker News username (case-sensitive)
+  """
+  return interrupt std::hackernews("Fetch this Hacker News user?", { op: "user", query: username })
+  const result = hnFetch(HN_BASE, HN_DOMAINS, buildUserPath(username))
+  return userFinalize(result)
+}
+
+export safe def hnSearch(query: string, sort: string = "relevance", tags: string = "story", limit: number = 20): Result<Story[]> raises <std::hackernews, std::http::fetchJSON> {
+  """
+  Search Hacker News stories by keyword via the Algolia index. Returns matching stories (title,
+  url, author, score, comment count), sorted by relevance or recency.
+
+  @param query - The search keywords
+  @param sort - Result ordering: "relevance" or "recent"
+  @param tags - Algolia tag filter, e.g. "story", "comment", "ask_hn", "show_hn"
+  @param limit - Maximum results (capped at 50)
+  """
+  const sortResult = parseSort(sort)
+  if (sortResult is failure(msg)) {
+    return failure(msg)
+  }
+  const endpoint = sortResult.value
+  return interrupt std::hackernews("Search Hacker News for this query?", { op: "search", query: query })
+  const result = hnFetch(HN_ALGOLIA_BASE, HN_ALGOLIA_DOMAINS, buildSearchPath(endpoint, query, tags, limit))
+  return searchFinalize(result)
+}

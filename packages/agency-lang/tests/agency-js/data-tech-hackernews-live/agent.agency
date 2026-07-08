@@ -1,0 +1,16 @@
+import { hnStories } from "std::data/tech/hackernews"
+
+node liveTop(): number {
+  handle {
+    const stories = hnStories("top", 3) catch []
+    return stories.length
+  } with (data) {
+    if (data.effect == "std::hackernews") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+    return reject()
+  }
+}

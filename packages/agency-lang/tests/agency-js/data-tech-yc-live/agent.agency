@@ -1,0 +1,16 @@
+import { ycBatch } from "std::data/tech/yc"
+
+node liveBatch(): number {
+  handle {
+    const companies = ycBatch("Winter 2012") catch []
+    return companies.length
+  } with (data) {
+    if (data.effect == "std::yc") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+    return reject()
+  }
+}

@@ -1,0 +1,126 @@
+import test { slugify, parseListName, buildBatchPath, buildIndustryPath, buildTagPath, buildListPath, buildMetaPath, parseCompanies, parseMeta, companiesFinalize, metaFinalize, ycError, ycBatch, ycList, ycMeta } from "std::data/tech/yc"
+import { Network } from "std::capabilities"
+
+// --- pure-function wrappers ---
+
+node tSlugify(s: string): string {
+  return slugify(s)
+}
+
+node tParseListName(list: string): any {
+  const r = parseListName(list)
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return r.value
+}
+
+node tBatchPath(slug: string): string {
+  return buildBatchPath(slug)
+}
+
+node tIndustryPath(slug: string): string {
+  return buildIndustryPath(slug)
+}
+
+node tTagPath(slug: string): string {
+  return buildTagPath(slug)
+}
+
+node tListPath(name: string): string {
+  return buildListPath(name)
+}
+
+node tMetaPath(): string {
+  return buildMetaPath()
+}
+
+node tParseCompanies(raw: any): any {
+  return parseCompanies(raw)
+}
+
+node tParseNull(): any {
+  return parseCompanies(null)
+}
+
+node tParseMeta(raw: any): any {
+  return parseMeta(raw)
+}
+
+node tMetaFinalize(raw: any): any {
+  return metaFinalize(success(raw)) catch {}
+}
+
+node tCompaniesFinalizeErr(): string {
+  const r = companiesFinalize(failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node tError(): string {
+  return ycError("boom")
+}
+
+// --- gating / capability ---
+
+// Compile-time capability assertion: ycBatch raises std::yc + std::http::fetchJSON, so this compiles
+// only if BOTH are covered by Network. Never called at runtime.
+node netCheck() raises <Network> {
+  const r = ycBatch("x") catch []
+  return r.length
+}
+
+// Plain caller: no fetch-level handler. Raises std::yc; approving it would resume into the
+// internally-approved fetch (a real network call), so tests only inspect/reject it.
+node callBatch(batch: string): any {
+  return ycBatch(batch)
+}
+
+// Governed caller: approve std::yc, then PROPAGATE the fetch. propagate() beats the connector's
+// internal approve(), so std::http::fetchJSON surfaces with its { baseUrl, path } — letting us assert
+// the built URL OFFLINE, then reject it so no network call happens.
+node callBatchGoverned(batch: string): any {
+  handle {
+    return ycBatch(batch)
+  } with (data) {
+    if (data.effect == "std::yc") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
+}
+
+// Bad list name fails BEFORE the interrupt → a failure Result offline (no fetch, no interrupt).
+node callListBad(): string {
+  const r = ycList("bogus")
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS_OR_INTERRUPT"
+}
+
+// --- fetch-mocked end-to-end (see fetchMocks.json) ---
+// `with approve` approves std::yc (and the internal fetch), so the real fetch runs against the
+// fetchMocks.json entries — exercising the full validate→fetch→parse→finalize path.
+
+node mockBatch(): any {
+  const r = ycBatch("Winter 2012") with approve
+  return r catch "FAIL"
+}
+
+node mockMeta(): any {
+  const r = ycMeta() with approve
+  return r catch "FAIL"
+}
+
+node mockBatchBad(): string {
+  const r = ycBatch("Bogus Batch") with approve
+  if (r is failure(e)) {
+    return "GOT_FAILURE"
+  }
+  return "UNEXPECTED_SUCCESS"
+}

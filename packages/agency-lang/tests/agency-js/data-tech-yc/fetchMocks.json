@@ -1,0 +1,5 @@
+[
+  { "url": "https://yc-oss.github.io/api/batches/winter-2012.json", "returnFile": "sample-batch.json" },
+  { "url": "https://yc-oss.github.io/api/meta.json", "returnFile": "sample-meta.json" },
+  { "url": "https://yc-oss.github.io/api/batches/bogus-batch.json", "return": "Not Found", "status": 404 }
+]

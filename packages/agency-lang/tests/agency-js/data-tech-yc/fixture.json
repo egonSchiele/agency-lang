@@ -1,0 +1,81 @@
+{
+  "slug1": "winter-2025",
+  "slug2": "b2b-saas",
+  "listOk": "top",
+  "listBad": "FAIL: unknown list 'bogus'; valid: top, all, hiring, nonprofit, women-founded, black-founded, hispanic-latino-founded",
+  "batchPath": "/batches/winter-2025.json",
+  "industryPath": "/industries/fintech.json",
+  "tagPath": "/tags/ai.json",
+  "listPath": "/companies/hiring.json",
+  "metaPath": "/meta.json",
+  "companies": [
+    {
+      "id": 271,
+      "name": "Airbnb",
+      "slug": "airbnb",
+      "website": "http://airbnb.com",
+      "oneLiner": "Book rooms with locals.",
+      "longDescription": "A marketplace for space.",
+      "batch": "Winter 2009",
+      "status": "Public",
+      "stage": "Public",
+      "teamSize": 6132,
+      "industry": "Consumer",
+      "subindustry": "Consumer -> Travel",
+      "tags": ["Marketplace", "Travel"],
+      "regions": ["United States of America"],
+      "allLocations": "San Francisco, CA, USA",
+      "launchedAt": 1234567890,
+      "topCompany": true,
+      "isHiring": false,
+      "nonprofit": false,
+      "url": "https://www.ycombinator.com/companies/airbnb"
+    }
+  ],
+  "parseNull": [],
+  "meta": {
+    "lastUpdated": "2026-07-07T02:09:17.762Z",
+    "batches": ["winter-2025", "spring-2025"],
+    "industries": ["fintech"],
+    "tags": ["ai"]
+  },
+  "metaFinalize": {
+    "lastUpdated": "2026-07-07T02:09:17.762Z",
+    "batches": ["winter-2025", "spring-2025"],
+    "industries": ["fintech"],
+    "tags": ["ai"]
+  },
+  "companiesFinalizeErr": "YC request failed (the data is static JSON on GitHub Pages; an unknown batch/industry/tag slug 404s): boom",
+  "errorMsg": "YC request failed (the data is static JSON on GitHub Pages; an unknown batch/industry/tag slug 404s): boom",
+  "mockBatch": [
+    {
+      "id": 271,
+      "name": "Airbnb",
+      "slug": "airbnb",
+      "website": "http://airbnb.com",
+      "oneLiner": "Book rooms with locals.",
+      "longDescription": "A marketplace for space.",
+      "batch": "Winter 2009",
+      "status": "Public",
+      "stage": "Public",
+      "teamSize": 6132,
+      "industry": "Consumer",
+      "subindustry": "Consumer -> Travel",
+      "tags": ["Marketplace", "Travel"],
+      "regions": ["United States of America"],
+      "allLocations": "San Francisco, CA, USA",
+      "launchedAt": 1234567890,
+      "topCompany": true,
+      "isHiring": false,
+      "nonprofit": false,
+      "url": "https://www.ycombinator.com/companies/airbnb"
+    }
+  ],
+  "mockMeta": {
+    "lastUpdated": "2026-07-07T02:09:17.762Z",
+    "batches": ["winter-2025", "spring-2025"],
+    "industries": ["fintech"],
+    "tags": ["ai"]
+  },
+  "mockBatchBad": "GOT_FAILURE"
+}

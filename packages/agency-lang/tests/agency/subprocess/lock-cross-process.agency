@@ -11,7 +11,7 @@ import { withLock } from "std::concurrency"
 node main() {
   withLock("resource") as {
     const before = read("agency-withlock-cross-process.txt", "/tmp") with approve
-    if (before.value == "parent") {
+    if ((before catch "") == "parent") {
       write("agency-withlock-cross-process.txt", "overlap", "/tmp") with approve
     } else {
       write("agency-withlock-cross-process.txt", "child", "/tmp") with approve
@@ -43,5 +43,5 @@ node main() {
   }
 
   const final = read(filename, "/tmp") with approve
-  return final.value
+  return final catch "read failed"
 }

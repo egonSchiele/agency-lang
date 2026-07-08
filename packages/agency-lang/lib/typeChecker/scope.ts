@@ -5,12 +5,17 @@ export type ScopeType = VariableType | "any";
 export class Scope {
   readonly key: string;
   readonly parent?: Scope;
-  private readonly vars: Record<string, ScopeType> = {};
-  private readonly consts: Record<string, boolean> = {};
+  // Null-prototype dictionaries: variable names are user-controlled, and on
+  // a plain `{}` assigning the key "__proto__" invokes the prototype setter
+  // (losing the binding and mutating the map) instead of storing an entry.
+  private readonly vars: Record<string, ScopeType> = Object.create(null);
+  private readonly consts: Record<string, boolean> = Object.create(null);
+  private readonly isFunctionBoundary: boolean;
 
-  constructor(key: string, parent?: Scope) {
+  constructor(key: string, parent?: Scope, isFunctionBoundary: boolean = false) {
     this.key = key;
     this.parent = parent;
+    this.isFunctionBoundary = isFunctionBoundary;
   }
 
   /**
@@ -46,6 +51,20 @@ export class Scope {
     return this.parent?.lookup(name);
   }
 
+  /**
+   * Like `lookup`, but stops at the enclosing function boundary instead of
+   * walking into outer (module-level) scopes. Used to decide whether a
+   * `let`/`const` statement redeclares an existing local or shadows an
+   * outer binding with a fresh one.
+   */
+  lookupInFunction(name: string): ScopeType | undefined {
+    if (Object.prototype.hasOwnProperty.call(this.vars, name)) {
+      return this.vars[name];
+    }
+    if (!this.parent || this.isFunctionBoundary) return undefined;
+    return this.parent.lookupInFunction(name);
+  }
+
   isConst(name: string): boolean {
     // Own-property check — `name in this.vars` walks the prototype chain.
     if (Object.prototype.hasOwnProperty.call(this.vars, name)) {
@@ -63,7 +82,9 @@ export class Scope {
   }
 
   private functionScope(): Scope {
-    if (!this.parent) return this;
+    // A function-boundary scope is a declaration target even when it chains
+    // to the module scope for lookups — locals must not leak into it.
+    if (!this.parent || this.isFunctionBoundary) return this;
     return this.parent.functionScope();
   }
 }

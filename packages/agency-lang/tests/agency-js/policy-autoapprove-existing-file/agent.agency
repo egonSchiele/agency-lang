@@ -1,4 +1,4 @@
-import { cliPolicyHandler, setPolicy, ScopedRuleFields } from "std::policy"
+import { cliPolicyHandler, setPolicy, Policy, ScopedRuleFields } from "std::policy"
 
 // Regression: when the on-disk policy file EXISTS and approves a kind,
 // cliPolicyHandler must auto-approve it without prompting. Previously the
@@ -13,7 +13,7 @@ const FIELDS: ScopedRuleFields = {
   "std::read": [{ field: "dir", matchSubpaths: true }],
 }
 
-const POLICY = {
+const POLICY: Policy = {
   "std::read": [{ action: "approve" }],
 }
 

@@ -65,4 +65,19 @@ describe("Scope", () => {
     expect(child.isConst("c")).toBe(true);
   });
 
+  it("treats '__proto__' as an ordinary variable name", () => {
+    // With a plain `{}` backing map, `vars["__proto__"] = <object>` would
+    // invoke the prototype setter instead of storing a binding — the binding
+    // is lost and the map's prototype is mutated.
+    const scope = new Scope("function:foo");
+    const objType: VariableType = {
+      type: "objectType",
+      fields: [],
+    } as unknown as VariableType;
+    scope.declare("__proto__", objType, true);
+    expect(scope.lookup("__proto__")).toEqual(objType);
+    expect(scope.isConst("__proto__")).toBe(true);
+    // Unrelated lookups are unaffected by the declaration.
+    expect(scope.lookup("toString")).toBeUndefined();
+  });
 });

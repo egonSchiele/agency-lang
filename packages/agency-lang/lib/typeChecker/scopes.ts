@@ -19,7 +19,7 @@ import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import type { FlowNode } from "./flow.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { checkType, getBlockSlot } from "./utils.js";
+import { checkType, getBlockSlot, isAnyType } from "./utils.js";
 import { checkMatchExprYields } from "./matchExprTypes.js";
 import { NUMBER_T } from "./primitives.js";
 import { recordLikeKeyValue } from "./recordLike.js";
@@ -45,7 +45,7 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
     ...Object.values(ctx.functionDefs),
     ...Object.values(ctx.nodeDefs),
   ]) {
-    scopes.push(buildDefScope(def, ctx));
+    scopes.push(buildDefScope(def, topLevelScope, ctx));
   }
 
   return scopes;
@@ -53,6 +53,7 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
 
 function buildDefScope(
   def: FunctionDefinition | GraphNodeDefinition,
+  topLevelScope: Scope,
   ctx: TypeCheckerContext,
 ): ScopeInfo {
   const name = def.type === "function" ? def.functionName : def.nodeName;
@@ -60,7 +61,10 @@ function buildDefScope(
     def.type === "function"
       ? scopeKey(functionScope(def.functionName))
       : scopeKey(nodeScope(def.nodeName));
-  const scope = new Scope(sk);
+  // Chain to the module scope so top-level bindings are visible inside the
+  // def (lookup only — the boundary flag keeps declarations local, and the
+  // top-level scope is fully walked before any def scope is built).
+  const scope = new Scope(sk, topLevelScope, true);
   for (const param of def.parameters) {
     scope.declare(param.name, param.typeHint ?? "any");
   }
@@ -119,7 +123,14 @@ export function declareVariable(
   }
 
   const newType = node.typeHint;
-  const existingType = scope.lookup(node.variableName);
+  // A `let`/`const` statement declares a fresh binding: only a match within
+  // the current function counts as "existing" (redeclaration); an outer
+  // module-level binding of the same name is shadowed, not redeclared. Bare
+  // reassignment (`x = 5`) targets whatever binding is visible, including
+  // module-level ones.
+  const existingType = node.declKind
+    ? scope.lookupInFunction(node.variableName)
+    : scope.lookup(node.variableName);
   const isConst = node.declKind === "const";
 
   if (newType) {
@@ -366,8 +377,15 @@ export function walkScopeBody(
   ctx: TypeCheckerContext,
 ): void {
   for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
-    checkConstMutations(node, scope, ctx);
+    const raw = nodes[i];
+    checkConstMutations(raw, scope, ctx);
+    // A `stmt with handler` modifier wraps the statement it applies to;
+    // unwrap it so a declaration inside (`const f = read(...) with approve`)
+    // still reaches declareVariable. Unwrap rather than recurse:
+    // checkConstMutations already descends into the wrapped statement via
+    // expressionChildren, so a recursive walkScopeBody call would report
+    // const mutations twice.
+    const node = raw.type === "withModifier" ? raw.statement : raw;
     switch (node.type) {
       case "assignment":
         declareVariable(node, scope, ctx);
@@ -393,9 +411,14 @@ export function walkScopeBody(
         // synthesis agree on an object literal's value type. Object literals
         // synthesize to `objectType`, not `Record`, so without this they'd be
         // wrongly rejected as non-iterable.
+        // Typed `any` (an explicit `: any` annotation, or an `is success(v)`
+        // binder over a bare `Result`) is as unknowable as the "any" string —
+        // treat both as "could be any iterable" rather than rejecting.
         const recordLike =
-          iterableType === "any" ? undefined : recordLikeKeyValue(iterableType);
-        if (iterableType === "any") {
+          iterableType === "any" || isAnyType(iterableType)
+            ? undefined
+            : recordLikeKeyValue(iterableType);
+        if (iterableType === "any" || isAnyType(iterableType)) {
           itemType = "any";
           // Iterable kind is unknown, so the second var could be either an
           // index or a value — leave it as `any` rather than assume a number.

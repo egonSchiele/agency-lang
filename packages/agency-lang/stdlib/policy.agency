@@ -460,9 +460,14 @@ def maybeFlush() {
   if (_pendingSave) {
     // flip FIRST
     _pendingSave = false
-    _internalIo = true
-    writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-    _internalIo = false
+    // `_pendingSave` is only set after a decision is recorded, which also
+    // sets `_policy` — but if that invariant ever breaks, skip the write
+    // rather than clobber the policy file with `null`.
+    if (_policy != null) {
+      _internalIo = true
+      writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
+      _internalIo = false
+    }
   }
 }
 
@@ -480,9 +485,11 @@ def maybeFlush() {
 export def flushPolicy() {
   if (_pendingSave) {
     _pendingSave = false
-    _internalIo = true
-    writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-    _internalIo = false
+    if (_policy != null) {
+      _internalIo = true
+      writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
+      _internalIo = false
+    }
   }
 }
 

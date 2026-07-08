@@ -43,5 +43,5 @@ node main() {
   }
 
   const final = read(filename, "/tmp") with approve
-  return final.value
+  return final catch "read failed"
 }

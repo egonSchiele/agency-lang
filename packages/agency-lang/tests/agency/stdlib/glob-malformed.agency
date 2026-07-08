@@ -2,8 +2,12 @@ import { glob } from "std::shell"
 
 node main() {
   let result = glob("{ts", "glob-fixtures") with approve
+  let hasError = false
+  if (isFailure(result)) {
+    hasError = result.error != null
+  }
   return {
     ok: isSuccess(result),
-    hasError: result.error != null
+    hasError: hasError
   }
 }

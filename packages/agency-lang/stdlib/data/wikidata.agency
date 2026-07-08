@@ -178,9 +178,9 @@ safe def parseBindings(raw: any): Record<string, string>[] {
   }
 }
 
-/** Shared failure message for a failed Wikidata fetch. Pure. */
+/** Shared failure message for a failed Wikidata fetch (either host). Pure. */
 safe def wikidataError(err: any): string {
-  return "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): ${err.message ?? err}"
+  return "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): ${err.message ?? err}"
 }
 
 /** Turn a fetch Result into an Entity[] Result. Pure. */
@@ -230,8 +230,9 @@ safe def wikidataFetch(base: string, domains: string[], path: string): Result ra
 
 export safe def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON> {
   """
-  Search Wikidata for entities by name. Returns matches with QID, label, description, and URL; use a
-  returned id with wikidataEntity or wikidataQuery. Empty result set returns an empty list.
+  Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
+  QID identifies the entity for a follow-up entity fetch or SPARQL query. Empty result set returns an
+  empty list.
 
   @param name - The person, organization, place, or thing to search for
   @param limit - Maximum number of matches to return (default 5)

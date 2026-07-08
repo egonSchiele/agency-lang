@@ -91,8 +91,9 @@ effect std::wikidata {
 wikidataSearch(name: string, limit: number): Result<Entity[]>
 ```
 
-Search Wikidata for entities by name. Returns matches with QID, label, description, and URL; use a
-  returned id with wikidataEntity or wikidataQuery. Empty result set returns an empty list.
+Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
+  QID identifies the entity for a follow-up entity fetch or SPARQL query. Empty result set returns an
+  empty list.
 
   @param name - The person, organization, place, or thing to search for
   @param limit - Maximum number of matches to return (default 5)
@@ -132,7 +133,7 @@ Fetch one Wikidata entity by its QID. Returns the English label, description, al
 
 **Throws:** `std::wikidata`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L245))
 
 ### wikidataQuery
 
@@ -156,4 +157,4 @@ Run a SPARQL query against the Wikidata Query Service and return rows (each a ma
 
 **Throws:** `std::wikidata`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L257))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L258))

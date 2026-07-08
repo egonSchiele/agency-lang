@@ -28,9 +28,9 @@
     { "item": "http://www.wikidata.org/entity/Q5", "itemLabel": "human" }
   ],
   "entityFinalizeUnknown": "Wikidata returned no entity for Q999",
-  "searchFinalizeErr": "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): boom",
-  "queryFinalizeErr": "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): boom",
-  "errorMsg": "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): boom",
+  "searchFinalizeErr": "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): boom",
+  "queryFinalizeErr": "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): boom",
+  "errorMsg": "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): boom",
   "mockSearch": [
     { "id": "Q4034010", "label": "Andreessen Horowitz", "description": "American venture capital firm", "url": "http://www.wikidata.org/entity/Q4034010" }
   ],

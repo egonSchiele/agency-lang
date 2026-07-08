@@ -171,8 +171,8 @@ let _firstEntry: Record<string, boolean> = {}
  * categories.
  *
  * When called, sets the module-level handoff target. The current
- * LLM call returns. `route` reads the target via `consumeHandoff`
- * and re-runs the user's original message in the new specialist's
+ * LLM call returns. `route` reads (and clears) the target and
+ * re-runs the user's original message in the new specialist's
  * thread. If `category` isn't in `validCategories`, the handoff is
  * rejected and the LLM sees an error string as the tool's result.
  * This keeps the LLM from accidentally handing off to itself or to
@@ -207,11 +207,10 @@ export safe def handoff(
 
 /**
  * Read and clear the pending handoff target. Used internally by
- * `route` after each LLM call. Exposed for tests and for advanced
- * users writing their own dispatch loop on top of `handoff`.
- * Returns `""` when no handoff was requested.
+ * `route` after each LLM call. Returns `""` when no handoff was
+ * requested.
  */
-export safe def consumeHandoff(): string {
+safe def consumeHandoff(): string {
   """
   Read and clear the pending handoff target. Returns "" when no handoff
   was requested.
@@ -317,9 +316,10 @@ def runOneTurnPrompt(
  *    its system message is seeded on first entry, memory is scoped
  *    if requested, and `llm(userMsg, { tools: [...spec.tools,
  *    handoff] })` runs.
- * 2. After the LLM call returns, check `consumeHandoff()`.
- *    - Empty → done, return the LLM's reply.
- *    - Non-empty → loop with the new category, up to `config.maxHops`
+ * 2. After the LLM call returns, check whether `handoff` was called
+ *    during the turn.
+ *    - No → done, return the LLM's reply.
+ *    - Yes → loop with the new category, up to `config.maxHops`
  *      total iterations.
  * 3. If the hop cap is reached without a final answer, run one more
  *    LLM call WITHOUT the `handoff` tool so the agent must answer.

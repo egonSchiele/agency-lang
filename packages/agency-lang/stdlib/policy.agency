@@ -698,11 +698,10 @@ def askUser(intr: any): AskUserResult {
 
 /**
  * Internal — the actual handler function returned by
- * `cliPolicyHandler`. Exported so module-level codegen can resolve
- * the function reference when you write `handle ... with handler`.
- * Do not call directly; use `cliPolicyHandler` to construct one.
+ * `cliPolicyHandler`. Do not call directly; use `cliPolicyHandler`
+ * to construct one.
  */
-export def _handler(intr: any): any {
+def _handler(intr: any): any {
   // Re-entrancy guard: while we read/write our OWN policy file (inside
   // maybeLoadPolicy / maybeFlush below), that file op raises a nested
   // std::read / std::write that re-enters this handler. Approve it

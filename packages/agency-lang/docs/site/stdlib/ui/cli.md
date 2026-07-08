@@ -84,16 +84,6 @@ Clear the input history of the currently running `repl()` session: both
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L105))
 
-### termWidth
-
-```ts
-termWidth(): number
-```
-
-**Returns:** `number`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L112))
-
 ### hline
 
 ```ts

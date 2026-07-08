@@ -109,7 +109,7 @@ export def clearHistory() {
   _clearHistory(_historyFile)
 }
 
-export safe def termWidth(): number {
+safe def termWidth(): number {
   return _termWidth()
 }
 

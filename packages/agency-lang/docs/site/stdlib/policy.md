@@ -540,27 +540,6 @@ flushPolicy()
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L485))
 
-### _handler
-
-```ts
-_handler(intr: any): any
-```
-
-* Internal — the actual handler function returned by
- * `cliPolicyHandler`. Exported so module-level codegen can resolve
- * the function reference when you write `handle ... with handler`.
- * Do not call directly; use `cliPolicyHandler` to construct one.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| intr | `any` |  |
-
-**Returns:** `any`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L705))
-
 ### cliPolicyHandler
 
 ```ts
@@ -631,4 +610,4 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L828))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L827))

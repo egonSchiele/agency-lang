@@ -87,6 +87,21 @@ export type Relationship = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L63))
 
+### CategoryFilter
+
+A category filter for relationship/connection queries: either "all" (no filter) or a specific
+    category by id. Produced by parseCategoryFilter, consumed by the path builders — this replaces
+    the old numeric sentinels (no more -1 for "invalid" or 0 for "all").
+
+```ts
+/** A category filter for relationship/connection queries: either "all" (no filter) or a specific
+    category by id. Produced by parseCategoryFilter, consumed by the path builders — this replaces
+    the old numeric sentinels (no more -1 for "invalid" or 0 for "all"). */
+export type CategoryFilter = { type: "all" } | { type: "category"; id: number }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L80))
+
 ## Effects
 
 ### std::littlesis
@@ -118,15 +133,16 @@ Map a LittleSis category_id (1–12) to its friendly name; unknown id → "". Pu
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L83))
 
-### categoryNameToId
+### parseCategoryFilter
 
 ```ts
-categoryNameToId(name: string): number
+parseCategoryFilter(name: string): Result<CategoryFilter>
 ```
 
-Map a friendly category name to its LittleSis category_id (1–12); unknown → -1. Pure.
+Parse a friendly category name into a CategoryFilter. "" (or not given) → all; a valid name →
+    that category; an unknown name → failure (listing the valid names). Pure.
 
 **Parameters:**
 
@@ -134,9 +150,9 @@ Map a friendly category name to its LittleSis category_id (1–12); unknown → 
 |---|---|---|
 | name | `string` |  |
 
-**Returns:** `number`
+**Returns:** `Result<CategoryFilter>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L98))
 
 ### buildSearchPath
 
@@ -155,7 +171,7 @@ Build the entity-search path. `page` is appended only when > 1. Pure.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L110))
 
 ### buildEntityPath
 
@@ -173,48 +189,47 @@ Build the single-entity path. Pure.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L119))
 
 ### buildRelationshipsPath
 
 ```ts
-buildRelationshipsPath(id: number, categoryId: number, sort: string): string
+buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string): string
 ```
 
-Build the relationships path. Appends category_id (when >= 1) and sort (when non-empty). Pure.
-    Builds a present-params list and joins it, so it scales linearly with params instead of
-    enumerating every on/off combination.
+Build the relationships path from a category filter and optional sort. Builds a present-params
+    list and joins it, so it scales linearly with params instead of enumerating combinations. Pure.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | id | `number` |  |
-| categoryId | `number` |  |
+| filter | [CategoryFilter](#categoryfilter) |  |
 | sort | `string` |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L125))
 
 ### buildConnectionsPath
 
 ```ts
-buildConnectionsPath(id: number, categoryId: number): string
+buildConnectionsPath(id: number, filter: CategoryFilter): string
 ```
 
-Build the connections path. Appends category_id when >= 1. Pure.
+Build the connections path from a category filter. Pure.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | id | `number` |  |
-| categoryId | `number` |  |
+| filter | [CategoryFilter](#categoryfilter) |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L141))
 
 ### parseEntity
 
@@ -233,7 +248,7 @@ Reshape one LittleSis entity node ({ id, attributes, links }) into an Entity.
 
 **Returns:** [Entity](#entity)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L150))
 
 ### parseEntities
 
@@ -251,7 +266,7 @@ Reshape a LittleSis list body ({ data: [node] }) into Entity[]. Pure/total.
 
 **Returns:** `Entity[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L170))
 
 ### parseRelationships
 
@@ -269,7 +284,7 @@ Reshape a LittleSis relationships body ({ data: [rel] }) into Relationship[]. Pu
 
 **Returns:** `Relationship[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L179))
 
 ### littlesisError
 
@@ -287,7 +302,7 @@ Shared failure message for a failed LittleSis fetch. Pure.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L203))
 
 ### entityListFinalize
 
@@ -306,7 +321,7 @@ Turn a fetchJSON Result into an entity-list Result. Used by BOTH search and conn
 
 **Returns:** `Result<Entity[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L223))
 
 ### entityFinalize
 
@@ -324,7 +339,7 @@ Turn a fetchJSON Result into a single-entity Result; missing data → failure. P
 
 **Returns:** `Result<Entity>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L231))
 
 ### relationshipsFinalize
 
@@ -342,7 +357,7 @@ Turn a fetchJSON Result into a relationships Result. Pure.
 
 **Returns:** `Result<Relationship[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L250))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L245))
 
 ### littlesisSearch
 
@@ -368,7 +383,7 @@ Search LittleSis for people and organizations by name. Returns matching entities
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L257))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L252))
 
 ### littlesisEntity
 
@@ -391,7 +406,7 @@ Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L273))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L268))
 
 ### littlesisRelationships
 
@@ -419,7 +434,7 @@ List an entity's relationships (typed edges) by its id. Each edge carries the tw
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L285))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L280))
 
 ### littlesisConnections
 
@@ -445,4 +460,4 @@ List the entities connected to an entity (neighbors, by name), optionally filter
 
 **Throws:** `std::littlesis`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L309))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L304))

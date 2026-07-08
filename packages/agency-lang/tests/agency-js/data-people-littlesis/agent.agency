@@ -1,4 +1,4 @@
-import { categoryIdToName, categoryNameToId, buildSearchPath, buildEntityPath, buildRelationshipsPath, buildConnectionsPath, parseEntity, parseEntities, parseRelationships, entityListFinalize, entityFinalize, relationshipsFinalize, littlesisError, littlesisSearch, littlesisRelationships } from "std::data/people/littlesis"
+import { categoryIdToName, parseCategoryFilter, buildSearchPath, buildEntityPath, buildRelationshipsPath, buildConnectionsPath, parseEntity, parseEntities, parseRelationships, entityListFinalize, entityFinalize, relationshipsFinalize, littlesisError, littlesisSearch, littlesisRelationships } from "std::data/people/littlesis"
 import { Network } from "std::capabilities"
 
 // Compile-time capability assertion: littlesisSearch raises std::littlesis + std::http::fetchJSON,
@@ -12,8 +12,13 @@ node tCatIdToName(id: number): string {
   return categoryIdToName(id)
 }
 
-node tCatNameToId(name: string): number {
-  return categoryNameToId(name)
+// Parse a friendly category name into a CategoryFilter (or its failure message).
+node tFilterCat(name: string): any {
+  const r = parseCategoryFilter(name)
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return r.value
 }
 
 node tSearchPath(name: string, page: number): string {
@@ -24,12 +29,21 @@ node tEntityPath(id: number): string {
   return buildEntityPath(id)
 }
 
-node tRelPath(id: number, categoryId: number, sort: string): string {
-  return buildRelationshipsPath(id, categoryId, sort)
+// Exercise parse → build together: a category NAME through parseCategoryFilter into the path.
+node tRelPath(id: number, category: string, sort: string): any {
+  const r = parseCategoryFilter(category)
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return buildRelationshipsPath(id, r.value, sort)
 }
 
-node tConnPath(id: number, categoryId: number): string {
-  return buildConnectionsPath(id, categoryId)
+node tConnPath(id: number, category: string): any {
+  const r = parseCategoryFilter(category)
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return buildConnectionsPath(id, r.value)
 }
 
 node tParseEntities(raw: any): any {
@@ -70,7 +84,7 @@ node tEntityFinalizeMissing(): string {
 }
 
 node tRelFinalizeEmpty(): any {
-  return relationshipsFinalize(success({ data: [] })) catch "FAIL"
+  return relationshipsFinalize(success({ data: [] })) catch []
 }
 
 node tError(): string {

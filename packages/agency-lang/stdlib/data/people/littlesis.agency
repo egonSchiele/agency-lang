@@ -74,6 +74,11 @@ export type Relationship = {
   isCurrent: boolean | null
 }
 
+/** A category filter for relationship/connection queries: either "all" (no filter) or a specific
+    category by id. Produced by parseCategoryFilter, consumed by the path builders — this replaces
+    the old numeric sentinels (no more -1 for "invalid" or 0 for "all"). */
+export type CategoryFilter = { type: "all" } | { type: "category", id: number }
+
 /** Map a LittleSis category_id (1–12) to its friendly name; unknown id → "". Pure. */
 export safe def categoryIdToName(id: number): string {
   if (id >= 1 && id < CATEGORY_NAMES.length) {
@@ -82,13 +87,23 @@ export safe def categoryIdToName(id: number): string {
   return ""
 }
 
-/** Map a friendly category name to its LittleSis category_id (1–12); unknown → -1. Pure. */
-export safe def categoryNameToId(name: string): number {
-  const idx = CATEGORY_NAMES.indexOf(name)
-  if (idx >= 1) {
-    return idx
+/** The friendly category names as a comma-separated string (drops the index-0 "" sentinel).
+    Single source of truth for the valid-category list in error messages. Pure. */
+safe def categoryNamesList(): string {
+  return CATEGORY_NAMES.slice(1).join(", ")
+}
+
+/** Parse a friendly category name into a CategoryFilter. "" (or not given) → all; a valid name →
+    that category; an unknown name → failure (listing the valid names). Pure. */
+export safe def parseCategoryFilter(name: string): Result<CategoryFilter> {
+  if (name == "") {
+    return success({ type: "all" })
   }
-  return -1
+  const idx = CATEGORY_NAMES.indexOf(name)
+  if (idx < 1) {
+    return failure("unknown category '${name}'; valid: ${categoryNamesList()}")
+  }
+  return success({ type: "category", id: idx })
 }
 
 /** Build the entity-search path. `page` is appended only when > 1. Pure. */
@@ -105,14 +120,13 @@ export safe def buildEntityPath(id: number): string {
   return "/entities/${id}"
 }
 
-/** Build the relationships path. Appends category_id (when >= 1) and sort (when non-empty). Pure.
-    Builds a present-params list and joins it, so it scales linearly with params instead of
-    enumerating every on/off combination. */
-export safe def buildRelationshipsPath(id: number, categoryId: number, sort: string): string {
+/** Build the relationships path from a category filter and optional sort. Builds a present-params
+    list and joins it, so it scales linearly with params instead of enumerating combinations. Pure. */
+export safe def buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string): string {
   const base = "/entities/${id}/relationships"
   let params: string[] = []
-  if (categoryId >= 1) {
-    params.push("category_id=${categoryId}")
+  if (filter is { type: "category", id: catId }) {
+    params.push("category_id=${catId}")
   }
   if (sort != "") {
     params.push("sort=${encodeURIComponent(sort)}")
@@ -123,10 +137,10 @@ export safe def buildRelationshipsPath(id: number, categoryId: number, sort: str
   return "${base}?${params.join("&")}"
 }
 
-/** Build the connections path. Appends category_id when >= 1. Pure. */
-export safe def buildConnectionsPath(id: number, categoryId: number): string {
-  if (categoryId >= 1) {
-    return "/entities/${id}/connections?category_id=${categoryId}"
+/** Build the connections path from a category filter. Pure. */
+export safe def buildConnectionsPath(id: number, filter: CategoryFilter): string {
+  if (filter is { type: "category", id: catId }) {
+    return "/entities/${id}/connections?category_id=${catId}"
   }
   return "/entities/${id}/connections"
 }
@@ -188,25 +202,6 @@ export safe def parseRelationships(raw: any): Relationship[] {
 /** Shared failure message for a failed LittleSis fetch. Pure. */
 export safe def littlesisError(err: any): string {
   return "LittleSis request failed (the API may be rate-limited; HTTP 503 = Rate Limit Exceeded): ${err}"
-}
-
-/** The friendly category names as a comma-separated string (drops the index-0 "" sentinel).
-    Single source of truth for the valid-category list in error messages. Pure. */
-safe def categoryNamesList(): string {
-  return CATEGORY_NAMES.slice(1).join(", ")
-}
-
-/** Resolve a friendly category name to a category_id: "" → 0 (all); unknown → failure. Pure.
-    Encapsulates the resolve-or-fail logic shared by relationships and connections. */
-safe def resolveCategoryId(category: string): Result<number> {
-  if (category == "") {
-    return success(0)
-  }
-  const id = categoryNameToId(category)
-  if (id < 0) {
-    return failure("unknown category '${category}'; valid: ${categoryNamesList()}")
-  }
-  return success(id)
 }
 
 /** Fetch a LittleSis path and return the parsed-JSON Result. Raises std::http::fetchJSON but
@@ -296,13 +291,13 @@ export safe def littlesisRelationships(id: number, category: string = "", sort: 
   // and keep the Result-narrowing out of the interrupt-resume flow (a match/.value over a typed
   // Result placed after `return interrupt` does not narrow). Bonus: makes the unknown-category
   // failure path reachable OFFLINE (returns before any interrupt).
-  const catResult = resolveCategoryId(category)
-  if (catResult is failure(msg)) {
+  const filterResult = parseCategoryFilter(category)
+  if (filterResult is failure(msg)) {
     return failure(msg)
   }
-  const categoryId = catResult.value
+  const filter = filterResult.value
   return interrupt std::littlesis("Fetch relationships for this LittleSis entity?", { op: "relationships", query: "${id}" })
-  const result = littlesisFetch(buildRelationshipsPath(id, categoryId, sort))
+  const result = littlesisFetch(buildRelationshipsPath(id, filter, sort))
   return relationshipsFinalize(result)
 }
 
@@ -316,12 +311,12 @@ export safe def littlesisConnections(id: number, category: string = ""): Result<
   @param category - Optional category filter: position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, generic (empty = all)
   """
   // Validate the category BEFORE the interrupt (see littlesisRelationships for the rationale).
-  const catResult = resolveCategoryId(category)
-  if (catResult is failure(msg)) {
+  const filterResult = parseCategoryFilter(category)
+  if (filterResult is failure(msg)) {
     return failure(msg)
   }
-  const categoryId = catResult.value
+  const filter = filterResult.value
   return interrupt std::littlesis("Fetch connections for this LittleSis entity?", { op: "connections", query: "${id}" })
-  const result = littlesisFetch(buildConnectionsPath(id, categoryId))
+  const result = littlesisFetch(buildConnectionsPath(id, filter))
   return entityListFinalize(result)
 }

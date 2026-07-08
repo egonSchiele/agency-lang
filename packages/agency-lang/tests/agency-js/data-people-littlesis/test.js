@@ -1,4 +1,4 @@
-import { tCatIdToName, tCatNameToId, tSearchPath, tEntityPath, tRelPath, tConnPath, tParseEntities, tParseEntity, tParseRelationships, tParseEmpty, tParseNull, tSearchFinalizeErr, tEntityFinalizeMissing, tRelFinalizeEmpty, tError, callRelBadCategory, hasInterrupts, approve, reject, respondToInterrupts, callSearch, callSearchGoverned } from "./agent.js";
+import { tCatIdToName, tFilterCat, tSearchPath, tEntityPath, tRelPath, tConnPath, tParseEntities, tParseEntity, tParseRelationships, tParseEmpty, tParseNull, tSearchFinalizeErr, tEntityFinalizeMissing, tRelFinalizeEmpty, tError, callRelBadCategory, hasInterrupts, approve, reject, respondToInterrupts, callSearch, callSearchGoverned } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -49,21 +49,21 @@ writeFileSync(
   "__result.json",
   JSON.stringify(
     {
-      ownershipId: unwrap(await tCatNameToId("ownership")),
       donationName: unwrap(await tCatIdToName(5)),
-      positionId: unwrap(await tCatNameToId("position")),
-      unknownName: unwrap(await tCatNameToId("bogus")),
       unknownId: unwrap(await tCatIdToName(99)),
       zeroId: unwrap(await tCatIdToName(0)),
+      filterAll: unwrap(await tFilterCat("")),
+      filterCat: unwrap(await tFilterCat("ownership")),
+      filterBad: unwrap(await tFilterCat("bogus")),
       searchPath: unwrap(await tSearchPath("Andreessen Horowitz", 1)),
       searchPathPaged: unwrap(await tSearchPath("a b", 3)),
       entityPath: unwrap(await tEntityPath(41946)),
-      relPathPlain: unwrap(await tRelPath(41946, 0, "")),
-      relPathCat: unwrap(await tRelPath(41946, 10, "")),
-      relPathCatSort: unwrap(await tRelPath(41946, 10, "amount")),
-      relPathSort: unwrap(await tRelPath(41946, 0, "recent")),
-      connPathPlain: unwrap(await tConnPath(41946, 0)),
-      connPathCat: unwrap(await tConnPath(41946, 10)),
+      relPathPlain: unwrap(await tRelPath(41946, "", "")),
+      relPathCat: unwrap(await tRelPath(41946, "ownership", "")),
+      relPathCatSort: unwrap(await tRelPath(41946, "ownership", "amount")),
+      relPathSort: unwrap(await tRelPath(41946, "", "recent")),
+      connPathPlain: unwrap(await tConnPath(41946, "")),
+      connPathCat: unwrap(await tConnPath(41946, "ownership")),
       entities: unwrap(await tParseEntities(sampleSearch)),
       entity: unwrap(await tParseEntity(sampleEntity)),
       relationships: unwrap(await tParseRelationships(sampleRels)),

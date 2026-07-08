@@ -1,10 +1,10 @@
 {
-  "ownershipId": 10,
   "donationName": "donation",
-  "positionId": 1,
-  "unknownName": -1,
   "unknownId": "",
   "zeroId": "",
+  "filterAll": { "type": "all" },
+  "filterCat": { "type": "category", "id": 10 },
+  "filterBad": "FAIL: unknown category 'bogus'; valid: position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, generic",
   "searchPath": "/entities/search?q=Andreessen%20Horowitz",
   "searchPathPaged": "/entities/search?q=a%20b&page=3",
   "entityPath": "/entities/41946",

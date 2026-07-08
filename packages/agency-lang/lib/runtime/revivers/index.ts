@@ -6,6 +6,7 @@ import { RegExpReviver } from "./regExpReviver.js";
 import { URLReviver } from "./urlReviver.js";
 import { ErrorReviver } from "./errorReviver.js";
 import { FunctionRefReviver } from "./functionRefReviver.js";
+import { TaggedReviver } from "./taggedReviver.js";
 
 export const functionRefReviver = new FunctionRefReviver();
 
@@ -16,6 +17,7 @@ const revivers: BaseReviver<any>[] = [
   new RegExpReviver(),
   new URLReviver(),
   new ErrorReviver(),
+  new TaggedReviver(),
   functionRefReviver,
 ];
 

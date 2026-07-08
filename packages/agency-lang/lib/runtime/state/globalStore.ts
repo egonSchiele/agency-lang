@@ -1,4 +1,5 @@
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
+import { canHoldDurableTag, attachTag, readTag } from "./tagSymbol.js";
 
 export type GlobalStoreJSON = {
   store: Record<string, Record<string, any>>;
@@ -9,20 +10,27 @@ export class GlobalStore {
   private store: Record<string, Record<string, any>> = {};
   private initializedModules: Set<string> = new Set();
 
-  // Object/array/function tags, keyed by reference. Deliberately a WeakMap so
-  // it is (a) excluded from toJSON serialization and (b) reset to empty on
-  // clone() (fromJSON constructs a fresh GlobalStore). Object identity does
-  // not survive the toJSON/fromJSON round-trip, so object tags are
-  // intentionally branch-local and do not cross fork/interrupt boundaries.
+  // FALLBACK object-tag store for values that can't carry the durable
+  // on-object marker (frozen/sealed or native-typed objects, functions — see
+  // canHoldDurableTag). Keyed by reference; deliberately a WeakMap so it is
+  // (a) excluded from toJSON serialization and (b) reset to empty on clone()
+  // (fromJSON constructs a fresh GlobalStore). Object identity does not
+  // survive the toJSON/fromJSON round-trip, so THESE tags are branch-local.
+  // Plain extensible objects/arrays instead carry the record on the object
+  // itself (tagSymbol.ts) and the TaggedReviver preserves it through every
+  // state round-trip — those tags are durable.
   private objectTags: WeakMap<object, Record<string, unknown>> = new WeakMap();
 
-  // Tracks whether any object (reference) tag has been set, so hasAnyTags()
-  // can answer without enumerating the (non-enumerable) WeakMap. Not
-  // serialized and starts false on every fresh store, so it resets on
-  // clone()/fromJSON — matching the WeakMap, whose entries also reset.
+  // Tracks whether any WEAKMAP (branch-local) object tag has been set, so
+  // hasAnyTags() can answer without enumerating the (non-enumerable) WeakMap.
+  // Not serialized and starts false on every fresh store, so it resets on
+  // clone()/fromJSON — matching the WeakMap, whose entries also reset. The
+  // durable (on-object) path has its own SERIALIZED flag under __internal
+  // (DURABLE_FLAG_KEY), which rides toJSON/fromJSON/clone.
   private objectTagsPresent = false;
 
   private static readonly VALUE_TAGS_KEY = "__valueTags";
+  private static readonly DURABLE_FLAG_KEY = "__hasDurableObjectTags";
   static readonly REDACT_TAG = "redact";
 
   private isRef(value: unknown): value is object {
@@ -67,9 +75,26 @@ export class GlobalStore {
     create: boolean,
   ): Record<string, unknown> | undefined {
     if (this.isRef(value)) {
-      let record = this.objectTags.get(value);
-      if (!record && create) {
-        record = Object.create(null) as Record<string, unknown>;
+      // Follow an existing tag wherever it already lives (so an object frozen
+      // AFTER tagging still resolves to its on-object record).
+      const durable = readTag(value);
+      if (durable !== undefined) {
+        // The record may have been created by ANOTHER store (the object
+        // arrived by reference, e.g. from a settled branch). On a write, set
+        // THIS store's flag too — the redaction gate must be locally true,
+        // not dependent on join-propagation ordering. Monotonic + idempotent.
+        if (create) this.setDurableObjectTagFlag();
+        return durable;
+      }
+      const weak = this.objectTags.get(value);
+      if (weak !== undefined) return weak;
+      if (!create) return undefined;
+      // Creating: choose the path by current capability.
+      const record = Object.create(null) as Record<string, unknown>;
+      if (canHoldDurableTag(value)) {
+        attachTag(value, record);
+        this.setDurableObjectTagFlag();
+      } else {
         this.objectTags.set(value, record);
         this.objectTagsPresent = true;
       }
@@ -108,6 +133,18 @@ export class GlobalStore {
   /** Remove every tag from a value. */
   removeAllTags(value: unknown): void {
     if (this.isRef(value)) {
+      const durable = readTag(value);
+      if (durable !== undefined) {
+        // Clear keys in place — the record object is separate from the
+        // (possibly frozen) target, and deleting the symbol property would
+        // throw on a frozen-after-tag object. Intentional asymmetry with the
+        // WeakMap/primitive paths: getTagsFor afterwards returns {} here
+        // (record stays attached, so the TaggedReviver keeps wrapping the
+        // object with empty tags), undefined there. Harmless — isRedacted
+        // checks `=== true`.
+        for (const key of Object.keys(durable)) delete durable[key];
+        return;
+      }
       this.objectTags.delete(value);
       return;
     }
@@ -136,13 +173,31 @@ export class GlobalStore {
   /**
    * Cheap "are there any tags at all?" check so statelog can skip installing
    * a redaction replacer entirely when nothing is tagged (the common case).
-   * The WeakMap can't report size, so object-tag presence is tracked by a
-   * boolean flag that resets on clone alongside the WeakMap.
+   * Three signals: the in-memory WeakMap bit (branch-local tags; resets on
+   * clone alongside the WeakMap), the serialized durable flag (on-object
+   * tags; rides clone/interrupt round-trips), and the primitive Map's size.
    */
   hasAnyTags(): boolean {
     if (this.objectTagsPresent) return true;
+    if (this.hasDurableObjectTagFlag()) return true;
     const m = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
     return m instanceof Map && m.size > 0;
+  }
+
+  /** True when any durable (on-object) tag has been created on or adopted by
+   * this store. Serialized under __internal, so it survives clone/fromJSON. */
+  hasDurableObjectTagFlag(): boolean {
+    return (
+      this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.DURABLE_FLAG_KEY) ===
+      true
+    );
+  }
+
+  /** Set the durable-object-tag presence flag. Monotonic (never reset —
+   * over-approximating costs one redaction pass, under-approximating leaks);
+   * OR'd into the parent store when a branch settles (see runBatch). */
+  setDurableObjectTagFlag(): void {
+    this.set(GlobalStore.INTERNAL_MODULE, GlobalStore.DURABLE_FLAG_KEY, true);
   }
 
   get(moduleId: string, varName: string): any {

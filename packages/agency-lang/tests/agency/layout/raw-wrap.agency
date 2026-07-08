@@ -1,0 +1,30 @@
+import { box, raw, render } from "std::ui/layout"
+
+// raw now wraps to the box exactly like text (default wrap: true).
+node testRawWrapsInBox(): string {
+  const panel = box(width: 12) as b {
+    b.raw("the quick brown fox")
+  }
+  return render(panel, color: false)
+}
+
+// Unsized box caps + wraps long content at the pinned viewport (headline fix).
+node testUnsizedBoxCapsAndWraps(): string {
+  const panel = box() as b {
+    b.text("the quick brown fox jumps over the lazy dog again")
+  }
+  return render(panel, color: false, cols: 16)
+}
+
+// Unsized box shrink-to-fits short content (does NOT blow up to full width).
+node testUnsizedBoxShrinkToFit(): string {
+  const panel = box() as b {
+    b.text("hi")
+  }
+  return render(panel, color: false, cols: 40)
+}
+
+// wrap: false forwards through the builder and preserves the exact node.
+node testRawWrapFalseNode() {
+  return raw("ascii-art-line", wrap: false)
+}

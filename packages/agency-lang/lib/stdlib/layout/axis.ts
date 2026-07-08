@@ -147,7 +147,11 @@ export function composeColumn(node: LayoutNode): Block { return composeAxis(node
 function sizeColumn(node: LayoutNode, ctx: SizingContext): LayoutNode {
   const own = resolveOwnWidth(node, ctx);
   // Columns stack vertically; horizontal width is shared with every child.
-  return resolveContainer(node, own, { defaultWidth: own, percentBasis: own });
+  return resolveContainer(node, own, {
+    defaultWidth: own,
+    percentBasis: own,
+    availableWidth: own ?? ctx.availableWidth,
+  });
 }
 
 function sizeRow(node: LayoutNode, ctx: SizingContext): LayoutNode {
@@ -155,9 +159,14 @@ function sizeRow(node: LayoutNode, ctx: SizingContext): LayoutNode {
   const gap = nonNegativeInteger(node.attrs.gap);
   const gapTotal = Math.max(0, node.children.length - 1) * gap;
   const inner = innerWidthAfterChrome(own, gapTotal);
-  // Row children stay natural width unless they declare their own
-  // width; percentages compute against the row's inner space.
-  return resolveContainer(node, own, { defaultWidth: undefined, percentBasis: inner });
+  // Row children stay natural width (no defaultWidth → not filled), but are
+  // capped at the row's available width so a lone wide child wraps instead
+  // of overflowing. Per-child horizontal distribution is a non-goal.
+  return resolveContainer(node, own, {
+    defaultWidth: undefined,
+    percentBasis: inner,
+    availableWidth: inner ?? ctx.availableWidth,
+  });
 }
 
 export const row:    NodeHandler = { size: sizeRow,    render: composeRow };

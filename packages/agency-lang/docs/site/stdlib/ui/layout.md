@@ -19,8 +19,10 @@ Build terminal output as a tree of boxes, rows, and columns, then render
   ```
 
   Containers (`box`, `row`, `column`) take a `width`: a number of columns,
-  `"50%"` of the parent, or `"full"` for the whole terminal. Text wraps to
-  fit; `raw` content never wraps.
+  `"50%"` of the parent, or `"full"` for the whole terminal. Content wraps to
+  fit its container; pass `wrap: false` to `raw` to preserve exact layout
+  (ASCII art, pre-rendered tables). Unsized containers shrink to fit their
+  content but cap at the available width, wrapping anything longer.
 
   For live, redrawing UIs with input handling, use `std::ui` instead.
 
@@ -43,7 +45,7 @@ export type LayoutNode = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L31))
 
 ### LayoutBuilder
 
@@ -69,7 +71,7 @@ export type LayoutBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L42))
 
 ### Alignment
 
@@ -77,7 +79,7 @@ export type LayoutBuilder = {
 export type Alignment = "start" | "center" | "end"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L53))
 
 ### BorderStyle
 
@@ -85,7 +87,7 @@ export type Alignment = "start" | "center" | "end"
 export type BorderStyle = "rounded" | "heavy" | "double" | "light"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L55))
 
 ### Width
 
@@ -93,7 +95,7 @@ export type BorderStyle = "rounded" | "heavy" | "double" | "light"
 export type Width = number | "full" | string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L57))
 
 ## Functions
 
@@ -129,21 +131,25 @@ A styled run of text. Newlines split it into multiple lines.
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L65))
 
 ### raw
 
 ```ts
-raw(content: string, align: Alignment): LayoutNode
+raw(content: string, align: Alignment, wrap: boolean): LayoutNode
 ```
 
-A pre-styled string, rendered as-is and never wrapped. Use it for ASCII art or strings that already carry their own styling.
+A pre-styled string (may carry its own ANSI or newlines). Wraps to the
+  container width by default; pass wrap: false to render exactly as-is and
+  never reflow (ASCII art, pre-rendered tables).
 
   @param content - Raw string content (may contain ANSI codes or newlines)
   @param align - For multi-line content, how shorter lines align to the longest
+  @param wrap - Reflow to the container width (default true). false preserves the exact layout.
 
-If the string carries its own ANSI sequences, nesting it inside a
-styled `text` or `box` won't re-apply styling after those sequences reset.
+Wraps to its container by default; pass `wrap: false` to preserve exact
+layout. Wrapping is ANSI-aware, so embedded color survives without bleeding
+into surrounding borders.
 
 **Parameters:**
 
@@ -151,10 +157,11 @@ styled `text` or `box` won't re-apply styling after those sequences reset.
 |---|---|---|
 | content | `string` |  |
 | align | [Alignment](#alignment) | "start" |
+| wrap | `boolean` | true |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L106))
 
 ### space
 
@@ -174,7 +181,7 @@ Blank space. Inside a row it adds columns; inside a column, rows.
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L127))
 
 ### hline
 
@@ -202,7 +209,7 @@ A horizontal rule. Inside a column, leave length at 0 to span the column's width
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L142))
 
 ### vline
 
@@ -230,7 +237,7 @@ A vertical rule. Inside a row, leave length at 0 to span the row's height.
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L171))
 
 ### row
 
@@ -258,7 +265,7 @@ A horizontal container. Children render left to right.
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L336))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L344))
 
 ### column
 
@@ -286,7 +293,7 @@ A vertical container. Children render top to bottom.
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L375))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L383))
 
 ### box
 
@@ -320,7 +327,7 @@ A bordered panel. Multiple children stack vertically inside it.
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L414))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L422))
 
 ### render
 
@@ -346,4 +353,4 @@ Render a layout tree to a styled, multi-line string ready to print.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L462))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L470))

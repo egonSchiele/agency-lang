@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "nodeName": "testRawWrapsInBox",
+      "input": "",
+      "expectedOutput": "\"╭──────────╮\\n│          │\\n│ the      │\\n│ quick    │\\n│ brown    │\\n│ fox      │\\n│          │\\n╰──────────╯\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testUnsizedBoxCapsAndWraps",
+      "input": "",
+      "expectedOutput": "\"╭──────────────╮\\n│              │\\n│ the quick    │\\n│ brown fox    │\\n│ jumps over   │\\n│ the lazy dog │\\n│ again        │\\n│              │\\n╰──────────────╯\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testUnsizedBoxShrinkToFit",
+      "input": "",
+      "expectedOutput": "\"╭────╮\\n│    │\\n│ hi │\\n│    │\\n╰────╯\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testRawWrapFalseNode",
+      "input": "",
+      "expectedOutput": "{\"type\":\"raw\",\"attrs\":{\"content\":\"ascii-art-line\",\"align\":\"start\",\"wrap\":false},\"children\":[]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

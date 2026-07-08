@@ -105,7 +105,11 @@ export function resolveSizes(node: LayoutNode, viewport: Viewport): LayoutNode {
   // percent basis (so `width: "full"` / `width: "100%"` at the root mean
   // "fill the terminal columns") but does not impose a default width
   // (so unsized roots stay content-driven).
-  return resolveNode(node, { defaultWidth: undefined, percentBasis: viewport.cols });
+  return resolveNode(node, {
+    defaultWidth: undefined,
+    percentBasis: viewport.cols,
+    availableWidth: viewport.cols,
+  });
 }
 
 export function resolveNode(node: LayoutNode, ctx: SizingContext): LayoutNode {

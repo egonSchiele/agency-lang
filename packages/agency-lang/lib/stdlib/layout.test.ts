@@ -84,15 +84,97 @@ describe("wrapText", () => {
       .toEqual(["\x1b[31mhello\x1b[0m", "world"]);
   });
 
-  test("breaks a long colored word at the column boundary while keeping CSI escapes intact", () => {
-    // The break must happen at a visual-cell boundary (width=4), not
-    // mid-escape. Both pieces of the broken token must keep the
-    // CSI bytes that landed inside their span.
+  test("breaks a long colored word at the column boundary, self-closing each line", () => {
     expect(_internal.wrapText("\x1b[31mabcdefghij\x1b[0m", 4)).toEqual([
-      "\x1b[31mabcd",
-      "efgh",
-      "ij\x1b[0m",
+      "\x1b[31mabcd\x1b[0m",
+      "\x1b[31mefgh\x1b[0m",
+      "\x1b[31mij\x1b[0m",
     ]);
+  });
+
+  test("reopens the active style on each wrapped line and resets at its end", () => {
+    expect(_internal.wrapText("\x1b[2mAAAA BBBB CCCC\x1b[0m", 9)).toEqual([
+      "\x1b[2mAAAA BBBB\x1b[0m",
+      "\x1b[2mCCCC\x1b[0m",
+    ]);
+  });
+
+  test("accumulates stacked codes and reopens ALL of them on continuation lines", () => {
+    // No reset in the input: both fg (31) and bold (1) stay active and must
+    // both be reopened on every continuation line. Kills a keep-last-code bug.
+    expect(_internal.wrapText("\x1b[31m\x1b[1mred bold text here", 8)).toEqual([
+      "\x1b[31m\x1b[1mred bold\x1b[0m",
+      "\x1b[31m\x1b[1mtext\x1b[0m",
+      "\x1b[31m\x1b[1mhere\x1b[0m",
+    ]);
+  });
+
+  test("a full reset (\\x1b[0m and \\x1b[m) clears the carried style", () => {
+    expect(_internal.wrapText("\x1b[31mred one\x1b[0m two three", 7)).toEqual([
+      "\x1b[31mred one\x1b[0m",
+      "two",
+      "three",
+    ]);
+    // Empty-params reset `\x1b[m` also clears.
+    expect(_internal.wrapText("\x1b[31mfoo\x1b[m bar", 3)).toEqual([
+      "\x1b[31mfoo\x1b[m",
+      "bar",
+    ]);
+  });
+
+  test("carries style across a literal newline boundary too", () => {
+    // Style opened on one source line, reset two lines later: each emitted
+    // visual line is still self-contained.
+    expect(_internal.wrapText("\x1b[31mfoo\nbar\x1b[0m", 10)).toEqual([
+      "\x1b[31mfoo\x1b[0m",
+      "\x1b[31mbar\x1b[0m",
+    ]);
+  });
+
+  test("non-SGR CSI (cursor/erase) passes through inline and is never reopened", () => {
+    // \x1b[2K is a CSI but not an SGR (ends in K). It must not enter the
+    // active-style state or be replayed on later lines.
+    expect(_internal.wrapText("\x1b[2Kfoo bar", 3)).toEqual([
+      "\x1b[2Kfoo",
+      "bar",
+    ]);
+  });
+
+  test("a blank line inside an active style span is self-contained", () => {
+    // The empty middle line reopens+resets the carried style (never dropped)
+    // and the style still continues on the next line.
+    expect(_internal.wrapText("\x1b[31mfoo\n\nbar\x1b[0m", 10)).toEqual([
+      "\x1b[31mfoo\x1b[0m",
+      "\x1b[31m\x1b[0m",
+      "\x1b[31mbar\x1b[0m",
+    ]);
+    // With no active style, a blank line stays truly empty.
+    expect(_internal.wrapText("foo\n\nbar", 10)).toEqual(["foo", "", "bar"]);
+  });
+
+  test("reopens a 24-bit / multi-param SGR code on continuation lines", () => {
+    // The real codes the renderer emits (sgr() -> \x1b[38;2;r;g;bm) carry
+    // semicolons; they must be treated as one SGR unit and fully reopened.
+    expect(_internal.wrapText("\x1b[38;2;1;2;3mfoo bar baz", 7)).toEqual([
+      "\x1b[38;2;1;2;3mfoo bar\x1b[0m",
+      "\x1b[38;2;1;2;3mbaz\x1b[0m",
+    ]);
+  });
+
+  test("after a reset, only the new color is reopened on the next line", () => {
+    // red closes, green opens, then wrap: the second line reopens green only
+    // (not the reset-away red). Exercises clear-then-accumulate.
+    expect(_internal.wrapText("\x1b[31mred\x1b[0m \x1b[32mgreen text", 9)).toEqual([
+      "\x1b[31mred\x1b[0m \x1b[32mgreen\x1b[0m",
+      "\x1b[32mtext\x1b[0m",
+    ]);
+  });
+
+  test("plain text and empty strings are unaffected by SGR handling", () => {
+    expect(_internal.wrapText("hello world", 5)).toEqual(["hello", "world"]);
+    expect(_internal.wrapText("hello  ", 10)).toEqual(["hello  "]);
+    expect(_internal.wrapText("", 5)).toEqual([""]);
+    expect(_internal.wrapText("hello", 0)).toEqual([]);
   });
 });
 
@@ -124,14 +206,63 @@ describe("resolveSizes", () => {
     expect(row.children.map((child) => child.attrs.resolvedWidth)).toEqual([20, 20]);
   });
 
-  test("row does not give full width to every unsized child", () => {
+  test("row caps unsized children at its width but does not fill them", () => {
     const tree = node("row", { width: 20 }, [
       node("text", { content: "first child is long" }),
       node("text", { content: "second child is long" }),
     ]);
     const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // Ceiling = row inner width (20, gap 0); children wrap at it but stay
+    // content-driven (no defaultWidth → not stretched to fill).
+    expect(resolved.children[0].attrs.wrapWidth).toBe(20);
+    expect(resolved.children[1].attrs.wrapWidth).toBe(20);
+  });
+
+  test("row subtracts gap from the ceiling it caps children at", () => {
+    const tree = node("row", { width: 20, gap: 2 }, [
+      node("text", { content: "a" }),
+      node("text", { content: "b" }),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // inner = 20 − (2 children − 1) * gap 2 = 18.
+    expect(resolved.children[0].attrs.wrapWidth).toBe(18);
+    expect(resolved.children[1].attrs.wrapWidth).toBe(18);
+  });
+
+  test("unsized box wraps content at the available width (shrink-to-fit ceiling)", () => {
+    // ceiling = viewport 40 − box chrome (2 border, 0 padding) = 38.
+    const tree = node("box", { padding: 0 }, [node("text", { content: "x" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 40, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBe(38);
+  });
+
+  test("unsized box ceiling subtracts padding on both sides", () => {
+    // chrome = 2 border + 2*2 padding = 6; ceiling = 40 − 6 = 34.
+    const tree = node("box", { padding: 2 }, [node("text", { content: "x" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 40, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBe(34);
+  });
+
+  test("nested unsized boxes subtract chrome at each level", () => {
+    const tree = node("box", { padding: 0 }, [
+      node("box", { padding: 0 }, [node("text", { content: "x" })]),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 40, rows: 24 });
+    // outer ceiling 40−2 = 38; inner ceiling 38−2 = 36.
+    expect(resolved.children[0].children[0].attrs.wrapWidth).toBe(36);
+  });
+
+  test("unsized column wraps its children at the available width", () => {
+    const tree = node("column", {}, [node("text", { content: "x" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 30, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBe(30);
+  });
+
+  test("never assigns wrapWidth ≤ 0 — content degrades to overflow, not to nothing", () => {
+    // chrome 2 + 2*20 = 42 > viewport 30 → ceiling clamps to 0 → no wrapWidth.
+    const tree = node("box", { padding: 20 }, [node("text", { content: "hello" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 30, rows: 24 });
     expect(resolved.children[0].attrs.wrapWidth).toBeUndefined();
-    expect(resolved.children[1].attrs.wrapWidth).toBeUndefined();
   });
 
   test("uses clamped integer padding and gap when resolving child width", () => {
@@ -738,9 +869,11 @@ describe("box renderer", () => {
     expect(lines).toContain("│the quick brown   │");
     expect(lines).toContain("│fox jumps         │");
   });
-  test("fixed-width box leaves raw content unwrapped", () => {
+  test("fixed-width box leaves raw content unwrapped when wrap:false", () => {
+    // raw wraps to the box by default now; wrap:false preserves the exact,
+    // unwrapped line (ASCII art / pre-rendered content).
     const tree = node("box", { width: 10 }, [
-      node("raw", { content: "ABCDEFGHIJKLMNOP" }),
+      node("raw", { content: "ABCDEFGHIJKLMNOP", wrap: false }),
     ]);
     const lines = render(tree, { cols: 80, rows: 24 }).split("\n");
     expect(_internal.visualWidth(lines[0])).toBe(10);
@@ -1496,5 +1629,94 @@ describe("table — _validateTable", () => {
     expect(v.header[0].type).toBe("text");
     expect(v.header[0].attrs.content).toBe("A");
     expect((v.body[0][0].attrs as { bold: boolean }).bold).toBe(true);
+  });
+});
+
+describe("raw", () => {
+  test("wraps by default (gets a wrapWidth) but not when wrap:false", () => {
+    const wrapped = _internal.resolveSizes(
+      node("box", { width: 30 }, [node("raw", { content: "x", wrap: true })]),
+      { cols: 80, rows: 24 },
+    );
+    expect(wrapped.children[0].attrs.wrapWidth).toBe(28);
+
+    const preserved = _internal.resolveSizes(
+      node("box", { width: 30 }, [node("raw", { content: "x", wrap: false })]),
+      { cols: 80, rows: 24 },
+    );
+    expect(preserved.children[0].attrs.wrapWidth).toBeUndefined();
+  });
+
+  test("raw also degrades to no wrapWidth when the ceiling clamps to 0", () => {
+    // sizeRaw shares wrapWidthFor's ≤0 guard: over-padded unsized box → the
+    // raw content stays present (overflow), not annotated to wrap at 0.
+    const tree = node("box", { padding: 20 }, [node("raw", { content: "hello" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 30, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBeUndefined();
+  });
+
+  test("raw wraps content to the box exactly like text, adding no styling", () => {
+    const out = render(
+      node("box", { width: 12, padding: 1 }, [
+        node("raw", { content: "the quick brown fox" }),
+      ]),
+      { cols: 80, rows: 24 },
+    );
+    expect(out).toBe(
+      [
+        "╭──────────╮",
+        "│          │",
+        "│ the      │",
+        "│ quick    │",
+        "│ brown    │",
+        "│ fox      │",
+        "│          │",
+        "╰──────────╯",
+      ].join("\n"),
+    );
+  });
+
+  test("wrapped colored content survives AND never leaves an open SGR at a line boundary", () => {
+    const colored = "\x1b[31malpha beta gamma delta epsilon\x1b[0m";
+    const out = _render(
+      node("box", { width: 16, padding: 1 }, [node("raw", { content: colored })]),
+      true, 80, 24,
+    );
+    // Colors survive (kills a "strip all ANSI" render bug).
+    expect(out).toContain("\x1b[31m");
+    // No style bleeds past a line boundary -> borders/padding stay uncolored.
+    // Independent re-implementation of the scan on purpose: a bug shared with
+    // updateActiveSgr would otherwise mask itself in this oracle.
+    const openAtEnd = (line: string): string => {
+      let active = "";
+      for (const match of line.matchAll(/\x1b\[[\d;]*m/g)) {
+        const params = match[0].slice(2, -1);
+        active = params === "" || params === "0" ? "" : active + match[0];
+      }
+      return active;
+    };
+    for (const line of out.split("\n")) expect(openAtEnd(line)).toBe("");
+
+    // Background colors must also reset before the border/padding, so the
+    // frame never inherits the bg on wrapped rows.
+    const bg = _render(
+      node("box", { width: 16, padding: 1 }, [
+        node("raw", { content: "\x1b[41malpha beta gamma delta epsilon\x1b[0m" }),
+      ]),
+      true, 80, 24,
+    );
+    expect(bg).toContain("\x1b[41m");
+    for (const line of bg.split("\n")) expect(openAtEnd(line)).toBe("");
+  });
+
+  test("raw right-aligns short wrapped lines when align:end", () => {
+    const out = render(
+      node("box", { width: 10, padding: 0 }, [
+        node("raw", { content: "a\nbbbb", align: "end" }),
+      ]),
+      { cols: 80, rows: 24 },
+    );
+    // "a" is padded on the LEFT to line up under "bbbb" (right alignment).
+    expect(out).toContain("   a");
   });
 });

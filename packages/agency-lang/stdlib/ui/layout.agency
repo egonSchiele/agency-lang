@@ -16,8 +16,10 @@ import { _render } from "agency-lang/stdlib-lib/layout.js"
   ```
 
   Containers (`box`, `row`, `column`) take a `width`: a number of columns,
-  `"50%"` of the parent, or `"full"` for the whole terminal. Text wraps to
-  fit; `raw` content never wraps.
+  `"50%"` of the parent, or `"full"` for the whole terminal. Content wraps to
+  fit its container; pass `wrap: false` to `raw` to preserve exact layout
+  (ASCII art, pre-rendered tables). Unsized containers shrink to fit their
+  content but cap at the available width, wrapping anything longer.
 
   For live, redrawing UIs with input handling, use `std::ui` instead.
 */
@@ -98,20 +100,25 @@ export safe def text(
   }
 }
 
-/** If the string carries its own ANSI sequences, nesting it inside a
-styled `text` or `box` won't re-apply styling after those sequences reset. */
-export safe def raw(content: string, align: Alignment = "start"): LayoutNode {
+/** Wraps to its container by default; pass `wrap: false` to preserve exact
+layout. Wrapping is ANSI-aware, so embedded color survives without bleeding
+into surrounding borders. */
+export safe def raw(content: string, align: Alignment = "start", wrap: boolean = true): LayoutNode {
   """
-  A pre-styled string, rendered as-is and never wrapped. Use it for ASCII art or strings that already carry their own styling.
+  A pre-styled string (may carry its own ANSI or newlines). Wraps to the
+  container width by default; pass wrap: false to render exactly as-is and
+  never reflow (ASCII art, pre-rendered tables).
 
   @param content - Raw string content (may contain ANSI codes or newlines)
   @param align - For multi-line content, how shorter lines align to the longest
+  @param wrap - Reflow to the container width (default true). false preserves the exact layout.
   """
   return {
     type: "raw",
     attrs: {
       content: content,
-      align: align
+      align: align,
+      wrap: wrap
     },
     children: []
   }
@@ -225,8 +232,9 @@ def _addRaw(
   kids: any[],
   content: string,
   align: Alignment = "start",
+  wrap: boolean = true,
 ): LayoutNode {
-  const n = raw(content: content, align: align)
+  const n = raw(content: content, align: align, wrap: wrap)
   kids.push(n)
   return n
 }

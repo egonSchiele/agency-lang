@@ -15,7 +15,7 @@
     {
       "nodeName": "testRaw",
       "input": "",
-      "expectedOutput": "{\"type\":\"raw\",\"attrs\":{\"content\":\"\\u001b[31mpre-styled\\u001b[0m\",\"align\":\"start\"},\"children\":[]}",
+      "expectedOutput": "{\"type\":\"raw\",\"attrs\":{\"content\":\"\\u001b[31mpre-styled\\u001b[0m\",\"align\":\"start\",\"wrap\":true},\"children\":[]}",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

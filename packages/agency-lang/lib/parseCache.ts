@@ -36,7 +36,9 @@ type ParseCacheEntry = {
   program: AgencyProgram;
 };
 
-const cache: Record<string, ParseCacheEntry> = {};
+// Null-prototype: keyed by (prefixed) file paths, matching the repo's other
+// string-keyed registries (e.g. lib/optimize/registry.ts).
+const cache: Record<string, ParseCacheEntry> = Object.create(null);
 
 const stats = { hits: 0, misses: 0 };
 

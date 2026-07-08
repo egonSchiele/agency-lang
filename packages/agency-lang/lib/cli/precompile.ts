@@ -60,7 +60,9 @@ export function groupTestSources(
   baseConfig: AgencyConfig,
   testJsonFiles: string[],
 ): PrecompileGroup[] {
-  const groups: Record<string, PrecompileGroup> = {};
+  // Null-prototype: keyed by dir paths (see lib/optimize/registry.ts for the
+  // house pattern on string-keyed registries).
+  const groups: Record<string, PrecompileGroup> = Object.create(null);
   for (const testJsonFile of testJsonFiles) {
     const sourceFile = path
       .resolve(testJsonFile)
@@ -80,6 +82,11 @@ export function groupTestSources(
     const group = (groups[label] ??= {
       label,
       config,
+      // JSON.stringify is order-stable here: every config passes through
+      // AgencyConfigSchema.safeParse (loadConfigSafe), and zod rebuilds the
+      // object in SCHEMA shape order, not input order — so semantically
+      // identical configs always serialize identically. Guarded by the
+      // "configKey is key-order independent" test.
       configKey: JSON.stringify(config),
       files: [],
     });
@@ -91,7 +98,9 @@ export function groupTestSources(
 export function findCrossConfigConflicts(
   groups: { label: string; configKey: string; modules: string[] }[],
 ): { module: string; labels: string[] }[] {
-  const touchedBy: Record<string, { configKey: string; label: string }[]> = {};
+  // Null-prototype: keyed by absolute module paths.
+  const touchedBy: Record<string, { configKey: string; label: string }[]> =
+    Object.create(null);
   for (const group of groups) {
     for (const module of group.modules) {
       (touchedBy[module] ??= []).push({

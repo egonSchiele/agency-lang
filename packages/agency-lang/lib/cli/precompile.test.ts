@@ -110,6 +110,30 @@ describe("groupTestSources", () => {
     expect(groups[0].files).toEqual([path.join(root, "live/main.agency")]);
   });
 
+  test("configKey is key-order independent", () => {
+    // Same config content, different key order in the two agency.json
+    // files. JSON.stringify would produce different strings; the group
+    // keys must still match so the dirs are config-compatible.
+    const root = writeTree({
+      a: {
+        "main.agency": TRIVIAL,
+        "main.test.json": TEST_JSON,
+        "agency.json": '{"verbose": true, "observability": false}',
+      },
+      b: {
+        "main.agency": TRIVIAL,
+        "main.test.json": TEST_JSON,
+        "agency.json": '{"observability": false, "verbose": true}',
+      },
+    });
+    const groups = groupTestSources({}, [
+      path.join(root, "a/main.test.json"),
+      path.join(root, "b/main.test.json"),
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].configKey).toBe(groups[1].configKey);
+  });
+
   test("test files without a sibling .agency are excluded", () => {
     const root = writeTree({
       orphan: { "main.test.json": TEST_JSON },

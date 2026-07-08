@@ -1,0 +1,52 @@
+{
+  "searchPath": "/w/api.php?action=wbsearchentities&search=Andreessen%20Horowitz&language=en&format=json&limit=5",
+  "entityPath": "/wiki/Special:EntityData/Q42.json",
+  "queryPath": "/sparql?query=SELECT%20%3Fx%20WHERE%20%7B%20%3Fx%20wdt%3AP31%20wd%3AQ5%20%7D%20LIMIT%201&format=json",
+  "search": [
+    { "id": "Q4034010", "label": "Andreessen Horowitz", "description": "American venture capital firm", "url": "http://www.wikidata.org/entity/Q4034010" }
+  ],
+  "searchNull": [],
+  "cvEntity": "Q5",
+  "cvString": "hello",
+  "cvMono": "Bonjour",
+  "cvTime": "+1952-03-11T00:00:00Z",
+  "cvQuantity": "+1.96",
+  "cvCoord": "51.5,-0.1",
+  "cvNovalue": "",
+  "entity": {
+    "id": "Q42",
+    "label": "Douglas Adams",
+    "description": "English writer and humorist",
+    "aliases": ["Douglas Noel Adams"],
+    "claims": {
+      "P31": ["Q5"],
+      "P569": ["+1952-03-11T00:00:00Z"],
+      "P856": ["http://www.douglasadams.com/"]
+    }
+  },
+  "bindings": [
+    { "item": "http://www.wikidata.org/entity/Q5", "itemLabel": "human" }
+  ],
+  "entityFinalizeUnknown": "Wikidata returned no entity for Q999",
+  "searchFinalizeErr": "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): boom",
+  "queryFinalizeErr": "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): boom",
+  "errorMsg": "Wikidata request failed (WDQS rate-limits and requires a descriptive User-Agent): boom",
+  "mockSearch": [
+    { "id": "Q4034010", "label": "Andreessen Horowitz", "description": "American venture capital firm", "url": "http://www.wikidata.org/entity/Q4034010" }
+  ],
+  "mockEntity": {
+    "id": "Q42",
+    "label": "Douglas Adams",
+    "description": "English writer and humorist",
+    "aliases": ["Douglas Noel Adams"],
+    "claims": {
+      "P31": ["Q5"],
+      "P569": ["+1952-03-11T00:00:00Z"],
+      "P856": ["http://www.douglasadams.com/"]
+    }
+  },
+  "mockEntityUnknown": "GOT_FAILURE",
+  "mockQuery": [
+    { "item": "http://www.wikidata.org/entity/Q5", "itemLabel": "human" }
+  ]
+}

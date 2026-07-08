@@ -1,0 +1,6 @@
+[
+  { "urlPattern": "www\\.wikidata\\.org/w/api\\.php.*wbsearchentities", "returnFile": "sample-search.json" },
+  { "url": "https://www.wikidata.org/wiki/Special:EntityData/Q42.json", "returnFile": "sample-entity.json" },
+  { "url": "https://www.wikidata.org/wiki/Special:EntityData/Q999999999.json", "return": { "entities": {} } },
+  { "urlPattern": "query\\.wikidata\\.org/sparql", "returnFile": "sample-sparql.json" }
+]

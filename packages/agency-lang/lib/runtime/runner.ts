@@ -573,7 +573,16 @@ export class Runner {
   async thread(
     id: number,
     method: "create" | "createSubthread",
-    opts: ThreadStepOpts,
+    // Codegen emits opts as a thunk (`async () => (<opts>)`) so its value
+    // expressions are evaluated ONLY after the halt/skip guards below. If a
+    // preceding `return` halted the runner, the steps that assign the locals
+    // those expressions reference are skipped, so evaluating them eagerly here
+    // would dereference an unset local and throw. Evaluating lazily lets the
+    // early return win. A bare object is still accepted for direct runtime
+    // callers (tests); only a function means "thunk".
+    optsArg:
+      | ThreadStepOpts
+      | (() => ThreadStepOpts | Promise<ThreadStepOpts>),
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     // Single canonical signature; `prettyPrint.ts` always emits an
@@ -585,6 +594,8 @@ export class Runner {
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
+
+    const opts = typeof optsArg === "function" ? await optsArg() : optsArg;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
@@ -845,7 +856,18 @@ export class Runner {
 
   async loop(
     id: number,
-    items: any[] | Record<string, any>,
+    // The iterable is a thunk (codegen emits `async () => <expr>`) so its
+    // expression is evaluated ONLY after the halt/skip guards below. If a
+    // preceding `return` halted the runner, the steps that would assign the
+    // iterable's backing locals are skipped, so eagerly evaluating the
+    // expression here would dereference an unset local and throw. Evaluating
+    // lazily lets the early return win. A bare value is still accepted for
+    // direct runtime callers (tests); only a function means "thunk", since an
+    // iterable can never legitimately be a function.
+    items:
+      | any[]
+      | Record<string, any>
+      | (() => any[] | Record<string, any> | Promise<any[] | Record<string, any>>),
     // Second arg is the numeric index for arrays, or the value for records.
     callback: (item: any, second: any, runner: Runner) => Promise<void>,
   ): Promise<void> {
@@ -855,6 +877,8 @@ export class Runner {
     if (await this.maybeDebugHook(id)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
+    const items_ = typeof items === "function" ? await items() : items;
 
     const iterKey =
       this.path.length === 0
@@ -869,10 +893,10 @@ export class Runner {
     // simply do nothing rather than crash mid-flow.
     let iterable: any[];
     let isRecord = false;
-    if (Array.isArray(items)) {
-      iterable = items;
-    } else if (items != null && typeof items === "object") {
-      iterable = Object.keys(items);
+    if (Array.isArray(items_)) {
+      iterable = items_;
+    } else if (items_ != null && typeof items_ === "object") {
+      iterable = Object.keys(items_);
       isRecord = true;
     } else {
       iterable = [];
@@ -892,7 +916,7 @@ export class Runner {
         // numeric index; for records it is the value at the current key. The
         // first callback arg is the element (array) or the key (record).
         const item = iterable[i];
-        const second = isRecord ? (items as Record<string, any>)[item] : i;
+        const second = isRecord ? (items_ as Record<string, any>)[item] : i;
         await this.runInScope(() => callback(item, second, this));
       } finally {
         this.path.pop();

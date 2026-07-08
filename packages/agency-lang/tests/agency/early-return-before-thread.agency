@@ -1,0 +1,50 @@
+// Regression test (sibling of early-return-before-loop): an early `return`
+// inside an `if` must skip a following `thread` block whose named-arg opts
+// reference a local that the skipped code would have assigned.
+//
+// `runner.thread` received its opts object eagerly, so the opts expressions
+// (`label: d.name`) were evaluated even after the halt — dereferencing the
+// never-assigned (because skipped) local and throwing. The opts are now a
+// thunk evaluated inside the halt guard, so the early return wins.
+//
+// Two paths are exercised:
+//   makeThread("x") -> "early": the halt path. A regression that
+//       re-eager-evaluates the opts throws here (`d` is skipped/undefined).
+//   runsThread -> "worker": the normal path. The thunked opts MUST actually
+//       be evaluated so the created thread carries label `d.name` == "worker",
+//       read back via listThreads(false). Guards against a regression where
+//       the opts thunk is never resolved (label dropped -> "no-label").
+
+import { listThreads } from "std::thread"
+
+def makeThread(t: string): string {
+  if (t == "x") {
+    return "early"
+  }
+  const d = {
+    name: "worker"
+  }
+  thread(label: d.name) {
+    print("in thread")
+  }
+  return "late"
+}
+
+node earlyReturn(): string {
+  return makeThread("x")
+}
+
+node runsThread(): string {
+  makeThread("y")
+  const all = listThreads(false)
+  if (isSuccess(all)) {
+    let found = "no-label"
+    for (info in all.value) {
+      if (info.label == "worker") {
+        found = "worker"
+      }
+    }
+    return found
+  }
+  return "list-failed"
+}

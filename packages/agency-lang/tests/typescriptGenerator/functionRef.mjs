@@ -521,7 +521,7 @@ await callHook({
       await runner.step(1, async (runner) => {
 __stack.locals.result = [];
       });
-      await runner.loop(2, __stack.args.items, async (item, _, runner) => {
+      await runner.loop(2, async () => __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 await __callMethod(__stack.locals.result, "push", {
             type: "positional",

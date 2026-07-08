@@ -530,7 +530,7 @@ await callHook({
       await runner.step(1, async (runner) => {
 __stack.locals.result = 1;
       });
-      await runner.loop(2, Array.from({length: 21 - 2}, (_, __i) => __i + 2), async (i, _, runner) => {
+      await runner.loop(2, async () => Array.from({length: 21 - 2}, (_, __i) => __i + 2), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(lcm, {
             type: "positional",

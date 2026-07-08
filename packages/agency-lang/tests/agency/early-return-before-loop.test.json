@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "nodeName": "earlyReturnArray",
+      "description": "Early return must skip a following array for-loop whose iterable (d.nums) is a skipped local, rather than eagerly evaluating it and throwing.",
+      "input": "",
+      "expectedOutput": "\"early\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runsArray",
+      "description": "Normal path: the thunked array iterable must actually be iterated, summing 1+2+3 -> late-6. Guards against a never-evaluated thunk (empty iterable -> late-0).",
+      "input": "",
+      "expectedOutput": "\"late-6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "earlyReturnRange",
+      "description": "Early return must skip a following range() for-loop whose bound (d.n, lowered into Array.from) is a skipped local, rather than eagerly evaluating it and throwing.",
+      "input": "",
+      "expectedOutput": "\"early\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runsRange",
+      "description": "Normal path: the thunked range() iterable must actually be iterated, summing 0+1+2 -> range-3. Guards against a never-evaluated thunk (empty iterable -> range-0).",
+      "input": "",
+      "expectedOutput": "\"range-3\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "earlyReturnRecord",
+      "description": "Early return must skip a following record for-loop whose iterable (d.scores) is a skipped local, rather than eagerly evaluating it and throwing.",
+      "input": "",
+      "expectedOutput": "\"early\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runsRecord",
+      "description": "Normal path: the thunked record iterable must actually be iterated by key, summing values 1+2+3 -> record-6. Guards against a never-evaluated thunk (empty iterable -> record-0).",
+      "input": "",
+      "expectedOutput": "\"record-6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

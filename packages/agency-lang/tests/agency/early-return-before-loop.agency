@@ -1,0 +1,93 @@
+// Regression test: an early `return` inside an `if` must skip ALL
+// subsequent statements, including a `for` loop whose iterable is
+// backed by a local that the skipped code would have assigned.
+//
+// The generated code does not use a JS `return` to leave the function;
+// it sets a `halted` flag that makes later steps no-ops. The for-loop's
+// iterable expression was previously passed to `runner.loop` eagerly, so
+// it was evaluated even after the halt — dereferencing the (never
+// assigned, because skipped) local and throwing. The iterable is now a
+// thunk evaluated inside the halt guard, so the early return wins.
+//
+// Covers all three `for`-iterable codegen forms, each of which embeds a
+// different throwing sub-expression in the eager position:
+//   - array   : `d.nums`                (plain iterable)
+//   - range   : `Array.from({length: d.n - 0}, ...)`   (range() lowering)
+//   - record  : `d.scores`              (object iterated by key)
+//
+// For each form, two paths are exercised:
+//   f("x") -> "early": the halt path. A regression that re-eager-evaluates
+//             the iterable throws here (the local `d` is skipped/undefined).
+//   f("y") -> a summed value: the normal path. The loop MUST actually iterate
+//             the thunked iterable; a regression where the thunk is never
+//             evaluated yields an empty iterable and a zero sum.
+
+def loopArray(t: string): string {
+  if (t == "x") {
+    return "early"
+  }
+  const d = {
+    nums: [1, 2, 3]
+  }
+  let total = 0
+  for (n in d.nums) {
+    total = total + n
+  }
+  return "late-" + total
+}
+
+def loopRange(t: string): string {
+  if (t == "x") {
+    return "early"
+  }
+  const d = {
+    n: 3
+  }
+  let total = 0
+  for (i in range(d.n)) {
+    total = total + i
+  }
+  return "range-" + total
+}
+
+def loopRecord(t: string): string {
+  if (t == "x") {
+    return "early"
+  }
+  const d = {
+    scores: {
+      a: 1,
+      b: 2,
+      c: 3
+    }
+  }
+  let total = 0
+  for (k, v in d.scores) {
+    total = total + v
+  }
+  return "record-" + total
+}
+
+node earlyReturnArray(): string {
+  return loopArray("x")
+}
+
+node runsArray(): string {
+  return loopArray("y")
+}
+
+node earlyReturnRange(): string {
+  return loopRange("x")
+}
+
+node runsRange(): string {
+  return loopRange("y")
+}
+
+node earlyReturnRecord(): string {
+  return loopRecord("x")
+}
+
+node runsRecord(): string {
+  return loopRecord("y")
+}

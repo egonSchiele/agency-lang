@@ -209,7 +209,7 @@ await callHook({
       await runner.step(2, async (runner) => {
 __stack.locals.items = [`a`, `b`, `c`];
       });
-      await runner.loop(3, __stack.locals.items, async (item, _, runner) => {
+      await runner.loop(3, async () => __stack.locals.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
             type: "positional",
@@ -228,7 +228,7 @@ if (hasInterrupts(__funcResult)) {
       await runner.step(4, async (runner) => {
 //  Range-based for loop
       });
-      await runner.loop(5, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
+      await runner.loop(5, async () => Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
             type: "positional",
@@ -250,7 +250,7 @@ if (hasInterrupts(__funcResult)) {
       await runner.step(7, async (runner) => {
 __stack.locals.names = [`alice`, `bob`];
       });
-      await runner.loop(8, __stack.locals.names, async (name, index, runner) => {
+      await runner.loop(8, async () => __stack.locals.names, async (name, index, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
             type: "positional",

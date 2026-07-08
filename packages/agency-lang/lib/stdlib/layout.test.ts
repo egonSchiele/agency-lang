@@ -140,6 +140,18 @@ describe("wrapText", () => {
     ]);
   });
 
+  test("a blank line inside an active style span is self-contained", () => {
+    // The empty middle line reopens+resets the carried style (never dropped)
+    // and the style still continues on the next line.
+    expect(_internal.wrapText("\x1b[31mfoo\n\nbar\x1b[0m", 10)).toEqual([
+      "\x1b[31mfoo\x1b[0m",
+      "\x1b[31m\x1b[0m",
+      "\x1b[31mbar\x1b[0m",
+    ]);
+    // With no active style, a blank line stays truly empty.
+    expect(_internal.wrapText("foo\n\nbar", 10)).toEqual(["foo", "", "bar"]);
+  });
+
   test("plain text and empty strings are unaffected by SGR handling", () => {
     expect(_internal.wrapText("hello world", 5)).toEqual(["hello", "world"]);
     expect(_internal.wrapText("hello  ", 10)).toEqual(["hello  "]);

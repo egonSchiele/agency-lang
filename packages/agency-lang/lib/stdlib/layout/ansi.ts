@@ -35,15 +35,18 @@ function updateActiveSgr(active: string, segment: string): string {
 // Make each wrapped segment self-contained: re-open the SGR state active at
 // its start and close with RESET when anything is still open at its end.
 // Each output is derived purely from its inputs so statement order can't
-// silently break it.
+// silently break it. A blank line inside an active style span is still made
+// self-contained (`<open><RESET>`) rather than special-cased to "" — this
+// keeps the invariant uniform (only a few zero-width bytes) so a style is
+// never dropped mid-span; when no style is active a blank line stays "".
 function reinjectSgr(segments: string[]): string[] {
   let active = "";
   return segments.map((segment) => {
-    if (segment === "") return "";
     const opened = active;
     const closed = updateActiveSgr(opened, segment);
     active = closed;
-    return opened + segment + (closed === "" ? "" : RESET);
+    const suffix = closed === "" ? "" : RESET;
+    return opened + segment + suffix;
   });
 }
 

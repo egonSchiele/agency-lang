@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { parseAgency } from "./parser.js";
+import { parseAgencyFileCached } from "./parseCache.js";
 import type { AgencyConfig } from "./config.js";
 import type {
   AgencyNode,
@@ -144,9 +144,8 @@ export class SymbolTable {
         console.log(`[SymbolTable] Processing ${absPath}`);
       }
 
-      const contents = fs.readFileSync(absPath, "utf-8");
-      const parseResult = parseAgency(
-        contents,
+      const parseResult = parseAgencyFileCached(
+        absPath,
         config,
         !isNonTemplatedStdlib(absPath),
       );

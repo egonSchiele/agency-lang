@@ -20,7 +20,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { AgencyProgram, AgencyNode } from "../types.js";
 import { AgencyConfig } from "../config.js";
-import { parseAgency } from "../parser.js";
+import { parseAgencyFileCached } from "../parseCache.js";
 import { SymbolTable } from "../symbolTable.js";
 import { resolveReExports } from "../preprocessors/resolveReExports.js";
 import {
@@ -252,9 +252,8 @@ function loadModule(
       `Error: Input file '${moduleId}' not found`,
     );
   }
-  const source = fs.readFileSync(moduleId, "utf-8");
   const applyTemplate = !isNonTemplatedStdlib(moduleId);
-  const result = parseAgency(source, config, applyTemplate);
+  const result = parseAgencyFileCached(moduleId, config, applyTemplate);
   if (!result.success) {
     throw new CompileClosureError(
       `Failed to parse ${moduleId}: ${result.message ?? "unknown parse error"}`,

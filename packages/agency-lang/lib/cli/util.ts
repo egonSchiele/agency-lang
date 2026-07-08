@@ -27,6 +27,8 @@ import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
+import type { FetchMock } from "../runtime/fetchMock.js";
+import { writeFetchMocksTempFile } from "./fetchMockResolve.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -225,6 +227,12 @@ type ExecuteNodeArgs = {
   // Reuse a precompiled `.js` sibling when present instead of recompiling.
   // See RunAgencyNodeArgs.preferCompiled.
   preferCompiled?: boolean;
+  // Fetch mocks for the deterministic fetch shim, already returnFile-inlined by
+  // the caller (lib/cli/fetchMockResolve.ts). When defined (even as an empty
+  // array — "no fetch may be made") the shim is installed via a temp file whose
+  // path is passed in AGENCY_FETCH_MOCKS_FILE, independent of the LLM
+  // deterministic flag. `undefined` means "no fetchMocks declared" — no shim.
+  fetchMocks?: FetchMock[];
 };
 
 export type RunAgencyNodeArgs = {
@@ -358,6 +366,7 @@ export async function runAgencyNode({
 export async function executeNodeAsync({
   llmMocks,
   useTestLLMProvider,
+  fetchMocks,
   ...rest
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   const useDeterministic =
@@ -365,7 +374,23 @@ export async function executeNodeAsync({
   const env: Record<string, string> = useDeterministic
     ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
     : {};
-  return runAgencyNode({ ...rest, env });
+
+  // Activate the fetch shim whenever fetchMocks is *defined* — an empty array
+  // means "this test may make no fetch calls" and must still install the shim
+  // (so any fetch throws), matching the llmMocks precedent. `undefined` means
+  // no fetchMocks were declared, so the shim stays off.
+  let fetchMocksCleanup: (() => void) | undefined;
+  if (fetchMocks) {
+    const { file, cleanup } = writeFetchMocksTempFile(fetchMocks);
+    env.AGENCY_FETCH_MOCKS_FILE = file;
+    fetchMocksCleanup = cleanup;
+  }
+
+  try {
+    return await runAgencyNode({ ...rest, env });
+  } finally {
+    fetchMocksCleanup?.();
+  }
 }
 
 export function safeUnlink(filePath: string) {

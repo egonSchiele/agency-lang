@@ -230,6 +230,36 @@ Keys are matched against the module making the `llm()` call: the exact module id
 
 The post-merge workflow ([`.github/workflows/test-with-llm.yml`](../../.github/workflows/test-with-llm.yml)) re-runs the same suites against the real OpenAI provider after a PR lands on `main`.
 
+### Deterministic fetch mode
+
+Independently of the LLM deterministic mode, you can mock HTTP responses. A `fetchMocks` array in a `.test.json` (file-level and/or per test case), or a `fetchMocks.json` file in an agency-js test directory, replaces **every** `fetch` in the agent subprocess — agency `fetch()`/`fetchJSON()`/`fetchMarkdown()`, internal stdlib TS, and interop TS — with canned responses. Any fetch that matches no entry throws and fails the test, so tests never hit the real network.
+
+```json
+{
+  "sourceFile": "weather.agency",
+  "fetchMocks": [
+    { "url": "https://api.weather.com/v1/*", "return": { "tempF": 72 } },
+    { "urlPattern": "wikipedia\\.org", "returnFile": "responses/dog.html", "status": 200 }
+  ],
+  "tests": [ { "nodeName": "getForecast", "input": "\"NYC\"", "expectedOutput": "72", "evaluationCriteria": [{ "type": "exact" }] } ]
+}
+```
+
+**Entry fields:**
+- Match: exactly one of `url` (exact, or `*` glob) or `urlPattern` (regex); optional `method`; optional request-body match via `body` (exact string, or JSON object = subset match) or `bodyPattern` (regex). All specified conditions are ANDed; the **first** matching entry wins and serves unlimited calls. Order same-URL entries most-specific-first (e.g. POSTs narrowed by `body`), with a body-less catch-all last.
+- Response: exactly one of `return` (string sent as-is; non-string JSON-stringified) or `returnFile` (path relative to the test file; contents read as UTF-8 text — ideal for large HTML/JSON); optional `status` (default 200) and `headers`.
+
+**Gotcha — `content-type` for `fetchMarkdown`:** a mock sets **no** `content-type` unless you supply one, and `fetchMarkdown` only converts HTML→markdown when the response's `content-type` includes `text/html`. So a `returnFile` HTML mock *without* `"headers": { "content-type": "text/html" }` silently returns the raw HTML instead of markdown. Set the header whenever a consumer branches on content-type:
+
+```json
+{ "url": "https://en.wikipedia.org/wiki/Dog", "returnFile": "responses/dog.html",
+  "headers": { "content-type": "text/html" } }
+```
+
+`fetchMocks` activate whenever present — you can mock the network with a real LLM, or mock the LLM with real network, in any combination. There is no on/off flag: to hit the real API instead, simply don't declare mocks for that test.
+
+**Relationship to interrupts/handlers:** fetch mocking substitutes only the network I/O primitive; it sits beneath Agency's interrupt/handler system and does not interact with it. If a function raises an interrupt before fetching and it is rejected, the fetch never runs — so the mock never runs either, identical to unmocked behavior. It is a test-only network switch, not a capability guard. (Note: the stdlib `fetch`/`fetchJSON`/`fetchMarkdown` raise an approval interrupt before fetching, so a test node must approve it — e.g. `fetch(url, path) with approve` — for the mock to be reached.)
+
 ### Creating test cases interactively
 
 The `fixtures` command walks you through creating test cases:

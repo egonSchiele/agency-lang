@@ -1,0 +1,12 @@
+import { fetch } from "std::http"
+
+// With an empty file-level `fetchMocks: []`, the shim must still be installed,
+// so this un-mocked fetch throws (no fall-through to the real network) and the
+// try/match surfaces it as "unmatched".
+node fetchUnmatched(): string {
+  const r = fetch("https://unmocked.example.com", "/x") with approve
+  if (r is success(v)) {
+    return v
+  }
+  return "unmatched"
+}

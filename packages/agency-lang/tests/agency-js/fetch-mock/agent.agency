@@ -1,0 +1,17 @@
+import { fetch, fetchJSON } from "std::http"
+
+node getData(): number {
+  const r = fetchJSON("https://api.example.com", "/data") with approve
+  if (r is success(v)) {
+    return v.answer
+  }
+  return 0
+}
+
+node getPage(): string {
+  const r = fetch("https://example.com", "/page.html") with approve
+  if (r is success(v)) {
+    return v
+  }
+  return "FAIL"
+}

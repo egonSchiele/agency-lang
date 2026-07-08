@@ -58,18 +58,18 @@ const SEC_DATA_BASE = "https://data.sec.gov/"
 const SEC_DATA_DOMAINS = ["data.sec.gov"]
 
 /** Build the submissions path for a 10-digit CIK. Pure — no network. */
-export safe def buildSubmissionsPath(cik10: string): string {
+safe def buildSubmissionsPath(cik10: string): string {
   return "submissions/CIK${cik10}.json"
 }
 
 /** Build the archive URL for a filing's primary document. Pure — no network. */
-export safe def buildArchiveUrl(cikNoPad: string, accessionNumber: string, primaryDocument: string): string {
+safe def buildArchiveUrl(cikNoPad: string, accessionNumber: string, primaryDocument: string): string {
   const accessionNoDashes = accessionNumber.replaceAll("-", "")
   return "https://www.sec.gov/Archives/edgar/data/${cikNoPad}/${accessionNoDashes}/${primaryDocument}"
 }
 
 /** Find a ticker in company_tickers.json and return its 10-digit CIK, or "" if absent. Pure. */
-export safe def parseTickerMap(raw: any, ticker: string): string {
+safe def parseTickerMap(raw: any, ticker: string): string {
   const rows = Object.values(raw ?? {})
   const want = ticker.toUpperCase()
   const row = find(rows) as r {
@@ -83,7 +83,7 @@ export safe def parseTickerMap(raw: any, ticker: string): string {
 }
 
 /** Reshape a submissions response into Filing[], optionally filtered by form and capped. Pure. */
-export safe def parseSubmissions(cik10: string, raw: any, formType: string, limit: number): Filing[] {
+safe def parseSubmissions(cik10: string, raw: any, formType: string, limit: number): Filing[] {
   const r: any = raw ?? {}
   const filings: any = r.filings ?? {}
   const recent: any = filings.recent ?? {}
@@ -116,7 +116,7 @@ export safe def parseSubmissions(cik10: string, raw: any, formType: string, limi
 }
 
 /** Finalize a submissions fetch into a Result, shared by both orchestrators. Pure. */
-export safe def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number, fetchResult: any): Result {
+safe def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number, fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
       if (((body.filings ?? null) == null)) {

@@ -32,9 +32,12 @@ How a tag is stored depends on the kind of value:
 - **Objects and arrays** are keyed by **reference**. Tagging one object does
   *not* tag a structurally-equal but distinct object.
 
-> Object and array tags are branch-local: they do not survive `fork`, `race`,
-> or `parallel` branches, or an interrupt/resume. Primitive (value) tags
-> survive both.
+> Tags on **plain objects and arrays** survive `fork`, `race`, `parallel`,
+> and interrupt/resume, the same as primitive (value) tags. A **spread or
+> structural copy** (`{...obj}`) produces an *untagged* new object — durability
+> follows the *same* object, not its copies. Tags on **frozen/sealed objects**
+> and **native-typed objects** (`Date`, `Map`, `Set`, …) are branch-local
+> (best-effort) — they can't carry the durable marker.
 
 ## Redaction
 

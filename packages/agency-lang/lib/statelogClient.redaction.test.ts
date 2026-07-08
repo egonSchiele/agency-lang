@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { runInTestContext } from "./runtime/asyncContext.js";
 import { RuntimeContext } from "./runtime/state/context.js";
 import { ThreadStore } from "./runtime/state/threadStore.js";
+import { deepClone } from "./runtime/utils.js";
 
 function makeStdoutCtx() {
   return new RuntimeContext({
@@ -88,6 +89,38 @@ describe("StatelogClient redaction", () => {
     });
     expect(printed(spy)).toContain('"format_version":1'); // infra field intact
     expect(printed(spy)).toContain("[REDACTED]"); // payload value redacted
+  });
+
+  it("redacts a durably-tagged object after it survives serialization", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const ctx = makeStdoutCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      const creds = { user: "alice", pass: "hunter2" };
+      execCtx.globals.setTag(creds, "redact", true); // durable (on-object)
+      // Round-trip the object the way fork/interrupt round-trip state:
+      const revived = deepClone(creds);
+      expect(revived).not.toBe(creds); // new identity
+      await execCtx.statelogClient.post({ event: "toolCall", args: { creds: revived } });
+    });
+    expect(printed(spy)).toContain("[REDACTED]");
+    expect(printed(spy)).not.toContain("hunter2");
+  });
+
+  it("redacts an out-of-frame post via the fallback globals (agentEnd path)", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const ctx = makeStdoutCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    execCtx.globals.markRedacted("sk-final");
+    // NO runInTestContext: this post fires outside any ALS frame, exactly like
+    // the result-bearing agentEnd event after the run's frame has ended. The
+    // client's fallbackGlobals (wired by createExecutionContext) must kick in.
+    await execCtx.statelogClient.post({
+      event: "agentEnd",
+      result: { apiKey: "sk-final" },
+    });
+    expect(printed(spy)).toContain("[REDACTED]");
+    expect(printed(spy)).not.toContain("sk-final");
   });
 
   it("redaction survives a fork-style globals clone (durable primitive path)", async () => {

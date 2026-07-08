@@ -56,3 +56,16 @@ node forkInheritsPrimitiveTag(): boolean {
   }
   return results[0]
 }
+
+node forkInheritsObjectTag(): boolean {
+  // Plain-object tags are durable too: the fork branch's state round-trip
+  // clones the object (new identity), but the tag rides ON the object via
+  // the TaggedReviver, so the branch still sees it.
+  const o = { id: 1 }
+  redact(o)
+  const results = fork(["only"]) as item {
+    const t = getTags(o)
+    return t["redact"] == true
+  }
+  return results[0]
+}

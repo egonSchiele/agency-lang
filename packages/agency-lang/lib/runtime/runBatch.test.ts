@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
+import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
 
 /** Build a synthetic Checkpoint-ish object (only the fields runBatch reads
  *  matter for these tests). */
@@ -700,5 +703,74 @@ describe("runBatch — mode 'race'", () => {
         children: [{ key: "c0", invoke: async () => 1 }],
       }),
     ).rejects.toThrow(/checkpoint\/mode mismatch/);
+  });
+});
+
+describe("runBatch — durable object-tag flag propagation", () => {
+  // A branch runs on a CLONE of the parent's GlobalStore; a durable tag set
+  // inside the branch rides back to the parent on the returned object (by
+  // reference), but the branch's presence flag would die with the clone. The
+  // settle hook must OR it into the parent so the parent's statelog redaction
+  // gate still fires.
+  function makeTagCtx() {
+    const { ctx } = makeCtx();
+    ctx.globals = new GlobalStore();
+    return ctx;
+  }
+
+  function batchOpts(ctx: any, invoke: () => Promise<unknown>) {
+    const { parentStack, parentFrame } = makeParent();
+    return {
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "all" as const,
+      children: [{ key: "c0", invoke }],
+    };
+  }
+
+  it("propagates the flag when a branch that tagged an object settles", async () => {
+    const ctx = makeTagCtx();
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      runBatch(
+        batchOpts(ctx, async () => {
+          // Runs inside the branch ALS frame → branch-local cloned store.
+          const branchGlobals = getRuntimeContext().globals;
+          expect(branchGlobals).not.toBe(ctx.globals);
+          branchGlobals.setTag({ secret: "s" }, "redact", true);
+          return "ok";
+        }),
+      ),
+    );
+    expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
+  });
+
+  it("propagates the flag even when the branch THROWS (parent may log the error payload)", async () => {
+    const ctx = makeTagCtx();
+    await expect(
+      runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        runBatch(
+          batchOpts(ctx, async () => {
+            getRuntimeContext().globals.setTag({ secret: "s" }, "redact", true);
+            throw new Error("branch failed");
+          }),
+        ),
+      ),
+    ).rejects.toThrow("branch failed");
+    expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
+  });
+
+  it("does not set the parent flag when the branch tagged nothing durable", async () => {
+    const ctx = makeTagCtx();
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      runBatch(
+        batchOpts(ctx, async () => {
+          getRuntimeContext().globals.setTag("prim", "redact", true);
+          return "ok";
+        }),
+      ),
+    );
+    expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(false);
   });
 });

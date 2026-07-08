@@ -217,6 +217,9 @@ export class RuntimeContext<T> {
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
+    // Out-of-frame posts (e.g. agentEnd) redact against the CURRENT top-level
+    // store — a getter because restore reassigns this.globals.
+    this.statelogClient.setFallbackGlobals(() => this.globals);
     this.checkpoints = new CheckpointStore(this.maxRestores);
     this.handlers = [];
     this.callbacks = {};
@@ -329,6 +332,9 @@ export class RuntimeContext<T> {
       ...this.statelogConfig,
       traceId: runId,
     });
+    // Out-of-frame posts (e.g. agentEnd) redact against the CURRENT top-level
+    // store — a getter because restore reassigns execCtx.globals.
+    execCtx.statelogClient.setFallbackGlobals(() => execCtx.globals);
     // Subprocess: nest this process's spans under the parent's
     // `subprocessRun` span (seeded by the bootstrap from the run/resume
     // instruction). The runId itself was already inherited by the caller

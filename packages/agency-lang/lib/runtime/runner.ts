@@ -1,11 +1,13 @@
 import { nanoid } from "nanoid";
-import { agencyStore } from "./asyncContext.js";
+import { __globals, agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
 import { RestoreSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
+import { makeRedactReplacer, REDACTED } from "./redactForStatelog.js";
 import { __pipeBind } from "./result.js";
+import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -52,14 +54,36 @@ const FORK_VALUE_CHAR_CAP = 4000;
  *  WITHOUT ever throwing — telemetry must not break execution. Returns:
  *  - `undefined` when there is no value (non-success outcome, or a value
  *    JSON can't represent, e.g. a function);
- *  - a deep JSON clone for normal small values (so it renders cleanly);
+ *  - a deep clone for normal small values (so it renders cleanly);
  *  - a truncated string for oversized values;
- *  - `"[unserializable]"` when stringification throws (e.g. a cycle). */
+ *  - `"[unserializable]"` when (de)serialization throws (e.g. a cycle).
+ *
+ *  Redaction happens HERE, during the stringify — not only at post() time.
+ *  The truncation branch returns a plain string, and post()'s redaction
+ *  replacer cannot see inside a string, so an oversized redact()ed branch
+ *  value would otherwise leak its first FORK_VALUE_CHAR_CAP chars into the
+ *  event. The redact check composes with the shared nativeTypeReplacer
+ *  (like deepClone) so untagged natives and non-redact tags still round-trip
+ *  intact for the small path. Reads the caller's store leniently: both call
+ *  sites run at the fork join inside the parent's ALS frame; with no frame
+ *  this degrades to tag-preserving cloning, which post() still redacts on
+ *  the un-truncated path. */
 export function safeStatelogValue(value: unknown): unknown {
   if (value === undefined) return undefined;
+  const globals = __globals();
+  const redact =
+    globals && globals.hasAnyTags() ? makeRedactReplacer(globals) : null;
+  const replacer = function (
+    this: unknown,
+    key: string,
+    val: unknown,
+  ): unknown {
+    if (redact && redact.call(this, key, val) === REDACTED) return REDACTED;
+    return nativeTypeReplacer.call(this, key, val);
+  };
   let json: string | undefined;
   try {
-    json = JSON.stringify(value);
+    json = JSON.stringify(value, replacer);
   } catch {
     return "[unserializable]";
   }
@@ -67,7 +91,13 @@ export function safeStatelogValue(value: unknown): unknown {
   if (json.length > FORK_VALUE_CHAR_CAP) {
     return json.slice(0, FORK_VALUE_CHAR_CAP) + "…[truncated]";
   }
-  return JSON.parse(json);
+  try {
+    return JSON.parse(json, nativeTypeReviver);
+  } catch {
+    // e.g. a FunctionRef whose registry entry is gone — telemetry must
+    // degrade, not throw.
+    return "[unserializable]";
+  }
 }
 
 /**

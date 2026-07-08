@@ -266,7 +266,11 @@ Use Agency execution tests (`tests/agency/`) and agency-js tests
   object shape and into the logs. Making object tags durable needs a custom
   replacer/reviver pair that preserves a hidden `__tags` across the round-trip
   (and re-hides it after redaction). Deferred to a follow-up PR (decided during
-  PR #447 review).
+  PR #447 review). **ADDRESSED** by
+  `2026-07-07-durable-object-tags-design.md` (+ its implementation plan):
+  a non-enumerable `Symbol` property carried through the shared reviver
+  machinery (`TaggedReviver`), durable for plain extensible objects/arrays,
+  `WeakMap` fallback for frozen/native-typed objects.
 - **Substring redaction**: scrub tagged secrets embedded in larger logged
   strings (thorough but O(secrets) per log; can mangle output).
 - **Additional special tags**: `pii`, etc., layered on the same mechanism.

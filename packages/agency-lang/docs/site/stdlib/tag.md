@@ -35,11 +35,11 @@ Note: object/array tags are branch-local — they do not survive `fork`/`race`/
 ### tag
 
 ```ts
-tag(value: any, key: string, val: any)
+tag(value: any, key: string, val: any): any
 ```
 
 Attach a tag to a value. Primitives are keyed by value; objects by
-  reference. `val` defaults to `true`.
+  reference. `val` defaults to `true`. Returns the value's current tags.
 
 **Parameters:**
 
@@ -49,7 +49,29 @@ Attach a tag to a value. Primitives are keyed by value; objects by
 | key | `string` |  |
 | val | `any` | true |
 
+**Returns:** `any`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L30))
+
+### setTags
+
+```ts
+setTags(value: any, tags: any): any
+```
+
+Attach multiple tags at once from a `{ key: value }` object. Returns the
+  value's current tags.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| value | `any` |  |
+| tags | `any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L36))
 
 ### getTags
 
@@ -57,7 +79,8 @@ Attach a tag to a value. Primitives are keyed by value; objects by
 getTags(value: any): any
 ```
 
-Return all tags on a value as an object, or an empty object if none.
+Return all tags on a value as an object, or an empty object if none. The
+  result is a shallow copy; nested tag values are shared references.
 
 **Parameters:**
 
@@ -67,16 +90,16 @@ Return all tags on a value as an object, or an empty object if none.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L42))
 
 ### redact
 
 ```ts
-redact(value: any)
+redact(value: any): any
 ```
 
 Mark a value so it is replaced with "[REDACTED]" in state logs. Shorthand
-  for tag(value, "redact", true).
+  for tag(value, "redact", true). Returns the value's current tags.
 
 **Parameters:**
 
@@ -84,4 +107,43 @@ Mark a value so it is replaced with "[REDACTED]" in state logs. Shorthand
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L41))
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L48))
+
+### removeTag
+
+```ts
+removeTag(value: any, key: string): any
+```
+
+Remove a single tag from a value. Returns the value's remaining tags.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| value | `any` |  |
+| key | `string` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L54))
+
+### removeAllTags
+
+```ts
+removeAllTags(value: any): any
+```
+
+Remove all tags from a value. Returns an empty object.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| value | `any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L59))

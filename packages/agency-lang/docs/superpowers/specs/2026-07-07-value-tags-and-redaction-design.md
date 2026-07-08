@@ -257,6 +257,16 @@ Use Agency execution tests (`tests/agency/`) and agency-js tests
 
 ## Follow-ups
 
+- **Durable object tags (custom serialization)**: today object/array (reference)
+  tags are branch-local — they don't survive a `fork` clone or interrupt/resume,
+  because object identity dies in the `toJSON`/`fromJSON` round-trip and a
+  `WeakMap` can't be serialized. Storing tags *on* the object (e.g. a hidden
+  `__tags` property) does **not** fix this on its own: a non-enumerable property
+  is dropped by `JSON.stringify`, and an enumerable one leaks into user-visible
+  object shape and into the logs. Making object tags durable needs a custom
+  replacer/reviver pair that preserves a hidden `__tags` across the round-trip
+  (and re-hides it after redaction). Deferred to a follow-up PR (decided during
+  PR #447 review).
 - **Substring redaction**: scrub tagged secrets embedded in larger logged
   strings (thorough but O(secrets) per log; can mangle output).
 - **Additional special tags**: `pii`, etc., layered on the same mechanism.

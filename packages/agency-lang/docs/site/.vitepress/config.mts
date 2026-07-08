@@ -128,7 +128,6 @@ export default defineConfig({
             { text: "Developer Tools", link: "/guide/developer-tools" },
             { text: "Debugging", link: "/guide/debugging" },
             { text: "Observability", link: "/guide/observability" },
-            { text: "Tags and Redaction", link: "/guide/tags" },
           ],
         },
 
@@ -158,6 +157,7 @@ export default defineConfig({
               link: "/guide/value-parameterized-types",
             },
             { text: "Memory", link: "/guide/memory" },
+            { text: "Tags and Redaction", link: "/guide/tags" },
           ],
         },
         {

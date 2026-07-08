@@ -9,12 +9,18 @@ The `std::tag` module lets you attach arbitrary tags to values and read them
 back anywhere in your program.
 
 ```ts
-import { tag, getTags, redact } from "std::tag"
+import { tag, setTags, getTags, removeTag, removeAllTags } from "std::tag"
 
-tag(x, "source", "user-upload")   // attach a key/value tag
-tag(x, "reviewed")                // value defaults to true
-const tags = getTags(x)           // { source: "user-upload", reviewed: true }
+tag(x, "source", "user-upload")        // attach a key/value tag
+tag(x, "reviewed")                     // value defaults to true
+setTags(x, { team: "growth", tier: 2 }) // attach several at once
+const tags = getTags(x)                // { source: "user-upload", reviewed: true, team: "growth", tier: 2 }
+removeTag(x, "reviewed")               // drop one tag
+removeAllTags(x)                       // drop them all
 ```
+
+Every function returns the value's current tags (an empty object once cleared),
+which doubles as a confirmation when one of these is used as an LLM tool.
 
 ## Value vs. reference semantics
 
@@ -46,12 +52,15 @@ def callApi(apiKey: string) {
 
 `redact(x)` is shorthand for `tag(x, "redact", true)`.
 
-Three limits to know:
+Four limits to know:
 
 - **Whole-value only.** A secret is redacted where it appears as a logged value
   on its own. A secret concatenated into a larger logged string (for example a
   URL query parameter) is *not* scrubbed — tag the exact string that gets
   logged.
+- **Values, never keys.** Redaction rewrites values, not object keys. A secret
+  used as a key (e.g. `{ "sk-...": {...} }`) still appears in the log verbatim —
+  tag the value, not the thing that becomes a key.
 - **State logs only.** Redaction governs what `std::statelog` records. It does
   not affect `print()` or other direct output.
 - **Not a secrecy guarantee.** Redaction is best-effort scrubbing of state-log

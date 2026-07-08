@@ -31,6 +31,45 @@ export type CompiledProgram = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L55))
 
+### SourceLocation
+
+```ts
+export type SourceLocation = {
+  line: number;
+  col: number;
+  start: number;
+  end: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L59))
+
+### TypeCheckDiagnostic
+
+```ts
+export type TypeCheckDiagnostic = {
+  severity: string;
+  message: string;
+  loc?: SourceLocation;
+  variableName?: string;
+  expectedType?: string;
+  actualType?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L66))
+
+### TypeCheckReport
+
+```ts
+export type TypeCheckReport = {
+  errors: TypeCheckDiagnostic[];
+  warnings: TypeCheckDiagnostic[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L75))
+
 ### AST
 
 A parsed Agency program, the value `parseAST` returns on success.

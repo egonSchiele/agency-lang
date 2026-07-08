@@ -56,14 +56,14 @@ export type CompiledProgram = {
   moduleId: string
 }
 
-type SourceLocation = {
+export type SourceLocation = {
   line: number;
   col: number;
   start: number;
   end: number
 }
 
-type TypeCheckDiagnostic = {
+export type TypeCheckDiagnostic = {
   severity: string;
   message: string;
   loc?: SourceLocation;
@@ -72,7 +72,7 @@ type TypeCheckDiagnostic = {
   actualType?: string
 }
 
-type TypeCheckReport = {
+export type TypeCheckReport = {
   errors: TypeCheckDiagnostic[];
   warnings: TypeCheckDiagnostic[]
 }

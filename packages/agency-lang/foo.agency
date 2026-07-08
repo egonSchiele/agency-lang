@@ -1,9 +1,8 @@
-import { enableMemory, remember } from "std::memory"
+import { diff } from "std::syntax"
+const file1 = read("testfile") with approve
+const file2 = read("testfile2") with approve
+
 node main() {
-  handle {
-    enableMemory({
-      dir: "./memtest"
-    })
-    remember("adit's favourite colour is blue")
-  } with approve
+  const res = diff(file1, file2, color: true)
+  print(res)
 }

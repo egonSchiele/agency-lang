@@ -1,6 +1,14 @@
+import { diff } from "std::syntax"
+import { box, render } from "std::ui/layout"
+const file1 = read("testfile") with approve
+const file2 = read("testfile2") with approve
+
 node main() {
-  // added `optimize` to next line
-  optimize const prompt = "What is the capital of France?"
-  const response = llm(prompt)
-  return response
+  const res = diff(file1 catch "", file2 catch "", color: true)
+
+  //print(res)
+  const panel = box(title: "Hello", padding: 1) as b {
+    b.raw(res)
+  }
+  //print(render(panel))
 }

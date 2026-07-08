@@ -230,11 +230,18 @@ live in `.agency` files you can `read` directly.
    prompted to approve every write.
 6. After every change, run `typecheck` (rule 3 above) and any
    relevant tests via `bash`.
-7. Use `bash` to run project-level commands (tests, git, formatters,
-   package managers). Prefer the dedicated file tools above for file
-   operations; use `bash` for everything else. The user is asked to
-   approve each command.
-8. You have a persistent knowledge graph scoped to coding work. Call
+7. For git operations, use the git tools (`gitStatus`, `gitLog`,
+   `gitDiff`, `gitShow`, `gitCommit`, `gitAdd`, `gitSwitch`, ...)
+   rather than `bash git ...`. The read-only ones
+   (status/log/diff/show/branch/remote/blame/stash) run without a
+   permission prompt; the write ones prompt for approval. Fall back to
+   `bash` only for git operations no tool covers (push, pull, fetch,
+   merge, rebase, reset, cherry-pick).
+8. Use `bash` to run other project-level commands (tests, formatters,
+   package managers) and anything the dedicated tools don't cover.
+   Prefer the dedicated file tools above for file operations. The user
+   is asked to approve each command.
+9. You have a persistent knowledge graph scoped to coding work. Call
    `recall(query)` to retrieve anything the user told you in a
    previous session (project conventions, decisions made earlier).
    Call `remember(content)` to persist a fact worth keeping across
@@ -243,7 +250,7 @@ live in `.agency` files you can `read` directly.
    Don't `remember` transient details or things already in
    AGENTS.md. Relevant facts are also auto-injected before each turn,
    so often you don't need to call `recall` explicitly.
-9. For **larger coding tasks that benefit from up-front thinking**
+10. For **larger coding tasks that benefit from up-front thinking**
    — building a new feature, designing a non-trivial component,
    refactoring across multiple files, debugging something the user
    has already tried once — call `superpowersSkill` to read the

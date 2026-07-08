@@ -1,4 +1,4 @@
-import { categoryIdToName, parseCategoryFilter, buildSearchPath, buildEntityPath, buildRelationshipsPath, buildConnectionsPath, parseEntity, parseEntities, parseRelationships, entityListFinalize, entityFinalize, relationshipsFinalize, littlesisError, littlesisSearch, littlesisRelationships } from "std::data/people/littlesis"
+import test { categoryIdToName, parseCategoryFilter, buildSearchPath, buildEntityPath, buildRelationshipsPath, buildConnectionsPath, parseEntity, parseEntities, parseRelationships, entityListFinalize, entityFinalize, relationshipsFinalize, littlesisError, littlesisSearch, littlesisRelationships } from "std::data/people/littlesis"
 import { Network } from "std::capabilities"
 
 // Compile-time capability assertion: littlesisSearch raises std::littlesis + std::http::fetchJSON,

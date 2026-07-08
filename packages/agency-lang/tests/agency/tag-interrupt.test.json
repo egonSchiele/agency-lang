@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "objectTagSurvivesResume",
+      "description": "Durable object tag survives the interrupt/resume serialization round-trip",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "confirm" }]
+    },
+    {
+      "nodeName": "arrayTagSurvivesResume",
+      "description": "Durable array tag survives the interrupt/resume serialization round-trip",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "confirm" }]
+    },
+    {
+      "nodeName": "primitiveTagSurvivesResume",
+      "description": "Primitive (value) tag survives the interrupt/resume serialization round-trip",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "confirm" }]
+    }
+  ]
+}

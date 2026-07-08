@@ -84,15 +84,67 @@ describe("wrapText", () => {
       .toEqual(["\x1b[31mhello\x1b[0m", "world"]);
   });
 
-  test("breaks a long colored word at the column boundary while keeping CSI escapes intact", () => {
-    // The break must happen at a visual-cell boundary (width=4), not
-    // mid-escape. Both pieces of the broken token must keep the
-    // CSI bytes that landed inside their span.
+  test("breaks a long colored word at the column boundary, self-closing each line", () => {
     expect(_internal.wrapText("\x1b[31mabcdefghij\x1b[0m", 4)).toEqual([
-      "\x1b[31mabcd",
-      "efgh",
-      "ij\x1b[0m",
+      "\x1b[31mabcd\x1b[0m",
+      "\x1b[31mefgh\x1b[0m",
+      "\x1b[31mij\x1b[0m",
     ]);
+  });
+
+  test("reopens the active style on each wrapped line and resets at its end", () => {
+    expect(_internal.wrapText("\x1b[2mAAAA BBBB CCCC\x1b[0m", 9)).toEqual([
+      "\x1b[2mAAAA BBBB\x1b[0m",
+      "\x1b[2mCCCC\x1b[0m",
+    ]);
+  });
+
+  test("accumulates stacked codes and reopens ALL of them on continuation lines", () => {
+    // No reset in the input: both fg (31) and bold (1) stay active and must
+    // both be reopened on every continuation line. Kills a keep-last-code bug.
+    expect(_internal.wrapText("\x1b[31m\x1b[1mred bold text here", 8)).toEqual([
+      "\x1b[31m\x1b[1mred bold\x1b[0m",
+      "\x1b[31m\x1b[1mtext\x1b[0m",
+      "\x1b[31m\x1b[1mhere\x1b[0m",
+    ]);
+  });
+
+  test("a full reset (\\x1b[0m and \\x1b[m) clears the carried style", () => {
+    expect(_internal.wrapText("\x1b[31mred one\x1b[0m two three", 7)).toEqual([
+      "\x1b[31mred one\x1b[0m",
+      "two",
+      "three",
+    ]);
+    // Empty-params reset `\x1b[m` also clears.
+    expect(_internal.wrapText("\x1b[31mfoo\x1b[m bar", 3)).toEqual([
+      "\x1b[31mfoo\x1b[m",
+      "bar",
+    ]);
+  });
+
+  test("carries style across a literal newline boundary too", () => {
+    // Style opened on one source line, reset two lines later: each emitted
+    // visual line is still self-contained.
+    expect(_internal.wrapText("\x1b[31mfoo\nbar\x1b[0m", 10)).toEqual([
+      "\x1b[31mfoo\x1b[0m",
+      "\x1b[31mbar\x1b[0m",
+    ]);
+  });
+
+  test("non-SGR CSI (cursor/erase) passes through inline and is never reopened", () => {
+    // \x1b[2K is a CSI but not an SGR (ends in K). It must not enter the
+    // active-style state or be replayed on later lines.
+    expect(_internal.wrapText("\x1b[2Kfoo bar", 3)).toEqual([
+      "\x1b[2Kfoo",
+      "bar",
+    ]);
+  });
+
+  test("plain text and empty strings are unaffected by SGR handling", () => {
+    expect(_internal.wrapText("hello world", 5)).toEqual(["hello", "world"]);
+    expect(_internal.wrapText("hello  ", 10)).toEqual(["hello  "]);
+    expect(_internal.wrapText("", 5)).toEqual([""]);
+    expect(_internal.wrapText("hello", 0)).toEqual([]);
   });
 });
 

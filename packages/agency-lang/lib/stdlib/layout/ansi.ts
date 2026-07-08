@@ -16,9 +16,41 @@ export function stripAnsi(s: string): string {
   return s.replace(CSI_RE, "");
 }
 
+// Matches SGR sequences only (CSI … `m`), not other CSI like cursor/erase.
+const SGR_RE = /\x1b\[[\d;]*m/g;
+
+// Track the SGR run active since the last full reset. `\x1b[0m` / `\x1b[m`
+// clears it; any other SGR sequence accumulates. (v1: partial attribute-off
+// codes and compound resets like `\x1b[0;31m` are treated as accumulating —
+// see the layout design doc.)
+function updateActiveSgr(active: string, segment: string): string {
+  let result = active;
+  for (const match of segment.matchAll(SGR_RE)) {
+    const params = match[0].slice(CSI.length, -1);
+    result = params === "" || params === "0" ? "" : result + match[0];
+  }
+  return result;
+}
+
+// Make each wrapped segment self-contained: re-open the SGR state active at
+// its start and close with RESET when anything is still open at its end.
+// Each output is derived purely from its inputs so statement order can't
+// silently break it.
+function reinjectSgr(segments: string[]): string[] {
+  let active = "";
+  return segments.map((segment) => {
+    if (segment === "") return "";
+    const opened = active;
+    const closed = updateActiveSgr(opened, segment);
+    active = closed;
+    return opened + segment + (closed === "" ? "" : RESET);
+  });
+}
+
 export function wrapText(content: string, width: number): string[] {
   if (width <= 0) return [];
-  return content.split("\n").flatMap((line) => wrapSingleLine(line, width));
+  const segments = content.split("\n").flatMap((line) => wrapSingleLine(line, width));
+  return reinjectSgr(segments);
 }
 
 function wrapSingleLine(line: string, width: number): string[] {

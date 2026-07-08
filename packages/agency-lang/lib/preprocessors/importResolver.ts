@@ -53,22 +53,35 @@ export function resolveImports(
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
-    if (node.type !== "importStatement" || !isAgencyImport(node.modulePath)) {
+    if (node.type !== "importStatement") {
       newNodes.push(node);
       continue;
     }
 
-    // Per-statement gate for test-only imports. Must run before symbol
-    // lookup so a pkg:: rejection does not depend on the package resolving.
+    // Per-statement gate for test-only imports. Must run BEFORE the
+    // non-Agency short-circuit below — otherwise `import test { x } from
+    // "./foo.ts"` (or a bare npm path) would slip through untouched, making
+    // the keyword a silent no-op instead of an error — and before symbol
+    // lookup, so a pkg:: rejection does not depend on the package resolving.
     if (node.testOnly) {
       if (isPkgImport(node.modulePath)) {
         throw new Error(
           "`import test` cannot be used with pkg:: imports; it is only for first-party (std:: and local) modules.",
         );
       }
+      if (!isAgencyImport(node.modulePath)) {
+        throw new Error(
+          "`import test` cannot be used with TypeScript or npm imports; it is only for first-party (std:: and local) modules.",
+        );
+      }
       if (!allowTestImports) {
         throw new Error("`import test` is only allowed under the test harness.");
       }
+    }
+
+    if (!isAgencyImport(node.modulePath)) {
+      newNodes.push(node);
+      continue;
     }
 
     const importedFilePath = resolveAgencyImportPath(

@@ -407,4 +407,30 @@ describe("resolveImports", () => {
       }),
     ).toThrow(/cannot be used with pkg:: imports/);
   });
+
+  it("import test is rejected for TypeScript imports even in test mode", () => {
+    // Non-Agency paths skip the resolver entirely for plain imports; the
+    // testOnly gate must still fire so the keyword never silently no-ops.
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "./foo.ts")],
+    };
+    const symbolTable = table({});
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency", {
+        allowTestImports: true,
+      }),
+    ).toThrow(/cannot be used with TypeScript or npm imports/);
+  });
+
+  it("import test is rejected for bare npm imports outside test mode too", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["debounce"], "lodash")],
+    };
+    const symbolTable = table({});
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency"),
+    ).toThrow(/cannot be used with TypeScript or npm imports/);
+  });
 });

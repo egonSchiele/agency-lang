@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compileSource } from "./compile.js";
+import { compileSource, typeCheckSource } from "./compile.js";
 
 describe("compileSource", () => {
   it("compiles valid Agency source to JavaScript", () => {
@@ -231,5 +231,16 @@ node main() { return 1 }
     if (!result.success) {
       expect(result.errors[0]).toContain("only allowed under the test harness");
     }
+  });
+
+  // typeCheckSource is agent-reachable via std::agency typecheck, so it must
+  // agree with execution: import test code that run() rejects must not
+  // typecheck as valid. (The LSP allows it independently for editor DX.)
+  it("rejects import test under typeCheckSource (agent-reachable typecheck agrees with execution)", () => {
+    const source = `
+import test { littlesisFetch } from "std::data/people/littlesis"
+node main() { return 1 }
+`;
+    expect(() => typeCheckSource(source)).toThrow(/only allowed under the test harness/);
   });
 });

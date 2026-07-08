@@ -98,30 +98,3 @@ export { safe search } from "std::wikipedia"
 export { safe search, fetch } from "std::wikipedia"
 ```
 
-## Test-only imports
-
-Tests sometimes need to call a module's internal helpers directly — parsing
-functions, path builders, and other pieces that are not part of the module's
-public API. Instead of exporting those helpers just for the test (which puts
-them in the docs and makes them callable from any program), use
-`import test { … }`:
-
-```ts
-import test { buildSearchPath, parseEntity } from "std::data/people/littlesis"
-```
-
-`import test` works like a normal named import but may also name symbols that
-are **not** exported. Its rules:
-
-- It is honored only under the test harness (`agency test`). In a normal
-  program, `agency run`/`agency compile`, or the `run()` subprocess sandbox it
-  is a hard error.
-- It only works for first-party modules — `std::` and local `.agency` files.
-  It cannot be used with `pkg::` imports.
-- Exported symbols may appear in the list too; `import test` is a superset of
-  `import`.
-
-Non-exported helpers stay out of the module's generated documentation and
-cannot be reached by normal imports, so the module's public surface is exactly
-what it exports.
-

@@ -58,9 +58,11 @@ node forkInheritsPrimitiveTag(): boolean {
 }
 
 node forkInheritsObjectTag(): boolean {
-  // Plain-object tags are durable too: the fork branch's state round-trip
-  // clones the object (new identity), but the tag rides ON the object via
-  // the TaggedReviver, so the branch still sees it.
+  // Pins ON-OBJECT tag storage: the fork branch reads the parent's live `o`
+  // by reference (no serialization on the happy path), but through a CLONED
+  // GlobalStore — the old per-store WeakMap would miss here. Serialization
+  // durability itself is pinned by tag-interrupt.agency, where resume revives
+  // the object from checkpoint JSON.
   const o = { id: 1 }
   redact(o)
   const results = fork(["only"]) as item {

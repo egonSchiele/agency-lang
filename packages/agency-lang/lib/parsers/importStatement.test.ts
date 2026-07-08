@@ -320,6 +320,59 @@ describe("importStatmentParser", () => {
   it("should throw on missing parts", () => {
     expect(() => importStatmentParser("import foo from;")).toThrow();
   });
+
+  // Test-only imports: `import test { ... }`
+  it('parses: import test { foo } from "std::x" with testOnly true', () => {
+    const result = importStatmentParser('import test { foo } from "std::x"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
+        ],
+        modulePath: "std::x",
+        isAgencyImport: true,
+        testOnly: true,
+      });
+    }
+  });
+
+  it('parses: import { test } from "./m.agency" as a symbol named test (no testOnly key)', () => {
+    const result = importStatmentParser('import { test } from "./m.agency"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("testOnly" in result.result).toBe(false); // not null, not false — absent
+      const first = result.result.importedNames[0];
+      expect(first.type).toBe("namedImport");
+      if (first.type === "namedImport") {
+        expect(first.importedNames).toEqual(["test"]);
+      }
+    }
+  });
+
+  it('parses: import test from "./t.ts" as a default import named test', () => {
+    const result = importStatmentParser('import test from "./t.ts"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("testOnly" in result.result).toBe(false);
+      expect(result.result.importedNames).toEqual([
+        { type: "defaultImport", importedNames: "test" },
+      ]);
+    }
+  });
+
+  it('parses: import test, { bar } from "./x.ts" as default(test) + named(bar)', () => {
+    const result = importStatmentParser('import test, { bar } from "./x.ts"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("testOnly" in result.result).toBe(false);
+      expect(result.result.importedNames).toEqual([
+        { type: "defaultImport", importedNames: "test" },
+        { type: "namedImport", importedNames: ["bar"], safeNames: [], aliases: {} },
+      ]);
+    }
+  });
 });
 
 describe("importNodeStatmentParser", () => {

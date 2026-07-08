@@ -1,0 +1,13 @@
+{
+  "sourceFile": "fetchMockEmpty.agency",
+  "fetchMocks": [],
+  "tests": [
+    {
+      "nodeName": "fetchUnmatched",
+      "input": "",
+      "expectedOutput": "\"unmatched\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "an empty fetchMocks [] still installs the shim, so every fetch throws — no fall-through to real network"
+    }
+  ]
+}

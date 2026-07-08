@@ -2,7 +2,6 @@ import { parseAgency } from "@/parser.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { getNodesOfType } from "@/utils/node.js";
 import fs from "fs";
-import os from "os";
 import prompts from "prompts";
 import {
   execFileAsync,
@@ -23,7 +22,7 @@ import path from "path";
 import { compile, loadConfig } from "./commands.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
-import { resolveFetchMocks } from "./fetchMockResolve.js";
+import { resolveFetchMocks, writeFetchMocksTempFile } from "./fetchMockResolve.js";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -567,7 +566,7 @@ async function runSingleTest(
   config: AgencyConfig,
   testFile: string,
   testCase: TestCase,
-  fetchMocks: FetchMock[],
+  fetchMocks: FetchMock[] | undefined,
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
@@ -682,7 +681,7 @@ async function runTestWithRetries(
   config: AgencyConfig,
   testFile: string,
   testCase: TestCase,
-  fetchMocks: FetchMock[],
+  fetchMocks: FetchMock[] | undefined,
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
@@ -801,11 +800,14 @@ async function runTestFile(
         continue;
       }
 
-      const fetchMocks = resolveFetchMocks(
-        tests.fetchMocks,
-        testCase.fetchMocks,
-        path.dirname(testFile),
-      );
+      // Preserve "not declared" (undefined -> no shim) vs "declared, possibly
+      // empty" ([] -> shim installed, every fetch throws). Only resolve when at
+      // least one level declares fetchMocks.
+      const fetchMocksDeclared =
+        tests.fetchMocks !== undefined || testCase.fetchMocks !== undefined;
+      const fetchMocks = fetchMocksDeclared
+        ? resolveFetchMocks(tests.fetchMocks, testCase.fetchMocks, path.dirname(testFile))
+        : undefined;
       const timeoutMs = resolveTimeoutMs(testCase, tests);
       const startTime = performance.now();
       const outcome = await runTestWithRetries(
@@ -1043,19 +1045,19 @@ async function runTsTestDir(
       mocksEnv = { AGENCY_LLM_MOCKS: mocks };
     }
 
-    // Fetch mocks activate independently of the LLM deterministic flag: their
-    // mere presence turns the fetch shim on. returnFile paths resolve relative
-    // to the test directory. Resolved mocks go through a temp FILE (not an env
-    // value) so a large returnFile body can't exceed the exec ARG_MAX limit.
-    let fetchMocksTmpDir: string | undefined;
+    // Fetch mocks activate independently of the LLM deterministic flag: the
+    // mere presence of fetchMocks.json turns the fetch shim on (an empty array
+    // means "no fetch may be made"). returnFile paths resolve relative to the
+    // test directory. Resolved mocks go through a temp FILE (not an env value)
+    // so a large returnFile body can't exceed the exec ARG_MAX limit.
+    let fetchMocksCleanup: (() => void) | undefined;
     const fetchMocksFile = path.join(dir, "fetchMocks.json");
     if (fs.existsSync(fetchMocksFile)) {
       const raw = JSON.parse(fs.readFileSync(fetchMocksFile, "utf-8")) as FetchMock[];
       const resolved = resolveFetchMocks(undefined, raw, dir);
-      fetchMocksTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-fetchmocks-"));
-      const resolvedFile = path.join(fetchMocksTmpDir, "mocks.json");
-      fs.writeFileSync(resolvedFile, JSON.stringify(resolved));
-      mocksEnv.AGENCY_FETCH_MOCKS_FILE = resolvedFile;
+      const { file, cleanup } = writeFetchMocksTempFile(resolved);
+      mocksEnv.AGENCY_FETCH_MOCKS_FILE = file;
+      fetchMocksCleanup = cleanup;
     }
 
     const testFile = "test.js";
@@ -1072,9 +1074,7 @@ async function runTsTestDir(
       log(color.red(`  ✗ Test script execution failed: ${e}`));
       return { success: false, dir };
     } finally {
-      if (fetchMocksTmpDir) {
-        fs.rmSync(fetchMocksTmpDir, { recursive: true, force: true });
-      }
+      fetchMocksCleanup?.();
     }
 
     if (!fs.existsSync(resultFile)) {

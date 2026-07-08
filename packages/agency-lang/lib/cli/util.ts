@@ -4,7 +4,6 @@ const onCancel = () => {
   process.exit(0);
 };
 import fs, { readFileSync } from "fs";
-import os from "os";
 import path from "path";
 import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
@@ -29,6 +28,7 @@ import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
+import { writeFetchMocksTempFile } from "./fetchMockResolve.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -228,9 +228,10 @@ type ExecuteNodeArgs = {
   // See RunAgencyNodeArgs.preferCompiled.
   preferCompiled?: boolean;
   // Fetch mocks for the deterministic fetch shim, already returnFile-inlined by
-  // the caller (lib/cli/fetchMockResolve.ts). Written to a temp file whose path
-  // is passed via AGENCY_FETCH_MOCKS_FILE whenever non-empty — independent of the
-  // LLM deterministic flag.
+  // the caller (lib/cli/fetchMockResolve.ts). When defined (even as an empty
+  // array — "no fetch may be made") the shim is installed via a temp file whose
+  // path is passed in AGENCY_FETCH_MOCKS_FILE, independent of the LLM
+  // deterministic flag. `undefined` means "no fetchMocks declared" — no shim.
   fetchMocks?: FetchMock[];
 };
 
@@ -374,20 +375,21 @@ export async function executeNodeAsync({
     ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
     : {};
 
-  let fetchMocksDir: string | undefined;
-  if (fetchMocks && fetchMocks.length > 0) {
-    fetchMocksDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-fetchmocks-"));
-    const mocksFile = path.join(fetchMocksDir, "mocks.json");
-    fs.writeFileSync(mocksFile, JSON.stringify(fetchMocks));
-    env.AGENCY_FETCH_MOCKS_FILE = mocksFile;
+  // Activate the fetch shim whenever fetchMocks is *defined* — an empty array
+  // means "this test may make no fetch calls" and must still install the shim
+  // (so any fetch throws), matching the llmMocks precedent. `undefined` means
+  // no fetchMocks were declared, so the shim stays off.
+  let fetchMocksCleanup: (() => void) | undefined;
+  if (fetchMocks) {
+    const { file, cleanup } = writeFetchMocksTempFile(fetchMocks);
+    env.AGENCY_FETCH_MOCKS_FILE = file;
+    fetchMocksCleanup = cleanup;
   }
 
   try {
     return await runAgencyNode({ ...rest, env });
   } finally {
-    if (fetchMocksDir) {
-      fs.rmSync(fetchMocksDir, { recursive: true, force: true });
-    }
+    fetchMocksCleanup?.();
   }
 }
 

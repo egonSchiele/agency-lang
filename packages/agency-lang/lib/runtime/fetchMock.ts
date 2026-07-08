@@ -35,7 +35,7 @@ type CompiledMock = {
 // path-segment-aware and won't cross `/`, but URL globs must (e.g.
 // `https://api.example.com/v1/*` matching `.../v1/anything/here`).
 function globToRegExp(glob: string): RegExp {
-  const parts = glob.split("*").map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const parts = glob.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return new RegExp("^" + parts.join(".*") + "$");
 }
 
@@ -55,27 +55,27 @@ function deepSubset(subset: unknown, actual: unknown): boolean {
     if (!Array.isArray(actual) || subset.length !== actual.length) {
       return false;
     }
-    return subset.every((v, i) => deepSubset(v, actual[i]));
+    return subset.every((element, index) => deepSubset(element, actual[index]));
   }
   if (Array.isArray(actual)) {
     return false;
   }
-  return Object.entries(subset as Record<string, unknown>).every(([k, v]) =>
-    deepSubset(v, (actual as Record<string, unknown>)[k]),
+  return Object.entries(subset as Record<string, unknown>).every(([key, value]) =>
+    deepSubset(value, (actual as Record<string, unknown>)[key]),
   );
 }
 
-function buildBodyMatcher(m: FetchMock): ((raw: string) => boolean) | undefined {
-  if (m.bodyPattern !== undefined) {
-    const re = new RegExp(m.bodyPattern);
-    return (raw) => re.test(raw);
+function buildBodyMatcher(mock: FetchMock): ((raw: string) => boolean) | undefined {
+  if (mock.bodyPattern !== undefined) {
+    const bodyRe = new RegExp(mock.bodyPattern);
+    return (raw) => bodyRe.test(raw);
   }
-  if (typeof m.body === "string") {
-    const want = m.body;
+  if (typeof mock.body === "string") {
+    const want = mock.body;
     return (raw) => raw === want;
   }
-  if (m.body !== undefined) {
-    const want = m.body;
+  if (mock.body !== undefined) {
+    const want = mock.body;
     return (raw) => {
       let parsed: unknown;
       try {
@@ -92,31 +92,31 @@ function buildBodyMatcher(m: FetchMock): ((raw: string) => boolean) | undefined 
   return undefined;
 }
 
-function compileMock(m: FetchMock, i: number): CompiledMock {
-  const where = `fetchMock[${i}]`;
-  const hasUrl = m.url !== undefined;
-  const hasPattern = m.urlPattern !== undefined;
+function compileMock(mock: FetchMock, index: number): CompiledMock {
+  const where = `fetchMock[${index}]`;
+  const hasUrl = mock.url !== undefined;
+  const hasPattern = mock.urlPattern !== undefined;
   if (hasUrl === hasPattern) {
     throw new Error(`${where}: exactly one of "url" or "urlPattern" is required.`);
   }
-  const urlRe = hasUrl ? globToRegExp(m.url as string) : new RegExp(m.urlPattern as string);
+  const urlRe = hasUrl ? globToRegExp(mock.url as string) : new RegExp(mock.urlPattern as string);
 
-  if (m.body !== undefined && m.bodyPattern !== undefined) {
+  if (mock.body !== undefined && mock.bodyPattern !== undefined) {
     throw new Error(`${where}: set at most one of "body" or "bodyPattern".`);
   }
 
-  if (m.return === undefined) {
+  if (mock.return === undefined) {
     throw new Error(`${where}: a "return" body is required (returnFile is inlined to "return" by the runner).`);
   }
-  const body = typeof m.return === "string" ? m.return : JSON.stringify(m.return);
+  const body = typeof mock.return === "string" ? mock.return : JSON.stringify(mock.return);
 
   return {
-    matchUrl: (u: string) => urlRe.test(u),
-    method: m.method?.toUpperCase(),
-    matchBody: buildBodyMatcher(m),
+    matchUrl: (candidate: string) => urlRe.test(candidate),
+    method: mock.method?.toUpperCase(),
+    matchBody: buildBodyMatcher(mock),
     body,
-    status: m.status ?? 200,
-    headers: m.headers,
+    status: mock.status ?? 200,
+    headers: mock.headers,
   };
 }
 
@@ -145,6 +145,11 @@ function extractMethod(input: any, init: any): string {
 }
 
 export function installFetchMock(mocks: FetchMock[]): () => void {
+  if (!Array.isArray(mocks)) {
+    throw new Error(
+      "installFetchMock: expected an array of fetch mocks (AGENCY_FETCH_MOCKS_FILE must hold a JSON array).",
+    );
+  }
   const compiled = mocks.map(compileMock);
   const real = globalThis.fetch;
 
@@ -179,20 +184,20 @@ export function installFetchMock(mocks: FetchMock[]): () => void {
       return text;
     };
 
-    for (const m of compiled) {
-      if (!m.matchUrl(url)) {
+    for (const mock of compiled) {
+      if (!mock.matchUrl(url)) {
         continue;
       }
-      if (m.method && m.method !== method) {
+      if (mock.method && mock.method !== method) {
         continue;
       }
-      if (m.matchBody && !m.matchBody(await getBody())) {
+      if (mock.matchBody && !mock.matchBody(await getBody())) {
         continue;
       }
-      return new Response(m.body, { status: m.status, headers: m.headers });
+      return new Response(mock.body, { status: mock.status, headers: mock.headers });
     }
 
-    const declared = mocks.map((x) => x.url ?? x.urlPattern).join(", ");
+    const declared = mocks.map((mock) => mock.url ?? mock.urlPattern).join(", ");
     throw new Error(
       `No fetchMock matched ${method} ${url}. Declared: [${declared}]. Add an entry to fetchMocks.`,
     );

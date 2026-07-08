@@ -88,6 +88,14 @@ describe("installFetchMock — url/method matching", () => {
   it("errors on config: missing return", () => {
     expect(() => installFetchMock([{ url: "https://api/x" }])).toThrow(/"return" body is required/);
   });
+
+  it("errors with a clear message when the mocks value is not an array", () => {
+    // Guards against a corrupt/hand-set AGENCY_FETCH_MOCKS_FILE holding a
+    // non-array JSON value (otherwise the failure is a cryptic "map is not a
+    // function").
+    expect(() => installFetchMock({ url: "https://api/x", return: "x" } as any))
+      .toThrow(/expected an array of fetch mocks/);
+  });
 });
 
 describe("installFetchMock — body matching", () => {

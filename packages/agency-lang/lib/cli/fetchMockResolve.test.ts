@@ -15,7 +15,12 @@ describe("resolveFetchMocks", () => {
       [{ url: "a", return: "test" }],
       dir,
     );
-    expect(out.map((m) => m.return)).toEqual(["test", "file"]);
+    expect(out.map((mock) => mock.return)).toEqual(["test", "file"]);
+  });
+
+  it("throws (pointing at the test file) when an entry has neither return nor returnFile", () => {
+    expect(() => resolveFetchMocks(undefined, [{ url: "a" }], dir))
+      .toThrow(/needs a "return" or a "returnFile"/);
   });
 
   it("inlines returnFile contents into return and strips returnFile", () => {

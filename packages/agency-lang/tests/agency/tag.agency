@@ -1,4 +1,4 @@
-import { tag, getTags, redact } from "std::tag"
+import { tag, setTags, getTags, redact, removeTag, removeAllTags } from "std::tag"
 
 node valueKeyed(): string {
   const x = "hello"
@@ -26,6 +26,25 @@ node objectByReference(): boolean {
   // `undefined` (not `null`), so `bTags["src"] == null` would be false even
   // when the tag is absent. Assert the tag did not leak by value instead.
   return shared == "upload" && bTags["src"] != "upload"
+}
+
+node mutateTags(): boolean {
+  const x = "mkey"
+  setTags(x, { a: 1, b: 2 })
+  removeTag(x, "a")
+  const afterRemove = getTags("mkey")
+  // b survives, a is gone (missing key reads back as absent, not == 1).
+  const removedOne = afterRemove["b"] == 2 && afterRemove["a"] != 1
+  removeAllTags(x)
+  const cleared = getTags("mkey")
+  const removedAll = cleared["b"] != 2
+  return removedOne && removedAll
+}
+
+node tagReturnsCurrentTags(): boolean {
+  // tag() returns the value's current tags (LLM-tool confirmation).
+  const returned = tag("rkey", "phase", "final")
+  return returned["phase"] == "final"
 }
 
 node forkInheritsPrimitiveTag(): boolean {

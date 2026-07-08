@@ -152,6 +152,24 @@ describe("wrapText", () => {
     expect(_internal.wrapText("foo\n\nbar", 10)).toEqual(["foo", "", "bar"]);
   });
 
+  test("reopens a 24-bit / multi-param SGR code on continuation lines", () => {
+    // The real codes the renderer emits (sgr() -> \x1b[38;2;r;g;bm) carry
+    // semicolons; they must be treated as one SGR unit and fully reopened.
+    expect(_internal.wrapText("\x1b[38;2;1;2;3mfoo bar baz", 7)).toEqual([
+      "\x1b[38;2;1;2;3mfoo bar\x1b[0m",
+      "\x1b[38;2;1;2;3mbaz\x1b[0m",
+    ]);
+  });
+
+  test("after a reset, only the new color is reopened on the next line", () => {
+    // red closes, green opens, then wrap: the second line reopens green only
+    // (not the reset-away red). Exercises clear-then-accumulate.
+    expect(_internal.wrapText("\x1b[31mred\x1b[0m \x1b[32mgreen text", 9)).toEqual([
+      "\x1b[31mred\x1b[0m \x1b[32mgreen\x1b[0m",
+      "\x1b[32mtext\x1b[0m",
+    ]);
+  });
+
   test("plain text and empty strings are unaffected by SGR handling", () => {
     expect(_internal.wrapText("hello world", 5)).toEqual(["hello", "world"]);
     expect(_internal.wrapText("hello  ", 10)).toEqual(["hello  "]);
@@ -198,6 +216,17 @@ describe("resolveSizes", () => {
     // content-driven (no defaultWidth → not stretched to fill).
     expect(resolved.children[0].attrs.wrapWidth).toBe(20);
     expect(resolved.children[1].attrs.wrapWidth).toBe(20);
+  });
+
+  test("row subtracts gap from the ceiling it caps children at", () => {
+    const tree = node("row", { width: 20, gap: 2 }, [
+      node("text", { content: "a" }),
+      node("text", { content: "b" }),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // inner = 20 − (2 children − 1) * gap 2 = 18.
+    expect(resolved.children[0].attrs.wrapWidth).toBe(18);
+    expect(resolved.children[1].attrs.wrapWidth).toBe(18);
   });
 
   test("unsized box wraps content at the available width (shrink-to-fit ceiling)", () => {
@@ -1618,6 +1647,14 @@ describe("raw", () => {
     expect(preserved.children[0].attrs.wrapWidth).toBeUndefined();
   });
 
+  test("raw also degrades to no wrapWidth when the ceiling clamps to 0", () => {
+    // sizeRaw shares wrapWidthFor's ≤0 guard: over-padded unsized box → the
+    // raw content stays present (overflow), not annotated to wrap at 0.
+    const tree = node("box", { padding: 20 }, [node("raw", { content: "hello" })]);
+    const resolved = _internal.resolveSizes(tree, { cols: 30, rows: 24 });
+    expect(resolved.children[0].attrs.wrapWidth).toBeUndefined();
+  });
+
   test("raw wraps content to the box exactly like text, adding no styling", () => {
     const out = render(
       node("box", { width: 12, padding: 1 }, [
@@ -1659,6 +1696,17 @@ describe("raw", () => {
       return active;
     };
     for (const line of out.split("\n")) expect(openAtEnd(line)).toBe("");
+
+    // Background colors must also reset before the border/padding, so the
+    // frame never inherits the bg on wrapped rows.
+    const bg = _render(
+      node("box", { width: 16, padding: 1 }, [
+        node("raw", { content: "\x1b[41malpha beta gamma delta epsilon\x1b[0m" }),
+      ]),
+      true, 80, 24,
+    );
+    expect(bg).toContain("\x1b[41m");
+    for (const line of bg.split("\n")) expect(openAtEnd(line)).toBe("");
   });
 
   test("raw right-aligns short wrapped lines when align:end", () => {

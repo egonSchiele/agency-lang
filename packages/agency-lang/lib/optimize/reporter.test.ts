@@ -32,6 +32,7 @@ function makeTarget(overrides: Partial<OptimizeTarget> & { id: string; name: str
     absoluteFile: "/abs/foo.agency",
     scope: "bar",
     valueKind: "string",
+    declaredType: null,
     value: "xyz",
     ...overrides,
   };
@@ -48,6 +49,7 @@ const systemTarget = makeTarget({
 const targetSet: OptimizeTargetSet = {
   baseDir: "/abs",
   entryFile: "foo.agency",
+  typeAliases: {},
   files: {},
   targets: [promptTarget, systemTarget],
 };

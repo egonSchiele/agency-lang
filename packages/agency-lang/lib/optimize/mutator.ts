@@ -9,6 +9,7 @@ import { executeNodeAsync } from "@/cli/util.js";
 import type { Input } from "@/eval/runTypes.js";
 import { getAgentsDir } from "@/importPaths.js";
 
+import { describeConstraint } from "./constraint.js";
 import type { OptimizeMutationDiagnostic } from "./sourceMutator.js";
 import type { OptimizeTarget } from "./targets.js";
 import type { MutationProposal } from "./types.js";
@@ -73,6 +74,7 @@ export function renderTargetsSection(targets: OptimizeTarget[]): string {
     .map((target) => [
       `- id: ${target.id}`,
       `  kind: ${target.kind}`,
+      `  type: ${describeConstraint(target)}`,
       `  current value: ${JSON.stringify(target.value)}`,
     ].join("\n"))
     .join("\n");

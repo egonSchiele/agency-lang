@@ -35,6 +35,8 @@ node mutatePrompt(
   - "operations": one record per target you change. Each record needs "target" and "kind" copied exactly from the list above, "op" set to "replaceInitializer", "value" with the replacement as Agency source text including the surrounding quotes, and "rationale" with one sentence on what you changed. The replacement must preserve every interpolation placeholder the current value uses (no drops, no additions).
   - "rationale": 2-4 sentences explaining the overall change.
 
+  Each target lists a "type:" describing its allowed values. Your replacement must fit that type exactly - for a list of choices pick one of them, for a boolean use true or false, for a record keep the same fields and field types. Typed values must be self-contained: no interpolation placeholders at all. Only "free text" targets accept arbitrary prose (and those keep their existing placeholders, per the rule above).
+
   Write a general instruction that works for any input of this kind. Do NOT hard-code the specific expected answers shown in the feedback into the value — an answer that only works for these inputs will fail on held-out validation inputs.
 
   ${diagnostics}

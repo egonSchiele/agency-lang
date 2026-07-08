@@ -587,3 +587,67 @@ export function getAllVariablesInBodyArray(body: AgencyNode[]) {
   }
   return results;
 }
+
+/**
+ * The parser represents `null` as a variableName node — there is no
+ * `{ type: "null" }` in parser output. Single point of truth for the check
+ * so no caller ever tests `expr.type === "null"` (dead code).
+ */
+export function isNullLiteral(expr: Expression): boolean {
+  return expr.type === "variableName" && expr.value === "null";
+}
+
+/**
+ * True when the expression is a self-contained literal: string, number,
+ * boolean, null, or an object/array composed of literals all the way down.
+ * Used by the optimizer to gate targets and proposed values — the
+ * typechecker alone cannot enforce it, because an unknown bare identifier
+ * (top-level or nested in a container) synthesizes to `any` and passes
+ * typechecking unflagged.
+ */
+export function isLiteralExpression(expr: Expression): boolean {
+  switch (expr.type) {
+    case "string":
+    case "multiLineString":
+    case "number":
+    case "boolean":
+      return true;
+    case "agencyArray":
+      return expr.items.every((item) =>
+        item.type === "splat" ? isLiteralExpression(item.value) : isLiteralExpression(item),
+      );
+    case "agencyObject":
+      return expr.entries.every((entry) => {
+        if ("type" in entry && entry.type === "splat") return isLiteralExpression(entry.value);
+        const kv = entry as { value: Expression };
+        return isLiteralExpression(kv.value);
+      });
+    default:
+      return isNullLiteral(expr);
+  }
+}
+
+/**
+ * True when a literal expression contains a string interpolation anywhere —
+ * at top level or nested inside object/array literals. Structural traversal
+ * only — no type semantics.
+ */
+export function hasInterpolation(expr: Expression): boolean {
+  switch (expr.type) {
+    case "string":
+    case "multiLineString":
+      return expr.segments.some((segment) => segment.type !== "text");
+    case "agencyArray":
+      return expr.items.some((item) =>
+        item.type === "splat" ? hasInterpolation(item.value) : hasInterpolation(item),
+      );
+    case "agencyObject":
+      return expr.entries.some((entry) => {
+        if ("type" in entry && entry.type === "splat") return hasInterpolation(entry.value);
+        const kv = entry as { value: Expression };
+        return hasInterpolation(kv.value);
+      });
+    default:
+      return false;
+  }
+}

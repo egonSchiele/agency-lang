@@ -8,8 +8,9 @@ import { BaseGrader } from "../grading/baseGrader.js";
 import { Scorecard } from "../grading/scorecard.js";
 import type { Grade, GraderInput, GraderOptions } from "../grading/types.js";
 import { GreedyReflective, type GreedyDeps } from "./greedyReflective.js";
-import type { OptimizeMutationPreview } from "../sourceMutator.js";
-import type { OptimizeTargetSet } from "../targets.js";
+import type { ProposeMutationArgs } from "../mutator.js";
+import { defaultPreview, type OptimizeMutationPreview } from "../sourceMutator.js";
+import { discoverOptimizeTargets, type OptimizeTargetSet } from "../targets.js";
 
 class ValueGrader extends BaseGrader {
   protected readonly defaultName = "value";
@@ -31,8 +32,9 @@ describe("GreedyReflective (pointwise)", () => {
   const fakeSource = (): OptimizeTargetSet => ({
     baseDir: src,
     entryFile: "agent.agency",
+    typeAliases: {},
     files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "x", sha256: "x" } },
-    targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi" }],
+    targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", declaredType: null }],
   });
 
   const deps = (): GreedyDeps => ({
@@ -201,5 +203,85 @@ describe("GreedyReflective (pointwise)", () => {
       gatesPassed: false,
     }]);
     expect(failed.gatedObjective()).toBe(0);
+  });
+});
+
+describe("typed target end-to-end guarantee", () => {
+  let root: string;
+  let src: string;
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "greedy-typed-"));
+    src = path.join(root, "src");
+    fs.mkdirSync(src);
+    fs.writeFileSync(
+      path.join(src, "agent.agency"),
+      `type Status = "pass" | "fail"\n\noptimize const status: Status = "pass"\n\nnode main() {\n  return status\n}\n`,
+    );
+  });
+  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  const BAD_OPERATION = {
+    target: "agent.agency:global:status",
+    kind: "variable",
+    op: "replaceInitializer",
+    value: `"exploded"`,
+  } as const;
+
+  it("never accepts an out-of-shape value (preview level, atomic)", () => {
+    const set = discoverOptimizeTargets(path.join(src, "agent.agency"), { baseDir: src });
+
+    const bad = defaultPreview(set, [BAD_OPERATION]);
+    expect(bad.diagnostics[0]?.code).toBe("type-mismatch");
+    expect(bad.files).toEqual({}); // atomic: no candidate files on rejection
+
+    const good = defaultPreview(set, [{ ...BAD_OPERATION, value: `"fail"` }]);
+    expect(good.diagnostics).toEqual([]);
+    expect(good.files["agent.agency"]).toContain(`"fail"`);
+  });
+
+  it("feeds type-mismatch diagnostics back to the proposer and never writes the bad value", async () => {
+    const proposeCalls: ProposeMutationArgs[] = [];
+    const propose = vi.fn(async (args: ProposeMutationArgs) => {
+      proposeCalls.push(args);
+      return { rationale: "try exploded", operations: [BAD_OPERATION] };
+    });
+    const opt = new GreedyReflective(
+      // 0.5 keeps the baseline below the max objective so the iteration runs.
+      { graders: [new ValueGrader(() => 0.5)], iterations: 1, config: {}, runsDir: root, runId: "typed-e2e", writeback: false },
+      {
+        runInput: async () => ({ output: "out", recordPath: "" }),
+        discover: () => discoverOptimizeTargets(path.join(src, "agent.agency"), { baseDir: src }),
+        propose,
+        // no preview override: the REAL defaultPreview runs the shape check
+      },
+    );
+
+    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
+
+    // Retried up to the attempt cap, every attempt rejected by the shape check.
+    expect(propose).toHaveBeenCalledTimes(3);
+    expect(result.validationFailedCount).toBe(1);
+    expect(result.championIter).toBe("baseline");
+
+    // The rejection reason flows back into the retry prompt inputs.
+    expect(proposeCalls[1]?.diagnostics?.[0]?.code).toBe("type-mismatch");
+    expect(proposeCalls[1]?.diagnostics?.[0]?.message).toContain("exploded");
+
+    // No .agency file anywhere under the run root ever carries the bad
+    // value — covers every path that materializes candidate/workspace
+    // sources, not a specific directory layout. (Diagnostics JSON may
+    // legitimately mention it; agent source must not.)
+    const agencyFiles: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".agency")) agencyFiles.push(full);
+      }
+    };
+    walk(root);
+    for (const file of agencyFiles) {
+      expect(fs.readFileSync(file, "utf8")).not.toContain("exploded");
+    }
   });
 });

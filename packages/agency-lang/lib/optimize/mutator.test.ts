@@ -14,6 +14,7 @@ const targets: OptimizeTarget[] = [
     scope: "global",
     name: "systemPrompt",
     valueKind: "string",
+    declaredType: null,
     value: "be brief",
   },
   {
@@ -24,6 +25,7 @@ const targets: OptimizeTarget[] = [
     scope: "bar",
     name: "prompt",
     valueKind: "string",
+    declaredType: null,
     value: "Classify ${text}",
   },
 ];
@@ -166,5 +168,44 @@ describe("proposeMutation", () => {
         process.env.AGENCY_LLM_MOCKS = previousMocks;
       }
     }
+  });
+});
+
+describe("renderTargetsSection type descriptions", () => {
+  it("describes a union target's allowed values and a boolean target", () => {
+    const typed: OptimizeTarget[] = [
+      {
+        id: "a.agency:global:status",
+        kind: "variable",
+        file: "a.agency",
+        absoluteFile: "/abs/a.agency",
+        scope: "global",
+        name: "status",
+        valueKind: "string",
+        value: "pass",
+        declaredType: `"pass" | "fail"`,
+      },
+      {
+        id: "a.agency:global:enabled",
+        kind: "variable",
+        file: "a.agency",
+        absoluteFile: "/abs/a.agency",
+        scope: "global",
+        name: "enabled",
+        valueKind: "literal",
+        value: "false",
+        declaredType: "boolean",
+      },
+    ];
+
+    const sections = buildMutatorSections({ targets: typed, inputs: [], history: "" });
+
+    expect(sections.targets).toContain(`type: "pass" | "fail"`);
+    expect(sections.targets).toContain("type: boolean");
+  });
+
+  it("labels freeform and unconstrained targets", () => {
+    const sections = buildMutatorSections({ targets, inputs: [], history: "" });
+    expect(sections.targets.toLowerCase()).toContain("free text");
   });
 });

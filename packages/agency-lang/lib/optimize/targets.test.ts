@@ -266,7 +266,7 @@ node main() {
     );
   });
 
-  it("rejects unsupported initializer values", () => {
+  it("requires an annotation for non-string literal initializers (v1)", () => {
     const dir = makeTempDir();
     const entry = writeAgency(dir, "foo.agency", `
 node main() {
@@ -275,17 +275,112 @@ node main() {
 `);
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
-      /only string and multiline string initializers are supported/i,
+      /needs a type annotation/i,
     );
   });
 
-  it("rejects optimize declarations with non-string initializers", () => {
+  it("rejects non-literal initializers", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", "optimize const limit = 42\n");
+    const entry = writeAgency(dir, "foo.agency", `
+def f(): number {
+  return 1
+}
+optimize const x = f()
+node main() {}
+`);
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
-      /Unsupported optimize target foo\.agency:global:limit/,
+      /must be a literal/i,
     );
+  });
+
+  it("exposes aliases from the whole import closure, including imported ones", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    writeAgency(dir, "types.agency", `export type Status = "pass" | "fail"\n`);
+    const entry = writeAgency(dir, "agent.agency", `
+import { Status } from "./types.agency"
+optimize const status: Status = "pass"
+node main() {}
+`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+
+    expect(targetSet.typeAliases.Status?.body.type).toBe("unionType");
+  });
+
+  it("keeps a bare string target freeform (constraint null)", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", `optimize const p = "hi \${x}"\nnode main() {}\n`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const target = targetSet.targets.find((candidate) => candidate.name === "p")!;
+
+    expect(target.declaredType).toBeNull();
+    expect(target.valueKind).toBe("string");
+    expect(target.value).toBe("hi ${x}");
+  });
+
+  it("treats a plain string annotation as freeform", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", `optimize const p: string = "hi"\nnode main() {}\n`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+
+    expect(targetSet.targets[0].declaredType).toBeNull();
+  });
+
+  it("constrains an annotated boolean; value is the exact source text", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", `optimize const enabled: boolean = false\nnode main() {}\n`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const target = targetSet.targets.find((candidate) => candidate.name === "enabled")!;
+
+    expect(target.valueKind).toBe("literal");
+    expect(target.value).toBe("false");
+    expect(target.declaredType).toBe("boolean");
+  });
+
+  it("preserves quotes in a record target's value (formatter-exact rendering)", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", `type Person = { name: string; age: number }
+optimize const person: Person = { name: "foo", age: 0 }
+node main() {}
+`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const target = targetSet.targets.find((candidate) => candidate.name === "person")!;
+
+    // Formatter-canonical (multi-line) rendering; the load-bearing property
+    // is that string field values keep their quotes — `"foo"`, not `foo`.
+    expect(target.value).toBe(`{\n  name: "foo",\n  age: 0\n}`);
+    expect(target.value).toContain(`"foo"`);
+    expect(target.declaredType).toBe("Person");
+  });
+
+  it("accepts a null initializer (variableName representation)", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(dir, "a.agency", `optimize const x: number | null = null\nnode main() {}\n`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const target = targetSet.targets.find((candidate) => candidate.name === "x")!;
+
+    expect(target.value).toBe("null");
+    expect(target.valueKind).toBe("literal");
+  });
+
+  it("BASELINE SELF-TEST: unconstrains a target whose own baseline fails its annotation", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    // `NotDefined` is not in the closure — the original value cannot pass
+    // the probe, so the target must become unconstrained rather than
+    // un-mutatable. literal + null constraint = unconstrained, NOT freeform.
+    const entry = writeAgency(dir, "a.agency", `optimize const x: NotDefined = 5\nnode main() {}\n`);
+
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const target = targetSet.targets.find((candidate) => candidate.name === "x")!;
+
+    expect(target.declaredType).toBeNull();
+    expect(target.valueKind).toBe("literal");
   });
 
   it("rejects legacy @optimize tags", () => {

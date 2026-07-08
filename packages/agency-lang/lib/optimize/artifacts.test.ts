@@ -53,6 +53,7 @@ describe("createOptimizeArtifacts", () => {
     const targetSet: OptimizeTargetSet = {
       baseDir: tmpDir,
       entryFile: "agent.agency",
+      typeAliases: {},
       files: {},
       targets: [{
         id: "agent.agency:global:prompt",
@@ -62,6 +63,7 @@ describe("createOptimizeArtifacts", () => {
         scope: "global",
         name: "prompt",
         valueKind: "string",
+        declaredType: null,
         value: "hi",
       }],
     };
@@ -71,6 +73,7 @@ describe("createOptimizeArtifacts", () => {
     expect(targetsPath).toBe(path.join(artifacts.runDir, "targets.json"));
     expect(JSON.parse(fs.readFileSync(targetsPath, "utf-8"))).toMatchObject({
       entryFile: "agent.agency",
+      typeAliases: {},
       targets: [{ id: "agent.agency:global:prompt" }],
     });
   });
@@ -130,7 +133,7 @@ describe("createOptimizeArtifacts", () => {
       }],
       diff: "--- foo.agency\n+++ foo.agency\n- old\n+ new",
       diagnostics: [],
-      targetSet: { baseDir: tmpDir, entryFile: "foo.agency", files: {}, targets: [] },
+      targetSet: { baseDir: tmpDir, entryFile: "foo.agency", files: {}, targets: [], typeAliases: {} },
     };
 
     const agent = artifacts.writeIterationAgent(1, preview.files);

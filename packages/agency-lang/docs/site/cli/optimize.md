@@ -60,7 +60,39 @@ Complete: champion iteration 1, accepted 1, rejected 0, invalid 0 (10.0s)
 Optimize demo-run completed: 1 accepted, 0 rejected
 ```
 
-You can put `optimize` on any string `const` `let` to tell the the optimizer to rewrite it.
+You can put `optimize` on any literal `const` or `let` — strings, numbers, booleans, records, and arrays — to tell the optimizer to rewrite it.
+
+## Typed targets
+
+A plain string target is freeform: the optimizer may propose any text (interpolation placeholders are preserved). Every other kind of target is **typed** — you declare its type, and every proposed value is checked against that type before it is ever written:
+
+```ts
+type Strategy = "fast" | "cheap" | "thorough"
+
+optimize const strategy: Strategy = "fast"
+optimize const maxRetries: number = 2
+optimize const style = "Be concise."   // freeform string, works as before
+```
+
+A record target keeps its shape too:
+
+```ts
+type JudgeConfig = { rubric: string; samples: number }
+
+optimize const judge: JudgeConfig = { rubric: "prefer brevity", samples: 3 }
+```
+
+The rules, which are the language's own typechecking rules:
+
+- A proposal must fit the declared type: a union target only accepts one of its members, a `number` target only accepts numbers, and so on. Out-of-shape proposals are rejected and the rejection reason is fed back to the mutator model, which retries.
+- Record proposals must keep the declared fields and field types. Unknown fields are rejected. A field whose type includes `null` may be omitted or set to `null` explicitly.
+- Typed values must be self-contained: no `${...}` interpolations (only freeform string targets carry placeholders).
+- **A type annotation is required** for non-string targets in v1 — `optimize const n = 5` is an error asking you to write `optimize const n: number = 5`.
+- If a target's own initializer does not satisfy its annotation (for example the type comes from a package the optimizer cannot resolve), the target is left unconstrained rather than blocked — the optimizer never rejects a value shaped like the one you already wrote.
+
+One known soft spot, inherited from the current typechecker: a record proposal that includes an explicit `null` field skips the deep field check (the whole literal degrades to `any`). This fails open — it can admit an imperfect record, never reject a valid one.
+
+Not yet supported (planned): enforcing `@validate` rules and numeric bounds on proposed values, time/size unit literals (`5s`, `100mb`) as targets, and inferring types for unannotated non-string targets.
 
 ## Inputs, graders, optimizers
 

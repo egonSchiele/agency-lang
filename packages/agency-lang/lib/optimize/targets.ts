@@ -1,10 +1,14 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { GLOBAL_SCOPE_KEY, buildCompilationUnit } from "@/compilationUnit.js";
 import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
-import type { AgencyNode, AgencyProgram, Assignment, PromptSegment } from "@/types.js";
-import { expressionToString, walkNodes } from "@/utils/node.js";
+import { SymbolTable } from "@/symbolTable.js";
+import type { AgencyNode, AgencyProgram, Assignment, PromptSegment, TypeAliasEntry, VariableType } from "@/types.js";
+import { generateExpression } from "@/backends/agencyGenerator.js";
+import { expressionToString, isLiteralExpression, walkNodes } from "@/utils/node.js";
+import { checkProposal, renderDeclaredType } from "./constraint.js";
 
 export type OptimizeTarget = {
   id: string;
@@ -13,8 +17,16 @@ export type OptimizeTarget = {
   absoluteFile: string;
   scope: string;
   name: string;
-  valueKind: "string" | "multilineString";
+  valueKind: "string" | "multilineString" | "literal";
+  /** Decoded text for text targets (interpolations rendered as `${...}` —
+   *  the `expected`-guard contract); the EXACT source slice, quotes intact,
+   *  for literal targets. */
   value: string;
+  /** Parseable type text proposals are probed against (constraint.ts).
+   *  `null` means FREEFORM for text targets (today's string-only semantics,
+   *  interpolation rule and all) and UNCONSTRAINED for literal targets (any
+   *  literal accepted). Consumers must branch on `valueKind` first. */
+  declaredType: string | null;
 };
 
 export type OptimizeSourceFile = {
@@ -29,6 +41,11 @@ export type OptimizeTargetSet = {
   entryFile: string;
   files: Record<string, OptimizeSourceFile>;
   targets: OptimizeTarget[];
+  /** Global type aliases visible across the import closure, in the exact
+   *  registry shape the typechecker consumes (`TypeAliasEntry`). Built by the
+   *  compiler's own pipeline (SymbolTable + buildCompilationUnit), plain
+   *  data — serializable. Consumed by the typed-target probe (constraint.ts). */
+  typeAliases: Record<string, TypeAliasEntry>;
 };
 
 export type DiscoverOptimizeTargetsOptions = {
@@ -84,6 +101,7 @@ function buildTargetSet(
   baseDir: string,
   parsedFiles: ParsedSourceFile[],
 ): OptimizeTargetSet {
+  const typeAliases = collectClosureTypeAliases(absoluteEntryFile, parsedFiles);
 
   const files: Record<string, OptimizeSourceFile> = {};
   const targets: OptimizeTarget[] = [];
@@ -96,7 +114,10 @@ function buildTargetSet(
       sha256: sha256Text(parsed.source),
     };
     rejectLegacyOptimizeTags(parsed.program, file);
-    targets.push(...collectTargets(parsed.program, file, parsed.absoluteFile).map((entry) => entry.target));
+    targets.push(
+      ...collectTargets(parsed.program, file, parsed.absoluteFile, typeAliases)
+        .map((entry) => entry.target),
+    );
   }
 
   targets.sort((a, b) => a.id.localeCompare(b.id));
@@ -107,7 +128,47 @@ function buildTargetSet(
     entryFile: relativeFile(baseDir, absoluteEntryFile),
     files,
     targets,
+    typeAliases,
   };
+}
+
+/**
+ * Global type aliases visible across the entry file's import closure, built
+ * with the compiler's own pipeline (SymbolTable stitches imported/re-exported
+ * aliases into the compilation unit) rather than a hand-rolled walk. Only the
+ * global scope matters here: optimize targets constrain top-level literal
+ * initializers, and the probe (constraint.ts) checks them in a synthetic
+ * top-level program.
+ */
+function collectClosureTypeAliases(
+  absoluteEntryFile: string,
+  parsedFiles: ParsedSourceFile[],
+): Record<string, TypeAliasEntry> {
+  const entry = parsedFiles.find((parsed) => parsed.absoluteFile === fs.realpathSync(absoluteEntryFile));
+  if (!entry) return {};
+  // SymbolTable.build is stricter than this file's own closure walk: it
+  // follows pkg:: imports and validates re-exported symbols, either of which
+  // can throw on programs that discovery deliberately tolerates. A missing
+  // registry only DEGRADES typed targets to unconstrained (via the baseline
+  // self-test in constraint resolution) — it must never fail discovery.
+  try {
+    const symbolTable = SymbolTable.build(absoluteEntryFile);
+    const unit = buildCompilationUnit(entry.program, symbolTable, entry.absoluteFile, entry.source);
+    return nullPrototyped(unit.typeAliases.visibleIn(GLOBAL_SCOPE_KEY));
+  } catch (error) {
+    console.warn(
+      `optimize discovery: could not build the type-alias registry for ${absoluteEntryFile} (typed targets will be unconstrained): ${error instanceof Error ? error.message : String(error)}`,
+    );
+    const unit = buildCompilationUnit(entry.program);
+    return nullPrototyped(unit.typeAliases.visibleIn(GLOBAL_SCOPE_KEY));
+  }
+}
+
+/** Null-prototype copy: the registry is keyed by user-defined type names, so
+ *  a name like "__proto__" or "constructor" must land as a plain own
+ *  property (same hardening as optimize/registry.ts and evalCache.ts). */
+function nullPrototyped<T>(record: Record<string, T>): Record<string, T> {
+  return Object.assign(Object.create(null), record);
 }
 
 type ParsedSourceFile = {
@@ -172,6 +233,8 @@ export function collectTargets(
   program: AgencyProgram,
   file: string,
   absoluteFile: string,
+  typeAliases: Record<string, TypeAliasEntry>,
+  priorTargets: Record<string, OptimizeTarget> = {},
 ): OptimizeTargetNode[] {
   const collected: OptimizeTargetNode[] = [];
   for (const { node, ancestors } of walkNodes(program.nodes)) {
@@ -184,7 +247,10 @@ export function collectTargets(
       );
     }
 
-    collected.push({ target: buildTarget(node, file, absoluteFile, scope), assignment: node });
+    collected.push({
+      target: buildTarget(node, file, absoluteFile, scope, typeAliases, priorTargets),
+      assignment: node,
+    });
   }
   return collected;
 }
@@ -203,23 +269,85 @@ function buildTarget(
   file: string,
   absoluteFile: string,
   scope: string,
+  typeAliases: Record<string, TypeAliasEntry>,
+  priorTargets: Record<string, OptimizeTarget>,
 ): OptimizeTarget {
-  if (assignment.value.type !== "string" && assignment.value.type !== "multiLineString") {
+  const value = assignment.value;
+  if (value.type === "messageThread" || !isLiteralExpression(value)) {
     throw new Error(
-      `Unsupported optimize target ${file}:${scope}:${assignment.variableName}. Only string and multiline string initializers are supported today.`,
+      `Unsupported optimize target ${file}:${scope}:${assignment.variableName}. Its value must be a literal (string, number, boolean, null, object, or array).`,
+    );
+  }
+
+  const id = `${file}:${scope}:${assignment.variableName}`;
+
+  // A target's literal-vs-text identity and its constraint come from the
+  // DECLARATION, decided once at discovery. On refresh collects (the source
+  // mutator re-collecting after a mutation), the prior entry carries them:
+  // re-deriving the identity from the champion's current value would let an
+  // unconstrained literal target flip to freeform when a string value is
+  // accepted, and re-running the baseline self-test would re-typecheck every
+  // typed target on every preview. Within TEXT targets, the string /
+  // multilineString sub-flavor DOES track the current value — it selects the
+  // quote style unquoted proposals are recovered with.
+  const prior = priorTargets[id];
+  const isText = prior
+    ? prior.valueKind !== "literal"
+    : value.type === "string" || value.type === "multiLineString";
+  const valueKind: OptimizeTarget["valueKind"] = !isText
+    ? "literal"
+    : value.type === "multiLineString"
+      ? "multilineString"
+      : "string";
+
+  // Text targets keep the decoded representation (the `expected`-guard
+  // contract). Literal targets carry formatter-exact source text, quotes
+  // intact — parsed initializer nodes have no loc offsets to slice by.
+  const valueSource = generateExpression(value);
+  const valueText = isText && (value.type === "string" || value.type === "multiLineString")
+    ? promptSegmentsToString(value.segments)
+    : valueSource;
+
+  if (!prior && !isText && !assignment.typeHint) {
+    throw new Error(
+      `Optimize target ${file}:${scope}:${assignment.variableName} is a non-string literal and needs a type annotation, e.g. \`optimize const ${assignment.variableName}: number = ${valueText}\`.`,
     );
   }
 
   return {
-    id: `${file}:${scope}:${assignment.variableName}`,
+    id,
     kind: "variable",
     file,
     absoluteFile,
     scope,
     name: assignment.variableName,
-    valueKind: assignment.value.type === "multiLineString" ? "multilineString" : "string",
-    value: promptSegmentsToString(assignment.value.segments),
+    valueKind,
+    value: valueText,
+    declaredType: prior
+      ? prior.declaredType
+      : resolveDeclaredType(assignment.typeHint, valueSource, typeAliases),
   };
+}
+
+/**
+ * The type text stored on a target, or null (freeform for text targets,
+ * unconstrained for literal targets). Two rules beyond "use the annotation":
+ * a plain `string` annotation is freeform, and the BASELINE SELF-TEST — if
+ * the target's ORIGINAL initializer does not pass the probe against its own
+ * annotation (unresolvable alias, exotic type, unrenderable annotation, a
+ * pre-existing type warning the user tolerates), the target is unconstrained
+ * so mutations are never blocked by a rule the baseline itself fails.
+ */
+function resolveDeclaredType(
+  typeHint: VariableType | undefined,
+  originalValueSource: string,
+  typeAliases: Record<string, TypeAliasEntry>,
+): string | null {
+  if (!typeHint) return null;
+  if (typeHint.type === "primitiveType" && typeHint.value === "string") return null;
+  const text = renderDeclaredType(typeHint);
+  if (!checkProposal(text, originalValueSource, typeAliases).ok) return null;
+  return text;
 }
 
 function rejectDuplicateTargetIds(targets: OptimizeTarget[]): void {

@@ -1742,3 +1742,12 @@ export function generateAgency(
       .replace(/[ \t]+$/gm, "") + "\n"
   );
 }
+
+/**
+ * Formatter-exact source rendering of a single expression — the same
+ * renderer interpolations use, so string quotes and escapes are preserved.
+ * NOT `expressionToString` (lib/utils/node.ts), which drops string quotes.
+ */
+export function generateExpression(expr: AgencyNode): string {
+  return new AgencyGenerator({}).processNode(expr).trim();
+}

@@ -1368,6 +1368,9 @@ export class AgencyGenerator {
       ? node.modulePath.replace(/\.agency$/, "")
       : node.modulePath;
     const suffix = ` from "${modulePath}"`;
+    // Test-only imports must round-trip: dropping `test` here would silently
+    // turn a working test import into a "not exported" compile error.
+    const importKeyword = node.testOnly ? "import test " : "import ";
 
     // For single named import, use wrapList
     if (
@@ -1381,7 +1384,7 @@ export class AgencyGenerator {
         return namedImport.safeNames?.includes(name) ? `safe ${base}` : base;
       });
       return this.indentStr(
-        this.wrapList(names, "import ", "{ ", " }", suffix),
+        this.wrapList(names, importKeyword, "{ ", " }", suffix),
       );
     }
 
@@ -1389,7 +1392,7 @@ export class AgencyGenerator {
     const importedNames = node.importedNames.map((name) =>
       this.processImportNameType(name),
     );
-    return this.indentStr(`import ${importedNames.join(", ")}${suffix}`);
+    return this.indentStr(`${importKeyword}${importedNames.join(", ")}${suffix}`);
   }
 
   protected processImportNameType(node: ImportNameType): string {

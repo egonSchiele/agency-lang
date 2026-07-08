@@ -157,6 +157,7 @@ export default defineConfig({
               link: "/guide/value-parameterized-types",
             },
             { text: "Memory", link: "/guide/memory" },
+            { text: "Tags and Redaction", link: "/guide/tags" },
           ],
         },
         {

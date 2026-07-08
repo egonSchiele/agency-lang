@@ -9,6 +9,142 @@ export class GlobalStore {
   private store: Record<string, Record<string, any>> = {};
   private initializedModules: Set<string> = new Set();
 
+  // Object/array/function tags, keyed by reference. Deliberately a WeakMap so
+  // it is (a) excluded from toJSON serialization and (b) reset to empty on
+  // clone() (fromJSON constructs a fresh GlobalStore). Object identity does
+  // not survive the toJSON/fromJSON round-trip, so object tags are
+  // intentionally branch-local and do not cross fork/interrupt boundaries.
+  private objectTags: WeakMap<object, Record<string, unknown>> = new WeakMap();
+
+  // Tracks whether any object (reference) tag has been set, so hasAnyTags()
+  // can answer without enumerating the (non-enumerable) WeakMap. Not
+  // serialized and starts false on every fresh store, so it resets on
+  // clone()/fromJSON — matching the WeakMap, whose entries also reset.
+  private objectTagsPresent = false;
+
+  private static readonly VALUE_TAGS_KEY = "__valueTags";
+  static readonly REDACT_TAG = "redact";
+
+  private isRef(value: unknown): value is object {
+    return (
+      (typeof value === "object" && value !== null) ||
+      typeof value === "function"
+    );
+  }
+
+  // A value can carry tags if it is a reference (keyed by identity in the
+  // WeakMap) or a JSON-serializable primitive (keyed by value in the Map).
+  // bigint and symbol are excluded on purpose: a bigint Map key throws during
+  // MapReviver/JSON serialization (breaking clone() and interrupt save), and a
+  // symbol has no stable serializable identity. Tagging one is a silent no-op.
+  private isTaggable(value: unknown): boolean {
+    if (this.isRef(value)) return true;
+    const kind = typeof value;
+    return kind === "string" || kind === "number" || kind === "boolean";
+  }
+
+  // Primitive tags, keyed by value. Stored as a Map under the __internal
+  // module so it rides the existing toJSON/fromJSON/clone machinery. The
+  // MapReviver serializes entries as [key, value] pairs through JSON, which
+  // preserves primitive key *types* (1, "1", and true stay distinct).
+  private valueTagMap(): Map<unknown, Record<string, unknown>> {
+    let map = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (!(map instanceof Map)) {
+      map = new Map();
+      this.set(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY, map);
+    }
+    return map as Map<unknown, Record<string, unknown>>;
+  }
+
+  // Resolve the tag record for a value. `create` controls whether a missing
+  // record (and its backing store slot) is allocated — reads pass false so a
+  // pure lookup never mutates state. Unifies the primitive (value Map) and
+  // object (WeakMap) paths so setTag/getTagsFor share one code path. Records
+  // are null-prototype so a user-controlled tag key like "__proto__" is stored
+  // as an own data property instead of mutating the prototype chain.
+  private tagsRecordFor(
+    value: unknown,
+    create: boolean,
+  ): Record<string, unknown> | undefined {
+    if (this.isRef(value)) {
+      let record = this.objectTags.get(value);
+      if (!record && create) {
+        record = Object.create(null) as Record<string, unknown>;
+        this.objectTags.set(value, record);
+        this.objectTagsPresent = true;
+      }
+      return record;
+    }
+    const map = create
+      ? this.valueTagMap()
+      : this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (!(map instanceof Map)) return undefined;
+    let record = map.get(value);
+    if (!record && create) {
+      record = Object.create(null) as Record<string, unknown>;
+      map.set(value, record);
+    }
+    return record;
+  }
+
+  setTag(value: unknown, key: string, val: unknown): void {
+    // Silently ignore untaggable values (bigint/symbol) — see isTaggable.
+    if (!this.isTaggable(value)) return;
+    const record = this.tagsRecordFor(value, true);
+    // create=true always yields a record; the guard is for the type checker.
+    if (record) record[key] = val;
+  }
+
+  getTagsFor(value: unknown): Record<string, unknown> | undefined {
+    return this.tagsRecordFor(value, false);
+  }
+
+  /** Remove a single tag key from a value. No-op if the value has no tags. */
+  removeTag(value: unknown, key: string): void {
+    const record = this.getTagsFor(value);
+    if (record) delete record[key];
+  }
+
+  /** Remove every tag from a value. */
+  removeAllTags(value: unknown): void {
+    if (this.isRef(value)) {
+      this.objectTags.delete(value);
+      return;
+    }
+    const map = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (map instanceof Map) map.delete(value);
+  }
+
+  /**
+   * Mark a value for statelog redaction. Sole *writer* of the redact tag, so
+   * the tag's representation lives in exactly one place. Equivalent to the
+   * user-facing tag(value, "redact", true).
+   */
+  markRedacted(value: unknown): void {
+    this.setTag(value, GlobalStore.REDACT_TAG, true);
+  }
+
+  /**
+   * True when a value is marked redact:true. Sole *reader* of the redact tag
+   * (the statelog replacer calls this), so the walker never hard-codes the
+   * tag shape.
+   */
+  isRedacted(value: unknown): boolean {
+    return this.getTagsFor(value)?.[GlobalStore.REDACT_TAG] === true;
+  }
+
+  /**
+   * Cheap "are there any tags at all?" check so statelog can skip installing
+   * a redaction replacer entirely when nothing is tagged (the common case).
+   * The WeakMap can't report size, so object-tag presence is tracked by a
+   * boolean flag that resets on clone alongside the WeakMap.
+   */
+  hasAnyTags(): boolean {
+    if (this.objectTagsPresent) return true;
+    const m = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    return m instanceof Map && m.size > 0;
+  }
+
   get(moduleId: string, varName: string): any {
     return this.store[moduleId]?.[varName];
   }

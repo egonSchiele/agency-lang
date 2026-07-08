@@ -5,6 +5,7 @@
     { "nodeName": "objectByReference", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "mutateTags", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "tagReturnsCurrentTags", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "forkInheritsPrimitiveTag", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "forkInheritsPrimitiveTag", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "forkInheritsObjectTag", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

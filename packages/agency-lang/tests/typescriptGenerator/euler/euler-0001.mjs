@@ -208,7 +208,7 @@ await callHook({
       await runner.step(1, async (runner) => {
 __stack.locals.sum = 0;
       });
-      await runner.loop(2, async () => Array.from({length: 1000 - 1}, (_, __i) => __i + 1), async (i, _, runner) => {
+      await runner.loop(2, async () => (Array.from({length: 1000 - 1}, (_, __i) => __i + 1)), async (i, _, runner) => {
 await runner.ifElse(0, [
 
   {

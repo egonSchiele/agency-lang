@@ -212,7 +212,7 @@ __stack.locals.sumOfSquares = 0;
       await runner.step(2, async (runner) => {
 __stack.locals.sum = 0;
       });
-      await runner.loop(3, async () => Array.from({length: 101 - 1}, (_, __i) => __i + 1), async (i, _, runner) => {
+      await runner.loop(3, async () => (Array.from({length: 101 - 1}, (_, __i) => __i + 1)), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.sumOfSquares = __stack.locals.sumOfSquares + i * i;
         });

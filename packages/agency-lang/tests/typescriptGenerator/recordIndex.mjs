@@ -230,7 +230,7 @@ if (hasInterrupts(__funcResult)) {
           return;
         }
       });
-      await runner.loop(5, async () => __stack.locals.votes, async (k, _, runner) => {
+      await runner.loop(5, async () => (__stack.locals.votes), async (k, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
             type: "positional",

@@ -41,6 +41,13 @@
       "input": "",
       "expectedOutput": "\"record-6\"",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "objectLiteralIterable",
+      "description": "Iterating an object literal directly requires the iterable thunk body to be parenthesized (async () => ({...})); a bare async () => {...} parses as a block and fails to compile. Iterating keys yields 'ab'.",
+      "input": "",
+      "expectedOutput": "\"ab\"",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

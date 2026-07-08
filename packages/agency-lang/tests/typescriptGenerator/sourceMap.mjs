@@ -378,7 +378,7 @@ await runner.step(1, async (runner) => {
 __stack.locals.y = 3;
           });
 });
-      await runner.loop(3, async () => [`a`, `b`], async (item, _, runner) => {
+      await runner.loop(3, async () => ([`a`, `b`]), async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.z = item;
         });

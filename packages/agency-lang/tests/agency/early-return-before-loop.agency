@@ -91,3 +91,14 @@ node earlyReturnRecord(): string {
 node runsRecord(): string {
   return loopRecord("y")
 }
+
+// Iterating an object LITERAL directly stresses the iterable-thunk codegen:
+// the thunk body must be parenthesized (`async () => ({ ... })`), otherwise
+// `async () => { a: 1 }` parses as a function body block and fails to compile.
+node objectLiteralIterable(): string {
+  let out = ""
+  for (k in { a: 1, b: 2 }) {
+    out = out + k
+  }
+  return out
+}

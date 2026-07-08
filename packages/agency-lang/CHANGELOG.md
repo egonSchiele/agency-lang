@@ -1,4 +1,4 @@
-## Unreleased
+## Jul 8 2026 — v0.7.0
 
 ### Language / Typechecker
 - Discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch; `match` arms narrow bound fields via the lowered scrutinee. Composes with `!`/`&&`/`||`/early-return/`while`.
@@ -19,7 +19,12 @@
     }
     ```
     Matches that mix function-exit arms with effect-only arms can't be mechanically hoisted this way and need restructuring by hand. A match-expression arm also can't dispatch to a graph node (a node call is control flow, not a value) — use an `if`/`else` chain for node dispatch instead.
-  - Exhaustiveness is a hard error in expression position regardless of `typechecker.matchExhaustiveness`; statement-position matches still honor that config. See the [pattern matching guide](docs/site/guide/pattern-matching.md#match-expressions) for the full v1 restrictions (expression position is limited to those two capture sites, `match(x is pattern)` stays statement-only, module-level `const x = match(...)` initializers aren't supported, match expressions can't appear inside a `with` handler body, and returns can't cross a concurrency boundary inside an arm).
+  - Exhaustiveness is a hard error in expression position regardless of `typechecker.matchExhaustiveness`; statement-position matches still honor that config. See the [pattern matching guide](docs/site/guide/pattern-matching.md#match-expressions) for the full v1 restrictions (expression position is limited to those two capture sites, `match(x is pattern)` stays statement-only, module-level `const x = match(...)` initializers aren't supported, and returns can't cross a concurrency boundary inside an arm).
+- More `match`-arm control flow: `interrupt`, `goto`, and `thread`/`subthread`/`seq` are now allowed inside arms, `match` statements are allowed at the module level, and match expressions may appear inside a `with` handler body.
+- Single-line `if` expressions — `if (cond) x else y` can be used as a value (assignment RHS or `return` operand).
+- `for` over a record now iterates its key and value.
+- Triple-quoted strings can escape `${` to emit it literally, and comments are allowed between array/object literal entries.
+- Definite-return checking is now match-aware and treats `while (true)` as diverging.
 
 ### Standard Library
 - **Image generation** — new `std::image` module: `generateImage(prompt, ...opts)`
@@ -50,6 +55,31 @@
     - `std::search`, `std::browser` → `std::web/search`, `std::web/browser`
   - There is no compatibility shim — old paths no longer resolve.
   - Effect identifiers are unchanged: the `std::search` **effect** (used in `raises`/`interrupt`/policy) keeps its name even though the module moved to `std::web/search`, because effect names are a separate namespace.
+- **`std::git`** — new module of typed, safe git tools. Read tools (`gitStatus`/`gitLog`/`gitDiff`/`gitShow`/`gitBranchList`/`gitRemoteList`/`gitBlame`/`gitStashList`) raise auto-approvable effects; write tools (`gitAdd`/`gitCommit`/`gitCheckout`/…) prompt. Each tool builds its own git command, so the model never supplies a raw flag.
+- **`std::tag`** — attach value tags that flow with a value and drive statelog redaction. Primitive and plain object/array tags survive `fork` and interrupt/resume.
+- **`std::data` connectors** — new `people/littlesis`, `finance` evidence sources (GDELT, FRED, EDGAR, DBnomics), and `tech/{yc, hackernews}`.
+- **`std::ui/layout`** — `raw` now wraps to its container by default (pass `wrap: false` to preserve exact layout for ASCII art); wrapping is SGR-aware so embedded colors survive without tinting borders; and unsized containers shrink to fit but cap at the available width instead of overflowing.
+- **`std::http`** — `fetch*` functions now fail on a non-2xx HTTP status instead of returning the error-body payload.
+- **`std::index`** — `map` / `filter` / `reduce` and friends moved into the auto-imported prelude, so they are available everywhere without importing `std::array`.
+- Tools can attach images to their reply via `attachToReply`; attachments are harvested and injected as a user message in the tool loop.
+
+### Testing
+- `fetch` is now mockable in the agency test framework.
+- `import test { … }` lets a test import non-exported functions from the module under test.
+
+### Runtime
+- A default `maxCallDepth` guard aborts runaway recursion before it exhausts memory.
+- Subprocesses launched via `run()` now propagate interrupts to the user, forward observer callbacks, and participate in `guard(cost:)`.
+- The `onStream` callback now fires for `llm()` calls made from Agency code.
+- Per-call `apiKey` accepts a per-provider object.
+- Bumped smoltalk to v0.8.1.
+
+### Eval / Optimize
+- Optimizer mutations can be constrained by adding a type annotation to an `optimize` variable — the optimizer validates each candidate against the declared type before proposing it.
+
+### Agency Agent
+- The agent uses the typed `std::git` tools instead of `bash` for git, so read-only git operations run without a permission prompt.
+- The agent can attach images to its replies and generate images.
 
 ## Jun 24 2026 — v0.6.4
 

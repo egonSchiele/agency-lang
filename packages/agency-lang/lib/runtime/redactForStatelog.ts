@@ -27,15 +27,13 @@ export function makeRedactReplacer(
     key: string,
     value: unknown,
   ): unknown {
-    // Recover the raw, pre-toJSON value for the tag lookup.
-    let raw: unknown;
-    if (typeof value === "object" && value !== null) {
-      raw = value;
-    } else if (key === "") {
-      raw = value;
-    } else {
-      raw = (this as Record<string, unknown>)[key];
-    }
+    // Recover the raw, pre-toJSON value for the tag lookup. JSON.stringify
+    // applies toJSON() BEFORE calling the replacer, so `value` may already be
+    // transformed (e.g. a Date → ISO string, or a custom toJSON returning an
+    // object). `this[key]` still holds the original value the tag was set on,
+    // so always read from there for non-root keys. (Root is the wrapper's ""
+    // key, where this[""] === value anyway.)
+    const raw = key === "" ? value : (this as Record<string, unknown>)[key];
     if (globals.isRedacted(raw)) return REDACTED;
     return value;
   };

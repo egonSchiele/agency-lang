@@ -87,4 +87,38 @@ describe("GlobalStore tags", () => {
     expect(restored.getTagsFor("prim")).toEqual({ redact: true });
     expect(restored.isRedacted("prim")).toBe(true);
   });
+
+  it("ignores bigint and symbol values (keeps serialization safe)", () => {
+    const gs = new GlobalStore();
+    gs.setTag(10n, "a", 1);
+    gs.setTag(Symbol("s"), "a", 1);
+    expect(gs.getTagsFor(10n)).toBeUndefined();
+    expect(gs.hasAnyTags()).toBe(false);
+    // The unsupported keys must not have created a Map that would throw here.
+    expect(() => gs.toJSON()).not.toThrow();
+  });
+
+  it("a __proto__ tag key does not pollute Object.prototype", () => {
+    const gs = new GlobalStore();
+    gs.setTag("v", "__proto__", { polluted: true });
+    expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+    // It is stored as an own data property on the (null-proto) record.
+    expect(gs.getTagsFor("v")?.["__proto__"]).toEqual({ polluted: true });
+  });
+
+  it("removeTag deletes a single key; removeAllTags clears the value", () => {
+    const gs = new GlobalStore();
+    gs.setTag("k", "a", 1);
+    gs.setTag("k", "b", 2);
+    gs.removeTag("k", "a");
+    expect(gs.getTagsFor("k")).toEqual({ b: 2 });
+    gs.removeAllTags("k");
+    expect(gs.getTagsFor("k")).toBeUndefined();
+    expect(gs.hasAnyTags()).toBe(false);
+    // removeAllTags also works by reference for objects.
+    const o = {};
+    gs.setTag(o, "x", 1);
+    gs.removeAllTags(o);
+    expect(gs.getTagsFor(o)).toBeUndefined();
+  });
 });

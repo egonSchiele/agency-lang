@@ -62,6 +62,16 @@ describe("makeRedactReplacer", () => {
     expect(roundtrip({ when }, gs)).toEqual({ when: "[REDACTED]" });
   });
 
+  it("redacts a tagged object whose toJSON returns an object (no leak)", () => {
+    // Regression: JSON.stringify runs toJSON BEFORE the replacer, so the
+    // replacer's `value` is the post-toJSON object, not the tagged one. The
+    // tag lookup must use the original (this[key]) or the secret leaks.
+    const gs = new GlobalStore();
+    const secret = { toJSON: () => ({ leaked: "sensitive" }) };
+    gs.markRedacted(secret);
+    expect(roundtrip({ secret }, gs)).toEqual({ secret: "[REDACTED]" });
+  });
+
   it("does not redact a tag whose redact value is not true", () => {
     const gs = new GlobalStore();
     gs.setTag("x", "redact", false);

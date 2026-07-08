@@ -32,56 +32,87 @@ export class GlobalStore {
     );
   }
 
+  // A value can carry tags if it is a reference (keyed by identity in the
+  // WeakMap) or a JSON-serializable primitive (keyed by value in the Map).
+  // bigint and symbol are excluded on purpose: a bigint Map key throws during
+  // MapReviver/JSON serialization (breaking clone() and interrupt save), and a
+  // symbol has no stable serializable identity. Tagging one is a silent no-op.
+  private isTaggable(value: unknown): boolean {
+    if (this.isRef(value)) return true;
+    const kind = typeof value;
+    return kind === "string" || kind === "number" || kind === "boolean";
+  }
+
   // Primitive tags, keyed by value. Stored as a Map under the __internal
   // module so it rides the existing toJSON/fromJSON/clone machinery. The
   // MapReviver serializes entries as [key, value] pairs through JSON, which
   // preserves primitive key *types* (1, "1", and true stay distinct).
   private valueTagMap(): Map<unknown, Record<string, unknown>> {
-    let m = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
-    if (!(m instanceof Map)) {
-      m = new Map();
-      this.set(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY, m);
+    let map = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (!(map instanceof Map)) {
+      map = new Map();
+      this.set(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY, map);
     }
-    return m as Map<unknown, Record<string, unknown>>;
+    return map as Map<unknown, Record<string, unknown>>;
   }
 
   // Resolve the tag record for a value. `create` controls whether a missing
   // record (and its backing store slot) is allocated — reads pass false so a
   // pure lookup never mutates state. Unifies the primitive (value Map) and
-  // object (WeakMap) paths so setTag/getTagsFor share one code path.
+  // object (WeakMap) paths so setTag/getTagsFor share one code path. Records
+  // are null-prototype so a user-controlled tag key like "__proto__" is stored
+  // as an own data property instead of mutating the prototype chain.
   private tagsRecordFor(
     value: unknown,
     create: boolean,
   ): Record<string, unknown> | undefined {
     if (this.isRef(value)) {
-      let t = this.objectTags.get(value);
-      if (!t && create) {
-        t = {};
-        this.objectTags.set(value, t);
+      let record = this.objectTags.get(value);
+      if (!record && create) {
+        record = Object.create(null) as Record<string, unknown>;
+        this.objectTags.set(value, record);
         this.objectTagsPresent = true;
       }
-      return t;
+      return record;
     }
-    const m = create
+    const map = create
       ? this.valueTagMap()
       : this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
-    if (!(m instanceof Map)) return undefined;
-    let t = m.get(value);
-    if (!t && create) {
-      t = {};
-      m.set(value, t);
+    if (!(map instanceof Map)) return undefined;
+    let record = map.get(value);
+    if (!record && create) {
+      record = Object.create(null) as Record<string, unknown>;
+      map.set(value, record);
     }
-    return t;
+    return record;
   }
 
   setTag(value: unknown, key: string, val: unknown): void {
-    const tags = this.tagsRecordFor(value, true);
+    // Silently ignore untaggable values (bigint/symbol) — see isTaggable.
+    if (!this.isTaggable(value)) return;
+    const record = this.tagsRecordFor(value, true);
     // create=true always yields a record; the guard is for the type checker.
-    if (tags) tags[key] = val;
+    if (record) record[key] = val;
   }
 
   getTagsFor(value: unknown): Record<string, unknown> | undefined {
     return this.tagsRecordFor(value, false);
+  }
+
+  /** Remove a single tag key from a value. No-op if the value has no tags. */
+  removeTag(value: unknown, key: string): void {
+    const record = this.getTagsFor(value);
+    if (record) delete record[key];
+  }
+
+  /** Remove every tag from a value. */
+  removeAllTags(value: unknown): void {
+    if (this.isRef(value)) {
+      this.objectTags.delete(value);
+      return;
+    }
+    const map = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (map instanceof Map) map.delete(value);
   }
 
   /**

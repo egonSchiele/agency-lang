@@ -1166,36 +1166,38 @@ export class StatelogClient {
 
     const span = this.currentSpan;
     // Single redaction chokepoint: every statelog event flows through post().
-    // Redaction is a JSON.stringify *replacer* scoped to the `data` payload
-    // ONLY. We stringify the envelope and the payload separately and splice
-    // them, so the replacer never runs over infra fields (format_version,
-    // trace_id, span ids). This keeps redaction single-pass (no extra deep
-    // copy) and preserves Date/URL/toJSON values, while making envelope fields
-    // structurally immune to a value-collision — e.g. a pathological
-    // `redact(1)` can't blank out `format_version: 1`. The replacer reads the
-    // caller's branch tag store via __globals(), synchronously before any
-    // detached (noWait) send, so it sees the correct branch. hasAnyTags() skips
-    // the replacer entirely when nothing is tagged, so tag-free programs pay
-    // nothing. Events posted outside an ALS frame (__globals() undefined) are
-    // not redacted — a documented boundary, not a secrecy guarantee.
+    // Redaction is a JSON.stringify *replacer* applied to the `data` payload
+    // ONLY, so it never touches infra fields (format_version, trace_id, span
+    // ids) — a pathological `redact(1)` can't blank out `format_version: 1`.
+    // We scope it by redacting `data` on its own (stringify with the replacer,
+    // then parse back), then serialize the whole envelope normally with the
+    // already-redacted payload. This preserves Date/URL/toJSON values (the
+    // replacer runs inside a real stringify) and keeps envelope handling as
+    // ordinary object construction — no string surgery.
+    //
+    // Reads the caller's branch tag store via __globals() (the lenient,
+    // returns-undefined accessor — post() can fire outside an ALS frame, so it
+    // must not throw like getRuntimeContext() would). hasAnyTags() skips the
+    // whole redaction pass when nothing is tagged, so the common case is one
+    // stringify, byte-identical to before. Events posted outside an ALS frame
+    // (__globals() undefined) are not redacted — a documented boundary, not a
+    // secrecy guarantee. See docs/dev/globalstore.md on per-branch isolation:
+    // __globals() returns the branch-local clone, so each branch redacts using
+    // its own tags.
     const globals = __globals();
-    const replacer =
-      globals && globals.hasAnyTags() ? makeRedactReplacer(globals) : undefined;
-    const envelopeJson = JSON.stringify({
+    const rawData = { ...body, timestamp: new Date().toISOString() };
+    const data =
+      globals && globals.hasAnyTags()
+        ? JSON.parse(JSON.stringify(rawData, makeRedactReplacer(globals)))
+        : rawData;
+    const postBody = JSON.stringify({
       format_version: STATELOG_FORMAT_VERSION,
       trace_id: this.traceId,
       project_id: this.projectId,
       span_id: span?.spanId ?? null,
       parent_span_id: span?.parentSpanId ?? null,
+      data,
     });
-    const dataJson = JSON.stringify(
-      { ...body, timestamp: new Date().toISOString() },
-      replacer,
-    );
-    // Splice: drop the envelope's closing brace and append the data field. The
-    // envelope always carries format_version, so envelopeJson is never "{}" and
-    // the leading comma is always valid.
-    const postBody = `${envelopeJson.slice(0, -1)},"data":${dataJson}}`;
 
     // File sink: append one JSON object per line. Done synchronously
     // so tests can read the file immediately after an awaited event.

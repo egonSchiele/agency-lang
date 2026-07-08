@@ -309,7 +309,7 @@ return failure(
     }
   }
 }
-const append = __AgencyFunction.create({
+export const append = __AgencyFunction.create({
   name: "append",
   module: "asyncUnassigned.agency",
   fn: __append_impl,

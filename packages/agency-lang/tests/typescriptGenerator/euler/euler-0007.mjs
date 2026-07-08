@@ -363,7 +363,7 @@ return failure(
     }
   }
 }
-const isPrime = __AgencyFunction.create({
+export const isPrime = __AgencyFunction.create({
   name: "isPrime",
   module: "euler-0007.agency",
   fn: __isPrime_impl,

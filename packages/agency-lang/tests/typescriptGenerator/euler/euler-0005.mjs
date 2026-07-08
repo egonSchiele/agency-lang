@@ -322,7 +322,7 @@ return failure(
     }
   }
 }
-const gcd = __AgencyFunction.create({
+export const gcd = __AgencyFunction.create({
   name: "gcd",
   module: "euler-0005.agency",
   fn: __gcd_impl,
@@ -476,7 +476,7 @@ return failure(
     }
   }
 }
-const lcm = __AgencyFunction.create({
+export const lcm = __AgencyFunction.create({
   name: "lcm",
   module: "euler-0005.agency",
   fn: __lcm_impl,

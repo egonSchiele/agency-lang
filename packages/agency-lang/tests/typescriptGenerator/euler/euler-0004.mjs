@@ -330,7 +330,7 @@ return failure(
     }
   }
 }
-const isPalindrome = __AgencyFunction.create({
+export const isPalindrome = __AgencyFunction.create({
   name: "isPalindrome",
   module: "euler-0004.agency",
   fn: __isPalindrome_impl,

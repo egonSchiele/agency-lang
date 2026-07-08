@@ -305,7 +305,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "comments.agency",
   fn: __greet_impl,

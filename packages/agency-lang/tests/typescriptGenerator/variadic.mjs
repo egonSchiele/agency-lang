@@ -313,7 +313,7 @@ return failure(
     }
   }
 }
-const log = __AgencyFunction.create({
+export const log = __AgencyFunction.create({
   name: "log",
   module: "variadic.agency",
   fn: __log_impl,

@@ -301,7 +301,7 @@ return failure(
     }
   }
 }
-const add = __AgencyFunction.create({
+export const add = __AgencyFunction.create({
   name: "add",
   module: "docstrings.agency",
   fn: __add_impl,
@@ -442,7 +442,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "docstrings.agency",
   fn: __greet_impl,
@@ -582,7 +582,7 @@ return failure(
     }
   }
 }
-const calculateArea = __AgencyFunction.create({
+export const calculateArea = __AgencyFunction.create({
   name: "calculateArea",
   module: "docstrings.agency",
   fn: __calculateArea_impl,
@@ -721,7 +721,7 @@ return failure(
     }
   }
 }
-const processData = __AgencyFunction.create({
+export const processData = __AgencyFunction.create({
   name: "processData",
   module: "docstrings.agency",
   fn: __processData_impl,
@@ -842,7 +842,7 @@ return failure(
     }
   }
 }
-const versionedTool = __AgencyFunction.create({
+export const versionedTool = __AgencyFunction.create({
   name: "versionedTool",
   module: "docstrings.agency",
   fn: __versionedTool_impl,

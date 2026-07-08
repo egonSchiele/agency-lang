@@ -297,7 +297,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "functionRef.agency",
   fn: __greet_impl,
@@ -436,7 +436,7 @@ return failure(
     }
   }
 }
-const double = __AgencyFunction.create({
+export const double = __AgencyFunction.create({
   name: "double",
   module: "functionRef.agency",
   fn: __double_impl,
@@ -595,7 +595,7 @@ return failure(
     }
   }
 }
-const applyToAll = __AgencyFunction.create({
+export const applyToAll = __AgencyFunction.create({
   name: "applyToAll",
   module: "functionRef.agency",
   fn: __applyToAll_impl,

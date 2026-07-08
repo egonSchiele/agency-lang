@@ -450,7 +450,7 @@ return failure(
     }
   }
 }
-const foo = __AgencyFunction.create({
+export const foo = __AgencyFunction.create({
   name: "foo",
   module: "threadsAndSubthreads.agency",
   fn: __foo_impl,

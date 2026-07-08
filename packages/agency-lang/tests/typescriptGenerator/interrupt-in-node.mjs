@@ -344,7 +344,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "interrupt-in-node.agency",
   fn: __greet_impl,

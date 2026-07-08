@@ -323,7 +323,7 @@ return failure(
     }
   }
 }
-const add = __AgencyFunction.create({
+export const add = __AgencyFunction.create({
   name: "add",
   module: "function-with-types.agency",
   fn: __add_impl,
@@ -485,7 +485,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "function-with-types.agency",
   fn: __greet_impl,
@@ -647,7 +647,7 @@ return failure(
     }
   }
 }
-const mixed = __AgencyFunction.create({
+export const mixed = __AgencyFunction.create({
   name: "mixed",
   module: "function-with-types.agency",
   fn: __mixed_impl,
@@ -809,7 +809,7 @@ return failure(
     }
   }
 }
-const processArray = __AgencyFunction.create({
+export const processArray = __AgencyFunction.create({
   name: "processArray",
   module: "function-with-types.agency",
   fn: __processArray_impl,
@@ -965,7 +965,7 @@ return failure(
     }
   }
 }
-const flexible = __AgencyFunction.create({
+export const flexible = __AgencyFunction.create({
   name: "flexible",
   module: "function-with-types.agency",
   fn: __flexible_impl,

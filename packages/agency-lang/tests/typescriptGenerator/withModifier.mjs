@@ -326,7 +326,7 @@ return failure(
     }
   }
 }
-const foo = __AgencyFunction.create({
+export const foo = __AgencyFunction.create({
   name: "foo",
   module: "withModifier.agency",
   fn: __foo_impl,

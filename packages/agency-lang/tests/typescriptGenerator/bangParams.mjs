@@ -313,7 +313,7 @@ return failure(
     }
   }
 }
-const process = __AgencyFunction.create({
+export const process = __AgencyFunction.create({
   name: "process",
   module: "bangParams.agency",
   fn: __process_impl,

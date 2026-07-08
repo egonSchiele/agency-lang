@@ -344,7 +344,7 @@ return failure(
     }
   }
 }
-const greet = __AgencyFunction.create({
+export const greet = __AgencyFunction.create({
   name: "greet",
   module: "interrupt-2-deep-in-function.agency",
   fn: __greet_impl,
@@ -529,7 +529,7 @@ return failure(
     }
   }
 }
-const foo2 = __AgencyFunction.create({
+export const foo2 = __AgencyFunction.create({
   name: "foo2",
   module: "interrupt-2-deep-in-function.agency",
   fn: __foo2_impl,

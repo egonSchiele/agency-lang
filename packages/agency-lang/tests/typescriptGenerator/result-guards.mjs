@@ -311,7 +311,7 @@ return failure(
     }
   }
 }
-const checkValue = __AgencyFunction.create({
+export const checkValue = __AgencyFunction.create({
   name: "checkValue",
   module: "result-guards.agency",
   fn: __checkValue_impl,

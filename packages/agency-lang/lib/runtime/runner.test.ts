@@ -3,7 +3,7 @@ import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { getRuntimeContext } from "./asyncContext.js";
+import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { GuardExceededError, TimeGuard } from "./guard.js";
 import { readCause } from "./errors.js";
@@ -107,6 +107,42 @@ describe("safeStatelogValue", () => {
       when: new Date("2026-01-01T00:00:00.000Z"),
     }) as { when: Date };
     expect(out.when).toBeInstanceOf(Date);
+  });
+
+  it("redacts an oversized value BEFORE truncating (no string leak)", () => {
+    // The truncation branch returns a plain string; post()'s redaction
+    // replacer can't see inside a string, so redaction must happen during
+    // this stringify. The redacted object is a small part of an oversized
+    // payload — big enough to truncate, with the secret inside the cap.
+    const gs = new GlobalStore();
+    const secret = { apiKey: "sk-oversized-secret" };
+    gs.setTag(secret, "redact", true);
+    const ctx: any = { globals: gs };
+    const out = runInTestContext(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      () => safeStatelogValue({ secret, filler: "x".repeat(5000) }),
+    );
+    expect(typeof out).toBe("string");
+    expect(out).toMatch(/…\[truncated\]$/);
+    expect(out).toContain("[REDACTED]");
+    expect(out).not.toContain("sk-oversized-secret");
+  });
+
+  it("redacts the small-path clone in place when a frame is present", () => {
+    const gs = new GlobalStore();
+    const secret = { apiKey: "sk-small-secret" };
+    gs.setTag(secret, "redact", true);
+    const ctx: any = { globals: gs };
+    const out = runInTestContext(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      () => safeStatelogValue({ secret, other: 1 }),
+    ) as Record<string, unknown>;
+    expect(out.secret).toBe("[REDACTED]");
+    expect(out.other).toBe(1);
   });
 });
 

@@ -1,5 +1,10 @@
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
-import { canHoldDurableTag, attachTag, readTag } from "./tagSymbol.js";
+import {
+  canHoldDurableTag,
+  attachTag,
+  detachTag,
+  readTag,
+} from "./tagSymbol.js";
 
 export type GlobalStoreJSON = {
   store: Record<string, Record<string, any>>;
@@ -135,14 +140,17 @@ export class GlobalStore {
     if (this.isRef(value)) {
       const durable = readTag(value);
       if (durable !== undefined) {
-        // Clear keys in place — the record object is separate from the
-        // (possibly frozen) target, and deleting the symbol property would
-        // throw on a frozen-after-tag object. Intentional asymmetry with the
-        // WeakMap/primitive paths: getTagsFor afterwards returns {} here
-        // (record stays attached, so the TaggedReviver keeps wrapping the
-        // object with empty tags), undefined there. Harmless — isRedacted
-        // checks `=== true`.
-        for (const key of Object.keys(durable)) delete durable[key];
+        // Prefer detaching the property outright so the object stops
+        // matching the TaggedReviver (no perpetual empty "Tagged" wrapper
+        // in every subsequent serialization) and getTagsFor returns
+        // undefined, consistent with the WeakMap/primitive paths. A
+        // frozen/sealed-after-tag target's property is non-configurable —
+        // deleting it would throw — so fall back to clearing the record's
+        // keys in place; getTagsFor then returns {} (intentional, narrow
+        // asymmetry; isRedacted checks `=== true` and is unaffected).
+        if (!detachTag(value)) {
+          for (const key of Object.keys(durable)) delete durable[key];
+        }
         return;
       }
       this.objectTags.delete(value);

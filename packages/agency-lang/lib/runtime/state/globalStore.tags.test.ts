@@ -118,12 +118,15 @@ describe("GlobalStore tags", () => {
     gs.removeAllTags("k");
     expect(gs.getTagsFor("k")).toBeUndefined();
     expect(gs.hasAnyTags()).toBe(false);
-    // Durable (plain-object) path: keys are cleared in place, so getTagsFor
-    // returns {} — see the intentional-asymmetry note in the durable block.
+    // Durable (plain-object) path: the symbol property is detached outright
+    // (the object stops matching the TaggedReviver), so getTagsFor returns
+    // undefined like the other paths. Only a frozen-after-tag target keeps
+    // the cleared-in-place {} record — see the durable block below.
     const o = {};
     gs.setTag(o, "x", 1);
     gs.removeAllTags(o);
-    expect(gs.getTagsFor(o)).toEqual({});
+    expect(gs.getTagsFor(o)).toBeUndefined();
+    expect(readTag(o)).toBeUndefined();
     // WeakMap (frozen) path: the entry is deleted, so getTagsFor is undefined.
     const frozen = Object.freeze({});
     gs.setTag(frozen, "x", 1);
@@ -162,11 +165,12 @@ describe("GlobalStore tags", () => {
       gs.setTag(o, "extra", 1); // mutates the record, no throw
       expect(gs.getTagsFor(o)).toEqual({ redact: true, extra: 1 });
       expect(() => gs.removeAllTags(o)).not.toThrow(); // clears keys, no delete
-      // NOTE: intentional asymmetry — the durable path returns {} after
-      // removeAllTags (keys cleared in place; the record can't be deleted off
-      // a frozen target), while the WeakMap/primitive paths delete the entry
-      // and return undefined. Don't "unify" this back to a delete: it throws
-      // on frozen-after-tag objects. isRedacted (=== true) is unaffected.
+      // NOTE: intentional, narrow asymmetry — a FROZEN-after-tag target keeps
+      // an empty {} record (its symbol property is non-configurable, so it
+      // can't be detached; keys are cleared in place instead). Extensible
+      // targets get the property detached and return undefined like every
+      // other path. Don't "unify" this to an unconditional delete: it throws
+      // here. isRedacted (=== true) is unaffected.
       expect(gs.getTagsFor(o)).toEqual({});
       expect(gs.isRedacted(o)).toBe(false);
     });

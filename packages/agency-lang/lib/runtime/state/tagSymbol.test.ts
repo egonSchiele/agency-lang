@@ -4,6 +4,7 @@ import {
   isPlainObjectOrArray,
   canHoldDurableTag,
   attachTag,
+  detachTag,
   readTag,
 } from "./tagSymbol.js";
 
@@ -50,6 +51,19 @@ describe("tagSymbol", () => {
     expect(readTag({})).toBeUndefined();
     expect(readTag("s")).toBeUndefined();
     expect(readTag(null)).toBeUndefined();
+  });
+
+  it("detachTag removes the property when extensible, refuses when frozen", () => {
+    const o = {};
+    attachTag(o, Object.assign(Object.create(null), { x: 1 }));
+    expect(detachTag(o)).toBe(true);
+    expect(readTag(o)).toBeUndefined();
+
+    const frozen = {};
+    attachTag(frozen, Object.assign(Object.create(null), { x: 1 }));
+    Object.freeze(frozen);
+    expect(detachTag(frozen)).toBe(false); // non-configurable — caller clears keys
+    expect(readTag(frozen)).toEqual({ x: 1 });
   });
 
   it("TAG_SYMBOL is the only way to reach the record", () => {

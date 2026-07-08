@@ -34,6 +34,17 @@ export function attachTag(
   });
 }
 
+// Remove the tag property from a target that can still afford it: our
+// property is defined configurable, and only freeze/seal flips that — both of
+// which also make the object non-extensible, so isExtensible is a safe proxy
+// for "delete won't throw". Returns false when the caller must fall back to
+// clearing the record's keys in place.
+export function detachTag(target: object): boolean {
+  if (!Object.isExtensible(target)) return false;
+  delete (target as Record<symbol, unknown>)[TAG_SYMBOL];
+  return true;
+}
+
 export function readTag(value: unknown): Record<string, unknown> | undefined {
   if (
     value === null ||

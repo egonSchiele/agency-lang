@@ -27,7 +27,7 @@ import { skillsDir } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
-import { withWebSearch } from "../lib/search.agency"
+import { withWebSearch, getSearchBackend } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
 
@@ -72,30 +72,16 @@ You are the **code specialist** of a multi-thread Agency-language
 assistant. You handle anything that touches code or the file system:
 writing, editing, running, and typechecking Agency or shell code.
 
-You do NOT have access to web search, Wikipedia,
-or URL fetching. If the user asks a question that needs research,
-do one of the following:
+For Agency-language questions (syntax, control flow, types, the CLI),
+call the bundled docs tools — they are authoritative for Agency:
+  * `docSkill` — the language guide (syntax, types, error handling,
+                 built-ins, callbacks, advanced types)
+  * `cliSkill` — the CLI reference (`agency run`, `agency test`, ...)
+Pick whichever matches the question rather than guessing.
 
-- If the research involves Agency features of syntax:
-   - call the bundled docs tools first — they're authoritative:
-     * `docSkill`      — language guide (syntax, control flow,
-                         types, error handling, etc.),
-                         built-ins, callbacks, advanced types
-     * `cliSkill`      — CLI reference (`agency run`, `agency test`,
-                         `agency compile`, ...)
-   Pick whichever matches the question rather than guessing.
-
-- If the research involves something else (a research question,
-  an external API, a Wikipedia summary, or a URL fetch), call
-  `handoff(reason)` — the only valid target for you is the research
-  specialist, so just pass a brief reason. The runtime will re-route
-  the user's original message there.
-
-**Bias toward staying in the code thread.** Most follow-up messages
-("can you make it faster?", "fix the error", "what about edge
-cases?") are continuations of the current coding task, NOT new
-categories. Only call `handoff` when the message clearly needs
-research-specialist tools.
+**Stay focused on the current task.** Most follow-ups ("can you make it
+faster?", "fix the error", "what about edge cases?") are continuations
+of the current work, not new categories.
 
 ## Style
 
@@ -359,6 +345,44 @@ export static const codeTools: any[] = [
   oracleAgent.partial(allowHandoff: false),
 ]
 
+// Appended to the system prompt only when a web-search backend is active
+// (see `withWebSearch`, which already wires the search tool onto the llm()
+// call). The prompt just needs to tell the model it HAS the capability — on
+// the cloud path `configureSearch` defaults to hosted web search.
+static const WEB_SEARCH_NOTE = """
+You have **web search**. Use it directly whenever a task needs current or
+external information — a fact to verify, a library or API to check, a
+dataset or leaderboard to consult. Do NOT ask the user to look things up,
+and do NOT decline a task as "needs research / out of scope": search for
+what you need and keep going."""
+
+// Appended in one-shot / autonomous mode (`agency agent -p`), where there is
+// no human to answer questions and no next turn. Gated on `_oneShot` so the
+// interactive REPL keeps its normal ask-when-unsure behavior.
+static const ONE_SHOT_NOTE = """
+You are running in **one-shot, autonomous mode**: no human will answer
+questions and there is NO next turn. Therefore:
+- NEVER end your turn by asking a clarifying question or waiting for input.
+  If something is ambiguous, state the most reasonable assumption and
+  proceed.
+- NEVER defer work to "the next turn" or hand back a plan — do it now.
+- NEVER end with an empty response or zero tool calls. If the task is hard,
+  underspecified, or outside your usual area, still take a concrete first
+  action toward it and write your best attempt to the required file — an
+  imperfect artifact on disk always beats producing nothing.
+- Leave the task COMPLETE on disk: write the required file(s), then verify
+  (compile, run, run any tests) and fix what fails before you stop.
+- If you are running low on tool budget, spend the remaining calls
+  producing and saving the best COMPLETE artifact you can. A working file
+  on disk beats a perfect plan that was never written."""
+
+// Set by `agent.agency` (`setCodeOneShot`) before the first dispatch when the
+// run is non-interactive. Gates `ONE_SHOT_NOTE`.
+let _oneShot = false
+export def setCodeOneShot(oneShot: boolean) {
+  _oneShot = oneShot
+}
+
 // only add system message the first time
 let _first = true
 
@@ -397,7 +421,16 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
       firstIteration = false
       iterations += 1
       if (_first) {
-        systemMessage(codeSysPrompt)
+        // Compose the system prompt from the static base plus the
+        // capabilities that are actually active this run.
+        let sys = codeSysPrompt
+        if (getSearchBackend() != "off") {
+          sys = "${sys}\n\n${WEB_SEARCH_NOTE}"
+        }
+        if (_oneShot) {
+          sys = "${sys}\n\n${ONE_SHOT_NOTE}"
+        }
+        systemMessage(sys)
         _first = false
       }
       reply = llm(

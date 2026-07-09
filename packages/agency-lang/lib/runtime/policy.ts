@@ -21,14 +21,26 @@ export function checkPolicy(
   policy: Policy,
   interrupt: { effect: string; message: string; data: any; origin: string },
 ): PolicyResult {
+  // Effect-specific rules take precedence over the wildcard.
   const rules = policy[interrupt.effect];
-  if (!rules) {
-    return { type: "propagate" };
+  if (rules) {
+    for (const rule of rules) {
+      if (matchesRule(rule, interrupt)) {
+        return { type: rule.action };
+      }
+    }
   }
 
-  for (const rule of rules) {
-    if (matchesRule(rule, interrupt)) {
-      return { type: rule.action };
+  // Wildcard catch-all: the `"*"` effect key applies to any interrupt whose
+  // own effect had no matching rule. This is how an "approve-all" policy
+  // covers effects it doesn't enumerate (a plain per-effect map would
+  // `propagate` — i.e. prompt — on anything unlisted).
+  const wildcard = policy["*"];
+  if (wildcard) {
+    for (const rule of wildcard) {
+      if (matchesRule(rule, interrupt)) {
+        return { type: rule.action };
+      }
     }
   }
 

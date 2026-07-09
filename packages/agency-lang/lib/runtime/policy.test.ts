@@ -123,6 +123,49 @@ describe("checkPolicy", () => {
     expect(result).toEqual({ type: "reject" });
   });
 
+  describe('"*" wildcard catch-all', () => {
+    it("approve-all: applies to every effect, including unlisted ones", () => {
+      const policy = { "*": [{ action: "approve" as const }] };
+      for (const effect of ["std::write", "std::bash", "std::remove", "anything::else"]) {
+        expect(checkPolicy(policy, { effect, message: "", data: { dir: "/etc" }, origin: "" }))
+          .toEqual({ type: "approve" });
+      }
+    });
+
+    it("effect-specific rules take precedence over the wildcard", () => {
+      const policy = {
+        "std::bash": [{ action: "reject" as const }],
+        "*": [{ action: "approve" as const }],
+      };
+      expect(checkPolicy(policy, { effect: "std::bash", message: "", data: {}, origin: "" }))
+        .toEqual({ type: "reject" });
+      // An effect with no specific rule falls through to the wildcard.
+      expect(checkPolicy(policy, { effect: "std::write", message: "", data: {}, origin: "" }))
+        .toEqual({ type: "approve" });
+    });
+
+    it("falls back to the wildcard when a specific effect's rules all miss", () => {
+      const policy = {
+        "std::write": [{ match: { dir: "/app/**" }, action: "approve" as const }],
+        "*": [{ action: "reject" as const }],
+      };
+      // Inside /app: matched by the specific rule.
+      expect(checkPolicy(policy, { effect: "std::write", message: "", data: { dir: "/app/x" }, origin: "" }))
+        .toEqual({ type: "approve" });
+      // Outside /app: the specific rule misses, so the wildcard rejects.
+      expect(checkPolicy(policy, { effect: "std::write", message: "", data: { dir: "/etc/x" }, origin: "" }))
+        .toEqual({ type: "reject" });
+    });
+
+    it("still propagates when neither the effect nor the wildcard matches", () => {
+      const policy = {
+        "*": [{ match: { dir: "/app/**" }, action: "approve" as const }],
+      };
+      expect(checkPolicy(policy, { effect: "std::write", message: "", data: { dir: "/etc/x" }, origin: "" }))
+        .toEqual({ type: "propagate" });
+    });
+  });
+
   describe("./ prefix normalization (picomatch workaround)", () => {
     // picomatch.isMatch returns false for patterns starting with `./`
     // when combined with `**` or brace expansions — e.g.

@@ -215,6 +215,88 @@ describe("_eagerSummarizeIfNeeded", () => {
     });
   });
 
+  it("excludes system/developer messages from the summarizer transcript", async () => {
+    // Regression: the transcript used to include EVERY message, so an
+    // agent's multi-thousand-token system prompt was pasted into the
+    // "summarize this conversation" prompt. On small local models
+    // (llama.cpp) that produced runaway generation that blocked the
+    // turn indefinitely; on hosted models it leaked system-prompt
+    // content into summaries and wasted tokens.
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const id = threads.create();
+    const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
+    spy.mockClear();
+
+    await agency.withTestContext(
+      { ctx, stack: ctx.stateStack, threads },
+      () =>
+        _eagerSummarizeIfNeeded({
+          threadId: `t${id}`,
+          eagerSummarize: true,
+          messages: [
+            { role: "system", content: "GIANT SYSTEM PROMPT" } as any,
+            { role: "developer", content: "DEV INSTRUCTIONS" } as any,
+            { role: "user", content: "say hello" } as any,
+            { role: "assistant", content: "Hello!" } as any,
+          ],
+        }),
+    );
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const prompt = spy.mock.calls[0][0].prompt as string;
+    expect(prompt).not.toContain("GIANT SYSTEM PROMPT");
+    expect(prompt).not.toContain("DEV INSTRUCTIONS");
+    expect(prompt).toContain("[user] say hello");
+    expect(prompt).toContain("[assistant] Hello!");
+  });
+
+  it("skips the LLM call entirely when only system messages remain", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const id = threads.create();
+    const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
+    spy.mockClear();
+
+    await agency.withTestContext(
+      { ctx, stack: ctx.stateStack, threads },
+      () =>
+        _eagerSummarizeIfNeeded({
+          threadId: `t${id}`,
+          eagerSummarize: true,
+          messages: [{ role: "system", content: "only system" } as any],
+        }),
+    );
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(threads.get(id).summary).toBe(null);
+  });
+
+  it("caps the summarizer's output tokens (runaway-generation guard)", async () => {
+    // A 1-2 sentence summary never needs unbounded output. Without a
+    // cap, a small local model that fails to emit the closing token
+    // generates until its context window fills — the turn (which
+    // awaits this hook at thread close) hangs for the duration.
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const id = threads.create();
+    const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
+    spy.mockClear();
+
+    await agency.withTestContext(
+      { ctx, stack: ctx.stateStack, threads },
+      () =>
+        _eagerSummarizeIfNeeded({
+          threadId: `t${id}`,
+          eagerSummarize: true,
+          messages: [{ role: "user", content: "hello" } as any],
+        }),
+    );
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0].clientConfig.maxTokens).toBe(256);
+  });
+
   it("tolerates non-canonical (non-slug) thread ids by passing them through", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);

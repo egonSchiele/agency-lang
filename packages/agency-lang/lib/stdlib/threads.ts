@@ -140,11 +140,19 @@ const _summarySchema = z.object({ summary: z.string() });
 /** Build the transcript string used by both the lazy and eager
  *  summarize prompts. Keeps the shape symmetric with the Agency-side
  *  `summarize()` def. Non-string content gets coerced the same way
- *  `_getThread()` does to keep the prompt deterministic. */
+ *  `_getThread()` does to keep the prompt deterministic.
+ *
+ *  System/developer messages are excluded: they are instructions, not
+ *  conversation, and an agent's system prompt can run thousands of
+ *  tokens — pasting it into the "summarize this conversation" prompt
+ *  leaks its content into summaries and, on small local models, makes
+ *  the summarizer itself the most expensive call of the turn. */
 function _buildSummaryTranscript(messages: smoltalk.MessageJSON[]): string {
   let transcript = "";
   for (const m of messages) {
-    transcript += `[${String(m.role)}] ${_contentToString(m.content)}\n`;
+    const role = String(m.role);
+    if (role === "system" || role === "developer") continue;
+    transcript += `[${role}] ${_contentToString(m.content)}\n`;
   }
   return transcript;
 }
@@ -189,6 +197,9 @@ export async function _eagerSummarizeIfNeeded(evt: {
 
   try {
     const transcript = _buildSummaryTranscript(evt.messages);
+    // All-system threads produce an empty transcript — nothing to
+    // summarize, so skip the LLM call rather than prompt over "".
+    if (transcript === "") return;
     const result = await agency.llm(
       `Summarize this conversation in 1-2 sentences:\n${transcript}`,
       {
@@ -198,6 +209,13 @@ export async function _eagerSummarizeIfNeeded(evt: {
         // isolation guarantee as `thread(hidden: true) { ... }` on
         // the Agency side.
         thread: new MessageThread(),
+        // A 1-2 sentence summary is small and bounded. Uncapped, a
+        // small local model under the structured-output grammar can
+        // miss its stop token and generate until the context window
+        // fills — and Runner.thread AWAITS this hook at thread close,
+        // so that runaway blocks the whole turn (the agent's reply is
+        // computed but never rendered).
+        maxTokens: 256,
       },
     );
     _setThreadSummary(evt.threadId, result.summary);

@@ -279,13 +279,23 @@ def summarize(messages: ThreadMessage[]): string {
 
   @param messages - The thread's messages to summarize
   """
+  // System/developer messages are instructions, not conversation --
+  // and an agent's system prompt can run thousands of tokens. Keep
+  // them out of the summarizer prompt (mirrors the eager TS path in
+  // lib/stdlib/threads.ts). maxTokens caps the summarizer so a model
+  // that misses its stop token can't generate unboundedly.
   let transcript = ""
   for (m in messages) {
-    transcript = transcript + "[" + m.role + "] " + m.content + "\n"
+    if (m.role != "system" && m.role != "developer") {
+      transcript = transcript + "[" + m.role + "] " + m.content + "\n"
+    }
+  }
+  if (transcript == "") {
+    return ""
   }
   let summary = ""
   thread(hidden: true) {
-    const r: SummaryResult = llm("Summarize this conversation in 1-2 sentences:\n" + transcript)
+    const r: SummaryResult = llm("Summarize this conversation in 1-2 sentences:\n" + transcript, { maxTokens: 256 })
     summary = r.summary
   }
   return summary

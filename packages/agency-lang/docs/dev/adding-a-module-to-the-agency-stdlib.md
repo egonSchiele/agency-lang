@@ -249,9 +249,6 @@ Other examples:
 Bad: "Enclosing guard(cost:) budgets meter the subprocess in real time"
 Good "The subprocess is metered in real time by enclosing guard(cost:) budgets."
 
-Bad: "filename cannot escape dir via absolute paths or .. segments (symlinks are followed and re-checked)."
-Good: "Absolute paths and .. segments cannot escape dir. Symlinks are followed and re-checked."
-
 3. Avoid introducing too many concepts in a single sentence.
 
 If you find yourself using multiple commas, semicolons, or conjunctions in a sentence, consider breaking it up into multiple sentences.

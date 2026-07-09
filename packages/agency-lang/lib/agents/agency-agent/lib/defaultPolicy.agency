@@ -163,19 +163,18 @@ export def withWritesPolicy(baseDir: string) {
   }
 }
 
-// `with-writes` plus auto-approval of `std::bash`, scoped to `baseDir`
-// on the command's `cwd`. NOTE: a shell command can still reach outside
-// `baseDir` via an absolute path or `cd` inside the command string —
-// the policy matches the declared `cwd`, not the shell's actual effects,
-// so this is best-effort confinement, not a hard sandbox. It exists so
-// autonomous / sandbox runs (e.g. a benchmark container) can drive the
-// shell without a human answering every approval.
-export def withBashPolicy(baseDir: string) {
-  const scope = dirScope(baseDir)
-  return {
-    ...withWritesPolicy(baseDir),
-    "std::bash": [{ match: { cwd: scope }, action: "approve" }]
-  }
+// Approve EVERY interrupt — reads, writes, shell, git, anything, anywhere,
+// with no path scoping. The `"*"` wildcard is a catch-all that `checkPolicy`
+// consults for any effect without a more specific rule (see
+// lib/runtime/policy.ts). This is NOT confined in any way: it will approve
+// writes and shell commands outside the working directory, deletes, network
+// calls — everything. Use it ONLY in a disposable sandbox (e.g. a benchmark
+// container) where the whole environment is throwaway. `std::bash` cannot be
+// meaningfully confined to a directory anyway (a command can `cd` or use
+// absolute paths), so for autonomous sandbox runs a blanket approve-all is
+// both simpler and more honest than a best-effort per-effect scope.
+export static const approveAllPolicy = {
+  "*": [{ action: "approve" }]
 }
 
 // Built-in policies accepted by the `--policy` flag (anything else is
@@ -196,8 +195,8 @@ export static const BUILTIN_POLICIES = [
     description: "recommended + auto-approve file writes and git changes, scoped to the current directory and its children."
   },
   {
-    name: "with-bash",
-    description: "with-writes + auto-approve shell commands, scoped to the current directory. Best-effort confinement — use in disposable/sandbox runs."
+    name: "approve-all",
+    description: "Approve EVERY interrupt — reads, writes, shell, git, anywhere, no scoping. UNSAFE outside a disposable sandbox."
   },
 ]
 
@@ -221,8 +220,8 @@ export def builtinPolicy(name: string, baseDir: string) {
   if (name == "with-writes") {
     return withWritesPolicy(baseDir)
   }
-  if (name == "with-bash") {
-    return withBashPolicy(baseDir)
+  if (name == "approve-all") {
+    return approveAllPolicy
   }
   return null
 }

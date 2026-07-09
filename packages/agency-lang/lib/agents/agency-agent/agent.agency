@@ -83,7 +83,7 @@ import {
   currentProvider,
   resolveMaxToolCallRounds,
  } from "./shared.agency"
-import { codeAgent } from "./subagents/code.agency"
+import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
@@ -1257,7 +1257,7 @@ node main() {
       policy: {
         type: "string",
         optional: true,
-        description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, with-bash) or a path to a policy JSON file. with-writes/with-bash auto-approve writes (and, for with-bash, shell) scoped to the current directory and its children. Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
+        description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, approve-all) or a path to a policy JSON file. with-writes auto-approves file writes and git changes scoped to the current directory and its children; approve-all approves EVERY interrupt with no scoping (sandbox use only). Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
       },
       local: {
         type: "string",
@@ -1433,6 +1433,27 @@ node main() {
   if (maxResultChars != null) {
     setLlmOptions({ maxToolResultChars: maxResultChars })
   }
+
+  // TEMPORARY: raise the per-turn output cap above smoltalk's 4096 default.
+  // With adaptive thinking on, a hard reasoning turn can spend the entire
+  // 4096-token budget thinking and return an empty reply (no text, no tool
+  // call) — see the empty-output failures on regex-log / protein-assembly.
+  // Capped at 20000: these llm() calls are non-streaming, and the Anthropic
+  // SDK refuses a non-streaming request whose estimated time exceeds 10 min,
+  // which is maxTokens > 21333 (60min * maxTokens / 128000 > 10min). 20000
+  // stays under that and is well within every modern-Claude output cap
+  // (Sonnet 5 = 64K, Opus 4.8 = 128K). Branch-scoped so every subagent
+  // inherits it; per-call `llm(..., { maxTokens })` (e.g. the summarizer's
+  // cap) still wins. Superseded by the declarative capabilities table in
+  // docs/superpowers/specs/2026-07-09-model-capabilities-design.md (§2,
+  // maxTokens applied via setLlmOptions at startup) — remove it then.
+  setLlmOptions({ maxTokens: 20000 })
+
+  // One-shot autonomy: tell the code subagent there is no human to answer
+  // questions and no next turn, so it must drive to a finished artifact.
+  // Set before any dispatch so both the pinned `--agent code` path and the
+  // coordinator (which calls codeAgent as a tool) pick it up.
+  setCodeOneShot(runningOneShot)
 
   // Validate the target subagent name up front (empty = coordinator).
   if (startAgent != "" && !START_AGENTS.includes(startAgent)) {

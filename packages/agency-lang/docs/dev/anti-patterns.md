@@ -328,3 +328,13 @@ function processUserData(userData) {
   return userData;
 }
 ```
+
+### Ugly code
+
+Please never use this pattern.
+
+```ts
+{
+        ...(traceFile ? { traceFile } : {}),
+}
+```

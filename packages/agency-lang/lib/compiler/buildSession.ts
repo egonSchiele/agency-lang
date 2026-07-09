@@ -55,6 +55,14 @@ export type CompileOptions = {
   allowTestImports?: boolean;
 };
 
+export type CompileRequest = {
+  /** Files or directories. One entry = the legacy per-entry path
+   *  (covers-check closure, stdlib carve-out); many = one union closure. */
+  entries: string[];
+  /** Single non-directory entry only: explicit output path. */
+  outputFile?: string;
+} & CompileOptions;
+
 /**
  * A set of entry files sharing one effective config. The canonical config
  * key is NOT part of this type: it is the session's own integrity
@@ -80,28 +88,26 @@ export class BuildSession {
   // compile call and reused by every per-file emit.
   private currentClosure: CompiledClosure | null = null;
 
-  /** Compile a file or directory entry: recursive imports, per-session
-   *  dedupe. Returns the output path (null for directories). */
-  compile(
-    config: AgencyConfig,
-    inputFile: string,
-    outputFile?: string,
-    options?: CompileOptions,
-  ): string | null {
-    return this.compileEntry(config, inputFile, outputFile, options);
-  }
-
-  /** Compile a set of entry files under ONE union closure, like the
-   *  directory branch of `compile()`. Closure errors THROW
-   *  (`CompileClosureError`) so programmatic callers can attach context;
-   *  parse/typecheck failures inside per-file compiles keep their exit
-   *  behavior. */
-  compileMany(
-    config: AgencyConfig,
-    files: string[],
-    options?: { quiet?: boolean; allowTestImports?: boolean },
-  ): void {
-    this.compileManyImpl(config, files, options);
+  /**
+   * The one public compile entry point: callers declare WHAT to build
+   * (entries + options); the session decides how. A single entry keeps the
+   * legacy per-entry closure semantics (covers-check reuse, stdlib
+   * carve-out); multiple entries compile under ONE union closure, where
+   * closure errors THROW (`CompileClosureError`) so programmatic callers
+   * can attach context. Parse/typecheck failures inside per-file compiles
+   * keep their exit behavior. Returns the output path for a single
+   * non-directory entry, null otherwise.
+   */
+  compile(config: AgencyConfig, request: CompileRequest): string | null {
+    const { entries, outputFile, ...options } = request;
+    if (outputFile !== undefined && entries.length !== 1) {
+      throw new Error("outputFile is only valid with a single file entry");
+    }
+    if (entries.length === 1) {
+      return this.compileEntry(config, entries[0], outputFile, options);
+    }
+    this.compileManyImpl(config, entries, options);
+    return null;
   }
 
   /** Compile config-heterogeneous groups (one union closure each), after
@@ -171,20 +177,20 @@ export class BuildSession {
   private compileManyImpl(
     config: AgencyConfig,
     files: string[],
-    options?: {
+    options?: CompileOptions & {
+      /** Prebuilt union closure (compileGroups handoff). MUST cover every
+       *  file, or the covers-check clears the session cache mid-loop. */
       closure?: CompiledClosure;
-      quiet?: boolean;
-      allowTestImports?: boolean;
     },
   ): void {
     const absFiles = files.map((f) => path.resolve(f));
-    if (absFiles.length === 0) return;
-    this.setClosure(options?.closure ?? buildCompiledClosure(absFiles, config));
+    if (absFiles.length === 0) {
+      return;
+    }
+    const { closure, ...compileOptions } = options ?? {};
+    this.setClosure(closure ?? buildCompiledClosure(absFiles, config));
     for (const file of absFiles) {
-      this.compileEntry(config, file, undefined, {
-        quiet: options?.quiet,
-        allowTestImports: options?.allowTestImports,
-      });
+      this.compileEntry(config, file, undefined, compileOptions);
     }
   }
 

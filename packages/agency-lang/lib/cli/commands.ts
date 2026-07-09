@@ -190,7 +190,7 @@ export function compileMany(
     allowTestImports?: boolean;
   },
 ): void {
-  getDefaultSession().compileMany(config, files, options);
+  getDefaultSession().compile(config, { entries: files, ...options });
 }
 
 /**
@@ -204,7 +204,11 @@ export function compile(
   _outputFile?: string,
   options?: CompileOptions,
 ): string | null {
-  return getDefaultSession().compile(config, inputFile, _outputFile, options);
+  return getDefaultSession().compile(config, {
+    entries: [inputFile],
+    outputFile: _outputFile,
+    ...options,
+  });
 }
 
 export async function format(

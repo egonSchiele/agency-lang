@@ -42,7 +42,7 @@ describe("createBuildSession", () => {
   test("compiles a single file and returns the output path", () => {
     const dir = writeTempDir({ "main.agency": TRIVIAL });
     const session = createBuildSession();
-    const out = session.compile({}, path.join(dir, "main.agency"), undefined, { quiet: true });
+    const out = session.compile({}, { entries: [path.join(dir, "main.agency")], quiet: true });
     expect(out).toBe(path.join(dir, "main.js"));
     expect(fs.existsSync(out!)).toBe(true);
   });
@@ -51,18 +51,18 @@ describe("createBuildSession", () => {
     const dir = writeTempDir({ "main.agency": TRIVIAL });
     const session = createBuildSession();
     const entry = path.join(dir, "main.agency");
-    session.compile({}, entry, undefined, { quiet: true });
+    session.compile({}, { entries: [entry], quiet: true });
     const stamped = backdate(path.join(dir, "main.js"));
-    session.compile({}, entry, undefined, { quiet: true });
+    session.compile({}, { entries: [entry], quiet: true });
     expect(fs.statSync(path.join(dir, "main.js")).mtimeMs).toBe(stamped);
   });
 
   test("sessions are isolated: a fresh session recompiles", () => {
     const dir = writeTempDir({ "main.agency": TRIVIAL });
     const entry = path.join(dir, "main.agency");
-    createBuildSession().compile({}, entry, undefined, { quiet: true });
+    createBuildSession().compile({}, { entries: [entry], quiet: true });
     const stamped = backdate(path.join(dir, "main.js"));
-    createBuildSession().compile({}, entry, undefined, { quiet: true });
+    createBuildSession().compile({}, { entries: [entry], quiet: true });
     expect(fs.statSync(path.join(dir, "main.js")).mtimeMs).toBeGreaterThan(stamped);
   });
 
@@ -70,10 +70,10 @@ describe("createBuildSession", () => {
     const dir = writeTempDir({ "main.agency": TRIVIAL });
     const entry = path.join(dir, "main.agency");
     const session = createBuildSession();
-    session.compile({}, entry, undefined, { quiet: true });
+    session.compile({}, { entries: [entry], quiet: true });
     const stamped = backdate(path.join(dir, "main.js"));
     session.reset();
-    session.compile({}, entry, undefined, { quiet: true });
+    session.compile({}, { entries: [entry], quiet: true });
     expect(fs.statSync(path.join(dir, "main.js")).mtimeMs).toBeGreaterThan(stamped);
   });
 
@@ -84,10 +84,9 @@ describe("createBuildSession", () => {
       "b.agency": IMPORTS_HELPER,
     });
     const spy = vi.spyOn(console, "log");
-    createBuildSession().compileMany({}, [
-      path.join(dir, "a.agency"),
-      path.join(dir, "b.agency"),
-    ]);
+    createBuildSession().compile({}, {
+      entries: [path.join(dir, "a.agency"), path.join(dir, "b.agency")],
+    });
     for (const out of ["a.js", "b.js", "helper.js"]) {
       expect(fs.existsSync(path.join(dir, out))).toBe(true);
     }
@@ -103,7 +102,7 @@ describe("createBuildSession", () => {
       "b.agency": IMPORTS_HELPER,
     });
     const spy = vi.spyOn(console, "log");
-    const result = createBuildSession().compile({}, dir);
+    const result = createBuildSession().compile({}, { entries: [dir] });
     expect(result).toBeNull();
     for (const out of ["a.js", "b.js", "helper.js"]) {
       expect(fs.existsSync(path.join(dir, out))).toBe(true);
@@ -117,7 +116,7 @@ describe("createBuildSession", () => {
         'import { gone } from "./missing.agency"\n\nnode main() {\n  return gone()\n}\n',
     });
     expect(() =>
-      createBuildSession().compileMany({}, [path.join(dir, "main.agency")], { quiet: true }),
+      createBuildSession().compile({}, { entries: [path.join(dir, "main.agency")], quiet: true }),
     ).toThrow(CompileClosureError);
   });
 
@@ -128,10 +127,10 @@ describe("createBuildSession", () => {
         'import test { secret } from "./lib.agency"\n\nnode main() {\n  return secret()\n}\n',
     });
     const files = [path.join(dir, "main.agency")];
-    expect(() => createBuildSession().compileMany({}, files, { quiet: true })).toThrow(
+    expect(() => createBuildSession().compile({}, { entries: files, quiet: true })).toThrow(
       /only allowed under the test harness/,
     );
-    createBuildSession().compileMany({}, files, { quiet: true, allowTestImports: true });
+    createBuildSession().compile({}, { entries: files, quiet: true, allowTestImports: true });
     expect(fs.existsSync(path.join(dir, "main.js"))).toBe(true);
   });
 
@@ -145,16 +144,37 @@ describe("createBuildSession", () => {
     const previousCwd = process.cwd();
     try {
       process.chdir(dir);
-      const out = createBuildSession().compile({ outDir }, "main.agency", undefined, {
-        quiet: true,
-      });
+      const out = createBuildSession().compile({ outDir }, { entries: ["main.agency"], quiet: true });
       expect(out).toBe(path.join(outDir, "main.js"));
       expect(fs.existsSync(out!)).toBe(true);
     } finally {
       process.chdir(previousCwd);
     }
   });
+
+  test("single entry returns the output path; multiple entries return null", () => {
+    const dir = writeTempDir({ "a.agency": TRIVIAL, "b.agency": TRIVIAL });
+    const single = createBuildSession().compile({}, { entries: [path.join(dir, "a.agency")], quiet: true });
+    expect(single).toBe(path.join(dir, "a.js"));
+    const multi = createBuildSession().compile(
+      {},
+      { entries: [path.join(dir, "a.agency"), path.join(dir, "b.agency")], quiet: true },
+    );
+    expect(multi).toBeNull();
+  });
+
+  test("outputFile with multiple entries throws", () => {
+    const dir = writeTempDir({ "a.agency": TRIVIAL, "b.agency": TRIVIAL });
+    expect(() =>
+      createBuildSession().compile({}, {
+        entries: [path.join(dir, "a.agency"), path.join(dir, "b.agency")],
+        outputFile: path.join(dir, "out.js"),
+        quiet: true,
+      }),
+    ).toThrow(/outputFile/);
+  });
 });
+
 
 describe("findCrossConfigConflicts", () => {
   test("no conflict when groups with the same config share a module", () => {

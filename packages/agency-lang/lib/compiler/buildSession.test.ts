@@ -128,7 +128,9 @@ describe("createBuildSession", () => {
         'import test { secret } from "./lib.agency"\n\nnode main() {\n  return secret()\n}\n',
     });
     const files = [path.join(dir, "main.agency")];
-    expect(() => createBuildSession().compileMany({}, files, { quiet: true })).toThrow();
+    expect(() => createBuildSession().compileMany({}, files, { quiet: true })).toThrow(
+      /only allowed under the test harness/,
+    );
     createBuildSession().compileMany({}, files, { quiet: true, allowTestImports: true });
     expect(fs.existsSync(path.join(dir, "main.js"))).toBe(true);
   });

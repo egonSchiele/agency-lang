@@ -1,7 +1,6 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram } from "@/index.js";
-import { CompileClosureError } from "@/compiler/compileClosure.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import { createRequire } from "module";

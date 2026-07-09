@@ -1,6 +1,10 @@
 **/dist/*
 **/node_modules/*
 .*
+# Explicit (also matched by the .* rule above): the incremental-build
+# scratch dir — tsc buildinfo now, Stage A manifest later. Kept explicit
+# so the intent survives if the broad dot-rule is ever narrowed.
+.agency-build/
 **/index.mts
 **/__evaluate.*
 **/__judge*

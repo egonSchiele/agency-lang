@@ -20,6 +20,7 @@ AGENT_PATHS := $(addprefix dist/lib/agents/,$(AGENT_DIRS))
 # .ts, so tsc emits nothing under dist/lib/agents — everything there is
 # agency-compiled from the sources this recipe just copied.
 define stage-agent-sources
+	mkdir -p dist/lib
 	rm -rf dist/lib/agents
 	cp -r lib/agents dist/lib
 endef
@@ -40,20 +41,31 @@ all:
 # Build the dist/ tree. Invoked by `pnpm run build`. Kept here (rather
 # than as a chain in package.json) so the steps remain readable and easy
 # to extend without inflating the package.json scripts section.
+#
+# Incremental: dist/ is NOT wiped here (use `make clean` for a full
+# reset; publish always goes through clean). Because the buildinfo lives
+# OUTSIDE dist/ (it must not ship in the tarball), dist and its
+# incremental state no longer share a lifetime: if dist/ was deleted by
+# hand but the buildinfo survived, tsc would consider everything
+# up-to-date, emit nothing, and leave an empty dist. The recipe's first
+# line drops the stale buildinfo in that case. It keys on dist/lib as a
+# heuristic for "dist meaningfully exists" — a PARTIAL hand-deletion that
+# leaves dist/lib (e.g. rm -rf dist/scripts) is not covered; `make clean`
+# is the recovery for any surgically damaged dist.
+#
+# The .mjs copies are wipe-then-copy so an .mjs deleted from lib/ cannot
+# linger (and later ship) in dist. The wipe targets *.mjs ONLY: these
+# dist dirs also hold tsc-emitted .js/.d.ts, which incremental tsc would
+# NOT re-emit if deleted behind its back.
 build:
-	# Incremental: dist/ is NOT wiped here (use `make clean` for a full
-	# reset; publish always goes through clean). Because the buildinfo
-	# lives OUTSIDE dist/ (it must not ship in the tarball), dist and its
-	# incremental state no longer share a lifetime: if dist/ was deleted
-	# by hand but the buildinfo survived, tsc would consider everything
-	# up-to-date, emit nothing, and leave an empty dist. Drop the stale
-	# buildinfo in that case.
 	@if [ ! -d dist/lib ]; then rm -f .agency-build/tsc.tsbuildinfo; fi
 	$(TSC)
 	$(TSC_ALIAS)
 	mkdir -p dist/lib/cli/runShim
+	rm -f dist/lib/cli/runShim/*.mjs
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 	mkdir -p dist/lib/stdlib/providers
+	rm -f dist/lib/stdlib/providers/*.mjs
 	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
 
 # Full reset: compiled TS, incremental scratch state, and the gitignored

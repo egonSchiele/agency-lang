@@ -2,8 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
 import { createProgram, runCli } from "./agency.js";
+
+const execFileAsync = promisify(execFile);
+
+// The CLI integration tests below shell out to the built dist/ to observe real
+// process exit codes (compile calls process.exit, which would kill the vitest
+// worker if run in-process). They are SKIPPED (with a visible reason) when dist
+// isn't built, so `pnpm test` stays green on a clean checkout; they run in CI
+// and after `make` / `pnpm run build`.
+const CLI = path.resolve("dist/scripts/agency.js");
+const HAS_BUILT_CLI = fs.existsSync(CLI);
+if (!HAS_BUILT_CLI) {
+  console.warn(
+    `Skipping CLI integration tests: ${CLI} not built (run \`make\` or \`pnpm run build\`).`,
+  );
+}
 
 let tmpDir: string;
 
@@ -90,5 +107,40 @@ describe("agency CLI command tree", () => {
     expect(logsCommand?.usage()).toContain("[file]");
     expect(typeof (logsCommand as unknown as { _actionHandler?: unknown })._actionHandler)
       .toBe("function");
+  });
+});
+
+describe.skipIf(!HAS_BUILT_CLI)("compile --strict (integration, requires build)", () => {
+  it("exits non-zero on a type error with --strict, zero without", async () => {
+    const cli = CLI;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strict-"));
+    const f = path.join(dir, "bad.agency");
+    fs.writeFileSync(f, 'node main() {\n  let x: number = "hello"\n}\n');
+    await expect(execFileAsync("node", [cli, "compile", f])).resolves.toBeTruthy();
+    await expect(execFileAsync("node", [cli, "compile", "--strict", f])).rejects.toBeTruthy();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe.skipIf(!HAS_BUILT_CLI)("config show (integration, requires build)", () => {
+  it("prints the resolved, merged config as JSON, with secrets masked by default", async () => {
+    const cli = CLI;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "config-show-"));
+    fs.writeFileSync(
+      path.join(dir, "agency.json"),
+      JSON.stringify({ outDir: "./built", log: { apiKey: "sk-secret-1234" } }),
+    );
+    const cfg = path.join(dir, "agency.json");
+
+    const masked = await execFileAsync("node", [cli, "-c", cfg, "config", "show"]);
+    const maskedJson = JSON.parse(masked.stdout);
+    expect(maskedJson.outDir).toBe("./built");
+    expect(maskedJson.log.apiKey).toBe("•••1234");
+    expect(masked.stdout).not.toContain("sk-secret-1234");
+
+    const raw = await execFileAsync("node", [cli, "-c", cfg, "config", "show", "--show-secrets"]);
+    expect(JSON.parse(raw.stdout).log.apiKey).toBe("sk-secret-1234");
+
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

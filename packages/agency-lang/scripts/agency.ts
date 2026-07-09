@@ -24,7 +24,12 @@ import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
-import { AgencyConfig } from "@/config.js";
+import {
+  AgencyConfig,
+  applyCliFlags,
+  type CliFlags,
+  redactConfigSecrets,
+} from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -78,7 +83,10 @@ import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
 
-type RunOptions = { resume?: string; trace?: string | true };
+// Per-run flags for `agency run` / the hidden default command: the shared
+// CliFlags (mapped onto config by applyCliFlags in config.ts) plus --resume,
+// which is a run-only concern, not a config field.
+type RunOptions = CliFlags & { resume?: string };
 
 type CliDependencies = {
   loadLspStartServer?: () => Promise<() => void>;
@@ -123,14 +131,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   }
 
   function runWithOptions(input: string, options: RunOptions) {
-    const config = getConfig();
-    if (options.trace) {
-      config.trace = true;
-      config.traceFile =
-        typeof options.trace === "string"
-          ? options.trace
-          : input.replace(/\.agency$/, ".trace");
-    }
+    const config = applyCliFlags(getConfig(), options, input);
     run(config, input, undefined, options.resume);
   }
 
@@ -141,9 +142,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<inputs...>", "Paths to .agency input files or directories")
     .option("--ts", "Output .ts files with // @no-check header")
     .option("-w, --watch", "Watch for changes and recompile")
+    .option("--strict", "Fail on any fatal type error (typechecker.strict)")
     .action(
-      async (inputs: string[], opts: { ts?: boolean; watch?: boolean }) => {
-        const config = getConfig();
+      async (inputs: string[], opts: { ts?: boolean; watch?: boolean; strict?: boolean }) => {
+        const config = applyCliFlags(getConfig(), { strict: opts.strict });
         if (opts.watch) {
           const close = await watchAndCompile(config, inputs, { ts: opts.ts });
           process.once("SIGINT", async () => {
@@ -184,6 +186,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--trace [file]",
         "Write execution trace to file (default: <input>.trace)",
+      )
+      .option(
+        "--log-file <path>",
+        "Append statelog events (one JSON object per line) to this file for this run",
+      )
+      .option(
+        "--observability",
+        "Enable statelog observability for this run (use with a configured host, or --log-file)",
+      )
+      .option(
+        "--strict",
+        "Fail the run on any fatal type error (typechecker.strict)",
       );
   }
 
@@ -913,9 +927,42 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Diagnose problems with an Agency file using the agency agent")
     .argument("<file>", "Path to the .agency file to diagnose")
     .option("--symptom <text>", "Optional description of the problem you are seeing")
-    .action((file: string, opts: { symptom?: string }) => {
+    .option("--trace [file]", "Write an execution trace of the diagnosis to this file")
+    .option("--log-file <path>", "Append statelog events from the diagnosis to this file")
+    .action(
+      (
+        file: string,
+        opts: { symptom?: string; trace?: string | boolean; logFile?: string },
+      ) => {
+        const config = getConfig();
+        doctor(config, file, {
+          symptom: opts.symptom,
+          trace: opts.trace as string | true | undefined,
+          logFile: opts.logFile,
+        });
+      },
+    );
+
+  const configCmd = program
+    .command("config")
+    .description("Inspect Agency configuration");
+
+  configCmd
+    .command("show")
+    .description("Print the resolved, merged agency.json config as JSON")
+    .option(
+      "--show-secrets",
+      "Print API keys verbatim instead of masking them (avoid in shared logs / bug reports)",
+    )
+    .action((opts: { showSecrets?: boolean }) => {
       const config = getConfig();
-      doctor(config, file, opts);
+      console.log(
+        JSON.stringify(
+          opts.showSecrets ? config : redactConfigSecrets(config),
+          null,
+          2,
+        ),
+      );
     });
 
   program

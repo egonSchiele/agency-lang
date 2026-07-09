@@ -96,15 +96,12 @@ describe("parseAgencyFileCached", () => {
     expect(_internal.stats.misses).toBe(2);
   });
 
-  test("bypasses the cache entirely when tarsecTraceHost is set", () => {
+  test("a stale tarsecTraceHost key no longer bypasses the cache", () => {
     const file = writeTempAgencyFile(VALID_PROGRAM);
-    const traced = parseAgencyFileCached(file, { tarsecTraceHost: true } as any);
-    expect(traced.success).toBe(true);
-    expect(_internal.stats.hits).toBe(0);
-    expect(_internal.stats.misses).toBe(0);
-    // The traced parse must not have stored an entry either.
-    parseAgencyFileCached(file, {});
-    expect(_internal.stats.hits).toBe(0);
+    parseAgencyFileCached(file, { tarsecTraceHost: "http://x" } as any);
+    parseAgencyFileCached(file, { tarsecTraceHost: "http://x" } as any);
+    // Old code: bypass → hits 0, misses 0 (nothing stored). New code: caches.
+    expect(_internal.stats.hits).toBe(1);
     expect(_internal.stats.misses).toBe(1);
   });
 

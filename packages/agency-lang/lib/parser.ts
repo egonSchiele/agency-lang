@@ -14,14 +14,11 @@ import {
   seqC,
   set,
   setInputStr,
-  setTraceHost,
-  setTraceId,
   success,
   TarsecError,
   trace,
 } from "tarsec";
 
-import { nanoid } from "nanoid";
 import { AgencyConfig } from "./config.js";
 import { lowerPatterns, PatternLoweringError } from "./lowering/patternLowering.js";
 import { LoweringError } from "./lowering/loweringError.js";
@@ -183,16 +180,10 @@ export function _parseAgency(
   // Clear memo caches so loc info derived from `setInputStr` in a previous
   // parse (which may have used a different source) doesn't leak through.
   resetMemos();
-  // CAUTION (parse cache): `tarsecTraceHost` is currently the ONLY config
-  // field the parse path reads, and lib/parseCache.ts relies on that — its
-  // cache key deliberately excludes config (tracing is handled via a full
-  // cache bypass). If you add any config-driven parse behavior here (e.g. a
-  // syntax feature flag), you MUST add that field to the parseCache key, or
-  // the cache will silently serve one config's AST to another.
-  if (config.tarsecTraceHost) {
-    setTraceHost("http://localhost:1465");
-    setTraceId(nanoid());
-  }
+  // NOTE (parse cache): the parse path reads NO field of `config`, so
+  // lib/parseCache.ts can key entries without config. If you ever add
+  // config-driven parse behavior here, you MUST add that field to the
+  // parseCache key, or the cache will serve one config's AST to another.
   const result = agencyParser(normalized);
   if (!result.success) {
     const betterMessage = getErrorMessage();

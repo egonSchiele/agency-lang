@@ -30,9 +30,6 @@ import { AgencyProgram } from "./types.js";
  *  - Only successful parses are cached. Failures re-parse every time; the
  *    parser's module-global rightmost-failure state is per-parse and callers
  *    may read it after a failure.
- *  - Bypassed entirely (no read, no store) when `config.tarsecTraceHost` is
- *    set: tracing is the one config field the parse path reads, and a traced
- *    parse must actually run.
  *  - Pinned to `lower: true` parses. The formatter's `lower: false` path must
  *    not use this cache without adding `lower` to the key.
  */
@@ -75,24 +72,20 @@ export function parseAgencyFileCached(
     };
   }
 
-  const bypass = !!config.tarsecTraceHost;
   const key = `${applyTemplate ? "t" : "r"}:${absPath}`;
 
-  if (!bypass) {
-    const entry = cache[key];
-    if (entry && entry.mtimeMs === stat.mtimeMs && entry.size === stat.size) {
-      stats.hits++;
-      return {
-        success: true,
-        result: structuredClone(entry.program),
-        rest: "",
-      };
-    }
+  const entry = cache[key];
+  if (entry && entry.mtimeMs === stat.mtimeMs && entry.size === stat.size) {
+    stats.hits++;
+    return {
+      success: true,
+      result: structuredClone(entry.program),
+      rest: "",
+    };
   }
 
   const contents = fs.readFileSync(absPath, "utf-8");
   const result = parseAgency(contents, config, applyTemplate);
-  if (bypass) return result;
 
   stats.misses++;
   if (result.success) {

@@ -30,22 +30,34 @@ export function buildDoctorPrompt(file: string, symptom?: string): string {
   ].join("\n");
 }
 
-// `agency doctor <file> [--symptom <text>]` — launch the agency agent in
-// interactive mode, seeded with a diagnosis prompt routed to the code
-// subagent. A thin wrapper over the generic --interactive/--agent flags.
+// Build the argv forwarded to the bundled agent. Kept pure and exported so
+// the flag assembly can be unit-tested without launching the agent. Debug
+// flags go BEFORE the `--` terminator (tokens after `--` are positionals to
+// the agent's std::args parser); the prompt is the sole positional after it.
+export function buildDoctorArgs(opts: {
+  file: string;
+  symptom?: string;
+  trace?: string | true;
+  logFile?: string;
+}): string[] {
+  const prompt = buildDoctorPrompt(opts.file, opts.symptom);
+  const debug: string[] = [];
+  if (opts.trace !== undefined) {
+    debug.push("--trace");
+    if (typeof opts.trace === "string") debug.push(opts.trace);
+  }
+  if (opts.logFile) debug.push("--log-file", opts.logFile);
+  return ["--interactive", "--agent", "code", ...debug, "--", prompt];
+}
+
+// `agency doctor <file> [--symptom <text>] [--trace [file]] [--log-file <path>]`
+// — launch the agency agent in interactive mode, seeded with a diagnosis prompt
+// routed to the code subagent. A thin wrapper over the generic
+// --interactive/--agent flags.
 export function doctor(
   config: AgencyConfig,
   file: string,
-  opts: { symptom?: string } = {},
+  opts: { symptom?: string; trace?: string | true; logFile?: string } = {},
 ): void {
-  const prompt = buildDoctorPrompt(file, opts.symptom);
-  // `--` ends flag parsing so the prompt (which may start with `-`) is
-  // treated as a positional by the agent's std::args parser.
-  runBundledAgent(config, "agency-agent", [
-    "--interactive",
-    "--agent",
-    "code",
-    "--",
-    prompt,
-  ]);
+  runBundledAgent(config, "agency-agent", buildDoctorArgs({ file, ...opts }));
 }

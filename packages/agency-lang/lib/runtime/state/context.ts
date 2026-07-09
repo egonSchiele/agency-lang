@@ -23,7 +23,11 @@ import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerFn } from "../types.js";
-import { applyRuntimeConfigOverridesToContextArgs } from "../configOverrides.js";
+import {
+  applyRuntimeConfigOverridesToContextArgs,
+  getRuntimeConfigOverrides,
+} from "../configOverrides.js";
+import { readConfigOverrides } from "../../config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
@@ -205,7 +209,16 @@ export class RuntimeContext<T> {
      *  match the established no-debug-by-default behavior. */
     logLevel?: LogLevel;
   }) {
-    args = applyRuntimeConfigOverridesToContextArgs(args);
+    // One runtime merge, applied for BOTH transports so a subprocess launched
+    // with explicit IPC overrides still inherits the env override (e.g. a
+    // tree-wide --log-file). Env first, then IPC on top: IPC (explicit,
+    // per-child) wins per field, env fills the rest. Sequential application
+    // also layers nested `log`/`trace` objects rather than clobbering them.
+    args = applyRuntimeConfigOverridesToContextArgs(args, readConfigOverrides());
+    args = applyRuntimeConfigOverridesToContextArgs(
+      args,
+      getRuntimeConfigOverrides(),
+    );
     const statelogConfig = {
       ...args.statelogConfig,
       traceId: args.statelogConfig.traceId || nanoid(),

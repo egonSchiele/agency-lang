@@ -1,5 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { AgencyConfigSchema } from "./config.js";
+import { describe, it, expect, vi } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import {
+  AgencyConfigSchema,
+  applyCliFlags,
+  CONFIG_OVERRIDES_ENV,
+  loadConfigSafe,
+  readConfigOverrides,
+  redactConfigSecrets,
+  serializeConfigOverrides,
+} from "./config.js";
 
 describe("AgencyConfigSchema", () => {
   it("should accept an empty config", () => {
@@ -122,5 +133,117 @@ describe("AgencyConfig typechecker key", () => {
   it("accepts an empty typechecker object", () => {
     const result = AgencyConfigSchema.safeParse({ typechecker: {} });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("loadConfigSafe — removed options are ignored, not rejected", () => {
+  it("loads an agency.json with the removed keys, and a stale wrong-typed key, without error", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-removed-"));
+    const cfgPath = path.join(dir, "agency.json");
+    fs.writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        excludeNodeTypes: "oops-was-string-array", // stale + wrong type: Zod error before removal, ignored after
+        excludeBuiltinFunctions: ["write"],
+        allowedFetchDomains: ["api.example.com"],
+        disallowedFetchDomains: ["blocked.com"],
+        outDir: "./dist",
+      }),
+    );
+    const { config, error } = loadConfigSafe(cfgPath);
+    expect(error).toBeUndefined();
+    expect(config.outDir).toBe("./dist");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("applyCliFlags", () => {
+  it("--trace <file> sets trace + traceFile", () => {
+    const out = applyCliFlags({}, { trace: "out.trace" });
+    expect(out.trace).toBe(true);
+    expect(out.traceFile).toBe("out.trace");
+    expect(out.traceDir).toBeUndefined();
+  });
+
+  it("bare --trace with an input derives <input>.trace (agency run)", () => {
+    const out = applyCliFlags({}, { trace: true }, "prog.agency");
+    expect(out.traceFile).toBe("prog.trace");
+  });
+
+  it("bare or empty --trace with no input uses traceDir='.' (bundled agent)", () => {
+    expect(applyCliFlags({}, { trace: true }).traceDir).toBe(".");
+    // Empty attached (--trace=) must behave like bare, not set traceFile="".
+    expect(applyCliFlags({}, { trace: "" }).traceDir).toBe(".");
+    expect(applyCliFlags({}, { trace: "" }).traceFile).toBeUndefined();
+  });
+
+  it("--log-file sets log.logFile and enables observability, preserving log.host", () => {
+    const out = applyCliFlags({ log: { host: "https://h" } }, { logFile: "x" });
+    expect(out.log).toEqual({ host: "https://h", logFile: "x" });
+    expect(out.observability).toBe(true);
+  });
+
+  it("--strict sets strict AND strictTypes", () => {
+    expect(applyCliFlags({}, { strict: true }).typechecker).toEqual({
+      strict: true,
+      strictTypes: true,
+    });
+  });
+
+  it("does not mutate the input config", () => {
+    const input = {};
+    applyCliFlags(input, { strict: true, logFile: "x", trace: "t" });
+    expect(input).toEqual({});
+  });
+});
+
+describe("config overrides env round-trip", () => {
+  it("serialize → read yields the same Partial<AgencyConfig>", () => {
+    const overrides = { trace: true, traceDir: ".", observability: true, log: { logFile: "l.jsonl" } };
+    const env = { [CONFIG_OVERRIDES_ENV]: serializeConfigOverrides(overrides) };
+    expect(readConfigOverrides(env)).toEqual(overrides);
+  });
+
+  it("returns {} for an absent value without warning", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(readConfigOverrides({})).toEqual({});
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("returns {} and warns (never throws) for unparseable JSON", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(readConfigOverrides({ [CONFIG_OVERRIDES_ENV]: "not json" })).toEqual({});
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("unparseable"));
+    spy.mockRestore();
+  });
+
+  it("returns {} and warns for a schema-violating field", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(readConfigOverrides({ [CONFIG_OVERRIDES_ENV]: '{"maxCallDepth":-1}' })).toEqual({});
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid"));
+    spy.mockRestore();
+  });
+});
+
+describe("redactConfigSecrets", () => {
+  it("masks log.apiKey and client.apiKey.* while keeping other fields", () => {
+    const redacted = redactConfigSecrets({
+      outDir: "./dist",
+      log: { host: "https://h", apiKey: "sk-secret-1234" },
+      client: { defaultModel: "gpt", apiKey: { openAi: "sk-openai-abcd", anthropic: "x" } },
+    });
+    expect(redacted.outDir).toBe("./dist");
+    expect(redacted.log?.host).toBe("https://h");
+    expect(redacted.log?.apiKey).toBe("•••1234");
+    expect(redacted.client?.apiKey?.openAi).toBe("•••abcd");
+    expect(redacted.client?.apiKey?.anthropic).toBe("•••"); // <=4 chars fully masked
+    expect(redacted.client?.defaultModel).toBe("gpt");
+  });
+
+  it("does not mutate the input", () => {
+    const input = { log: { apiKey: "sk-secret-1234" } };
+    redactConfigSecrets(input);
+    expect(input.log.apiKey).toBe("sk-secret-1234");
   });
 });

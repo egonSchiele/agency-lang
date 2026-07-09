@@ -6,6 +6,26 @@
 
 For basic usage examples, see `docs/config.md`.
 
+## Config resolution (single source of truth)
+
+The effective config for a program is assembled from three sources, defined and
+documented in one place — the "Config resolution" section at the bottom of
+`lib/config.ts`. In increasing precedence:
+
+1. **`agency.json`** — the file, walked up from cwd (`loadConfigSafe`). The base.
+2. **CLI flags** — `--trace` / `--log-file` / `--strict`, mapped onto config by
+   `applyCliFlags()`. This is the only definition of what each flag means.
+3. **`AGENCY_CONFIG_OVERRIDES`** — a JSON `Partial<AgencyConfig>` in the
+   environment (`readConfigOverrides`). Used to push config into a process whose
+   config was baked at compile time and can't be re-derived from source (the
+   precompiled built-in agents, `agency pack` bundles). It is the env-transport
+   twin of the subprocess IPC `configOverrides` message, and both are applied by
+   the single runtime merge `applyRuntimeConfigOverridesToContextArgs`.
+
+Where applied: sources 1⊕2 at the CLI (baked into the generated program);
+source 3 at runtime, in the `RuntimeContext` constructor. Inspect the resolved
+result with `agency config show` (secrets masked; `--show-secrets` to reveal).
+
 ## All options
 
 ### Basic
@@ -14,22 +34,6 @@ For basic usage examples, see `docs/config.md`.
 |--------|------|-------------|
 | `verbose` | `boolean` | Enable verbose compilation logging |
 | `outDir` | `string` | Output directory for compiled TypeScript files |
-
-### Code generation filtering
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `excludeNodeTypes` | `string[]` | AST node types to skip during code generation (e.g., `"comment"`, `"typeHint"`) |
-| `excludeBuiltinFunctions` | `string[]` | Built-in functions to exclude from generated code. Available: `print`, `printJSON`, `input`, `read`, `readBinary`, `write`, `fetch`, `fetchJSON`, `fetchJson`, `sleep`, `round` |
-
-### Fetch security
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `allowedFetchDomains` | `string[]` | Whitelist of allowed domains for `fetch` calls |
-| `disallowedFetchDomains` | `string[]` | Blacklist of disallowed domains for `fetch` calls |
-
-If both are set, only domains in the allowed list that are NOT in the disallowed list are permitted. Only string literal URLs are validated at compile time; variable URLs cannot be checked.
 
 ### Type checking
 
@@ -59,7 +63,6 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
 | Option | Type | Description |
 |--------|------|-------------|
 | `log` | `Partial<StatelogConfig>` | Statelog configuration — `host`, `projectId`, `apiKey`, `debugMode`. See `docs/dev/statelog.md` |
-| `tarsecTraceHost` | `string` | Custom host for tarsec parser trace collection |
 
 ### Security
 
@@ -78,8 +81,6 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
   "strictTypes": true,
   "typeCheck": true,
   "restrictImports": true,
-  "excludeBuiltinFunctions": ["write", "fetch"],
-  "allowedFetchDomains": ["api.example.com"],
   "client": {
     "defaultModel": "gpt-4o",
     "logLevel": "error",

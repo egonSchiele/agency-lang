@@ -27,11 +27,7 @@ Flags:
 Config File (agency.json):
   {
     "verbose": false,                   Enable verbose logging by default
-    "outDir": "./dist",                 Default output directory for compiled files
-    "excludeNodeTypes": ["comment"],    Node types to exclude from code generation
-    "excludeBuiltinFunctions": ["write"], Builtin functions to exclude
-    "allowedFetchDomains": ["api.example.com"], Whitelist for fetch domains
-    "disallowedFetchDomains": ["blocked.com"]   Blacklist for fetch domains
+    "outDir": "./dist"                  Default output directory for compiled files
   }
 
 Examples:

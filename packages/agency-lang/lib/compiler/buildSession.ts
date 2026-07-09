@@ -142,6 +142,19 @@ export class BuildSession {
       deriveConfigKey(config),
     );
     try {
+      // Fully-clean fast path: every requested module fresh per the
+      // manifest alone — no closure walk, no parsing. Directories expand
+      // with the same walker the compile path uses.
+      const allFiles = expandEntries(entries);
+      if (this.tracker.allFresh(allFiles)) {
+        for (const file of allFiles) {
+          this.compiledFiles.add(file);
+        }
+        if (!options.quiet) {
+          console.log(`${allFiles.length} file(s) up to date`);
+        }
+        return allFiles.length === 1 ? this.tracker.outputFor(allFiles[0]) : null;
+      }
       if (entries.length === 1) {
         return this.compileEntry(config, entries[0], outputFile, options);
       }
@@ -388,8 +401,6 @@ export class BuildSession {
     const compileStartTime = performance.now();
     const absoluteInputFile = path.resolve(inputFile);
 
-    this.ensureCompiledClosure(absoluteInputFile, config, !!options?.symbolTable, verbose);
-
     const ext = options?.ts ? ".ts" : ".js";
     // Anchor the replacement to the extension so that an absolute path
     // containing ".agency" as a substring in a parent directory (e.g.
@@ -409,6 +420,21 @@ export class BuildSession {
       return outputFile;
     }
 
+    // Incremental skip — BEFORE the closure build, so a fresh module pays
+    // no parse, no analysis, no typecheck, no recursion into imports (its
+    // depsHash covers the whole subtree), no emit. The NOOP tracker makes
+    // this constant-false for "always" sessions. Deliberately NOT added to
+    // compiledFiles here: ensureCompiledClosure below may clear that set,
+    // and repeat visits are absorbed by this same check.
+    if (this.tracker.isFresh(absoluteInputFile)) {
+      return outputFile;
+    }
+
+    this.ensureCompiledClosure(absoluteInputFile, config, !!options?.symbolTable, verbose);
+
+    // Added AFTER ensureCompiledClosure: setClosure clears the dedupe set
+    // when the closure changes, so an earlier add would be wiped moments
+    // later (this ordering predates the manifest and must be preserved).
     this.compiledFiles.add(absoluteInputFile);
 
     const contents = readFile(inputFile);
@@ -636,4 +662,21 @@ function subtreeHasPkgImport(
     }
   }
   return false;
+}
+
+/** Expand request entries to absolute FILE paths: directories via the same
+ *  walker the compile path uses, files as-is. Fast-path support only —
+ *  the compile dispatch itself keeps its dir handling untouched. */
+function expandEntries(entries: string[]): string[] {
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (fs.existsSync(entry) && fs.statSync(entry).isDirectory()) {
+      for (const found of findRecursively(entry)) {
+        files.push(path.resolve(found.path));
+      }
+    } else {
+      files.push(path.resolve(entry));
+    }
+  }
+  return files;
 }

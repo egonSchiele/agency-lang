@@ -164,6 +164,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Compile .agency file(s) or directory(s) to JavaScript")
     .argument("<inputs...>", "Paths to .agency input files or directories")
     .option("--ts", "Output .ts files with // @no-check header")
+    .option("--force", "Recompile everything, ignoring the incremental-build manifest")
     .option("-w, --watch", "Watch for changes and recompile")
     .option("--strict", "Fail on any fatal type error (typechecker.strict)")
     .option(
@@ -181,6 +182,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         inputs: string[],
         opts: {
           ts?: boolean;
+          force?: boolean;
           watch?: boolean;
           strict?: boolean;
           maxToolCallRounds?: number;
@@ -200,7 +202,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
           });
         } else {
           for (const input of inputs) {
-            compile(config, input, undefined, { ts: opts.ts });
+            compile(config, input, undefined, {
+              ts: opts.ts,
+              freshness: opts.force ? "force" : undefined,
+            });
           }
           // If installed globally, the user will hit ERR_MODULE_NOT_FOUND
           // if they try to `node` the output directly. Steer them toward

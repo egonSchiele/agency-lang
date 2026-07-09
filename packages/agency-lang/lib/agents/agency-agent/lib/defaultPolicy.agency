@@ -132,24 +132,12 @@ def dirScope(baseDir: string): string {
 }
 
 // `recommended` plus auto-approval of the mutating file-system and
-// git-write effects, each SCOPED to `baseDir` and its children. Writes
-// (or git actions) whose path lands outside `baseDir` still prompt.
-//
-// The scope is matched on each effect's path field: `dir` for
-// write/edit/mkdir, `target` for remove, `src`+`dest` for copy/move, and
-// `cwd` for the git commands (which resolve an empty cwd to the agent
-// working directory before raising the interrupt). This mirrors the
-// fields `ALWAYS_FIELDS` pins for the interactive "here" rule.
-//
-// This is a genuine confinement for file writes, guarded on two layers:
-// (1) `std::write`/`std::edit`/`std::writeBinary` run their `filename`
-// through `resolvePath`, which rejects `..`, absolute paths, `~`, and
-// symlink escapes at runtime — so `dir` matching `baseDir` really does
-// pin the write inside it; and (2) the scope glob itself won't match a
-// value containing `..` (picomatch, dot:false), so effects matched on a
-// whole-path field (remove/copy/move/mkdir) can't be approved for a
-// `..`-escaping path either. Absolute paths outside `baseDir` simply
-// don't match and fall through to prompting.
+// git-write effects, each scoped to `baseDir` and its children; anything
+// outside still prompts. Matched on each effect's path field: `dir`
+// (write/edit/mkdir), `target` (remove), `src`+`dest` (copy/move), `cwd`
+// (git). Confinement is real: write/edit run `filename` through
+// `resolvePath` (rejects `..`/absolute/`~`/symlink) and the scope glob
+// won't match a `..`-containing path.
 export def withWritesPolicy(baseDir: string) {
   const scope = dirScope(baseDir)
   const dirRule = [{ match: { dir: scope }, action: "approve" }]
@@ -193,8 +181,8 @@ export def withBashPolicy(baseDir: string) {
 // Built-in policy names accepted by the `--policy` flag (anything else
 // is treated as a path to a policy JSON file).
 export static const BUILTIN_POLICY_NAMES = [
-  "minimal",
   "recommended",
+  "minimal",
   "with-writes",
   "with-bash",
 ]

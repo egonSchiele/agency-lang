@@ -1,0 +1,27 @@
+// The headline claim: a forked subagent inherits the branch-scoped
+// maxToolCallRounds. Subagents are invoked as TOOLS (like the agency agent's
+// codeAgent/oracleAgent), so each runs in a forked tool branch. `subagent`
+// runs its OWN inner llm() tool loop; with maxToolCallRounds=1 set on the root
+// branch, that inner loop must be capped too, so `innerPing` runs exactly once.
+// If the branch default did NOT propagate to the fork, the inner loop would use
+// the compiled default (10) and run innerPing twice.
+import { setLlmOptions } from "std::llm"
+
+let innerPingCount = 0
+
+def innerPing(): string {
+  """Returns pong."""
+  innerPingCount = innerPingCount + 1
+  return "pong"
+}
+
+def subagent(): string {
+  """Runs a nested task by calling innerPing."""
+  return llm("call innerPing", { tools: [innerPing] })
+}
+
+node main(): number {
+  setLlmOptions({ maxToolCallRounds: 1 })
+  llm("call subagent", { tools: [subagent] })
+  return innerPingCount
+}

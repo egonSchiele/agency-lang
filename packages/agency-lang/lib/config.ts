@@ -348,7 +348,10 @@ export const AgencyConfigSchema = z
     verbose: z.boolean(),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
-    maxToolCallRounds: z.number(),
+    // Positive integer: the generated code does `maxToolCallRounds || 10`, so a
+    // 0 would silently mean 10 and a float/negative is meaningless — reject at
+    // load rather than surprise. Mirrors maxCallDepth.
+    maxToolCallRounds: z.number().int().positive(),
     observability: z.boolean(),
     log: z
       .object({
@@ -586,6 +589,8 @@ export type CliFlags = {
   logFile?: string;
   observability?: boolean;
   strict?: boolean;
+  maxToolCallRounds?: number;
+  maxToolResultChars?: number;
 };
 
 /**
@@ -599,6 +604,10 @@ export type CliFlags = {
  *   --observability  → observability=true
  *   --strict         → typechecker.strict + strictTypes (the compile-path gate
  *                      never runs the checker on strictTypes alone)
+ *   --max-tool-call-rounds <n> → maxToolCallRounds=<n> (baked into runPrompt at
+ *                      compile time; overrides agency.json for this run)
+ *   --max-tool-result-chars <n> → client.maxToolResultChars=<n> (0 disables the
+ *                      cap; overrides agency.json for this run)
  */
 export function applyCliFlags(
   config: AgencyConfig,
@@ -626,6 +635,12 @@ export function applyCliFlags(
   }
   if (flags.strict) {
     next.typechecker = { ...next.typechecker, strict: true, strictTypes: true };
+  }
+  if (flags.maxToolCallRounds !== undefined) {
+    next.maxToolCallRounds = flags.maxToolCallRounds;
+  }
+  if (flags.maxToolResultChars !== undefined) {
+    next.client = { ...next.client, maxToolResultChars: flags.maxToolResultChars };
   }
   return next;
 }

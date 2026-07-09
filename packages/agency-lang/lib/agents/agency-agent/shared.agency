@@ -21,6 +21,28 @@ import { getModelSettings, loadSettings } from "./lib/settings.agency"
 import { slotKind } from "./lib/slots.agency"
 
 
+// One-shot runs (--print / piped / a positional query) have no REPL for the
+// user to say "keep going", so an autonomous task gets more tool rounds by
+// default than the interactive baked default (10).
+export static const ONE_SHOT_MAX_TOOL_CALL_ROUNDS = 50
+
+/** Effective maxToolCallRounds for a run. An explicit --max-tool-call-rounds
+  always wins; otherwise a one-shot run gets ONE_SHOT_MAX_TOOL_CALL_ROUNDS and
+  an interactive run returns null (keep the compiled default). */
+export def resolveMaxToolCallRounds(
+  explicit: number | null,
+  oneShot: boolean,
+): number | null {
+  if (explicit != null) {
+    return explicit
+  }
+  if (oneShot) {
+    return ONE_SHOT_MAX_TOOL_CALL_ROUNDS
+  }
+  return null
+}
+
+
 // Per-user state directory for the agent (persistent memory + saved
 // policy). We expand `~` ourselves via `env("HOME")` because
 // `enableMemory(...)`'s underlying `MemoryFrame` calls

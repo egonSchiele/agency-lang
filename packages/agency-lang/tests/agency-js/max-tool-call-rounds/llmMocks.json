@@ -1,0 +1,5 @@
+[
+  { "toolCalls": [{ "name": "ping", "args": {} }] },
+  { "toolCalls": [{ "name": "ping", "args": {} }] },
+  { "return": "done" }
+]

@@ -31,6 +31,7 @@ export type LlmDefaults = RetryConfig & {
   reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
   maxToolResultChars?: number;
+  maxToolCallRounds?: number;
 };
 
 /**

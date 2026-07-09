@@ -65,6 +65,12 @@ describe("_setLlmOptions", () => {
     expect(stack.other.llmDefaults.maxToolResultChars).toBe(5);
   });
 
+  it("carries maxToolCallRounds in the same bag (branch default for runPrompt)", () => {
+    const stack = { other: {} as any };
+    withStack(stack, () => _setLlmOptions({ maxToolCallRounds: 3 }));
+    expect(stack.other.llmDefaults.maxToolCallRounds).toBe(3);
+  });
+
   it("ignores undefined fields (no overwrite with undefined)", () => {
     const stack = { other: { llmDefaults: { model: "keep" } } as any };
     withStack(stack, () => _setLlmOptions({ temperature: 0.5 }));

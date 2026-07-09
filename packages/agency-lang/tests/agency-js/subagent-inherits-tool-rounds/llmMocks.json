@@ -1,0 +1,7 @@
+[
+  { "toolCalls": [{ "name": "subagent", "args": {} }] },
+  { "toolCalls": [{ "name": "innerPing", "args": {} }] },
+  { "toolCalls": [{ "name": "innerPing", "args": {} }] },
+  { "return": "inner done" },
+  { "return": "outer done" }
+]

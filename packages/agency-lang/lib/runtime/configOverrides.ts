@@ -33,23 +33,23 @@ export function getRuntimeConfigOverrides(): Partial<AgencyConfig> | undefined {
 }
 
 /**
- * Apply runtime config overrides (set per-subprocess via
- * `setRuntimeConfigOverrides`) to the args used to construct a
- * `RuntimeContext`. `log.*` fields and the top-level `observability` flag flow
- * into the statelog config; `client.providerModules` and `maxCallDepth` are
- * forwarded explicitly (see below). Other `AgencyConfig` fields are ignored
- * because the runtime has its own pathways for them. If a new statelog-relevant
- * override field is added, it will be picked up automatically by the shallow
- * merge below.
+ * Apply runtime config overrides — a `Partial<AgencyConfig>` — onto the args
+ * used to construct a `RuntimeContext`. This is THE single runtime merge; it
+ * serves two transports:
+ *   • subprocess IPC: the parent forwards `configOverrides` in the spawn
+ *     message (`setRuntimeConfigOverrides` sets the active value).
+ *   • bundled agents / packed bundles: `AGENCY_CONFIG_OVERRIDES` in the env
+ *     (`config.ts` `readConfigOverrides`), passed explicitly by the caller.
  *
- * `client.providerModules` is honored: `_run` forwards the parent's
- * (absolutized) provider-module paths here so a subprocess loads the same
- * custom/local providers the parent has, regardless of how the child was
- * compiled. They are merged with any baked-in `providerModules` on `args`;
- * `loadProviderModules` de-duplicates by resolved path at load time.
- *
- * `maxCallDepth` is honored so a subprocess inherits the parent's runaway-
- * recursion ceiling rather than falling back to the default.
+ * Fields honored (others are ignored — the runtime has its own pathways):
+ *   • `log.*` + `observability` → statelogConfig
+ *   • `trace` / `traceFile` / `traceDir` → traceConfig. An override always
+ *     wins over the baked traceConfig: a supplied `traceDir` clears any baked
+ *     `traceFile` (which `resolveTraceFilePath` would otherwise prefer), so a
+ *     per-run `--trace` dir actually takes effect.
+ *   • `client.providerModules` → merged with baked modules (subprocess loads
+ *     the same custom/local providers; de-duped at load time).
+ *   • `maxCallDepth` → inherit the parent's runaway-recursion ceiling.
  */
 export function applyRuntimeConfigOverridesToContextArgs(
   args: RuntimeContextConstructorArgs,
@@ -69,6 +69,17 @@ export function applyRuntimeConfigOverridesToContextArgs(
     statelogConfig: { ...args.statelogConfig, ...statelogOverrides },
   };
 
+  if (overrides.traceFile || overrides.traceDir) {
+    merged.traceConfig = {
+      ...(args.traceConfig ?? {}),
+      // Override wins over baked. An explicit file sets traceFile; a dir-only
+      // override clears any baked traceFile so the dir is honored (see above).
+      ...(overrides.traceFile
+        ? { traceFile: overrides.traceFile }
+        : { traceFile: undefined, traceDir: overrides.traceDir }),
+    };
+  }
+
   const overrideModules = overrides.client?.providerModules;
   if (overrideModules && overrideModules.length > 0) {
     merged.providerModules = [
@@ -82,56 +93,5 @@ export function applyRuntimeConfigOverridesToContextArgs(
     merged.maxCallDepth = overrides.maxCallDepth;
   }
 
-  return merged;
-}
-
-/** Env-var names for per-run trace/statelog overrides. Shared so the reader
- *  (applyEnvOverridesToContextArgs) and the writer (runBundledAgent's
- *  agentDebugFlagsToEnv) can never drift. */
-export const DEBUG_ENV_VARS = {
-  traceFile: "AGENCY_TRACE_FILE",
-  traceDir: "AGENCY_TRACE_DIR",
-  logFile: "AGENCY_LOG_FILE",
-} as const;
-
-/**
- * Fold trace/statelog overrides from environment variables into RuntimeContext
- * args. How the precompiled built-in agents get a trace/statelog for one run:
- * runBundledAgent sets these env vars from --trace/--log-file. Env wins over
- * baked args. The statelog half delegates to applyRuntimeConfigOverridesToContextArgs
- * (which already owns log.* + observability → statelogConfig); only the trace
- * half is new here.
- *
- * Nested processes: AGENCY_LOG_FILE is inherited and shared across the tree
- * (intended — one statelog). AGENCY_TRACE_DIR is per-runId (safe). A fixed
- * AGENCY_TRACE_FILE shared across concurrent nested runs can interleave/truncate
- * — documented in the spec; consume-and-clear at the spawn boundary is a follow-up.
- */
-export function applyEnvOverridesToContextArgs(
-  args: RuntimeContextConstructorArgs,
-  env: Record<string, string | undefined> = process.env,
-): RuntimeContextConstructorArgs {
-  const traceFile = env[DEBUG_ENV_VARS.traceFile];
-  const traceDir = env[DEBUG_ENV_VARS.traceDir];
-  const logFile = env[DEBUG_ENV_VARS.logFile];
-  if (!traceFile && !traceDir && !logFile) return args;
-
-  let merged = logFile
-    ? applyRuntimeConfigOverridesToContextArgs(args, {
-        observability: true,
-        log: { logFile },
-      })
-    : args;
-
-  if (traceFile || traceDir) {
-    merged = {
-      ...merged,
-      traceConfig: {
-        ...(merged.traceConfig ?? {}),
-        ...(traceFile ? { traceFile } : {}),
-        ...(traceDir ? { traceDir } : {}),
-      },
-    };
-  }
   return merged;
 }

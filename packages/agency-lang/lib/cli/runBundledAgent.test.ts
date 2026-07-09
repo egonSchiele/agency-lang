@@ -7,61 +7,63 @@ vi.mock("fs", async (importOriginal) => {
   return { ...actual, existsSync: () => true };
 });
 
-import { agentDebugFlagsToEnv, runBundledAgent } from "./runBundledAgent.js";
+import { CONFIG_OVERRIDES_ENV } from "@/config.js";
+import { agentConfigOverride, runBundledAgent } from "./runBundledAgent.js";
 
-describe("agentDebugFlagsToEnv", () => {
-  it("--trace <file> → AGENCY_TRACE_FILE", () => {
-    expect(agentDebugFlagsToEnv(["--trace", "out.agencytrace"])).toEqual({
-      AGENCY_TRACE_FILE: "out.agencytrace",
+describe("agentConfigOverride", () => {
+  it("--trace <file> → traceFile", () => {
+    expect(agentConfigOverride(["--trace", "out.agencytrace"])).toEqual({
+      trace: true,
+      traceFile: "out.agencytrace",
     });
   });
   it("--trace=<file> attached form", () => {
-    expect(agentDebugFlagsToEnv(["--trace=x.trace"])).toEqual({
-      AGENCY_TRACE_FILE: "x.trace",
+    expect(agentConfigOverride(["--trace=x.trace"])).toEqual({
+      trace: true,
+      traceFile: "x.trace",
     });
   });
-  it("bare --trace → AGENCY_TRACE_DIR=.", () => {
-    expect(agentDebugFlagsToEnv(["--trace"])).toEqual({ AGENCY_TRACE_DIR: "." });
+  it("bare --trace → per-run dir (traceDir)", () => {
+    expect(agentConfigOverride(["--trace"])).toEqual({ trace: true, traceDir: "." });
   });
-  it("--trace followed by a single-dash token is bare (not a file named -p)", () => {
-    expect(agentDebugFlagsToEnv(["--trace", "-p"])).toEqual({ AGENCY_TRACE_DIR: "." });
+  it("empty --trace= behaves identically to bare --trace (the divergence bug)", () => {
+    expect(agentConfigOverride(["--trace="])).toEqual({ trace: true, traceDir: "." });
   });
-  it("--log-file <path> and attached form", () => {
-    expect(agentDebugFlagsToEnv(["--log-file", "l.jsonl"])).toEqual({
-      AGENCY_LOG_FILE: "l.jsonl",
-    });
-    expect(agentDebugFlagsToEnv(["--log-file=l.jsonl"])).toEqual({
-      AGENCY_LOG_FILE: "l.jsonl",
-    });
+  it("--log-file <path> → log.logFile + observability, space and attached forms", () => {
+    const expected = { log: { logFile: "l.jsonl" }, observability: true };
+    expect(agentConfigOverride(["--log-file", "l.jsonl"])).toEqual(expected);
+    expect(agentConfigOverride(["--log-file=l.jsonl"])).toEqual(expected);
   });
-  it("bare --log-file yields nothing (no optional value)", () => {
-    expect(agentDebugFlagsToEnv(["--log-file"])).toEqual({});
+  it("stops at the -- terminator", () => {
+    expect(agentConfigOverride(["--", "--trace", "x"])).toEqual({});
   });
-  it("stops scanning at the -- terminator", () => {
-    expect(agentDebugFlagsToEnv(["--", "--trace", "x"])).toEqual({});
-  });
-  it("last flag wins on repeats", () => {
-    expect(agentDebugFlagsToEnv(["--trace", "a", "--trace", "b"])).toEqual({
-      AGENCY_TRACE_FILE: "b",
+  it("last --trace wins on repeats", () => {
+    expect(agentConfigOverride(["--trace", "a", "--trace", "b"])).toEqual({
+      trace: true,
+      traceFile: "b",
     });
   });
-  it("combines both and ignores unrelated args", () => {
-    expect(agentDebugFlagsToEnv(["hi", "--trace", "t", "--log-file", "l"])).toEqual({
-      AGENCY_TRACE_FILE: "t",
-      AGENCY_LOG_FILE: "l",
+  it("combines trace + log and ignores the agent's own flags/positionals", () => {
+    expect(
+      agentConfigOverride(["--model", "gpt", "hi", "--trace", "t", "--log-file", "l"]),
+    ).toEqual({
+      trace: true,
+      traceFile: "t",
+      log: { logFile: "l" },
+      observability: true,
     });
   });
-  it("empty when neither present", () => {
-    expect(agentDebugFlagsToEnv(["--print", "do it"])).toEqual({});
+  it("empty when neither flag is present", () => {
+    expect(agentConfigOverride(["--print", "do it"])).toEqual({});
   });
 });
 
-describe("runBundledAgent passes the translated env to spawn", () => {
+describe("runBundledAgent passes config overrides to the child via env", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("includes AGENCY_TRACE_FILE / AGENCY_LOG_FILE in the child env", () => {
+  it("serializes the override into AGENCY_CONFIG_OVERRIDES", () => {
     const onMock = vi.fn();
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: onMock }) as never);
 
@@ -70,10 +72,22 @@ describe("runBundledAgent passes the translated env to spawn", () => {
     });
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const spawnOptions = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
-    expect(spawnOptions.env.AGENCY_TRACE_FILE).toBe("t.trace");
-    expect(spawnOptions.env.AGENCY_LOG_FILE).toBe("l.jsonl");
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
+    expect(overrides).toEqual({
+      trace: true,
+      traceFile: "t.trace",
+      log: { logFile: "l.jsonl" },
+      observability: true,
+    });
     // Parent env is preserved (spread), so PATH survives.
-    expect(spawnOptions.env.PATH).toBe(process.env.PATH);
+    expect(opts.env.PATH).toBe(process.env.PATH);
+  });
+
+  it("does not set the env var when no debug flags are present", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    runBundledAgent({}, "agency-agent", ["--print", "hi"], { spawn: spawnMock as never });
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(opts.env[CONFIG_OVERRIDES_ENV]).toBeUndefined();
   });
 });

@@ -6,6 +6,26 @@
 
 For basic usage examples, see `docs/config.md`.
 
+## Config resolution (single source of truth)
+
+The effective config for a program is assembled from three sources, defined and
+documented in one place — the "Config resolution" section at the bottom of
+`lib/config.ts`. In increasing precedence:
+
+1. **`agency.json`** — the file, walked up from cwd (`loadConfigSafe`). The base.
+2. **CLI flags** — `--trace` / `--log-file` / `--strict`, mapped onto config by
+   `applyCliFlags()`. This is the only definition of what each flag means.
+3. **`AGENCY_CONFIG_OVERRIDES`** — a JSON `Partial<AgencyConfig>` in the
+   environment (`readConfigOverrides`). Used to push config into a process whose
+   config was baked at compile time and can't be re-derived from source (the
+   precompiled built-in agents, `agency pack` bundles). It is the env-transport
+   twin of the subprocess IPC `configOverrides` message, and both are applied by
+   the single runtime merge `applyRuntimeConfigOverridesToContextArgs`.
+
+Where applied: sources 1⊕2 at the CLI (baked into the generated program);
+source 3 at runtime, in the `RuntimeContext` constructor. Inspect the resolved
+result with `agency config show` (secrets masked; `--show-secrets` to reveal).
+
 ## All options
 
 ### Basic

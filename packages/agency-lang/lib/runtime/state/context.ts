@@ -24,9 +24,10 @@ import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerFn } from "../types.js";
 import {
-  applyEnvOverridesToContextArgs,
   applyRuntimeConfigOverridesToContextArgs,
+  getRuntimeConfigOverrides,
 } from "../configOverrides.js";
+import { readConfigOverrides } from "../../config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
@@ -208,8 +209,13 @@ export class RuntimeContext<T> {
      *  match the established no-debug-by-default behavior. */
     logLevel?: LogLevel;
   }) {
-    args = applyRuntimeConfigOverridesToContextArgs(args);
-    args = applyEnvOverridesToContextArgs(args);
+    // One runtime merge, two transports: subprocess overrides (set via IPC)
+    // win; otherwise fall back to AGENCY_CONFIG_OVERRIDES from the environment
+    // (how the precompiled bundled agents receive per-run trace/statelog).
+    args = applyRuntimeConfigOverridesToContextArgs(
+      args,
+      getRuntimeConfigOverrides() ?? readConfigOverrides(),
+    );
     const statelogConfig = {
       ...args.statelogConfig,
       traceId: args.statelogConfig.traceId || nanoid(),

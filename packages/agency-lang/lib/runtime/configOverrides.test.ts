@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { applyRuntimeConfigOverridesToContextArgs } from "./configOverrides.js";
 import {
-  applyEnvOverridesToContextArgs,
-  applyRuntimeConfigOverridesToContextArgs,
-  DEBUG_ENV_VARS,
-} from "./configOverrides.js";
+  CONFIG_OVERRIDES_ENV,
+  serializeConfigOverrides,
+} from "../config.js";
 import { RuntimeContext } from "./state/context.js";
-import { agentDebugFlagsToEnv } from "../cli/runBundledAgent.js";
+import { agentConfigOverride } from "../cli/runBundledAgent.js";
 
 describe("runtime config overrides", () => {
   it("applies eval run statelog overrides without replacing existing fields", () => {
@@ -80,7 +80,7 @@ describe("runtime config overrides", () => {
   });
 });
 
-describe("applyEnvOverridesToContextArgs", () => {
+describe("applyRuntimeConfigOverridesToContextArgs — trace overrides", () => {
   const baseArgs = () => ({
     statelogConfig: {
       host: "https://kept",
@@ -94,68 +94,63 @@ describe("applyEnvOverridesToContextArgs", () => {
     traceConfig: { program: "agent" },
   });
 
-  it("folds AGENCY_LOG_FILE into statelog, enables observability, keeps siblings", () => {
-    const r = applyEnvOverridesToContextArgs(baseArgs(), {
-      [DEBUG_ENV_VARS.logFile]: "/tmp/a.jsonl",
+  it("folds an override traceFile and preserves traceConfig.program", () => {
+    const r = applyRuntimeConfigOverridesToContextArgs(baseArgs(), {
+      trace: true,
+      traceFile: "/t.agencytrace",
     });
-    expect(r.statelogConfig.logFile).toBe("/tmp/a.jsonl");
-    expect(r.statelogConfig.observability).toBe(true);
-    expect(r.statelogConfig.host).toBe("https://kept");
-    expect(r.statelogConfig.debugMode).toBe(true);
+    expect(r.traceConfig?.traceFile).toBe("/t.agencytrace");
+    expect(r.traceConfig?.program).toBe("agent");
   });
 
-  it("folds trace file/dir and preserves traceConfig.program", () => {
-    const rf = applyEnvOverridesToContextArgs(baseArgs(), {
-      [DEBUG_ENV_VARS.traceFile]: "/t.agencytrace",
+  it("folds an override traceDir", () => {
+    const r = applyRuntimeConfigOverridesToContextArgs(baseArgs(), {
+      trace: true,
+      traceDir: "/traces",
     });
-    expect(rf.traceConfig?.traceFile).toBe("/t.agencytrace");
-    expect(rf.traceConfig?.program).toBe("agent");
-    const rd = applyEnvOverridesToContextArgs(baseArgs(), {
-      [DEBUG_ENV_VARS.traceDir]: "/traces",
+    expect(r.traceConfig?.traceDir).toBe("/traces");
+  });
+
+  it("an override traceDir clears a baked traceFile so the dir takes effect", () => {
+    const baked = { ...baseArgs(), traceConfig: { program: "agent", traceFile: "baked.trace" } };
+    const r = applyRuntimeConfigOverridesToContextArgs(baked, {
+      trace: true,
+      traceDir: "/x",
     });
-    expect(rd.traceConfig?.traceDir).toBe("/traces");
+    expect(r.traceConfig?.traceFile).toBeUndefined();
+    expect(r.traceConfig?.traceDir).toBe("/x");
   });
 
-  it("env wins over a baked traceConfig.traceFile", () => {
-    const baked = { ...baseArgs(), traceConfig: { program: "agent", traceFile: "baked" } };
-    const r = applyEnvOverridesToContextArgs(baked, { [DEBUG_ENV_VARS.traceFile]: "env" });
-    expect(r.traceConfig?.traceFile).toBe("env");
-  });
-
-  it("handles an absent traceConfig", () => {
-    const noTrace = {
-      statelogConfig: baseArgs().statelogConfig,
-      smoltalkDefaults: {},
-      dirname: "/p",
-    };
-    const r = applyEnvOverridesToContextArgs(noTrace, { [DEBUG_ENV_VARS.traceFile]: "/t" });
-    expect(r.traceConfig?.traceFile).toBe("/t");
-  });
-
-  it("applies both trace and log env at once", () => {
-    const r = applyEnvOverridesToContextArgs(baseArgs(), {
-      [DEBUG_ENV_VARS.traceFile]: "/t",
-      [DEBUG_ENV_VARS.logFile]: "/l",
+  it("applies trace + statelog overrides together, keeping statelog siblings", () => {
+    const r = applyRuntimeConfigOverridesToContextArgs(baseArgs(), {
+      trace: true,
+      traceFile: "/t",
+      observability: true,
+      log: { logFile: "/l" },
     });
     expect(r.traceConfig?.traceFile).toBe("/t");
     expect(r.statelogConfig.logFile).toBe("/l");
+    expect(r.statelogConfig.observability).toBe(true);
+    expect(r.statelogConfig.host).toBe("https://kept");
   });
 
-  it("is a no-op when no env keys are set", () => {
-    const r = applyEnvOverridesToContextArgs(baseArgs(), {});
-    expect(r.statelogConfig.logFile).toBeUndefined();
-    expect(r.traceConfig?.traceFile).toBeUndefined();
+  it("is a no-op when overrides are empty/undefined", () => {
+    expect(applyRuntimeConfigOverridesToContextArgs(baseArgs(), {}).traceConfig?.traceFile).toBeUndefined();
+    expect(applyRuntimeConfigOverridesToContextArgs(baseArgs(), undefined).traceConfig?.program).toBe("agent");
   });
 });
 
-describe("RuntimeContext honors debug env vars", () => {
+describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => {
   const saved = { ...process.env };
   afterEach(() => {
     process.env = { ...saved };
   });
 
-  it("reads AGENCY_LOG_FILE into statelogConfig at construction", () => {
-    process.env[DEBUG_ENV_VARS.logFile] = "/tmp/wired.jsonl";
+  it("reads the env override into statelogConfig", () => {
+    process.env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides({
+      observability: true,
+      log: { logFile: "/tmp/wired.jsonl" },
+    });
     const ctx = new RuntimeContext({
       statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
       smoltalkDefaults: {},
@@ -169,16 +164,17 @@ describe("RuntimeContext honors debug env vars", () => {
   });
 });
 
-describe("writer→reader env contract", () => {
-  it("agentDebugFlagsToEnv output lands in context args via applyEnvOverridesToContextArgs", () => {
+describe("writer→reader override contract", () => {
+  it("agentConfigOverride output applies cleanly through the runtime merge", () => {
     const base = {
       statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
       smoltalkDefaults: {},
       dirname: "/p",
       traceConfig: { program: "agent" },
     };
-    const env = agentDebugFlagsToEnv(["--trace", "t.trace", "--log-file", "l.jsonl"]);
-    const r = applyEnvOverridesToContextArgs(base, env);
+    // The exact object runBundledAgent serializes into AGENCY_CONFIG_OVERRIDES.
+    const overrides = agentConfigOverride(["--trace", "t.trace", "--log-file", "l.jsonl"]);
+    const r = applyRuntimeConfigOverridesToContextArgs(base, overrides);
     expect(r.traceConfig?.traceFile).toBe("t.trace");
     expect(r.statelogConfig.logFile).toBe("l.jsonl");
   });

@@ -5,9 +5,21 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
-import { applyCliFlagsToConfig, createProgram, runCli } from "./agency.js";
+import { createProgram, runCli } from "./agency.js";
 
 const execFileAsync = promisify(execFile);
+
+// The CLI integration tests below shell out to the built dist/ to observe real
+// process exit codes (compile calls process.exit, which would kill the vitest
+// worker if run in-process). Fail fast with a legible message when dist is
+// missing rather than a cryptic MODULE_NOT_FOUND.
+const CLI = path.resolve("dist/scripts/agency.js");
+function requireBuiltCli(): string {
+  if (!fs.existsSync(CLI)) {
+    throw new Error(`${CLI} not built — run \`make\` (or \`pnpm run build\`) before the CLI integration tests`);
+  }
+  return CLI;
+}
 
 let tmpDir: string;
 
@@ -97,65 +109,37 @@ describe("agency CLI command tree", () => {
   });
 });
 
-describe("applyCliFlagsToConfig", () => {
-  it("maps --log-file to log.logFile and enables observability", () => {
-    const out = applyCliFlagsToConfig({}, { logFile: "run.jsonl" });
-    expect(out.log?.logFile).toBe("run.jsonl");
-    expect(out.observability).toBe(true);
-  });
-
-  it("maps --strict to strict AND strictTypes (both required by the gate)", () => {
-    const out = applyCliFlagsToConfig({}, { strict: true });
-    expect(out.typechecker).toEqual({ strict: true, strictTypes: true });
-  });
-
-  it("maps --observability alone", () => {
-    expect(applyCliFlagsToConfig({}, { observability: true }).observability).toBe(true);
-  });
-
-  it("preserves a log.host loaded from agency.json when adding logFile", () => {
-    const out = applyCliFlagsToConfig({ log: { host: "https://h" } }, { logFile: "x" });
-    expect(out.log).toEqual({ host: "https://h", logFile: "x" });
-  });
-
-  it("derives the default trace file from the input path", () => {
-    const out = applyCliFlagsToConfig({}, { trace: true }, "prog.agency");
-    expect(out.trace).toBe(true);
-    expect(out.traceFile).toBe("prog.trace");
-  });
-
-  it("does not mutate the input config", () => {
-    const input = {};
-    applyCliFlagsToConfig(input, { strict: true, logFile: "x" });
-    expect(input).toEqual({});
-  });
-});
-
-describe("compile --strict (integration)", () => {
+describe("compile --strict (integration, requires build)", () => {
   it("exits non-zero on a type error with --strict, zero without", async () => {
+    const cli = requireBuiltCli();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strict-"));
     const f = path.join(dir, "bad.agency");
     fs.writeFileSync(f, 'node main() {\n  let x: number = "hello"\n}\n');
-    const cli = path.resolve("dist/scripts/agency.js");
     await expect(execFileAsync("node", [cli, "compile", f])).resolves.toBeTruthy();
     await expect(execFileAsync("node", [cli, "compile", "--strict", f])).rejects.toBeTruthy();
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
 
-describe("config show (integration)", () => {
-  it("prints the resolved, merged config as JSON", async () => {
+describe("config show (integration, requires build)", () => {
+  it("prints the resolved, merged config as JSON, with secrets masked by default", async () => {
+    const cli = requireBuiltCli();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "config-show-"));
-    fs.writeFileSync(path.join(dir, "agency.json"), JSON.stringify({ outDir: "./built" }));
-    const cli = path.resolve("dist/scripts/agency.js");
-    const { stdout } = await execFileAsync("node", [
-      cli,
-      "-c",
+    fs.writeFileSync(
       path.join(dir, "agency.json"),
-      "config",
-      "show",
-    ]);
-    expect(JSON.parse(stdout).outDir).toBe("./built");
+      JSON.stringify({ outDir: "./built", log: { apiKey: "sk-secret-1234" } }),
+    );
+    const cfg = path.join(dir, "agency.json");
+
+    const masked = await execFileAsync("node", [cli, "-c", cfg, "config", "show"]);
+    const maskedJson = JSON.parse(masked.stdout);
+    expect(maskedJson.outDir).toBe("./built");
+    expect(maskedJson.log.apiKey).toBe("•••1234");
+    expect(masked.stdout).not.toContain("sk-secret-1234");
+
+    const raw = await execFileAsync("node", [cli, "-c", cfg, "config", "show", "--show-secrets"]);
+    expect(JSON.parse(raw.stdout).log.apiKey).toBe("sk-secret-1234");
+
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -1194,9 +1194,10 @@ node main() {
   )
 
   // NOTE: --trace / --log-file are declared here only for --help and so
-  // parseArgs accepts them. They are wired via env vars by runBundledAgent
-  // (see DEBUG_ENV_VARS), read when the RuntimeContext is constructed — before
-  // this main() runs. Do not re-handle them here.
+  // parseArgs accepts them. runBundledAgent extracts them from the forwarded
+  // args and passes them to this process as the AGENCY_CONFIG_OVERRIDES env
+  // var, read when the RuntimeContext is constructed — before this main() runs.
+  // Do not re-handle them here.
 
   if (args.flags.debug) {
     AGENT_DEBUG = true

@@ -24,7 +24,12 @@ import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
-import { AgencyConfig } from "@/config.js";
+import {
+  AgencyConfig,
+  applyCliFlags,
+  type CliFlags,
+  redactConfigSecrets,
+} from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -78,46 +83,10 @@ import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
 
-type RunOptions = {
-  resume?: string;
-  trace?: string | true;
-  logFile?: string;
-  observability?: boolean;
-  strict?: boolean;
-};
-
-/**
- * Fold per-run CLI flags into a config COPY. Single source of truth for the
- * flag→config mapping (used by run, compile, and the hidden default command).
- * `--strict` sets BOTH strict and strictTypes: the compile-path gate
- * (commands.ts) is `if (!tc?.enabled && !tc?.strict) return`, and fatality
- * requires `strict` — `strictTypes` alone is a no-op there.
- */
-export function applyCliFlagsToConfig(
-  config: AgencyConfig,
-  options: RunOptions,
-  input?: string,
-): AgencyConfig {
-  const next: AgencyConfig = { ...config };
-  if (options.trace) {
-    next.trace = true;
-    next.traceFile =
-      typeof options.trace === "string"
-        ? options.trace
-        : (input ?? "").replace(/\.agency$/, ".trace");
-  }
-  if (options.logFile) {
-    next.log = { ...next.log, logFile: options.logFile };
-    next.observability = true;
-  }
-  if (options.observability) {
-    next.observability = true;
-  }
-  if (options.strict) {
-    next.typechecker = { ...next.typechecker, strict: true, strictTypes: true };
-  }
-  return next;
-}
+// Per-run flags for `agency run` / the hidden default command: the shared
+// CliFlags (mapped onto config by applyCliFlags in config.ts) plus --resume,
+// which is a run-only concern, not a config field.
+type RunOptions = CliFlags & { resume?: string };
 
 type CliDependencies = {
   loadLspStartServer?: () => Promise<() => void>;
@@ -162,7 +131,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   }
 
   function runWithOptions(input: string, options: RunOptions) {
-    const config = applyCliFlagsToConfig(getConfig(), options, input);
+    const config = applyCliFlags(getConfig(), options, input);
     run(config, input, undefined, options.resume);
   }
 
@@ -176,7 +145,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--strict", "Fail on any fatal type error (typechecker.strict)")
     .action(
       async (inputs: string[], opts: { ts?: boolean; watch?: boolean; strict?: boolean }) => {
-        const config = applyCliFlagsToConfig(getConfig(), { strict: opts.strict });
+        const config = applyCliFlags(getConfig(), { strict: opts.strict });
         if (opts.watch) {
           const close = await watchAndCompile(config, inputs, { ts: opts.ts });
           process.once("SIGINT", async () => {
@@ -981,8 +950,19 @@ export function createProgram(deps: CliDependencies = {}): Command {
   configCmd
     .command("show")
     .description("Print the resolved, merged agency.json config as JSON")
-    .action(() => {
-      console.log(JSON.stringify(getConfig(), null, 2));
+    .option(
+      "--show-secrets",
+      "Print API keys verbatim instead of masking them (avoid in shared logs / bug reports)",
+    )
+    .action((opts: { showSecrets?: boolean }) => {
+      const config = getConfig();
+      console.log(
+        JSON.stringify(
+          opts.showSecrets ? config : redactConfigSecrets(config),
+          null,
+          2,
+        ),
+      );
     });
 
   program

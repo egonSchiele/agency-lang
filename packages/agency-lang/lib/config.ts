@@ -548,3 +548,135 @@ export function findProjectRoot(startPath: string): string | null {
     current = parent;
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Config resolution — the single source of truth
+//
+// A program's effective AgencyConfig is assembled from three sources, listed
+// here in increasing precedence:
+//
+//   1. agency.json           — the file, found by walking up from cwd
+//                              (loadConfigSafe / findProjectRoot). The base.
+//   2. CLI flags             — per-invocation flags (--trace, --log-file,
+//                              --strict, ...) mapped onto config by
+//                              applyCliFlags(). This is the ONLY place that
+//                              defines what each flag means in config terms.
+//   3. AGENCY_CONFIG_OVERRIDES — a JSON Partial<AgencyConfig> in the
+//                              environment (readConfigOverrides). Used to push
+//                              config INTO a process whose config was baked at
+//                              compile time and can't be re-derived from source
+//                              (the precompiled built-in agents; `agency pack`
+//                              bundles). The env-transport twin of the
+//                              subprocess IPC `configOverrides` message.
+//
+// WHERE each source is applied:
+//   • CLI (scripts/agency.ts): sources 1 ⊕ 2. The result is baked into the
+//     generated program at compile time.
+//   • Runtime (RuntimeContext constructor): the baked config ⊕ source 3, via
+//     applyRuntimeConfigOverridesToContextArgs(). Env overrides are applied
+//     HERE, not at CLI time, precisely because their job is to reach a process
+//     that has already been compiled.
+// ════════════════════════════════════════════════════════════════════════
+
+/** Per-invocation flags accepted by `agency run`/`compile` and forwarded to the
+ *  bundled agents. Mapped onto AgencyConfig by applyCliFlags. `trace` is
+ *  `string` for `--trace <file>`, `true` for a bare `--trace`. */
+export type CliFlags = {
+  trace?: string | true;
+  logFile?: string;
+  observability?: boolean;
+  strict?: boolean;
+};
+
+/**
+ * Fold per-invocation CLI flags onto a config COPY (never mutates the input).
+ * The single definition of what each debug flag means:
+ *   --trace <file>   → trace + traceFile=<file>
+ *   --trace (bare)   → trace + traceFile=<input>.trace when an input path is
+ *                      known (agency run), else traceDir="." (a bundled agent
+ *                      with no input file → a per-run file in cwd)
+ *   --log-file <p>   → log.logFile=<p> and observability=true
+ *   --observability  → observability=true
+ *   --strict         → typechecker.strict + strictTypes (the compile-path gate
+ *                      never runs the checker on strictTypes alone)
+ */
+export function applyCliFlags(
+  config: AgencyConfig,
+  flags: CliFlags,
+  input?: string,
+): AgencyConfig {
+  const next: AgencyConfig = { ...config };
+  if (flags.trace !== undefined) {
+    next.trace = true;
+    const explicitFile = typeof flags.trace === "string" && flags.trace !== "";
+    if (explicitFile) {
+      next.traceFile = flags.trace as string;
+    } else if (input) {
+      next.traceFile = input.replace(/\.agency$/, ".trace");
+    } else {
+      next.traceDir = ".";
+    }
+  }
+  if (flags.logFile) {
+    next.log = { ...next.log, logFile: flags.logFile };
+    next.observability = true;
+  }
+  if (flags.observability) {
+    next.observability = true;
+  }
+  if (flags.strict) {
+    next.typechecker = { ...next.typechecker, strict: true, strictTypes: true };
+  }
+  return next;
+}
+
+/** The one env var carrying a JSON Partial<AgencyConfig> into an already-compiled
+ *  process (see the source-of-truth note above, source 3). */
+export const CONFIG_OVERRIDES_ENV = "AGENCY_CONFIG_OVERRIDES";
+
+/** Serialize config overrides for a child process's AGENCY_CONFIG_OVERRIDES. */
+export function serializeConfigOverrides(
+  overrides: Partial<AgencyConfig>,
+): string {
+  return JSON.stringify(overrides);
+}
+
+/** Read + validate AGENCY_CONFIG_OVERRIDES. Returns {} when the var is absent,
+ *  unparseable, or fails schema validation, so a malformed value can never
+ *  brick startup. */
+export function readConfigOverrides(
+  env: NodeJS.ProcessEnv = process.env,
+): Partial<AgencyConfig> {
+  const raw = env[CONFIG_OVERRIDES_ENV];
+  if (!raw) return {};
+  try {
+    const result = AgencyConfigSchema.safeParse(JSON.parse(raw));
+    return result.success ? (result.data as Partial<AgencyConfig>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Return a deep copy of `config` with secret-bearing fields masked, for
+ *  human-facing output (`agency config show`). Masks every `apiKey` — the
+ *  top-level `log.apiKey` string and each key under `client.apiKey` /
+ *  `client.statelog.apiKey` — to `•••<last4>`. */
+export function redactConfigSecrets(config: AgencyConfig): AgencyConfig {
+  const mask = (value: string): string =>
+    value.length <= 4 ? "•••" : `•••${value.slice(-4)}`;
+  const clone = JSON.parse(JSON.stringify(config)) as AgencyConfig;
+  const redactKeyMap = (obj: Record<string, unknown> | undefined): void => {
+    if (!obj) return;
+    for (const key of Object.keys(obj)) {
+      if (typeof obj[key] === "string") obj[key] = mask(obj[key] as string);
+    }
+  };
+  if (clone.log && typeof clone.log.apiKey === "string") {
+    clone.log.apiKey = mask(clone.log.apiKey);
+  }
+  redactKeyMap(clone.client?.apiKey as Record<string, unknown> | undefined);
+  if (clone.client?.statelog && typeof clone.client.statelog.apiKey === "string") {
+    clone.client.statelog.apiKey = mask(clone.client.statelog.apiKey);
+  }
+  return clone;
+}

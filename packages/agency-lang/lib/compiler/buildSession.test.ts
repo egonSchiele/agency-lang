@@ -110,13 +110,19 @@ describe("createBuildSession", () => {
     expect(emitCount(spy, "helper.agency")).toBe(1);
   });
 
-  test("compileMany throws CompileClosureError for programmatic callers", () => {
+  test("multi-entry compile throws CompileClosureError for programmatic callers", () => {
+    // The throw contract belongs to the union-closure path (2+ entries);
+    // a single entry keeps the legacy exit-on-closure-error behavior.
     const dir = writeTempDir({
+      "ok.agency": TRIVIAL,
       "main.agency":
         'import { gone } from "./missing.agency"\n\nnode main() {\n  return gone()\n}\n',
     });
     expect(() =>
-      createBuildSession().compile({}, { entries: [path.join(dir, "main.agency")], quiet: true }),
+      createBuildSession().compile({}, {
+        entries: [path.join(dir, "ok.agency"), path.join(dir, "main.agency")],
+        quiet: true,
+      }),
     ).toThrow(CompileClosureError);
   });
 

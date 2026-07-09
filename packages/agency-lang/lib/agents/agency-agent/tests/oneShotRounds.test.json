@@ -1,0 +1,9 @@
+{
+  "sourceFile": "oneShotRounds.agency",
+  "tests": [
+    { "nodeName": "explicitWinsOverOneShot", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "oneShotDefaults50", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "explicitWinsOverInteractive", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "interactiveKeepsBaked", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

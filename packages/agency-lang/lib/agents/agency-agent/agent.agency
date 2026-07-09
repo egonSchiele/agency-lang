@@ -81,6 +81,7 @@ import {
   applyResolved,
   promoteAll,
   currentProvider,
+  resolveMaxToolCallRounds,
  } from "./shared.agency"
 import { codeAgent } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -1279,7 +1280,7 @@ node main() {
       },
       "max-tool-call-rounds": {
         type: "number",
-        description: "Max LLM tool-call rounds before a tool loop halts (default 10)"
+        description: "Max LLM tool-call rounds before a tool loop halts (default 10 interactive, 50 in one-shot/-p mode)"
       },
       "max-tool-result-chars": {
         type: "number",
@@ -1403,12 +1404,26 @@ node main() {
     configureSearch(false)
   }
 
-  // Tool-loop caps from --max-tool-call-rounds / --max-tool-result-chars.
-  // Set as branch-scoped LLM defaults on the root branch BEFORE any subagent
-  // is dispatched, so every subagent (forked, seeded from here) inherits them.
-  // setLlmOptions merges only present keys, so this never clobbers the model
-  // defaults configured above.
-  const maxRounds = args.flags["max-tool-call-rounds"]
+  // Positional args (everything after flags) are joined with spaces to
+  // form the starting prompt. `--` ends flag parsing if a positional
+  // would otherwise look like a flag.
+  const positionalQuery = args.positionals.join(" ")
+  const hasQuery = positionalQuery != ""
+  const startAgent = args.flags.agent ?? ""
+  const wantInteractive = args.flags.interactive
+
+  // Seeded interactive: run the prompt as the first turn, then hand over the
+  // REPL (needs a TTY + query, and not --print). Everything else is one-shot.
+  const seededInteractive = wantInteractive && hasQuery && isTTY() && !args.flags.print
+  const runningOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
+
+  // Tool-loop caps. One-shot runs (--print / piped / a positional query) have
+  // no REPL to continue an autonomous task, so maxToolCallRounds defaults
+  // higher (resolveMaxToolCallRounds); an explicit --max-tool-call-rounds always
+  // wins. Set as branch-scoped defaults on the root branch BEFORE any subagent
+  // is dispatched, so every (fork-seeded) subagent inherits them. setLlmOptions
+  // merges only present keys, so this never clobbers the model defaults above.
+  const maxRounds = resolveMaxToolCallRounds(args.flags["max-tool-call-rounds"] ?? null, runningOneShot)
   const maxResultChars = args.flags["max-tool-result-chars"]
   if (maxRounds != null || maxResultChars != null) {
     setLlmOptions(
@@ -1418,14 +1433,6 @@ node main() {
     },
     )
   }
-
-  // Positional args (everything after flags) are joined with spaces to
-  // form the starting prompt. `--` ends flag parsing if a positional
-  // would otherwise look like a flag.
-  const positionalQuery = args.positionals.join(" ")
-  const hasQuery = positionalQuery != ""
-  const startAgent = args.flags.agent ?? ""
-  const wantInteractive = args.flags.interactive
 
   // Validate the target subagent name up front (empty = coordinator).
   if (startAgent != "" && !START_AGENTS.includes(startAgent)) {
@@ -1443,7 +1450,7 @@ node main() {
   // and exit with no REPL. Without a TTY (or with `--print`) we fall
   // through to one-shot below; `--interactive` with no prompt falls through
   // to the plain REPL.
-  if (wantInteractive && hasQuery && isTTY() && !args.flags.print) {
+  if (seededInteractive) {
     setTitle("Agency Agent")
     clearScreen()
     printHeader()

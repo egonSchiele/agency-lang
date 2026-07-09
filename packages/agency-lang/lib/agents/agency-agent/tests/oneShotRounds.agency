@@ -1,0 +1,20 @@
+// resolveMaxToolCallRounds: an explicit --max-tool-call-rounds always wins;
+// otherwise one-shot runs get the higher default and interactive runs keep the
+// compiled default (null).
+import { resolveMaxToolCallRounds } from "../shared.agency"
+
+node explicitWinsOverOneShot(): boolean {
+  return resolveMaxToolCallRounds(7, true) == 7
+}
+
+node oneShotDefaults50(): boolean {
+  return resolveMaxToolCallRounds(null, true) == 50
+}
+
+node explicitWinsOverInteractive(): boolean {
+  return resolveMaxToolCallRounds(3, false) == 3
+}
+
+node interactiveKeepsBaked(): boolean {
+  return resolveMaxToolCallRounds(null, false) == null
+}

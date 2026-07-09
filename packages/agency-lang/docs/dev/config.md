@@ -47,7 +47,8 @@ result with `agency config show` (secrets masked; `--show-secrets` to reveal).
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `maxToolCallRounds` | `number` | Max LLM-to-tool iterations before halting (default: 10) |
+| `maxToolCallRounds` | `number` (positive int) | Max LLM-to-tool iterations before halting a tool loop (default: 10). Also `agency run/compile --max-tool-call-rounds <n>`, and at runtime via `setLlmOptions({ maxToolCallRounds })` / the agent's `--max-tool-call-rounds` flag. |
+| `client.maxToolResultChars` | `number` | Max chars of a single tool result fed back to the model (default: 100000; `0` disables). Also `--max-tool-result-chars <n>`, `llm(..., { maxToolResultChars })`, and `setLlmOptions({ maxToolResultChars })`. |
 | `maxCallDepth` | `number` (positive int) | Max logical function-call nesting depth before the runaway-recursion guard throws `CallDepthExceededError` (default: 2048). Catches unbounded recursion — especially the async kind, which grows the promise chain until the process OOMs with no diagnostic — before it exhausts memory. Raise it for programs that legitimately recurse very deeply. Note: recursing through the stdlib higher-order functions (`map`/`filter`/`reduce`/`flatMap`) consumes ~2 depth levels per user level (the HOF call plus its callback dispatch), so the effective budget for HOF-style recursion is roughly half of what a `for`-loop equivalent gets. |
 | `client` | `Partial<SmolConfig>` | Smoltalk client defaults — `logLevel`, `defaultModel`, `defaultProvider`, nested `apiKey`/`baseUrl` maps, and nested `statelog` config |
 

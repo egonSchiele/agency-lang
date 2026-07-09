@@ -110,6 +110,18 @@ describe("AgencyConfig maxCallDepth key", () => {
   });
 });
 
+describe("AgencyConfig maxToolCallRounds key", () => {
+  it("accepts a positive integer", () => {
+    expect(AgencyConfigSchema.safeParse({ maxToolCallRounds: 20 }).success).toBe(true);
+  });
+
+  it("rejects 0, negative, and non-integer (0 would silently mean 10 via `|| 10`)", () => {
+    expect(AgencyConfigSchema.safeParse({ maxToolCallRounds: 0 }).success).toBe(false);
+    expect(AgencyConfigSchema.safeParse({ maxToolCallRounds: -1 }).success).toBe(false);
+    expect(AgencyConfigSchema.safeParse({ maxToolCallRounds: 1.5 }).success).toBe(false);
+  });
+});
+
 describe("AgencyConfig typechecker key", () => {
   it("accepts the new typechecker object", () => {
     const result = AgencyConfigSchema.safeParse({
@@ -190,9 +202,22 @@ describe("applyCliFlags", () => {
     });
   });
 
+  it("--max-tool-call-rounds sets the top-level maxToolCallRounds", () => {
+    expect(applyCliFlags({}, { maxToolCallRounds: 20 }).maxToolCallRounds).toBe(20);
+  });
+
+  it("--max-tool-result-chars sets client.maxToolResultChars, preserving other client fields", () => {
+    const out = applyCliFlags({ client: { defaultModel: "gpt" } }, { maxToolResultChars: 50000 });
+    expect(out.client).toEqual({ defaultModel: "gpt", maxToolResultChars: 50000 });
+  });
+
+  it("keeps maxToolResultChars=0 (0 disables the cap, not falsy-skipped)", () => {
+    expect(applyCliFlags({}, { maxToolResultChars: 0 }).client?.maxToolResultChars).toBe(0);
+  });
+
   it("does not mutate the input config", () => {
     const input = {};
-    applyCliFlags(input, { strict: true, logFile: "x", trace: "t" });
+    applyCliFlags(input, { strict: true, logFile: "x", trace: "t", maxToolCallRounds: 5 });
     expect(input).toEqual({});
   });
 });

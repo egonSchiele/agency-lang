@@ -9,7 +9,7 @@ import { map } from "std::array"
 import { today } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
-import { listHostedModels, hostedModelInfo } from "std::llm"
+import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
 import { keys } from "std::object"
 import { basename, dirname } from "std::path"
@@ -1276,6 +1276,14 @@ node main() {
       "log-file": {
         type: "string",
         description: "Append structured statelog events (one JSON object per line) to this file for debugging"
+      },
+      "max-tool-call-rounds": {
+        type: "number",
+        description: "Max LLM tool-call rounds before a tool loop halts (default 10)"
+      },
+      "max-tool-result-chars": {
+        type: "number",
+        description: "Max chars of a single tool result fed back to the model (0 disables; default 100000)"
       }
     }
   },
@@ -1393,6 +1401,22 @@ node main() {
     // handler/REPL is installed.
     enableAgentMemory()
     configureSearch(false)
+  }
+
+  // Tool-loop caps from --max-tool-call-rounds / --max-tool-result-chars.
+  // Set as branch-scoped LLM defaults on the root branch BEFORE any subagent
+  // is dispatched, so every subagent (forked, seeded from here) inherits them.
+  // setLlmOptions merges only present keys, so this never clobbers the model
+  // defaults configured above.
+  const maxRounds = args.flags["max-tool-call-rounds"]
+  const maxResultChars = args.flags["max-tool-result-chars"]
+  if (maxRounds != null || maxResultChars != null) {
+    setLlmOptions(
+      {
+      maxToolCallRounds: maxRounds,
+      maxToolResultChars: maxResultChars
+    },
+    )
   }
 
   // Positional args (everything after flags) are joined with spaces to

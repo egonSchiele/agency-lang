@@ -38,7 +38,8 @@ export type LlmDefaults = {
   temperature?: number;
   reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
-  maxToolResultChars?: number
+  maxToolResultChars?: number;
+  maxToolCallRounds?: number
 }
 
 export def setLlmOptions(opts: LlmDefaults) {

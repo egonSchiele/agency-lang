@@ -122,6 +122,25 @@ describe.skipIf(!HAS_BUILT_CLI)("compile --strict (integration, requires build)"
   });
 });
 
+describe.skipIf(!HAS_BUILT_CLI)("compile --max-tool-call-rounds (integration, requires build)", () => {
+  it("bakes the flag value into the generated runPrompt call (overriding the default 10)", async () => {
+    const cli = CLI;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mtcr-"));
+    const f = path.join(dir, "prog.agency");
+    const out = path.join(dir, "prog.ts");
+    fs.writeFileSync(f, 'node main() {\n  const reply = llm("hi")\n}\n');
+    await execFileAsync("node", [cli, "compile", "--ts", "--max-tool-call-rounds", "3", f]);
+    const generated = fs.readFileSync(out, "utf-8");
+    expect(generated).toContain("maxToolCallRounds: 3");
+    expect(generated).not.toContain("maxToolCallRounds: 10");
+    // A positive integer is required.
+    await expect(
+      execFileAsync("node", [cli, "compile", "--ts", "--max-tool-call-rounds", "0", f]),
+    ).rejects.toBeTruthy();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe.skipIf(!HAS_BUILT_CLI)("config show (integration, requires build)", () => {
   it("prints the resolved, merged config as JSON, with secrets masked by default", async () => {
     const cli = CLI;

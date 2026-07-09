@@ -1,0 +1,21 @@
+// Exercises the runtime tool-call-rounds limit. `ping` counts its executions
+// in a module global; the mock (llmMocks.json) asks for `ping` on two
+// consecutive rounds, then answers. With setLlmOptions({ maxToolCallRounds: 1 })
+// the second round must be blocked BEFORE the tool runs, so `ping` executes
+// exactly once. Without the branch-default override it would use the baked
+// default (10) and run twice.
+import { setLlmOptions } from "std::llm"
+
+let pingCount = 0
+
+def ping(): string {
+  """Returns pong."""
+  pingCount = pingCount + 1
+  return "pong"
+}
+
+node main(): number {
+  setLlmOptions({ maxToolCallRounds: 1 })
+  llm("call ping", { tools: [ping] })
+  return pingCount
+}

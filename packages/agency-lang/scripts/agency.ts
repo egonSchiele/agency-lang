@@ -36,7 +36,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
@@ -87,6 +87,24 @@ import { serveMcp, serveHttp } from "@/cli/serve.js";
 // CliFlags (mapped onto config by applyCliFlags in config.ts) plus --resume,
 // which is a run-only concern, not a config field.
 type RunOptions = CliFlags & { resume?: string };
+
+// commander option parser: a positive integer, else a clean usage error.
+function parsePositiveInt(value: string): number {
+  const n = parseInt(value, 10);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new InvalidArgumentError("must be a positive integer");
+  }
+  return n;
+}
+
+// commander option parser: a non-negative integer (0 allowed, e.g. to disable a cap).
+function parseNonNegativeInt(value: string): number {
+  const n = parseInt(value, 10);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new InvalidArgumentError("must be a non-negative integer");
+  }
+  return n;
+}
 
 type CliDependencies = {
   loadLspStartServer?: () => Promise<() => void>;
@@ -143,9 +161,32 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--ts", "Output .ts files with // @no-check header")
     .option("-w, --watch", "Watch for changes and recompile")
     .option("--strict", "Fail on any fatal type error (typechecker.strict)")
+    .option(
+      "--max-tool-call-rounds <n>",
+      "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
+      parsePositiveInt,
+    )
+    .option(
+      "--max-tool-result-chars <n>",
+      "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
+      parseNonNegativeInt,
+    )
     .action(
-      async (inputs: string[], opts: { ts?: boolean; watch?: boolean; strict?: boolean }) => {
-        const config = applyCliFlags(getConfig(), { strict: opts.strict });
+      async (
+        inputs: string[],
+        opts: {
+          ts?: boolean;
+          watch?: boolean;
+          strict?: boolean;
+          maxToolCallRounds?: number;
+          maxToolResultChars?: number;
+        },
+      ) => {
+        const config = applyCliFlags(getConfig(), {
+          strict: opts.strict,
+          maxToolCallRounds: opts.maxToolCallRounds,
+          maxToolResultChars: opts.maxToolResultChars,
+        });
         if (opts.watch) {
           const close = await watchAndCompile(config, inputs, { ts: opts.ts });
           process.once("SIGINT", async () => {
@@ -198,6 +239,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--strict",
         "Fail the run on any fatal type error (typechecker.strict)",
+      )
+      .option(
+        "--max-tool-call-rounds <n>",
+        "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
+        parsePositiveInt,
+      )
+      .option(
+        "--max-tool-result-chars <n>",
+        "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
+        parseNonNegativeInt,
       );
   }
 

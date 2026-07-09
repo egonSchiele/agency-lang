@@ -749,8 +749,15 @@ export async function runPrompt(args: {
   // baked agency.json < stack defaults < per-call `llm({...})`.
   const stackDefaults: Partial<LlmDefaults> =
     stateStack?.other?.llmDefaults ?? {};
-  const { maxToolResultChars: stackMaxToolResultChars, ...stackSmolDefaults } =
-    stackDefaults;
+  const {
+    maxToolResultChars: stackMaxToolResultChars,
+    maxToolCallRounds: stackMaxToolCallRounds,
+    ...stackSmolDefaults
+  } = stackDefaults;
+  // maxToolCallRounds precedence: a branch default (setLlmOptions) overrides the
+  // baked per-call value (agency.json → codegen literal, default 10). Kept out
+  // of stackSmolDefaults above — it isn't a smoltalk config field.
+  const effectiveMaxToolCallRounds = stackMaxToolCallRounds ?? maxToolCallRounds;
   const clientConfig = ctx.getSmoltalkConfig({
     ...stackSmolDefaults,
     ...restClientConfig,
@@ -1189,13 +1196,13 @@ export async function runPrompt(args: {
             return;
           }
 
-          if (self.toolCallRound >= maxToolCallRounds) {
+          if (self.toolCallRound >= effectiveMaxToolCallRounds) {
             await b.step(
               `round.${round}.tool.${callSlug}.tooManyRounds`,
               async () => {
                 messages.push(
                   smoltalk.toolMessage(
-                    `Error: Maximum number of tool call rounds (${maxToolCallRounds}) exceeded. This tool call will not be executed.`,
+                    `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
                     { tool_call_id: toolCall.id, name: toolCall.name },
                   ),
                 );

@@ -120,3 +120,109 @@ export static const recommendedAutoApprovePolicy = {
     action: "approve"
   }]
 }
+
+// Glob that matches a directory and everything under it. This is the
+// same convention `std::policy`'s `buildScopedMatch` uses for the
+// interactive "approve-always-here" rule: the exact path OR any nested
+// path. `baseDir` must be absolute (the agent pins it to the launch cwd
+// via `setAgentCwd(cwd())`), so relative paths the model passes resolve
+// into this range and outside paths fall through to prompting.
+def dirScope(baseDir: string): string {
+  return "{${baseDir},${baseDir}/**}"
+}
+
+// `recommended` plus auto-approval of the mutating file-system and
+// git-write effects, each scoped to `baseDir` and its children; anything
+// outside still prompts. Matched on each effect's path field: `dir`
+// (write/edit/mkdir), `target` (remove), `src`+`dest` (copy/move), `cwd`
+// (git). Confinement is real: write/edit run `filename` through
+// `resolvePath` (rejects `..`/absolute/`~`/symlink) and the scope glob
+// won't match a `..`-containing path.
+export def withWritesPolicy(baseDir: string) {
+  const scope = dirScope(baseDir)
+  const dirRule = [{ match: { dir: scope }, action: "approve" }]
+  const cwdRule = [{ match: { cwd: scope }, action: "approve" }]
+  return {
+    ...recommendedAutoApprovePolicy,
+    "std::write": dirRule,
+    "std::writeBinary": dirRule,
+    "std::edit": dirRule,
+    "std::mkdir": dirRule,
+    "std::remove": [{ match: { target: scope }, action: "approve" }],
+    "std::copy": [{ match: { src: scope, dest: scope }, action: "approve" }],
+    "std::move": [{ match: { src: scope, dest: scope }, action: "approve" }],
+    "std::git::add": cwdRule,
+    "std::git::commit": cwdRule,
+    "std::git::checkout": cwdRule,
+    "std::git::switch": cwdRule,
+    "std::git::branchCreate": cwdRule,
+    "std::git::branchDelete": cwdRule,
+    "std::git::stashPush": cwdRule,
+    "std::git::stashPop": cwdRule,
+    "std::git::restore": cwdRule
+  }
+}
+
+// `with-writes` plus auto-approval of `std::bash`, scoped to `baseDir`
+// on the command's `cwd`. NOTE: a shell command can still reach outside
+// `baseDir` via an absolute path or `cd` inside the command string —
+// the policy matches the declared `cwd`, not the shell's actual effects,
+// so this is best-effort confinement, not a hard sandbox. It exists so
+// autonomous / sandbox runs (e.g. a benchmark container) can drive the
+// shell without a human answering every approval.
+export def withBashPolicy(baseDir: string) {
+  const scope = dirScope(baseDir)
+  return {
+    ...withWritesPolicy(baseDir),
+    "std::bash": [{ match: { cwd: scope }, action: "approve" }]
+  }
+}
+
+// Built-in policies accepted by the `--policy` flag (anything else is
+// treated as a path to a policy JSON file), in display order with a
+// one-line description each. Single source of truth for the flag's help
+// text and its unknown-value error.
+export static const BUILTIN_POLICIES = [
+  {
+    name: "recommended",
+    description: "Auto-approve reads and web/search; prompt for writes, shell, and git changes. (Default.)"
+  },
+  {
+    name: "minimal",
+    description: "Auto-approve only memory and the safe read-only agency subcommands; prompt for everything else."
+  },
+  {
+    name: "with-writes",
+    description: "recommended + auto-approve file writes and git changes, scoped to the current directory and its children."
+  },
+  {
+    name: "with-bash",
+    description: "with-writes + auto-approve shell commands, scoped to the current directory. Best-effort confinement — use in disposable/sandbox runs."
+  },
+]
+
+// Just the built-in names, e.g. for the unknown-value error message.
+export def builtinPolicyNames(): string[] {
+  return map(BUILTIN_POLICIES) as p {
+    return p.name
+  }
+}
+
+// Resolve a built-in policy name to a concrete `Policy`, scoping the
+// cwd-relative variants to `baseDir`. Returns null for an unknown name
+// so the caller can fall back to treating the argument as a file path.
+export def builtinPolicy(name: string, baseDir: string) {
+  if (name == "minimal") {
+    return minimalAutoApprovePolicy
+  }
+  if (name == "recommended") {
+    return recommendedAutoApprovePolicy
+  }
+  if (name == "with-writes") {
+    return withWritesPolicy(baseDir)
+  }
+  if (name == "with-bash") {
+    return withBashPolicy(baseDir)
+  }
+  return null
+}

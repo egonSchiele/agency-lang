@@ -150,6 +150,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "removeLastFieldDropsEntry",
+      "input": "",
+      "expectedOutput": "\"undefined/undefined\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

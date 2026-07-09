@@ -4,7 +4,13 @@
   no summarizer, no memory, and a token cap. Resolution is per-field across
   six layers: user model > user provider > user global > built-in model >
   built-in provider > built-in default. See
-  docs/superpowers/specs/2026-07-09-model-capabilities-design.md. */
+  docs/superpowers/specs/2026-07-09-model-capabilities-design.md.
+
+  On-disk note for hand-editors of settings.json: field removal writes
+  null (Agency cannot delete object fields), and a null field reads as
+  absent everywhere. Nulls are transient — the sanitize pass strips
+  them on the next load — and an entry whose last field is removed is
+  dropped from its record immediately. */
 
 /** The total, resolved profile. Every field has a value after resolution. */
 export type Capabilities = {
@@ -331,7 +337,8 @@ export def mergeCapabilityOverride(
   return out
 }
 
-/** Set one field of a patch to null. Agency has no delete keyword, so
+/** Set one field of a patch to null. Agency does not support `delete`
+  (it parses as a plain identifier and emits invalid TypeScript), so
   null stands in for "removed". That works because every consumer tests
   fields with `!= null`, which treats null and absent the same. The next
   loadSettings() sanitize pass then drops the null for good. */
@@ -354,8 +361,32 @@ def patchFieldToNull(patch: CapabilityPatch, field: string): CapabilityPatch {
   return out
 }
 
+/** True when every field of the patch is null or absent. */
+def patchIsEmpty(patch: CapabilityPatch): boolean {
+  return patch.prompt == null && patch.summarize == null && patch.memory == null && patch.maxTokens == null
+}
+
+/** Copy a record without one key. Rebuilds the record because keys,
+  like object fields, cannot be deleted. */
+def recordWithout(
+  entries: Record<string, CapabilityPatch>,
+  dropKey: string,
+): Record<string, CapabilityPatch> {
+  let kept: Record<string, CapabilityPatch> = {}
+  for (entryKey in Object.keys(entries)) {
+    if (entryKey != dropKey) {
+      kept[entryKey] = entries[entryKey]
+    }
+  }
+  return kept
+}
+
 /** Remove one field from one scope entry (by nulling it — see
-  patchFieldToNull). Pure. Removing from an absent entry is a no-op. */
+  patchFieldToNull). Pure. Removing from an absent entry is a no-op.
+  A model/provider entry whose last field was removed is dropped from
+  its record, so settings.json does not accumulate empty entries. A
+  nulled global field (and any null a hand-editor writes) is stripped
+  by the sanitize pass on the next load. */
 export def removeCapabilityField(
   user: CapabilitySettings,
   scope: string,
@@ -379,7 +410,12 @@ export def removeCapabilityField(
     let providers = {
       ...out.providers
     }
-    providers[key] = patchFieldToNull(providers[key], field)
+    const newProviderEntry = patchFieldToNull(providers[key], field)
+    if (patchIsEmpty(newProviderEntry)) {
+      providers = recordWithout(providers, key)
+    } else {
+      providers[key] = newProviderEntry
+    }
     out.providers = providers
     return out
   }
@@ -389,7 +425,12 @@ export def removeCapabilityField(
   let models = {
     ...out.models
   }
-  models[key] = patchFieldToNull(models[key], field)
+  const newModelEntry = patchFieldToNull(models[key], field)
+  if (patchIsEmpty(newModelEntry)) {
+    models = recordWithout(models, key)
+  } else {
+    models[key] = newModelEntry
+  }
   out.models = models
   return out
 }

@@ -609,15 +609,16 @@ def parsePositiveInt(text: string): number {
   // Bound to a const because the parser rejects method calls on string
   // LITERALS ("0123456789".includes(...) does not parse; a variable does).
   const digits = "0123456789"
-  if (text == "") {
+  const trimmed = text.trim()
+  if (trimmed == "") {
     return -1
   }
-  for (ch in text.split("")) {
+  for (ch in trimmed.split("")) {
     if (!digits.includes(ch)) {
       return -1
     }
   }
-  return Number(text)
+  return Number(trimmed)
 }
 
 /** Interactive edit: field → value → scope → save → live-apply. */
@@ -735,7 +736,14 @@ def editCapabilities() {
   // Live-apply what can apply now; explain what can't.
   if (fieldKey == "memory") {
     if (getCapabilities().memory) {
-      maybeEnableMemory()
+      // The ON direction cannot live-apply. enableAgentMemory's
+      // `with approve` cannot override the outer policy handler that
+      // startInteractive installed, so the memory-dir fs interrupts
+      // would surface as policy prompts mid-flow, or get denied and
+      // half-apply the toggle. The OFF direction stays live below:
+      // disableMemory raises no fs interrupts and already runs in-REPL
+      // from reactToSlotChange.
+      pushMessage(color.dim("Memory turns on at next agent start (enabling mid-session would raise policy prompts)."))
     } else {
       disableMemory() with approve
     }

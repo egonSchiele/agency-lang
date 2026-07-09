@@ -211,3 +211,23 @@ node applyResolvedRefreshesCapabilities(): string {
 node demoteInvertsPromote(): string {
   return "${demoteProvider("openai-responses")}/${demoteProvider("anthropic")}"
 }
+
+// Removing an entry's last field drops the whole entry, so settings.json
+// does not accumulate empty entries.
+node removeLastFieldDropsEntry(): string {
+  let user: CapabilitySettings = {}
+  user = mergeCapabilityOverride(user, "model", "m-solo", {
+    maxTokens: 512
+  })
+  user = mergeCapabilityOverride(user, "provider", "p-solo", {
+    summarize: false
+  })
+  user = removeCapabilityField(user, "model", "m-solo", "maxTokens")
+  user = removeCapabilityField(user, "provider", "p-solo", "summarize")
+  const models = user.models
+  const providers = user.providers
+  if (models == null || providers == null) {
+    return "missing-record"
+  }
+  return "${models["m-solo"]}/${providers["p-solo"]}"
+}

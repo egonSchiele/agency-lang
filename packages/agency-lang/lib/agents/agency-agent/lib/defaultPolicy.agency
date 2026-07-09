@@ -178,14 +178,35 @@ export def withBashPolicy(baseDir: string) {
   }
 }
 
-// Built-in policy names accepted by the `--policy` flag (anything else
-// is treated as a path to a policy JSON file).
-export static const BUILTIN_POLICY_NAMES = [
-  "recommended",
-  "minimal",
-  "with-writes",
-  "with-bash",
+// Built-in policies accepted by the `--policy` flag (anything else is
+// treated as a path to a policy JSON file), in display order with a
+// one-line description each. Single source of truth for the flag's help
+// text and its unknown-value error.
+export static const BUILTIN_POLICIES = [
+  {
+    name: "recommended",
+    description: "Auto-approve reads and web/search; prompt for writes, shell, and git changes. (Default.)"
+  },
+  {
+    name: "minimal",
+    description: "Auto-approve only memory and the safe read-only agency subcommands; prompt for everything else."
+  },
+  {
+    name: "with-writes",
+    description: "recommended + auto-approve file writes and git changes, scoped to the current directory and its children."
+  },
+  {
+    name: "with-bash",
+    description: "with-writes + auto-approve shell commands, scoped to the current directory. Best-effort confinement — use in disposable/sandbox runs."
+  },
 ]
+
+// Just the built-in names, e.g. for the unknown-value error message.
+export def builtinPolicyNames(): string[] {
+  return map(BUILTIN_POLICIES) as p {
+    return p.name
+  }
+}
 
 // Resolve a built-in policy name to a concrete `Policy`, scoping the
 // cwd-relative variants to `baseDir`. Returns null for an unknown name

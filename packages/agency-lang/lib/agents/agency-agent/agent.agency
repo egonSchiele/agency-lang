@@ -53,7 +53,8 @@ import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
   builtinPolicy,
-  BUILTIN_POLICY_NAMES,
+  builtinPolicyNames,
+  BUILTIN_POLICIES,
  } from "./lib/defaultPolicy.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
 import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
@@ -1019,6 +1020,21 @@ def printHeader() {
   print(render(data, color: true))
 }
 
+// Print `--policy` usage and list the built-in policies (name + one-line
+// description). Shown when `--policy` is passed with no value.
+def printPolicyHelp() {
+  print(color.bold("Usage: agency agent --policy <name | path>"))
+  print(
+    "Select the approval policy for this run: a built-in name below, or a path to a policy JSON file.",
+  )
+  print("")
+  print(color.bold("Built-in policies:"))
+  for (p in BUILTIN_POLICIES) {
+    print("  ${color.cyan(p.name)}")
+    print("      ${p.description}")
+  }
+}
+
 def givePolicyChoice() {
   const title = "Welcome to the agency agent. Please pick a policy to start."
   const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${POLICY_PATH} and the agent will use it automatically."
@@ -1088,7 +1104,7 @@ def setupSession(interactive: boolean): any {
       if (loaded is failure(f)) {
         print(
           color.red(
-          "--policy '${_policyArg}' is neither a built-in policy (${BUILTIN_POLICY_NAMES.join(", ")}) nor a readable policy file (${f.status}).",
+          "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
         ),
         )
         process.exit(1)
@@ -1239,7 +1255,8 @@ node main() {
       },
       policy: {
         type: "string",
-        description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, with-bash) or a path to a policy JSON file. with-writes/with-bash auto-approve writes (and, for with-bash, shell) scoped to the current directory and its children. Overrides the saved policy without persisting it."
+        optional: true,
+        description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, with-bash) or a path to a policy JSON file. with-writes/with-bash auto-approve writes (and, for with-bash, shell) scoped to the current directory and its children. Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
       },
       local: {
         type: "string",
@@ -1260,6 +1277,13 @@ node main() {
   }
   if (args.flags.verbose) {
     VERBOSE = true
+  }
+  // `--policy` is an optional-value flag: a bare `--policy` (no name or
+  // path) prints the usage + the built-in policies and exits, rather than
+  // silently doing nothing.
+  if (args.flags.policy == "") {
+    printPolicyHelp()
+    process.exit(0)
   }
   _policyArg = args.flags.policy ?? ""
 

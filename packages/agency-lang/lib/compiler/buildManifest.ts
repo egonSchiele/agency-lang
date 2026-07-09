@@ -64,8 +64,15 @@ export const MANIFEST_DIR_NAME = ".agency-build";
 const MANIFEST_FILE = "manifest.json";
 
 export function manifestDirFor(entryFile: string): string {
-  const root = findProjectRoot(path.dirname(path.resolve(entryFile)));
-  return root ?? path.dirname(path.resolve(entryFile));
+  // Entries can be files OR directories (`agency compile someDir`): a
+  // directory anchors the search (and the fallback) at itself, not its
+  // parent — otherwise `.agency-build/` would pollute a sibling-containing
+  // parent dir in agency.json-less projects.
+  const abs = path.resolve(entryFile);
+  const startDir =
+    fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
+  const root = findProjectRoot(startDir);
+  return root ?? startDir;
 }
 
 function emptyManifest(): BuildManifest {
@@ -115,6 +122,14 @@ export function hashFile(absPath: string): string | null {
  *  (isEntryFresh) both call this; never inline the expression. */
 export function computeDepsHash(depHashes: string[]): string {
   return hashBytes(JSON.stringify(depHashes));
+}
+
+/** Canonical config identity. JSON.stringify is order-stable here because
+ *  every config passes through AgencyConfigSchema.safeParse (loadConfigSafe
+ *  returns result.data), and zod rebuilds objects in SCHEMA shape order —
+ *  guarded by the key-order test in lib/cli/precompile.test.ts. */
+export function deriveConfigKey(config: unknown): string {
+  return JSON.stringify(config);
 }
 
 // Deliberate near-duplicate of lib/cli/util.ts findRecursively — see the
@@ -177,13 +192,30 @@ export type FreshnessContext = {
  * 4. stdlibHash / compilerStamp / configKey match; hasPkgImports is false;
  * 5. the module's own recorded output exists.
  */
+// A valid-but-malformed manifest (manual edit, older schema) must cost a
+// rebuild, never a crash — validate the runtime shape of every field the
+// checker touches before trusting it.
+function entryHasValidShape(entry: ManifestEntry): boolean {
+  return (
+    typeof entry.sourceHash === "string" &&
+    Array.isArray(entry.deps) &&
+    entry.deps.every((d) => typeof d === "string") &&
+    typeof entry.depsHash === "string" &&
+    typeof entry.stdlibHash === "string" &&
+    typeof entry.hasPkgImports === "boolean" &&
+    typeof entry.configKey === "string" &&
+    typeof entry.compilerStamp === "string" &&
+    typeof entry.outputPath === "string"
+  );
+}
+
 export function isEntryFresh(
   moduleRel: string,
   manifest: BuildManifest,
   ctx: FreshnessContext,
 ): boolean {
   const entry = manifest.entries[moduleRel];
-  if (!entry) {
+  if (!entry || !entryHasValidShape(entry)) {
     return false;
   }
   if (entry.hasPkgImports) {
@@ -210,7 +242,7 @@ export function isEntryFresh(
     }
     depHashes.push(depHash);
     const depEntry = manifest.entries[dep];
-    if (!depEntry) {
+    if (!depEntry || typeof depEntry.outputPath !== "string") {
       return false;
     }
     if (!fs.existsSync(path.join(ctx.manifestDir, depEntry.outputPath))) {

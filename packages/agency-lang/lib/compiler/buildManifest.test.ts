@@ -91,6 +91,14 @@ describe("manifest IO", () => {
     fs.writeFileSync(path.join(dir, "x.agency"), "");
     expect(manifestDirFor(path.join(dir, "x.agency"))).toBe(dir);
   });
+
+  test("manifestDirFor anchors DIRECTORY entries at the directory itself, not its parent", () => {
+    const parent = tmp();
+    const projectDir = path.join(parent, "someProject");
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, "x.agency"), "");
+    expect(manifestDirFor(projectDir)).toBe(projectDir);
+  });
 });
 
 describe("hashing", () => {

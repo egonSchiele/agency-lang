@@ -37,6 +37,7 @@ import {
   type Freshness,
   type ManifestTracker,
 } from "./manifestTracker.js";
+import { deriveConfigKey } from "./buildManifest.js";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
 import * as path from "path";
@@ -97,8 +98,20 @@ export type CompileGroup = {
 // sibling .ts deps on disk — run/runAgencyNode/coverage paths), and the
 // manifest key cannot see it — same disease configKey/hasPkgImports
 // prevent, so it forces "always".
-function resolveFreshness(options?: CompileOptions): Freshness {
-  if (options?.allowTestImports || options?.ts || options?.importStrategy) {
+function resolveFreshness(
+  options?: CompileOptions & { outputFile?: string },
+): Freshness {
+  // An explicit outputFile also forces "always": a fresh entry only knows
+  // the RECORDED output path, so a skip could return the requested path
+  // without ever writing it. Unreachable today (the only outputFile caller
+  // also passes RunStrategy) but both are public surface — same precedent
+  // as --ts: different artifact, not manifest-tracked.
+  if (
+    options?.allowTestImports ||
+    options?.ts ||
+    options?.importStrategy ||
+    options?.outputFile !== undefined
+  ) {
     return "always";
   }
   return options?.freshness ?? "incremental";
@@ -135,17 +148,12 @@ export class BuildSession {
     if (entries.length === 0) {
       return null;
     }
-    this.tracker = createManifestTracker(
-      config,
-      entries[0],
-      resolveFreshness(options),
-      deriveConfigKey(config),
-    );
+    this.tracker = createManifestTracker(config, entries[0], resolveFreshness(request));
     try {
       // Fully-clean fast path: every requested module fresh per the
       // manifest alone — no closure walk, no parsing. Directories expand
       // with the same walker the compile path uses.
-      const allFiles = expandEntries(entries);
+      const { files: allFiles, hasDirectory } = expandEntries(entries);
       if (this.tracker.allFresh(allFiles)) {
         for (const file of allFiles) {
           this.compiledFiles.add(file);
@@ -153,7 +161,12 @@ export class BuildSession {
         if (!options.quiet) {
           console.log(`${allFiles.length} file(s) up to date`);
         }
-        return allFiles.length === 1 ? this.tracker.outputFor(allFiles[0]) : null;
+        // Match the compile path contract: directory entries return null
+        // even when the directory holds exactly one file.
+        if (allFiles.length === 1 && !hasDirectory) {
+          return this.tracker.outputFor(allFiles[0]);
+        }
+        return null;
       }
       if (entries.length === 1) {
         return this.compileEntry(config, entries[0], outputFile, options);
@@ -209,12 +222,7 @@ export class BuildSession {
       // Each group gets its own tracker (per-group config identity); the
       // test runner passes allowTestImports, which resolves to "always"
       // and the NOOP tracker — no manifest IO, structurally.
-      this.tracker = createManifestTracker(
-        group.config,
-        group.files[0],
-        resolveFreshness(options),
-        deriveConfigKey(group.config),
-      );
+      this.tracker = createManifestTracker(group.config, group.files[0], resolveFreshness(options));
       try {
         this.compileManyImpl(group.config, group.files, {
           closure,
@@ -538,13 +546,25 @@ export class BuildSession {
       fs.writeFileSync(outputFile, result.code, "utf-8");
       const esbuildEndTime = performance.now();
       logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
-      const transitiveDeps = this.transitiveDeps(absoluteInputFile);
-      this.tracker.record(
-        absoluteInputFile,
-        path.resolve(outputFile),
-        transitiveDeps,
-        subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
-      );
+      // Record ONLY when the module's deps are knowable: covered by the
+      // session closure, or a stdlib module (compiled closure-free by
+      // design; deps [] is correct because stdlibHash covers all of
+      // stdlib). A module compiled with a caller-threaded symbolTable and
+      // no closure (agency serve) has REAL imports the session cannot see
+      // — recording deps: [] would poison the manifest with an entry that
+      // skips despite edited imports.
+      const isStdlibModule = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
+      const depsKnowable =
+        isStdlibModule || this.currentClosure?.programs[absoluteInputFile] !== undefined;
+      if (depsKnowable) {
+        const transitiveDeps = this.transitiveDeps(absoluteInputFile);
+        this.tracker.record(
+          absoluteInputFile,
+          path.resolve(outputFile),
+          transitiveDeps,
+          subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
+        );
+      }
     }
     const compileEndTime = performance.now();
     const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
@@ -562,14 +582,6 @@ export function readFile(inputFile: string): string {
   }
 
   return fs.readFileSync(inputFile, "utf-8");
-}
-
-// Canonical config identity. JSON.stringify is order-stable here because
-// every config passes through AgencyConfigSchema.safeParse (loadConfigSafe
-// returns result.data), and zod rebuilds objects in SCHEMA shape order —
-// guarded by the key-order test in lib/cli/precompile.test.ts.
-function deriveConfigKey(config: AgencyConfig): string {
-  return JSON.stringify(config);
 }
 
 export function findCrossConfigConflicts(
@@ -667,10 +679,12 @@ function subtreeHasPkgImport(
 /** Expand request entries to absolute FILE paths: directories via the same
  *  walker the compile path uses, files as-is. Fast-path support only —
  *  the compile dispatch itself keeps its dir handling untouched. */
-function expandEntries(entries: string[]): string[] {
+function expandEntries(entries: string[]): { files: string[]; hasDirectory: boolean } {
   const files: string[] = [];
+  let hasDirectory = false;
   for (const entry of entries) {
     if (fs.existsSync(entry) && fs.statSync(entry).isDirectory()) {
+      hasDirectory = true;
       for (const found of findRecursively(entry)) {
         files.push(path.resolve(found.path));
       }
@@ -678,5 +692,5 @@ function expandEntries(entries: string[]): string[] {
       files.push(path.resolve(entry));
     }
   }
-  return files;
+  return { files, hasDirectory };
 }

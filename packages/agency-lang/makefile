@@ -113,7 +113,7 @@ fixtures:
 # includes the doc generator) changed. `make clean` wipes .agency-build
 # and forces regeneration.
 doc:
-	@STAMP=$$(node ./scripts/stdlib-stamp.mjs); \
+	@STAMP=$$(node ./dist/scripts/stdlib-stamp.js); \
 	if [ -f .agency-build/doc.stamp ] && [ "$$(cat .agency-build/doc.stamp)" = "$$STAMP" ]; then \
 	  echo "stdlib docs up to date"; \
 	else \

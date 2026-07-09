@@ -6,6 +6,7 @@ import { createBuildSession, findCrossConfigConflicts } from "./buildSession.js"
 import { loadManifest, MANIFEST_DIR_NAME } from "./buildManifest.js";
 import { _internal as parseCacheInternal } from "../parseCache.js";
 import { RunStrategy } from "../importStrategy.js";
+import { SymbolTable } from "../symbolTable.js";
 import { CompileClosureError } from "./compileClosure.js";
 import { compile, resetCompilationCache } from "../cli/commands.js";
 
@@ -387,5 +388,46 @@ describe("manifest read path (incremental skip)", () => {
     createBuildSession().compile({}, { entries: [dir], quiet: true });
     expect(parseCacheInternal.stats.misses).toBe(before.misses);
     expect(parseCacheInternal.stats.hits).toBe(before.hits);
+  });
+});
+
+describe("review hardening (PR #468)", () => {
+  test("serve-style compile (threaded symbolTable, no closure) records NO manifest entry", () => {
+    // lib/cli/serve.ts compiles with a top-level symbolTable and no
+    // closure; deps are unknowable there, and recording deps: [] would
+    // poison the manifest into stale skips that outlive serve.
+    const dir = writeTempDir({ "helper.agency": HELPER, "main.agency": IMPORTS_HELPER });
+    const entry = path.join(dir, "main.agency");
+    const symbolTable = SymbolTable.build(entry, {});
+    createBuildSession().compile({}, { entries: [entry], quiet: true, symbolTable });
+    expect(loadManifest(dir).entries["main.agency"]).toBeUndefined();
+  });
+
+  test("serve-then-edit-dep-then-plain-compile re-emits (no poisoned skip)", () => {
+    const dir = writeTempDir({ "helper.agency": HELPER, "main.agency": IMPORTS_HELPER });
+    const entry = path.join(dir, "main.agency");
+    const symbolTable = SymbolTable.build(entry, {});
+    createBuildSession().compile({}, { entries: [entry], quiet: true, symbolTable });
+    fs.writeFileSync(path.join(dir, "helper.agency"), HELPER.replace("shared", "changed"));
+    const stamped = backdate(path.join(dir, "main.js"));
+    createBuildSession().compile({}, { entries: [entry], quiet: true });
+    expect(fs.statSync(path.join(dir, "main.js")).mtimeMs).toBeGreaterThan(stamped);
+  });
+
+  test("an explicit outputFile always writes, even against a fresh entry", () => {
+    const dir = writeTempDir({ "main.agency": TRIVIAL });
+    const entry = path.join(dir, "main.agency");
+    createBuildSession().compile({}, { entries: [entry], quiet: true }); // fresh entry recorded
+    const requested = path.join(dir, "custom-out.js");
+    const out = createBuildSession().compile({}, { entries: [entry], quiet: true, outputFile: requested });
+    expect(out).toBe(requested);
+    expect(fs.existsSync(requested)).toBe(true); // must exist — never a skipped phantom path
+  });
+
+  test("fast path returns null for a fresh single-DIRECTORY entry", () => {
+    const dir = writeTempDir({ "main.agency": TRIVIAL });
+    createBuildSession().compile({}, { entries: [dir], quiet: true });
+    const out = createBuildSession().compile({}, { entries: [dir], quiet: true });
+    expect(out).toBeNull(); // matches the compile path directory contract
   });
 });

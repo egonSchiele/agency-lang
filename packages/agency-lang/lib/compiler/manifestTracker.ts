@@ -15,6 +15,7 @@ import {
   computeCompilerStamp,
   computeDepsHash,
   computeStdlibHash,
+  deriveConfigKey,
   hashFile,
   isEntryFresh,
   loadManifest,
@@ -98,7 +99,9 @@ class RealManifestTracker implements ManifestTracker {
   outputFor(absModule: string): string | null {
     const rel = path.relative(this.manifestDir, absModule);
     const entry = this.manifest.entries[rel];
-    if (!entry) {
+    // Malformed manifests are recoverable everywhere else; a non-string
+    // outputPath (manual edit, older schema) must not throw here either.
+    if (!entry || typeof entry.outputPath !== "string") {
       return null;
     }
     return path.join(this.manifestDir, entry.outputPath);
@@ -132,15 +135,27 @@ class RealManifestTracker implements ManifestTracker {
 /** Policy is resolved HERE, once:
  *  "always" → the shared NOOP tracker (no state, no IO, isFresh always false)
  *  "force"  → real tracker with reads disabled, writes on
- *  "incremental" → real tracker, reads + writes on. */
+ *  "incremental" → real tracker, reads + writes on.
+ *  The tracker derives the config key itself — it owns every other piece
+ *  of freshness identity, and a caller-supplied key could mismatch the
+ *  config.
+ *
+ *  Perf note: each real tracker recomputes computeStdlibHash + the
+ *  compiler stamp + loadManifest; the warm-make path constructs one per
+ *  CLI input (~6). Fine today (warm make 2.5s) — if this ever regresses,
+ *  memoize PER SESSION, not module-level (watch mode can outlive a stdlib
+ *  edit). */
 export function createManifestTracker(
-  _config: AgencyConfig,
+  config: AgencyConfig,
   entryFile: string,
   freshness: Freshness,
-  configKey: string,
 ): ManifestTracker {
   if (freshness === "always") {
     return NOOP_TRACKER;
   }
-  return new RealManifestTracker(manifestDirFor(entryFile), freshness === "incremental", configKey);
+  return new RealManifestTracker(
+    manifestDirFor(entryFile),
+    freshness === "incremental",
+    deriveConfigKey(config),
+  );
 }

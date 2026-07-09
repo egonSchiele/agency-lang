@@ -1,41 +1,98 @@
-.PHONY: all test stdlib agents doc packages-doc refresh-action-pins build
+.PHONY: all test stdlib agents doc packages-doc refresh-action-pins build clean publish compile-agency
+
+# Resolve tsc/tsc-alias from the workspace, not from whatever happens to
+# be global. Historically `make build` was only ever reached via
+# `pnpm run build`, which put node_modules/.bin on PATH; `all` now invokes
+# it directly ($(MAKE) build), so the Makefile must point at the tools
+# itself. Explicit paths (not a PATH export) because Apple's GNU make 3.81
+# does not reliably apply an exported PATH to its exec fast path. Also
+# pins tool versions to the repo lockfile.
+TSC := ./node_modules/.bin/tsc
+TSC_ALIAS := ./node_modules/.bin/tsc-alias
+
+# The bundled agent dirs. Adding an agent = add it here, nowhere else.
+AGENT_DIRS := review policy agency-agent eval optimize
+AGENT_PATHS := $(addprefix dist/lib/agents/,$(AGENT_DIRS))
+
+# Stage agent sources into dist. Wipe-then-copy, NOT overlay: with dist
+# persisting across builds, an overlay would keep outputs of agent sources
+# that were deleted from lib/agents. Safe to wipe: lib/agents contains no
+# .ts, so tsc emits nothing under dist/lib/agents — everything there is
+# agency-compiled from the sources this recipe just copied.
+define stage-agent-sources
+	rm -rf dist/lib/agents
+	cp -r lib/agents dist/lib
+endef
+
+# Stage the doc markdown the agents read at runtime. rm before cp -r:
+# copying onto an existing dir NESTS (guide/guide) — that artifact exists
+# in pre-Stage-C tarballs; these copies must be idempotent.
+define stage-agent-docs
+	mkdir -p dist/lib/agents/docs
+	rm -rf dist/lib/agents/docs/guide dist/lib/agents/docs/cli
+	cp -r docs/site/guide dist/lib/agents/docs/guide
+	cp -r docs/site/cli dist/lib/agents/docs/cli
+endef
 
 all:
-	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) agents && $(MAKE) doc
+	pnpm run templates && $(MAKE) build && $(MAKE) compile-agency && $(MAKE) doc
 
 # Build the dist/ tree. Invoked by `pnpm run build`. Kept here (rather
 # than as a chain in package.json) so the steps remain readable and easy
 # to extend without inflating the package.json scripts section.
 build:
-	rm -rf dist/
-	tsc
-	tsc-alias
+	# Incremental: dist/ is NOT wiped here (use `make clean` for a full
+	# reset; publish always goes through clean). Because the buildinfo
+	# lives OUTSIDE dist/ (it must not ship in the tarball), dist and its
+	# incremental state no longer share a lifetime: if dist/ was deleted
+	# by hand but the buildinfo survived, tsc would consider everything
+	# up-to-date, emit nothing, and leave an empty dist. Drop the stale
+	# buildinfo in that case.
+	@if [ ! -d dist/lib ]; then rm -f .agency-build/tsc.tsbuildinfo; fi
+	$(TSC)
+	$(TSC_ALIAS)
 	mkdir -p dist/lib/cli/runShim
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 	mkdir -p dist/lib/stdlib/providers
 	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
-	mkdir -p dist/lib/agents/docs
-	cp -r docs/site/guide dist/lib/agents/docs/guide
-	cp -r docs/site/cli dist/lib/agents/docs/cli
 
+# Full reset: compiled TS, incremental scratch state, and the gitignored
+# stdlib .js siblings. Both dist/ AND stdlib/**/*.js ship in the npm
+# tarball, so publish MUST come through here to guarantee no orphaned
+# output (from a deleted/renamed source) can ship. Safe: stdlib contains
+# no .ts and no tracked/.mjs .js — every stdlib .js is agency-generated.
+clean:
+	rm -rf dist/ .agency-build/
+	find stdlib -name '*.js' -type f -delete
+
+# ONE compiler process for stdlib + all agent dirs: node boot and the
+# compiler import are paid once, and the process-wide parse cache means
+# the stdlib prelude (imported by every one of the 94 files) is parsed
+# once instead of once per invocation. This is the load-bearing lever for
+# the Stage C warm-make target.
+compile-agency:
+	$(stage-agent-sources)
+	node ./dist/scripts/agency.js compile stdlib/ $(AGENT_PATHS)
+	$(stage-agent-docs)
+
+# Selective-use aliases (same recipes, one root set each).
 stdlib:
-	pnpm run agency compile stdlib/
+	node ./dist/scripts/agency.js compile stdlib/
 
 agents:
-	cp -r lib/agents dist/lib && \
-	pnpm run agency compile dist/lib/agents/review/ && \
-	pnpm run agency compile dist/lib/agents/policy/ && \
-	pnpm run agency compile dist/lib/agents/agency-agent/ && \
-	pnpm run agency compile dist/lib/agents/eval/ && \
-	pnpm run agency compile dist/lib/agents/optimize/ && \
-	mkdir -p dist/lib/agents/docs
-	cp -r docs/site/guide dist/lib/agents/docs/guide
-	cp -r docs/site/cli dist/lib/agents/docs/cli
+	$(stage-agent-sources)
+	node ./dist/scripts/agency.js compile $(AGENT_PATHS)
+	$(stage-agent-docs)
 
 test:
 	pnpm run test
 
+# Publish = clean rebuild, no tests (CI gates merges; publishing is not a
+# test run — deliberate). Note `make all` regenerates docs/site/stdlib/,
+# so publish can leave tracked doc files modified in the working tree.
 publish:
+	$(MAKE) clean
+	$(MAKE) all
 	pnpm publish --no-git-checks
 
 fixtures:
@@ -43,7 +100,7 @@ fixtures:
 	node dist/scripts/regenerate-fixtures.js
 
 doc:
-	rm -rf docs/site/stdlib/ && pnpm run agency doc stdlib -o docs/site/stdlib/
+	rm -rf docs/site/stdlib/ && node ./dist/scripts/agency.js doc stdlib -o docs/site/stdlib/
 
 # Documentable packages: each has an index.agency that `agency doc` reads.
 # (brave-search / tui / examples have no library source, so they're skipped.)

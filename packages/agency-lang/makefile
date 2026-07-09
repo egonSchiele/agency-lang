@@ -14,15 +14,13 @@ TSC_ALIAS := ./node_modules/.bin/tsc-alias
 AGENT_DIRS := review policy agency-agent eval optimize
 AGENT_PATHS := $(addprefix dist/lib/agents/,$(AGENT_DIRS))
 
-# Stage agent sources into dist. Wipe-then-copy, NOT overlay: with dist
-# persisting across builds, an overlay would keep outputs of agent sources
-# that were deleted from lib/agents. Safe to wipe: lib/agents contains no
-# .ts, so tsc emits nothing under dist/lib/agents — everything there is
-# agency-compiled from the sources this recipe just copied.
+# Sync-style staging (scripts/stage-agents.mjs): copies sources over,
+# deletes orphans (a removed foo.agency takes its foo.js), and never
+# deletes a compiled output whose source survives — the old rm -rf
+# recipe wiped every compiled agent .js and made incremental agent
+# skips impossible.
 define stage-agent-sources
-	mkdir -p dist/lib
-	rm -rf dist/lib/agents
-	cp -r lib/agents dist/lib
+	node ./scripts/stage-agents.mjs lib/agents dist/lib/agents
 endef
 
 # Stage the doc markdown the agents read at runtime. rm before cp -r:
@@ -111,8 +109,17 @@ fixtures:
 	pnpm run templates && pnpm run build
 	node dist/scripts/regenerate-fixtures.js
 
+# Regenerate stdlib docs only when stdlib content OR the compiler (which
+# includes the doc generator) changed. `make clean` wipes .agency-build
+# and forces regeneration.
 doc:
-	rm -rf docs/site/stdlib/ && node ./dist/scripts/agency.js doc stdlib -o docs/site/stdlib/
+	@STAMP=$$(node ./scripts/stdlib-stamp.mjs); \
+	if [ -f .agency-build/doc.stamp ] && [ "$$(cat .agency-build/doc.stamp)" = "$$STAMP" ]; then \
+	  echo "stdlib docs up to date"; \
+	else \
+	  rm -rf docs/site/stdlib/ && node ./dist/scripts/agency.js doc stdlib -o docs/site/stdlib/ && \
+	  mkdir -p .agency-build && echo "$$STAMP" > .agency-build/doc.stamp; \
+	fi
 
 # Documentable packages: each has an index.agency that `agency doc` reads.
 # (brave-search / tui / examples have no library source, so they're skipped.)

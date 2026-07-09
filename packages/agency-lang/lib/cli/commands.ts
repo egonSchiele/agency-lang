@@ -1,45 +1,26 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig, loadConfigSafe } from "@/config.js";
-import { AgencyProgram, generateTypeScript } from "@/index.js";
-import { initPlanForModule } from "@/backends/typescriptGenerator.js";
-import { resolveImports } from "@/preprocessors/importResolver.js";
-import { resolveReExports } from "@/preprocessors/resolveReExports.js";
-import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
-import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
-import { SymbolTable } from "@/symbolTable.js";
-import { formatErrors, typeCheck } from "@/typeChecker/index.js";
-import {
-  buildCompiledClosure,
-  CompileClosureError,
-  type CompiledClosure,
-} from "@/compiler/compileClosure.js";
+import { AgencyProgram } from "@/index.js";
 import { spawn } from "child_process";
-import { transformSync } from "esbuild";
 import * as fs from "fs";
 import { createRequire } from "module";
 import * as path from "path";
 
-import {
-  getStdlibDir,
-  isNonTemplatedStdlib,
-  isPkgImport,
-  isStdlibImport,
-  resolveAgencyImportPath,
-} from "../importPaths.js";
-import {
-  CompileStrategy,
-  RunStrategy,
-  type ImportStrategy,
-} from "../importStrategy.js";
+import { RunStrategy } from "../importStrategy.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
-import { parseAgencyFileCached } from "../parseCache.js";
 import { fileURLToPath, pathToFileURL } from "url";
 import {
   classifyInstall,
   installDirFromUrl,
   type InstallKind,
 } from "./installLocation.js";
-import { findRecursively, getImports } from "./util.js";
+import { findRecursively } from "./util.js";
+import {
+  createBuildSession,
+  readFile,
+  type BuildSession,
+  type CompileOptions,
+} from "../compiler/buildSession.js";
 
 // Returns the file:// URL of the ESM loader-register shim shipped with the
 // agency-lang package. Passing this to `node --import=<url>` causes Node to
@@ -166,351 +147,64 @@ export function parse(
   return parseResult.result;
 }
 
-export function readFile(inputFile: string): string {
-  if (!fs.existsSync(inputFile)) {
-    console.error(`Error: Input file '${inputFile}' not found`);
-    process.exit(1);
-  }
+export { readFile };
 
-  return fs.readFileSync(inputFile, "utf-8");
+// The default session backing the legacy module-level entry points
+// (compile/compileMany/resetCompilationCache). Deliberately the ONLY
+// compile-pipeline state left in this file: CLI processes are
+// single-session by nature, and watch mode resets it between rebuilds.
+// All pipeline logic lives in lib/compiler/buildSession.ts.
+//
+// Created LAZILY, not at module top level: `agency pack` bundles compiled
+// programs whose import chain reaches this module for small helpers
+// (readFile, loadConfig). An eager createBuildSession() call is a
+// top-level side effect that defeats esbuild tree-shaking and drags the
+// entire codegen subtree into every packed artifact (~16k extra lines,
+// caught by pack.test.ts).
+let defaultSession: BuildSession | null = null;
+
+function getDefaultSession(): BuildSession {
+  return (defaultSession ??= createBuildSession());
 }
 
-const compiledFiles: Set<string> = new Set();
-// Cached `CompiledClosure` for the current compile session. Built once
-// at the outermost `compile()` call (when no per-file recursion is in
-// progress) and reused by every per-file emit. Cleared by
-// `resetCompilationCache()`.
-let currentClosure: CompiledClosure | null = null;
-
 export function resetCompilationCache(): void {
-  compiledFiles.clear();
-  currentClosure = null;
+  defaultSession = null;
 }
 
 /**
  * Compile a set of entry files under ONE union closure, like the
  * directory branch of `compile()` does. Callers with many entry points
  * (the test runner's precompile pass) use this instead of per-file
- * `compile()` calls, which would rebuild the closure once per entry via
- * `ensureCompiledClosure`'s covers-check.
+ * `compile()` calls, which would rebuild the closure once per entry.
  *
  * Unlike the CLI directory branch, closure errors THROW
  * (`CompileClosureError`) instead of exiting, so programmatic callers
  * can attach context. Parse/typecheck failures inside per-file
  * `compile()` keep their existing exit behavior.
- *
- * `options.closure` lets a caller that already built the union closure
- * (e.g. to run analyses over `closure.programs`) hand it in rather than
- * paying for a rebuild. It MUST cover every file in `files`, otherwise
- * `ensureCompiledClosure` clears the session cache mid-loop and the
- * one-compile-per-module guarantee is lost.
  */
 export function compileMany(
   config: AgencyConfig,
   files: string[],
   options?: {
-    closure?: CompiledClosure;
     quiet?: boolean;
     allowTestImports?: boolean;
   },
 ): void {
-  const absFiles = files.map((f) => path.resolve(f));
-  if (absFiles.length === 0) return;
-  currentClosure = options?.closure ?? buildCompiledClosure(absFiles, config);
-  compiledFiles.clear();
-  for (const file of absFiles) {
-    compile(config, file, undefined, {
-      quiet: options?.quiet,
-      allowTestImports: options?.allowTestImports,
-    });
-  }
+  getDefaultSession().compileMany(config, files, options);
 }
 
 /**
- * Build the import-closure analysis once per compile session — at the
- * outermost call, before any recursive per-file compile() runs. The
- * recursive children reuse the cached closure to get per-module init
- * plans without re-parsing.
- *
- * "Outermost call" = no `options.symbolTable` (passed by recursive
- * children). When the outermost call's entry file changes (e.g. the
- * `agency test` runner iterates several .test.json fixtures in one
- * process), the cached closure no longer covers the new entry's
- * imports so we rebuild and drop the stale `compiledFiles` set.
- * Without that drop, downstream codegen would look up plans for
- * modules that aren't in the closure and emit an empty init plan.
- *
- * Stdlib files compile under their own entry (e.g., when a user runs
- * `agency compile std/...`) but most user code reaches them via
- * `import "std::..."`, which the closure walker intentionally skips.
- * Avoid building a closure rooted at a stdlib file — its imports are
- * structured differently and we don't need the analysis there.
+ * Compile an .agency file (or directory of them) to JavaScript. Thin
+ * delegate over the default BuildSession — all pipeline logic and caching
+ * state live in lib/compiler/buildSession.ts.
  */
-function ensureCompiledClosure(
-  absoluteInputFile: string,
-  config: AgencyConfig,
-  hasSymbolTable: boolean,
-  verbose: boolean,
-): void {
-  const isOutermostCall = !hasSymbolTable;
-  const isStdlibEntry = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
-  const closureCoversEntry =
-    currentClosure?.programs[absoluteInputFile] !== undefined;
-  if (!isOutermostCall || isStdlibEntry || closureCoversEntry) return;
-
-  currentClosure = null;
-  compiledFiles.clear();
-  try {
-    const ccStartTime = performance.now();
-    currentClosure = buildCompiledClosure(absoluteInputFile, config);
-    const ccEndTime = performance.now();
-    logTime({ label: "Built compile closure", start: ccStartTime, end: ccEndTime, verbose });
-  } catch (e) {
-    if (e instanceof CompileClosureError) {
-      console.error(e.message);
-      process.exit(1);
-    }
-    throw e;
-  }
-}
-
-function runTypecheck(
-  liftedProgram: AgencyProgram,
-  config: AgencyConfig,
-  info: CompilationUnit,
-  absoluteInputFile: string,
-  verbose: boolean,
-): void {
-  const tc = config.typechecker;
-  if (!tc?.enabled && !tc?.strict) return;
-  const tcStartTime = performance.now();
-  const { errors } = typeCheck(liftedProgram, config, info);
-  const tcEndTime = performance.now();
-  logTime({ label: `Type checked ${absoluteInputFile}`, start: tcStartTime, end: tcEndTime, verbose });
-  if (errors.length === 0) return;
-  if (tc?.strict) {
-    console.error(formatErrors(errors));
-    const hasFatal = errors.some((e) => (e.severity ?? "error") === "error");
-    if (hasFatal) process.exit(1);
-  } else {
-    console.warn(formatErrors(errors, "warning"));
-  }
-}
-
-// Cached-parse counterpart of `parse()`: same exit-on-failure contract the
-// CLI pipeline expects, but reads through the process-wide parse cache.
-function parseFileOrExit(
-  absPath: string,
-  config: AgencyConfig,
-  applyTemplate: boolean,
-  contents: string,
-): AgencyProgram {
-  const parseResult = parseAgencyFileCached(absPath, config, applyTemplate);
-  if (!parseResult.success) {
-    if (parseResult.message) {
-      console.error(`Failed to parse Agency program: ${parseResult.message}`);
-    } else {
-      console.error("Failed to parse Agency program.", contents.slice(0, 400));
-    }
-    process.exit(1);
-  }
-  return parseResult.result;
-}
-
 export function compile(
   config: AgencyConfig,
   inputFile: string,
   _outputFile?: string,
-  options?: {
-    ts?: boolean;
-    symbolTable?: SymbolTable;
-    importStrategy?: ImportStrategy;
-    /** Suppress the per-file `input → output (in Nms)` progress line. */
-    quiet?: boolean;
-    /** Test-harness only. Honors `import test { … }`. Never set outside the
-     *  test runner / analysis paths — kept off AgencyConfig so agent source
-     *  cannot enable it. */
-    allowTestImports?: boolean;
-  },
+  options?: CompileOptions,
 ): string | null {
-  if (!fs.existsSync(inputFile)) {
-    console.error(`Error: Input file '${inputFile}' not found`);
-    process.exit(1);
-  }
-  const stats = fs.statSync(inputFile);
-  const verbose = config.verbose ?? false;
-  if (stats.isDirectory()) {
-    const files = [...findRecursively(inputFile)].map((f) => f.path);
-    // A directory is many entry points — every .agency file under it. To
-    // avoid recompiling shared dependencies once per entry, build ONE
-    // import closure covering all of them up front and reuse it for every
-    // file. Without this, each sibling entry the previous closure didn't
-    // cover would clear the per-session cache (see ensureCompiledClosure)
-    // and recompile shared deps once per entry. Skipped for:
-    //   - recursive child calls (a symbolTable was threaded in) — those
-    //     aren't real top-level directory compiles; and
-    //   - stdlib dirs, which intentionally compile without a closure (the
-    //     same carve-out ensureCompiledClosure makes for stdlib entries).
-    const absDir = path.resolve(inputFile);
-    const isStdlibDir =
-      absDir === getStdlibDir() || absDir.startsWith(getStdlibDir() + path.sep);
-    if (!options?.symbolTable && !isStdlibDir && files.length > 0) {
-      try {
-        currentClosure = buildCompiledClosure(
-          files.map((f) => path.resolve(f)),
-          config,
-        );
-        // The fresh union closure supersedes anything cached for a prior
-        // entry; drop the per-file set so codegen reruns under it.
-        compiledFiles.clear();
-      } catch (e) {
-        if (e instanceof CompileClosureError) {
-          console.error(e.message);
-          process.exit(1);
-        }
-        throw e;
-      }
-    }
-    for (const file of files) {
-      compile(config, file, undefined, options);
-    }
-    return null;
-  }
-
-  const compileStartTime = performance.now();
-  const absoluteInputFile = path.resolve(inputFile);
-
-  ensureCompiledClosure(absoluteInputFile, config, !!options?.symbolTable, verbose);
-
-  const ext = options?.ts ? ".ts" : ".js";
-  // Anchor the replacement to the extension so that an absolute path
-  // containing ".agency" as a substring in a parent directory (e.g.
-  // "/Users/me/dev/worksy.agency-init/src/agent.agency") does not get
-  // the first match clobbered. See issue #48.
-  let outputFile = _outputFile || inputFile.replace(/\.agency$/, ext);
-  if (config.outDir && !_outputFile) {
-    const outputDir = path.resolve(config.outDir);
-
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    outputFile = path.join(outputDir, outputFile);
-  }
-  if (compiledFiles.has(absoluteInputFile)) {
-    return outputFile;
-  }
-
-  compiledFiles.add(absoluteInputFile);
-
-  const contents = readFile(inputFile);
-  const applyTemplate = !isNonTemplatedStdlib(absoluteInputFile);
-  const parsedProgram = parseFileOrExit(absoluteInputFile, config, applyTemplate, contents);
-
-  const symbolTableStartTime = performance.now();
-  const symbolTable =
-    options?.symbolTable ?? SymbolTable.build(absoluteInputFile, config);
-
-  const symbolTableEndTime = performance.now();
-  logTime({ label: `Built symbol table for ${absoluteInputFile}`, start: symbolTableStartTime, end: symbolTableEndTime, verbose });
-
-  const compilationUnitStartTime = performance.now();
-  const reExportedProgram = resolveReExports(
-    parsedProgram,
-    symbolTable,
-    absoluteInputFile,
-  );
-  const resolvedProgram = resolveImports(reExportedProgram, symbolTable, absoluteInputFile, {
-    allowTestImports: options?.allowTestImports ?? false,
-  });
-  // Lift `callback("onX") { ... }` block bodies to top-level defs.
-  // Must run BEFORE buildCompilationUnit and typecheck so the lifted defs
-  // appear in functionDefinitions and get their bodies typechecked.
-  const liftedProgram = liftCallbackBlocks(resolvedProgram);
-  const info = buildCompilationUnit(
-    liftedProgram,
-    symbolTable,
-    absoluteInputFile,
-    contents,
-  );
-  const compilationUnitEndTime = performance.now();
-  logTime({ label: `Built compilation unit for ${absoluteInputFile}`, start: compilationUnitStartTime, end: compilationUnitEndTime, verbose });
-
-  runTypecheck(liftedProgram, config, info, absoluteInputFile, verbose);
-
-  const imports = getImports(resolvedProgram);
-
-  for (const importPath of imports) {
-    if (isStdlibImport(importPath) || isPkgImport(importPath)) continue;
-
-    const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
-    compile(config, absPath, undefined, { ...options, symbolTable });
-  }
-
-  // Rewrite import paths in the AST using the import strategy
-  const strategy =
-    options?.importStrategy ?? new CompileStrategy({ targetExt: ".js" });
-  const nonAgencyImports: string[] = [];
-
-  liftedProgram.nodes.forEach((node) => {
-    if (node.type !== "importStatement") return;
-    if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
-
-    node.modulePath = strategy.rewriteImport(
-      node.modulePath,
-      absoluteInputFile,
-    );
-
-    if (!node.modulePath.endsWith(".agency")) {
-      nonAgencyImports.push(node.modulePath);
-    }
-  });
-
-  try {
-    strategy.prepareDependencies(nonAgencyImports, absoluteInputFile);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-
-  const moduleId = path.relative(process.cwd(), absoluteInputFile);
-  const absoluteOutputFile = path.resolve(outputFile);
-  // Per-module init plan view — derived from the cached closure if we
-  // built one. Modules not in the closure (e.g., out-of-tree stdlib
-  // compiles) fall through to the legacy path with no plan.
-  const initPlan = currentClosure
-    ? initPlanForModule(currentClosure, absoluteInputFile)
-    : undefined;
-  const codegenStartTime = performance.now();
-  const generatedCode = generateTypeScript(
-    liftedProgram,
-    config,
-    info,
-    moduleId,
-    absoluteOutputFile,
-    initPlan,
-  );
-  const codegenEndTime = performance.now();
-  logTime({ label: `Generated code for ${absoluteInputFile}`, start: codegenStartTime, end: codegenEndTime, verbose });
-  if (options?.ts) {
-    fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
-  } else {
-    const esbuildStartTime = performance.now();
-    const result = transformSync(generatedCode, {
-      loader: "ts",
-      format: "esm",
-      supported: { "top-level-await": true },
-    });
-    fs.writeFileSync(outputFile, result.code, "utf-8");
-    const esbuildEndTime = performance.now();
-    logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
-  }
-  const compileEndTime = performance.now();
-  const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
-  if (!options?.quiet) {
-    console.log(`${inputFile} → ${outputFile} (in ${timeTaken})`);
-  }
-  return outputFile;
+  return getDefaultSession().compile(config, inputFile, _outputFile, options);
 }
 
 export async function format(
@@ -591,10 +285,4 @@ export function run(
       process.exit(code || 1);
     }
   });
-}
-
-function logTime({ label, start, end, verbose }: { label: string, start: number, end: number, verbose: boolean }): void {
-  if (verbose) {
-    console.log(`${label} in ${(end - start).toFixed(2)}ms`);
-  }
 }

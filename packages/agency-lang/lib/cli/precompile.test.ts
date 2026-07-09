@@ -2,11 +2,7 @@ import { describe, expect, test } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import {
-  findCrossConfigConflicts,
-  groupTestSources,
-  precompileTestSources,
-} from "./precompile.js";
+import { groupTestSources, precompileTestSources } from "./precompile.js";
 
 const TRIVIAL = 'node main() {\n  return "ok"\n}\n';
 const HELPER = 'export def helper(): string {\n  return "shared"\n}\n';
@@ -27,34 +23,6 @@ function writeTree(spec: Record<string, Record<string, string>>): string {
 }
 
 const TEST_JSON = JSON.stringify({ tests: [] });
-
-describe("findCrossConfigConflicts", () => {
-  test("no conflict when groups with the same config share a module", () => {
-    const conflicts = findCrossConfigConflicts([
-      { label: "a", configKey: "{}", modules: ["/shared.agency"] },
-      { label: "b", configKey: "{}", modules: ["/shared.agency"] },
-    ]);
-    expect(conflicts).toEqual([]);
-  });
-
-  test("conflict when groups with differing configs share a module", () => {
-    const conflicts = findCrossConfigConflicts([
-      { label: "a", configKey: "{}", modules: ["/shared.agency", "/a.agency"] },
-      { label: "b", configKey: '{"verbose":true}', modules: ["/shared.agency"] },
-    ]);
-    expect(conflicts).toHaveLength(1);
-    expect(conflicts[0].module).toBe("/shared.agency");
-    expect(conflicts[0].labels.sort()).toEqual(["a", "b"]);
-  });
-
-  test("no conflict when differing-config groups touch disjoint modules", () => {
-    const conflicts = findCrossConfigConflicts([
-      { label: "a", configKey: "{}", modules: ["/a.agency"] },
-      { label: "b", configKey: '{"verbose":true}', modules: ["/b.agency"] },
-    ]);
-    expect(conflicts).toEqual([]);
-  });
-});
 
 describe("groupTestSources", () => {
   test("files without a local agency.json land in one base group", () => {
@@ -91,7 +59,7 @@ describe("groupTestSources", () => {
     expect(custom.config.verbose).toBe(true);
     expect(custom.config.observability).toBe(true);
     const base = groups.find((g) => !g.label.includes("custom"))!;
-    expect(base.configKey).not.toBe(custom.configKey);
+    expect(base.config).not.toEqual(custom.config);
   });
 
   test("file-level skipped test files are excluded", () => {
@@ -110,28 +78,32 @@ describe("groupTestSources", () => {
     expect(groups[0].files).toEqual([path.join(root, "live/main.agency")]);
   });
 
-  test("configKey is key-order independent", () => {
-    // Same config content, different key order in the two agency.json
-    // files. JSON.stringify would produce different strings; the group
-    // keys must still match so the dirs are config-compatible.
+  test("key-order-different but equal local configs are compatible (zod-normalized keys)", () => {
+    // Two dirs whose agency.json files have the same content in different
+    // key order, sharing an imported module. The session derives config
+    // keys via JSON.stringify, which is only order-stable because
+    // loadConfig routes through zod (schema shape order). If that
+    // normalization ever breaks, the keys diverge and the shared module
+    // trips the cross-config assert — this test is the tripwire.
     const root = writeTree({
+      shared: { "helper.agency": HELPER },
       a: {
-        "main.agency": TRIVIAL,
+        "main.agency": IMPORTS_HELPER,
         "main.test.json": TEST_JSON,
-        "agency.json": '{"verbose": true, "observability": false}',
+        "agency.json": '{"verbose": false, "observability": true}',
       },
       b: {
-        "main.agency": TRIVIAL,
+        "main.agency": IMPORTS_HELPER,
         "main.test.json": TEST_JSON,
-        "agency.json": '{"observability": false, "verbose": true}',
+        "agency.json": '{"observability": true, "verbose": false}',
       },
     });
-    const groups = groupTestSources({}, [
-      path.join(root, "a/main.test.json"),
-      path.join(root, "b/main.test.json"),
-    ]);
-    expect(groups).toHaveLength(2);
-    expect(groups[0].configKey).toBe(groups[1].configKey);
+    expect(() =>
+      precompileTestSources({}, [
+        path.join(root, "a/main.test.json"),
+        path.join(root, "b/main.test.json"),
+      ], { quiet: true }),
+    ).not.toThrow();
   });
 
   test("test files without a sibling .agency are excluded", () => {

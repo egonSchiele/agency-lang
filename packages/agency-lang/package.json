@@ -47,7 +47,8 @@
     "./dist/lib/agents/docs/cli/**/*.md",
     "./dist/lib/agents/docs/appendix/**/*.md",
     "./stdlib/**/*.agency",
-    "./stdlib/**/*.js"
+    "./stdlib/**/*.js",
+    "./scripts/hooks/postinstall.js"
   ],
   "exports": {
     ".": {
@@ -79,9 +80,6 @@
     "./stdlib/*": "./stdlib/*"
   },
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
   "types": "./dist/lib/index.d.ts",
   "keywords": [],
   "author": "Aditya Bhargava",

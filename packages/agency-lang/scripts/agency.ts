@@ -78,16 +78,6 @@ import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
 
-const MIN_NODE_MAJOR = 20;
-const nodeMajor = Number(process.versions.node.split(".")[0]);
-if (Number.isFinite(nodeMajor) && nodeMajor < MIN_NODE_MAJOR) {
-  console.error(
-    `agency-lang requires Node.js ${MIN_NODE_MAJOR} or newer (you are on ${process.version}).\n` +
-      `Please upgrade Node.js: https://nodejs.org/`,
-  );
-  process.exit(1);
-}
-
 type RunOptions = { resume?: string; trace?: string | true };
 
 type CliDependencies = {

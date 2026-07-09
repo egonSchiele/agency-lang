@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { createBuildSession, findCrossConfigConflicts } from "./buildSession.js";
+import { loadManifest, MANIFEST_DIR_NAME } from "./buildManifest.js";
 import { CompileClosureError } from "./compileClosure.js";
 import { compile, resetCompilationCache } from "../cli/commands.js";
 
@@ -247,5 +248,37 @@ describe("commands.ts delegates", () => {
     resetCompilationCache();
     compile({}, entry, undefined, { quiet: true });
     expect(fs.statSync(path.join(dir, "main.js")).mtimeMs).toBeGreaterThan(stamped);
+  });
+});
+
+describe("manifest write path", () => {
+  test("compiling records an entry per emitted module with recorded deps", () => {
+    const dir = writeTempDir({ "helper.agency": HELPER, "main.agency": IMPORTS_HELPER });
+    createBuildSession().compile({}, { entries: [path.join(dir, "main.agency")], quiet: true });
+    const manifest = loadManifest(dir);
+    expect(manifest.entries["main.agency"].deps).toEqual(["helper.agency"]);
+    expect(manifest.entries["main.agency"].outputPath).toBe("main.js");
+    expect(manifest.entries["main.agency"].hasPkgImports).toBe(false);
+    expect(manifest.entries["helper.agency"].deps).toEqual([]);
+  });
+
+  test("allowTestImports sessions write no manifest", () => {
+    const dir = writeTempDir({
+      "lib.agency": 'def secret(): string {\n  return "s"\n}\n',
+      "main.agency":
+        'import test { secret } from "./lib.agency"\n\nnode main() {\n  return secret()\n}\n',
+    });
+    createBuildSession().compile({}, {
+      entries: [path.join(dir, "main.agency")],
+      quiet: true,
+      allowTestImports: true,
+    });
+    expect(fs.existsSync(path.join(dir, MANIFEST_DIR_NAME))).toBe(false);
+  });
+
+  test("--ts mode writes no manifest", () => {
+    const dir = writeTempDir({ "main.agency": TRIVIAL });
+    createBuildSession().compile({}, { entries: [path.join(dir, "main.agency")], quiet: true, ts: true });
+    expect(fs.existsSync(path.join(dir, MANIFEST_DIR_NAME))).toBe(false);
   });
 });

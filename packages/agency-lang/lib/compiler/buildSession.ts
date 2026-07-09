@@ -25,10 +25,18 @@ import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import {
+  agencyImportTargets,
   buildCompiledClosure,
   CompileClosureError,
+  programHasPkgImport,
   type CompiledClosure,
 } from "@/compiler/compileClosure.js";
+import {
+  createManifestTracker,
+  NOOP_TRACKER,
+  type Freshness,
+  type ManifestTracker,
+} from "./manifestTracker.js";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
 import * as path from "path";
@@ -53,6 +61,11 @@ export type CompileOptions = {
    *  test runner / analysis paths — kept off AgencyConfig so agent source
    *  cannot enable it. */
   allowTestImports?: boolean;
+  /** Skip policy. "incremental" (default) consults and records the
+   *  manifest; "force" recompiles everything but rewrites it (--force);
+   *  "always" is internal (allowTestImports / --ts / caller-supplied
+   *  importStrategy) and touches nothing. */
+  freshness?: Freshness;
 };
 
 export type CompileRequest = {
@@ -78,6 +91,19 @@ export type CompileGroup = {
   files: string[];
 };
 
+// The only place freshness OVERRIDES live; the policy MEANING lives in
+// the tracker factory. A caller-supplied importStrategy shapes emitted
+// bytes (RunStrategy rewrites .ts import specifiers and transpiles
+// sibling .ts deps on disk — run/runAgencyNode/coverage paths), and the
+// manifest key cannot see it — same disease configKey/hasPkgImports
+// prevent, so it forces "always".
+function resolveFreshness(options?: CompileOptions): Freshness {
+  if (options?.allowTestImports || options?.ts || options?.importStrategy) {
+    return "always";
+  }
+  return options?.freshness ?? "incremental";
+}
+
 export function createBuildSession(): BuildSession {
   return new BuildSession();
 }
@@ -87,6 +113,9 @@ export class BuildSession {
   // Cached `CompiledClosure` for this session. Built once at the outermost
   // compile call and reused by every per-file emit.
   private currentClosure: CompiledClosure | null = null;
+  // Per-operation manifest policy object; NOOP outside operations and for
+  // "always" sessions, so every call site is an unconditional one-liner.
+  private tracker: ManifestTracker = NOOP_TRACKER;
 
   /**
    * The one public compile entry point: callers declare WHAT to build
@@ -103,11 +132,29 @@ export class BuildSession {
     if (outputFile !== undefined && entries.length !== 1) {
       throw new Error("outputFile is only valid with a single file entry");
     }
-    if (entries.length === 1) {
-      return this.compileEntry(config, entries[0], outputFile, options);
+    if (entries.length === 0) {
+      return null;
     }
-    this.compileManyImpl(config, entries, options);
-    return null;
+    this.tracker = createManifestTracker(
+      config,
+      entries[0],
+      resolveFreshness(options),
+      deriveConfigKey(config),
+    );
+    try {
+      if (entries.length === 1) {
+        return this.compileEntry(config, entries[0], outputFile, options);
+      }
+      this.compileManyImpl(config, entries, options);
+      return null;
+    } finally {
+      // Modules emitted before a later failure are legitimately fresh, so
+      // flushing in finally is correct. Caveat: most compile failures are
+      // process.exit(1), which bypasses finally — the flush is simply
+      // lost, which only over-rebuilds next time. Safe.
+      this.tracker.flush();
+      this.tracker = NOOP_TRACKER;
+    }
   }
 
   /** Compile config-heterogeneous groups (one union closure each), after
@@ -117,7 +164,7 @@ export class BuildSession {
    *  Throws `CompileClosureError` naming the module and group labels. */
   compileGroups(
     groups: CompileGroup[],
-    options?: { quiet?: boolean; allowTestImports?: boolean },
+    options?: { quiet?: boolean; allowTestImports?: boolean; freshness?: Freshness },
   ): void {
     const withClosures = groups.map((group) => ({
       group,
@@ -146,17 +193,32 @@ export class BuildSession {
     }
 
     for (const { group, closure } of withClosures) {
-      this.compileManyImpl(group.config, group.files, {
-        closure,
-        quiet: options?.quiet,
-        allowTestImports: options?.allowTestImports,
-      });
+      // Each group gets its own tracker (per-group config identity); the
+      // test runner passes allowTestImports, which resolves to "always"
+      // and the NOOP tracker — no manifest IO, structurally.
+      this.tracker = createManifestTracker(
+        group.config,
+        group.files[0],
+        resolveFreshness(options),
+        deriveConfigKey(group.config),
+      );
+      try {
+        this.compileManyImpl(group.config, group.files, {
+          closure,
+          quiet: options?.quiet,
+          allowTestImports: options?.allowTestImports,
+        });
+      } finally {
+        this.tracker.flush();
+        this.tracker = NOOP_TRACKER;
+      }
     }
   }
 
   /** Drop all cached state (watch-mode rebuild boundary). */
   reset(): void {
     this.setClosure(null);
+    this.tracker = NOOP_TRACKER;
   }
 
   // `compiledFiles` entries are only meaningful under the current closure,
@@ -166,6 +228,28 @@ export class BuildSession {
   private setClosure(closure: CompiledClosure | null): void {
     this.currentClosure = closure;
     this.compiledFiles.clear();
+  }
+
+  /** BFS over the closure import graph. Stdlib entries have no closure —
+   *  their deps are [] by construction (stdlibHash covers them). */
+  private transitiveDeps(absModule: string): string[] {
+    const programs = this.currentClosure?.programs;
+    if (!programs || !programs[absModule]) {
+      return [];
+    }
+    const seen = [absModule];
+    for (let i = 0; i < seen.length; i++) {
+      const program = programs[seen[i]];
+      if (!program) {
+        continue;
+      }
+      for (const target of agencyImportTargets(program, seen[i])) {
+        if (!seen.includes(target)) {
+          seen.push(target);
+        }
+      }
+    }
+    return seen.slice(1);
   }
 
   /**
@@ -428,6 +512,13 @@ export class BuildSession {
       fs.writeFileSync(outputFile, result.code, "utf-8");
       const esbuildEndTime = performance.now();
       logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
+      const transitiveDeps = this.transitiveDeps(absoluteInputFile);
+      this.tracker.record(
+        absoluteInputFile,
+        path.resolve(outputFile),
+        transitiveDeps,
+        subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
+      );
     }
     const compileEndTime = performance.now();
     const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
@@ -528,4 +619,21 @@ function logTime({ label, start, end, verbose }: { label: string, start: number,
   if (verbose) {
     console.log(`${label} in ${(end - start).toFixed(2)}ms`);
   }
+}
+
+/** pkg:: imports are invisible to the closure and depsHash; a module whose
+ *  subtree touches pkg:: is never skipped (spec). Edge detection is shared
+ *  with the closure walker via programHasPkgImport. */
+function subtreeHasPkgImport(
+  closure: CompiledClosure | null,
+  absModule: string,
+  transitiveDeps: string[],
+): boolean {
+  for (const modulePath of [absModule, ...transitiveDeps]) {
+    const program = closure?.programs[modulePath];
+    if (program && programHasPkgImport(program)) {
+      return true;
+    }
+  }
+  return false;
 }

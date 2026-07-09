@@ -1,0 +1,213 @@
+import {
+  resolveCapabilities,
+  sanitizeCapabilitySettings,
+  mergeCapabilityOverride,
+  removeCapabilityField,
+  providerLacksEmbeddings,
+  CapabilitySettings,
+ } from "../lib/capabilities.agency"
+import {
+  refreshCapabilities,
+  getCapabilities,
+  getCapabilityModelKey,
+  getCapabilityProvider,
+  applyResolved,
+  demoteProvider,
+ } from "../shared.agency"
+import { saveSettings } from "../lib/settings.agency"
+
+// Unknown model + unknown provider → pure built-in defaults. Pins the
+// 20000 maxTokens default, which the table owns.
+node unknownModelGetsDefaults(): string {
+  const resolved = resolveCapabilities("some-new-model", "some-provider", {})
+  return "${resolved.values.prompt}/${resolved.values.summarize}/${resolved.values.memory}/${resolved.values.maxTokens}/${resolved.sources.prompt}"
+}
+
+// Unknown local model → llama-cpp provider profile.
+node unknownLocalModelGetsProviderProfile(): string {
+  const resolved = resolveCapabilities("mystery-model.gguf", "llama-cpp", {})
+  return "${resolved.values.prompt}/${resolved.values.summarize}/${resolved.values.maxTokens}/${resolved.sources.summarize}"
+}
+
+// Curated model entry beats its provider default (built-in model layer).
+node modelEntryBeatsProvider(): number {
+  const resolved = resolveCapabilities("smollm2-135m", "llama-cpp", {})
+  if (resolved.values.maxTokens == null) {
+    return -1
+  }
+  return resolved.values.maxTokens
+}
+
+// A user GLOBAL override beats a BUILT-IN model/provider entry (the
+// intentional consequence called out in the spec's decision 6).
+node userGlobalBeatsBuiltinProvider(): string {
+  const user: CapabilitySettings = {
+    global: {
+      summarize: true
+    }
+  }
+  const resolved = resolveCapabilities("qwen3.5-2b", "llama-cpp", user)
+  return "${resolved.values.summarize}/${resolved.sources.summarize}"
+}
+
+// The user-provider layer beats user-global. The two layers hold DISTINCT
+// values here, so a wrong lookup key in the provider layer cannot pass.
+node userProviderBeatsUserGlobal(): string {
+  const user: CapabilitySettings = {
+    global: {
+      prompt: "small"
+    },
+    providers: {
+      "llama-cpp": {
+        prompt: "large"
+      }
+    }
+  }
+  const resolved = resolveCapabilities("qwen3.5-2b", "llama-cpp", user)
+  return "${resolved.values.prompt}/${resolved.sources.prompt}"
+}
+
+// Full precedence: user model > user provider > user global.
+node userModelBeatsUserProvider(): string {
+  const user: CapabilitySettings = {
+    global: {
+      prompt: "small"
+    },
+    providers: {
+      "llama-cpp": {
+        prompt: "small"
+      }
+    },
+    models: {
+      "qwen3.5-2b": {
+        prompt: "large"
+      }
+    }
+  }
+  const resolved = resolveCapabilities("qwen3.5-2b", "llama-cpp", user)
+  return "${resolved.values.prompt}/${resolved.sources.prompt}"
+}
+
+// Per-field independence: a user prompt override must not disturb the
+// provider-sourced summarize/maxTokens fields.
+node perFieldResolution(): string {
+  const user: CapabilitySettings = {
+    models: {
+      "qwen3.5-2b": {
+        prompt: "large"
+      }
+    }
+  }
+  const resolved = resolveCapabilities("qwen3.5-2b", "llama-cpp", user)
+  return "${resolved.sources.prompt}/${resolved.sources.summarize}/${resolved.sources.maxTokens}"
+}
+
+// Anthropic default: memory off, everything else the hosted default.
+node anthropicMemoryOff(): string {
+  const resolved = resolveCapabilities("claude-opus-4-8", "anthropic", {})
+  return "${resolved.values.memory}/${resolved.values.summarize}/${resolved.values.prompt}"
+}
+
+// Sanitize covers all three sections: invalid values drop, valid
+// siblings survive.
+node sanitizeDropsInvalid(): string {
+  const cleaned = sanitizeCapabilitySettings(
+    {
+    global: {
+      prompt: "huge",
+      summarize: false
+    },
+    models: {
+      "m1": {
+        maxTokens: -5,
+        memory: true
+      }
+    },
+    providers: {
+      "openai": {
+        prompt: "banana",
+        summarize: true
+      }
+    }
+  },
+  )
+  const globalPatch = cleaned.global
+  const models = cleaned.models
+  const providers = cleaned.providers
+  if (globalPatch == null || models == null || providers == null) {
+    return "missing-section"
+  }
+  return "${globalPatch.prompt}/${globalPatch.summarize}/${models["m1"].maxTokens}/${models["m1"].memory}/${providers["openai"].prompt}/${providers["openai"].summarize}"
+}
+
+// The /settings Tier-2 notice keys off the table, not hardcoded names.
+node lacksEmbeddingsFromTable(): string {
+  return "${providerLacksEmbeddings("anthropic")}/${providerLacksEmbeddings("llama-cpp")}/${providerLacksEmbeddings("openai")}"
+}
+
+// Merge preserves sibling fields in the same entry (review test-gap:
+// saveCapabilityOverride merge semantics).
+node mergePreservesSiblings(): string {
+  let user: CapabilitySettings = {}
+  user = mergeCapabilityOverride(user, "model", "qwen3.5-2b", {
+    prompt: "large"
+  })
+  user = mergeCapabilityOverride(user, "model", "qwen3.5-2b", {
+    summarize: true
+  })
+  const models = user.models
+  if (models == null) {
+    return "missing"
+  }
+  return "${models["qwen3.5-2b"].prompt}/${models["qwen3.5-2b"].summarize}"
+}
+
+// Removal nulls exactly one field and leaves siblings intact. Absent
+// entries are tolerated. The nulled field must read as absent in
+// resolution.
+node removeDeletesOneField(): string {
+  let user: CapabilitySettings = {}
+  user = mergeCapabilityOverride(user, "model", "qwen3.5-2b", {
+    prompt: "large",
+    maxTokens: 512
+  })
+  user = removeCapabilityField(user, "model", "qwen3.5-2b", "maxTokens")
+  user = removeCapabilityField(user, "model", "no-such-model", "prompt")
+  const models = user.models
+  if (models == null) {
+    return "missing"
+  }
+  // The nulled maxTokens must fall back to the provider layer's 2000
+  // rather than stick at 512. That proves null reads as absent.
+  const resolved = resolveCapabilities("qwen3.5-2b", "llama-cpp", user)
+  return "${models["qwen3.5-2b"].prompt}/${models["qwen3.5-2b"].maxTokens}/${resolved.values.maxTokens}/${resolved.sources.maxTokens}"
+}
+
+// refresh + get round-trip through the shared cache. Resets settings.json
+// first, because earlier settings tests write real overrides to the same
+// file.
+node refreshCachesProfile(): string {
+  saveSettings({}) with approve
+  refreshCapabilities("qwen3.5-2b", "llama-cpp")
+  const caps = getCapabilities()
+  return "${caps.summarize}/${caps.prompt}/${getCapabilityModelKey()}"
+}
+
+// The applyResolved chokepoint refreshes capabilities (deleting the hook
+// must fail THIS test) and demotes the promoted provider name.
+node applyResolvedRefreshesCapabilities(): string {
+  saveSettings({}) with approve
+  applyResolved({
+    "main": {
+      model: "gpt-4o-mini",
+      provider: "openai-responses",
+      via: "test"
+    }
+  })
+  const caps = getCapabilities()
+  return "${caps.summarize}/${getCapabilityModelKey()}/${getCapabilityProvider()}"
+}
+
+node demoteInvertsPromote(): string {
+  return "${demoteProvider("openai-responses")}/${demoteProvider("anthropic")}"
+}

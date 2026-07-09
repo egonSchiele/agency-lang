@@ -5,22 +5,91 @@
       "nodeName": "roundTripsTheSearchBackend",
       "input": "",
       "expectedOutput": "\"tavily\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "missingFileLoadsAsEmpty",
       "input": "",
       "expectedOutput": "\"empty\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "corruptFileLoadsAsEmpty",
       "input": "",
       "expectedOutput": "\"empty\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
-    { "nodeName": "dropsUnknownSlotKey", "input": "", "expectedOutput": "{\"slots\":{\"reasoning\":\"opus\"}}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "doesNotMutateInput", "input": "", "expectedOutput": "\"unmutated\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "roundTripsModelSlots", "input": "", "expectedOutput": "\"claude-opus-4-8\"", "evaluationCriteria": [{ "type": "exact" }] }
+    {
+      "nodeName": "dropsUnknownSlotKey",
+      "input": "",
+      "expectedOutput": "{\"slots\":{\"reasoning\":\"opus\"}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "doesNotMutateInput",
+      "input": "",
+      "expectedOutput": "\"unmutated\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "roundTripsModelSlots",
+      "input": "",
+      "expectedOutput": "\"claude-opus-4-8\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "roundTripsCapabilities",
+      "input": "",
+      "expectedOutput": "\"large\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "capabilitiesSanitizedOnLoad",
+      "input": "",
+      "expectedOutput": "\"undefined/false/undefined\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingCapabilitiesIsEmpty",
+      "input": "",
+      "expectedOutput": "\"empty\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
   ]
 }

@@ -15,9 +15,14 @@ import { setLlmOptions } from "std::llm"
 import { enableMemory } from "std::memory"
 import { env } from "std::system"
 
+import {
+  resolveCapabilities,
+  Capabilities,
+  ResolvedCapabilities,
+ } from "./lib/capabilities.agency"
 import { resolveDetected, knownProviders, Resolved } from "./lib/models.agency"
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
-import { getModelSettings, loadSettings } from "./lib/settings.agency"
+import { getCapabilitySettings, getModelSettings, loadSettings } from "./lib/settings.agency"
 import { slotKind } from "./lib/slots.agency"
 
 
@@ -119,6 +124,71 @@ def promoteProvider(provider: string): string {
   return provider
 }
 
+/** Inverse of promoteProvider. Capability tables and settings.json key
+  providers by their public name, "openai". The internal openai-responses
+  promotion must not leak into either place. If it did, a hand-written
+  "openai" entry in settings.json would silently never match. */
+export def demoteProvider(provider: string): string {
+  if (provider == "openai-responses") {
+    return "openai"
+  }
+  return provider
+}
+
+// Capability profile for the current main model. refreshCapabilities()
+// resolves it and getCapabilities() reads it. The key and provider are
+// kept so /settings knows what scope "this model" means.
+let _capabilities: ResolvedCapabilities = {
+  values: {
+    prompt: "large",
+    summarize: true,
+    memory: true,
+    maxTokens: 20000
+  },
+  sources: {
+    prompt: "default",
+    summarize: "default",
+    memory: "default",
+    maxTokens: "default"
+  }
+}
+let _capabilityModelKey: string = ""
+let _capabilityProvider: string = ""
+
+/** Re-resolve the capability profile for (modelKey, provider) against the
+  user's saved overrides and cache it. Demotes the provider first.
+
+  Two callers: applyResolved covers the hosted path and /model switches.
+  configureLocalModel calls it again with the curated short name, because
+  the .gguf path applyResolved sees would miss MODEL_CAPABILITIES entries. */
+export def refreshCapabilities(modelKey: string, provider: string) {
+  const demoted = demoteProvider(provider)
+  const settings = loadSettings()
+  _capabilities = resolveCapabilities(
+    modelKey,
+    demoted,
+    getCapabilitySettings(settings),
+  )
+  _capabilityModelKey = modelKey
+  _capabilityProvider = demoted
+}
+
+export def getCapabilities(): Capabilities {
+  return _capabilities.values
+}
+
+export def getCapabilitiesResolved(): ResolvedCapabilities {
+  return _capabilities
+}
+
+export def getCapabilityModelKey(): string {
+  return _capabilityModelKey
+}
+
+export def getCapabilityProvider(): string {
+  return _capabilityProvider
+}
+
 export def promoteAll(
   slots: Record<string, Resolved>,
 ): Record<string, Resolved> {
@@ -159,6 +229,10 @@ export def applyResolved(slots: Record<string, Resolved>) {
     } else if (kind == "slow") {
       setSlowModel(resolved.model, resolved.provider)
     }
+  }
+  const mainSlot = slots["main"]
+  if (mainSlot != null) {
+    refreshCapabilities(mainSlot.model, mainSlot.provider)
   }
 }
 
@@ -282,5 +356,8 @@ export def configureLocalModel(value: string) {
     }
   },
   )
+  // applyResolved keyed capabilities by the resolved .gguf path. Re-key
+  // by the curated short name so MODEL_CAPABILITIES entries match.
+  refreshCapabilities(value, "llama-cpp")
 }
 

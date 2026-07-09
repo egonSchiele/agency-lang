@@ -1,0 +1,16 @@
+import { wikidataSearch } from "std::data/wikidata"
+
+node liveSearch(): number {
+  handle {
+    const hits = wikidataSearch("Ada Lovelace") catch []
+    return hits.length
+  } with (data) {
+    if (data.effect == "std::wikidata") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+    return reject()
+  }
+}

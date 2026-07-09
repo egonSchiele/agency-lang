@@ -283,6 +283,10 @@ export default defineConfig({
                   text: "data/tech/hackernews",
                   link: "/stdlib/data/tech/hackernews",
                 },
+                {
+                  text: "data/wikidata",
+                  link: "/stdlib/data/wikidata",
+                },
               ],
             },
             { text: "date", link: "/stdlib/date" },

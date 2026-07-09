@@ -1,0 +1,8 @@
+{
+  "head": { "vars": ["item", "itemLabel"] },
+  "results": {
+    "bindings": [
+      { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q5" }, "itemLabel": { "xml:lang": "en", "type": "literal", "value": "human" } }
+    ]
+  }
+}

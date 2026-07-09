@@ -1,0 +1,269 @@
+import { fetchJSON } from "std::http"
+import { env } from "std::system"
+import { mapValues, values } from "std::object"
+
+/** @module
+  ## Wikidata — the open knowledge graph
+
+  Query [Wikidata](https://www.wikidata.org), the free structured database behind Wikipedia:
+  resolve a name to an entity, read an entity's facts, or run a raw SPARQL query over the graph.
+  Use it for broad entity research — people, organizations, places, works, and their typed
+  relationships — complementing the power-network focus of `std::data/people/littlesis`.
+
+  Recipe: `wikidataSearch` a name to get a QID, then `wikidataEntity(qid)` for its facts, or
+  `wikidataQuery` for graph traversal. Entity claims and SPARQL results reference other entities by
+  QID (e.g. "Q5"); resolve those with another search/entity call, or ask SPARQL for labels with
+  `SERVICE wikibase:label`. No API key required (WDQS is rate-limited and wants a descriptive
+  User-Agent — set WIKIDATA_USER_AGENT to override the default).
+
+  ### Usage
+
+  ```ts
+  import { wikidataSearch, wikidataEntity } from "std::data/wikidata"
+
+  node main() {
+    const hits = wikidataSearch("Ada Lovelace") catch []
+    if (hits.length > 0) {
+      const e = wikidataEntity(hits[0].id) catch { id: "", label: "", description: "", aliases: [], claims: {} }
+      print("${e.label}: ${e.description}")
+    }
+  }
+  ```
+*/
+
+effect std::wikidata { op: string, query: string }
+
+static const WD_BASE = "https://www.wikidata.org"
+static const WD_DOMAINS = ["www.wikidata.org"]
+static const WDQS_BASE = "https://query.wikidata.org"
+static const WDQS_DOMAINS = ["query.wikidata.org"]
+
+// WDQS requires a descriptive User-Agent. Read once per run (env), like edgar's SEC_USER_AGENT.
+const wikidataUserAgent = env("WIKIDATA_USER_AGENT") ?? "agency-lang (https://agency-lang.com)"
+const WD_HEADERS = { "User-Agent": wikidataUserAgent }
+
+/** A Wikidata entity from a name search. `id` is the QID (e.g. "Q42"). */
+export type Entity = {
+  id: string;
+  label: string;
+  description: string;
+  url: string
+}
+
+/** One entity's facts. `claims` maps a property id (e.g. "P31") to its values; a value is a QID for
+    entity-valued claims, or the literal's string form otherwise. Resolve QIDs with another
+    search/entity call. */
+export type EntityDetail = {
+  id: string;
+  label: string;
+  description: string;
+  aliases: string[];
+  claims: Record<string, string[]>
+}
+
+/** Build the entity-search path (wbsearchentities). Pure. */
+safe def buildSearchPath(name: string, limit: number): string {
+  const q = encodeURIComponent(name)
+  return "/w/api.php?action=wbsearchentities&search=${q}&language=en&format=json&limit=${limit}"
+}
+
+/** Build the entity-data path. Pure. */
+safe def buildEntityPath(qid: string): string {
+  return "/wiki/Special:EntityData/${encodeURIComponent(qid)}.json"
+}
+
+/** Build the SPARQL path. Pure. */
+safe def buildQueryPath(sparql: string): string {
+  const q = encodeURIComponent(sparql)
+  return "/sparql?query=${q}&format=json"
+}
+
+/** Reshape a wbsearchentities body into Entity[]. Pure/total. */
+safe def parseSearch(raw: any): Entity[] {
+  const r: any = raw ?? {}
+  const results = r.search ?? []
+  return map(results) as s {
+    const e: any = s ?? {}
+    return {
+      id: e.id ?? "",
+      label: e.label ?? "",
+      description: e.description ?? "",
+      url: e.concepturi ?? ""
+    }
+  }
+}
+
+/** Reduce a claim's mainsnak to a string by datavalue type. A novalue/somevalue snak → "".
+    Pure/total. */
+safe def parseClaimValue(mainsnak: any): string {
+  const snak: any = mainsnak ?? {}
+  if ((snak.snaktype ?? "") != "value") {
+    return ""
+  }
+  const dv: any = snak.datavalue ?? {}
+  const t = dv.type ?? ""
+  const v: any = dv.value ?? null
+  if (t == "wikibase-entityid") {
+    return v.id ?? ""
+  }
+  if (t == "string") {
+    return v ?? ""
+  }
+  if (t == "monolingualtext") {
+    return v.text ?? ""
+  }
+  if (t == "time") {
+    return v.time ?? ""
+  }
+  if (t == "quantity") {
+    return v.amount ?? ""
+  }
+  if (t == "globecoordinate") {
+    return "${v.latitude ?? 0},${v.longitude ?? 0}"
+  }
+  return ""
+}
+
+/** Map a property's statements to a list of stringified claim values. Pure/total. */
+safe def parseClaimList(statements: any): string[] {
+  const arr = statements ?? []
+  return map(arr) as s {
+    const st: any = s ?? {}
+    return parseClaimValue(st.mainsnak ?? {})
+  }
+}
+
+/** Reshape the claims object (PID → statements) into PID → string[]. Pure/total. */
+safe def parseClaims(claims: any): Record<string, string[]> {
+  const c: any = claims ?? {}
+  return mapValues(c) as (statements, pid) {
+    return parseClaimList(statements)
+  }
+}
+
+/** Reshape an EntityData body into EntityDetail. `qid` is the fallback id. Pure/total. */
+safe def parseEntity(raw: any, qid: string): EntityDetail {
+  const r: any = raw ?? {}
+  const ents: any[] = values(r.entities ?? {})
+  const ent: any = ents[0] ?? {}
+  const labels: any = ent.labels ?? {}
+  const descriptions: any = ent.descriptions ?? {}
+  const aliasesObj: any = ent.aliases ?? {}
+  const enLabel: any = labels.en ?? {}
+  const enDesc: any = descriptions.en ?? {}
+  const enAliases: any[] = aliasesObj.en ?? []
+  return {
+    id: ent.id ?? qid,
+    label: enLabel.value ?? "",
+    description: enDesc.value ?? "",
+    aliases: map(enAliases) as a {
+      const al: any = a ?? {}
+      return al.value ?? ""
+    },
+    claims: parseClaims(ent.claims ?? {})
+  }
+}
+
+/** Reshape a SPARQL body into rows (variable → value string). Pure/total. */
+safe def parseBindings(raw: any): Record<string, string>[] {
+  const r: any = raw ?? {}
+  const res: any = r.results ?? {}
+  const bindings = res.bindings ?? []
+  return map(bindings) as b {
+    const binding: any = b ?? {}
+    return mapValues(binding) as (cell, varName) {
+      const c: any = cell ?? {}
+      return c.value ?? ""
+    }
+  }
+}
+
+/** Shared failure message for a failed Wikidata fetch (either host). Pure. */
+safe def wikidataError(err: any): string {
+  return "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): ${err.message ?? err}"
+}
+
+/** Turn a fetch Result into an Entity[] Result. Pure. */
+safe def searchFinalize(fetchResult: any): Result<Entity[]> {
+  return match (fetchResult) {
+    success(body) => success(parseSearch(body))
+    failure(err) => failure(wikidataError(err))
+  }
+}
+
+/** Turn a fetch Result into an EntityDetail Result; empty entities (unknown QID) → failure. Pure. */
+safe def entityFinalize(fetchResult: any, qid: string): Result<EntityDetail> {
+  return match (fetchResult) {
+    success(body) => {
+      const b: any = body ?? {}
+      const ents: any[] = values(b.entities ?? {})
+      if (ents.length == 0) {
+        return failure("Wikidata returned no entity for ${qid}")
+      }
+      return success(parseEntity(b, qid))
+    }
+    failure(err) => failure(wikidataError(err))
+  }
+}
+
+/** Turn a SPARQL fetch Result into a rows Result. Pure. */
+safe def queryFinalize(fetchResult: any): Result<Record<string, string>[]> {
+  return match (fetchResult) {
+    success(body) => success(parseBindings(body))
+    failure(err) => failure(wikidataError(err))
+  }
+}
+
+/** Fetch a Wikidata path (either host) with the User-Agent header, returning the parsed-JSON Result.
+    Raises std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's
+    own std::wikidata prompt while any OUTER fetch handler still receives (and can reject or propagate)
+    the fetch. allowedDomains is enforced inside fetchJSON regardless. Private. */
+safe def wikidataFetch(base: string, domains: string[], path: string): Result raises <std::http::fetchJSON> {
+  handle {
+    return fetchJSON(baseUrl: base, path: path, headers: WD_HEADERS, allowedDomains: domains)
+  } with (data) {
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+  }
+}
+
+export safe def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON> {
+  """
+  Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
+  QID identifies the entity for a follow-up entity fetch or SPARQL query. Empty result set returns an
+  empty list.
+
+  @param name - The person, organization, place, or thing to search for
+  @param limit - Maximum number of matches to return (default 5)
+  """
+  return interrupt std::wikidata("Search Wikidata for this name?", { op: "search", query: name })
+  const result = wikidataFetch(WD_BASE, WD_DOMAINS, buildSearchPath(name, limit))
+  return searchFinalize(result)
+}
+
+export safe def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON> {
+  """
+  Fetch one Wikidata entity by its QID. Returns the English label, description, aliases, and claims
+  (property id to values; entity-valued claims are QIDs to resolve separately). Unknown QID returns
+  a failure.
+
+  @param qid - The Wikidata entity id, e.g. "Q42"
+  """
+  return interrupt std::wikidata("Fetch this Wikidata entity?", { op: "entity", query: qid })
+  const result = wikidataFetch(WD_BASE, WD_DOMAINS, buildEntityPath(qid))
+  return entityFinalize(result, qid)
+}
+
+export safe def wikidataQuery(sparql: string): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON> {
+  """
+  Run a SPARQL query against the Wikidata Query Service and return rows (each a map of the SELECTed
+  variable names to string values). Prefixes wd:/wdt:/rdfs: and SERVICE wikibase:label are available.
+  Example: SELECT ?item ?itemLabel WHERE { ?item wdt:P31 wd:Q5 . SERVICE wikibase:label { bd:serviceParam wikibase:language "en" } } LIMIT 10
+
+  @param sparql - The SPARQL query text
+  """
+  return interrupt std::wikidata("Run this SPARQL query against Wikidata?", { op: "query", query: sparql })
+  const result = wikidataFetch(WDQS_BASE, WDQS_DOMAINS, buildQueryPath(sparql))
+  return queryFinalize(result)
+}

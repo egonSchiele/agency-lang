@@ -1,0 +1,15 @@
+{
+  "entities": {
+    "Q42": {
+      "id": "Q42",
+      "labels": { "en": { "language": "en", "value": "Douglas Adams" } },
+      "descriptions": { "en": { "language": "en", "value": "English writer and humorist" } },
+      "aliases": { "en": [ { "language": "en", "value": "Douglas Noel Adams" } ] },
+      "claims": {
+        "P31": [ { "mainsnak": { "snaktype": "value", "property": "P31", "datavalue": { "value": { "entity-type": "item", "numeric-id": 5, "id": "Q5" }, "type": "wikibase-entityid" }, "datatype": "wikibase-item" } } ],
+        "P569": [ { "mainsnak": { "snaktype": "value", "property": "P569", "datavalue": { "value": { "time": "+1952-03-11T00:00:00Z", "precision": 11 }, "type": "time" }, "datatype": "time" } } ],
+        "P856": [ { "mainsnak": { "snaktype": "value", "property": "P856", "datavalue": { "value": "http://www.douglasadams.com/", "type": "string" }, "datatype": "url" } } ]
+      }
+    }
+  }
+}

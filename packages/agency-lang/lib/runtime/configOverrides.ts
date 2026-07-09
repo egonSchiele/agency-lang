@@ -84,3 +84,54 @@ export function applyRuntimeConfigOverridesToContextArgs(
 
   return merged;
 }
+
+/** Env-var names for per-run trace/statelog overrides. Shared so the reader
+ *  (applyEnvOverridesToContextArgs) and the writer (runBundledAgent's
+ *  agentDebugFlagsToEnv) can never drift. */
+export const DEBUG_ENV_VARS = {
+  traceFile: "AGENCY_TRACE_FILE",
+  traceDir: "AGENCY_TRACE_DIR",
+  logFile: "AGENCY_LOG_FILE",
+} as const;
+
+/**
+ * Fold trace/statelog overrides from environment variables into RuntimeContext
+ * args. How the precompiled built-in agents get a trace/statelog for one run:
+ * runBundledAgent sets these env vars from --trace/--log-file. Env wins over
+ * baked args. The statelog half delegates to applyRuntimeConfigOverridesToContextArgs
+ * (which already owns log.* + observability → statelogConfig); only the trace
+ * half is new here.
+ *
+ * Nested processes: AGENCY_LOG_FILE is inherited and shared across the tree
+ * (intended — one statelog). AGENCY_TRACE_DIR is per-runId (safe). A fixed
+ * AGENCY_TRACE_FILE shared across concurrent nested runs can interleave/truncate
+ * — documented in the spec; consume-and-clear at the spawn boundary is a follow-up.
+ */
+export function applyEnvOverridesToContextArgs(
+  args: RuntimeContextConstructorArgs,
+  env: Record<string, string | undefined> = process.env,
+): RuntimeContextConstructorArgs {
+  const traceFile = env[DEBUG_ENV_VARS.traceFile];
+  const traceDir = env[DEBUG_ENV_VARS.traceDir];
+  const logFile = env[DEBUG_ENV_VARS.logFile];
+  if (!traceFile && !traceDir && !logFile) return args;
+
+  let merged = logFile
+    ? applyRuntimeConfigOverridesToContextArgs(args, {
+        observability: true,
+        log: { logFile },
+      })
+    : args;
+
+  if (traceFile || traceDir) {
+    merged = {
+      ...merged,
+      traceConfig: {
+        ...(merged.traceConfig ?? {}),
+        ...(traceFile ? { traceFile } : {}),
+        ...(traceDir ? { traceDir } : {}),
+      },
+    };
+  }
+  return merged;
+}

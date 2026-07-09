@@ -40,39 +40,6 @@ export interface AgencyConfig {
   outDir?: string;
 
   /**
-   * Array of AST node types to exclude from code generation
-   * Example: ["comment", "typeAlias"]
-   */
-  excludeNodeTypes?: string[];
-
-  /**
-   * Array of built-in function names to exclude from code generation
-   * Example: ["fetch", "write"]
-   */
-  excludeBuiltinFunctions?: string[];
-
-  /**
-   * Array of domains allowed for fetch operations
-   * If specified, only these domains can be fetched
-   * Example: ["api.example.com", "data.mysite.com"]
-   */
-  allowedFetchDomains?: string[];
-
-  /**
-   * Array of domains disallowed for fetch operations
-   * These domains will throw an error if fetch is attempted
-   * If both allowed and disallowed are set, takes the intersection
-   * (only allowed domains, minus disallowed ones)
-   * Example: ["malicious.com", "blocked.site.com"]
-   */
-  disallowedFetchDomains?: string[];
-
-  /**
-   * Optionally specify a custom host for tarsec trace collection
-   */
-  tarsecTraceHost?: string;
-
-  /**
    * Number of times the LLM can go back and forth between calling tools
    * and responding to their outputs before halting execution to prevent infinite loops.
    * Default 10.
@@ -381,11 +348,6 @@ export const AgencyConfigSchema = z
     verbose: z.boolean(),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
-    excludeNodeTypes: z.array(z.string()),
-    excludeBuiltinFunctions: z.array(z.string()),
-    allowedFetchDomains: z.array(z.string()),
-    disallowedFetchDomains: z.array(z.string()),
-    tarsecTraceHost: z.string(),
     maxToolCallRounds: z.number(),
     observability: z.boolean(),
     log: z

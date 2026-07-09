@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
-import { createProgram, runCli } from "./agency.js";
+import { applyCliFlagsToConfig, createProgram, runCli } from "./agency.js";
+
+const execFileAsync = promisify(execFile);
 
 let tmpDir: string;
 
@@ -90,5 +94,68 @@ describe("agency CLI command tree", () => {
     expect(logsCommand?.usage()).toContain("[file]");
     expect(typeof (logsCommand as unknown as { _actionHandler?: unknown })._actionHandler)
       .toBe("function");
+  });
+});
+
+describe("applyCliFlagsToConfig", () => {
+  it("maps --log-file to log.logFile and enables observability", () => {
+    const out = applyCliFlagsToConfig({}, { logFile: "run.jsonl" });
+    expect(out.log?.logFile).toBe("run.jsonl");
+    expect(out.observability).toBe(true);
+  });
+
+  it("maps --strict to strict AND strictTypes (both required by the gate)", () => {
+    const out = applyCliFlagsToConfig({}, { strict: true });
+    expect(out.typechecker).toEqual({ strict: true, strictTypes: true });
+  });
+
+  it("maps --observability alone", () => {
+    expect(applyCliFlagsToConfig({}, { observability: true }).observability).toBe(true);
+  });
+
+  it("preserves a log.host loaded from agency.json when adding logFile", () => {
+    const out = applyCliFlagsToConfig({ log: { host: "https://h" } }, { logFile: "x" });
+    expect(out.log).toEqual({ host: "https://h", logFile: "x" });
+  });
+
+  it("derives the default trace file from the input path", () => {
+    const out = applyCliFlagsToConfig({}, { trace: true }, "prog.agency");
+    expect(out.trace).toBe(true);
+    expect(out.traceFile).toBe("prog.trace");
+  });
+
+  it("does not mutate the input config", () => {
+    const input = {};
+    applyCliFlagsToConfig(input, { strict: true, logFile: "x" });
+    expect(input).toEqual({});
+  });
+});
+
+describe("compile --strict (integration)", () => {
+  it("exits non-zero on a type error with --strict, zero without", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strict-"));
+    const f = path.join(dir, "bad.agency");
+    fs.writeFileSync(f, 'node main() {\n  let x: number = "hello"\n}\n');
+    const cli = path.resolve("dist/scripts/agency.js");
+    await expect(execFileAsync("node", [cli, "compile", f])).resolves.toBeTruthy();
+    await expect(execFileAsync("node", [cli, "compile", "--strict", f])).rejects.toBeTruthy();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("config show (integration)", () => {
+  it("prints the resolved, merged config as JSON", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "config-show-"));
+    fs.writeFileSync(path.join(dir, "agency.json"), JSON.stringify({ outDir: "./built" }));
+    const cli = path.resolve("dist/scripts/agency.js");
+    const { stdout } = await execFileAsync("node", [
+      cli,
+      "-c",
+      path.join(dir, "agency.json"),
+      "config",
+      "show",
+    ]);
+    expect(JSON.parse(stdout).outDir).toBe("./built");
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

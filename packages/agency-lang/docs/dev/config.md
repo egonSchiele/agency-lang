@@ -15,22 +15,6 @@ For basic usage examples, see `docs/config.md`.
 | `verbose` | `boolean` | Enable verbose compilation logging |
 | `outDir` | `string` | Output directory for compiled TypeScript files |
 
-### Code generation filtering
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `excludeNodeTypes` | `string[]` | AST node types to skip during code generation (e.g., `"comment"`, `"typeHint"`) |
-| `excludeBuiltinFunctions` | `string[]` | Built-in functions to exclude from generated code. Available: `print`, `printJSON`, `input`, `read`, `readBinary`, `write`, `fetch`, `fetchJSON`, `fetchJson`, `sleep`, `round` |
-
-### Fetch security
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `allowedFetchDomains` | `string[]` | Whitelist of allowed domains for `fetch` calls |
-| `disallowedFetchDomains` | `string[]` | Blacklist of disallowed domains for `fetch` calls |
-
-If both are set, only domains in the allowed list that are NOT in the disallowed list are permitted. Only string literal URLs are validated at compile time; variable URLs cannot be checked.
-
 ### Type checking
 
 | Option | Type | Description |
@@ -59,7 +43,6 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
 | Option | Type | Description |
 |--------|------|-------------|
 | `log` | `Partial<StatelogConfig>` | Statelog configuration — `host`, `projectId`, `apiKey`, `debugMode`. See `docs/dev/statelog.md` |
-| `tarsecTraceHost` | `string` | Custom host for tarsec parser trace collection |
 
 ### Security
 
@@ -78,8 +61,6 @@ If both are set, only domains in the allowed list that are NOT in the disallowed
   "strictTypes": true,
   "typeCheck": true,
   "restrictImports": true,
-  "excludeBuiltinFunctions": ["write", "fetch"],
-  "allowedFetchDomains": ["api.example.com"],
   "client": {
     "defaultModel": "gpt-4o",
     "logLevel": "error",

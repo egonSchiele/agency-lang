@@ -23,7 +23,10 @@ import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerFn } from "../types.js";
-import { applyRuntimeConfigOverridesToContextArgs } from "../configOverrides.js";
+import {
+  applyEnvOverridesToContextArgs,
+  applyRuntimeConfigOverridesToContextArgs,
+} from "../configOverrides.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
@@ -206,6 +209,7 @@ export class RuntimeContext<T> {
     logLevel?: LogLevel;
   }) {
     args = applyRuntimeConfigOverridesToContextArgs(args);
+    args = applyEnvOverridesToContextArgs(args);
     const statelogConfig = {
       ...args.statelogConfig,
       traceId: args.statelogConfig.traceId || nanoid(),

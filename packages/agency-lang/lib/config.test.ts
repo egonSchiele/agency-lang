@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { AgencyConfigSchema } from "./config.js";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { AgencyConfigSchema, loadConfigSafe } from "./config.js";
 
 describe("AgencyConfigSchema", () => {
   it("should accept an empty config", () => {
@@ -122,5 +125,26 @@ describe("AgencyConfig typechecker key", () => {
   it("accepts an empty typechecker object", () => {
     const result = AgencyConfigSchema.safeParse({ typechecker: {} });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("loadConfigSafe — removed options are ignored, not rejected", () => {
+  it("loads an agency.json with the removed keys, and a stale wrong-typed key, without error", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-removed-"));
+    const cfgPath = path.join(dir, "agency.json");
+    fs.writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        excludeNodeTypes: "oops-was-string-array", // stale + wrong type: Zod error before removal, ignored after
+        excludeBuiltinFunctions: ["write"],
+        allowedFetchDomains: ["api.example.com"],
+        disallowedFetchDomains: ["blocked.com"],
+        outDir: "./dist",
+      }),
+    );
+    const { config, error } = loadConfigSafe(cfgPath);
+    expect(error).toBeUndefined();
+    expect(config.outDir).toBe("./dist");
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

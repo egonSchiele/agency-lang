@@ -78,7 +78,46 @@ import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
 
-type RunOptions = { resume?: string; trace?: string | true };
+type RunOptions = {
+  resume?: string;
+  trace?: string | true;
+  logFile?: string;
+  observability?: boolean;
+  strict?: boolean;
+};
+
+/**
+ * Fold per-run CLI flags into a config COPY. Single source of truth for the
+ * flag→config mapping (used by run, compile, and the hidden default command).
+ * `--strict` sets BOTH strict and strictTypes: the compile-path gate
+ * (commands.ts) is `if (!tc?.enabled && !tc?.strict) return`, and fatality
+ * requires `strict` — `strictTypes` alone is a no-op there.
+ */
+export function applyCliFlagsToConfig(
+  config: AgencyConfig,
+  options: RunOptions,
+  input?: string,
+): AgencyConfig {
+  const next: AgencyConfig = { ...config };
+  if (options.trace) {
+    next.trace = true;
+    next.traceFile =
+      typeof options.trace === "string"
+        ? options.trace
+        : (input ?? "").replace(/\.agency$/, ".trace");
+  }
+  if (options.logFile) {
+    next.log = { ...next.log, logFile: options.logFile };
+    next.observability = true;
+  }
+  if (options.observability) {
+    next.observability = true;
+  }
+  if (options.strict) {
+    next.typechecker = { ...next.typechecker, strict: true, strictTypes: true };
+  }
+  return next;
+}
 
 type CliDependencies = {
   loadLspStartServer?: () => Promise<() => void>;
@@ -123,14 +162,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   }
 
   function runWithOptions(input: string, options: RunOptions) {
-    const config = getConfig();
-    if (options.trace) {
-      config.trace = true;
-      config.traceFile =
-        typeof options.trace === "string"
-          ? options.trace
-          : input.replace(/\.agency$/, ".trace");
-    }
+    const config = applyCliFlagsToConfig(getConfig(), options, input);
     run(config, input, undefined, options.resume);
   }
 
@@ -141,9 +173,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<inputs...>", "Paths to .agency input files or directories")
     .option("--ts", "Output .ts files with // @no-check header")
     .option("-w, --watch", "Watch for changes and recompile")
+    .option("--strict", "Fail on any fatal type error (typechecker.strict)")
     .action(
-      async (inputs: string[], opts: { ts?: boolean; watch?: boolean }) => {
-        const config = getConfig();
+      async (inputs: string[], opts: { ts?: boolean; watch?: boolean; strict?: boolean }) => {
+        const config = applyCliFlagsToConfig(getConfig(), { strict: opts.strict });
         if (opts.watch) {
           const close = await watchAndCompile(config, inputs, { ts: opts.ts });
           process.once("SIGINT", async () => {
@@ -184,6 +217,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--trace [file]",
         "Write execution trace to file (default: <input>.trace)",
+      )
+      .option(
+        "--log-file <path>",
+        "Append statelog events (one JSON object per line) to this file for this run",
+      )
+      .option(
+        "--observability",
+        "Enable statelog observability for this run (use with a configured host, or --log-file)",
+      )
+      .option(
+        "--strict",
+        "Fail the run on any fatal type error (typechecker.strict)",
       );
   }
 
@@ -913,9 +958,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Diagnose problems with an Agency file using the agency agent")
     .argument("<file>", "Path to the .agency file to diagnose")
     .option("--symptom <text>", "Optional description of the problem you are seeing")
-    .action((file: string, opts: { symptom?: string }) => {
-      const config = getConfig();
-      doctor(config, file, opts);
+    .option("--trace [file]", "Write an execution trace of the diagnosis to this file")
+    .option("--log-file <path>", "Append statelog events from the diagnosis to this file")
+    .action(
+      (
+        file: string,
+        opts: { symptom?: string; trace?: string | boolean; logFile?: string },
+      ) => {
+        const config = getConfig();
+        doctor(config, file, {
+          symptom: opts.symptom,
+          trace: opts.trace as string | true | undefined,
+          logFile: opts.logFile,
+        });
+      },
+    );
+
+  const configCmd = program
+    .command("config")
+    .description("Inspect Agency configuration");
+
+  configCmd
+    .command("show")
+    .description("Print the resolved, merged agency.json config as JSON")
+    .action(() => {
+      console.log(JSON.stringify(getConfig(), null, 2));
     });
 
   program

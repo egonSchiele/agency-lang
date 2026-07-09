@@ -88,22 +88,27 @@ import { serveMcp, serveHttp } from "@/cli/serve.js";
 // which is a run-only concern, not a config field.
 type RunOptions = CliFlags & { resume?: string };
 
-// commander option parser: a positive integer, else a clean usage error.
-function parsePositiveInt(value: string): number {
+// commander option parsers. Match the WHOLE string against digits so
+// `parseInt`'s silent truncation ("1.5"→1, "3abc"→3, "0x10"→16) can't sneak an
+// invalid value through as a usable number.
+function parseBoundedInt(value: string, min: number, label: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new InvalidArgumentError(label);
+  }
   const n = parseInt(value, 10);
-  if (!Number.isInteger(n) || n < 1) {
-    throw new InvalidArgumentError("must be a positive integer");
+  if (n < min) {
+    throw new InvalidArgumentError(label);
   }
   return n;
 }
 
-// commander option parser: a non-negative integer (0 allowed, e.g. to disable a cap).
-function parseNonNegativeInt(value: string): number {
-  const n = parseInt(value, 10);
-  if (!Number.isInteger(n) || n < 0) {
-    throw new InvalidArgumentError("must be a non-negative integer");
-  }
-  return n;
+export function parsePositiveInt(value: string): number {
+  return parseBoundedInt(value, 1, "must be a positive integer");
+}
+
+// 0 allowed (e.g. to disable a cap).
+export function parseNonNegativeInt(value: string): number {
+  return parseBoundedInt(value, 0, "must be a non-negative integer");
 }
 
 type CliDependencies = {

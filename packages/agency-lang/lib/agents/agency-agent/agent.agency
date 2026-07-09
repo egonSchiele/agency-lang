@@ -1423,15 +1423,15 @@ node main() {
   // wins. Set as branch-scoped defaults on the root branch BEFORE any subagent
   // is dispatched, so every (fork-seeded) subagent inherits them. setLlmOptions
   // merges only present keys, so this never clobbers the model defaults above.
+  // Separate calls, each gated on its own value: setLlmOptions only skips
+  // `undefined`, not `null`, so passing an absent key would clobber the bag.
   const maxRounds = resolveMaxToolCallRounds(args.flags["max-tool-call-rounds"] ?? null, runningOneShot)
+  if (maxRounds != null) {
+    setLlmOptions({ maxToolCallRounds: maxRounds })
+  }
   const maxResultChars = args.flags["max-tool-result-chars"]
-  if (maxRounds != null || maxResultChars != null) {
-    setLlmOptions(
-      {
-      maxToolCallRounds: maxRounds,
-      maxToolResultChars: maxResultChars
-    },
-    )
+  if (maxResultChars != null) {
+    setLlmOptions({ maxToolResultChars: maxResultChars })
   }
 
   // Validate the target subagent name up front (empty = coordinator).

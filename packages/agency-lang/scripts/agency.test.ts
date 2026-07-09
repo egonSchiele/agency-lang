@@ -5,7 +5,12 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
-import { createProgram, runCli } from "./agency.js";
+import {
+  createProgram,
+  parseNonNegativeInt,
+  parsePositiveInt,
+  runCli,
+} from "./agency.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -161,5 +166,23 @@ describe.skipIf(!HAS_BUILT_CLI)("config show (integration, requires build)", () 
     expect(JSON.parse(raw.stdout).log.apiKey).toBe("sk-secret-1234");
 
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("integer flag parsers reject parseInt footguns", () => {
+  it("parsePositiveInt accepts positive integers, rejects 0/floats/garbage/hex/negatives", () => {
+    expect(parsePositiveInt("5")).toBe(5);
+    expect(parsePositiveInt("100")).toBe(100);
+    for (const bad of ["0", "1.5", "3abc", "0x10", "-1", "", " ", "1e3"]) {
+      expect(() => parsePositiveInt(bad)).toThrow();
+    }
+  });
+
+  it("parseNonNegativeInt accepts 0 and positives, rejects floats/garbage/hex/negatives", () => {
+    expect(parseNonNegativeInt("0")).toBe(0);
+    expect(parseNonNegativeInt("42")).toBe(42);
+    for (const bad of ["1.5", "3abc", "0x10", "-1", "", "1e3"]) {
+      expect(() => parseNonNegativeInt(bad)).toThrow();
+    }
   });
 });

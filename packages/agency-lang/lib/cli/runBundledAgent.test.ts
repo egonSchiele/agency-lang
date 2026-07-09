@@ -29,6 +29,19 @@ describe("agentConfigOverride", () => {
   it("empty --trace= behaves identically to bare --trace (the divergence bug)", () => {
     expect(agentConfigOverride(["--trace="])).toEqual({ trace: true, traceDir: "." });
   });
+  it("a following flag is NOT consumed as the --trace value (matches std::args)", () => {
+    // Both are bare on the agent side, so they must be bare here too — not a
+    // trace file named "--print" / "-p".
+    expect(agentConfigOverride(["--trace", "--print", "hi"])).toEqual({
+      trace: true,
+      traceDir: ".",
+    });
+    expect(agentConfigOverride(["--trace", "-p"])).toEqual({ trace: true, traceDir: "." });
+  });
+  it("bare --log-file (or one followed by a flag) is ignored, not a file named --print", () => {
+    expect(agentConfigOverride(["--log-file"])).toEqual({});
+    expect(agentConfigOverride(["--log-file", "--print"])).toEqual({});
+  });
   it("--log-file <path> → log.logFile + observability, space and attached forms", () => {
     const expected = { log: { logFile: "l.jsonl" }, observability: true };
     expect(agentConfigOverride(["--log-file", "l.jsonl"])).toEqual(expected);

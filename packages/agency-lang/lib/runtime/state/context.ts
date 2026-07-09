@@ -209,12 +209,15 @@ export class RuntimeContext<T> {
      *  match the established no-debug-by-default behavior. */
     logLevel?: LogLevel;
   }) {
-    // One runtime merge, two transports: subprocess overrides (set via IPC)
-    // win; otherwise fall back to AGENCY_CONFIG_OVERRIDES from the environment
-    // (how the precompiled bundled agents receive per-run trace/statelog).
+    // One runtime merge, applied for BOTH transports so a subprocess launched
+    // with explicit IPC overrides still inherits the env override (e.g. a
+    // tree-wide --log-file). Env first, then IPC on top: IPC (explicit,
+    // per-child) wins per field, env fills the rest. Sequential application
+    // also layers nested `log`/`trace` objects rather than clobbering them.
+    args = applyRuntimeConfigOverridesToContextArgs(args, readConfigOverrides());
     args = applyRuntimeConfigOverridesToContextArgs(
       args,
-      getRuntimeConfigOverrides() ?? readConfigOverrides(),
+      getRuntimeConfigOverrides(),
     );
     const statelogConfig = {
       ...args.statelogConfig,

@@ -651,8 +651,23 @@ export function readConfigOverrides(
   if (!raw) return {};
   try {
     const result = AgencyConfigSchema.safeParse(JSON.parse(raw));
-    return result.success ? (result.data as Partial<AgencyConfig>) : {};
-  } catch {
+    if (!result.success) {
+      // Don't brick startup, but never fail silently — a typo'd override that
+      // makes --trace/--log-file quietly do nothing is the worst failure mode.
+      console.error(
+        `Ignoring invalid ${CONFIG_OVERRIDES_ENV}: ${result.error.issues
+          .map((i) => i.path.join("."))
+          .join(", ")}`,
+      );
+      return {};
+    }
+    return result.data as Partial<AgencyConfig>;
+  } catch (err) {
+    console.error(
+      `Ignoring unparseable ${CONFIG_OVERRIDES_ENV}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return {};
   }
 }

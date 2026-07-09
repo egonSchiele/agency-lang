@@ -13,31 +13,63 @@ import { parseArgs } from "node:util";
 
 const currentDir = path.dirname(new URL(import.meta.url).pathname);
 
+// The debug flags every bundled agent understands. Same names the agent
+// declares (for --help) and that `agency run` accepts.
+const AGENT_DEBUG_FLAGS = ["--trace", "--log-file"] as const;
+
 /**
- * Extract the debug flags every bundled agent understands (`--trace`,
- * `--log-file`) from its forwarded argv, as a config override. This is the ONE
- * place these flags are handled — every bundled agent gets them for free by
- * going through `runBundledAgent`; no agent writes flag code.
+ * Rewrite a bare debug flag to its empty attached form (`--trace` → `--trace=`)
+ * when its next token is absent or starts with `-`. This replicates exactly
+ * what `std::args` does before parsing (lib/stdlib/args.ts:499-505), so the
+ * agent's own parser and this pre-scan agree: `--trace --print` and `--trace
+ * -p` are BOTH bare here, not a trace file named "--print" / "-p". Stops at the
+ * `--` terminator (everything after is positional).
+ */
+function normalizeBareDebugFlags(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i];
+    if (token === "--") {
+      out.push(...args.slice(i));
+      break;
+    }
+    if ((AGENT_DEBUG_FLAGS as readonly string[]).includes(token)) {
+      const next = args[i + 1];
+      const bare = next === undefined || next === "--" || next.startsWith("-");
+      out.push(bare ? `${token}=` : token);
+    } else {
+      out.push(token);
+    }
+  }
+  return out;
+}
+
+/**
+ * Extract the debug flags (`--trace`, `--log-file`) from a bundled agent's
+ * forwarded argv, as a config override. This is the ONE place these flags are
+ * handled — every bundled agent gets them for free by going through
+ * `runBundledAgent`; no agent writes flag code.
  *
- * Parsing is delegated to `node:util.parseArgs` (the standard library parser
- * `std::args` itself is built on), so `--flag=value`, the `--` terminator, and
- * last-wins-on-repeat all fall out correctly. `strict: false` ignores the
- * agent's own flags. A bare or empty `--trace` maps to a per-run trace file in
- * cwd; the flag→config meaning lives in `applyCliFlags` (config.ts), shared
- * with `agency run`/`compile`.
+ * Tokenization is `node:util.parseArgs` (which `std::args` is itself built on)
+ * after the same bare-flag normalization std::args applies, so `--flag=value`,
+ * the `--` terminator, last-wins-on-repeat, AND a following-flag-is-not-a-value
+ * all match the agent's own parser. An empty/bare `--trace` maps to a per-run
+ * trace file in cwd; the flag→config meaning lives in `applyCliFlags`.
  */
 export function agentConfigOverride(args: string[]): Partial<AgencyConfig> {
   const { values } = parseArgs({
-    args,
+    args: normalizeBareDebugFlags(args),
     options: { trace: { type: "string" }, "log-file": { type: "string" } },
     strict: false,
     allowPositionals: true,
   });
   const flags: CliFlags = {};
-  if ("trace" in values) {
-    flags.trace = values.trace === true ? true : String(values.trace);
+  // After normalization a present --trace is always a string ("" when bare).
+  if (typeof values.trace === "string") {
+    flags.trace = values.trace;
   }
-  if (typeof values["log-file"] === "string") {
+  // --log-file requires a value; a bare (now "") --log-file is ignored.
+  if (typeof values["log-file"] === "string" && values["log-file"] !== "") {
     flags.logFile = values["log-file"];
   }
   return applyCliFlags({}, flags);

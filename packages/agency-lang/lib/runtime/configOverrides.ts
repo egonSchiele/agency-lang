@@ -43,10 +43,11 @@ export function getRuntimeConfigOverrides(): Partial<AgencyConfig> | undefined {
  *
  * Fields honored (others are ignored — the runtime has its own pathways):
  *   • `log.*` + `observability` → statelogConfig
- *   • `trace` / `traceFile` / `traceDir` → traceConfig. An override always
- *     wins over the baked traceConfig: a supplied `traceDir` clears any baked
- *     `traceFile` (which `resolveTraceFilePath` would otherwise prefer), so a
- *     per-run `--trace` dir actually takes effect.
+ *   • `traceFile` / `traceDir` → traceConfig (the `trace` boolean is only a
+ *     marker set alongside them by applyCliFlags; the file/dir drive output).
+ *     An override always wins over the baked traceConfig: a supplied `traceDir`
+ *     clears any baked `traceFile` (which `resolveTraceFilePath` would otherwise
+ *     prefer), so a per-run `--trace` dir actually takes effect.
  *   • `client.providerModules` → merged with baked modules (subprocess loads
  *     the same custom/local providers; de-duped at load time).
  *   • `maxCallDepth` → inherit the parent's runaway-recursion ceiling.

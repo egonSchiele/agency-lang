@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyRuntimeConfigOverridesToContextArgs } from "./configOverrides.js";
+import {
+  applyRuntimeConfigOverridesToContextArgs,
+  setRuntimeConfigOverrides,
+} from "./configOverrides.js";
 import {
   CONFIG_OVERRIDES_ENV,
   serializeConfigOverrides,
@@ -161,6 +164,30 @@ describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => 
     }).statelogConfig;
     expect(sc.logFile).toBe("/tmp/wired.jsonl");
     expect(sc.observability).toBe(true);
+  });
+
+  it("still applies the env override when an IPC override is also present (both transports layer)", () => {
+    process.env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides({
+      observability: true,
+      log: { logFile: "/tmp/tree.jsonl" },
+    });
+    // A subprocess launched with explicit IPC overrides (e.g. an eval run) must
+    // NOT drop out of the env-based statelog tree.
+    setRuntimeConfigOverrides({ maxCallDepth: 7 });
+    try {
+      const ctx = new RuntimeContext({
+        statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+        smoltalkDefaults: {},
+        dirname: "/project",
+      });
+      const sc = (ctx as unknown as {
+        statelogConfig: { logFile?: string; observability?: boolean };
+      }).statelogConfig;
+      expect(sc.logFile).toBe("/tmp/tree.jsonl");
+      expect(sc.observability).toBe(true);
+    } finally {
+      setRuntimeConfigOverrides(undefined);
+    }
   });
 });
 

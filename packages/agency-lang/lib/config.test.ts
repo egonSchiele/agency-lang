@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -204,10 +204,25 @@ describe("config overrides env round-trip", () => {
     expect(readConfigOverrides(env)).toEqual(overrides);
   });
 
-  it("returns {} for an absent or malformed value (never throws)", () => {
+  it("returns {} for an absent value without warning", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(readConfigOverrides({})).toEqual({});
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("returns {} and warns (never throws) for unparseable JSON", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(readConfigOverrides({ [CONFIG_OVERRIDES_ENV]: "not json" })).toEqual({});
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("unparseable"));
+    spy.mockRestore();
+  });
+
+  it("returns {} and warns for a schema-violating field", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(readConfigOverrides({ [CONFIG_OVERRIDES_ENV]: '{"maxCallDepth":-1}' })).toEqual({});
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid"));
+    spy.mockRestore();
   });
 });
 

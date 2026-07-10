@@ -215,8 +215,8 @@ export async function __internal_fetch(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-  method: string,
-  body: any,
+  method: string = "GET",
+  body: any = null,
 ): Promise<string | ResultFailure> {
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
@@ -268,8 +268,8 @@ export async function __internal_fetchJSON(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-  method: string,
-  body: any,
+  method: string = "GET",
+  body: any = null,
 ): Promise<any> {
   return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
@@ -321,8 +321,8 @@ export async function __internal_fetchMarkdown(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
-  method: string,
-  body: any,
+  method: string = "GET",
+  body: any = null,
 ): Promise<string | ResultFailure> {
   return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }

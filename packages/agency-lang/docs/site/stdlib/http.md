@@ -21,11 +21,17 @@ Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
 
 ### HttpMethod
 
-An HTTP request method. Non-GET methods may carry a body.
+An HTTP request method. POST/PUT/PATCH/DELETE may carry a body; GET/HEAD do not.
 
 ```ts
-/** An HTTP request method. Non-GET methods may carry a body. */
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+/** An HTTP request method. POST/PUT/PATCH/DELETE may carry a body; GET/HEAD do not. */
+export type HttpMethod =
+  | "GET"
+  | "HEAD"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L29))
@@ -73,7 +79,7 @@ effect std::http::fetchMarkdown {
 ### fetch
 
 ```ts
-fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: any): Result
+fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: Record<string, any> | string | null): Result
 ```
 
 Fetch a URL and return the response as text.
@@ -98,7 +104,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
 | method | [HttpMethod](#httpmethod) | "GET" |
-| body | `any` | null |
+| body | `Record<string, any> \| string \| null` | null |
 
 **Returns:** `Result`
 
@@ -109,7 +115,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 ### fetchJSON
 
 ```ts
-fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: any): Result
+fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: Record<string, any> | string | null): Result
 ```
 
 Fetch a URL and return the response parsed as JSON.
@@ -134,7 +140,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
 | method | [HttpMethod](#httpmethod) | "GET" |
-| body | `any` | null |
+| body | `Record<string, any> \| string \| null` | null |
 
 **Returns:** `Result`
 
@@ -145,7 +151,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 ### fetchMarkdown
 
 ```ts
-fetchMarkdown(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: any): Result
+fetchMarkdown(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: Record<string, any> | string | null): Result
 ```
 
 Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
@@ -170,7 +176,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
 | method | [HttpMethod](#httpmethod) | "GET" |
-| body | `any` | null |
+| body | `Record<string, any> \| string \| null` | null |
 
 **Returns:** `Result`
 

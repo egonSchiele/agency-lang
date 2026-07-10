@@ -25,8 +25,8 @@ effect std::http::fetch { baseUrl: string, path: string, method: string }
 effect std::http::fetchJSON { baseUrl: string, path: string, method: string }
 effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string }
 
-/** An HTTP request method. Non-GET methods may carry a body. */
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+/** An HTTP request method. POST/PUT/PATCH/DELETE may carry a body; GET/HEAD do not. */
+export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
 
 /**
   On abort, Agency tears down the in-flight HTTP request and body read. The
@@ -39,7 +39,7 @@ export def fetch(
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
   method: HttpMethod = "GET",
-  body: any = null,
+  body: Record<string, any> | string | null = null,
 ): Result {
   """
   Fetch a URL and return the response as text.
@@ -70,7 +70,7 @@ export def fetchJSON(
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
   method: HttpMethod = "GET",
-  body: any = null,
+  body: Record<string, any> | string | null = null,
 ): Result {
   """
   Fetch a URL and return the response parsed as JSON.
@@ -95,7 +95,7 @@ export def fetchJSON(
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 */
-export def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = [], method: HttpMethod = "GET", body: any = null): Result {
+export def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = [], method: HttpMethod = "GET", body: Record<string, any> | string | null = null): Result {
   """
   Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
 

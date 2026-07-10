@@ -96,7 +96,7 @@ import {
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
-import { isFunctionTyped } from "../typeChecker/utils.js";
+import { isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -2239,6 +2239,7 @@ export class TypeScriptBuilder {
         defaultValue: ts.id("undefined"),
         variadic: ts.bool(!!p.variadic),
         isFunctionTyped: ts.bool(isFunctionTyped(p)),
+        acceptsResult: ts.bool(paramAcceptsFailure(p)),
       }),
     );
 

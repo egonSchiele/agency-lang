@@ -11,7 +11,7 @@ try {
   // ignore ENOENT
 }
 
-const result = await main();
+const result = (await main()).data;
 const log = readFileSync("statelog.log", "utf-8");
 
 writeFileSync(

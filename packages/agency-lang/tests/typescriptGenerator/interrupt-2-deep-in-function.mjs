@@ -353,13 +353,15 @@ export const greet = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }, {
     name: "age",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "greet",
@@ -538,13 +540,15 @@ export const foo2 = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }, {
     name: "age",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "foo2",

@@ -318,13 +318,15 @@ export const append = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }, {
     name: "value",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: true
   }],
   toolDefinition: {
     name: "append",

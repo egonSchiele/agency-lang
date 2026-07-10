@@ -86,6 +86,48 @@ function typeContainsFunction(t: VariableType): boolean {
 }
 
 /**
+ * Static half of the failure-propagation rule (spec:
+ * docs/superpowers/specs/2026-07-08-failure-propagation-design.md).
+ * Returns true when the parameter's declared type accepts Result values:
+ * `Result`/`Result<...>`, explicit `any`, or a union containing either.
+ *
+ * Unannotated params return false — the strict rule. For a variadic
+ * `...xs: T[]` the ELEMENT type decides, matching how the runtime checks
+ * each gathered element. `typeAliasVariable` returns false (v1: aliases
+ * are not resolved here; an alias of Result trips the runtime check and
+ * the error message teaches the inline annotation).
+ *
+ * Emitted into FuncParam.acceptsResult by the typescript builder; consumed
+ * by checkFailureArgs (lib/runtime/failurePropagation.ts).
+ */
+export function paramAcceptsFailure(param: FunctionParameter): boolean {
+  const hint = param.typeHint;
+  if (!hint) {
+    return false;
+  }
+  if (param.variadic) {
+    if (hint.type !== "arrayType") {
+      return false;
+    }
+    return typeAcceptsResult(hint.elementType);
+  }
+  return typeAcceptsResult(hint);
+}
+
+function typeAcceptsResult(t: VariableType): boolean {
+  if (t.type === "resultType") {
+    return true;
+  }
+  if (t.type === "primitiveType" && t.value === "any") {
+    return true;
+  }
+  if (t.type === "unionType") {
+    return t.types.some(typeAcceptsResult);
+  }
+  return false;
+}
+
+/**
  * The `regex` primitive isn't representable in JSON, so an LLM can't return
  * one as structured output. Walk the expected LLM-call type and reject any
  * regex usage with a clear diagnostic, rather than silently emitting a

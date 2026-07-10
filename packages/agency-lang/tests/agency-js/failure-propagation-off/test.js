@@ -1,7 +1,7 @@
 import { main } from "./agent.js";
 import { writeFileSync } from "fs";
 
-const result = await main();
+const result = (await main()).data;
 
 writeFileSync(
   "__result.json",

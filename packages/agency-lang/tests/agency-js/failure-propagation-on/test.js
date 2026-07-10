@@ -5,7 +5,7 @@ import { writeFileSync } from "fs";
 // end during Stage 1, while the shipped default is still "warn". This is
 // the guard that makes the Stage 2 default flip a no-surprise diff.
 
-const result = await main();
+const result = (await main()).data;
 
 writeFileSync(
   "__result.json",

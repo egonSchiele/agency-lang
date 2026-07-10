@@ -435,7 +435,8 @@ export const toDigit = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "toDigit",

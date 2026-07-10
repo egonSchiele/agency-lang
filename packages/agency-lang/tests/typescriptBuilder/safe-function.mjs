@@ -311,7 +311,8 @@ export const safeLookup = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "safeLookup",
@@ -465,7 +466,8 @@ export const unsafeSave = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "unsafeSave",

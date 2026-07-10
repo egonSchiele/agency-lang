@@ -104,6 +104,7 @@ import {
   overrideFromResolved,
   embeddingsOverride,
   providerKeyMissing,
+  demoteProvider,
  } from "./shared.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -384,6 +385,15 @@ export def switchModel(
   ctx: Ctx,
   before: Record<string, Resolved>,
 ): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
+  // The caller builds ctx from currentProvider(), which returns the
+  // PROMOTED name on openai sessions. priceDefault and the built-in
+  // tables key by public provider names, so demote before resolving —
+  // otherwise a switch that lets any slot fall through to the built-in
+  // defaults fails with "openai-responses has no built-in defaults".
+  const ctx2: Ctx = {
+    provider: demoteProvider(ctx.provider),
+    price: ctx.price
+  }
   let nextSlots: Record<string, string> = {}
   for (key in Object.keys(prior.slots)) {
     nextSlots[key] = prior.slots[key]
@@ -439,7 +449,7 @@ export def switchModel(
     knownProviders(),
     providerEstablished,
   )
-  const all = resolveAll(layers, ctx)
+  const all = resolveAll(layers, ctx2)
   if (isFailure(all)) {
     pushMessage(color.red("Could not switch model: ${all.error}"))
     return {

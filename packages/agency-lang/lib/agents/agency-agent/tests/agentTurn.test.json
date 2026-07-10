@@ -235,6 +235,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "switchPinFromPromotedOpenaiSession",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6/|built-in:embedding(derived)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchPerSlotFromPromotedOpenaiSession",
+      "input": "",
+      "expectedOutput": "\"gpt-4o-mini/claude-opus-4-8\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

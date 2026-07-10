@@ -273,6 +273,20 @@ export def priceDefault(
   slot: string,
   price: string,
 ): Result<Resolved> {
+  // The derived default is provider-independent, so it must not gate on
+  // the MODELS lookup. Before this ordering, a bare /model pin on an
+  // openai session failed: pins skip derived slots, the embedding slot
+  // fell through to here, and the promoted "openai-responses" ctx
+  // provider has no MODELS entry.
+  if (slotKind(slot) == "derived") {
+    return success(
+      {
+      model: "",
+      provider: "",
+      via: "built-in:embedding(derived)"
+    },
+    )
+  }
   if (MODELS[provider] == null) {
     return failure(
       "Provider '${provider}' has no built-in defaults; pass an explicit model.",

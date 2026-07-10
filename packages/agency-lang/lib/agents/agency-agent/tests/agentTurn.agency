@@ -347,3 +347,40 @@ node mainProviderChangeSkipsPauseWithPinnedEmbedding(): boolean {
   }
   return reactToSlotChange(change)
 }
+
+// Regression: a bare pin on an openai session. currentProvider() hands
+// switchModel the PROMOTED name, pins skip the embedding slot, and the
+// slot falls through to priceDefault, which used to fail with
+// "openai-responses has no built-in defaults" and revert the switch.
+node switchPinFromPromotedOpenaiSession(): string {
+  saveSettings({}) with approve
+  const promotedCtx: Ctx = {
+    provider: "openai-responses",
+    price: "standard"
+  }
+  const out = switchModel(freshSession(), "claude-sonnet-4-6", promotedCtx, SWITCH_BEFORE)
+  const main = out.resolved["main"]
+  const embedding = out.resolved["embedding"]
+  if (main == null || embedding == null) {
+    return "unresolved"
+  }
+  return "${main.model}/${embedding.model}|${embedding.via}"
+}
+
+// Regression: a per-slot switch on an openai session lets the OTHER chat
+// slot fall through to priceDefault. The demoted ctx must resolve it to
+// the openai built-ins instead of failing.
+node switchPerSlotFromPromotedOpenaiSession(): string {
+  saveSettings({}) with approve
+  const promotedCtx: Ctx = {
+    provider: "openai-responses",
+    price: "standard"
+  }
+  const out = switchModel(freshSession(), "reasoning=claude-opus-4-8", promotedCtx, SWITCH_BEFORE)
+  const main = out.resolved["main"]
+  const reasoning = out.resolved["reasoning"]
+  if (main == null || reasoning == null) {
+    return "unresolved"
+  }
+  return "${main.model}/${reasoning.model}"
+}

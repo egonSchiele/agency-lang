@@ -254,6 +254,22 @@ downstream code see e.g. `Schema<MyType>` and validate `.parse()` /
 `schema` is listed in `RESERVED_FUNCTION_NAMES` so users can't define
 their own `def schema()` (which would create parse ambiguity).
 
+### Built-in utility types
+
+`Partial`, `Required`, `Pick`, `Omit`, and `NonNullable` are built-in
+generics evaluated EAGERLY by `resolveTypeWithGuard` (see
+`lib/typeChecker/utilityTypes.ts`): they resolve to plain object/union
+types at resolution time, so no downstream pass knows they exist. This is
+the litmus test for Agency type features: a type must be eagerly evaluable
+to a concrete, JSON-schema-able shape (which is why mapped and conditional
+types are permanently out of scope). Arity lives in `BUILTIN_GENERIC_ARITY`
+(validate.ts); the five names are in `RESERVED_TYPE_NAMES` (index.ts).
+Semantic argument errors throw `TypeError` from the resolver, surfacing the
+same way `Record` key errors do: swallowed by `safeResolveType` at
+typecheck time (the annotation degrades to `any`), fatal at codegen via
+`resolveTypeDeep`. Located diagnostics are a named follow-up in the design
+spec (`docs/superpowers/specs/2026-07-09-utility-types-design.md`).
+
 ## Type narrowing
 
 Flow-sensitive narrowing and exhaustiveness checking have their own subtree:

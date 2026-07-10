@@ -175,6 +175,51 @@ When you write an object *literal*, every key in the literal must be in its decl
 const cfg: Options = { modle: "gpt-4" }  // error: Unknown property 'modle'
 ```
 
+## Utility types
+
+Agency ships five built-in utility types modeled on TypeScript, adapted to
+Agency optionality (optional means `| null`; there is no `undefined`):
+
+| Type | What it does |
+|---|---|
+| `Partial<T>` | Every property becomes nullable: `p: V` → `p: V \| null` |
+| `Required<T>` | The inverse: strips `null` from every property |
+| `Pick<T, K>` | Keeps only the listed keys: `Pick<User, "name" \| "email">` |
+| `Omit<T, K>` | Removes the listed keys |
+| `NonNullable<T>` | Strips `null` from a single type: `NonNullable<string \| null>` is `string` |
+
+```ts
+type User = {
+  name: string,
+  age?: number,
+}
+
+def updateUser(id: string, changes: Partial<User>): string {
+  // changes.name is string | null — guard before use:
+  if (changes.name != null) {
+    return changes.name  // narrowed to string here
+  }
+  return "no name change"
+}
+```
+
+Details worth knowing:
+
+- All transforms are **shallow** — nested object types are not transformed.
+- In Agency source, object keys are always required. `Partial` means you can
+  pass `null` for a value, not omit the key. Key omission is only forgiven
+  when parsing JSON with `schema(...)`: missing keys coalesce to `null`.
+- Because `p?: V` and `p: V | null` are the same type after parsing,
+  `Required` un-optionalizes both — it cannot distinguish a property you
+  marked optional from one you declared nullable on purpose.
+- `Pick` errors on a key that does not exist on the target; `Omit` allows it
+  (matching TypeScript).
+- The transforms need concrete object types: applying them to `Record<K, V>`,
+  arrays, primitives, or unions is an error.
+- A bad `Pick` key or a non-object argument is reported when the program
+  **compiles**, not as an editor/typecheck diagnostic — `agency typecheck`
+  will not flag it today.
+
 ## References
 
 - [Schemas](/guide/schemas)

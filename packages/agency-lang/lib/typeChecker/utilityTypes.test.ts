@@ -384,14 +384,13 @@ node main() {
   it("rejects a wrongly-typed property under Partial", () => {
     // The anti-any sentinel: if the resolver branch threw and safeResolveType
     // silently degraded Partial<User> to any, this would pass with 0 errors.
-    // NOTE: the RHS deliberately contains no null literal — a null literal
-    // synths to "any" (no case "null" in synthType), which makes synthObject
-    // bail and skip the check entirely. Pre-existing lenience, not utility-
-    // type behavior.
+    // The null literal alongside the bad property also exercises the
+    // synthObject null fix (see nullLiteralSynth.test.ts) — null used to
+    // poison the whole literal to "any" and skip this check.
     const errors = typecheckSource(`
 type User = { name: string, age: number }
 node main() {
-  const changes: Partial<User> = { name: 1, age: 2 }
+  const changes: Partial<User> = { name: 1, age: null }
   return changes
 }
 `);

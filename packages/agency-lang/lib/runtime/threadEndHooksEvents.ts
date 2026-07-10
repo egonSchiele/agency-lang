@@ -27,7 +27,18 @@ export async function withThreadEndHooksEvents<T>(
   payload: { threadId: string; eagerSummarize: boolean; messageCount: number },
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (!client || typeof (client as any).threadEndHooksStart !== "function") {
+  // Degrade unless EVERY method the bracket uses is present: a client
+  // with the start method but not the end method would otherwise throw
+  // from the finally — exactly the mask-the-primary-exception hazard
+  // this guard exists to prevent.
+  const partial = client as any;
+  if (
+    !client ||
+    typeof partial.threadEndHooksStart !== "function" ||
+    typeof partial.threadEndHooksEnd !== "function" ||
+    typeof partial.startSpan !== "function" ||
+    typeof partial.endSpan !== "function"
+  ) {
     return fn();
   }
   const spanId = client.startSpan("threadEndHooks");

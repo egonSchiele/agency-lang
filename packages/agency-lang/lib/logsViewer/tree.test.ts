@@ -427,6 +427,21 @@ describe("promptStart pairing", () => {
     expect(leavesBySpan).toContainEqual(["promptCompletion"]);
   });
 
+  it("tolerates prototype-chain span ids in a crafted log (no crash, still pairs)", () => {
+    // Untrusted-input guard: with a plain-object accumulator, span_id
+    // "constructor"/"__proto__" resolved through the prototype chain and
+    // .push threw, crashing the viewer on a crafted or corrupt log.
+    const forest = buildForest([
+      start("constructor"),
+      completion("constructor"),
+      start("__proto__"),
+    ]);
+    const spans = forest[0].children;
+    const leavesBySpan = spans.map((s) => s.children.map((c) => c.label));
+    expect(leavesBySpan).toContainEqual(["promptCompletion"]);
+    expect(leavesBySpan).toContainEqual(["promptStart"]);
+  });
+
   it("labels the threadEndHooks span from its start event", () => {
     const forest = buildForest([
       evt({

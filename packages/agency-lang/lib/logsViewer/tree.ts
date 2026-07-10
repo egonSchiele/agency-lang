@@ -42,7 +42,12 @@ const STRONG_LABEL_EVENTS = new Set<string>([
  *  data, and doubling every call's rows would make the common case
  *  worse to read. */
 export function pairedPromptStarts(events: EventEnvelope[]): Set<EventEnvelope> {
-  const pendingBySpan: Record<string, EventEnvelope[]> = {};
+  // Null-prototype: span_id comes from the log file, which the viewer
+  // must treat as untrusted input. With a plain object, a span_id of
+  // "constructor" or "__proto__" resolves through the prototype chain
+  // to a non-array and the .push below throws, crashing the viewer on
+  // a crafted or corrupt log. Same pattern as lib/optimize/registry.ts.
+  const pendingBySpan: Record<string, EventEnvelope[]> = Object.create(null);
   const paired = new Set<EventEnvelope>();
   for (const event of events) {
     const spanKey = event.span_id ?? "";
@@ -67,14 +72,18 @@ export function pairedPromptStarts(events: EventEnvelope[]): Set<EventEnvelope> 
 }
 
 export function buildForest(events: EventEnvelope[]): TreeNode[] {
-  // traceId → trace root
-  const traces: Record<string, TreeNode> = {};
+  // traceId → trace root. Null-prototype (like pendingBySpan in
+  // pairedPromptStarts): ids come from the log file — untrusted input —
+  // and a plain object resolves ids like "constructor" through the
+  // prototype chain, so the `in` existence checks lie and pass 2
+  // crashes. Pre-existing bug surfaced by the pairing tests.
+  const traces: Record<string, TreeNode> = Object.create(null);
   // span_id → span node (lookup across all traces; span_ids are globally unique per nanoid)
-  const spans: Record<string, TreeNode> = {};
+  const spans: Record<string, TreeNode> = Object.create(null);
   // span_id → its desired parent_span_id (as observed on first sight).
   // Tracked separately so pass 1b can re-resolve parents once every
   // span exists, without polluting the public TreeNode shape.
-  const desiredParent: Record<string, string | null> = {};
+  const desiredParent: Record<string, string | null> = Object.create(null);
 
   // Pass 1a: create traces and spans, linking each span to its parent
   // (or trace root) in arrival order. This puts child spans into their

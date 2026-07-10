@@ -57,6 +57,18 @@ describe("withThreadEndHooksEvents", () => {
     expect(value).toBe(42);
   });
 
+  it("degrades when the client has the start method but not the end method", async () => {
+    // The finally posts the end event; a client missing only that method
+    // would throw from the finally and mask the primary exception.
+    const lopsided = {
+      startSpan: () => "s",
+      endSpan: () => undefined,
+      threadEndHooksStart: async () => undefined,
+    };
+    const value = await withThreadEndHooksEvents(lopsided as any, PAYLOAD, async () => "ok");
+    expect(value).toBe("ok");
+  });
+
   it("degrades to a bare fn() when the client lacks the new methods", async () => {
     // Older test contexts construct partial statelog clients (see the
     // ?.threadEndHookError?. guard in runner.ts). Instrumentation must

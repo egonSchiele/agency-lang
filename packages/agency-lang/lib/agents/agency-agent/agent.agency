@@ -9,7 +9,7 @@ import { map } from "std::array"
 import { today } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
-import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
+import { listHostedModels, hostedModelInfo, setLlmOptions, envVarFor } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
 import { keys } from "std::object"
 import { basename, dirname } from "std::path"
@@ -103,6 +103,7 @@ import {
   memoryEnablePlan,
   overrideFromResolved,
   embeddingsOverride,
+  providerKeyMissing,
  } from "./shared.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -462,6 +463,12 @@ export def switchModel(
   returns when a selective toggle lands.) Returns true if it emitted the notice. */
 export def reactToSlotChange(change: SlotChange): boolean {
   if (change.slot == "main" && change.before.provider != change.after.provider) {
+    // When the embedding slot pins the embed model, a main-provider
+    // change no longer changes the embedding space behind recall, so
+    // the pause would be a false positive.
+    if (embeddingsOverride(getResolvedSlots()) != null) {
+      return false
+    }
     pushMessage(
       color.dim(
       "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
@@ -471,6 +478,17 @@ export def reactToSlotChange(change: SlotChange): boolean {
     // provider switch, not asking the user — so don't surface an approval prompt.
     disableMemory() with approve
     return true
+  }
+  if (change.slot == "embedding") {
+    const override = overrideFromResolved(change.after)
+    if (override != null && providerKeyMissing(override.provider)) {
+      pushMessage(
+        color.yellow(
+        "Warning: the embedding slot needs ${envVarFor(override.provider)}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until the key is exported.",
+      ),
+      )
+      return true
+    }
   }
   return false
 }

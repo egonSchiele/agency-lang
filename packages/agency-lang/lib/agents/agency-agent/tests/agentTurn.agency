@@ -21,6 +21,7 @@ import {
   SlotChange,
  } from "../lib/resolution.agency"
 import { saveSettings } from "../lib/settings.agency"
+import { setEnv } from "std::system"
 import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
 
 node respondsToAMessage(): boolean {
@@ -271,4 +272,78 @@ node pinDoesNotReachEmbedding(): string {
     return "empty"
   }
   return "leaked: ${resolved.model}"
+}
+
+// A keyless embedding assignment warns. The openai-responses case pins
+// the demotion: without it, envVarFor gets the internal alias, returns
+// "", and the warning never fires.
+node reactWarnsOnKeylessEmbeddingSlot(): string {
+  setEnv("OPENAI_API_KEY", "") with approve
+  const change: SlotChange = {
+    slot: "embedding",
+    before: {
+      model: "",
+      provider: "",
+      via: "x"
+    },
+    after: {
+      model: "text-embedding-3-small",
+      provider: "openai-responses",
+      via: "y"
+    }
+  }
+  const warned = reactToSlotChange(change)
+  setEnv("OPENAI_API_KEY", "test-key") with approve
+  const quiet = reactToSlotChange(change)
+  return "${warned}/${quiet}"
+}
+
+// Clearing the slot never warns, even when a key is missing.
+node reactStaysQuietOnClearedEmbeddingSlot(): boolean {
+  setEnv("OPENAI_API_KEY", "") with approve
+  const change: SlotChange = {
+    slot: "embedding",
+    before: {
+      model: "text-embedding-3-small",
+      provider: "openai",
+      via: "x"
+    },
+    after: {
+      model: "",
+      provider: "",
+      via: "y"
+    }
+  }
+  return reactToSlotChange(change)
+}
+
+// A main-provider change does not pause memory when the embedding slot
+// pins the embed model.
+node mainProviderChangeSkipsPauseWithPinnedEmbedding(): boolean {
+  applyResolved({
+    "main": {
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      via: "test"
+    },
+    "embedding": {
+      model: "text-embedding-3-small",
+      provider: "openai",
+      via: "test"
+    }
+  })
+  const change: SlotChange = {
+    slot: "main",
+    before: {
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      via: "x"
+    },
+    after: {
+      model: "gpt-5.5",
+      provider: "openai-responses",
+      via: "y"
+    }
+  }
+  return reactToSlotChange(change)
 }

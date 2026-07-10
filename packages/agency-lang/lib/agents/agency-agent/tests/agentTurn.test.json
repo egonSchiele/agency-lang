@@ -205,6 +205,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "reactWarnsOnKeylessEmbeddingSlot",
+      "input": "",
+      "expectedOutput": "\"true/false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reactStaysQuietOnClearedEmbeddingSlot",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "mainProviderChangeSkipsPauseWithPinnedEmbedding",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

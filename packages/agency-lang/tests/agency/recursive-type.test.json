@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "forwardRef",
+      "input": "",
+      "expectedOutput": "{\"b\":{\"x\":1}}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "forward alias reference loads and runs"
+    },
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "{\"value\":1,\"children\":[{\"value\":2,\"children\":[]}]}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "recursive schema parses nested payload"
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "recursive schema validates at depth 2"
+    },
+    {
+      "nodeName": "mutual",
+      "input": "",
+      "expectedOutput": "{\"name\":\"a\",\"manager\":{\"reports\":[{\"name\":\"b\",\"manager\":null}]}}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "mutual recursion executes end to end"
+    },
+    {
+      "nodeName": "paramUse",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "recursive alias as executed function parameter (tool schema at module load)"
+    }
+  ]
+}

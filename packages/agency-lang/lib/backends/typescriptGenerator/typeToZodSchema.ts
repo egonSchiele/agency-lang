@@ -69,9 +69,10 @@ function mapTypeToSchema(
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   optionalKeyMode: OptionalKeyMode = "required-nullable",
+  pendingAliases?: Set<string>,
 ): string {
   return appendMeta(
-    mapTypeToSchemaInner(variableType, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode),
+    mapTypeToSchemaInner(variableType, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode, pendingAliases),
     variableType.tags,
   );
 }
@@ -82,10 +83,11 @@ function mapTypeToSchemaInner(
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   optionalKeyMode: OptionalKeyMode = "required-nullable",
+  pendingAliases?: Set<string>,
 ): string {
   const recurse = (vt: VariableType) =>
     appendMeta(
-      mapTypeToSchemaInner(vt, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode),
+      mapTypeToSchemaInner(vt, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode, pendingAliases),
       vt.tags,
     );
 
@@ -169,6 +171,7 @@ function mapTypeToSchemaInner(
           resultHandler,
           typeAliasesFull,
           optionalKeyMode,
+          pendingAliases,
         );
         // .describe(...) must come BEFORE .meta(...) — Zod requires
         // .meta() to be the final call in the chain or the metadata is
@@ -223,6 +226,18 @@ function mapTypeToSchemaInner(
         optionalKeyMode,
       );
     }
+    // A plain alias reference emits the alias schema const by name. When
+    // the target alias is declared in the CURRENT module but its const
+    // has not been emitted yet at this point (forward reference,
+    // self-recursion, or a cycle back-edge), a bare name is a TDZ crash
+    // at module load — defer with z.lazy, which resolves at first parse,
+    // after all consts exist. Backward references keep the bare name
+    // (zero churn, no indirection). Imported aliases are never pending:
+    // imports initialize before the module body runs, and the pending
+    // set is built from CURRENT-module declarations only.
+    if (pendingAliases?.has(variableType.aliasName)) {
+      return `z.lazy(() => ${variableType.aliasName})`;
+    }
     return variableType.aliasName;
   } else if (variableType.type === "genericType") {
     if (variableType.name === "Record") {
@@ -268,6 +283,7 @@ export function mapTypeToValidationSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
+  pendingAliases?: Set<string>,
 ): string {
   return mapTypeToSchema(
     variableType,
@@ -282,5 +298,6 @@ export function mapTypeToValidationSchema(
     },
     typeAliasesFull,
     "optional-coalesce",
+    pendingAliases,
   );
 }

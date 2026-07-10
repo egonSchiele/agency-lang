@@ -1,0 +1,68 @@
+// Issue #470 bug 1: recursive/forward alias schema consts used to emit
+// self/forward references in their initializers and crash at module load
+// with a TDZ ReferenceError. Covers self-recursion, plain forward
+// references, mutual recursion (executed, not just emitted), and a
+// recursive alias used as an executed function parameter (its tool
+// registration builds a module-load-time schema).
+type Ahead = {
+  b: Behind,
+}
+
+type Behind = {
+  x: number,
+}
+
+type Tree = {
+  value: number,
+  children: Tree[],
+}
+
+type Employee = {
+  name: string,
+  manager: Manager | null,
+}
+
+type Manager = {
+  reports: Employee[],
+}
+
+def depth(t: Tree): number {
+  return 1
+}
+
+node forwardRef() {
+  const a: Ahead = { b: { x: 1 } }
+  return a
+}
+
+node accepts() {
+  const s = schema(Tree)
+  const r = s.parseJSON("{\"value\": 1, \"children\": [{\"value\": 2, \"children\": []}]}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(Tree)
+  const r = s.parseJSON("{\"value\": 1, \"children\": [{\"value\": \"nope\", \"children\": []}]}")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}
+
+node mutual() {
+  const s = schema(Employee)
+  const r = s.parseJSON("{\"name\": \"a\", \"manager\": {\"reports\": [{\"name\": \"b\", \"manager\": null}]}}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node paramUse() {
+  const t: Tree = { value: 1, children: [] }
+  return depth(t)
+}

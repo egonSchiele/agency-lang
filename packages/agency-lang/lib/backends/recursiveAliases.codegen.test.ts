@@ -144,3 +144,58 @@ node main() {
     ).toThrow(/circularly references itself with no structure/);
   });
 });
+
+describe("recursive value-parameterized aliases (#484)", () => {
+  // The unguarded inline expansion fires when the instantiation is USED
+  // (a declaration alone emits nothing) — each test includes a use site.
+  it("rejects a directly self-referencing value-param alias with a clear error", () => {
+    expect(() =>
+      generate(`
+type Weird(n: number) = {
+  next: Weird(n),
+}
+type Holder = {
+  w: Weird(1),
+}
+node main() {
+  return 1
+}
+`),
+    ).toThrow(/recursive value-parameterized/i);
+  });
+
+  it("rejects a mutually recursive value-param alias pair", () => {
+    expect(() =>
+      generate(`
+type A(n: number) = {
+  next: B(n),
+}
+type B(n: number) = {
+  next: A(n),
+}
+type Holder = {
+  w: A(1),
+}
+node main() {
+  return 1
+}
+`),
+    ).toThrow(/recursive value-parameterized/i);
+  });
+
+  it("still accepts a NON-recursive value-param alias chain at a use site", () => {
+    const out = generate(`
+type Age(low: number) = number
+type Person(low: number) = {
+  age: Age(low),
+}
+type Holder = {
+  p: Person(1),
+}
+node main() {
+  return 1
+}
+`);
+    expect(out).toContain("const Holder");
+  });
+});

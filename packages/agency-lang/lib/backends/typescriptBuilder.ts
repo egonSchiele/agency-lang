@@ -96,6 +96,7 @@ import {
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
+import { visitTypes } from "../typeChecker/typeWalker.js";
 import { isFunctionTyped } from "../typeChecker/utils.js";
 
 import { $, ts } from "../ir/builders.js";
@@ -707,7 +708,44 @@ export class TypeScriptBuilder {
     return out;
   }
 
+  /**
+   * Reject value-parameterized aliases whose bodies cycle back to a
+   * value-parameterized alias already on the walk (directly or mutually).
+   * Their instantiations are INLINED by the zod mapper and the descriptor
+   * builder — unlike plain aliases, which emit named consts and defer
+   * cycles with z.lazy — so a cycle has no representation: expansion
+   * recurses until the stack blows (#484). Detected at declaration so the
+   * error names the alias instead of surfacing as a RangeError at some
+   * use site.
+   */
+  private rejectValueParamCycle(node: TypeAlias): void {
+    const aliasesFull = this.scopes.visibleTypeAliasesFull();
+    const walk = (body: VariableType, seen: string[]): void => {
+      visitTypes(body, (t) => {
+        const refName =
+          t.type === "typeAliasVariable"
+            ? t.aliasName
+            : t.type === "genericType"
+              ? t.name
+              : undefined;
+        if (refName === undefined) return;
+        const entry = aliasesFull[refName];
+        if (!entry?.valueParams) return;
+        if (seen.includes(refName)) {
+          throw new Error(
+            `Type alias '${node.aliasName}' is a recursive value-parameterized alias (cycle: ${[...seen, refName].join(" -> ")}). Value-param instantiations are inlined into their use sites and cannot recurse; use a plain recursive alias instead.`,
+          );
+        }
+        walk(entry.body, [...seen, refName]);
+      });
+    };
+    walk(node.aliasedType, [node.aliasName]);
+  }
+
   private processTypeAlias(node: TypeAlias): TsNode {
+    if (node.valueParams) {
+      this.rejectValueParamCycle(node);
+    }
     // Generic aliases (type Container<T> = ...) can't be turned into a single
     // zod schema because the body references type parameters that have no
     // runtime value. Usages like `Container<number>` are normalized away by

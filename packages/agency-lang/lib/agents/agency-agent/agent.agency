@@ -702,12 +702,23 @@ def editCapabilities() {
       patch = {
         memory: picked == "on"
       }
-      if (picked == "on" && providerLacksEmbeddings(getCapabilityProvider())) {
-        pushMessage(
-          color.dim(
-          "Note: ${getCapabilityProvider()} has no embeddings endpoint — memory runs with Tier-2 semantic recall disabled (structured recall still works).",
-        ),
-        )
+      if (picked == "on") {
+        const status = embeddingKeyStatus(getResolvedSlots())
+        if (status.state == "key-missing") {
+          pushMessage(
+            color.red(
+            "Cannot enable memory: the embedding slot needs ${status.varName}, which is not set. Export it, or point the embedding slot elsewhere via /model.",
+          ),
+          )
+          return
+        }
+        if (status.state == "no-override" && providerLacksEmbeddings(getCapabilityProvider())) {
+          pushMessage(
+            color.dim(
+            "Note: ${getCapabilityProvider()} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small.",
+          ),
+          )
+        }
       }
     }
   }

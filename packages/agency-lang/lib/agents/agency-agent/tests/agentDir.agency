@@ -12,6 +12,9 @@ node agentDirHonorsSandbox(): string {
   const sandboxed = computeAgentDir()
   setEnv("AGENCY_AGENT_HOME", "") with approve
   const normal = computeAgentDir()
-  const backToHome = normal != "/tmp/agency-sandbox-test"
+  // endsWith pins the empty-counts-as-unset rule: both real fallbacks end
+  // with the dir name, and the empty string a dropped guard would return
+  // does not.
+  const backToHome = normal.endsWith(".agency-agent")
   return "${sandboxed}/${backToHome}"
 }

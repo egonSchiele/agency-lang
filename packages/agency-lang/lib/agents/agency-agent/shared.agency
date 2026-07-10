@@ -20,8 +20,9 @@ import {
   Capabilities,
   ResolvedCapabilities,
  } from "./lib/capabilities.agency"
-import { resolveDetected, knownProviders, Resolved } from "./lib/models.agency"
+import { resolveDetected, knownProviders, missingProviderEnvVar, Resolved } from "./lib/models.agency"
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
+import { resolveAgentHome } from "./lib/config.agency"
 import { getCapabilitySettings, getModelSettings, loadSettings } from "./lib/settings.agency"
 import { slotKind } from "./lib/slots.agency"
 
@@ -59,18 +60,10 @@ export def resolveMaxToolCallRounds(
 // a Windows concern — the `.` puts the dir under cwd as a last
 // resort instead of crashing module init).
 export def computeAgentDir(): string {
-  // The sandbox variable wins, matching POLICY_DIR in lib/config.agency.
-  // Before this check, sandboxed agent tests wrote to the real
-  // ~/.agency-agent/memory while settings and policy stayed sandboxed.
-  const sandbox = env("AGENCY_AGENT_HOME")
-  if (sandbox != null && sandbox != "") {
-    return sandbox
-  }
-  const home = env("HOME")
-  if (home == null) {
-    return "./.agency-agent"
-  }
-  return "${home}/.agency-agent"
+  // One resolver for the agent home: settings, policy, history, and the
+  // memory dir all go through resolveAgentHome, so the sandbox variable
+  // and the home fallback cannot drift between them.
+  return resolveAgentHome(env("AGENCY_AGENT_HOME"))
 }
 
 export static const AGENCY_AGENT_DIR = computeAgentDir()
@@ -173,16 +166,11 @@ export def embeddingsOverride(
   return overrideFromResolved(slots["embedding"])
 }
 
-/** True when the provider has a known API-key variable and the
-  environment leaves it unset or empty. Providers without a known
-  variable never report missing. */
-export def providerKeyMissing(provider: string): boolean {
-  const varName = envVarFor(provider)
-  if (varName == "") {
-    return false
-  }
-  const value = env(varName)
-  return value == null || value == ""
+/** True when the provider requires env configuration that is unset —
+  the API-key var, or the base-URL var for proxy providers. Providers
+  that require nothing never report missing. */
+export def providerEnvMissing(provider: string): boolean {
+  return missingProviderEnvVar(provider) != ""
 }
 
 /** The embedding-key question, answered once. Every checkpoint that
@@ -205,17 +193,18 @@ export def embeddingKeyStatus(
       varName: ""
     }
   }
-  if (providerKeyMissing(override.provider)) {
+  const missing = missingProviderEnvVar(override.provider)
+  if (missing != "") {
     return {
       state: "key-missing",
       override: override,
-      varName: envVarFor(override.provider)
+      varName: missing
     }
   }
   return {
     state: "ready",
     override: override,
-    varName: envVarFor(override.provider)
+    varName: ""
   }
 }
 
@@ -243,13 +232,14 @@ export def memoryEnablePlan(
 export def memoryConfigFor(
   embeddings: (EmbeddingsOverride | null),
 ): MemoryConfig {
+  const dir = "${AGENCY_AGENT_DIR}/memory"
   if (embeddings == null) {
     return {
-      dir: "${AGENCY_AGENT_DIR}/memory"
+      dir: dir
     }
   }
   return {
-    dir: "${AGENCY_AGENT_DIR}/memory",
+    dir: dir,
     embeddings: {
       model: embeddings.model,
       provider: embeddings.provider

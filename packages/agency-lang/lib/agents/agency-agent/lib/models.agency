@@ -66,24 +66,44 @@ static const BASE_URL_PROVIDERS: Record<string, string> = {
   litellm: "LITELLM_BASE_URL"
 }
 
-/** Verify a provider's required env config is present. Checks the API-key
- *  var (via `envVarFor`) and, for proxy providers, the base-URL var. A
- *  truly-custom/local provider (no recognized key var, no base-URL
- *  requirement) passes through untouched, so `--provider llama-cpp --model
- *  x.gguf` still needs no hosted key. Returns the provider on success or a
- *  ready-to-print failure. */
-def checkProviderEnv(provider: string): Result<string> {
+/** The first env var the provider requires that the environment leaves
+ *  unset or empty, or "" when the provider is fully configured. Checks the
+ *  API-key var, then the base-URL var for proxy providers. A truly-custom
+ *  or local provider requires nothing and always returns "". The single
+ *  home of "is this provider usable" — checkProviderEnv and the memory
+ *  embedding validation both consume it. */
+export def missingProviderEnvVar(provider: string): string {
   const varName = envVarFor(provider)
   if (varName != "" && (env(varName) == null || env(varName) == "")) {
-    return failure("No API key for provider '${provider}'. Set ${varName}.")
+    return varName
   }
   const baseVar = BASE_URL_PROVIDERS[provider]
   if (baseVar != undefined && (env(baseVar) == null || env(baseVar) == "")) {
-    return failure(
-      "Provider '${provider}' needs a base URL. Set ${baseVar} (your proxy URL).",
-    )
+    return baseVar
   }
-  return success(provider)
+  return ""
+}
+
+/** Verify a provider's required env config is present. Returns the
+ *  provider on success or a ready-to-print failure naming the var. */
+def checkProviderEnv(provider: string): Result<string> {
+  const missing = missingProviderEnvVar(provider)
+  if (missing == "") {
+    return success(provider)
+  }
+  if (missing == envVarFor(provider)) {
+    return failure("No API key for provider '${provider}'. Set ${missing}.")
+  }
+  return failure(
+    "Provider '${provider}' needs a base URL. Set ${missing} (your proxy URL).",
+  )
+}
+
+/** True when an embedding slot value carries its required provider
+ *  prefix. The rule lives once; /model, --model, and settings sanitize
+ *  all consume it. */
+export def embeddingSpecHasProvider(value: string): boolean {
+  return parseModelSpec(value, false, knownProviders()).provider != ""
 }
 
 // The agent always uses the OpenAI Responses API (not Chat Completions) for

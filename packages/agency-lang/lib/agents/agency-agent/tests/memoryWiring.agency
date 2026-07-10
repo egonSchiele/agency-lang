@@ -3,7 +3,7 @@ import { setEnv } from "std::system"
 import {
   overrideFromResolved,
   embeddingsOverride,
-  providerKeyMissing,
+  providerEnvMissing,
   embeddingKeyStatus,
   memoryEnablePlan,
   memoryConfigFor,
@@ -53,11 +53,30 @@ node overrideNullCases(): string {
 // degraded run in the e2e task covers it.
 node keyMissingStates(): string {
   setEnv("OPENROUTER_API_KEY", "test-key") with approve
-  const present = providerKeyMissing("openrouter")
+  const present = providerEnvMissing("openrouter")
   setEnv("OPENROUTER_API_KEY", "") with approve
-  const missing = providerKeyMissing("openrouter")
-  const unknown = providerKeyMissing("llama-cpp")
+  const missing = providerEnvMissing("openrouter")
+  const unknown = providerEnvMissing("llama-cpp")
   return "${present}/${missing}/${unknown}"
+}
+
+// Proxy providers also need their base URL. A litellm override with the
+// key set but no base URL is unusable, and the status names the base-URL
+// var so the notices point at the right fix.
+node baseUrlCountsAsMissing(): string {
+  setEnv("LITELLM_API_KEY", "test-key") with approve
+  setEnv("LITELLM_BASE_URL", "") with approve
+  const slots = {
+    "embedding": {
+      model: "some-embed",
+      provider: "litellm",
+      via: "test"
+    }
+  }
+  const missing = embeddingKeyStatus(slots)
+  setEnv("LITELLM_BASE_URL", "http://localhost:4000") with approve
+  const ready = embeddingKeyStatus(slots)
+  return "${missing.state}:${missing.varName}/${ready.state}"
 }
 
 // The status composes override + key check, and carries the payload the

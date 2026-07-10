@@ -9,7 +9,7 @@ import { map } from "std::array"
 import { today } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
-import { listHostedModels, hostedModelInfo, setLlmOptions, envVarFor } from "std::llm"
+import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
 import { keys } from "std::object"
 import { basename, dirname } from "std::path"
@@ -57,7 +57,8 @@ import {
   BUILTIN_POLICIES,
  } from "./lib/defaultPolicy.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
-import { parseModelFlag, parseModelSpec, knownProviders, Resolved } from "./lib/models.agency"
+import { parseModelFlag, parseModelSpec, knownProviders, embeddingSpecHasProvider, missingProviderEnvVar, Resolved } from "./lib/models.agency"
+import { SLOTS } from "./lib/slots.agency"
 import {
   buildLayers,
   resolveAll,
@@ -103,7 +104,7 @@ import {
   memoryEnablePlan,
   overrideFromResolved,
   embeddingsOverride,
-  providerKeyMissing,
+  providerEnvMissing,
   demoteProvider,
  } from "./shared.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
@@ -403,9 +404,9 @@ export def switchModel(
     slots: nextSlots
   }
   const parsed = parseModelFlag(spec)
-  if (parsed.slot != "" && parsed.slot != "main" && parsed.slot != "reasoning" && parsed.slot != "embedding") {
+  if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
     pushMessage(
-      color.red("Unknown model slot '${parsed.slot}'. Valid slots: main, reasoning, embedding."),
+      color.red("Unknown model slot '${parsed.slot}'. Valid slots: ${SLOTS.join(", ")}."),
     )
     return {
       session: prior,
@@ -413,21 +414,18 @@ export def switchModel(
       changes: []
     }
   }
-  if (parsed.slot == "embedding") {
+  if (parsed.slot == "embedding" && !embeddingSpecHasProvider(parsed.model)) {
     // The embedding slot exists to point AWAY from the chat provider, so
     // the provider can never be inferred. Require the explicit form.
-    const spec2 = parseModelSpec(parsed.model, false, knownProviders())
-    if (spec2.provider == "") {
-      pushMessage(
-        color.red(
-        "Embedding models need the provider/model form, e.g. embedding=openai/text-embedding-3-small.",
-      ),
-      )
-      return {
-        session: prior,
-        resolved: before,
-        changes: []
-      }
+    pushMessage(
+      color.red(
+      "Embedding models need the provider/model form, e.g. embedding=openai/text-embedding-3-small.",
+    ),
+    )
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
     }
   }
   if (parsed.slot == "") {
@@ -473,10 +471,11 @@ export def switchModel(
   returns when a selective toggle lands.) Returns true if it emitted the notice. */
 export def reactToSlotChange(change: SlotChange): boolean {
   if (change.slot == "main" && change.before.provider != change.after.provider) {
-    // When the embedding slot pins the embed model, a main-provider
-    // change no longer changes the embedding space behind recall, so
-    // the pause would be a false positive.
-    if (embeddingsOverride(getResolvedSlots()) != null) {
+    // Skip the pause only when startup actually enabled memory WITH the
+    // override. A set-but-keyless slot took the fallback path, so memory
+    // runs on derived embeddings and the provider change still shifts
+    // the embedding space behind recall.
+    if (_memoryEmbeddingsPinned) {
       return false
     }
     pushMessage(
@@ -491,10 +490,21 @@ export def reactToSlotChange(change: SlotChange): boolean {
   }
   if (change.slot == "embedding") {
     const override = overrideFromResolved(change.after)
-    if (override != null && providerKeyMissing(override.provider)) {
+    if (override != null) {
+      const missing = missingProviderEnvVar(override.provider)
+      if (missing != "") {
+        pushMessage(
+          color.yellow(
+          "Warning: the embedding slot needs ${missing}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until it is exported.",
+        ),
+        )
+        return true
+      }
+      // The healthy path must not be silent: enableMemory already ran,
+      // so the user would otherwise believe embeddings switched now.
       pushMessage(
-        color.yellow(
-        "Warning: the embedding slot needs ${envVarFor(override.provider)}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until the key is exported.",
+        color.dim(
+        "Embedding slot set: memory embeddings use ${override.provider}/${override.model} at next agent start.",
       ),
       )
       return true
@@ -1297,9 +1307,22 @@ static const mainAgentTools = [
   pointed the embedding slot at a provider, embeddings run there. A
   missing API key degrades to the default embedding behavior with one
   notice. It never blocks startup. */
+// Whether startup actually enabled memory WITH the embedding override.
+// The pause guard in reactToSlotChange consults this instead of
+// re-deriving from the slots: a keyless override took the fallback path,
+// so memory runs on DERIVED embeddings and a main-provider change still
+// shifts the embedding space. Exported mutator so tests can drive the
+// guard directly.
+let _memoryEmbeddingsPinned = false
+
+export def markMemoryEmbeddingsPinned(pinned: boolean) {
+  _memoryEmbeddingsPinned = pinned
+}
+
 def maybeEnableMemory() {
   const status = embeddingKeyStatus(getResolvedSlots())
   const plan = memoryEnablePlan(getCapabilities().memory, status)
+  markMemoryEmbeddingsPinned(plan == "enable-override")
   if (plan == "skip") {
     return
   }
@@ -1803,8 +1826,7 @@ node main() {
       } else if (parsed.slot == "reasoning") {
         slowFlag = parsed.model
       } else if (parsed.slot == "embedding") {
-        const spec2 = parseModelSpec(parsed.model, false, knownProviders())
-        if (spec2.provider == "") {
+        if (!embeddingSpecHasProvider(parsed.model)) {
           print(
             color.red(
             "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small.",
@@ -1816,7 +1838,7 @@ node main() {
       } else {
         print(
           color.red(
-          "Unknown model slot '${parsed.slot}' in --model. Valid slots: main, reasoning, embedding.",
+          "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}.",
         ),
         )
         process.exit(1)

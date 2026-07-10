@@ -11,6 +11,7 @@ import {
   agentReply,
   switchModel,
   reactToSlotChange,
+  markMemoryEmbeddingsPinned,
   Session,
  } from "../agent.agency"
 import { knownProviders, Resolved } from "../lib/models.agency"
@@ -274,9 +275,10 @@ node pinDoesNotReachEmbedding(): string {
   return "leaked: ${resolved.model}"
 }
 
-// A keyless embedding assignment warns. The openai-responses case pins
-// the demotion: without it, envVarFor gets the internal alias, returns
-// "", and the warning never fires.
+// A keyless embedding assignment warns; a healthy one prints the
+// next-start notice instead of staying silent. Both return true. The
+// openai-responses case pins the demotion: without it, the env-var
+// lookup gets the internal alias and neither message fires.
 node reactWarnsOnKeylessEmbeddingSlot(): string {
   setEnv("OPENAI_API_KEY", "") with approve
   const change: SlotChange = {
@@ -294,8 +296,8 @@ node reactWarnsOnKeylessEmbeddingSlot(): string {
   }
   const warned = reactToSlotChange(change)
   setEnv("OPENAI_API_KEY", "test-key") with approve
-  const quiet = reactToSlotChange(change)
-  return "${warned}/${quiet}"
+  const noticed = reactToSlotChange(change)
+  return "${warned}/${noticed}"
 }
 
 // Clearing the slot never warns, even when a key is missing.
@@ -317,9 +319,32 @@ node reactStaysQuietOnClearedEmbeddingSlot(): boolean {
   return reactToSlotChange(change)
 }
 
-// A main-provider change does not pause memory when the embedding slot
-// pins the embed model.
+static const MAIN_PROVIDER_CHANGE: SlotChange = {
+  slot: "main",
+  before: {
+    model: "claude-sonnet-4-6",
+    provider: "anthropic",
+    via: "x"
+  },
+  after: {
+    model: "gpt-5.5",
+    provider: "openai-responses",
+    via: "y"
+  }
+}
+
+// The pause is skipped only when startup actually enabled memory WITH
+// the override, recorded by the pinned flag.
 node mainProviderChangeSkipsPauseWithPinnedEmbedding(): boolean {
+  markMemoryEmbeddingsPinned(true)
+  return reactToSlotChange(MAIN_PROVIDER_CHANGE)
+}
+
+// The failure case the flag exists for: a set-but-keyless slot took the
+// fallback path at startup, so memory runs on DERIVED embeddings and the
+// provider change still shifts the embedding space. The pause must fire.
+node mainProviderChangeStillPausesWhenOverrideFellBack(): boolean {
+  markMemoryEmbeddingsPinned(false)
   applyResolved({
     "main": {
       model: "claude-sonnet-4-6",
@@ -332,20 +357,7 @@ node mainProviderChangeSkipsPauseWithPinnedEmbedding(): boolean {
       via: "test"
     }
   })
-  const change: SlotChange = {
-    slot: "main",
-    before: {
-      model: "claude-sonnet-4-6",
-      provider: "anthropic",
-      via: "x"
-    },
-    after: {
-      model: "gpt-5.5",
-      provider: "openai-responses",
-      via: "y"
-    }
-  }
-  return reactToSlotChange(change)
+  return reactToSlotChange(MAIN_PROVIDER_CHANGE)
 }
 
 // Regression: a bare pin on an openai session. currentProvider() hands

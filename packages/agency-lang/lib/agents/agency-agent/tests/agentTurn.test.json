@@ -209,7 +209,7 @@
     {
       "nodeName": "reactWarnsOnKeylessEmbeddingSlot",
       "input": "",
-      "expectedOutput": "\"true/false\"",
+      "expectedOutput": "\"true/true\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -250,6 +250,16 @@
       "nodeName": "switchPerSlotFromPromotedOpenaiSession",
       "input": "",
       "expectedOutput": "\"gpt-4o-mini/claude-opus-4-8\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "mainProviderChangeStillPausesWhenOverrideFellBack",
+      "input": "",
+      "expectedOutput": "true",
       "evaluationCriteria": [
         {
           "type": "exact"

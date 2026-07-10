@@ -4,7 +4,19 @@
  *  (ipc.ts loads the subprocess machinery; failurePropagation.ts sits on
  *  the hot path of every call via agencyFunction.ts). */
 export function truncate(val: any, maxLen = 200): string {
-  const s = typeof val === "string" ? val : JSON.stringify(val);
+  let s: string | undefined;
+  if (typeof val === "string") {
+    s = val;
+  } else {
+    // JSON.stringify throws on BigInt and circular structures. This runs
+    // inside error/warn reporting paths, where a throw would mask the
+    // signal being reported — fall back to String() instead.
+    try {
+      s = JSON.stringify(val);
+    } catch {
+      s = String(val);
+    }
+  }
   if (s == null) {
     return "undefined";
   }

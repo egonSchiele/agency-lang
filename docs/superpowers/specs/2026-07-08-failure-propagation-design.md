@@ -1,7 +1,7 @@
 # Failure propagation at call boundaries
 
 **Date:** 2026-07-08
-**Status:** Approved design, not yet planned or implemented
+**Status:** Stage 1 (the full mechanism, shipping default `"warn"`) is implemented on this branch. Stage 2 — flipping the default to `"on"` — is a follow-up PR. Implementation plan: `docs/superpowers/plans/2026-07-08-failure-propagation.md`.
 
 ## The problem
 

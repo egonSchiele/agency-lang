@@ -24,10 +24,21 @@ export function _printJSON(obj: any): void {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-// Printing a failure is a legitimate debugging move; without the tag the
-// dispatcher's failure-argument check would reject these plain TS helpers.
-acceptsFailures(_print);
-acceptsFailures(_printJSON);
+/**
+ * SINGLE SOURCE OF TRUTH for stdlib TS helpers that legitimately receive
+ * failure values (printing a failure is a debugging move). Add new
+ * failure-tolerant helpers HERE, never as scattered acceptsFailures()
+ * calls. Runtime-layer builtins have their own list —
+ * FAILURE_TOLERANT_BUILTINS in lib/runtime/failurePropagation.ts — because
+ * the runtime hot path must not import the stdlib graph.
+ */
+const FAILURE_TOLERANT_STDLIB_HELPERS: ReadonlyArray<(...args: any[]) => any> = [
+  _print,
+  _printJSON,
+];
+for (const fn of FAILURE_TOLERANT_STDLIB_HELPERS) {
+  acceptsFailures(fn);
+}
 
 export function _parseJSON(text: string): any {
   return JSON.parse(text);

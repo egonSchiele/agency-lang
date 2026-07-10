@@ -1244,7 +1244,14 @@ export class StatelogClient {
 
   /** Structured warning event. First consumer: the failure-propagation
    *  check (warnType "failurePropagation"), which logs every skipped call
-   *  and every would-be throw in "warn" mode, and every skip in "on" mode. */
+   *  and every would-be throw in "warn" mode, and every skip in "on" mode.
+   *
+   *  The variable payload — most importantly `error`, an arbitrary user
+   *  value — is nested under `data` because post()'s redaction replacer is
+   *  scoped to the `data` payload ONLY; a top-level `error` would carry
+   *  redact()-tagged secrets into statelog unscrubbed. `message` embeds a
+   *  truncated error PREVIEW as a string; that matches the exposure of the
+   *  existing error() event's message and is a deliberate parity call. */
   async warn({
     warnType,
     message,
@@ -1262,9 +1269,7 @@ export class StatelogClient {
       type: "warn",
       warnType,
       message,
-      functionName,
-      param,
-      error,
+      data: { functionName, param, error },
     });
   }
 

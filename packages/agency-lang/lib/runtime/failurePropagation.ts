@@ -52,24 +52,49 @@ export function isFailureTolerant(fn: unknown): boolean {
   return (fn as any)[ACCEPTS_FAILURES] === true;
 }
 
-// These four are DIRECT_CALL_FUNCTIONS (nameClassifier.ts), so by-name
-// calls never reach the dispatcher. Tag them anyway: aliased and
-// higher-order uses (`const f = isFailure; f(x)`, `const mk = failure;
-// mk(inner)`) route through __call like any other value.
-acceptsFailures(isSuccess);
-acceptsFailures(isFailure);
-acceptsFailures(success);
-acceptsFailures(failure);
+/**
+ * SINGLE SOURCE OF TRUTH for runtime-layer builtins that legitimately
+ * receive failure values. Add new entries HERE, never as scattered
+ * acceptsFailures() calls.
+ *
+ * Every entry must be on the compiler's DIRECT_CALL_FUNCTIONS list
+ * (lib/backends/typescriptBuilder/nameClassifier.ts) — by-name calls to
+ * those bypass the dispatcher entirely, so this list only matters for
+ * ALIASED use (`const f = isFailure; f(x)`). A tripwire test in
+ * failurePropagation.test.ts enforces that membership, so the two lists
+ * cannot drift silently.
+ *
+ * Two deliberate non-members:
+ * - stdlib TS helpers (`_print`, `_printJSON`) have their own list in
+ *   lib/stdlib/builtins.ts, because the runtime hot path must not import
+ *   the stdlib graph.
+ * - JSON.stringify is tolerated by IDENTITY inside isFailureTolerant; it
+ *   is a native, not an Agency builtin.
+ */
+export const FAILURE_TOLERANT_BUILTINS: ReadonlyArray<(...args: any[]) => any> = [
+  isSuccess,
+  isFailure,
+  success,
+  failure,
+];
+for (const fn of FAILURE_TOLERANT_BUILTINS) {
+  acceptsFailures(fn);
+}
 
 function origin(f: ResultFailure): string {
   return f.functionName ?? "(unknown)";
 }
 
-function logWarn(mode: FailurePropagationMode, message: string, detail: {
-  functionName?: string;
-  param?: string;
-  error?: unknown;
-}): void {
+function logWarn(
+  mode: FailurePropagationMode,
+  message: string,
+  detail: {
+    functionName?: string;
+    param?: string;
+    error?: unknown;
+  },
+  consoleLine: string,
+): void {
   const ctx = agencyStore.getStore()?.ctx;
   // Fire-and-forget, like handlerDecision in interrupts.ts. Optional-chained
   // end to end: unit tests and mock contexts may lack a statelog client.
@@ -82,10 +107,12 @@ function logWarn(mode: FailurePropagationMode, message: string, detail: {
   });
   // Warn mode exists to be SEEN: without observability config the statelog
   // event goes nowhere, so echo to stderr. "on" mode stays quiet here — its
-  // skip/throw is the signal. (statelogClient itself uses console.warn, so
-  // this is an allowed pattern.)
+  // skip/throw is the signal. The console line is PAYLOAD-FREE on purpose:
+  // console output never passes the statelog redaction chokepoint, and a
+  // failure's error often wraps upstream response bodies — exactly what
+  // redact() tags exist to scrub. Full detail goes to statelog only.
   if (mode === "warn") {
-    console.warn(`failurePropagation: ${message}`);
+    console.warn(`failurePropagation: ${consoleLine}`);
   }
 }
 
@@ -129,10 +156,14 @@ export function checkFailureArgs(
     if (hit === undefined) {
       continue;
     }
+    // In warn mode nothing is actually skipped — say so, or the telemetry
+    // reads as if the legacy behavior already changed.
+    const verb = mode === "warn" ? "would be skipped" : "skipped";
     logWarn(
       mode,
-      `call to '${fnName}' skipped: parameter '${param.name}' received a failure produced by '${origin(hit)}' (${truncate(hit.error)})`,
+      `call to '${fnName}' ${verb}: parameter '${param.name}' received a failure produced by '${origin(hit)}' (${truncate(hit.error)})`,
       { functionName: fnName, param: param.name, error: hit.error },
+      `call to '${fnName}' ${verb}: parameter '${param.name}' received a failure produced by '${origin(hit)}' — enable observability for detail`,
     );
     if (mode === "warn") {
       // Census semantics: warn mode exists to MEASURE, so log every
@@ -167,7 +198,12 @@ export function checkTsFunctionArgs(
       `'${fnName}' received a failure produced by '${origin(arg)}' (${truncate(arg.error)}). ` +
       `TypeScript functions cannot receive failures. Check the Result before passing it, ` +
       `or tag the function with acceptsFailures().`;
-    logWarn(mode, message, { functionName: fnName, error: arg.error });
+    logWarn(
+      mode,
+      message,
+      { functionName: fnName, error: arg.error },
+      `'${fnName}' received a failure produced by '${origin(arg)}' — TypeScript functions cannot receive failures; tag with acceptsFailures() to allow`,
+    );
     if (mode === "on") {
       throw new Error(message);
     }
@@ -202,7 +238,10 @@ export function checkResultMethodCall(
   const message = isFailureObj
     ? `called '.${String(prop)}()' on a failure produced by '${origin(obj as ResultFailure)}' (${truncate((obj as ResultFailure).error)}). Check the Result before using it.`
     : `called '.${String(prop)}()' on a success Result. Did you mean .value.${String(prop)}(...)?`;
-  logWarn(mode, message, { param: String(prop) });
+  const consoleLine = isFailureObj
+    ? `called '.${String(prop)}()' on a failure produced by '${origin(obj as ResultFailure)}' — check the Result before using it`
+    : `called '.${String(prop)}()' on a success Result — did you mean .value.${String(prop)}(...)?`;
+  logWarn(mode, message, { param: String(prop) }, consoleLine);
   if (mode === "on") {
     throw new Error(message);
   }

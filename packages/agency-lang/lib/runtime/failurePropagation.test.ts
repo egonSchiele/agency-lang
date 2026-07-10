@@ -408,3 +408,76 @@ describe("dispatcher failure checks", () => {
     expect(typeof out).toBe("string");
   });
 });
+
+import { vi } from "vitest";
+import { FAILURE_TOLERANT_BUILTINS } from "./failurePropagation.js";
+import { DIRECT_CALL_FUNCTIONS } from "../backends/typescriptBuilder/nameClassifier.js";
+import { truncate } from "./truncate.js";
+
+describe("FAILURE_TOLERANT_BUILTINS sync tripwire", () => {
+  it("every runtime failure-tolerant builtin is on the compiler DIRECT_CALL_FUNCTIONS list", () => {
+    // The tolerance list only matters for ALIASED use because by-name calls
+    // to DIRECT_CALL functions bypass the dispatcher. If an entry here is
+    // NOT a direct-call function, either the entry is wrong or the
+    // classifier changed — both need a human decision, so fail loudly.
+    for (const fn of FAILURE_TOLERANT_BUILTINS) {
+      expect(DIRECT_CALL_FUNCTIONS.has(fn.name), `${fn.name} missing from DIRECT_CALL_FUNCTIONS`).toBe(true);
+    }
+  });
+});
+
+describe("truncate hardening", () => {
+  it("falls back to String() for values JSON.stringify throws on", () => {
+    expect(truncate(BigInt(7))).toBe("7");
+    const circular: any = { name: "loop" };
+    circular.self = circular;
+    expect(truncate(circular)).toBe("[object Object]");
+  });
+});
+
+describe("warn-mode console echo", () => {
+  it("is payload-free and says 'would be skipped' (nothing is skipped in warn mode)", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const ctx: any = { failurePropagation: "warn", statelogClient: { warn: () => {} } };
+      agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
+        checkFailureArgs(
+          "target",
+          [param("x", { acceptsResult: false })],
+          [failure("SECRET-PAYLOAD", { functionName: "origin" })],
+        );
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+      const line = spy.mock.calls[0][0] as string;
+      expect(line).toContain("would be skipped");
+      expect(line).toContain("target");
+      expect(line).not.toContain("SECRET-PAYLOAD");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("statelog warn event still carries the full detail (message + error)", () => {
+    const events: any[] = [];
+    const ctx: any = {
+      failurePropagation: "warn",
+      statelogClient: { warn: (e: any) => { events.push(e); } },
+    };
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
+        checkFailureArgs(
+          "target",
+          [param("x", { acceptsResult: false })],
+          [failure("SECRET-PAYLOAD")],
+        );
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(events).toHaveLength(1);
+    expect(events[0].message).toContain("SECRET-PAYLOAD");
+    expect(events[0].message).toContain("would be skipped");
+    expect(events[0].error).toBe("SECRET-PAYLOAD");
+  });
+});

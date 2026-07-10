@@ -58,6 +58,16 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
         input: "def old(x, y) { x }",
         expectedOutput: "def old(x, y) {\nx\n}",
       },
+      {
+        description: "utility type hint is preserved as written",
+        input: "def patch(c: Partial<User>) { c }",
+        expectedOutput: "def patch(c: Partial<User>) {\nc\n}",
+      },
+      {
+        description: "Pick with a literal-union key argument",
+        input: 'def contact(c: Pick<User, "name" | "email">) { c }',
+        expectedOutput: 'def contact(c: Pick<User, "name" | "email">) {\nc\n}',
+      },
     ];
 
     testCases.forEach(({ description, input, expectedOutput }) => {
@@ -80,6 +90,20 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
   });
 
   describe("Type preservation", () => {
+    it("preserves a utility type in a type alias declaration", () => {
+      const parseResult = parseAgency("type UserPatch = Partial<User>", {}, false);
+      expect(parseResult.success).toBe(true);
+
+      if (!parseResult.success) return;
+
+      const generator = new AgencyGenerator();
+      const result = generator.generate(parseResult.result);
+
+      // toContain is deliberate — pins survival of the written form without
+      // coupling to whitespace canonicalization.
+      expect(result.output).toContain("Partial<User>");
+    });
+
     it("should preserve primitive types", () => {
       const input = "def test(n: number, s: string, b: boolean) { n }";
       const parseResult = parseAgency(input, {}, false);

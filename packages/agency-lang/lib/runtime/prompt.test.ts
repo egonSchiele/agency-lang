@@ -299,3 +299,56 @@ describe("runWithRetry", () => {
     ).rejects.toSatisfy((e: unknown) => readCause(e)?.kind === "userInterrupt");
   });
 });
+
+describe("dropNullDefaultedArgs", () => {
+  const P = (name: string, hasDefault: boolean) => ({
+    name,
+    hasDefault,
+    defaultValue: undefined,
+    variadic: false,
+  });
+
+  it("drops a null argument when the param has a default (LLM omitted it)", () => {
+    // Mirrors the real bug: bash(command, cwd: null) — cwd has a default of "".
+    const params = [P("command", false), P("cwd", true), P("timeout", true)];
+    const out = _internal.dropNullDefaultedArgs(
+      { command: "ls", cwd: null, timeout: null },
+      params,
+    );
+    expect(out).toEqual({ command: "ls" });
+    expect("cwd" in out).toBe(false);
+    expect("timeout" in out).toBe(false);
+  });
+
+  it("keeps a null argument when the param has NO default", () => {
+    // A required (or intentionally-nullable) param keeps its value so the
+    // normal type error still surfaces for the model to correct.
+    const params = [P("target", false)];
+    expect(_internal.dropNullDefaultedArgs({ target: null }, params))
+      .toEqual({ target: null });
+  });
+
+  it("leaves non-null values untouched, including falsy ones", () => {
+    const params = [P("cwd", true), P("count", true), P("flag", true)];
+    const out = _internal.dropNullDefaultedArgs(
+      { cwd: "/app", count: 0, flag: false },
+      params,
+    );
+    expect(out).toEqual({ cwd: "/app", count: 0, flag: false });
+  });
+
+  it("handles null/undefined argument objects", () => {
+    expect(_internal.dropNullDefaultedArgs(null, [P("cwd", true)])).toEqual({});
+    expect(_internal.dropNullDefaultedArgs(undefined, [P("cwd", true)])).toEqual({});
+  });
+
+  it("does not drop keys absent from the param list", () => {
+    // An arg with no matching param (e.g. an LLM hallucinated key) is left
+    // as-is; only declared defaulted params are considered.
+    const out = _internal.dropNullDefaultedArgs(
+      { extra: null },
+      [P("cwd", true)],
+    );
+    expect(out).toEqual({ extra: null });
+  });
+});

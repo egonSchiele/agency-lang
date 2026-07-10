@@ -6,7 +6,7 @@ import {
   redactAttachments,
 } from "smoltalk";
 import { createLogger } from "../logger.js";
-import { AgencyFunction } from "./agencyFunction.js";
+import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
 import {
   harvestReplyAttachments,
@@ -135,6 +135,29 @@ async function dispatchLLMRequest({
     completion: response.value,
     toolCalls: response.value.toolCalls || [],
   };
+}
+
+/** LLMs routinely emit an explicit `null` for an optional tool argument
+ *  they chose not to set (e.g. `bash(command, cwd: null, timeout: null)`).
+ *  Agency default-parameter values only fill `undefined`, so a `null` would
+ *  sail past the default into the function body — `bash(cwd: null)` reaches
+ *  `applyAgentCwd` → `path.resolve(base, null)` and throws. Drop any argument
+ *  whose value is `null` when its parameter declares a default, so the call
+ *  behaves exactly as if the LLM had omitted the key (the default applies).
+ *  Params without a default keep their value untouched: a required arg passed
+ *  `null` still surfaces its normal type error for the model to correct, and
+ *  an intentionally-nullable param is left alone. */
+function dropNullDefaultedArgs(
+  args: Record<string, any> | null | undefined,
+  params: readonly FuncParam[],
+): Record<string, any> {
+  const out: Record<string, any> = { ...args };
+  for (const param of params) {
+    if (param.hasDefault && out[param.name] === null) {
+      delete out[param.name];
+    }
+  }
+  return out;
 }
 
 /** Default cap on characters of a single tool result fed back to the
@@ -399,6 +422,7 @@ export const _internal = {
   assertUniqueToolNames,
   armCallTimeout,
   runWithRetry,
+  dropNullDefaultedArgs,
 };
 
 async function _runPrompt({
@@ -1237,7 +1261,10 @@ export async function runPrompt(args: {
           // uniformly by completedSteps inside b.step (start/invoke/end
           // each get marked done on success and skipped on resume).
           const branchStack = stack.getOrCreateBranch(branchKey).stack;
-          const namedArgs = { ...toolCall.arguments };
+          const namedArgs = dropNullDefaultedArgs(
+            toolCall.arguments,
+            handler.params,
+          );
 
           await b.step(
             `round.${round}.tool.${callSlug}.start`,

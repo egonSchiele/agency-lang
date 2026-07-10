@@ -269,14 +269,15 @@ Only add the **semantic** effect (`std::littlesis`) — `std::http::fetchJSON` i
 If a connector has natural allow/deny defaults, consider exporting a ready-made `std::policy`
 (`stdlib/policy.agency`) so users don't have to hand-write a handler. A policy is
 declarative data keyed by effect with glob `match` on the payload, and — because the payload has an
-`op` discriminant and the fetch carries `{ baseUrl, path }` — it can gate per-operation or
-per-domain today. An exported policy **must be `static`** (globals can't be exported):
+`op` discriminant and the fetch carries `{ baseUrl, path, method }` — it can gate per-operation,
+per-domain, or per-method (e.g. allow GETs, deny POSTs). An exported policy **must be `static`**
+(globals can't be exported):
 
 ```
 export static const POLICY: Policy = {
   "std::littlesis": [{ action: "approve" }],
   "std::http::fetchJSON": [
-    { match: { baseUrl: "https://littlesis.org/api" }, action: "approve" },
+    { match: { baseUrl: "https://littlesis.org/api", method: "GET" }, action: "approve" },
     { action: "reject" }
   ]
 }
@@ -317,8 +318,8 @@ test. Copy `tests/agency-js/data-people-littlesis/`.
   a real captured body over a hand-authored one — a wrong field path otherwise ships green.)*
 - **Interrupt gating** — assert (a) rejecting the semantic effect short-circuits before any fetch;
   (b) a plain caller sees only the semantic effect; (c) an outer handler that `propagate()`s the
-  fetch surfaces `std::http::fetchJSON` with the exact `{ baseUrl, path }` — this proves the wiring
-  *and* the built URL **offline, with no network**; (d) invalid input fails before the interrupt.
+  fetch surfaces `std::http::fetchJSON` with the exact `{ baseUrl, path, method }` — this proves the
+  wiring *and* the built URL **offline, with no network**; (d) invalid input fails before the interrupt.
 - **Capability** — a `node netCheck() raises <Network>` that calls the connector (compile-only).
 
 **Live** (`*-live/`, gated on `AGENCY_LIVE_TESTS`): a real end-to-end call, `{ skipped: true }` by

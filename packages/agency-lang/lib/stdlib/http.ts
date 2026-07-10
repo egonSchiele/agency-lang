@@ -67,6 +67,38 @@ function validateUrl(
   return url;
 }
 
+function hasContentType(headers: Record<string, string>): boolean {
+  return Object.keys(headers).some((k) => k.toLowerCase() === "content-type");
+}
+
+/**
+ * Build the `fetch` request init. A body is attached only for methods that
+ * carry one (not GET/HEAD): a string is sent as-is, a non-string is
+ * JSON-serialized with a default `Content-Type: application/json` (unless the
+ * caller already set a content-type header). Headers are copied so the default
+ * doesn't mutate the caller's object.
+ */
+function buildInit(
+  method: string,
+  headers: Record<string, string>,
+  body: any,
+  signal: AbortSignal,
+): RequestInit {
+  const h: Record<string, string> = { ...headers };
+  const init: RequestInit = { method, headers: h, signal };
+  if (body != null && method !== "GET" && method !== "HEAD") {
+    if (typeof body === "string") {
+      init.body = body;
+    } else {
+      init.body = JSON.stringify(body);
+      if (!hasContentType(h)) {
+        h["Content-Type"] = "application/json";
+      }
+    }
+  }
+  return init;
+}
+
 /**
  * A structured `failure` for a non-2xx response, or `null` when the status is
  * ok (`Response.ok`, i.e. in [200, 300)). Returning a `failure` — rather than
@@ -153,21 +185,23 @@ async function fetchImpl(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string,
+  body: any,
 ): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(async () => {
-    const result = await fetch(url, { headers, signal });
-    let body: string;
+    const result = await fetch(url, buildInit(method, headers, body, signal));
+    let responseBody: string;
     try {
-      body = await readBodyCapped(result, url, signal);
+      responseBody = await readBodyCapped(result, url, signal);
     } catch (e) {
       if (isAbortError(e)) throw e;
       throw new Error(`Failed to get text from ${url}: ${e}`);
     }
-    const statusFailure = httpStatusFailure(result, url, body);
+    const statusFailure = httpStatusFailure(result, url, responseBody);
     if (statusFailure) return statusFailure;
-    return body;
+    return responseBody;
   }, url);
 }
 
@@ -181,8 +215,10 @@ export async function __internal_fetch(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string = "GET",
+  body: any = null,
 ): Promise<string | ResultFailure> {
-  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
 /** ALS-reading replacement for `__internal_fetch`. */
@@ -191,9 +227,11 @@ export async function _fetch(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string,
+  body: any,
 ): Promise<string | ResultFailure> {
   const { ctx, stack } = getRuntimeContext();
-  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
 async function fetchJSONImpl(
@@ -203,11 +241,13 @@ async function fetchJSONImpl(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string,
+  body: any,
 ): Promise<any> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(async () => {
-    const result = await fetch(url, { headers, signal });
+    const result = await fetch(url, buildInit(method, headers, body, signal));
     const text = await readBodyCapped(result, url, signal);
     const statusFailure = httpStatusFailure(result, url, text);
     if (statusFailure) return statusFailure;
@@ -228,8 +268,10 @@ export async function __internal_fetchJSON(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string = "GET",
+  body: any = null,
 ): Promise<any> {
-  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
 /** ALS-reading replacement for `__internal_fetchJSON`. */
@@ -238,9 +280,11 @@ export async function _fetchJSON(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string,
+  body: any,
 ): Promise<any> {
   const { ctx, stack } = getRuntimeContext();
-  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
 async function fetchMarkdownImpl(
@@ -250,19 +294,21 @@ async function fetchMarkdownImpl(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string,
+  body: any,
 ): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(async () => {
-    const result = await fetch(url, { headers, signal });
+    const result = await fetch(url, buildInit(method, headers, body, signal));
     const contentType = result.headers.get("content-type") ?? "";
-    const body = await readBodyCapped(result, url, signal);
-    const statusFailure = httpStatusFailure(result, url, body);
+    const responseBody = await readBodyCapped(result, url, signal);
+    const statusFailure = httpStatusFailure(result, url, responseBody);
     if (statusFailure) return statusFailure;
     if (contentType.includes("text/html")) {
-      return htmlToMarkdown(body);
+      return htmlToMarkdown(responseBody);
     }
-    return body;
+    return responseBody;
   }, url);
 }
 
@@ -275,8 +321,10 @@ export async function __internal_fetchMarkdown(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string = "GET",
+  body: any = null,
 ): Promise<string | ResultFailure> {
-  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
 /** ALS-reading replacement for `__internal_fetchMarkdown`. */
@@ -285,9 +333,11 @@ export async function _fetchMarkdown(
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
+  method: string,
+  body: any,
 ): Promise<string | ResultFailure> {
   const { ctx, stack } = getRuntimeContext();
-  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
 function htmlToMarkdown(html: string): string {

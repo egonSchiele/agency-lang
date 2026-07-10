@@ -51,7 +51,7 @@ import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
-import { UTILITY_TYPE_ARITY } from "./utilityTypes.js";
+import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
 import { validateStaticInit } from "./validateStaticInit.js";
 import { walkNodes } from "../utils/node.js";
 
@@ -62,7 +62,7 @@ const RESERVED_TYPE_NAMES = new Set<string>([
   "Result",
   "Success",
   "Failure",
-  ...Object.keys(UTILITY_TYPE_ARITY),
+  ...RESERVED_GENERIC_NAMES,
 ]);
 
 export class TypeChecker {

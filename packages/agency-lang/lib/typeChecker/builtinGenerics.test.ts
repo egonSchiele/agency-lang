@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { evalUtilityType, isUtilityTypeName, UTILITY_TYPE_ARITY } from "./utilityTypes.js";
+import {
+  evalBuiltinGeneric,
+  isBuiltinGenericName,
+  BUILTIN_GENERIC_ARITY,
+  RESERVED_GENERIC_NAMES,
+} from "./builtinGenerics.js";
+import { resolveType } from "./assignability.js";
 import { typecheckSource } from "./testUtils.js";
 import type { VariableType } from "../types.js";
 
@@ -22,23 +28,66 @@ function lit(value: string): VariableType {
   return { type: "stringLiteralType", value };
 }
 
-describe("UTILITY_TYPE_ARITY / isUtilityTypeName", () => {
-  it("covers exactly the five names", () => {
-    expect(UTILITY_TYPE_ARITY).toEqual({
+describe("the built-in generics registry", () => {
+  it("covers all eight built-in generic forms with their arities", () => {
+    expect(BUILTIN_GENERIC_ARITY).toEqual({
+      Array: 1,
+      Schema: 1,
+      Record: 2,
       Partial: 1,
       Required: 1,
       NonNullable: 1,
       Pick: 2,
       Omit: 2,
     });
-    expect(isUtilityTypeName("Partial")).toBe(true);
-    expect(isUtilityTypeName("Record")).toBe(false);
+    expect(isBuiltinGenericName("Partial")).toBe(true);
+    expect(isBuiltinGenericName("Record")).toBe(true);
+    expect(isBuiltinGenericName("Unrelated")).toBe(false);
+  });
+
+  it("reserves exactly the five utility-type names (Array/Schema/Record stay shadowable)", () => {
+    expect([...RESERVED_GENERIC_NAMES].sort()).toEqual(
+      ["NonNullable", "Omit", "Partial", "Pick", "Required"].sort(),
+    );
+  });
+});
+
+describe("container forms through the registry", () => {
+  it("Array lowers to arrayType", () => {
+    expect(evalBuiltinGeneric("Array", [STR], id)).toEqual({
+      type: "arrayType",
+      elementType: STR,
+    });
+  });
+
+  it("Schema lowers to schemaType", () => {
+    expect(evalBuiltinGeneric("Schema", [NUM], id)).toEqual({
+      type: "schemaType",
+      inner: NUM,
+    });
+  });
+
+  it("Record keeps its genericType wrapper with resolved args and use-site tags", () => {
+    const tag = { type: "tag" as const, name: "validate", arguments: [] };
+    const out = evalBuiltinGeneric("Record", [STR, NUM], id, [tag]);
+    expect(out).toEqual({
+      type: "genericType",
+      name: "Record",
+      typeArgs: [STR, NUM],
+      tags: [tag],
+    });
+  });
+
+  it("Record rejects an invalid key type", () => {
+    expect(() =>
+      evalBuiltinGeneric("Record", [{ type: "primitiveType", value: "boolean" }, NUM], id),
+    ).toThrow(/Record key type must be/);
   });
 });
 
 describe("Partial", () => {
   it("adds null to every property and preserves descriptions", () => {
-    const out = evalUtilityType("Partial", [user()], id);
+    const out = evalBuiltinGeneric("Partial", [user()], id);
     expect(out).toEqual({
       type: "objectType",
       properties: [
@@ -63,7 +112,7 @@ describe("Partial", () => {
         },
       ],
     };
-    const out = evalUtilityType("Partial", [tagged], id);
+    const out = evalBuiltinGeneric("Partial", [tagged], id);
     expect(out).toMatchObject({
       properties: [
         { key: "name", tags: [{ type: "tag", name: "validate", arguments: [] }] },
@@ -76,7 +125,7 @@ describe("Partial", () => {
       type: "objectType",
       properties: [{ key: "p", value: { type: "unionType", types: [STR, NUL] } }],
     };
-    const out = evalUtilityType("Partial", [t], id);
+    const out = evalBuiltinGeneric("Partial", [t], id);
     expect(out).toEqual(t);
   });
 
@@ -92,7 +141,7 @@ describe("Partial", () => {
       x.type === "typeAliasVariable" && x.aliasName === "MaybeStr"
         ? { type: "unionType", types: [STR, NUL] }
         : x;
-    const out = evalUtilityType("Partial", [t], resolve);
+    const out = evalBuiltinGeneric("Partial", [t], resolve);
     expect(out).toEqual(t); // written alias kept, no null bolted on
   });
 
@@ -101,18 +150,18 @@ describe("Partial", () => {
     // an in-place rewrite would corrupt the alias for the rest of the compile.
     const input = user();
     const snapshot = JSON.parse(JSON.stringify(input));
-    evalUtilityType("Partial", [input], id);
+    evalBuiltinGeneric("Partial", [input], id);
     expect(input).toEqual(snapshot);
   });
 
   it("rejects a non-object argument", () => {
-    expect(() => evalUtilityType("Partial", [NUM], id)).toThrow(
+    expect(() => evalBuiltinGeneric("Partial", [NUM], id)).toThrow(
       /Partial expects an object type/,
     );
   });
 
   it("rejects wrong arity", () => {
-    expect(() => evalUtilityType("Partial", [NUM, STR], id)).toThrow(
+    expect(() => evalBuiltinGeneric("Partial", [NUM, STR], id)).toThrow(
       /Partial expects 1 type argument, got 2/,
     );
   });
@@ -127,7 +176,7 @@ describe("Required", () => {
         { key: "age", value: { type: "unionType", types: [NUM, NUL] } },
       ],
     };
-    const out = evalUtilityType("Required", [t], id);
+    const out = evalBuiltinGeneric("Required", [t], id);
     expect(out).toEqual({
       type: "objectType",
       properties: [
@@ -142,7 +191,7 @@ describe("Required", () => {
       type: "objectType",
       properties: [{ key: "gone", value: NUL }],
     };
-    const out = evalUtilityType("Required", [t], id);
+    const out = evalBuiltinGeneric("Required", [t], id);
     expect(out).toEqual({
       type: "objectType",
       properties: [
@@ -163,7 +212,7 @@ describe("Required", () => {
         },
       ],
     };
-    const out = evalUtilityType("Required", [t], id);
+    const out = evalBuiltinGeneric("Required", [t], id);
     expect(out).toMatchObject({
       properties: [
         {
@@ -182,7 +231,7 @@ describe("Required", () => {
       properties: [{ key: "p", value: { type: "unionType", types: [STR, NUL] } }],
     };
     const snapshot = JSON.parse(JSON.stringify(input));
-    evalUtilityType("Required", [input], id);
+    evalBuiltinGeneric("Required", [input], id);
     expect(input).toEqual(snapshot);
   });
 });
@@ -202,7 +251,7 @@ describe("Pick", () => {
       type: "unionType",
       types: [lit("c"), lit("a")],
     };
-    const out = evalUtilityType("Pick", [t, keys], id);
+    const out = evalBuiltinGeneric("Pick", [t, keys], id);
     expect(out).toEqual({
       type: "objectType",
       properties: [
@@ -213,7 +262,7 @@ describe("Pick", () => {
   });
 
   it("accepts a single literal key (not a union)", () => {
-    const out = evalUtilityType("Pick", [user(), lit("name")], id);
+    const out = evalBuiltinGeneric("Pick", [user(), lit("name")], id);
     expect(out).toEqual({
       type: "objectType",
       properties: [{ key: "name", value: STR, description: "the name" }],
@@ -221,13 +270,13 @@ describe("Pick", () => {
   });
 
   it("rejects a key that does not exist, listing available keys", () => {
-    expect(() => evalUtilityType("Pick", [user(), lit("nope")], id)).toThrow(
+    expect(() => evalBuiltinGeneric("Pick", [user(), lit("nope")], id)).toThrow(
       /Pick key 'nope' does not exist.*name, age/,
     );
   });
 
   it("rejects a non-literal key argument", () => {
-    expect(() => evalUtilityType("Pick", [user(), STR], id)).toThrow(
+    expect(() => evalBuiltinGeneric("Pick", [user(), STR], id)).toThrow(
       /Pick expects string literal keys/,
     );
   });
@@ -235,7 +284,7 @@ describe("Pick", () => {
 
 describe("Omit", () => {
   it("removes named properties", () => {
-    const out = evalUtilityType("Omit", [user(), lit("age")], id);
+    const out = evalBuiltinGeneric("Omit", [user(), lit("age")], id);
     expect(out).toEqual({
       type: "objectType",
       properties: [{ key: "name", value: STR, description: "the name" }],
@@ -243,7 +292,7 @@ describe("Omit", () => {
   });
 
   it("allows keys that do not exist (TS parity)", () => {
-    const out = evalUtilityType("Omit", [user(), lit("nope")], id);
+    const out = evalBuiltinGeneric("Omit", [user(), lit("nope")], id);
     expect(out).toEqual(user());
   });
 
@@ -252,14 +301,14 @@ describe("Omit", () => {
       type: "unionType",
       types: [lit("name"), lit("age")],
     };
-    const out = evalUtilityType("Omit", [user(), keys], id);
+    const out = evalBuiltinGeneric("Omit", [user(), keys], id);
     expect(out).toEqual({ type: "objectType", properties: [] });
   });
 });
 
 describe("NonNullable", () => {
   it("strips null from a union", () => {
-    const out = evalUtilityType(
+    const out = evalBuiltinGeneric(
       "NonNullable",
       [{ type: "unionType", types: [STR, NUL] }],
       id,
@@ -268,18 +317,18 @@ describe("NonNullable", () => {
   });
 
   it("is a no-op without null", () => {
-    expect(evalUtilityType("NonNullable", [STR], id)).toEqual(STR);
+    expect(evalBuiltinGeneric("NonNullable", [STR], id)).toEqual(STR);
   });
 
   it("resolves NonNullable<null> to never", () => {
-    expect(evalUtilityType("NonNullable", [NUL], id)).toEqual({
+    expect(evalBuiltinGeneric("NonNullable", [NUL], id)).toEqual({
       type: "primitiveType",
       value: "never",
     });
   });
 
   it("keeps a multi-member union a union", () => {
-    const out = evalUtilityType(
+    const out = evalBuiltinGeneric(
       "NonNullable",
       [{ type: "unionType", types: [STR, NUM, NUL] }],
       id,
@@ -293,7 +342,7 @@ describe("argument resolution", () => {
     const aliasRef: VariableType = { type: "typeAliasVariable", aliasName: "User" };
     const resolve = (t: VariableType) =>
       t.type === "typeAliasVariable" && t.aliasName === "User" ? user() : t;
-    const out = evalUtilityType("Pick", [aliasRef, lit("name")], resolve);
+    const out = evalBuiltinGeneric("Pick", [aliasRef, lit("name")], resolve);
     expect(out).toEqual({
       type: "objectType",
       properties: [{ key: "name", value: STR, description: "the name" }],
@@ -310,7 +359,7 @@ describe("argument resolution", () => {
       x.type === "typeAliasVariable" && x.aliasName === "MaybeStr"
         ? { type: "unionType", types: [STR, NUL] }
         : x;
-    const out = evalUtilityType("Required", [t], resolve);
+    const out = evalBuiltinGeneric("Required", [t], resolve);
     expect(out).toEqual({
       type: "objectType",
       properties: [{ key: "p", value: STR }],
@@ -325,7 +374,7 @@ describe("argument resolution", () => {
     };
     const resolve = (x: VariableType) =>
       x.type === "typeAliasVariable" && x.aliasName === "Name" ? STR : x;
-    const out = evalUtilityType("Partial", [t], resolve);
+    const out = evalBuiltinGeneric("Partial", [t], resolve);
     // The written alias survives inside the union; null is appended.
     expect(out).toEqual({
       type: "objectType",
@@ -341,7 +390,7 @@ describe("argument resolution", () => {
       x.type === "typeAliasVariable" && x.aliasName === "MaybeStr"
         ? { type: "unionType", types: [STR, NUL] }
         : x;
-    expect(evalUtilityType("NonNullable", [aliasRef], resolve)).toEqual(STR);
+    expect(evalBuiltinGeneric("NonNullable", [aliasRef], resolve)).toEqual(STR);
   });
 
   it("composes when the argument is itself a utility application", () => {
@@ -354,8 +403,8 @@ describe("argument resolution", () => {
       typeArgs: [user(), lit("name")],
     };
     const resolve = (t: VariableType): VariableType =>
-      t.type === "genericType" ? evalUtilityType(t.name, t.typeArgs, resolve) : t;
-    const out = evalUtilityType("Partial", [inner], resolve);
+      t.type === "genericType" ? evalBuiltinGeneric(t.name, t.typeArgs, resolve) : t;
+    const out = evalBuiltinGeneric("Partial", [inner], resolve);
     expect(out).toEqual({
       type: "objectType",
       properties: [
@@ -492,5 +541,73 @@ node main() {
 }
 `);
     expect(errors).toEqual([]);
+  });
+});
+
+describe("registry lookup safety (prototype chain)", () => {
+  it("does not treat Object.prototype keys as utility types", () => {
+    expect(isBuiltinGenericName("toString")).toBe(false);
+    expect(isBuiltinGenericName("constructor")).toBe(false);
+    expect(isBuiltinGenericName("hasOwnProperty")).toBe(false);
+  });
+
+  it("an unknown generic named like a prototype key does not misroute into the builtin path", () => {
+    // The registry lookups are own-property guarded, so 'toString' is NOT
+    // treated as a builtin generic (that used to produce a garbled arity
+    // message quoting Object.prototype.toString). The residual diagnostic
+    // wording comes from validate.ts indexing the ALIAS table bare —
+    // typeAliases["toString"] finds Object.prototype.toString, so the
+    // message says "not a generic type" instead of "Unknown generic type".
+    // That alias-table prototype hazard is pre-existing and codebase-wide;
+    // pinned here as-is.
+    const errors = typecheckSource(`
+type X = toString<number>
+node main() {
+  return 1
+}
+`);
+    const messages = errors.map((e) => e.message).join("\n");
+    expect(messages).not.toMatch(/expects function/); // the old garbled arity path
+    expect(messages).toMatch(/Type 'toString' is not a generic type/);
+  });
+});
+
+describe("use-site tag precedence", () => {
+  it("use-site validate tags apply AFTER argument alias tags (alias first, use-site on top)", () => {
+    // mergeTagSets contract: alias validators first, then use-site validators,
+    // collapsed into one @validate tag. The resolver branch must pass the
+    // genericType occurrence's own tags as the USE-SITE side.
+    const aliasTag = {
+      type: "tag" as const,
+      name: "validate",
+      arguments: [{ type: "variableName" as const, value: "fromAlias" }],
+    };
+    const useSiteTag = {
+      type: "tag" as const,
+      name: "validate",
+      arguments: [{ type: "variableName" as const, value: "fromUseSite" }],
+    };
+    const aliases = {
+      Tagged: {
+        body: {
+          type: "objectType" as const,
+          properties: [{ key: "p", value: STR }],
+        },
+        tags: [aliasTag],
+      },
+    };
+    const vt = {
+      type: "genericType" as const,
+      name: "Partial",
+      typeArgs: [{ type: "typeAliasVariable" as const, aliasName: "Tagged" }],
+      tags: [useSiteTag],
+    };
+    const resolved = resolveType(vt as any, aliases as any);
+    expect(resolved.type).toBe("objectType");
+    const validate = (resolved.tags ?? []).find((t) => t.name === "validate");
+    expect(validate).toBeDefined();
+    expect(
+      validate!.arguments.map((a) => (a as { value: string }).value),
+    ).toEqual(["fromAlias", "fromUseSite"]);
   });
 });

@@ -203,23 +203,6 @@ def updateUser(id: string, changes: Partial<User>): string {
 }
 ```
 
-Details worth knowing:
-
-- All transforms are **shallow** — nested object types are not transformed.
-- In Agency source, object keys are always required. `Partial` means you can
-  pass `null` for a value, not omit the key. Key omission is only forgiven
-  when parsing JSON with `schema(...)`: missing keys coalesce to `null`.
-- Because `p?: V` and `p: V | null` are the same type after parsing,
-  `Required` un-optionalizes both — it cannot distinguish a property you
-  marked optional from one you declared nullable on purpose.
-- `Pick` errors on a key that does not exist on the target; `Omit` allows it
-  (matching TypeScript).
-- The transforms need concrete object types: applying them to `Record<K, V>`,
-  arrays, primitives, or unions is an error.
-- A bad `Pick` key or a non-object argument is reported when the program
-  **compiles**, not as an editor/typecheck diagnostic — `agency typecheck`
-  will not flag it today.
-
 ## References
 
 - [Schemas](/guide/schemas)

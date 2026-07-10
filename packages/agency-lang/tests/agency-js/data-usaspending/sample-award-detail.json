@@ -1,0 +1,31 @@
+{
+  "id": 22834500,
+  "generated_unique_award_id": "CONT_AWD_SPE2DX16D1500_9700",
+  "category": "contract",
+  "type_description": "DELIVERY ORDER",
+  "description": "AIRCRAFT PARTS",
+  "total_obligation": 12500000.5,
+  "subaward_count": 3,
+  "total_subaward_amount": 4200000,
+  "recipient": {
+    "recipient_name": "LOCKHEED MARTIN CORPORATION",
+    "recipient_uei": "ABC123DEF456"
+  },
+  "awarding_agency": {
+    "toptier_agency": { "name": "Department of Defense" }
+  },
+  "period_of_performance": {
+    "start_date": "2016-03-01",
+    "end_date": "2021-02-28"
+  },
+  "place_of_performance": {
+    "city_name": "FORT WORTH",
+    "state_code": "TX"
+  },
+  "executive_details": {
+    "officers": [
+      { "name": "Jane Doe", "amount": 20000000 },
+      { "name": "John Smith", "amount": 15000000 }
+    ]
+  }
+}

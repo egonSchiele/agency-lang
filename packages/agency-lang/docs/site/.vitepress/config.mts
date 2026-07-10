@@ -287,6 +287,10 @@ export default defineConfig({
                   text: "data/wikidata",
                   link: "/stdlib/data/wikidata",
                 },
+                {
+                  text: "data/usaspending",
+                  link: "/stdlib/data/usaspending",
+                },
               ],
             },
             { text: "date", link: "/stdlib/date" },

@@ -47,6 +47,22 @@ export function resultToObjectUnion(
           // runtime is `Record<string, any> | null` (a record, not an array);
           // typed `any` here — tighten to a Record type later if useful.
           { key: "args", value: ANY_T },
+          // Propagation trail appended by the failure-propagation runtime
+          // check (lib/runtime/failurePropagation.ts). Mirrors
+          // SkippedFunction in lib/runtime/result.ts.
+          {
+            key: "skippedFunctions",
+            value: {
+              type: "arrayType",
+              elementType: {
+                type: "objectType",
+                properties: [
+                  { key: "name", value: STRING_T },
+                  { key: "param", value: STRING_T },
+                ],
+              },
+            },
+          },
         ],
       },
     ],

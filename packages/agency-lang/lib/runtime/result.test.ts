@@ -195,6 +195,7 @@ describe("failure", () => {
       retryable: false,
       functionName: null,
       args: null,
+      skippedFunctions: [],
     });
   });
 
@@ -208,6 +209,7 @@ describe("failure", () => {
       retryable: false,
       functionName: null,
       args: null,
+      skippedFunctions: [],
     });
   });
 

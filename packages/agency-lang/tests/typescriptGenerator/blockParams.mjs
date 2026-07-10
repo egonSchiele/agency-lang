@@ -339,13 +339,15 @@ export const mapItems = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: false
   }, {
     name: "block",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: true
+    isFunctionTyped: true,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "mapItems",

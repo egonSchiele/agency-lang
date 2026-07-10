@@ -301,3 +301,39 @@ node main() {
     expect(valueErrs.length).toBe(5);
   });
 });
+
+describe("skippedFunctions member on a narrowed failure", () => {
+  it("allows skippedFunctions on a narrowed failure", () => {
+    const { errors } = check(`
+def f(): Result { return failure("x") }
+def g(): string {
+  const r = f()
+  if (isFailure(r)) {
+    const skips = r.skippedFunctions
+    if (skips.length == 0) {
+      return "none skipped"
+    }
+    return "some skipped"
+  }
+  return "ok"
+}`);
+    expect(errors).toEqual([]);
+  });
+
+  it("negative control: a misspelled failure member still errors (proves enforcement is armed)", () => {
+    const { errors } = check(`
+def f(): Result { return failure("x") }
+def g(): string {
+  const r = f()
+  if (isFailure(r)) {
+    const skips = r.skippedFunctionz
+    if (skips.length == 0) {
+      return "none skipped"
+    }
+    return "some skipped"
+  }
+  return "ok"
+}`);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});

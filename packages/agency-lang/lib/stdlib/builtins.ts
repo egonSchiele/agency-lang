@@ -12,6 +12,7 @@ import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep } from "./abortable.js";
+import { acceptsFailures } from "../runtime/failurePropagation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,6 +22,22 @@ export function _print(...messages: any[]): void {
 
 export function _printJSON(obj: any): void {
   console.log(JSON.stringify(obj, null, 2));
+}
+
+/**
+ * SINGLE SOURCE OF TRUTH for stdlib TS helpers that legitimately receive
+ * failure values (printing a failure is a debugging move). Add new
+ * failure-tolerant helpers HERE, never as scattered acceptsFailures()
+ * calls. Runtime-layer builtins have their own list —
+ * FAILURE_TOLERANT_BUILTINS in lib/runtime/failurePropagation.ts — because
+ * the runtime hot path must not import the stdlib graph.
+ */
+const FAILURE_TOLERANT_STDLIB_HELPERS: ReadonlyArray<(...args: any[]) => any> = [
+  _print,
+  _printJSON,
+];
+for (const fn of FAILURE_TOLERANT_STDLIB_HELPERS) {
+  acceptsFailures(fn);
 }
 
 export function _parseJSON(text: string): any {

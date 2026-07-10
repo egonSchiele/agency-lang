@@ -328,7 +328,8 @@ export const twice = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: true
+    isFunctionTyped: true,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "twice",

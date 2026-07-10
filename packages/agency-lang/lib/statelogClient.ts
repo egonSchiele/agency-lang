@@ -1242,6 +1242,37 @@ export class StatelogClient {
     });
   }
 
+  /** Structured warning event. First consumer: the failure-propagation
+   *  check (warnType "failurePropagation"), which logs every skipped call
+   *  and every would-be throw in "warn" mode, and every skip in "on" mode.
+   *
+   *  The variable payload — most importantly `error`, an arbitrary user
+   *  value — is nested under `data` because post()'s redaction replacer is
+   *  scoped to the `data` payload ONLY; a top-level `error` would carry
+   *  redact()-tagged secrets into statelog unscrubbed. `message` embeds a
+   *  truncated error PREVIEW as a string; that matches the exposure of the
+   *  existing error() event's message and is a deliberate parity call. */
+  async warn({
+    warnType,
+    message,
+    functionName,
+    param,
+    error,
+  }: {
+    warnType: "failurePropagation";
+    message: string;
+    functionName?: string;
+    param?: string;
+    error?: unknown;
+  }): Promise<void> {
+    await this.post({
+      type: "warn",
+      warnType,
+      message,
+      data: { functionName, param, error },
+    });
+  }
+
   /** Wire the out-of-frame redaction fallback (see the field's docstring).
    *  Called by the execution context right after this client is created. */
   setFallbackGlobals(fn: () => GlobalStore | undefined): void {

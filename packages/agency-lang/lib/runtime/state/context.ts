@@ -173,6 +173,7 @@ export class RuntimeContext<T> {
   /** Ceiling on logical function-call nesting depth before the runaway-
    *  recursion guard trips. See lib/runtime/callDepth.ts. */
   maxCallDepth: number;
+  failurePropagation: "off" | "warn" | "on";
 
   // Memory layer (resolved decisions in
   // docs/superpowers/plans/2026-05-12-memory-layer.md and
@@ -201,6 +202,7 @@ export class RuntimeContext<T> {
     dirname: string;
     maxRestores?: number;
     maxCallDepth?: number;
+    failurePropagation?: "off" | "warn" | "on";
     traceConfig?: TraceConfig;
     verbose?: boolean;
     memory?: MemoryConfig;
@@ -227,6 +229,11 @@ export class RuntimeContext<T> {
     this.statelogConfig = statelogConfig;
     this.maxRestores = args.maxRestores ?? 100;
     this.maxCallDepth = args.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH;
+    // Stage 1 rollout default: every real compiled program warns without
+    // changing behavior. Stage 2 flips this one literal to "on" after the
+    // corpus measurement (do NOT touch the frameless "on" fallback in
+    // failurePropagation.ts, which serves unit tests).
+    this.failurePropagation = args.failurePropagation ?? "warn";
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
@@ -316,6 +323,7 @@ export class RuntimeContext<T> {
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;
     execCtx.maxCallDepth = this.maxCallDepth;
+    execCtx.failurePropagation = this.failurePropagation;
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     execCtx.handlers = [];
     execCtx.callbacks = {};

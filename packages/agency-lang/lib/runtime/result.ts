@@ -62,6 +62,10 @@ export type FailureOpts = {
   ownedGuardIds?: string[];
 };
 
+/** One hop in a propagated failure's journey: the function whose body was
+ *  skipped and the parameter that rejected the failure. */
+export type SkippedFunction = { name: string; param: string };
+
 export type ResultFailure = {
   __type: "resultType";
   success: false;
@@ -70,6 +74,7 @@ export type ResultFailure = {
   retryable: boolean;
   functionName: string | null;
   args: Record<string, any> | null;
+  skippedFunctions: SkippedFunction[];
 };
 
 export function success(value: any): ResultSuccess {
@@ -85,6 +90,23 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
     retryable: opts?.retryable ?? false,
     functionName: opts?.functionName ?? null,
     args: opts?.args ?? null,
+    skippedFunctions: [],
+  };
+}
+
+/** Shallow-clone a failure with one more skip entry. Used by the
+ *  failure-propagation check when a call short-circuits: the ORIGINAL
+ *  failure's error/functionName/args survive untouched so the origin is
+ *  never hidden. `failure()` is the single initializer of
+ *  skippedFunctions — no `?? []` fallback here (spec: no backward-compat
+ *  handling for pre-feature serialized failures). */
+export function propagateFailure(
+  orig: ResultFailure,
+  skipped: SkippedFunction,
+): ResultFailure {
+  return {
+    ...orig,
+    skippedFunctions: [...orig.skippedFunctions, skipped],
   };
 }
 

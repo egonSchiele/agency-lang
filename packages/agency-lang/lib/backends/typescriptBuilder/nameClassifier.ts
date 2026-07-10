@@ -9,7 +9,7 @@ import { BUILTIN_FUNCTIONS } from "../../config.js";
  * directly. These are NOT AgencyFunction instances and do not participate in
  * the interrupt-checking machinery.
  */
-const DIRECT_CALL_FUNCTIONS: ReadonlySet<string> = new Set([
+export const DIRECT_CALL_FUNCTIONS: ReadonlySet<string> = new Set([
   "approve", "reject", "propagate",
   "success", "failure",
   "isInterrupt", "hasInterrupts", "isDebugger", "isRejected", "isApproved",

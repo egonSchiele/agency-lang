@@ -1,0 +1,16 @@
+def bad(): Result {
+  return failure("boom")
+}
+
+def use(s: string) {
+  return "ran"
+}
+
+node main() {
+  const f = bad()
+  const out = use(f)
+  if (isFailure(out)) {
+    return "skipped"
+  }
+  return "legacy: ${out}"
+}

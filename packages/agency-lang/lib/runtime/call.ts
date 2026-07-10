@@ -1,5 +1,11 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
+import {
+  checkTsFunctionArgs,
+  checkResultMethodCall,
+  describeFailureCallTarget,
+} from "./failurePropagation.js";
+import { isFailure } from "./result.js";
 
 /**
  * Runtime dispatcher for every Agency call site. Generated code emits
@@ -26,6 +32,9 @@ export async function __call(
     return target.invoke(descriptor);
   }
   if (typeof target !== "function") {
+    if (isFailure(target)) {
+      throw new Error(describeFailureCallTarget(target));
+    }
     throw new Error(`Cannot call non-function value: ${String(target)}`);
   }
   if (descriptor.type === "named") {
@@ -45,6 +54,11 @@ export async function __call(
       `Named arguments are not supported for non-Agency function '${target.name || "(anonymous)"}'`,
     );
   }
+  checkTsFunctionArgs(
+    target as (...args: unknown[]) => unknown,
+    target.name || "(anonymous)",
+    descriptor.args,
+  );
   return target(...descriptor.args);
 }
 
@@ -99,6 +113,18 @@ export async function __callMethod(
       return obj.preapprove();
     }
   }
+
+  // A method call on a Result object is a forgotten-unwrap bug unless the
+  // property is an own field holding a callable (`r.value()` on a
+  // function-wrapping success). Throws a plain Error; the enclosing
+  // auto-try converts it into a catchable failure.
+  //
+  // Deliberately the ONLY check in __callMethod: method ARGUMENTS are not
+  // scanned, because native prototype methods are untagged plain functions
+  // and `arr.push(someFailure)` / `arr.includes(f)` must keep working
+  // (collecting Results into arrays is the pattern the shallow check
+  // protects). The TS-function argument scan lives in __call only.
+  checkResultMethodCall(obj, prop);
 
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {

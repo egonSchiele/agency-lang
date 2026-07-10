@@ -320,7 +320,8 @@ export const checkValue = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
-    isFunctionTyped: false
+    isFunctionTyped: false,
+    acceptsResult: true
   }],
   toolDefinition: {
     name: "checkValue",

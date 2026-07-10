@@ -1,0 +1,7 @@
+{
+  "failurePropagation": "warn",
+  "observability": true,
+  "log": {
+    "logFile": "statelog.log"
+  }
+}

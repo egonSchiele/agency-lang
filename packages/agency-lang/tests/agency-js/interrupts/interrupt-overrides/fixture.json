@@ -10,7 +10,8 @@
     "checkpoint": null,
     "retryable": false,
     "functionName": null,
-    "args": null
+    "args": null,
+    "skippedFunctions": []
   },
   "resolve": {
     "x": 77,

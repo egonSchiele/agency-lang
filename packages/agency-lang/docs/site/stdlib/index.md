@@ -65,7 +65,7 @@ effect std::readImage {
 ### print
 
 ```ts
-print(...messages)
+print(...messages: any[])
 ```
 
 Print a message to the console.
@@ -76,7 +76,7 @@ Print a message to the console.
 
 | Name | Type | Default |
 |---|---|---|
-| messages |  |  |
+| messages | `any[]` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L46))
 

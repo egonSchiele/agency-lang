@@ -206,3 +206,29 @@ describe("writer→reader override contract", () => {
     expect(r.statelogConfig.logFile).toBe("l.jsonl");
   });
 });
+
+describe("failurePropagation override", () => {
+  it("inherits failurePropagation from overrides through the runtime merge", () => {
+    const base = {
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: "/p",
+    };
+    const merged = applyRuntimeConfigOverridesToContextArgs(base, {
+      failurePropagation: "warn",
+    });
+    expect(merged.failurePropagation).toBe("warn");
+  });
+
+  it("leaves failurePropagation unset when the override omits it", () => {
+    const base = {
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: "/p",
+    };
+    const merged = applyRuntimeConfigOverridesToContextArgs(base, {
+      maxCallDepth: 7,
+    });
+    expect(merged.failurePropagation).toBeUndefined();
+  });
+});

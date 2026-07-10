@@ -96,8 +96,8 @@ import {
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
+import { isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
 import { rejectValueParamCycle } from "./valueParamCycle.js";
-import { isFunctionTyped } from "../typeChecker/utils.js";
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -2243,6 +2243,7 @@ export class TypeScriptBuilder {
         defaultValue: ts.id("undefined"),
         variadic: ts.bool(!!p.variadic),
         isFunctionTyped: ts.bool(isFunctionTyped(p)),
+        acceptsResult: ts.bool(paramAcceptsFailure(p)),
       }),
     );
 
@@ -4053,6 +4054,11 @@ export class TypeScriptBuilder {
     if (this.agencyConfig.maxCallDepth !== undefined) {
       runtimeCtxArgs.maxCallDepth = ts.raw(
         String(this.agencyConfig.maxCallDepth),
+      );
+    }
+    if (this.agencyConfig.failurePropagation !== undefined) {
+      runtimeCtxArgs.failurePropagation = ts.str(
+        this.agencyConfig.failurePropagation,
       );
     }
     if (cfg.client?.maxToolResultChars !== undefined) {

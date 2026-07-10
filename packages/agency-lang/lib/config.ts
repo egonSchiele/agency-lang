@@ -224,6 +224,13 @@ export interface AgencyConfig {
    * programs that legitimately recurse very deeply. Default: 2048. */
   maxCallDepth?: number;
 
+  /** Failure-propagation mode. "warn" (current default, flips to "on" in a
+   * follow-up release): warnings only, legacy behavior otherwise. "on": a
+   * failure value passed to a parameter not typed to accept Results skips
+   * the call and propagates the original failure; failures into plain TS
+   * functions and method calls on Results throw. "off": no checks. */
+  failurePropagation?: "off" | "warn" | "on";
+
   /** Enable execution tracing — writes checkpoints to a .trace file */
   trace?: boolean;
 
@@ -444,6 +451,7 @@ export const AgencyConfigSchema = z
     // call is depth 1, so a value < 1 (or a float/NaN) would make every call
     // throw — reject it at config-load rather than bricking the program.
     maxCallDepth: z.number().int().positive(),
+    failurePropagation: z.enum(["off", "warn", "on"]),
     trace: z.boolean(),
     traceFile: z.string(),
     traceDir: z.string(),

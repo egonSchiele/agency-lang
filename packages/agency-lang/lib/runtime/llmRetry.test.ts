@@ -121,12 +121,17 @@ describe("enrichSchemaLimitationError (#487)", () => {
     const err = new Error(
       'invalid_request_error: output_format.schema: Circular reference detected in schema definitions: __schema0 -> __schema0. Self-referencing or mutually-referencing definitions are not supported.',
     );
+    (err as Error & { status?: number }).status = 400;
     const enriched = enrichSchemaLimitationError(err);
     expect(enriched).not.toBeNull();
     expect(enriched!.message).toMatch(/recursive type/i);
     expect(enriched!.message).toMatch(/parseJSON/);
     // Original provider text preserved for debugging.
     expect(enriched!.message).toContain("Circular reference detected");
+    // The ORIGINAL instance is preserved (metadata + stack survive), not a
+    // fresh wrapper Error.
+    expect(enriched).toBe(err);
+    expect((enriched as Error & { status?: number }).status).toBe(400);
   });
 
   it("returns null for unrelated errors", () => {

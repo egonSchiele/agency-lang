@@ -183,6 +183,62 @@ node main() {
     ).toThrow(/recursive value-parameterized/i);
   });
 
+  it("rejects a recursive value-param alias declared inside a function body", () => {
+    // Body aliases hoist through the same processTypeAlias path — the
+    // guard must fire there too (owner review question, probe-verified).
+    expect(() =>
+      generate(`
+def f(): number {
+  type W(n: number) = {
+    next: W(n),
+  }
+  type H = {
+    w: W(1),
+  }
+  return 1
+}
+node main() {
+  return f()
+}
+`),
+    ).toThrow(/recursive value-parameterized/i);
+  });
+
+  it("rejects a recursive combined generic+value-param alias", () => {
+    expect(() =>
+      generate(`
+type Foo<T>(n: number) = {
+  v: T,
+  next: Foo<T>(n),
+}
+type H = {
+  f: Foo<number>(1),
+}
+node main() {
+  return 1
+}
+`),
+    ).toThrow(/recursive value-parameterized/i);
+  });
+
+  it("accepts a vp alias cycling through a PLAIN alias (named const breaks the inline cycle)", () => {
+    // Weird(n) references Mid by NAME (a const, z.lazy if forward), so
+    // inlining stops — the guard deliberately follows only value-param
+    // entries. Pins the boundary so nobody "fixes" the guard to over-reject.
+    const out = generate(`
+type Weird(n: number) = {
+  next: Mid,
+}
+type Mid = {
+  w: Weird(2),
+}
+node main() {
+  return 1
+}
+`);
+    expect(out).toContain("const Mid");
+  });
+
   it("still accepts a NON-recursive value-param alias chain at a use site", () => {
     const out = generate(`
 type Age(low: number) = number

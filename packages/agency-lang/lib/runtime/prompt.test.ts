@@ -171,6 +171,21 @@ describe("runWithRetry", () => {
     expect(fired[1].delayMs).toBeGreaterThanOrEqual(fired[0].delayMs);
   });
 
+  it("rethrows a terminal circular-schema 400 ENRICHED (wiring for enrichSchemaLimitationError)", async () => {
+    // Pins the prompt.ts terminal-branch wiring, not just the pure helper:
+    // reverting `throw enrichSchemaLimitationError(err) ?? err` back to
+    // `throw err` fails this test.
+    const dispatch = async () => {
+      throw new SmolError(
+        "Circular reference detected in schema definitions: __schema0 -> __schema0.",
+        { status: 400 },
+      );
+    };
+    const promise = _internal.runWithRetry(dispatch, policy, undefined, noHooks, normalize);
+    await expect(promise).rejects.toThrow(/recursive types as structured-output contracts/);
+    await expect(promise).rejects.toThrow(/parseJSON/);
+  });
+
   it("surfaces a plain Error (→ Failure) classified by reason after exhausting retries", async () => {
     const dispatch = async () => {
       throw new SmolError("503", { status: 503 });

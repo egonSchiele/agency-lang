@@ -219,11 +219,9 @@ type Tree = {
 annotations on nested fields fire at every depth through the `!`
 validated-assignment form.
 
-One provider limitation: recursive types work as LLM structured-output
-contracts (`const t: Tree = llm(...)`) on OpenAI and Gemini, but
-Anthropic's structured-output API rejects self-referencing schemas. On
-Anthropic, ask for a string and parse it yourself with
-`schema(Tree).parseJSON(...)` — parsing and validation are unaffected.
+Anthropic does not support recursive types as LLM output contracts
+(OpenAI and Gemini do). On Anthropic, parse the response yourself with
+`schema(Tree).parseJSON(...)`.
 
 ## References
 

@@ -230,10 +230,13 @@ export function enrichSchemaLimitationError(err: unknown): Error | null {
   if (!/Circular reference detected in schema definitions/.test(err.message)) {
     return null;
   }
-  return new Error(
+  // Rewrite the message on the ORIGINAL instance rather than wrapping in a
+  // new Error: provider metadata (e.g. SmolError.status) and the original
+  // stack must survive for callers that read them.
+  err.message =
     `This provider does not support recursive types as structured-output contracts. ` +
-      `Parse the response yourself instead: declare the result as a string and run ` +
-      `schema(YourType).parseJSON(...) on it, or switch this call to a provider that ` +
-      `supports recursive schemas (OpenAI, Gemini). Provider error: ${err.message}`,
-  );
+    `Parse the response yourself instead: declare the result as a string and run ` +
+    `schema(YourType).parseJSON(...) on it, or switch this call to a provider that ` +
+    `supports recursive schemas (OpenAI, Gemini). Provider error: ${err.message}`;
+  return err;
 }

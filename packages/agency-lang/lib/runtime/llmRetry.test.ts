@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyLlmError, decideRetry, resolveRetryPolicy } from "./llmRetry.js";
+import { classifyLlmError, decideRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import { AgencyAbort, makeAbortCause } from "./errors.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 
@@ -112,5 +112,30 @@ describe("resolveRetryPolicy", () => {
     const resolved = resolveRetryPolicy({ retries: 0, timeout: 0 }, {});
     expect(resolved.retries).toBe(0);
     expect(resolved.timeout).toBe(0);
+  });
+});
+
+describe("enrichSchemaLimitationError (#487)", () => {
+  it("enriches the Anthropic circular-reference 400 with actionable guidance", () => {
+    // Exact message shape from a live probe (2026-07-09):
+    const err = new Error(
+      'invalid_request_error: output_format.schema: Circular reference detected in schema definitions: __schema0 -> __schema0. Self-referencing or mutually-referencing definitions are not supported.',
+    );
+    (err as Error & { status?: number }).status = 400;
+    const enriched = enrichSchemaLimitationError(err);
+    expect(enriched).not.toBeNull();
+    expect(enriched!.message).toMatch(/recursive type/i);
+    expect(enriched!.message).toMatch(/parseJSON/);
+    // Original provider text preserved for debugging.
+    expect(enriched!.message).toContain("Circular reference detected");
+    // The ORIGINAL instance is preserved (metadata + stack survive), not a
+    // fresh wrapper Error.
+    expect(enriched).toBe(err);
+    expect((enriched as Error & { status?: number }).status).toBe(400);
+  });
+
+  it("returns null for unrelated errors", () => {
+    expect(enrichSchemaLimitationError(new Error("rate limited"))).toBeNull();
+    expect(enrichSchemaLimitationError("not an error")).toBeNull();
   });
 });

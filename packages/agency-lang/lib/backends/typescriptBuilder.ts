@@ -97,6 +97,7 @@ import {
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
 import { isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
+import { rejectValueParamCycle } from "./valueParamCycle.js";
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -708,6 +709,9 @@ export class TypeScriptBuilder {
   }
 
   private processTypeAlias(node: TypeAlias): TsNode {
+    if (node.valueParams) {
+      rejectValueParamCycle(node, this.scopes.visibleTypeAliasesFull());
+    }
     // Generic aliases (type Container<T> = ...) can't be turned into a single
     // zod schema because the body references type parameters that have no
     // runtime value. Usages like `Container<number>` are normalized away by

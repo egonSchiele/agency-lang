@@ -219,6 +219,10 @@ type Tree = {
 annotations on nested fields fire at every depth through the `!`
 validated-assignment form.
 
+Anthropic does not support recursive types as LLM output contracts
+(OpenAI and Gemini do). On Anthropic, parse the response yourself with
+`schema(Tree).parseJSON(...)`.
+
 ## References
 
 - [Schemas](/guide/schemas)

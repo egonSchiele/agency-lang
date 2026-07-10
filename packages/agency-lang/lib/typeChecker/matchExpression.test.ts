@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
@@ -256,5 +257,14 @@ const label: string = match(env) {
 }
 node main(): string { return label }`);
     expect(errs).toEqual([]);
+  });
+});
+
+describe("computeMatchExprTypes ordering assertion", () => {
+  it("throws if called before buildFlowGraphs (flowEnv not set)", () => {
+    const ctx = {} as unknown as Parameters<typeof computeMatchExprTypes>[1];
+    expect(() => computeMatchExprTypes([], ctx)).toThrow(
+      /must run after buildFlowGraphs/,
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { writeFileSync, unlinkSync } from "fs";
 import path from "path";
 import os from "os";
@@ -403,5 +404,16 @@ node main() {
   }
 }`);
     expect(errs.some((x) => /not available on every member/i.test(x.message))).toBe(true);
+  });
+});
+
+describe("ordering assertion", () => {
+  it("throws if called after buildFlowGraphs (flowEnv already set)", () => {
+    const ctx = { flowEnv: {} } as unknown as Parameters<
+      typeof refineInlineHandlerParams
+    >[2];
+    expect(() => refineInlineHandlerParams([], {}, ctx, {})).toThrow(
+      /must run before buildFlowGraphs/,
+    );
   });
 });

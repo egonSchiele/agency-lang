@@ -215,3 +215,25 @@ export function resolveRetryPolicy(opts: RetryConfig, branchDefaults: RetryConfi
     },
   };
 }
+
+/**
+ * Known provider schema-limitation 400s, rethrown with guidance the user
+ * can act on. Today: Anthropic structured outputs reject recursive
+ * ($ref-cyclic) schemas — the raw message names zod-internal identifiers
+ * ("__schema0 -> __schema0") instead of the user's type (#487; behavior
+ * live-probed 2026-07-09). OpenAI and Gemini accept recursive schemas, so
+ * the guidance names the provider-specific workaround. Returns null for
+ * anything unrecognized (caller rethrows the original).
+ */
+export function enrichSchemaLimitationError(err: unknown): Error | null {
+  if (!(err instanceof Error)) return null;
+  if (!/Circular reference detected in schema definitions/.test(err.message)) {
+    return null;
+  }
+  return new Error(
+    `This provider does not support recursive types as structured-output contracts. ` +
+      `Parse the response yourself instead: declare the result as a string and run ` +
+      `schema(YourType).parseJSON(...) on it, or switch this call to a provider that ` +
+      `supports recursive schemas (OpenAI, Gemini). Provider error: ${err.message}`,
+  );
+}

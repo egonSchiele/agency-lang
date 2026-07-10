@@ -2,6 +2,7 @@ import { parseAgency } from "@/parser.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { getNodesOfType } from "@/utils/node.js";
 import fs from "fs";
+import os from "os";
 import prompts from "prompts";
 import {
   execFileAsync,
@@ -1062,11 +1063,18 @@ async function runTsTestDir(
       !!process.env.AGENCY_USE_TEST_LLM_PROVIDER ||
       fs.existsSync(path.join(dir, "useTestLLMProvider"));
     let mocksEnv: Record<string, string> = {};
+    let agentHomeCleanup: (() => void) | undefined;
     if (useDeterministic) {
       const mocks = fs.existsSync(mocksFile)
         ? fs.readFileSync(mocksFile, "utf-8")
         : "[]";
       mocksEnv = { AGENCY_LLM_MOCKS: mocks };
+      // Same agent-home sandbox as executeNodeAsync (issue #469).
+      const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
+      mocksEnv.AGENCY_AGENT_HOME = agentHome;
+      agentHomeCleanup = () => {
+        fs.rmSync(agentHome, { recursive: true, force: true });
+      };
     }
 
     // Fetch mocks activate independently of the LLM deterministic flag: the
@@ -1099,6 +1107,7 @@ async function runTsTestDir(
       return { success: false, dir };
     } finally {
       fetchMocksCleanup?.();
+      agentHomeCleanup?.();
     }
 
     if (!fs.existsSync(resultFile)) {

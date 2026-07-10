@@ -13,19 +13,20 @@ import { parseArgs } from "node:util";
 
 const currentDir = path.dirname(new URL(import.meta.url).pathname);
 
-// The debug flags every bundled agent understands. Same names the agent
-// declares (for --help) and that `agency run` accepts.
-const AGENT_DEBUG_FLAGS = ["--trace", "--log-file"] as const;
+// The flags every bundled agent understands that this launcher pre-scans
+// out of the forwarded argv (the agent also declares them, for --help).
+const AGENT_PRESCAN_FLAGS = ["--trace", "--log-file", "--agent-home"] as const;
 
 /**
- * Rewrite a bare debug flag to its empty attached form (`--trace` → `--trace=`)
- * when its next token is absent or starts with `-`. This replicates exactly
- * what `std::args` does before parsing (lib/stdlib/args.ts:499-505), so the
- * agent's own parser and this pre-scan agree: `--trace --print` and `--trace
- * -p` are BOTH bare here, not a trace file named "--print" / "-p". Stops at the
- * `--` terminator (everything after is positional).
+ * Rewrite a bare pre-scanned flag to its empty attached form (`--trace` →
+ * `--trace=`) when its next token is absent or starts with `-`. This
+ * replicates exactly what `std::args` does before parsing
+ * (lib/stdlib/args.ts:499-505), so the agent's own parser and this pre-scan
+ * agree: `--trace --print` and `--trace -p` are BOTH bare here, not a trace
+ * file named "--print" / "-p". Stops at the `--` terminator (everything after
+ * is positional).
  */
-function normalizeBareDebugFlags(args: string[]): string[] {
+function normalizeBareFlags(args: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const token = args[i];
@@ -33,7 +34,7 @@ function normalizeBareDebugFlags(args: string[]): string[] {
       out.push(...args.slice(i));
       break;
     }
-    if ((AGENT_DEBUG_FLAGS as readonly string[]).includes(token)) {
+    if ((AGENT_PRESCAN_FLAGS as readonly string[]).includes(token)) {
       const next = args[i + 1];
       const bare = next === undefined || next === "--" || next.startsWith("-");
       out.push(bare ? `${token}=` : token);
@@ -58,7 +59,7 @@ function normalizeBareDebugFlags(args: string[]): string[] {
  */
 export function agentConfigOverride(args: string[]): Partial<AgencyConfig> {
   const { values } = parseArgs({
-    args: normalizeBareDebugFlags(args),
+    args: normalizeBareFlags(args),
     options: { trace: { type: "string" }, "log-file": { type: "string" } },
     strict: false,
     allowPositionals: true,
@@ -73,6 +74,29 @@ export function agentConfigOverride(args: string[]): Partial<AgencyConfig> {
     flags.logFile = values["log-file"];
   }
   return applyCliFlags({}, flags);
+}
+
+/**
+ * Extract `--agent-home <dir>` — the flag form of the AGENCY_AGENT_HOME env
+ * var — from a bundled agent's forwarded argv, using the same pre-scan
+ * tokenization rules as `agentConfigOverride`. Returns the directory resolved
+ * to an absolute path (the child would otherwise resolve a relative one
+ * against whatever its cwd happens to be), or null when the flag is absent or
+ * bare. A bare `--agent-home` is a usage error the agent's own parser
+ * reports, so it is only skipped here, never defaulted.
+ */
+export function agentHomeOverride(args: string[]): string | null {
+  const { values } = parseArgs({
+    args: normalizeBareFlags(args),
+    options: { "agent-home": { type: "string" } },
+    strict: false,
+    allowPositionals: true,
+  });
+  const home = values["agent-home"];
+  if (typeof home !== "string" || home === "") {
+    return null;
+  }
+  return path.resolve(home);
 }
 
 export function runBundledAgent(
@@ -101,13 +125,18 @@ export function runBundledAgent(
   }
 
   const overrides = agentConfigOverride(args);
-  const env =
-    Object.keys(overrides).length > 0
-      ? {
-          ...process.env,
-          [CONFIG_OVERRIDES_ENV]: serializeConfigOverrides(overrides),
-        }
-      : process.env;
+  const agentHome = agentHomeOverride(args);
+  const env = { ...process.env };
+  if (Object.keys(overrides).length > 0) {
+    env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(overrides);
+  }
+  // The agent home must be in the env before the child starts: the agent's
+  // config module derives its settings/policy/history paths from it in
+  // static-const initializers, which run before the agent's main() could
+  // parse any flag. The flag beats an inherited AGENCY_AGENT_HOME.
+  if (agentHome !== null) {
+    env.AGENCY_AGENT_HOME = agentHome;
+  }
 
   const nodeProcess = spawn(
     process.execPath,

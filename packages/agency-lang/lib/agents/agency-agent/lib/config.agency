@@ -1,11 +1,30 @@
 import {
   ScopedRuleFields
  } from "std::policy"
+import { env } from "std::system"
 
 export static const agentNames = ["code", "research"]
 export static const POLICY_FILE = "policy.json"
 export static const HISTORY_FILE = "history"
-export static const POLICY_DIR = path.join(os.homedir(), ".agency-agent")
+// AGENCY_AGENT_HOME (or its flag form, `agency agent --agent-home`,
+// which the CLI launcher injects into this process's env) redirects the
+// WHOLE agent home: settings, policy, and history all derive from
+// POLICY_DIR. The test harness sets it to a per-test sandbox dir so
+// tests can never clobber the real ~/.agency-agent (issue #469: the
+// settings tests deleted/corrupted the developer file on every local
+// run, and the shared file raced under the parallel runner).
+//
+// An empty override counts as unset: env() returns "" for a
+// set-but-empty var, and without the guard every derived path would
+// silently become cwd-relative (a stray `settings.json` written into —
+// or read from — whatever directory the agent runs in).
+def resolveAgentHome(override: string | null): string {
+  if (override == null || override == "") {
+    return path.join(os.homedir(), ".agency-agent")
+  }
+  return override
+}
+export static const POLICY_DIR = resolveAgentHome(env("AGENCY_AGENT_HOME"))
 export static const POLICY_PATH = path.join(POLICY_DIR, POLICY_FILE)
 // A --policy built-in is materialized here (not to POLICY_PATH) so a
 // one-off override never clobbers the user's saved policy, and a

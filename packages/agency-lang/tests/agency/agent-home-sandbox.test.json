@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "useTestLLMProvider": true,
+      "expectedOutput": "\"sandboxed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The test harness sets AGENCY_AGENT_HOME to a per-test sandbox dir (only in deterministic mode, hence useTestLLMProvider), and the agent config resolves POLICY_DIR (hence settings/policy/history paths) to it instead of the real ~/.agency-agent (issue #469)."
+    }
+  ]
+}

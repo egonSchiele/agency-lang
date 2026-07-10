@@ -8,7 +8,12 @@ vi.mock("fs", async (importOriginal) => {
 });
 
 import { CONFIG_OVERRIDES_ENV } from "@/config.js";
-import { agentConfigOverride, runBundledAgent } from "./runBundledAgent.js";
+import * as path from "path";
+import {
+  agentConfigOverride,
+  agentHomeOverride,
+  runBundledAgent,
+} from "./runBundledAgent.js";
 
 describe("agentConfigOverride", () => {
   it("--trace <file> → traceFile", () => {
@@ -71,9 +76,31 @@ describe("agentConfigOverride", () => {
   });
 });
 
+describe("agentHomeOverride", () => {
+  it("--agent-home <dir> → absolute path, space and attached forms", () => {
+    expect(agentHomeOverride(["--agent-home", "/x/home"])).toBe("/x/home");
+    expect(agentHomeOverride(["--agent-home=/x/home"])).toBe("/x/home");
+  });
+  it("resolves a relative dir against cwd", () => {
+    expect(agentHomeOverride(["--agent-home", "rel"])).toBe(
+      path.resolve("rel"),
+    );
+  });
+  it("bare --agent-home (or one followed by a flag) is ignored, not a dir named --print", () => {
+    expect(agentHomeOverride(["--agent-home"])).toBeNull();
+    expect(agentHomeOverride(["--agent-home", "--print"])).toBeNull();
+    expect(agentHomeOverride(["--agent-home="])).toBeNull();
+  });
+  it("null when the flag is absent, stops at the -- terminator", () => {
+    expect(agentHomeOverride(["--print", "hi"])).toBeNull();
+    expect(agentHomeOverride(["--", "--agent-home", "/x"])).toBeNull();
+  });
+});
+
 describe("runBundledAgent passes config overrides to the child via env", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("serializes the override into AGENCY_CONFIG_OVERRIDES", () => {
@@ -102,5 +129,23 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     runBundledAgent({}, "agency-agent", ["--print", "hi"], { spawn: spawnMock as never });
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     expect(opts.env[CONFIG_OVERRIDES_ENV]).toBeUndefined();
+  });
+
+  it("--agent-home sets AGENCY_AGENT_HOME in the child env, beating an inherited value", () => {
+    vi.stubEnv("AGENCY_AGENT_HOME", "/from/env");
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    runBundledAgent({}, "agency-agent", ["--agent-home", "/from/flag", "hi"], {
+      spawn: spawnMock as never,
+    });
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(opts.env.AGENCY_AGENT_HOME).toBe("/from/flag");
+  });
+
+  it("without the flag, an inherited AGENCY_AGENT_HOME passes through untouched", () => {
+    vi.stubEnv("AGENCY_AGENT_HOME", "/from/env");
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    runBundledAgent({}, "agency-agent", ["hi"], { spawn: spawnMock as never });
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(opts.env.AGENCY_AGENT_HOME).toBe("/from/env");
   });
 });

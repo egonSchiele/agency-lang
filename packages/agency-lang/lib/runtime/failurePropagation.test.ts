@@ -267,3 +267,82 @@ describe("checkResultMethodCall", () => {
     }
   });
 });
+
+import { AgencyFunction } from "./agencyFunction.js";
+
+function makeFn(
+  params: Array<Partial<FuncParam> & { name: string }>,
+  fn: (...args: any[]) => any,
+) {
+  return new AgencyFunction({
+    name: "target",
+    module: "test.agency",
+    fn,
+    params: params.map((p) => ({
+      hasDefault: false,
+      defaultValue: undefined,
+      variadic: false,
+      ...p,
+    })),
+    toolDefinition: null,
+  });
+}
+
+describe("invoke() failure propagation", () => {
+  const f = failure("boom", { functionName: "origin" });
+
+  it("skips the body and propagates for a rejecting param", async () => {
+    let ran = false;
+    const fn = makeFn([{ name: "text", acceptsResult: false }], () => { ran = true; });
+    const out: any = await fn.invoke({ type: "positional", args: [f] });
+    expect(ran).toBe(false);
+    expect(isFailure(out)).toBe(true);
+    expect(out.error).toBe("boom");
+    expect(out.skippedFunctions).toEqual([{ name: "target", param: "text" }]);
+  });
+
+  it("runs the body for accepting and legacy params", async () => {
+    const accepting = makeFn([{ name: "r", acceptsResult: true }], (r: unknown) => r);
+    expect(isFailure(await accepting.invoke({ type: "positional", args: [f] }))).toBe(true);
+    const legacy = makeFn([{ name: "r" }], (r: unknown) => "ran");
+    expect(await legacy.invoke({ type: "positional", args: [f] })).toBe("ran");
+  });
+
+  it("checks values bound via .partial()", async () => {
+    let ran = false;
+    const fn = makeFn(
+      [{ name: "a", acceptsResult: false }, { name: "b", acceptsResult: false }],
+      () => { ran = true; },
+    );
+    const bound = fn.partial({ a: f });
+    const out: any = await bound.invoke({ type: "positional", args: ["ok"] });
+    expect(ran).toBe(false);
+    expect(out.skippedFunctions).toEqual([{ name: "target", param: "a" }]);
+  });
+
+  it("checks named arguments", async () => {
+    const fn = makeFn([{ name: "x", acceptsResult: false }], () => "ran");
+    const out: any = await fn.invoke({
+      type: "named",
+      positionalArgs: [],
+      namedArgs: { x: f },
+    });
+    expect(out.skippedFunctions).toEqual([{ name: "target", param: "x" }]);
+  });
+
+  it("UNSET padding on an omitted defaulted param is skipped; a failure on a later param still trips", async () => {
+    const fn = makeFn(
+      [
+        { name: "a", hasDefault: true, acceptsResult: false },
+        { name: "b", acceptsResult: false },
+      ],
+      () => "ran",
+    );
+    const out: any = await fn.invoke({
+      type: "named",
+      positionalArgs: [],
+      namedArgs: { b: f },
+    });
+    expect(out.skippedFunctions).toEqual([{ name: "target", param: "b" }]);
+  });
+});

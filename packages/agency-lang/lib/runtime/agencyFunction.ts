@@ -3,6 +3,7 @@ import { stripBoundParams } from "./stripBoundParams.js";
 import { approve } from "./interrupts.js";
 import { agencyStore, withPushedHandler } from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
+import { checkFailureArgs } from "./failurePropagation.js";
 import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
@@ -22,6 +23,17 @@ export type FuncParam = {
    * backstop fails open (i.e. doesn't block valid tools).
    */
   isFunctionTyped?: boolean;
+  /**
+   * False when the parameter's declared type does NOT accept Result values —
+   * i.e. it is not `Result`/`Result<...>`, not explicit `any`, and not a
+   * union containing either. Set by codegen from the static
+   * `paramAcceptsFailure` predicate (lib/typeChecker/utils.ts); consumed by
+   * the failure-propagation check in invoke().
+   *
+   * Absent on legacy/handcrafted FuncParam values, and absence fails OPEN
+   * (the param accepts failures) — same convention as `isFunctionTyped`.
+   */
+  acceptsResult?: boolean;
   boundValue?: unknown;
   isBound?: boolean;
 };
@@ -75,6 +87,7 @@ export class AgencyFunction {
   private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;
   private readonly _isBound: boolean;
+  private readonly _checksFailures: boolean;
   readonly exported: boolean;
   readonly safe: boolean;
   private readonly _isPreapproved: boolean;
@@ -92,6 +105,7 @@ export class AgencyFunction {
     this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);
     this._hasVariadic = this._unboundParams.length > 0 && this._unboundParams[this._unboundParams.length - 1].variadic;
     this._isBound = opts.params.some(p => p.isBound);
+    this._checksFailures = opts.params.some(p => p.acceptsResult === false);
   }
 
   get isPreapproved(): boolean {
@@ -147,6 +161,21 @@ export class AgencyFunction {
       const args = this._isBound
         ? this.mergeWithBound(this.resolveArgs(descriptor))
         : this.resolveArgs(descriptor);
+      // Failure propagation: a failure landing on a param that does not
+      // accept Results skips the body and returns the original failure
+      // (spec: docs/superpowers/specs/2026-07-08-failure-propagation-design.md).
+      // `args` is aligned with `this.params` in both branches: mergeWithBound
+      // rebuilds the full list, and in the unbound case params ARE the
+      // unbound list (variadic slot = gathered array). Skipping the body
+      // also skips its pushHandler calls — safe for the same reason pipe
+      // short-circuiting is safe: the call never begins, so no partial run
+      // can raise an effect past an unregistered handler.
+      if (this._checksFailures) {
+        const propagated = checkFailureArgs(this.name, this.params, args);
+        if (propagated !== null) {
+          return propagated;
+        }
+      }
       return this._fn(...args);
     });
   }

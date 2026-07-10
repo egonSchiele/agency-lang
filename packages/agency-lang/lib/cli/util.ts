@@ -4,6 +4,7 @@ const onCancel = () => {
   process.exit(0);
 };
 import fs, { readFileSync } from "fs";
+import os from "os";
 import path from "path";
 import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
@@ -384,6 +385,19 @@ export async function executeNodeAsync({
     ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
     : {};
 
+  // Sandbox the agent home per test case: the agent config derives every
+  // ~/.agency-agent path from AGENCY_AGENT_HOME when set, so tests can
+  // never delete/corrupt the developer's real settings or race each other
+  // on the shared file (issue #469).
+  let agentHomeCleanup: (() => void) | undefined;
+  if (useDeterministic) {
+    const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
+    env.AGENCY_AGENT_HOME = agentHome;
+    agentHomeCleanup = () => {
+      fs.rmSync(agentHome, { recursive: true, force: true });
+    };
+  }
+
   // Activate the fetch shim whenever fetchMocks is *defined* — an empty array
   // means "this test may make no fetch calls" and must still install the shim
   // (so any fetch throws), matching the llmMocks precedent. `undefined` means
@@ -399,6 +413,7 @@ export async function executeNodeAsync({
     return await runAgencyNode({ ...rest, env });
   } finally {
     fetchMocksCleanup?.();
+    agentHomeCleanup?.();
   }
 }
 

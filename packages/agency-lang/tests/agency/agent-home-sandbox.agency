@@ -1,0 +1,17 @@
+import { env } from "std::system"
+import { POLICY_DIR } from "../../lib/agents/agency-agent/lib/config.agency"
+
+// Under the test harness, AGENCY_AGENT_HOME must be set to a sandbox dir
+// and the agent's POLICY_DIR (from which settings/policy/history paths all
+// derive) must resolve to it — so tests can never touch the developer's
+// real ~/.agency-agent (issue #469).
+node main(): string {
+  const sandbox = env("AGENCY_AGENT_HOME")
+  if (sandbox == null) {
+    return "AGENCY_AGENT_HOME not set"
+  }
+  if (POLICY_DIR != sandbox) {
+    return "POLICY_DIR ignores the override: ${POLICY_DIR}"
+  }
+  return "sandboxed"
+}

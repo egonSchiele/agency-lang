@@ -99,6 +99,10 @@ import {
   getCapabilityModelKey,
   getCapabilityProvider,
   refreshCapabilities,
+  embeddingKeyStatus,
+  memoryEnablePlan,
+  overrideFromResolved,
+  embeddingsOverride,
  } from "./shared.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -1250,16 +1254,28 @@ static const mainAgentTools = [
   generateImageFile,
 ]
 
-/** Enable memory only when the capability profile allows it.
-
-  Providers without an embeddings endpoint default the field to off. A
-  user override still works: memory then runs with Tier-2 semantic recall
-  disabled, and std::memory prints its one-time notice. The embedding
-  slot is a no-op today, so nothing here validates against it. */
+/** Enable memory when the capability profile allows it. When the user
+  pointed the embedding slot at a provider, embeddings run there. A
+  missing API key degrades to the default embedding behavior with one
+  notice. It never blocks startup. */
 def maybeEnableMemory() {
-  if (getCapabilities().memory) {
-    enableAgentMemory()
+  const status = embeddingKeyStatus(getResolvedSlots())
+  const plan = memoryEnablePlan(getCapabilities().memory, status)
+  if (plan == "skip") {
+    return
   }
+  if (plan == "enable-override") {
+    enableAgentMemory(status.override)
+    return
+  }
+  if (plan == "enable-fallback") {
+    print(
+      color.dim(
+      "Memory: the embedding slot needs ${status.varName}, which is not set. Falling back to the default embedding behavior.",
+    ),
+    )
+  }
+  enableAgentMemory()
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {

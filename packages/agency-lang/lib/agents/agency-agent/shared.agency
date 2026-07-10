@@ -86,14 +86,13 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // local run works fine without it. Calling `enableMemory(...)` from `main()`
 // is the documented pattern (see `stdlib/memory.agency`); `with approve`
 // auto-approves the dir creation and has the enclosing step path it needs
-// inside this def. We deliberately do NOT pin `embeddings.model`: for hosted
-// providers the memory layer derives it from the active LLM provider
-// (openai → text-embedding-3-small, google → text-embedding-004,
-// ollama → nomic-embed-text). Set `embeddings.model` explicitly to override.
-export def enableAgentMemory() {
-  enableMemory({
-    dir: "${AGENCY_AGENT_DIR}/memory"
-  }) with approve
+// inside this def. By default the memory layer derives the embedding
+// model from the active LLM provider (openai → text-embedding-3-small,
+// google → text-embedding-004, ollama → nomic-embed-text). When the user
+// assigned the embedding slot, the caller passes the override and memory
+// embeddings run on that model and provider instead.
+export def enableAgentMemory(embeddings: (EmbeddingsOverride | null) = null) {
+  enableMemory(memoryConfigFor(embeddings)) with approve
 }
 
 // The slow ("deep reasoning") model + its provider, set once by

@@ -1,0 +1,12 @@
+def bad(): Result {
+  return failure("boom")
+}
+
+node main() {
+  const f = bad()
+  const r = print(f)
+  if (isFailure(r)) {
+    return "print was skipped"
+  }
+  return "printed"
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"block saw failure\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "block params always accept failures in v1 (emission sites carry no acceptsResult flags) \u2014 the block body runs and can guard with isFailure"
+    }
+  ]
+}

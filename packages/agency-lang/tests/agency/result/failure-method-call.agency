@@ -1,0 +1,51 @@
+def getF(): Result {
+  return failure("nope")
+}
+
+def callSplitOn(v: any) {
+  const parts = v.split(" ")
+  return "no throw"
+}
+
+def callToFixedOn(v: any) {
+  const s = v.toFixed(1)
+  return "no throw"
+}
+
+def addOne(n: number) {
+  return n + 1
+}
+
+node main() {
+  const f = getF()
+
+  let failureMsg = "?"
+  const r1 = try callSplitOn(f)
+  if (isFailure(r1)) {
+    let hasSplit = "no"
+    if (r1.error.includes("split")) {
+      hasSplit = "yes"
+    }
+    let hasOrigin = "no"
+    if (r1.error.includes("getF")) {
+      hasOrigin = "yes"
+    }
+    failureMsg = "split=${hasSplit} origin=${hasOrigin}"
+  }
+
+  let successMsg = "?"
+  const s = success(5)
+  const r2 = try callToFixedOn(s)
+  if (isFailure(r2)) {
+    let hasHint = "no"
+    if (r2.error.includes(".value.")) {
+      hasHint = "yes"
+    }
+    successMsg = "hint=${hasHint}"
+  }
+
+  const wrapped = success(addOne)
+  const called = wrapped.value(41)
+
+  return "${failureMsg} | ${successMsg} | value()=${called}"
+}

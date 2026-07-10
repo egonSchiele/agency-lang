@@ -1,0 +1,18 @@
+def eachOf(items: any, block: (any) -> string): string {
+  let out = ""
+  for (item in items) {
+    out = block(item)
+  }
+  return out
+}
+
+node main() {
+  const mixed = [success(1), failure("bad")]
+  const last = eachOf(mixed) as item {
+    if (isFailure(item)) {
+      return "block saw failure"
+    }
+    return "block saw value"
+  }
+  return last
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"printed\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "print accepts a failure value under the strict rule (any[] variadic annotation); a skip would flip the output"
+    }
+  ]
+}

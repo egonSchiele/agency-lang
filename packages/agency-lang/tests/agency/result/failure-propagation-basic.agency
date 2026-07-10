@@ -1,0 +1,22 @@
+def getReport(id: string): Result {
+  return failure("HTTP 404: report not found")
+}
+
+def wordCount(text: string) {
+  return 999
+}
+
+def formatSummary(report: string) {
+  return "summary"
+}
+
+node main() {
+  const report = getReport("abc")
+  const count = wordCount(report)
+  const summary = formatSummary(count)
+  if (isFailure(summary)) {
+    const trail = JSON.stringify(summary.skippedFunctions)
+    return "propagated ${summary.error} via ${trail}"
+  }
+  return "no propagation"
+}

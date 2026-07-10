@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"threw hint=yes | formatted:plain | alias ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "failure into an untagged TS function throws with the acceptsFailures hint; normal values pass; aliased isFailure works because it ships pre-tagged"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"fallback | try failure boom\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "catch unwraps a propagated failure into the fallback; try passes it through unchanged"
+    }
+  ]
+}

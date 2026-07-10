@@ -1,0 +1,20 @@
+def mightFail(n: number): Result {
+  if (n % 2 == 0) {
+    return failure("even ${n}")
+  }
+  return success(n)
+}
+
+node main() {
+  const collected = []
+  for (n in [1, 2, 3, 4]) {
+    collected.push(mightFail(n))
+  }
+  let failures = 0
+  for (r in collected) {
+    if (isFailure(r)) {
+      failures = failures + 1
+    }
+  }
+  return "collected ${collected.length}, failures ${failures}"
+}

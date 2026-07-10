@@ -229,11 +229,11 @@ export class RuntimeContext<T> {
     this.statelogConfig = statelogConfig;
     this.maxRestores = args.maxRestores ?? 100;
     this.maxCallDepth = args.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH;
-    // Stage 1 rollout default: every real compiled program warns without
-    // changing behavior. Stage 2 flips this one literal to "on" after the
-    // corpus measurement (do NOT touch the frameless "on" fallback in
-    // failurePropagation.ts, which serves unit tests).
-    this.failurePropagation = args.failurePropagation ?? "warn";
+    // Strict by default since the Stage 2 flip (the Stage 1 "warn" default
+    // shipped one release as the rollout measurement). The frameless "on"
+    // fallback in failurePropagation.ts is a SEPARATE default serving unit
+    // tests — this literal is the one that governs compiled programs.
+    this.failurePropagation = args.failurePropagation ?? "on";
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();

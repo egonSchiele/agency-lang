@@ -1,0 +1,33 @@
+import { tsFormat } from "./failure-helpers.js"
+
+def getF(): Result {
+  return failure("boom")
+}
+
+def callTs(v: any) {
+  return tsFormat(v)
+}
+
+node main() {
+  const f = getF()
+
+  let untagged = "?"
+  const r1 = try callTs(f)
+  if (isFailure(r1)) {
+    let hasHint = "no"
+    if (r1.error.includes("acceptsFailures")) {
+      hasHint = "yes"
+    }
+    untagged = "threw hint=${hasHint}"
+  }
+
+  const okValue = tsFormat("plain")
+
+  const check = isFailure
+  let aliased = "alias broken"
+  if (check(f)) {
+    aliased = "alias ok"
+  }
+
+  return "${untagged} | ${okValue} | ${aliased}"
+}

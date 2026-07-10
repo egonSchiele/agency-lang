@@ -1,0 +1,18 @@
+def bad(): Result {
+  return failure("boom")
+}
+
+def use(s: string) {
+  return "used ${s}"
+}
+
+node main() {
+  const f = bad()
+  const withCatch = use(f) catch "fallback"
+  const withTry = try use(f)
+  let tryMsg = "try not failure"
+  if (isFailure(withTry)) {
+    tryMsg = "try failure ${withTry.error}"
+  }
+  return "${withCatch} | ${tryMsg}"
+}

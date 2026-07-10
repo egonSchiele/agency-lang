@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"split=yes origin=yes | hint=yes | value()=42\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "method calls on failures/successes throw rich catchable errors; r.value() on a function-wrapping success still works"
+    }
+  ]
+}

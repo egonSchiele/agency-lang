@@ -89,6 +89,16 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
         input: "def f(k: keyof User[]) { k }",
         expectedOutput: "def f(k: keyof User[]) {\nk\n}",
       },
+      {
+        description: "keyof of a union keeps its parens",
+        input: "def f(k: keyof (A | B)) { k }",
+        expectedOutput: "def f(k: keyof (A | B)) {\nk\n}",
+      },
+      {
+        description: "indexed access on a union keeps its parens",
+        input: 'def f(x: (A | B)["k"]) { x }',
+        expectedOutput: 'def f(x: (A | B)["k"]) {\nx\n}',
+      },
     ];
 
     testCases.forEach(({ description, input, expectedOutput }) => {

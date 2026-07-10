@@ -69,6 +69,11 @@ export type GenericType = {
  * Example: in `type Container<T> = { value: T }`, the `T` is a TypeParam.
  * Defaults allow bare use of the alias: `type StringMap<V = any> = Record<string, V>`.
  */
+export type TypeParam = {
+  name: string;
+  default?: VariableType;
+};
+
 /**
  * `keyof T` — the union of an object type's key names. Exists only
  * between parse and resolution: `resolveTypeWithGuard` evaluates it
@@ -94,10 +99,6 @@ export type IndexedAccessType = {
   tags?: Tag[];
 };
 
-export type TypeParam = {
-  name: string;
-  default?: VariableType;
-};
 
 /**
  * A value-parameter declaration on a value-parameterized type alias.

@@ -83,13 +83,24 @@ export function formatTypeHint(
     }
     case "genericType":
       return `${vt.name}<${vt.typeArgs.map(recurse).join(", ")}>`;
-    case "keyofType":
-      return `keyof ${recurse(vt.operand)}`;
+    case "keyofType": {
+      // Parenthesize a union operand: `keyof (A | B)` must not print as
+      // `keyof A | B`, which re-parses as (keyof A) | B.
+      const op = recurse(vt.operand);
+      return vt.operand.type === "unionType"
+        ? `keyof (${op})`
+        : `keyof ${op}`;
+    }
     case "indexedAccessType": {
-      // Parenthesize a keyof object for the same re-parse reason as the
-      // arrayType case.
+      // Parenthesize keyof and union objects for the same re-parse
+      // reasons as the arrayType case: `(A | B)["k"]` must not print as
+      // `A | B["k"]`.
       const obj = recurse(vt.objectType);
-      const wrapped = vt.objectType.type === "keyofType" ? `(${obj})` : obj;
+      const wrapped =
+        vt.objectType.type === "keyofType" ||
+        vt.objectType.type === "unionType"
+          ? `(${obj})`
+          : obj;
       return `${wrapped}[${recurse(vt.index)}]`;
     }
     default:

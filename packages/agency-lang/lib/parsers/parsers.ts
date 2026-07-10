@@ -1011,73 +1011,78 @@ const typePostfixBase: Parser<VariableType> = (input: string) =>
   )(input);
 
 /**
- * Parse postfix suffixes onto a base type: `[]` wraps an array,
- * `[<type>]` wraps an indexed access. `minSuffixes` controls the arity:
- *
- * - arrayTypeParser uses 1: as an or-chain member it must FAIL on a bare
- *   base (exactly like the old `count(str("[]"))`, which failed on zero
- *   matches), so bare types fall through to later alternatives. A
- *   zero-suffix variant in the or-chain would greedily match `keyof` as
- *   a plain identifier and break every keyof annotation, because or()
- *   commits to the first success.
- * - postfixOperandParser uses 0: keyof binds to the full postfix
- *   expression that follows it (`keyof User`, `keyof User[]`,
- *   `keyof User["a"]` all work). Only keyofTypeParser consumes it, so
- *   the bare-match greediness leaks nowhere.
+ * A postfix type suffix: `[]` wraps an array, `[<type>]` wraps an
+ * indexed access. Index brackets tolerate inner whitespace
+ * (`User[ "name" ]`), matching TypeScript; the bare `[]` array suffix
+ * stays space-intolerant, matching its old behavior.
  */
-function parseTypePostfix(
-  input: string,
-  minSuffixes: number,
-): ParserResult<VariableType> {
-  const base = typePostfixBase(input);
-  if (!base.success) return base;
-  let current: VariableType = base.result;
-  let rest = base.rest;
-  let suffixes = 0;
-  for (;;) {
-    const emptyBrackets = str("[]")(rest);
-    if (emptyBrackets.success) {
-      current = { type: "arrayType", elementType: current };
-      rest = emptyBrackets.rest;
-      suffixes += 1;
-      continue;
-    }
-    const openBracket = char("[")(rest);
-    if (openBracket.success) {
-      const index = variableTypeParser(openBracket.rest);
-      if (index.success) {
-        const closeBracket = char("]")(index.rest);
-        if (closeBracket.success) {
-          current = {
-            type: "indexedAccessType",
-            objectType: current,
-            index: index.result,
-          };
-          rest = closeBracket.rest;
-          suffixes += 1;
-          continue;
-        }
-      }
-    }
-    break;
-  }
-  if (suffixes < minSuffixes) {
-    return {
-      success: false,
-      rest: input,
-      message: "expected at least one type suffix",
-    };
-  }
-  return { success: true, rest, result: current };
+type TypeSuffix =
+  | { suffix: "array" }
+  | { suffix: "index"; index: VariableType };
+
+const typeSuffixParser: Parser<TypeSuffix> = or(
+  map(str("[]"), (): TypeSuffix => ({ suffix: "array" })),
+  map(
+    seqC(
+      char("["),
+      optionalSpaces,
+      capture(lazy(() => variableTypeParser), "index"),
+      optionalSpaces,
+      char("]"),
+    ),
+    ({ index }): TypeSuffix => ({ suffix: "index", index }),
+  ),
+);
+
+/** Fold suffixes onto a base type, left to right. */
+function applyTypeSuffixes(
+  base: VariableType,
+  suffixes: TypeSuffix[],
+): VariableType {
+  return suffixes.reduce<VariableType>(
+    (current, s) =>
+      s.suffix === "array"
+        ? { type: "arrayType", elementType: current }
+        : { type: "indexedAccessType", objectType: current, index: s.index },
+    base,
+  );
 }
 
-export const arrayTypeParser: Parser<ArrayType> = (input: string) =>
-  trace("arrayTypeParser", (i: string) =>
-    parseTypePostfix(i, 1),
-  )(input) as ParserResult<ArrayType>;
+/**
+ * Base + AT LEAST ONE suffix. As an or-chain member this parser must
+ * FAIL on a bare base (exactly like the old `count(str("[]"))`, which
+ * failed on zero matches), so bare types fall through to later
+ * alternatives. A zero-suffix variant in the or-chain would greedily
+ * match `keyof` as a plain identifier and break every keyof annotation,
+ * because or() commits to the first success.
+ *
+ * The name is historical: with index suffixes in the grammar, the
+ * top-level result may be an IndexedAccessType (`User["name"]`), so the
+ * declared type is Parser<VariableType>.
+ */
+export const arrayTypeParser: Parser<VariableType> = trace(
+  "arrayTypeParser",
+  map(
+    seqC(
+      capture(typePostfixBase, "base"),
+      capture(many1(typeSuffixParser), "suffixes"),
+    ),
+    ({ base, suffixes }) => applyTypeSuffixes(base, suffixes),
+  ),
+);
 
-const postfixOperandParser: Parser<VariableType> = (input: string) =>
-  parseTypePostfix(input, 0);
+/**
+ * Base + ZERO OR MORE suffixes. Only keyofTypeParser consumes this, so
+ * its bare-match greediness leaks nowhere: `keyof User`, `keyof User[]`,
+ * and `keyof User["a"]` all bind the full postfix expression.
+ */
+const postfixOperandParser: Parser<VariableType> = map(
+  seqC(
+    capture(typePostfixBase, "base"),
+    capture(many(typeSuffixParser), "suffixes"),
+  ),
+  ({ base, suffixes }) => applyTypeSuffixes(base, suffixes),
+);
 
 /**
  * `keyof T` — prefix operator producing a KeyofType node. Binds to the

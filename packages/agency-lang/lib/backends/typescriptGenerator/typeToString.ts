@@ -208,7 +208,16 @@ export function variableTypeToString(
       .join(", ");
     return `${variableType.name}<${args}>${formatValueArgs(variableType.valueArgs)}`;
   } else if (variableType.type === "keyofType") {
-    return `keyof ${variableTypeToString(variableType.operand, typeAliases, forFormatting)}`;
+    const op = variableTypeToString(
+      variableType.operand,
+      typeAliases,
+      forFormatting,
+    );
+    // Parenthesize a union operand: `keyof (A | B)` must not print as
+    // `keyof A | B`, which re-parses as (keyof A) | B.
+    return variableType.operand.type === "unionType"
+      ? `keyof (${op})`
+      : `keyof ${op}`;
   } else if (variableType.type === "indexedAccessType") {
     const obj = variableTypeToString(
       variableType.objectType,
@@ -216,7 +225,10 @@ export function variableTypeToString(
       forFormatting,
     );
     const wrapped =
-      variableType.objectType.type === "keyofType" ? `(${obj})` : obj;
+      variableType.objectType.type === "keyofType" ||
+      variableType.objectType.type === "unionType"
+        ? `(${obj})`
+        : obj;
     const index = variableTypeToString(
       variableType.index,
       typeAliases,

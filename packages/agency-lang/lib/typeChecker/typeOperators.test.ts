@@ -281,9 +281,12 @@ node main() {
   return k
 }
 `);
-    // The undefined-alias diagnostic may legitimately fire here (operand
-    // reference validation); assert only that nothing CRASHES.
-    expect(Array.isArray(unknownAlias)).toBe(true);
+    // The undefined-alias diagnostic fires through the keyof operand
+    // (validateTypeReferences descends via visitTypes) — pinned exactly,
+    // so this also trips if that behavior changes.
+    expect(unknownAlias.map((e) => e.message)).toEqual([
+      "Type alias 'NotDefined' is not defined (referenced in 'k').",
+    ]);
   });
 
   it("user redefinition of keyof as an alias name is rejected", () => {

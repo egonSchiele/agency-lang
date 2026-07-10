@@ -97,6 +97,24 @@ describe("indexed access parsing", () => {
     });
   });
 
+  it("tolerates whitespace inside index brackets (TS parity)", () => {
+    expect(firstParamHint('def f(x: User[ "name" ]) { x }')).toMatchObject({
+      type: "indexedAccessType",
+      index: { type: "stringLiteralType", value: "name" },
+    });
+  });
+
+  it("parses union operands and objects when parenthesized", () => {
+    expect(firstParamHint("def f(k: keyof (A | B)) { k }")).toMatchObject({
+      type: "keyofType",
+      operand: { type: "unionType" },
+    });
+    expect(firstParamHint('def f(x: (A | B)["k"]) { x }')).toMatchObject({
+      type: "indexedAccessType",
+      objectType: { type: "unionType" },
+    });
+  });
+
   it("empty brackets still mean array", () => {
     expect(firstParamHint("def f(x: number[]) { x }")).toMatchObject({
       type: "arrayType",

@@ -223,31 +223,6 @@ Anthropic does not support recursive types as LLM output contracts
 (OpenAI and Gemini do). On Anthropic, parse the response yourself with
 `schema(Tree).parseJSON(...)`.
 
-## keyof and indexed access
-
-`keyof T` is the union of an object type's key names. `T["key"]` is the
-type of one field. Both update automatically when the source type
-changes:
-
-```ts
-type User = {
-  name: string,
-  email: string,
-}
-
-type Field = keyof User        // "name" | "email"
-type Name = User["name"]       // string
-```
-
-`keyof` produces a closed union, so `match` over a `keyof` value gets
-exhaustiveness checking. Add a field to `User` and every match over its
-keys reports a missing case.
-
-Both operators need a concrete object type. Records, arrays, and
-primitives are errors. Index keys must be string literals. A union of
-keys returns a union of field types, so `User[keyof User]` is the type
-of every value in `User`.
-
 ## References
 
 - [Schemas](/guide/schemas)

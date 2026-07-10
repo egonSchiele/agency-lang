@@ -1,0 +1,165 @@
+{
+  "sourceFile": "capabilities.agency",
+  "tests": [
+    {
+      "nodeName": "unknownModelGetsDefaults",
+      "input": "",
+      "expectedOutput": "\"large/true/true/20000/default\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownLocalModelGetsProviderProfile",
+      "input": "",
+      "expectedOutput": "\"small/false/2000/provider\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelEntryBeatsProvider",
+      "input": "",
+      "expectedOutput": "1000",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "userGlobalBeatsBuiltinProvider",
+      "input": "",
+      "expectedOutput": "\"true/user-global\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "userProviderBeatsUserGlobal",
+      "input": "",
+      "expectedOutput": "\"large/user-provider\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "userModelBeatsUserProvider",
+      "input": "",
+      "expectedOutput": "\"large/user-model\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "perFieldResolution",
+      "input": "",
+      "expectedOutput": "\"user-model/provider/provider\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anthropicMemoryOff",
+      "input": "",
+      "expectedOutput": "\"false/true/large\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sanitizeDropsInvalid",
+      "input": "",
+      "expectedOutput": "\"undefined/false/undefined/true/undefined/true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "lacksEmbeddingsFromTable",
+      "input": "",
+      "expectedOutput": "\"true/true/false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "mergePreservesSiblings",
+      "input": "",
+      "expectedOutput": "\"large/true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "removeDeletesOneField",
+      "input": "",
+      "expectedOutput": "\"large/null/2000/provider\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refreshCachesProfile",
+      "input": "",
+      "expectedOutput": "\"false/small/qwen3.5-2b\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "applyResolvedRefreshesCapabilities",
+      "input": "",
+      "expectedOutput": "\"true/gpt-4o-mini/openai\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "demoteInvertsPromote",
+      "input": "",
+      "expectedOutput": "\"openai/anthropic\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "removeLastFieldDropsEntry",
+      "input": "",
+      "expectedOutput": "\"undefined/undefined\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

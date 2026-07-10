@@ -23,6 +23,7 @@ import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
+import { CapabilitySettings, sanitizeCapabilitySettings } from "./capabilities.agency"
 import { isKnownSlot, canonicalSlot } from "./slots.agency"
 
 
@@ -40,7 +41,8 @@ export type ModelSettings = {
 
 export type Settings = {
   search?: SearchSettings;
-  model?: ModelSettings
+  model?: ModelSettings;
+  capabilities?: CapabilitySettings
 }
 
 /** Return a NEW ModelSettings with unknown slot keys dropped (warned). Does NOT
@@ -75,6 +77,14 @@ export def getModelSettings(settings: Settings): ModelSettings {
     return {}
   }
   return settings.model
+}
+
+/** The capabilities section, or empty when absent. */
+export def getCapabilitySettings(settings: Settings): CapabilitySettings {
+  if (settings.capabilities == null) {
+    return {}
+  }
+  return settings.capabilities
 }
 
 /*
@@ -115,6 +125,9 @@ export def loadSettings(): Settings {
   }
   if (value.model != null) {
     value.model = sanitizeModelSettings(value.model)
+  }
+  if (value.capabilities != null) {
+    value.capabilities = sanitizeCapabilitySettings(value.capabilities)
   }
   return value
 }

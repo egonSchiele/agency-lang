@@ -71,7 +71,19 @@ import {
   getSearchBackend,
   availableBackendItems,
  } from "./lib/search.agency"
-import { getModelSettings, loadSettings } from "./lib/settings.agency"
+import {
+  CAPABILITY_FIELDS,
+  CapabilityPatch,
+  mergeCapabilityOverride,
+  removeCapabilityField,
+  providerLacksEmbeddings,
+ } from "./lib/capabilities.agency"
+import {
+  getCapabilitySettings,
+  getModelSettings,
+  loadSettings,
+  saveSettings,
+ } from "./lib/settings.agency"
 import { truncate, formatArgs, formatToolResponse } from "./lib/utils.agency"
 import {
   configureModels,
@@ -82,6 +94,11 @@ import {
   promoteAll,
   currentProvider,
   resolveMaxToolCallRounds,
+  getCapabilities,
+  getCapabilitiesResolved,
+  getCapabilityModelKey,
+  getCapabilityProvider,
+  refreshCapabilities,
  } from "./shared.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -314,6 +331,7 @@ def builtinPalette(): Record<string, string> {
     "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
+    "/settings": "View and change capability settings for the current model",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
   }
@@ -467,6 +485,279 @@ export def parseModelsFilters(cmd: string): ModelFilters {
   }
 }
 
+/** Human label for a capability source layer. Interprets the source
+  strings resolveCapabilities emits (capabilities.agency). */
+def capabilitySourceLabel(source: string): string {
+  if (source == "default") {
+    return "built-in default"
+  }
+  if (source == "provider") {
+    return "provider default: ${getCapabilityProvider()}"
+  }
+  if (source == "model") {
+    return "built-in for ${getCapabilityModelKey()}"
+  }
+  if (source == "user-global") {
+    return "your global override"
+  }
+  if (source == "user-provider") {
+    return "your override for ${getCapabilityProvider()}"
+  }
+  return "your override for ${getCapabilityModelKey()}"
+}
+
+/** One "value (source)" cell. The typed Capabilities shape cannot be
+  indexed by a dynamic key, so this is the renderer's per-field switch. */
+def capabilityRow(fieldKey: string): string {
+  const resolved = getCapabilitiesResolved()
+  const values = resolved.values
+  const sources = resolved.sources
+  if (fieldKey == "prompt") {
+    return "${values.prompt}   (${capabilitySourceLabel(sources.prompt)})"
+  }
+  if (fieldKey == "summarize") {
+    return "${values.summarize}   (${capabilitySourceLabel(sources.summarize)})"
+  }
+  if (fieldKey == "memory") {
+    return "${values.memory}   (${capabilitySourceLabel(sources.memory)})"
+  }
+  let cap = "none"
+  if (values.maxTokens != null) {
+    cap = "${values.maxTokens}"
+  }
+  return "${cap}   (${capabilitySourceLabel(sources.maxTokens)})"
+}
+
+/** Render the current profile with per-field provenance. */
+def showCapabilities() {
+  pushMessage("Capabilities for ${getCapabilityModelKey()} (${getCapabilityProvider()}):")
+  for (field in CAPABILITY_FIELDS) {
+    pushMessage("  ${field.label}   ${capabilityRow(field.key)}")
+  }
+}
+
+/** The settings.json key a scope writes under. Global's key is unused. */
+def scopeTargetName(scopeKey: string): string {
+  if (scopeKey == "provider") {
+    return getCapabilityProvider()
+  }
+  return getCapabilityModelKey()
+}
+
+/** Persist one override patch at a scope, then re-resolve. */
+def saveCapabilityOverride(scopeKey: string, patch: CapabilityPatch) {
+  let settings = loadSettings()
+  settings.capabilities = mergeCapabilityOverride(
+    getCapabilitySettings(settings),
+    scopeKey,
+    scopeTargetName(scopeKey),
+    patch,
+  )
+  saveSettings(settings)
+  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
+}
+
+/** Remove one field override at a scope, then re-resolve. */
+def removeCapabilityOverride(scopeKey: string, fieldKey: string) {
+  let settings = loadSettings()
+  settings.capabilities = removeCapabilityField(
+    getCapabilitySettings(settings),
+    scopeKey,
+    scopeTargetName(scopeKey),
+    fieldKey,
+  )
+  saveSettings(settings)
+  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
+}
+
+/** Ask which scope an override applies to. Returns "" on cancel. */
+def pickOverrideScope(): string {
+  let scopeItems: ChoiceItem[] = []
+  scopeItems.push({
+    key: "model",
+    label: "this model (${getCapabilityModelKey()})"
+  })
+  scopeItems.push({
+    key: "provider",
+    label: "this provider (${getCapabilityProvider()})"
+  })
+  scopeItems.push({
+    key: "global",
+    label: "all models"
+  })
+  const scopeKey = chooseOption("Scope", "Where should this apply?", scopeItems, allowCancel: true)
+  if (scopeKey == null) {
+    return ""
+  }
+  return scopeKey
+}
+
+/** Re-apply the resolved cap as the branch default. After a reset the
+  resolved value falls back to a built-in layer, which is always numeric
+  for known providers, so live-apply covers removal too. */
+def applyLiveMaxTokens() {
+  const capValue = getCapabilities().maxTokens
+  if (capValue != null) {
+    setLlmOptions({ maxTokens: capValue })
+  }
+}
+
+/** Positive-integer parse. parseInt and isNaN appear nowhere in the
+  repo's .agency code, so this uses a digits check instead. Returns -1
+  for anything that is not all digits. */
+def parsePositiveInt(text: string): number {
+  // Bound to a const because the parser rejects method calls on string
+  // LITERALS ("0123456789".includes(...) does not parse; a variable does).
+  const digits = "0123456789"
+  const trimmed = text.trim()
+  if (trimmed == "") {
+    return -1
+  }
+  for (ch in trimmed.split("")) {
+    if (!digits.includes(ch)) {
+      return -1
+    }
+  }
+  return Number(trimmed)
+}
+
+/** Interactive edit: field → value → scope → save → live-apply. */
+def editCapabilities() {
+  let fieldItems: ChoiceItem[] = []
+  for (field in CAPABILITY_FIELDS) {
+    fieldItems.push({
+      key: field.key,
+      label: "${field.label} — ${field.description}"
+    })
+  }
+  const fieldKey = chooseOption(
+    "Settings",
+    "Pick a setting to change (empty to exit).",
+    fieldItems,
+    allowCancel: true,
+  )
+  if (fieldKey == "" || fieldKey == null) {
+    return
+  }
+
+  let patch: CapabilityPatch = {}
+  if (fieldKey == "prompt") {
+    let promptItems: ChoiceItem[] = []
+    promptItems.push({
+      key: "large",
+      label: "large — full coordinator prompt"
+    })
+    promptItems.push({
+      key: "small",
+      label: "small — compact prompt for small-context models"
+    })
+    const picked = chooseOption("prompt", "System prompt size.", promptItems, allowCancel: true)
+    if (picked == "" || picked == null) {
+      return
+    }
+    patch = {
+      prompt: picked
+    }
+  }
+  if (fieldKey == "summarize" || fieldKey == "memory") {
+    let onOffItems: ChoiceItem[] = []
+    onOffItems.push({
+      key: "on",
+      label: "on"
+    })
+    onOffItems.push({
+      key: "off",
+      label: "off"
+    })
+    const picked = chooseOption(fieldKey, "Enable ${fieldKey}?", onOffItems, allowCancel: true)
+    if (picked == "" || picked == null) {
+      return
+    }
+    if (fieldKey == "summarize") {
+      patch = {
+        summarize: picked == "on"
+      }
+    } else {
+      patch = {
+        memory: picked == "on"
+      }
+      if (picked == "on" && providerLacksEmbeddings(getCapabilityProvider())) {
+        pushMessage(
+          color.dim(
+          "Note: ${getCapabilityProvider()} has no embeddings endpoint — memory runs with Tier-2 semantic recall disabled (structured recall still works).",
+        ),
+        )
+      }
+    }
+  }
+  if (fieldKey == "maxTokens") {
+    let capItems: ChoiceItem[] = []
+    capItems.push({
+      key: "reset",
+      label: "reset — remove my override, use the default"
+    })
+    const picked = chooseOption(
+      "maxTokens",
+      "Default output-token cap. Type a number, or pick reset.",
+      capItems,
+      allowFreeText: true,
+      allowCancel: true,
+    )
+    if (picked == "" || picked == null) {
+      return
+    }
+    if (picked == "reset") {
+      const scopeKey = pickOverrideScope()
+      if (scopeKey == "") {
+        return
+      }
+      removeCapabilityOverride(scopeKey, "maxTokens")
+      applyLiveMaxTokens()
+      pushMessage("Override removed.")
+      showCapabilities()
+      return
+    }
+    const parsed = parsePositiveInt(picked)
+    if (parsed <= 0) {
+      pushMessage(color.red("Not a positive number: ${picked}"))
+      return
+    }
+    patch = {
+      maxTokens: parsed
+    }
+  }
+
+  const scopeKey = pickOverrideScope()
+  if (scopeKey == "") {
+    return
+  }
+  saveCapabilityOverride(scopeKey, patch)
+
+  // Live-apply what can apply now; explain what can't.
+  if (fieldKey == "memory") {
+    if (getCapabilities().memory) {
+      // The ON direction cannot live-apply. enableAgentMemory's
+      // `with approve` cannot override the outer policy handler that
+      // startInteractive installed, so the memory-dir fs interrupts
+      // would surface as policy prompts mid-flow, or get denied and
+      // half-apply the toggle. The OFF direction stays live below:
+      // disableMemory raises no fs interrupts and already runs in-REPL
+      // from reactToSlotChange.
+      pushMessage(color.dim("Memory turns on at next agent start (enabling mid-session would raise policy prompts)."))
+    } else {
+      disableMemory() with approve
+    }
+  }
+  if (fieldKey == "maxTokens") {
+    applyLiveMaxTokens()
+  }
+  if (fieldKey == "prompt") {
+    pushMessage(color.dim("Prompt change applies on next agent start (this session's system message is already sent)."))
+  }
+  pushMessage("Saved.")
+  showCapabilities()
+}
+
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
 def _runTurn(msg: string): boolean {
@@ -493,8 +784,13 @@ def _runTurn(msg: string): boolean {
   }
   if (trimmed == "/help") {
     pushMessage(
-      "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /paste, /help",
+      "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /paste, /help",
     )
+    return true
+  }
+  if (trimmed == "/settings") {
+    showCapabilities()
+    editCapabilities()
     return true
   }
   if (trimmed == "/search") {
@@ -661,7 +957,7 @@ let first = true
 // subagent. Used to validate the flag and to dispatch in `agentReplyVia`.
 static const START_AGENTS = ["main", "code", "research", "oracle", "explorer", "review"]
 
-static const mainAgentSystemPrompt = """
+static const MAIN_PROMPT_LARGE = """
 You are the top-level coordinator of an Agency-language assistant. You
 receive every user message and decide how to respond.
 
@@ -830,6 +1126,41 @@ unless the user has clearly asked for an action ("do X", "fix Y",
 with them — don't sprint to implementation.
 """
 
+// Compact coordinator prompt for small-context models, ~350 tokens
+// instead of ~3,400. Selected when the capability profile says
+// prompt: "small". An 8K-context model loses 40% of its window to the
+// large prompt before the user types anything. The phrase "compact
+// coordinator" is a deliberate marker that verification greps for in
+// statelogs.
+static const MAIN_PROMPT_SMALL = """
+You are the compact coordinator of an Agency-language assistant. Decide
+how to answer each user message.
+
+Tools (each runs in its own context; pass a self-contained message):
+- `codeAgent(userMsg)` — anything touching code or files: read, write,
+  edit, run, typecheck. Also Agency syntax and CLI questions.
+- `researchAgent(userMsg)` — web search, URL fetches, external facts.
+- `reviewAgent(userMsg)` — check non-trivial new Agency code for
+  syntax and type errors; pass the code to review.
+- `oracleAgent(userMsg)` — deep reasoning on a hard question; include
+  all needed context in the message.
+- `explorerAgent(userMsg)` — broad read-only codebase/docs questions.
+- `generateImageFile(prompt, path, size, images)` — create or edit an
+  image; do not route image work to codeAgent.
+
+Routing rules:
+- Simple chat, greetings, quick factual answers: reply directly, no
+  tools.
+- Anything code- or file-related: codeAgent. Current/external info:
+  researchAgent. Broad "summarize/tour/how does X work" questions:
+  explorerAgent.
+- Surface tool results to the user concisely; do not re-run a tool the
+  user did not ask to re-run.
+
+Style: plain, direct answers in Markdown. No preamble. Keep replies
+short unless the task demands detail.
+"""
+
 // Exported for tests: agent-cwd resolution of edit inputs is a spec
 // invariant with no other observable (the deterministic image client
 // ignores its images argument). generateImage accepts path / URL /
@@ -902,14 +1233,31 @@ static const mainAgentTools = [
   generateImageFile,
 ]
 
+/** Enable memory only when the capability profile allows it.
+
+  Providers without an embeddings endpoint default the field to off. A
+  user override still works: memory then runs with Tier-2 semantic recall
+  disabled, and std::memory prints its one-time notice. The embedding
+  slot is a no-op today, so nothing here validates against it. */
+def maybeEnableMemory() {
+  if (getCapabilities().memory) {
+    enableAgentMemory()
+  }
+}
+
 def mainAgent(prompt: string | (string | Attachment)[]): string {
-  thread(label: "main", summarize: true, session: "main") {
+  const doSummarize = getCapabilities().summarize
+  thread(label: "main", summarize: doSummarize, session: "main") {
     setMemoryId("main")
     if (first) {
       // `_context` carries the per-run grounding (date, cwd, AGENTS.md),
       // set by `setupSession`. Appending it to the system prompt is what
       // actually gets that context to the LLM.
-      systemMessage("${mainAgentSystemPrompt}${_context}")
+      let sysPrompt = MAIN_PROMPT_LARGE
+      if (getCapabilities().prompt == "small") {
+        sysPrompt = MAIN_PROMPT_SMALL
+      }
+      systemMessage("${sysPrompt}${_context}")
       first = false
     }
     const result = llm(prompt, {
@@ -1359,9 +1707,6 @@ node main() {
     // fall through into the session on the chosen local model
   } else if (localVal != null) {
     configureLocalModel(localVal)
-    // Intentionally do NOT enable memory for a local model: the llama-cpp
-    // provider has no embedding endpoint, so memory would only emit a
-    // "Tier-2 disabled" notice. std::memory calls no-op while it's off.
     configureSearch(true)
   } else {
     // Hosted path. --model accepts `slot=model` (per-slot) or a bare model
@@ -1395,14 +1740,12 @@ node main() {
       slowFlag = sm
     }
     configureModels(modelGlobal, fastFlag, slowFlag, args.flags.provider ?? "")
-    // Persistent knowledge graph — enabled for hosted providers, skipped for
-    // local models. (Some hosted providers, e.g. anthropic, still lack an
-    // embedding endpoint and just disable Tier-2 recall with a one-time
-    // notice; structured recall works regardless.) Must run before any
-    // handler/REPL is installed.
-    enableAgentMemory()
     configureSearch(false)
   }
+
+  // Persistent knowledge graph, gated on the capability profile. Must run
+  // before any handler/REPL is installed.
+  maybeEnableMemory()
 
   // Positional args (everything after flags) are joined with spaces to
   // form the starting prompt. `--` ends flag parsing if a positional
@@ -1434,20 +1777,15 @@ node main() {
     setLlmOptions({ maxToolResultChars: maxResultChars })
   }
 
-  // TEMPORARY: raise the per-turn output cap above smoltalk's 4096 default.
-  // With adaptive thinking on, a hard reasoning turn can spend the entire
-  // 4096-token budget thinking and return an empty reply (no text, no tool
-  // call) — see the empty-output failures on regex-log / protein-assembly.
-  // Capped at 20000: these llm() calls are non-streaming, and the Anthropic
-  // SDK refuses a non-streaming request whose estimated time exceeds 10 min,
-  // which is maxTokens > 21333 (60min * maxTokens / 128000 > 10min). 20000
-  // stays under that and is well within every modern-Claude output cap
-  // (Sonnet 5 = 64K, Opus 4.8 = 128K). Branch-scoped so every subagent
-  // inherits it; per-call `llm(..., { maxTokens })` (e.g. the summarizer's
-  // cap) still wins. Superseded by the declarative capabilities table in
-  // docs/superpowers/specs/2026-07-09-model-capabilities-design.md (§2,
-  // maxTokens applied via setLlmOptions at startup) — remove it then.
-  setLlmOptions({ maxTokens: 20000 })
+  // Per-model default output cap from the capability profile. The hosted
+  // default of 20000 carries the adaptive-thinking empty-reply fix that
+  // used to live here as a TEMPORARY block. Local profiles cap lower.
+  // Branch-scoped, so every subagent inherits it. A per-call
+  // llm(..., { maxTokens }) still wins, e.g. the summarizer's 256.
+  const capsMaxTokens = getCapabilities().maxTokens
+  if (capsMaxTokens != null) {
+    setLlmOptions({ maxTokens: capsMaxTokens })
+  }
 
   // One-shot autonomy: tell the code subagent there is no human to answer
   // questions and no next turn, so it must drive to a finished artifact.

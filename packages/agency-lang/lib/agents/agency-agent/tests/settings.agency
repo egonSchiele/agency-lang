@@ -13,6 +13,7 @@ import {
   saveSettings,
   sanitizeModelSettings,
   getModelSettings,
+  getCapabilitySettings,
   ModelSettings,
  } from "../lib/settings.agency"
 
@@ -85,3 +86,80 @@ node roundTripsModelSlots(): string {
   return getModelSettings(loaded).slots["reasoning"]
 }
 
+
+node roundTripsCapabilities(): string {
+  saveSettings({
+    capabilities: {
+      models: {
+        "test-caps-model": {
+          prompt: "large"
+        }
+      }
+    }
+  }) with approve
+  const loaded = loadSettings() with approve
+  const caps = getCapabilitySettings(loaded)
+  const models = caps.models
+  if (models == null) {
+    return "missing"
+  }
+  const prompt = models["test-caps-model"].prompt
+  if (prompt == null) {
+    return "missing-prompt"
+  }
+  return prompt
+}
+
+node capabilitiesSanitizedOnLoad(): string {
+  // Raw JSON, not a typed literal: unknown field + wrong-typed maxTokens,
+  // exactly what a hand-edited settings.json can contain.
+  write(
+    SETTINGS_FILE,
+    "{\"capabilities\":{\"global\":{\"prompt\":\"gigantic\",\"summarize\":false,\"maxTokens\":\"2000\",\"frobnicate\":true}}}",
+    POLICY_DIR,
+  ) with approve
+  const loaded = loadSettings() with approve
+  const caps = getCapabilitySettings(loaded)
+  const globalPatch = caps.global
+  if (globalPatch == null) {
+    return "no-global"
+  }
+  return "${globalPatch.prompt}/${globalPatch.summarize}/${globalPatch.maxTokens}"
+}
+
+node missingCapabilitiesIsEmpty(): string {
+  saveSettings({
+    search: {
+      backend: "off"
+    }
+  }) with approve
+  const loaded = loadSettings() with approve
+  const caps = getCapabilitySettings(loaded)
+  if (caps.models == null && caps.providers == null && caps.global == null) {
+    return "empty"
+  }
+  return "unexpected"
+}
+
+node nullEntryAndReservedKeySurviveLoad(): string {
+  // A hand-edited file with a null entry used to throw inside
+  // loadSettings (sanitizePatch read .prompt off null); a __proto__ key
+  // would reparent the record on assignment instead of storing. Both
+  // must be dropped with the valid sibling kept.
+  write(
+    SETTINGS_FILE,
+    "{\"capabilities\":{\"models\":{\"broken\":null,\"__proto__\":{\"summarize\":false},\"ok\":{\"summarize\":true}}}}",
+    POLICY_DIR,
+  ) with approve
+  const loaded = loadSettings() with approve
+  const caps = getCapabilitySettings(loaded)
+  const models = caps.models
+  if (models == null) {
+    return "no-models"
+  }
+  const okEntry = models["ok"]
+  if (okEntry == null) {
+    return "sibling-lost"
+  }
+  return "${models["broken"]}/${okEntry.summarize}"
+}

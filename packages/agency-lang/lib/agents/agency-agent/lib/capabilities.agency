@@ -1,0 +1,464 @@
+/** @module Declarative per-model capability profiles for the agency agent.
+  Pure data + resolution; no I/O. A capability profile answers "what should
+  the agent enable for THIS model?" — small local models get a small prompt,
+  no summarizer, no memory, and a token cap. Resolution is per-field across
+  six layers: user model > user provider > user global > built-in model >
+  built-in provider > built-in default. See
+  docs/superpowers/specs/2026-07-09-model-capabilities-design.md.
+
+  On-disk note for hand-editors of settings.json: field removal writes
+  null (Agency cannot delete object fields), and a null field reads as
+  absent everywhere. Nulls are transient — the sanitize pass strips
+  them on the next load — and an entry whose last field is removed is
+  dropped from its record immediately. */
+
+/** The total, resolved profile. Every field has a value after resolution. */
+export type Capabilities = {
+  prompt: string;
+  summarize: boolean;
+  memory: boolean;
+  maxTokens: (number | null)
+}
+
+/** A partial entry: states only what it changes. */
+export type CapabilityPatch = {
+  prompt?: string;
+  summarize?: boolean;
+  memory?: boolean;
+  maxTokens?: number
+}
+
+/** The user-override shape persisted in settings.json under "capabilities". */
+export type CapabilitySettings = {
+  models?: Record<string, CapabilityPatch>;
+  providers?: Record<string, CapabilityPatch>;
+  global?: CapabilityPatch
+}
+
+/** Per-field provenance: which layer set each value. One of "default",
+  "provider", "model", "user-global", "user-provider", "user-model".
+  A concrete type (not Record) so the /settings renderer is exhaustive. */
+export type CapabilitySources = {
+  prompt: string;
+  summarize: string;
+  memory: string;
+  maxTokens: string
+}
+
+export type ResolvedCapabilities = {
+  values: Capabilities;
+  sources: CapabilitySources
+}
+
+/** The field table that drives the /settings display and pickers.
+  Adding a field means one entry here plus a typed block in applyPatch,
+  sanitizePatch, and capabilityRow. The typed blocks repeat the field
+  list on purpose: Agency cannot iterate a typed object's fields. */
+export type CapabilityField = {
+  key: string;
+  label: string;
+  description: string
+}
+
+export static const CAPABILITY_FIELDS: CapabilityField[] = [
+  {
+    key: "prompt",
+    label: "prompt",
+    description: "large or small system prompt"
+  },
+  {
+    key: "summarize",
+    label: "summarize",
+    description: "thread summary after each turn"
+  },
+  {
+    key: "memory",
+    label: "memory",
+    description: "persistent knowledge graph"
+  },
+  {
+    key: "maxTokens",
+    label: "maxTokens",
+    description: "default output cap per LLM call"
+  }
+]
+
+/** The built-in base: what a capable hosted model gets.
+
+  maxTokens is 20000, not null. Smoltalk defaults to 4096, and with
+  adaptive thinking a hard reasoning turn can spend that whole budget
+  on thinking and return an empty reply. 20000 also stays under the
+  Anthropic non-streaming cutoff, which refuses maxTokens above 21333. */
+export static const CAPABILITY_DEFAULT: Capabilities = {
+  prompt: "large",
+  summarize: true,
+  memory: true,
+  maxTokens: 20000
+}
+
+/** Per-provider defaults. Any model without its own entry lands here.
+  Keys are DEMOTED provider names ("openai", never "openai-responses" —
+  see demoteProvider in shared.agency). */
+export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
+  // No embeddings endpoint. Users who want memory anyway can override;
+  // it runs with Tier-2 semantic recall disabled.
+  "anthropic": {
+    memory: false
+  },
+  // The safety profile for local models. Every un-curated local model
+  // lands here. Small models under a JSON grammar can miss their stop
+  // token and generate until the context fills, so the summarizer is
+  // off and output is capped.
+  "llama-cpp": {
+    prompt: "small",
+    summarize: false,
+    memory: false,
+    maxTokens: 2000
+  }
+}
+
+/** Curated per-model exceptions, keyed by the curated short name for local
+  models and the canonical model name for hosted ones. Grown over time. */
+export static const MODEL_CAPABILITIES: Record<string, CapabilityPatch> = {
+  // 8K context; even the small prompt + a modest reply must fit.
+  "smollm2-135m": {
+    maxTokens: 1000
+  }
+}
+
+/** True when the provider's built-in profile turns memory off. Today that
+  means the provider has no embeddings endpoint. Reading the table keeps
+  the /settings notice in sync with the actual defaults. */
+export def providerLacksEmbeddings(provider: string): boolean {
+  const patch = PROVIDER_CAPABILITIES[provider]
+  return patch != null && patch.memory == false
+}
+
+/** Apply one patch layer on top of a resolution-in-progress. Pure: returns
+  a new ResolvedCapabilities. A null/missing patch is a no-op. */
+def applyPatch(
+  current: ResolvedCapabilities,
+  patch: (CapabilityPatch | null),
+  source: string,
+): ResolvedCapabilities {
+  if (patch == null) {
+    return current
+  }
+  let values = {
+    ...current.values
+  }
+  let sources = {
+    ...current.sources
+  }
+  if (patch.prompt != null) {
+    values.prompt = patch.prompt
+    sources.prompt = source
+  }
+  if (patch.summarize != null) {
+    values.summarize = patch.summarize
+    sources.summarize = source
+  }
+  if (patch.memory != null) {
+    values.memory = patch.memory
+    sources.memory = source
+  }
+  if (patch.maxTokens != null) {
+    values.maxTokens = patch.maxTokens
+    sources.maxTokens = source
+  }
+  return {
+    values: values,
+    sources: sources
+  }
+}
+
+/** Resolve the capability profile for (modelKey, provider) under the user's
+  overrides. Layers applied lowest to highest so later wins:
+  built-in default < built-in provider < built-in model < user global <
+  user provider < user model. `provider` must be the DEMOTED name. */
+export def resolveCapabilities(
+  modelKey: string,
+  provider: string,
+  user: CapabilitySettings,
+): ResolvedCapabilities {
+  let out: ResolvedCapabilities = {
+    values: {
+      ...CAPABILITY_DEFAULT
+    },
+    sources: {
+      prompt: "default",
+      summarize: "default",
+      memory: "default",
+      maxTokens: "default"
+    }
+  }
+  out = applyPatch(out, PROVIDER_CAPABILITIES[provider], "provider")
+  out = applyPatch(out, MODEL_CAPABILITIES[modelKey], "model")
+  if (user.global != null) {
+    out = applyPatch(out, user.global, "user-global")
+  }
+  const userProviders = user.providers
+  if (userProviders != null) {
+    out = applyPatch(out, userProviders[provider], "user-provider")
+  }
+  const userModels = user.models
+  if (userModels != null) {
+    out = applyPatch(out, userModels[modelKey], "user-model")
+  }
+  return out
+}
+
+/** Keep only known fields with valid values in one patch. Unknown fields are
+  dropped silently (copy-the-knowns); invalid values warn and drop. `label`
+  names the entry in warnings, e.g. "models.qwen3.5-2b". */
+def sanitizePatch(patch: CapabilityPatch, label: string): CapabilityPatch {
+  let kept: CapabilityPatch = {}
+  if (patch.prompt != null) {
+    if (patch.prompt == "large" || patch.prompt == "small") {
+      kept.prompt = patch.prompt
+    } else {
+      print(
+        "Warning: settings.json capabilities ${label} has invalid prompt '${patch.prompt}'; ignoring it.",
+      )
+    }
+  }
+  if (patch.summarize != null) {
+    if (typeof patch.summarize == "boolean") {
+      kept.summarize = patch.summarize
+    } else {
+      print(
+        "Warning: settings.json capabilities ${label} has non-boolean summarize; ignoring it.",
+      )
+    }
+  }
+  if (patch.memory != null) {
+    if (typeof patch.memory == "boolean") {
+      kept.memory = patch.memory
+    } else {
+      print(
+        "Warning: settings.json capabilities ${label} has non-boolean memory; ignoring it.",
+      )
+    }
+  }
+  if (patch.maxTokens != null) {
+    if (typeof patch.maxTokens == "number" && patch.maxTokens > 0) {
+      kept.maxTokens = patch.maxTokens
+    } else {
+      print(
+        "Warning: settings.json capabilities ${label} has invalid maxTokens '${patch.maxTokens}'; ignoring it.",
+      )
+    }
+  }
+  return kept
+}
+
+/** Guard one record entry from a hand-edited file. Drops (with a warning)
+  a null or non-object entry — sanitizePatch would throw on those — and
+  the prototype-chain keys, whose assignment would silently reparent the
+  record instead of storing the entry. Sanitize is the single trust
+  boundary for hand-edited keys: merge/remove only ever see keys that
+  survived this pass or came from model resolution. */
+def validCapabilityEntry(key: string, entry: any, section: string): boolean {
+  if (key == "__proto__" || key == "constructor" || key == "prototype") {
+    print(
+      "Warning: settings.json capabilities ${section} has reserved key '${key}'; ignoring it.",
+    )
+    return false
+  }
+  if (entry == null || typeof entry != "object" || Array.isArray(entry)) {
+    print(
+      "Warning: settings.json capabilities ${section}.${key} is not an object; ignoring it.",
+    )
+    return false
+  }
+  return true
+}
+
+/** Sanitize the whole capabilities section from settings.json. Never throws;
+  returns a NEW object (does not mutate the input). */
+export def sanitizeCapabilitySettings(user: CapabilitySettings): CapabilitySettings {
+  let out: CapabilitySettings = {}
+  const models = user.models
+  if (models != null) {
+    let keptModels: Record<string, CapabilityPatch> = {}
+    for (modelKey in Object.keys(models)) {
+      if (!validCapabilityEntry(modelKey, models[modelKey], "models")) {
+        continue
+      }
+      keptModels[modelKey] = sanitizePatch(models[modelKey], "models.${modelKey}")
+    }
+    out.models = keptModels
+  }
+  const providers = user.providers
+  if (providers != null) {
+    let keptProviders: Record<string, CapabilityPatch> = {}
+    for (providerKey in Object.keys(providers)) {
+      if (!validCapabilityEntry(providerKey, providers[providerKey], "providers")) {
+        continue
+      }
+      keptProviders[providerKey] = sanitizePatch(providers[providerKey], "providers.${providerKey}")
+    }
+    out.providers = keptProviders
+  }
+  if (user.global != null) {
+    out.global = sanitizePatch(user.global, "global")
+  }
+  return out
+}
+
+/** Merge one patch into the user settings at a scope. Pure: returns a new
+  CapabilitySettings. Other fields in the same entry survive, so writing a
+  summarize override never eats a prompt override written earlier. */
+export def mergeCapabilityOverride(
+  user: CapabilitySettings,
+  scope: string,
+  key: string,
+  patch: CapabilityPatch,
+): CapabilitySettings {
+  let out = {
+    ...user
+  }
+  if (scope == "global") {
+    let globalPatch: CapabilityPatch = {}
+    if (out.global != null) {
+      globalPatch = out.global
+    }
+    out.global = {
+      ...globalPatch,
+      ...patch
+    }
+    return out
+  }
+  if (scope == "provider") {
+    let providers: Record<string, CapabilityPatch> = {}
+    if (out.providers != null) {
+      providers = {
+        ...out.providers
+      }
+    }
+    let entry: CapabilityPatch = {}
+    if (providers[key] != null) {
+      entry = providers[key]
+    }
+    providers[key] = {
+      ...entry,
+      ...patch
+    }
+    out.providers = providers
+    return out
+  }
+  let models: Record<string, CapabilityPatch> = {}
+  if (out.models != null) {
+    models = {
+      ...out.models
+    }
+  }
+  let entry: CapabilityPatch = {}
+  if (models[key] != null) {
+    entry = models[key]
+  }
+  models[key] = {
+    ...entry,
+    ...patch
+  }
+  out.models = models
+  return out
+}
+
+/** Set one field of a patch to null. Agency does not support `delete`
+  (it parses as a plain identifier and emits invalid TypeScript), so
+  null stands in for "removed". That works because every consumer tests
+  fields with `!= null`, which treats null and absent the same. The next
+  loadSettings() sanitize pass then drops the null for good. */
+def patchFieldToNull(patch: CapabilityPatch, field: string): CapabilityPatch {
+  let out = {
+    ...patch
+  }
+  if (field == "prompt") {
+    out.prompt = null
+  }
+  if (field == "summarize") {
+    out.summarize = null
+  }
+  if (field == "memory") {
+    out.memory = null
+  }
+  if (field == "maxTokens") {
+    out.maxTokens = null
+  }
+  return out
+}
+
+/** True when every field of the patch is null or absent. */
+def patchIsEmpty(patch: CapabilityPatch): boolean {
+  return patch.prompt == null && patch.summarize == null && patch.memory == null && patch.maxTokens == null
+}
+
+/** Copy a record without one key. Rebuilds the record because keys,
+  like object fields, cannot be deleted. */
+def recordWithout(
+  entries: Record<string, CapabilityPatch>,
+  dropKey: string,
+): Record<string, CapabilityPatch> {
+  let kept: Record<string, CapabilityPatch> = {}
+  for (entryKey in Object.keys(entries)) {
+    if (entryKey != dropKey) {
+      kept[entryKey] = entries[entryKey]
+    }
+  }
+  return kept
+}
+
+/** Remove one field from one scope entry (by nulling it — see
+  patchFieldToNull). Pure. Removing from an absent entry is a no-op.
+  A model/provider entry whose last field was removed is dropped from
+  its record, so settings.json does not accumulate empty entries. A
+  nulled global field (and any null a hand-editor writes) is stripped
+  by the sanitize pass on the next load. */
+export def removeCapabilityField(
+  user: CapabilitySettings,
+  scope: string,
+  key: string,
+  field: string,
+): CapabilitySettings {
+  let out = {
+    ...user
+  }
+  if (scope == "global") {
+    if (out.global == null) {
+      return out
+    }
+    out.global = patchFieldToNull(out.global, field)
+    return out
+  }
+  if (scope == "provider") {
+    if (out.providers == null || out.providers[key] == null) {
+      return out
+    }
+    let providers = {
+      ...out.providers
+    }
+    const newProviderEntry = patchFieldToNull(providers[key], field)
+    if (patchIsEmpty(newProviderEntry)) {
+      providers = recordWithout(providers, key)
+    } else {
+      providers[key] = newProviderEntry
+    }
+    out.providers = providers
+    return out
+  }
+  if (out.models == null || out.models[key] == null) {
+    return out
+  }
+  let models = {
+    ...out.models
+  }
+  const newModelEntry = patchFieldToNull(models[key], field)
+  if (patchIsEmpty(newModelEntry)) {
+    models = recordWithout(models, key)
+  } else {
+    models[key] = newModelEntry
+  }
+  out.models = models
+  return out
+}

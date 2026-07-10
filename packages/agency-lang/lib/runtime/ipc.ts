@@ -18,6 +18,7 @@ import { runBatch } from "./runBatch.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
+import { truncate } from "./truncate.js";
 import { isPayableCost, type IpcTelemetryMessage } from "./costTelemetry.js";
 import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
 import { invokeCallbacks } from "./hooks.js";
@@ -154,11 +155,6 @@ function buildIpcPayloadLimitError(threshold: number, value: number, samplePrefi
 const ipcDebug = process.env.AGENCY_IPC_DEBUG === "1";
 const role = isIpcMode() ? "child" : "parent";
 
-function truncate(val: any, maxLen = 200): string {
-  const s = typeof val === "string" ? val : JSON.stringify(val);
-  if (s == null) return "undefined";
-  return s.length > maxLen ? s.slice(0, maxLen) + "..." : s;
-}
 
 export function ipcLog(direction: "send" | "recv", msg: any): void {
   if (!ipcDebug) return;

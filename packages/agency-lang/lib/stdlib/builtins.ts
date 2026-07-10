@@ -12,6 +12,7 @@ import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep } from "./abortable.js";
+import { acceptsFailures } from "../runtime/failurePropagation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +23,11 @@ export function _print(...messages: any[]): void {
 export function _printJSON(obj: any): void {
   console.log(JSON.stringify(obj, null, 2));
 }
+
+// Printing a failure is a legitimate debugging move; without the tag the
+// dispatcher's failure-argument check would reject these plain TS helpers.
+acceptsFailures(_print);
+acceptsFailures(_printJSON);
 
 export function _parseJSON(text: string): any {
   return JSON.parse(text);

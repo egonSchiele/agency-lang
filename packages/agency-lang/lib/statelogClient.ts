@@ -1242,6 +1242,32 @@ export class StatelogClient {
     });
   }
 
+  /** Structured warning event. First consumer: the failure-propagation
+   *  check (warnType "failurePropagation"), which logs every skipped call
+   *  and every would-be throw in "warn" mode, and every skip in "on" mode. */
+  async warn({
+    warnType,
+    message,
+    functionName,
+    param,
+    error,
+  }: {
+    warnType: "failurePropagation";
+    message: string;
+    functionName?: string;
+    param?: string;
+    error?: unknown;
+  }): Promise<void> {
+    await this.post({
+      type: "warn",
+      warnType,
+      message,
+      functionName,
+      param,
+      error,
+    });
+  }
+
   /** Wire the out-of-frame redaction fallback (see the field's docstring).
    *  Called by the execution context right after this client is created. */
   setFallbackGlobals(fn: () => GlobalStore | undefined): void {

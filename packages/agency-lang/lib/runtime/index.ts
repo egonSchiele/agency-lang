@@ -141,7 +141,8 @@ export {
   __tryCall,
   __catchResult,
 } from "./result.js";
-export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
+export type { ResultValue, ResultSuccess, ResultFailure, SkippedFunction } from "./result.js";
+export { acceptsFailures } from "./failurePropagation.js";
 export { Schema, __validateType } from "./schema.js";
 export { __eq } from "./eq.js";
 export {

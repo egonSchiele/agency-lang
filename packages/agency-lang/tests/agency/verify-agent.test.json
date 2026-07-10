@@ -37,7 +37,7 @@
     {
       "nodeName": "unwrapFailure",
       "input": "",
-      "expectedOutput": "\"true|0\"",
+      "expectedOutput": "\"true|- verification could not run: verifier boom\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": []

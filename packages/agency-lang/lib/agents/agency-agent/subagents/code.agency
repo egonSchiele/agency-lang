@@ -476,17 +476,20 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
         hasErrors = true
       } else {
         hasErrors = false
+        // Default: done unless the verifier says otherwise. Resetting here
+        // (not only inside the gate) means that once the verify-fix cap is
+        // reached and the block below is skipped, `needsFix` can't stay
+        // true and spin the loop to the `iterations` cap.
+        needsFix = false
         // Fresh-eyes verification — one-shot only, only after the code
-        // typechecks clean, capped at 2 verify-fix cycles. `verify.invoke`
-        // returns a Result: a Failure (verifier crashed / no verdict)
-        // matches the else arm and we fail open, since verification can
-        // only help — never block or corrupt (the verifier never writes).
+        // typechecks clean, capped at 2 verify-fix cycles. `try` yields a
+        // Result: a Failure (verifier crashed / no verdict) is unwrapped to
+        // a fail-open verdict, since verification can only help — never
+        // block or corrupt (the verifier never writes).
         if (_oneShot && verifyRounds < 2) {
-          const verdictResult = verify.invoke(originalUserMsg)
+          const verdictResult = try verify(originalUserMsg)
           const verdict = unwrapVerdict(verdictResult)
-          if (verdict.satisfied) {
-            needsFix = false
-          } else {
+          if (!verdict.satisfied) {
             userMsg = "Your work isn't complete yet. A fresh review found these gaps:\n\n${renderGaps(verdict.gaps)}\n\nFix each gap; your work will be re-verified."
             needsFix = true
             verifyRounds += 1

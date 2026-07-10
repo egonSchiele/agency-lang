@@ -1,4 +1,4 @@
-import { ls, glob, grep, bash } from "std::shell"
+import { ls, glob, grep, exec } from "std::shell"
 import { systemMessage } from "std::thread"
 import { map } from "std::array"
 
@@ -16,16 +16,18 @@ export type Verdict = {
   gaps: string[];
 }
 
-// Read-only + run. No write/edit: the verifier reports, it never fixes.
-// Partial-applied with `useAgentCwd` so paths resolve against the same
-// working directory the code agent used (`setAgentCwd`), where the
-// artifacts live.
+// Inspect + run, but no `write`/`edit`: the verifier reports, it never
+// fixes. Uses `exec` (structured command + args, allow/block-listable) NOT
+// `bash` — a bash string can't be constrained, so a "read-only" claim over
+// it would be false. Partial-applied with `useAgentCwd` so paths resolve
+// against the same working directory the code agent used (`setAgentCwd`),
+// where the artifacts live.
 export static const verifyTools: any[] = [
   read.partial(useAgentCwd: true),
   ls.partial(useAgentCwd: true),
   glob.partial(useAgentCwd: true),
   grep.partial(useAgentCwd: true),
-  bash.partial(useAgentCwd: true),
+  exec.partial(useAgentCwd: true),
 ]
 
 export static const verifySysPrompt = """
@@ -37,8 +39,9 @@ go looking for a test suite. Instead, **reconstruct the success check
 from the task's own description** — and any example usage or sample
 input/output it provides — then RUN the agent's artifact through it:
 apply the regex, execute the program, run the provided example, curl the
-endpoint, query the db. Install a package with `bash` ONLY if you need it
-to run the artifact.
+endpoint, query the db. Run programs with the `exec` tool (a command plus
+an args array); install a package with `exec` ONLY if you need it to run
+the artifact.
 
 Check the output contract **literally**:
 - the exact required file path and name,
@@ -57,17 +60,23 @@ export def renderGaps(gaps: string[]): string {
   return map(gaps, \g -> "- ${g}").join("\n")
 }
 
-// Unwrap a `verify.invoke()` Result to a plain Verdict, failing OPEN on
-// any Failure (verifier crashed / no verdict) — verification can only
-// help, never block. Kept as a pure `safe def` so the `match` compiles
-// cleanly and the caller's loop body stays free of binder-in-`if`
-// patterns (which the stepped-loop codegen doesn't handle).
+// Unwrap a `try verify(...)` Result to a plain Verdict, failing OPEN on any
+// Failure (verifier crashed / no verdict) — verification can only help,
+// never block. The failure message is kept in `gaps` so it surfaces in the
+// trace instead of being swallowed; `satisfied` stays true so it doesn't
+// re-prompt the agent. Kept as a pure `safe def` so the `match` compiles
+// cleanly and the caller's loop body stays free of binder-in-`if` patterns
+// (which the stepped-loop codegen doesn't handle).
 export safe def unwrapVerdict(r: Result<Verdict>): Verdict {
-  const failOpen: Verdict = { satisfied: true, gaps: [] }
   return match (r) {
     success(v) => v
-    failure(err) => failOpen
+    failure(err) => failOpenVerdict(err)
   }
+}
+
+// The fail-open verdict, carrying the failure message for observability.
+def failOpenVerdict(err: string): Verdict {
+  return { satisfied: true, gaps: ["verification could not run: ${err}"] }
 }
 
 // only add the system message the first time on the resumed thread
@@ -84,7 +93,7 @@ export def verify(originalUserMsg: string): Verdict {
   """
   // Fail-safe default: if anything below is unclear, we stay `satisfied`
   // so verification never blocks the agent (belt-and-suspenders; the
-  // caller also fails open on a Failure via `.invoke()`).
+  // caller also fails open on a Failure via `try` + `unwrapVerdict`).
   let result: Verdict = { satisfied: true, gaps: [] }
   thread(label: "verify", summarize: true, session: "verify") {
     if (first) {

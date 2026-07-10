@@ -20,9 +20,9 @@ node unwrapSuccess() {
   return "${v.satisfied}|${v.gaps.length}"
 }
 
-// A failure Result (verifier crashed) fails OPEN — satisfied, no gaps —
-// so verification never blocks or breaks the agent.
+// A failure Result (verifier crashed) fails OPEN — satisfied — and carries
+// the error message in gaps so it surfaces instead of being swallowed.
 node unwrapFailure() {
   const v = unwrapVerdict(failure("verifier boom"))
-  return "${v.satisfied}|${v.gaps.length}"
+  return "${v.satisfied}|${renderGaps(v.gaps)}"
 }

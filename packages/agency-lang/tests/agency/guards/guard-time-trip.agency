@@ -5,9 +5,10 @@ import { guard } from "std::thread"
 // abortable, so it wakes promptly on the guard's abort signal. The
 // next runner step boundary then throws GuardExceededError("time",
 // ...). The stdlib guard's `try` converts it to a Failure with type
-// "timeoutFailure". Because sleep now wakes at the abort moment,
-// actualTime lands right around maxTime; we assert it reaches the
-// limit within a small tolerance.
+// "timeoutFailure". We assert actualTime is a real elapsed
+// measurement (at least half the budget) rather than a 0/sentinel
+// value; see the comment on the assertion below for why the bound is
+// deliberately loose.
 node main() {
   const result = guard(time: 20ms) as {
     sleep(150ms)

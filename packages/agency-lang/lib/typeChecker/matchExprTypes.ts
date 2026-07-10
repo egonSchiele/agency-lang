@@ -34,6 +34,16 @@ export function computeMatchExprTypes(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
+  // ORDERING ASSERTION (load-bearing — see TypeChecker.check()): yield
+  // synthesis must see flow-narrowed bindings, and this pass patches the
+  // eagerly-snapshotted matchConsumerAssignFlows nodes — both require the
+  // flow graph to exist. A reorder would silently type every
+  // expression-match as its un-narrowed synthesis.
+  if (!ctx.flowEnv) {
+    throw new Error(
+      "computeMatchExprTypes must run after buildFlowGraphs (ctx.flowEnv is not set)",
+    );
+  }
   for (const info of scopes) {
     ctx.withScope(info.scopeKey, () => {
       const yieldsByMatch: Record<number, MatchYield[]> = {};

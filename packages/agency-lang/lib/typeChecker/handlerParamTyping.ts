@@ -89,6 +89,15 @@ export function refineInlineHandlerParams(
   ctx: TypeCheckerContext,
   registry: Record<string, ObjectType>,
 ): void {
+  // ORDERING ASSERTION (load-bearing — see TypeChecker.check()): this pass
+  // MUTATES scope types, so it must run BEFORE buildFlowGraphs seeds the
+  // typeAt memo. Running after would require the memo-reset contract this
+  // ordering exists to avoid; a reorder would silently produce stale types.
+  if (ctx.flowEnv) {
+    throw new Error(
+      "refineInlineHandlerParams must run before buildFlowGraphs (ctx.flowEnv is already set)",
+    );
+  }
   for (const info of scopes) {
     ctx.withScope(info.scopeKey, () => {
       // Count EVERY inline handler param name (eligible or not) — a shared name

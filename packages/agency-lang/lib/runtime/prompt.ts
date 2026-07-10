@@ -16,7 +16,7 @@ import {
 } from "./replyAttachments.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { abortableSleep } from "../stdlib/abortable.js";
-import { decideRetry, resolveRetryPolicy } from "./llmRetry.js";
+import { decideRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 import {
@@ -321,11 +321,16 @@ async function runWithRetry<T>(
       const normalized = normalizeError(err);
       const decision = decideRetry(err, normalized, attempt, policy);
 
-      if (decision.kind === "propagate" || decision.kind === "terminal") {
-        // propagate: a user/abort cause re-throws untouched (cancel).
-        // terminal: a terminal provider error (e.g. content policy / 4xx) is a
-        // plain Error → the function/node catch ladder converts it to a Failure.
+      if (decision.kind === "propagate") {
+        // A user/abort cause re-throws untouched (cancel).
         throw err;
+      }
+      if (decision.kind === "terminal") {
+        // A terminal provider error (e.g. content policy / 4xx) is a plain
+        // Error → the function/node catch ladder converts it to a Failure.
+        // Known schema-limitation 400s are rethrown with actionable
+        // guidance (#487) — the raw provider text names zod internals.
+        throw enrichSchemaLimitationError(err) ?? err;
       }
       if (decision.kind === "surfaceFailure") {
         // Retries exhausted. Surface a plain Error (NOT an AgencyAbort) so the

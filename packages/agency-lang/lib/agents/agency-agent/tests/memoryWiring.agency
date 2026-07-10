@@ -1,0 +1,129 @@
+import { setEnv } from "std::system"
+
+import {
+  overrideFromResolved,
+  embeddingsOverride,
+  providerKeyMissing,
+  embeddingKeyStatus,
+  memoryEnablePlan,
+  memoryConfigFor,
+  EmbeddingKeyStatus,
+ } from "../shared.agency"
+
+// The override maps the slot value and demotes the provider.
+node overrideFromSlot(): string {
+  const override = embeddingsOverride({
+    "embedding": {
+      model: "text-embedding-3-small",
+      provider: "openai-responses",
+      via: "test"
+    }
+  })
+  if (override == null) {
+    return "null"
+  }
+  return "${override.model}/${override.provider}"
+}
+
+// Empty model, empty provider, and an absent slot all mean unset. The
+// checks are explicit so a wrong non-null result cannot pin itself
+// into the fixture.
+node overrideNullCases(): string {
+  const emptyModel = overrideFromResolved({
+    model: "",
+    provider: "llama-cpp",
+    via: "local"
+  })
+  const emptyProvider = overrideFromResolved({
+    model: "text-embedding-3-small",
+    provider: "",
+    via: "settings"
+  })
+  const absent = embeddingsOverride({})
+  if (emptyModel == null && emptyProvider == null && absent == null) {
+    return "all-null"
+  }
+  return "not-null"
+}
+
+// setEnv makes the key check deterministic. A set key is present, an
+// empty key is missing, and unknown providers never report missing.
+// The value == null branch stays untested here: std::system has no
+// unsetEnv, and the inherited environment is machine-dependent. The
+// degraded run in the e2e task covers it.
+node keyMissingStates(): string {
+  setEnv("OPENROUTER_API_KEY", "test-key") with approve
+  const present = providerKeyMissing("openrouter")
+  setEnv("OPENROUTER_API_KEY", "") with approve
+  const missing = providerKeyMissing("openrouter")
+  const unknown = providerKeyMissing("llama-cpp")
+  return "${present}/${missing}/${unknown}"
+}
+
+// The status composes override + key check, and carries the payload the
+// checkpoints need.
+node statusStates(): string {
+  setEnv("OPENROUTER_API_KEY", "") with approve
+  const slots = {
+    "embedding": {
+      model: "some-embed",
+      provider: "openrouter",
+      via: "test"
+    }
+  }
+  const missing = embeddingKeyStatus(slots)
+  setEnv("OPENROUTER_API_KEY", "key") with approve
+  const ready = embeddingKeyStatus(slots)
+  const none = embeddingKeyStatus({})
+  return "${missing.state}:${missing.varName}/${ready.state}/${none.state}"
+}
+
+// The plan covers all four outcomes, including the precedence case
+// where memory is on, no override exists, and a stale key flag could
+// mislead a wrong implementation.
+node planOutcomes(): string {
+  const ready: EmbeddingKeyStatus = {
+    state: "ready",
+    override: {
+      model: "m",
+      provider: "openai"
+    },
+    varName: "OPENAI_API_KEY"
+  }
+  const missing: EmbeddingKeyStatus = {
+    state: "key-missing",
+    override: {
+      model: "m",
+      provider: "openai"
+    },
+    varName: "OPENAI_API_KEY"
+  }
+  const none: EmbeddingKeyStatus = {
+    state: "no-override",
+    override: null,
+    varName: ""
+  }
+  const off = memoryEnablePlan(false, ready)
+  const noSlot = memoryEnablePlan(true, none)
+  const keyless = memoryEnablePlan(true, missing)
+  const good = memoryEnablePlan(true, ready)
+  return "${off}/${noSlot}/${keyless}/${good}"
+}
+
+// The wiring seam: the override reaches the config, and null keeps the
+// default shape. This is what makes an ignored parameter in
+// enableAgentMemory fail a test instead of shipping.
+node configCarriesOverride(): string {
+  const withOverride = memoryConfigFor({
+    model: "text-embedding-3-small",
+    provider: "openai"
+  })
+  const bare = memoryConfigFor(null)
+  const embeddings = withOverride.embeddings
+  if (embeddings == null) {
+    return "override-lost"
+  }
+  const bareHasNone = bare.embeddings == null
+  const dirsMatch = withOverride.dir == bare.dir
+  return "${embeddings.model}/${embeddings.provider}/${bareHasNone}/${dirsMatch}"
+}

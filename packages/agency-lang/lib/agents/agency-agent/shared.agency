@@ -11,8 +11,8 @@
  */
 import { registerLocalModel } from "std::agency/local"
 import { keys } from "std::object"
-import { setLlmOptions } from "std::llm"
-import { enableMemory } from "std::memory"
+import { setLlmOptions, envVarFor } from "std::llm"
+import { enableMemory, MemoryConfig } from "std::memory"
 import { env } from "std::system"
 
 import {
@@ -140,6 +140,122 @@ export def demoteProvider(provider: string): string {
     return "openai"
   }
   return provider
+}
+
+
+/** The embedding slot's model and provider, demoted. */
+export type EmbeddingsOverride = {
+  model: string;
+  provider: string
+}
+
+/** Map one resolved slot value to an embeddings override. Null when the
+  value is absent, its model is empty, or its provider is empty. The
+  provider comes out demoted as belt-and-braces; promoteAll already
+  exempts derived slots, so demotion is normally a no-op here. This is
+  the single home of that rule. embeddingsOverride and reactToSlotChange
+  both use it. */
+export def overrideFromResolved(
+  resolved: (Resolved | null),
+): (EmbeddingsOverride | null) {
+  if (resolved == null || resolved.model == "" || resolved.provider == "") {
+    return null
+  }
+  return {
+    model: resolved.model,
+    provider: demoteProvider(resolved.provider)
+  }
+}
+
+/** The embeddings override from the resolved slots, or null. */
+export def embeddingsOverride(
+  slots: Record<string, Resolved>,
+): (EmbeddingsOverride | null) {
+  return overrideFromResolved(slots["embedding"])
+}
+
+/** True when the provider has a known API-key variable and the
+  environment leaves it unset or empty. Providers without a known
+  variable never report missing. */
+export def providerKeyMissing(provider: string): boolean {
+  const varName = envVarFor(provider)
+  if (varName == "") {
+    return false
+  }
+  const value = env(varName)
+  return value == null || value == ""
+}
+
+/** The embedding-key question, answered once. Every checkpoint that
+  needs "is the embedding slot usable right now" consumes this instead
+  of re-deriving override plus demotion plus key check. */
+export type EmbeddingKeyStatus = {
+  state: ("no-override" | "key-missing" | "ready");
+  override: (EmbeddingsOverride | null);
+  varName: string
+}
+
+export def embeddingKeyStatus(
+  slots: Record<string, Resolved>,
+): EmbeddingKeyStatus {
+  const override = embeddingsOverride(slots)
+  if (override == null) {
+    return {
+      state: "no-override",
+      override: null,
+      varName: ""
+    }
+  }
+  if (providerKeyMissing(override.provider)) {
+    return {
+      state: "key-missing",
+      override: override,
+      varName: envVarFor(override.provider)
+    }
+  }
+  return {
+    state: "ready",
+    override: override,
+    varName: envVarFor(override.provider)
+  }
+}
+
+/** Decide how maybeEnableMemory should enable memory. Pure, so the
+  branching is testable without the environment or the memory runtime. */
+export def memoryEnablePlan(
+  memoryOn: boolean,
+  status: EmbeddingKeyStatus,
+): ("skip" | "enable-default" | "enable-fallback" | "enable-override") {
+  if (!memoryOn) {
+    return "skip"
+  }
+  if (status.state == "no-override") {
+    return "enable-default"
+  }
+  if (status.state == "key-missing") {
+    return "enable-fallback"
+  }
+  return "enable-override"
+}
+
+/** Build the enableMemory config. Extracted so a test can assert the
+  wiring seam: the override reaches the config, and null keeps the
+  default shape. */
+export def memoryConfigFor(
+  embeddings: (EmbeddingsOverride | null),
+): MemoryConfig {
+  if (embeddings == null) {
+    return {
+      dir: "${AGENCY_AGENT_DIR}/memory"
+    }
+  }
+  return {
+    dir: "${AGENCY_AGENT_DIR}/memory",
+    embeddings: {
+      model: embeddings.model,
+      provider: embeddings.provider
+    }
+  }
 }
 
 // Capability profile for the current main model. refreshCapabilities()

@@ -611,3 +611,19 @@ describe("use-site tag precedence", () => {
     ).toEqual(["fromAlias", "fromUseSite"]);
   });
 });
+
+describe("utility types over recursive aliases (#470 unblocked)", () => {
+  it("Partial of a recursive alias works shallowly", () => {
+    const errors = typecheckSource(`
+type Tree = {
+  value: number,
+  children: Tree[],
+}
+node main() {
+  const t: Partial<Tree> = { value: null, children: null }
+  return t
+}
+`);
+    expect(errors).toEqual([]);
+  });
+});

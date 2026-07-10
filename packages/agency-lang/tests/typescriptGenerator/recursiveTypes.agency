@@ -6,6 +6,8 @@ type Behind = {
   x: number,
 }
 
+type TreePatch = Partial<Tree>
+
 type Tree = {
   value: number,
   children: Tree[],

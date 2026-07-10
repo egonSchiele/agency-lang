@@ -181,6 +181,8 @@ const Ahead = z.object({ "b": z.lazy(() => Behind) });
 type Ahead = z.infer<typeof Ahead>;
 const Behind = z.object({ "x": z.number() });
 type Behind = z.infer<typeof Behind>;
+const TreePatch = z.object({ "value": z.union([z.number(), z.null()]).optional().default(null), "children": z.union([z.array(z.lazy(() => Tree)), z.null()]).optional().default(null) });
+type TreePatch = z.infer<typeof TreePatch>;
 const Tree = z.object({ "value": z.number(), "children": z.array(z.lazy(() => Tree)) });
 type Tree = z.infer<typeof Tree>;
 const Employee = z.object({ "name": z.string(), "manager": z.union([z.lazy(() => Manager), z.null()]).optional().default(null) });
@@ -405,4 +407,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"recursiveTypes.agency:main":{"1":{"line":25,"col":2},"2":{"line":26,"col":2}},"recursiveTypes.agency:llmTree":{"1":{"line":30,"col":2},"2":{"line":31,"col":2}}};
+export const __sourceMap = {"recursiveTypes.agency:main":{"1":{"line":27,"col":2},"2":{"line":28,"col":2}},"recursiveTypes.agency:llmTree":{"1":{"line":32,"col":2},"2":{"line":33,"col":2}}};

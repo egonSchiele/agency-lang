@@ -12,6 +12,25 @@ export function summarize(evt: EventEnvelope): string {
   switch (d.type) {
     case "promptCompletion":
       return `promptCompletion ${stripQuotes(d.model)} (${fmtDuration(d.timeTaken)})`;
+    case "promptStart": {
+      // Only unpaired starts reach the tree, so this line IS the
+      // "call in flight / never completed" indicator. The parenthetical
+      // is the runaway fingerprint: schema + cap + prompt size.
+      const shape = [
+        d.hasResponseFormat ? "schema" : null,
+        d.maxTokens != null ? `maxTokens ${d.maxTokens}` : null,
+        `${d.messageCount} msgs`,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      return `⏳ promptStart ${stripQuotes(d.model)} — never completed (${shape})`;
+    }
+    case "promptCancelled":
+      return `promptCancelled`;
+    case "threadEndHooksStart":
+      return `thread-end hooks (summarize: ${d.eagerSummarize ? "on" : "off"})`;
+    case "threadEndHooksEnd":
+      return `thread-end hooks done (${fmtDuration(d.timeTaken)})`;
     case "toolCallStart":
       return `toolCallStart "${d.toolName}"`;
     case "toolCall":

@@ -361,3 +361,66 @@ describe("summarizeSpanStyled", () => {
     expect(s).not.toMatch(/\{[a-z-]+-fg\}1500 tok/);
   });
 });
+
+describe("summarize (prompt visibility events)", () => {
+  it("summarizes an unpaired promptStart with the runaway fingerprint", () => {
+    const line = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: "s",
+      parent_span_id: null,
+      data: {
+        type: "promptStart",
+        timestamp: "",
+        model: '"qwen"',
+        messageCount: 39,
+        toolCount: 0,
+        hasResponseFormat: true,
+        maxTokens: 2000,
+      },
+    });
+    expect(line).toContain("promptStart qwen");
+    expect(line).toContain("never completed");
+    expect(line).toContain("schema");
+    expect(line).toContain("maxTokens 2000");
+    expect(line).toContain("39 msgs");
+  });
+
+  it("summarizes promptCancelled and the threadEndHooks pair", () => {
+    const cancelledLine = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: "s",
+      parent_span_id: null,
+      data: { type: "promptCancelled", timestamp: "", threadId: "1" },
+    });
+    const startLine = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: "s",
+      parent_span_id: null,
+      data: {
+        type: "threadEndHooksStart",
+        timestamp: "",
+        threadId: "t1",
+        eagerSummarize: true,
+        messageCount: 3,
+      },
+    });
+    const endLine = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: "s",
+      parent_span_id: null,
+      data: { type: "threadEndHooksEnd", timestamp: "", threadId: "t1", timeTaken: 9 },
+    });
+    expect(cancelledLine).toContain("promptCancelled");
+    expect(startLine).toContain("thread-end hooks");
+    expect(startLine).toContain("summarize: on");
+    expect(endLine).toContain("done");
+  });
+});

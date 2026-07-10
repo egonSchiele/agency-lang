@@ -19,7 +19,10 @@ const STRONG_LABEL_EVENTS = new Set<string>([
   "agentEnd",
   "enterNode",
   "promptCompletion",
+  "promptStart",
   "embedCompletion",
+  "threadEndHooksStart",
+  "threadEndHooksEnd",
   "toolCallStart",
   "toolCall",
   "forkStart",
@@ -28,6 +31,40 @@ const STRONG_LABEL_EVENTS = new Set<string>([
   "subprocessEnd",
   "handlerDecision",
 ]);
+
+/** Pair promptStart events with their terminators — a promptCompletion,
+ *  an error event with errorType "llmError", or a promptCancelled — by
+ *  span and order: the nth start in a span pairs with the nth
+ *  terminator. Returns the set of PAIRED starts; anything not in the
+ *  set never completed (a hung, killed, or in-flight call — in follow
+ *  mode this is the live in-flight indicator). Paired starts are hidden
+ *  from the tree: the terminator row already carries the interesting
+ *  data, and doubling every call's rows would make the common case
+ *  worse to read. */
+export function pairedPromptStarts(events: EventEnvelope[]): Set<EventEnvelope> {
+  const pendingBySpan: Record<string, EventEnvelope[]> = {};
+  const paired = new Set<EventEnvelope>();
+  for (const event of events) {
+    const spanKey = event.span_id ?? "";
+    const eventType = event.data.type;
+    if (eventType === "promptStart") {
+      if (!pendingBySpan[spanKey]) {
+        pendingBySpan[spanKey] = [];
+      }
+      pendingBySpan[spanKey].push(event);
+    } else if (
+      eventType === "promptCompletion" ||
+      eventType === "promptCancelled" ||
+      (eventType === "error" && event.data.errorType === "llmError")
+    ) {
+      const pending = pendingBySpan[spanKey];
+      if (pending && pending.length > 0) {
+        paired.add(pending.shift()!);
+      }
+    }
+  }
+  return paired;
+}
 
 export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // traceId → trace root
@@ -85,9 +122,11 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // trace root if it has no span_id), preserving arrival order. Some
   // event types are noise (e.g. the `graph` schema dump) and are
   // hidden from the viewer entirely.
+  const pairedStarts = pairedPromptStarts(events);
   let leafCounter = 0;
   for (const evt of events) {
     if (HIDDEN_EVENT_TYPES.has(evt.data.type)) continue;
+    if (evt.data.type === "promptStart" && pairedStarts.has(evt)) continue;
     const traceRoot = traces[evt.trace_id];
     const parent = evt.span_id ? spans[evt.span_id] : traceRoot;
     const leaf: TreeNode = {
@@ -203,8 +242,15 @@ function inferSpanLabel(evt: EventEnvelope): string {
       return "agentRun";
     case "enterNode":
       return "nodeExecution";
+    case "promptStart":
+      // Arrives first in its llmCall span, so it is usually the
+      // span-introducing event.
+      return "llmCall";
     case "promptCompletion":
       return "llmCall";
+    case "threadEndHooksStart":
+    case "threadEndHooksEnd":
+      return "threadEndHooks";
     case "embedCompletion":
       // Embedding spans share the chat-completion shape but get their
       // own label so the viewer can color/filter them separately and

@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, test, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
   buildCompiledClosure,
   CompileClosureError,
+  programHasPkgImport,
 } from "./compileClosure.js";
+import { parseAgency } from "../parser.js";
 
 let dir: string;
 
@@ -174,5 +176,35 @@ describe("buildCompiledClosure", () => {
     // localOrder still doesn't include bare slots — codegen emits them
     // inline via the section assembler.
     expect(c.plans[mainPath]!.global.localOrder).toEqual([]);
+  });
+});
+
+describe("programHasPkgImport", () => {
+  function parse(source: string) {
+    const result = parseAgency(source, {}, false);
+    if (!result.success) {
+      throw new Error("fixture parse failed");
+    }
+    return result.result;
+  }
+
+  test("detects a plain pkg import", () => {
+    expect(programHasPkgImport(parse('import { x } from "pkg::toolbox"\n'))).toBe(true);
+  });
+
+  test("detects a pkg node import", () => {
+    expect(programHasPkgImport(parse('import node { main } from "pkg::toolbox"\n'))).toBe(true);
+  });
+
+  test("detects a pkg re-export", () => {
+    expect(programHasPkgImport(parse('export { x } from "pkg::toolbox"\n'))).toBe(true);
+  });
+
+  test("false for stdlib and local imports", () => {
+    expect(
+      programHasPkgImport(
+        parse('import { map } from "std::index"\nimport { y } from "./local.agency"\n'),
+      ),
+    ).toBe(false);
   });
 });

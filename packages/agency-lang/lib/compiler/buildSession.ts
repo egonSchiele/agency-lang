@@ -25,10 +25,19 @@ import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import {
+  agencyImportTargets,
   buildCompiledClosure,
   CompileClosureError,
+  programHasPkgImport,
   type CompiledClosure,
 } from "@/compiler/compileClosure.js";
+import {
+  createManifestTracker,
+  NOOP_TRACKER,
+  type Freshness,
+  type ManifestTracker,
+} from "./manifestTracker.js";
+import { deriveConfigKey } from "./buildManifest.js";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
 import * as path from "path";
@@ -53,7 +62,20 @@ export type CompileOptions = {
    *  test runner / analysis paths — kept off AgencyConfig so agent source
    *  cannot enable it. */
   allowTestImports?: boolean;
+  /** Skip policy. "incremental" (default) consults and records the
+   *  manifest; "force" recompiles everything but rewrites it (--force);
+   *  "always" is internal (allowTestImports / --ts / caller-supplied
+   *  importStrategy) and touches nothing. */
+  freshness?: Freshness;
 };
+
+export type CompileRequest = {
+  /** Files or directories. One entry = the legacy per-entry path
+   *  (covers-check closure, stdlib carve-out); many = one union closure. */
+  entries: string[];
+  /** Single non-directory entry only: explicit output path. */
+  outputFile?: string;
+} & CompileOptions;
 
 /**
  * A set of entry files sharing one effective config. The canonical config
@@ -70,6 +92,31 @@ export type CompileGroup = {
   files: string[];
 };
 
+// The only place freshness OVERRIDES live; the policy MEANING lives in
+// the tracker factory. A caller-supplied importStrategy shapes emitted
+// bytes (RunStrategy rewrites .ts import specifiers and transpiles
+// sibling .ts deps on disk — run/runAgencyNode/coverage paths), and the
+// manifest key cannot see it — same disease configKey/hasPkgImports
+// prevent, so it forces "always".
+function resolveFreshness(
+  options?: CompileOptions & { outputFile?: string },
+): Freshness {
+  // An explicit outputFile also forces "always": a fresh entry only knows
+  // the RECORDED output path, so a skip could return the requested path
+  // without ever writing it. Unreachable today (the only outputFile caller
+  // also passes RunStrategy) but both are public surface — same precedent
+  // as --ts: different artifact, not manifest-tracked.
+  if (
+    options?.allowTestImports ||
+    options?.ts ||
+    options?.importStrategy ||
+    options?.outputFile !== undefined
+  ) {
+    return "always";
+  }
+  return options?.freshness ?? "incremental";
+}
+
 export function createBuildSession(): BuildSession {
   return new BuildSession();
 }
@@ -79,29 +126,61 @@ export class BuildSession {
   // Cached `CompiledClosure` for this session. Built once at the outermost
   // compile call and reused by every per-file emit.
   private currentClosure: CompiledClosure | null = null;
+  // Per-operation manifest policy object; NOOP outside operations and for
+  // "always" sessions, so every call site is an unconditional one-liner.
+  private tracker: ManifestTracker = NOOP_TRACKER;
 
-  /** Compile a file or directory entry: recursive imports, per-session
-   *  dedupe. Returns the output path (null for directories). */
-  compile(
-    config: AgencyConfig,
-    inputFile: string,
-    outputFile?: string,
-    options?: CompileOptions,
-  ): string | null {
-    return this.compileEntry(config, inputFile, outputFile, options);
-  }
-
-  /** Compile a set of entry files under ONE union closure, like the
-   *  directory branch of `compile()`. Closure errors THROW
-   *  (`CompileClosureError`) so programmatic callers can attach context;
-   *  parse/typecheck failures inside per-file compiles keep their exit
-   *  behavior. */
-  compileMany(
-    config: AgencyConfig,
-    files: string[],
-    options?: { quiet?: boolean; allowTestImports?: boolean },
-  ): void {
-    this.compileManyImpl(config, files, options);
+  /**
+   * The one public compile entry point: callers declare WHAT to build
+   * (entries + options); the session decides how. A single entry keeps the
+   * legacy per-entry closure semantics (covers-check reuse, stdlib
+   * carve-out); multiple entries compile under ONE union closure, where
+   * closure errors THROW (`CompileClosureError`) so programmatic callers
+   * can attach context. Parse/typecheck failures inside per-file compiles
+   * keep their exit behavior. Returns the output path for a single
+   * non-directory entry, null otherwise.
+   */
+  compile(config: AgencyConfig, request: CompileRequest): string | null {
+    const { entries, outputFile, ...options } = request;
+    if (outputFile !== undefined && entries.length !== 1) {
+      throw new Error("outputFile is only valid with a single file entry");
+    }
+    if (entries.length === 0) {
+      return null;
+    }
+    this.tracker = createManifestTracker(config, entries[0], resolveFreshness(request));
+    try {
+      // Fully-clean fast path: every requested module fresh per the
+      // manifest alone — no closure walk, no parsing. Directories expand
+      // with the same walker the compile path uses.
+      const { files: allFiles, hasDirectory } = expandEntries(entries);
+      if (this.tracker.allFresh(allFiles)) {
+        for (const file of allFiles) {
+          this.compiledFiles.add(file);
+        }
+        if (!options.quiet) {
+          console.log(`${allFiles.length} file(s) up to date`);
+        }
+        // Match the compile path contract: directory entries return null
+        // even when the directory holds exactly one file.
+        if (allFiles.length === 1 && !hasDirectory) {
+          return this.tracker.outputFor(allFiles[0]);
+        }
+        return null;
+      }
+      if (entries.length === 1) {
+        return this.compileEntry(config, entries[0], outputFile, options);
+      }
+      this.compileManyImpl(config, entries, options);
+      return null;
+    } finally {
+      // Modules emitted before a later failure are legitimately fresh, so
+      // flushing in finally is correct. Caveat: most compile failures are
+      // process.exit(1), which bypasses finally — the flush is simply
+      // lost, which only over-rebuilds next time. Safe.
+      this.tracker.flush();
+      this.tracker = NOOP_TRACKER;
+    }
   }
 
   /** Compile config-heterogeneous groups (one union closure each), after
@@ -111,7 +190,7 @@ export class BuildSession {
    *  Throws `CompileClosureError` naming the module and group labels. */
   compileGroups(
     groups: CompileGroup[],
-    options?: { quiet?: boolean; allowTestImports?: boolean },
+    options?: { quiet?: boolean; allowTestImports?: boolean; freshness?: Freshness },
   ): void {
     const withClosures = groups.map((group) => ({
       group,
@@ -140,17 +219,27 @@ export class BuildSession {
     }
 
     for (const { group, closure } of withClosures) {
-      this.compileManyImpl(group.config, group.files, {
-        closure,
-        quiet: options?.quiet,
-        allowTestImports: options?.allowTestImports,
-      });
+      // Each group gets its own tracker (per-group config identity); the
+      // test runner passes allowTestImports, which resolves to "always"
+      // and the NOOP tracker — no manifest IO, structurally.
+      this.tracker = createManifestTracker(group.config, group.files[0], resolveFreshness(options));
+      try {
+        this.compileManyImpl(group.config, group.files, {
+          closure,
+          quiet: options?.quiet,
+          allowTestImports: options?.allowTestImports,
+        });
+      } finally {
+        this.tracker.flush();
+        this.tracker = NOOP_TRACKER;
+      }
     }
   }
 
   /** Drop all cached state (watch-mode rebuild boundary). */
   reset(): void {
     this.setClosure(null);
+    this.tracker = NOOP_TRACKER;
   }
 
   // `compiledFiles` entries are only meaningful under the current closure,
@@ -162,6 +251,28 @@ export class BuildSession {
     this.compiledFiles.clear();
   }
 
+  /** BFS over the closure import graph. Stdlib entries have no closure —
+   *  their deps are [] by construction (stdlibHash covers them). */
+  private transitiveDeps(absModule: string): string[] {
+    const programs = this.currentClosure?.programs;
+    if (!programs || !programs[absModule]) {
+      return [];
+    }
+    const seen = [absModule];
+    for (let i = 0; i < seen.length; i++) {
+      const program = programs[seen[i]];
+      if (!program) {
+        continue;
+      }
+      for (const target of agencyImportTargets(program, seen[i])) {
+        if (!seen.includes(target)) {
+          seen.push(target);
+        }
+      }
+    }
+    return seen.slice(1);
+  }
+
   /**
    * Internal variant of compileMany keeping the prebuilt-closure handoff
    * (`options.closure`) used by compileGroups; the public method omits it —
@@ -171,20 +282,20 @@ export class BuildSession {
   private compileManyImpl(
     config: AgencyConfig,
     files: string[],
-    options?: {
+    options?: CompileOptions & {
+      /** Prebuilt union closure (compileGroups handoff). MUST cover every
+       *  file, or the covers-check clears the session cache mid-loop. */
       closure?: CompiledClosure;
-      quiet?: boolean;
-      allowTestImports?: boolean;
     },
   ): void {
     const absFiles = files.map((f) => path.resolve(f));
-    if (absFiles.length === 0) return;
-    this.setClosure(options?.closure ?? buildCompiledClosure(absFiles, config));
+    if (absFiles.length === 0) {
+      return;
+    }
+    const { closure, ...compileOptions } = options ?? {};
+    this.setClosure(closure ?? buildCompiledClosure(absFiles, config));
     for (const file of absFiles) {
-      this.compileEntry(config, file, undefined, {
-        quiet: options?.quiet,
-        allowTestImports: options?.allowTestImports,
-      });
+      this.compileEntry(config, file, undefined, compileOptions);
     }
   }
 
@@ -298,8 +409,6 @@ export class BuildSession {
     const compileStartTime = performance.now();
     const absoluteInputFile = path.resolve(inputFile);
 
-    this.ensureCompiledClosure(absoluteInputFile, config, !!options?.symbolTable, verbose);
-
     const ext = options?.ts ? ".ts" : ".js";
     // Anchor the replacement to the extension so that an absolute path
     // containing ".agency" as a substring in a parent directory (e.g.
@@ -319,6 +428,21 @@ export class BuildSession {
       return outputFile;
     }
 
+    // Incremental skip — BEFORE the closure build, so a fresh module pays
+    // no parse, no analysis, no typecheck, no recursion into imports (its
+    // depsHash covers the whole subtree), no emit. The NOOP tracker makes
+    // this constant-false for "always" sessions. Deliberately NOT added to
+    // compiledFiles here: ensureCompiledClosure below may clear that set,
+    // and repeat visits are absorbed by this same check.
+    if (this.tracker.isFresh(absoluteInputFile)) {
+      return outputFile;
+    }
+
+    this.ensureCompiledClosure(absoluteInputFile, config, !!options?.symbolTable, verbose);
+
+    // Added AFTER ensureCompiledClosure: setClosure clears the dedupe set
+    // when the closure changes, so an earlier add would be wiped moments
+    // later (this ordering predates the manifest and must be preserved).
     this.compiledFiles.add(absoluteInputFile);
 
     const contents = readFile(inputFile);
@@ -422,6 +546,25 @@ export class BuildSession {
       fs.writeFileSync(outputFile, result.code, "utf-8");
       const esbuildEndTime = performance.now();
       logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
+      // Record ONLY when the module's deps are knowable: covered by the
+      // session closure, or a stdlib module (compiled closure-free by
+      // design; deps [] is correct because stdlibHash covers all of
+      // stdlib). A module compiled with a caller-threaded symbolTable and
+      // no closure (agency serve) has REAL imports the session cannot see
+      // — recording deps: [] would poison the manifest with an entry that
+      // skips despite edited imports.
+      const isStdlibModule = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
+      const depsKnowable =
+        isStdlibModule || this.currentClosure?.programs[absoluteInputFile] !== undefined;
+      if (depsKnowable) {
+        const transitiveDeps = this.transitiveDeps(absoluteInputFile);
+        this.tracker.record(
+          absoluteInputFile,
+          path.resolve(outputFile),
+          transitiveDeps,
+          subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
+        );
+      }
     }
     const compileEndTime = performance.now();
     const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
@@ -439,14 +582,6 @@ export function readFile(inputFile: string): string {
   }
 
   return fs.readFileSync(inputFile, "utf-8");
-}
-
-// Canonical config identity. JSON.stringify is order-stable here because
-// every config passes through AgencyConfigSchema.safeParse (loadConfigSafe
-// returns result.data), and zod rebuilds objects in SCHEMA shape order —
-// guarded by the key-order test in lib/cli/precompile.test.ts.
-function deriveConfigKey(config: AgencyConfig): string {
-  return JSON.stringify(config);
 }
 
 export function findCrossConfigConflicts(
@@ -522,4 +657,40 @@ function logTime({ label, start, end, verbose }: { label: string, start: number,
   if (verbose) {
     console.log(`${label} in ${(end - start).toFixed(2)}ms`);
   }
+}
+
+/** pkg:: imports are invisible to the closure and depsHash; a module whose
+ *  subtree touches pkg:: is never skipped (spec). Edge detection is shared
+ *  with the closure walker via programHasPkgImport. */
+function subtreeHasPkgImport(
+  closure: CompiledClosure | null,
+  absModule: string,
+  transitiveDeps: string[],
+): boolean {
+  for (const modulePath of [absModule, ...transitiveDeps]) {
+    const program = closure?.programs[modulePath];
+    if (program && programHasPkgImport(program)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Expand request entries to absolute FILE paths: directories via the same
+ *  walker the compile path uses, files as-is. Fast-path support only —
+ *  the compile dispatch itself keeps its dir handling untouched. */
+function expandEntries(entries: string[]): { files: string[]; hasDirectory: boolean } {
+  const files: string[] = [];
+  let hasDirectory = false;
+  for (const entry of entries) {
+    if (fs.existsSync(entry) && fs.statSync(entry).isDirectory()) {
+      hasDirectory = true;
+      for (const found of findRecursively(entry)) {
+        files.push(path.resolve(found.path));
+      }
+    } else {
+      files.push(path.resolve(entry));
+    }
+  }
+  return { files, hasDirectory };
 }

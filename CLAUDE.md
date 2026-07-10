@@ -116,6 +116,7 @@ Pipeline and architecture:
 - `docs/dev/validation-annotations.md` — `@validate(...)` and `@jsonSchema(...)` internals: tag merging, `__agency_descriptor` contract, descriptor tree, runtime walker
 - `docs/dev/async-context.md` — `agencyStore` AsyncLocalStorage frame and `getRuntimeContext()` pattern for stdlib TS helpers
 - `docs/dev/local-models.md` — Local-model support: provider, name resolution, catalog refresh, and SHA-256 download verification
+- `docs/dev/incremental-builds.md` — The build manifest: schema, invalidation fields, the ManifestTracker policy object, --force
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

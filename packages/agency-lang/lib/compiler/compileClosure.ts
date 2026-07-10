@@ -265,7 +265,7 @@ function loadModule(
   };
 }
 
-function agencyImportTargets(
+export function agencyImportTargets(
   program: AgencyProgram,
   moduleId: string,
 ): string[] {
@@ -285,6 +285,24 @@ function agencyImportTarget(node: AgencyNode): string | null {
   if (node.type === "importNodeStatement") return node.agencyFile;
   if (node.type === "exportFromStatement") return node.modulePath;
   return null;
+}
+
+/**
+ * True when the program has any pkg:: import edge. Routed through the
+ * SAME extraction as the closure walker (agencyImportTarget), which
+ * recognizes importStatement, importNodeStatement, AND
+ * exportFromStatement — a hand-rolled importStatement-only scan would let
+ * `export { x } from "pkg::…"` escape the incremental-build never-skip.
+ * One source of truth for "what is an import edge".
+ */
+export function programHasPkgImport(program: AgencyProgram): boolean {
+  for (const node of program.nodes) {
+    const target = agencyImportTarget(node);
+    if (target !== null && isPkgImport(target)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

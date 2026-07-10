@@ -84,7 +84,7 @@ function stripNull(t: VariableType): VariableType {
  * ARGUMENT (alias-side per the `mergeTagSets` contract); the occurrence's
  * tags are the use-site layer and override on `@jsonSchema` key conflicts.
  */
-function withUseSiteTags(
+export function withUseSiteTags(
   t: VariableType,
   useSiteTags: Tag[] | undefined,
 ): VariableType {
@@ -102,7 +102,7 @@ function isValidRecordKey(t: VariableType): boolean {
   return false;
 }
 
-function resolveObjectArg(
+export function resolveObjectArg(
   name: string,
   arg: VariableType,
   resolve: Resolve,
@@ -117,7 +117,7 @@ function resolveObjectArg(
 }
 
 /** K must resolve to a string literal or a union of string literals. */
-function resolveKeysArg(
+export function resolveKeysArg(
   name: string,
   arg: VariableType,
   resolve: Resolve,

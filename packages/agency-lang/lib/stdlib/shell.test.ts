@@ -6,6 +6,8 @@ import { __internal_exec, __internal_bash } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
+import { safeDeleteDirectory } from "../utils.js";
+import { findPackageRoot } from "../importPaths.js";
 
 /**
  * Focused tests for the `~`-expansion + allow-list behavior on the
@@ -148,12 +150,16 @@ describe("_exec / _bash cwd ~ expansion", () => {
  * doing `setAgentCwd("/tmp/build")` before the `mkdir`.
  */
 describe("_exec / _bash reject a nonexistent cwd with a clear error", () => {
+  // Create the scratch dir INSIDE the project root so `safeDeleteDirectory`'s
+  // containment guard accepts it (it refuses anything outside the project, so
+  // a test can never delete the wrong thing).
+  const projectRoot = fs.realpathSync(findPackageRoot(__dirname));
   let tmp: string;
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "shell-cwd-"));
+    tmp = fs.mkdtempSync(path.join(projectRoot, ".test-shell-cwd-"));
   });
   afterEach(() => {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    safeDeleteDirectory(tmp, false);
   });
 
   it("_bash throws 'does not exist', not 'spawn sh ENOENT'", async () => {

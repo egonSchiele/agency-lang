@@ -67,7 +67,8 @@ async function resolveSpawnCwd(
     if (e?.code === "ENOENT") {
       throw new Error(
         `Working directory does not exist: ${resolved}. ` +
-          "Create it first (e.g. `mkdir -p` from an existing directory) " +
+          "Create it first (e.g. `mkdir -p` from an existing directory, or " +
+          "another tool to create directories that you have access to) " +
           "before running a command there.",
       );
     }

@@ -145,6 +145,50 @@ const result = try foo()
 
 Agency also adds an automatic try-catch around every function definition, and if an error is thrown, it returns a `Failure` type.
 
+## Failure propagation
+
+A failure is self-propagating. If you pass one to a function that is not
+typed to accept Results, the function does not run. The call returns the
+original failure instead, exactly like a pipe chain short-circuiting:
+
+```ts
+def getReport(id: string): Result {
+  return failure("HTTP 404: report not found")
+}
+
+def wordCount(text: string): number {
+  return text.split(" ").length
+}
+
+node main() {
+  const report = getReport("abc")   // oops: never checked
+  const count = wordCount(report)   // wordCount is skipped
+  // count IS the original failure. count.error is the 404 message, and
+  // count.skippedFunctions is [{ name: "wordCount", param: "text" }].
+}
+```
+
+A parameter accepts failures only if its type says so. `Result`,
+`Result<...>`, explicit `any`, or a union containing either accepts.
+Untyped parameters reject.
+
+Passing a failure to an imported TypeScript function throws an error
+instead, because TypeScript code does not know about Results. Calling a
+method on a Result (like `.split()` on a failure you forgot to unwrap)
+also throws. Both errors name the function that produced the failure.
+If your own TypeScript helper legitimately takes failures, tag it:
+
+```ts
+import { acceptsFailures } from "agency-lang";
+
+export const myLogger = acceptsFailures((value) => {
+  console.log(value);
+});
+```
+
+Set `failurePropagation` in `agency.json` to `"warn"` (log a statelog
+warning and a stderr line, keep legacy behavior) or `"off"` to disable.
+
 ## `Result` type parameters
 
 The `Result` type has two type parameters, the success type and the failure type. If you don't specify them, they default to `any`:

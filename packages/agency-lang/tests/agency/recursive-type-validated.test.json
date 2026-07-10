@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "valid nested payload passes recursive validation"
+    },
+    {
+      "nodeName": "rejectsNested",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "validator fires at nesting depth 2 (silent-loss regression pin)"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+// Validated recursive alias: nested validators must run at every level.
+// Validators fire through the `!` validated-assignment path (schema(...)
+// parse is zod-only). Before the lazy-descriptor fix, the alias's own
+// __agency_descriptor initializer read itself mid-assignment (undefined),
+// so walking into `children` hit a dead descriptor and nested validation
+// broke — rejectsNested() proves the validator now fires one level down.
+def positive(n: number): Result<number, string> {
+  if (n > 0) {
+    return success(n)
+  }
+  return failure("must be positive")
+}
+
+type Tree = {
+  @validate(positive)
+  value: number,
+  children: Tree[],
+}
+
+node accepts() {
+  const t: Tree! = { value: 1, children: [{ value: 2, children: [] }] }
+  if (isSuccess(t)) {
+    return "ok"
+  }
+  return "invalid"
+}
+
+node rejectsNested() {
+  const t: Tree! = { value: 1, children: [{ value: -5, children: [] }] }
+  if (isFailure(t)) {
+    return "rejected"
+  }
+  return "accepted"
+}

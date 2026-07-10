@@ -753,10 +753,16 @@ export class TypeScriptBuilder {
       // intact lets `buildValidationDescriptor` emit a nested factory CALL
       // for any value-param reference (validators resolve in their own
       // module); the schema strings still substitute identifiers locally.
+      // Value-param factories HOIST but their bodies execute when called —
+      // possibly from a load-time descriptor initializer ANYWHERE in the
+      // module, so no source position bounds which aliases are safe. Treat
+      // every module alias as pending: z.lazy is always safe and only
+      // costs indirection.
       const vpDescriptor = buildValidationDescriptor(
         vpAliasedWithTags,
         this.scopes.visibleTypeAliases(),
         vpAliasesFull,
+        this.pendingAliasesFor(undefined),
       );
       // Bake value-param DEFAULTS into the factory signature so an omitted
       // use-site arg (e.g. `Age()!` or bare `Age!`) resolves the same default
@@ -821,6 +827,7 @@ export class TypeScriptBuilder {
         resolved,
         this.scopes.visibleTypeAliases(),
         aliasesFull,
+        this.pendingAliasesFor(node.loc?.start),
       );
       // `(Foo as any).__agency_descriptor = ...` — keeps the runtime metadata
       // co-located with the schema and avoids exporting/importing a second

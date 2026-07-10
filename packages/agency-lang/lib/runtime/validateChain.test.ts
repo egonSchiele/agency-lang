@@ -161,3 +161,82 @@ describe("__validateChainRecursive", () => {
     expect(typeof err.valuePreview === "string").toBe(true);
   });
 });
+
+describe("ref descriptors (deferred reads for recursive/forward aliases)", () => {
+  it("resolves a self-referential ref at walk time and validates every level", async () => {
+    // Mirrors the emitted shape for `type Tree = { @validate(pos) value,
+    // children: Tree[] }`: the array element is a ref whose get() reads the
+    // completed descriptor — the eager-read emission this replaced saw
+    // `undefined` mid-assignment and nested validation vanished.
+    const isPositive: AgencyValidator = async (v) =>
+      typeof v === "number" && v > 0
+        ? success(v)
+        : failure("must be positive");
+    const treeSchema: z.ZodType = z.object({
+      value: z.number(),
+      children: z.array(z.lazy(() => treeSchema)),
+    });
+    const tree: TypeValidationDescriptor = {
+      kind: "object",
+      schema: treeSchema,
+      validators: [],
+      properties: {
+        value: { kind: "leaf", schema: z.number(), validators: [isPositive] },
+        children: {
+          kind: "array",
+          schema: z.array(z.lazy(() => treeSchema)),
+          validators: [],
+          element: { kind: "ref", get: () => tree },
+        },
+      },
+    };
+    const ok = await __validateChainRecursive(
+      { value: 1, children: [{ value: 2, children: [] }] },
+      tree,
+    );
+    expect(isSuccess(ok)).toBe(true);
+    const bad = await __validateChainRecursive(
+      { value: 1, children: [{ value: -5, children: [] }] },
+      tree,
+    );
+    expect(isFailure(bad)).toBe(true);
+  });
+
+  it("use-site validators merged onto the resolved descriptor still run through a ref", async () => {
+    // The emitter wraps use-site validators INSIDE get() (the walker
+    // dispatches ref before running validators). Simulate that shape.
+    const rejectAll: AgencyValidator = async () => failure("nope");
+    const leaf: TypeValidationDescriptor = {
+      kind: "leaf",
+      schema: z.number(),
+      validators: [],
+    };
+    const ref: TypeValidationDescriptor = {
+      kind: "ref",
+      get: () => ({ ...leaf, validators: [rejectAll] }),
+    };
+    expect(isFailure(await __validateChainRecursive(1, ref))).toBe(true);
+  });
+
+  it("depth cap still bounds a cyclic ref walk", async () => {
+    // A degenerate always-recursing descriptor must hit maxDepth, not hang.
+    const selfRef: TypeValidationDescriptor = {
+      kind: "ref",
+      get: () => wrapper,
+    };
+    const wrapper: TypeValidationDescriptor = {
+      kind: "object",
+      schema: z.any(),
+      validators: [],
+      properties: { next: selfRef },
+    };
+    const deep: { next?: unknown } = {};
+    let cursor = deep;
+    for (let i = 0; i < 200; i++) {
+      cursor.next = {};
+      cursor = cursor.next as { next?: unknown };
+    }
+    const r = await __validateChainRecursive(deep, wrapper, { maxDepth: 16 });
+    expect(isFailure(r)).toBe(true);
+  });
+});

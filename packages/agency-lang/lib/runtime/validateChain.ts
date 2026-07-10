@@ -107,6 +107,19 @@ export type TypeValidationDescriptor =
       schema: z.ZodType;
       validators: AgencyValidator[];
       inner: TypeValidationDescriptor;
+    }
+  | {
+      kind: "ref";
+      /**
+       * Deferred descriptor read. Emitted for alias references whose
+       * target descriptor is not initialized yet at module load (forward
+       * refs) or is the descriptor currently being built (self-recursion).
+       * Resolved at walk time, when every __agency_descriptor exists.
+       * Dispatched BEFORE the own-validator step: a ref carries no schema
+       * or validators of its own — use-site validators are merged onto
+       * the resolved descriptor inside get() at emission time.
+       */
+      get: () => TypeValidationDescriptor;
     };
 
 export type RecursiveValidationOpts = {
@@ -143,6 +156,12 @@ async function walk(
     });
   }
   if (isFailure(value)) return value as ResultValue;
+
+  if (descriptor.kind === "ref") {
+    // Depth passes through unchanged: the structural kinds below the ref
+    // increment it, and maxDepth bounds runaway recursion.
+    return walk(value, descriptor.get(), depth, maxDepth);
+  }
 
   // Step 1: parse + own validators at this node.
   const own = await __validateChain(

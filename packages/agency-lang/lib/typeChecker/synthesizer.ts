@@ -13,6 +13,7 @@ import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
 import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
+import { typeKey } from "./typeKey.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -457,9 +458,9 @@ function synthLogical(
   const seen = new Map<string, VariableType>();
   const collect = (t: VariableType) => {
     if (t.type === "unionType") {
-      for (const m of t.types) seen.set(JSON.stringify(m), m);
+      for (const m of t.types) seen.set(typeKey(m, ctx.getTypeAliases()), m);
     } else {
-      seen.set(JSON.stringify(t), t);
+      seen.set(typeKey(t, ctx.getTypeAliases()), t);
     }
   };
   collect(left);
@@ -636,7 +637,7 @@ function synthArray(
   // Deduplicate structurally identical types
   const seen = new Map<string, VariableType>();
   for (const t of concreteTypes) {
-    const key = JSON.stringify(t);
+    const key = typeKey(t, ctx.getTypeAliases());
     if (!seen.has(key)) seen.set(key, t);
   }
   const unique = Array.from(seen.values());
@@ -708,7 +709,7 @@ function synthObject(
       ...computedValueTypes,
     ];
     if (allValueTypes.length === 0) return "any";
-    const unique = uniqBy(allValueTypes, (t) => JSON.stringify(t));
+    const unique = uniqBy(allValueTypes, (t) => typeKey(t, ctx.getTypeAliases()));
     const valueType: VariableType =
       unique.length === 1
         ? unique[0]
@@ -1212,7 +1213,7 @@ function synthBlockReturnType(
   // Dedupe structurally identical types.
   const seen = new Map<string, VariableType>();
   for (const t of concrete) {
-    const key = JSON.stringify(t);
+    const key = typeKey(t, ctx.getTypeAliases());
     if (!seen.has(key)) seen.set(key, t);
   }
   const unique = Array.from(seen.values());

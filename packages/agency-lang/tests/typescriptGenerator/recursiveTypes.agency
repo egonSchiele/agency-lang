@@ -1,0 +1,35 @@
+type Ahead = {
+  b: Behind,
+}
+
+type Behind = {
+  x: number,
+}
+
+type TreePatch = Partial<Tree>
+
+type Tree = {
+  value: number,
+  children: Tree[],
+}
+
+type Employee = {
+  name: string,
+  manager: Manager | null,
+}
+
+type Manager = {
+  reports: Employee[],
+}
+
+type Json = string | number | Json[]
+
+node main() {
+  const t: Tree = { value: 1, children: [] }
+  return t
+}
+
+node llmTree() {
+  const suggested: Tree = llm("Suggest a small tree")
+  return suggested
+}

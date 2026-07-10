@@ -203,6 +203,22 @@ def updateUser(id: string, changes: Partial<User>): string {
 }
 ```
 
+## Recursive types
+
+Type aliases can reference themselves, each other, or aliases declared
+later in the file:
+
+```ts
+type Tree = {
+  value: number,
+  children: Tree[],
+}
+```
+
+`schema(Tree)` validates nested payloads at every level, and `@validate`
+annotations on nested fields fire at every depth through the `!`
+validated-assignment form.
+
 ## References
 
 - [Schemas](/guide/schemas)

@@ -4,6 +4,7 @@ import { narrowByRefine } from "./narrowing.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { NEVER_T } from "./primitives.js";
 import { isNever, safeResolveType } from "./assignability.js";
+import { typeKey } from "./typeKey.js";
 // The pure path-segment core lives in its own module so `narrowing.ts` can
 // value-import it (chainToSegments) without a runtime cycle back through
 // `flow.ts` (which value-imports `narrowByRefine` from `narrowing.ts`). Re-export
@@ -125,22 +126,20 @@ export type FlowEnvironment = {
  * `never`. Literal members are preserved (not widened to primitives) so a
  * discriminant union survives a join with full precision.
  *
- * KNOWN LIMITATION (PR 1a): dedup is by `JSON.stringify` structural equality
- * and does NOT resolve type aliases. Two members that resolve to the same
- * underlying type via different aliases will both survive. PR 2 will hit this
- * the moment alias-typed locals flow through a join — fix then by resolving
- * with `_aliases` before keying.
+ * Dedup keys via `typeKey` (typeKey.ts), which resolves top-level aliases,
+ * ignores property order and non-semantic metadata, and keys recursive
+ * references nominally — the gaps raw `JSON.stringify` keying had.
  */
 export function uniteTypes(
   types: ScopeType[],
-  _aliases: Record<string, TypeAliasEntry>,
+  aliases: Record<string, TypeAliasEntry>,
 ): ScopeType {
   if (types.some((t) => t === "any")) return "any";
   const concrete = (types as VariableType[]).filter((t) => !isNever(t));
   if (concrete.length === 0) return NEVER_T;
   const seen: Record<string, VariableType> = {};
   for (const t of concrete) {
-    const key = JSON.stringify(t);
+    const key = typeKey(t, aliases);
     if (!(key in seen)) seen[key] = t;
   }
   const uniques = Object.values(seen);
@@ -306,10 +305,10 @@ export function mergeFlows(flows: FlowNode[]): FlowNode {
  * changed. Can over-widen when a narrowing actually holds across iterations —
  * acceptable, documented (no fixpoint).
  *
- * The unchanged-check uses `JSON.stringify` equality (same as `uniteTypes`) and
- * does NOT resolve type aliases — two structurally-different-but-equivalent
- * aliased types read as "changed" and pessimistically widen. Same caveat as
- * `uniteTypes`; revisit alongside it.
+ * The unchanged-check uses `typeKey` equality (same as `uniteTypes`), so
+ * alias-vs-body and property-order differences no longer pessimistically
+ * widen. The `"any"` sentinel short-circuits before typeKey, which only
+ * accepts real VariableTypes.
  */
 export function widenAtLoopBackEdge(
   loopEntry: FlowNode,
@@ -325,7 +324,11 @@ export function widenAtLoopBackEdge(
     const r: Reference = { variable: name, chain: [] };
     const before = typeAt(r, loopEntry, env);
     const after = bodyEnd.kind === "exit" ? before : typeAt(r, bodyEnd, env);
-    if (JSON.stringify(before) === JSON.stringify(after)) {
+    const unchanged =
+      before === "any" || after === "any"
+        ? before === after
+        : typeKey(before, env.typeAliases) === typeKey(after, env.typeAliases);
+    if (unchanged) {
       widened[referenceKey(r)] = before;
     } else {
       widened[referenceKey(r)] = uniteTypes([before, after], env.typeAliases);

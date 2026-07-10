@@ -1,0 +1,26 @@
+// Utility-type x recursion composition: Partial<Tree> parses with missing
+// keys null-coalesced, and still validates a wrongly-typed present key.
+// (Schema bound to a variable first — chaining on schema(...) does not
+// parse, see #480.)
+type Tree = {
+  value: number,
+  children: Tree[],
+}
+
+node accepts() {
+  const s = schema(Partial<Tree>)
+  const r = s.parseJSON("{}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(Partial<Tree>)
+  const r = s.parseJSON("{\"value\": \"nope\"}")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

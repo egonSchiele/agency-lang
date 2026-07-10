@@ -95,7 +95,7 @@ import {
   hasAliasValidate,
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
-import { resolveTypeDeep } from "../typeChecker/assignability.js";
+import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
 import { isFunctionTyped } from "../typeChecker/utils.js";
 
 import { $, ts } from "../ir/builders.js";
@@ -453,6 +453,17 @@ export class TypeScriptBuilder {
   // ------- Main entry point -------
 
   build(program: AgencyProgram): TsNode {
+    // Plain top-level aliases in source order — the basis for the derived
+    // pending-alias computation (see pendingAliasesFor). Captured once;
+    // partitionProgram keeps top-level declarations in source order, so
+    // source offsets are a faithful oracle for const-initialization order.
+    this.aliasEmissionOrder = program.nodes
+      .filter(
+        (n): n is TypeAlias =>
+          n.type === "typeAlias" && !n.typeParams && !n.valueParams,
+      )
+      .map((n) => ({ name: n.aliasName, start: n.loc?.start ?? 0 }));
+
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
@@ -742,10 +753,16 @@ export class TypeScriptBuilder {
       // intact lets `buildValidationDescriptor` emit a nested factory CALL
       // for any value-param reference (validators resolve in their own
       // module); the schema strings still substitute identifiers locally.
+      // Value-param factories HOIST but their bodies execute when called —
+      // possibly from a load-time descriptor initializer ANYWHERE in the
+      // module, so no source position bounds which aliases are safe. Treat
+      // every module alias as pending: z.lazy is always safe and only
+      // costs indirection.
       const vpDescriptor = buildValidationDescriptor(
         vpAliasedWithTags,
         this.scopes.visibleTypeAliases(),
         vpAliasesFull,
+        this.pendingAliasesFor(undefined),
       );
       // Bake value-param DEFAULTS into the factory signature so an omitted
       // use-site arg (e.g. `Age()!` or bare `Age!`) resolves the same default
@@ -777,7 +794,31 @@ export class TypeScriptBuilder {
           tags: [...(node.aliasedType.tags ?? []), ...node.tags],
         }
       : node.aliasedType;
-    const zodSchema = this.zodSchemaFor(aliasedWithTags);
+    // `type Loop = Loop` (directly or via `type A = B` + `type B = A`) has
+    // no base case: its lazy schema would recurse at first parse, and its
+    // validation descriptors would chain ref -> ref forever. TS rejects the
+    // shape too. Resolve the alias CHAIN with safeResolveType — its
+    // in-progress guard leaves genuinely circular chains as a nominal ref,
+    // while a legitimate alias-of-alias (`type Point = Coords`) resolves
+    // through to the referenced body. An unknown alias also stays nominal
+    // but has no registry entry: fall through to the regular
+    // undefined-alias diagnostic instead of a misleading circularity error.
+    if (node.aliasedType.type === "typeAliasVariable") {
+      const aliasesFull = this.scopes.visibleTypeAliasesFull();
+      const chainEnd = safeResolveType(node.aliasedType, aliasesFull);
+      if (
+        chainEnd.type === "typeAliasVariable" &&
+        aliasesFull[chainEnd.aliasName]
+      ) {
+        throw new Error(
+          `Type alias '${node.aliasName}' circularly references itself with no structure. Give it an object, array, or union shape.`,
+        );
+      }
+    }
+    const zodSchema = this.zodSchemaFor(
+      aliasedWithTags,
+      this.pendingAliasesFor(node.loc?.start),
+    );
     const stmts: TsNode[] = [
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
       ts.raw(
@@ -795,6 +836,7 @@ export class TypeScriptBuilder {
         resolved,
         this.scopes.visibleTypeAliases(),
         aliasesFull,
+        this.pendingAliasesFor(node.loc?.start),
       );
       // `(Foo as any).__agency_descriptor = ...` — keeps the runtime metadata
       // co-located with the schema and avoids exporting/importing a second
@@ -815,13 +857,39 @@ export class TypeScriptBuilder {
    * like `Container<number>` become a concrete object/array/etc. before the
    * (alias-unaware) zod mapper runs.
    */
-  private zodSchemaFor(t: VariableType): string {
+  private zodSchemaFor(t: VariableType, pendingAliases?: Set<string>): string {
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     const resolved = resolveTypeDeep(t, aliasesFull);
     return mapTypeToValidationSchema(
       resolved,
       this.scopes.visibleTypeAliases(),
       aliasesFull,
+      pendingAliases,
+    );
+  }
+
+  /** See build() — plain top-level aliases in source order. */
+  private aliasEmissionOrder: { name: string; start: number }[] = [];
+
+  /**
+   * Aliases whose schema const is NOT yet initialized when module-load
+   * code originating at source offset `start` runs: every plain top-level
+   * alias declared at-or-after that offset. A PURE derivation from the
+   * program captured in build() — no mutable emitted-set to keep in sync.
+   * Generic/value-param aliases never emit consts (inlined / hoisted
+   * factory functions) and function-body aliases initialize at call time,
+   * so neither is listed. `start` undefined treats ALL listed aliases as
+   * pending — z.lazy is always safe; over-inclusion only costs
+   * indirection.
+   */
+  private pendingAliasesFor(start: number | undefined): Set<string> {
+    if (start === undefined) {
+      return new Set(this.aliasEmissionOrder.map((a) => a.name));
+    }
+    return new Set(
+      this.aliasEmissionOrder
+        .filter((a) => a.start >= start)
+        .map((a) => a.name),
     );
   }
 
@@ -1716,6 +1784,7 @@ export class TypeScriptBuilder {
    */
   private paramSchemaContribution(
     param: FunctionParameter,
+    pendingAliases: Set<string>,
   ):
     | { kind: "drop" }
     | { kind: "scalar"; zod: string }
@@ -1733,7 +1802,7 @@ export class TypeScriptBuilder {
               type: "primitiveType" as const,
               value: "string",
             });
-      const elementZod = this.zodSchemaFor(elementHint);
+      const elementZod = this.zodSchemaFor(elementHint, pendingAliases);
       return { kind: "array", zod: `z.array(${elementZod})` };
     }
 
@@ -1741,7 +1810,7 @@ export class TypeScriptBuilder {
       type: "primitiveType" as const,
       value: "string",
     };
-    let zod = this.zodSchemaFor(typeHint);
+    let zod = this.zodSchemaFor(typeHint, pendingAliases);
     if (param.defaultValue) {
       const defaultStr = expressionToString(param.defaultValue);
       // A widened optional param (`x?: T` → `T | null`) is already nullable;
@@ -1781,9 +1850,14 @@ export class TypeScriptBuilder {
       );
     }
 
+    // Tool definitions initialize at module load (the __AgencyFunction
+    // const), so alias refs in param schemas need the same pending
+    // treatment alias consts get — a def declared BEFORE a type it
+    // references used to TDZ-crash (probe-confirmed).
+    const pendingAliases = this.pendingAliasesFor(node.loc?.start);
     const contributions = parameters.map((p) => ({
       param: p,
-      contribution: this.paramSchemaContribution(p),
+      contribution: this.paramSchemaContribution(p, pendingAliases),
     }));
 
     // Declaration order is preserved by iterating `parameters` directly;

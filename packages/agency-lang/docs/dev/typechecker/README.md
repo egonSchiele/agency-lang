@@ -195,6 +195,25 @@ structure.
 6. **Same-kind matching**: two primitive types match if their values are equal; two literal types match if their values are equal; two array types match if their element types are assignable; two object types use structural matching (source must have all target properties with compatible types)
 7. Otherwise, return `false`
 
+### Coinduction: recursive aliases are comparable
+
+Assignability is **coinductive** (issue #470): the private
+`isAssignableGuarded` helper keeps an in-progress stack of comparison
+pairs, keyed by `typeKey` (`lib/typeChecker/typeKey.ts` — the canonical
+structural identity, also used at union-dedup sites). Re-encountering a
+pair already on the stack means the walk is inside the very comparison
+that would prove or refute it — it is assumed to hold, exactly like
+`resolveTypeWithGuard`'s `inProgress` set and TypeScript's relation
+stack. Two load-bearing details: entries are REMOVED on exit
+(try/finally), so a pair refuted in one sibling position is recomputed —
+never assumed — in another; and the pair key is only computed when a
+NAMED reference (`typeAliasVariable`/`genericType`) is involved, which is
+sound because cycles can only re-enter through a named reference, and
+keeps `typeKey` off the hot path for plain structural comparisons. This
+is what makes `type Tree = { children: Tree[] }` comparable to itself
+instead of a stack overflow. The public `isAssignable` signature is
+unchanged (three args).
+
 ### The `never` type
 
 `never` is Agency's bottom type, represented as `{ type: "primitiveType", value: "never" }` — mirroring how `any` (the top type) and `unknown`/`void`/`null` are modeled as primitives, rather than as a distinct AST node. Its rules:

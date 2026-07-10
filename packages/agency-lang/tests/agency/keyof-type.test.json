@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "\"name\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "a real key parses"
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "a non-key is rejected (would pass under a z.string fallback)"
+    }
+  ]
+}

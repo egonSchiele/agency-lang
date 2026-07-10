@@ -23,12 +23,7 @@ export type FailurePropagationMode = "off" | "warn" | "on";
  *  always get the strict rule. Do not change this fallback when flipping
  *  the rollout default. */
 export function getFailurePropagationMode(): FailurePropagationMode {
-  // Structural read: the field lands on RuntimeContext in the config task;
-  // this cast bridges the gap and stays harmless afterwards.
-  const ctx = agencyStore.getStore()?.ctx as
-    | { failurePropagation?: FailurePropagationMode }
-    | undefined;
-  return ctx?.failurePropagation ?? "on";
+  return agencyStore.getStore()?.ctx?.failurePropagation ?? "on";
 }
 
 /** Symbol.for so the tag survives duplicated module instances (e.g. a

@@ -4051,6 +4051,11 @@ export class TypeScriptBuilder {
         String(this.agencyConfig.maxCallDepth),
       );
     }
+    if (this.agencyConfig.failurePropagation !== undefined) {
+      runtimeCtxArgs.failurePropagation = ts.str(
+        this.agencyConfig.failurePropagation,
+      );
+    }
     if (cfg.client?.maxToolResultChars !== undefined) {
       runtimeCtxArgs.maxToolResultChars = ts.raw(
         String(cfg.client.maxToolResultChars),

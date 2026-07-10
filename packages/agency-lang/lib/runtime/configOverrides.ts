@@ -14,6 +14,7 @@ export type RuntimeContextConstructorArgs = {
   dirname: string;
   maxRestores?: number;
   maxCallDepth?: number;
+  failurePropagation?: "off" | "warn" | "on";
   traceConfig?: TraceConfig;
   verbose?: boolean;
   memory?: MemoryConfig;
@@ -51,6 +52,7 @@ export function getRuntimeConfigOverrides(): Partial<AgencyConfig> | undefined {
  *   • `client.providerModules` → merged with baked modules (subprocess loads
  *     the same custom/local providers; de-duped at load time).
  *   • `maxCallDepth` → inherit the parent's runaway-recursion ceiling.
+ *   • `failurePropagation` → inherit the parent's failure-propagation mode.
  */
 export function applyRuntimeConfigOverridesToContextArgs(
   args: RuntimeContextConstructorArgs,
@@ -92,6 +94,11 @@ export function applyRuntimeConfigOverridesToContextArgs(
   // Let a subprocess inherit the parent's runaway-recursion ceiling.
   if (overrides.maxCallDepth !== undefined) {
     merged.maxCallDepth = overrides.maxCallDepth;
+  }
+
+  // Let a subprocess inherit the parent's failure-propagation mode.
+  if (overrides.failurePropagation !== undefined) {
+    merged.failurePropagation = overrides.failurePropagation;
   }
 
   return merged;

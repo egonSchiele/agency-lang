@@ -58,7 +58,14 @@ export def resolveMaxToolCallRounds(
 // agency-lang#230. Falls back to `.` if `HOME` is unset (rare; mostly
 // a Windows concern — the `.` puts the dir under cwd as a last
 // resort instead of crashing module init).
-def computeAgentDir(): string {
+export def computeAgentDir(): string {
+  // The sandbox variable wins, matching POLICY_DIR in lib/config.agency.
+  // Before this check, sandboxed agent tests wrote to the real
+  // ~/.agency-agent/memory while settings and policy stayed sandboxed.
+  const sandbox = env("AGENCY_AGENT_HOME")
+  if (sandbox != null && sandbox != "") {
+    return sandbox
+  }
   const home = env("HOME")
   if (home == null) {
     return "./.agency-agent"

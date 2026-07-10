@@ -40,7 +40,12 @@ At the start of execution, the full graph topology is logged: all node IDs, all 
 - **`afterHook(nodeId, startData, endData, timeTaken)`** — after-node hook execution
 
 ### LLM calls
+- **`promptStart(model, threadId, messageCount, toolCount, hasResponseFormat, maxTokens)`** — fired immediately before an LLM request is dispatched. Small payload: the request shape, not its content. Pairs with a terminator by span + order (the nth start in an llmCall span pairs with the nth terminator: a `promptCompletion`, an `error` with errorType `llmError`, or a `promptCancelled`). An unpaired start means the call never finished — the signature of a hung or killed-mid-call run, and the live in-flight indicator in follow mode.
 - **`promptCompletion(messages, completion, model, timeTaken, tools, responseFormat)`** — logs the full message history, model response, model name, tools provided, and response format
+- **`promptCancelled(threadId)`** — terminator for a promptStart whose call was cancelled: a race loser's abort, Esc-cancel, or a timeout. Deliberately not an error event — a cancel is a normal outcome, and without this terminator every healthy `race()` would leave its losers' starts unpaired.
+
+### Thread-end hooks
+- **`threadEndHooksStart(threadId, eagerSummarize, messageCount)`** / **`threadEndHooksEnd(threadId, timeTaken)`** — bracket `Runner.thread`'s onThreadEnd hook invocation, inside a `threadEndHooks` span. Hook-initiated LLM calls (the eager thread summarizer) nest under that span, so the log answers WHY a call ran. The end event posts from a finally, so a throwing hook is still bracketed.
 
 ### Tool execution
 - **`toolCall(toolName, args, output, model, timeTaken)`** — logs each tool invocation with its arguments, output, and timing

@@ -23,6 +23,10 @@ export type SpanType =
   | "nodeExecution"
   | "llmCall"
   | "toolExecution"
+  // Wraps Runner.thread's onThreadEnd hook invocation, so hook-initiated
+  // work (the eager thread summarizer's llmCall span) nests under an
+  // explanation of why it ran. See the threadEndHooksStart/End events.
+  | "threadEndHooks"
   | "forkAll"
   | "race"
   | "handlerChain"
@@ -430,6 +434,97 @@ export class StatelogClient {
       toNodeId,
       isConditionalEdge,
       data,
+    });
+  }
+
+  /** Fired immediately before an LLM request is dispatched. Paired with a
+   *  terminator — `promptCompletion` (success), an `error` event with
+   *  errorType "llmError" (failure), or `promptCancelled` (race loser /
+   *  Esc / timeout abort) — by span + order: the nth promptStart in an
+   *  llmCall span pairs with the nth terminator. An unpaired start means
+   *  the call vanished — a hung or killed-mid-call run. Mirrors the
+   *  toolCallStart/toolCall pair (same OTEL start+end merge story).
+   *  Small payload by design: the request SHAPE, not its content — the
+   *  redacted message array stays on promptCompletion. hasResponseFormat
+   *  + maxTokens are the runaway-generation fingerprint (grammar-
+   *  constrained plus uncapped). `model` arrives JSON.stringify-quoted,
+   *  like every model field on the wire. */
+  async promptStart({
+    model,
+    threadId,
+    messageCount,
+    toolCount,
+    hasResponseFormat,
+    maxTokens,
+  }: {
+    model?: string;
+    threadId?: string | null;
+    messageCount: number;
+    toolCount: number;
+    hasResponseFormat: boolean;
+    maxTokens?: number | null;
+  }): Promise<void> {
+    await this.post({
+      type: "promptStart",
+      model,
+      threadId: threadId ?? null,
+      messageCount,
+      toolCount,
+      hasResponseFormat,
+      maxTokens: maxTokens ?? null,
+    });
+  }
+
+  /** Terminator for a promptStart whose call was cancelled — a race
+   *  loser's abort, Esc-cancel, or a timeout. Deliberately NOT an error
+   *  event: a user cancel is not a request failure (the cancellation
+   *  path skips llmError for the same reason). Without this, every
+   *  healthy race() would leave its losers' starts unpaired and the
+   *  viewer would cry wolf. */
+  async promptCancelled({
+    threadId,
+  }: {
+    threadId?: string | null;
+  }): Promise<void> {
+    await this.post({
+      type: "promptCancelled",
+      threadId: threadId ?? null,
+    });
+  }
+
+  /** Fired when Runner.thread starts invoking onThreadEnd hooks. Paired
+   *  with threadEndHooksEnd; both live inside the threadEndHooks span so
+   *  hook-initiated LLM calls nest underneath. */
+  async threadEndHooksStart({
+    threadId,
+    eagerSummarize,
+    messageCount,
+  }: {
+    threadId: string;
+    eagerSummarize: boolean;
+    messageCount: number;
+  }): Promise<void> {
+    await this.post({
+      type: "threadEndHooksStart",
+      threadId,
+      eagerSummarize,
+      messageCount,
+    });
+  }
+
+  /** Fired when Runner.thread finishes invoking onThreadEnd hooks —
+   *  including when a hook threw (the wrapper posts from a finally). */
+  async threadEndHooksEnd({
+    threadId,
+    timeTaken,
+  }: {
+    threadId: string;
+    timeTaken: number;
+  }): Promise<void> {
+    await this.post({
+      type: "threadEndHooksEnd",
+      threadId,
+      timeTaken,
     });
   }
 

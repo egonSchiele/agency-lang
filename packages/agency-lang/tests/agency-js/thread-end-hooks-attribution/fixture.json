@@ -1,0 +1,8 @@
+{
+  "finalData": "hello there",
+  "llmCalls": 2,
+  "hookStartCount": 1,
+  "hookEndCount": 1,
+  "eagerSummarizeFlags": [true],
+  "attributedSummarizerStarts": 1
+}

@@ -1,0 +1,34 @@
+// failing(): the client throws and retries are disabled — the start must
+// already be on disk (it can only have been emitted BEFORE dispatch) and
+// the llmError event must share its span so the pair terminates.
+// retried(): the client fails once then succeeds with retries: 1 — the
+// retry lives INSIDE dispatchWithRetry, below the emission, so exactly
+// one start and one completion appear.
+//
+// The llm() calls are wrapped in defs because `try llm(...)` DIRECTLY
+// loses the success value (try + builtin-llm codegen bug, isolated
+// 2026-07-10: `try llm()` yields success(undefined) while `try def()`
+// wrapping the same call round-trips fine). Unrelated to this feature.
+def failingCall(): string {
+  return llm("this will fail", { retries: 0 })
+}
+
+def retriedCall(): string {
+  return llm("fails once", { retries: 1 })
+}
+
+node failing() {
+  const result = try failingCall()
+  if (result is success(reply)) {
+    return "unexpected-success"
+  }
+  return "failed"
+}
+
+node retried() {
+  const result = try retriedCall()
+  if (result is success(reply)) {
+    return reply
+  }
+  return "unexpected-failure"
+}

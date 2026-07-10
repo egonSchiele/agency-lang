@@ -19,7 +19,10 @@ const STRONG_LABEL_EVENTS = new Set<string>([
   "agentEnd",
   "enterNode",
   "promptCompletion",
+  "promptStart",
   "embedCompletion",
+  "threadEndHooksStart",
+  "threadEndHooksEnd",
   "toolCallStart",
   "toolCall",
   "forkStart",
@@ -29,15 +32,58 @@ const STRONG_LABEL_EVENTS = new Set<string>([
   "handlerDecision",
 ]);
 
+/** Pair promptStart events with their terminators — a promptCompletion,
+ *  an error event with errorType "llmError", or a promptCancelled — by
+ *  span and order: the nth start in a span pairs with the nth
+ *  terminator. Returns the set of PAIRED starts; anything not in the
+ *  set never completed (a hung, killed, or in-flight call — in follow
+ *  mode this is the live in-flight indicator). Paired starts are hidden
+ *  from the tree: the terminator row already carries the interesting
+ *  data, and doubling every call's rows would make the common case
+ *  worse to read. */
+export function pairedPromptStarts(events: EventEnvelope[]): Set<EventEnvelope> {
+  // Null-prototype: span_id comes from the log file, which the viewer
+  // must treat as untrusted input. With a plain object, a span_id of
+  // "constructor" or "__proto__" resolves through the prototype chain
+  // to a non-array and the .push below throws, crashing the viewer on
+  // a crafted or corrupt log. Same pattern as lib/optimize/registry.ts.
+  const pendingBySpan: Record<string, EventEnvelope[]> = Object.create(null);
+  const paired = new Set<EventEnvelope>();
+  for (const event of events) {
+    const spanKey = event.span_id ?? "";
+    const eventType = event.data.type;
+    if (eventType === "promptStart") {
+      if (!pendingBySpan[spanKey]) {
+        pendingBySpan[spanKey] = [];
+      }
+      pendingBySpan[spanKey].push(event);
+    } else if (
+      eventType === "promptCompletion" ||
+      eventType === "promptCancelled" ||
+      (eventType === "error" && event.data.errorType === "llmError")
+    ) {
+      const pending = pendingBySpan[spanKey];
+      if (pending && pending.length > 0) {
+        paired.add(pending.shift()!);
+      }
+    }
+  }
+  return paired;
+}
+
 export function buildForest(events: EventEnvelope[]): TreeNode[] {
-  // traceId → trace root
-  const traces: Record<string, TreeNode> = {};
+  // traceId → trace root. Null-prototype (like pendingBySpan in
+  // pairedPromptStarts): ids come from the log file — untrusted input —
+  // and a plain object resolves ids like "constructor" through the
+  // prototype chain, so the `in` existence checks lie and pass 2
+  // crashes. Pre-existing bug surfaced by the pairing tests.
+  const traces: Record<string, TreeNode> = Object.create(null);
   // span_id → span node (lookup across all traces; span_ids are globally unique per nanoid)
-  const spans: Record<string, TreeNode> = {};
+  const spans: Record<string, TreeNode> = Object.create(null);
   // span_id → its desired parent_span_id (as observed on first sight).
   // Tracked separately so pass 1b can re-resolve parents once every
   // span exists, without polluting the public TreeNode shape.
-  const desiredParent: Record<string, string | null> = {};
+  const desiredParent: Record<string, string | null> = Object.create(null);
 
   // Pass 1a: create traces and spans, linking each span to its parent
   // (or trace root) in arrival order. This puts child spans into their
@@ -85,9 +131,11 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // trace root if it has no span_id), preserving arrival order. Some
   // event types are noise (e.g. the `graph` schema dump) and are
   // hidden from the viewer entirely.
+  const pairedStarts = pairedPromptStarts(events);
   let leafCounter = 0;
   for (const evt of events) {
     if (HIDDEN_EVENT_TYPES.has(evt.data.type)) continue;
+    if (evt.data.type === "promptStart" && pairedStarts.has(evt)) continue;
     const traceRoot = traces[evt.trace_id];
     const parent = evt.span_id ? spans[evt.span_id] : traceRoot;
     const leaf: TreeNode = {
@@ -203,8 +251,15 @@ function inferSpanLabel(evt: EventEnvelope): string {
       return "agentRun";
     case "enterNode":
       return "nodeExecution";
+    case "promptStart":
+      // Arrives first in its llmCall span, so it is usually the
+      // span-introducing event.
+      return "llmCall";
     case "promptCompletion":
       return "llmCall";
+    case "threadEndHooksStart":
+    case "threadEndHooksEnd":
+      return "threadEndHooks";
     case "embedCompletion":
       // Embedding spans share the chat-completion shape but get their
       // own label so the viewer can color/filter them separately and

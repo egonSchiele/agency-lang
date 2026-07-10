@@ -1,0 +1,11 @@
+// Two racing branches each make an llm() call. The mock resolves branch
+// A instantly and parks branch B until its abort signal fires (the race
+// loser abort). The loser's start must be terminated by promptCancelled
+// — NOT llmError (a cancel is not a failure), NOT left unpaired (a
+// healthy race must not render "never completed" warnings). See test.js.
+node main() {
+  const winner = race([1, 2]) as item {
+    return llm("branch ${item}")
+  }
+  return winner
+}

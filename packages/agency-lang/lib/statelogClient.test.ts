@@ -811,6 +811,76 @@ describe("StatelogClient", () => {
       expect(fs.existsSync(file)).toBe(false);
     });
   });
+
+  it("promptStart posts the small request-shape payload and nothing heavy", async () => {
+    const file = tmpLogFile("prompt-start");
+    tmpDirs.push(path.dirname(file));
+    const client = fileClient(file);
+    await client.promptStart({
+      model: '"test-model"',
+      threadId: "7",
+      messageCount: 3,
+      toolCount: 2,
+      hasResponseFormat: true,
+      maxTokens: 2000,
+    });
+    const events = readEvents(file);
+    expect(events).toHaveLength(1);
+    expect(events[0].data).toMatchObject({
+      type: "promptStart",
+      model: '"test-model"',
+      threadId: "7",
+      messageCount: 3,
+      toolCount: 2,
+      hasResponseFormat: true,
+      maxTokens: 2000,
+    });
+    // Payload-bloat guard: the request CONTENT stays on promptCompletion.
+    expect(events[0].data).not.toHaveProperty("messages");
+    expect(events[0].data).not.toHaveProperty("tools");
+  });
+
+  it("promptStart normalizes absent threadId/maxTokens to null", async () => {
+    const file = tmpLogFile("prompt-start-nulls");
+    tmpDirs.push(path.dirname(file));
+    const client = fileClient(file);
+    await client.promptStart({
+      messageCount: 1,
+      toolCount: 0,
+      hasResponseFormat: false,
+    });
+    const events = readEvents(file);
+    expect(events[0].data.threadId).toBeNull();
+    expect(events[0].data.maxTokens).toBeNull();
+  });
+
+  it("promptCancelled posts a tiny terminator", async () => {
+    const file = tmpLogFile("prompt-cancelled");
+    tmpDirs.push(path.dirname(file));
+    const client = fileClient(file);
+    await client.promptCancelled({ threadId: "3" });
+    const events = readEvents(file);
+    expect(events[0].data).toMatchObject({ type: "promptCancelled", threadId: "3" });
+  });
+
+  it("threadEndHooks start/end events post their payloads", async () => {
+    const file = tmpLogFile("hooks-pair");
+    tmpDirs.push(path.dirname(file));
+    const client = fileClient(file);
+    await client.threadEndHooksStart({
+      threadId: "t3",
+      eagerSummarize: true,
+      messageCount: 5,
+    });
+    await client.threadEndHooksEnd({ threadId: "t3", timeTaken: 12.5 });
+    const events = readEvents(file);
+    expect(events.map((e) => e.data.type)).toEqual([
+      "threadEndHooksStart",
+      "threadEndHooksEnd",
+    ]);
+    expect(events[0].data).toMatchObject({ eagerSummarize: true, messageCount: 5 });
+    expect(events[1].data).toMatchObject({ threadId: "t3", timeTaken: 12.5 });
+  });
 });
 
 describe("getStatelogClient", () => {

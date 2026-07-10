@@ -341,3 +341,124 @@ describe("buildForest", () => {
     expect(forest[0].children[0].parentId).toBe(forest[0].id);
   });
 });
+
+describe("promptStart pairing", () => {
+  const start = (span: string) =>
+    evt({
+      span_id: span,
+      data: {
+        type: "promptStart",
+        timestamp: "",
+        model: '"m"',
+        threadId: "1",
+        messageCount: 2,
+        toolCount: 0,
+        hasResponseFormat: true,
+        maxTokens: 2000,
+      },
+    });
+  const completion = (span: string) =>
+    evt({
+      span_id: span,
+      data: { type: "promptCompletion", timestamp: "", model: '"m"', timeTaken: 5 },
+    });
+  const llmError = (span: string) =>
+    evt({
+      span_id: span,
+      data: { type: "error", timestamp: "", errorType: "llmError", message: "boom" },
+    });
+  const cancelled = (span: string) =>
+    evt({
+      span_id: span,
+      data: { type: "promptCancelled", timestamp: "", threadId: "1" },
+    });
+
+  it("hides a paired promptStart leaf, keeps the completion", () => {
+    const forest = buildForest([start("s1"), completion("s1")]);
+    const span = forest[0].children[0];
+    expect(span.children.map((c) => c.label)).toEqual(["promptCompletion"]);
+  });
+
+  it("renders an unpaired promptStart, labeling its span llmCall", () => {
+    const forest = buildForest([start("s1")]);
+    const span = forest[0].children[0];
+    expect(span.children.map((c) => c.label)).toEqual(["promptStart"]);
+    expect(span.label).toBe("llmCall");
+  });
+
+  it("pairs nth start with nth terminator per span (multi-round)", () => {
+    const forest = buildForest([start("s1"), completion("s1"), start("s1")]);
+    const span = forest[0].children[0];
+    expect(span.children.map((c) => c.label)).toEqual([
+      "promptCompletion",
+      "promptStart",
+    ]);
+  });
+
+  it("an llmError terminates (pairs) a start", () => {
+    const forest = buildForest([start("s1"), llmError("s1")]);
+    const span = forest[0].children[0];
+    expect(span.children.map((c) => c.label)).toEqual(["error"]);
+  });
+
+  it("a promptCancelled terminates (pairs) a start — healthy race losers stay quiet", () => {
+    const forest = buildForest([start("s1"), cancelled("s1")]);
+    const span = forest[0].children[0];
+    expect(span.children.map((c) => c.label)).toEqual(["promptCancelled"]);
+  });
+
+  it("pairing is per-span: a completion in another span pairs nothing", () => {
+    const forest = buildForest([start("s1"), completion("s2")]);
+    const spans = forest[0].children;
+    const allLeafLabels = spans.flatMap((s) => s.children.map((c) => c.label));
+    expect(allLeafLabels).toContain("promptStart");
+  });
+
+  it("the post-resume shape: abandoned start alone in span A, paired start in span B", () => {
+    // On resume the llmCall span is re-opened with a NEW span id
+    // (deliberately outside pr.step), so a killed-mid-call run leaves:
+    // span A = one abandoned unpaired start; span B = start +
+    // completion. The abandoned one must render; the resumed one must
+    // hide.
+    const forest = buildForest([start("sA"), start("sB"), completion("sB")]);
+    const spans = forest[0].children;
+    const leavesBySpan = spans.map((s) => s.children.map((c) => c.label));
+    expect(leavesBySpan).toContainEqual(["promptStart"]);
+    expect(leavesBySpan).toContainEqual(["promptCompletion"]);
+  });
+
+  it("tolerates prototype-chain span ids in a crafted log (no crash, still pairs)", () => {
+    // Untrusted-input guard: with a plain-object accumulator, span_id
+    // "constructor"/"__proto__" resolved through the prototype chain and
+    // .push threw, crashing the viewer on a crafted or corrupt log.
+    const forest = buildForest([
+      start("constructor"),
+      completion("constructor"),
+      start("__proto__"),
+    ]);
+    const spans = forest[0].children;
+    const leavesBySpan = spans.map((s) => s.children.map((c) => c.label));
+    expect(leavesBySpan).toContainEqual(["promptCompletion"]);
+    expect(leavesBySpan).toContainEqual(["promptStart"]);
+  });
+
+  it("labels the threadEndHooks span from its start event", () => {
+    const forest = buildForest([
+      evt({
+        span_id: "h1",
+        data: {
+          type: "threadEndHooksStart",
+          timestamp: "",
+          threadId: "t1",
+          eagerSummarize: true,
+          messageCount: 3,
+        },
+      }),
+      evt({
+        span_id: "h1",
+        data: { type: "threadEndHooksEnd", timestamp: "", threadId: "t1", timeTaken: 9 },
+      }),
+    ]);
+    expect(forest[0].children[0].label).toBe("threadEndHooks");
+  });
+});

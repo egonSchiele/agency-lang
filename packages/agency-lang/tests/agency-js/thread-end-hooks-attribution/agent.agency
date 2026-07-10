@@ -1,0 +1,18 @@
+import { userMessage } from "std::thread"
+
+// The std::thread import is load-bearing: the eager summarizer is a
+// global onThreadEnd hook that lib/stdlib/threads.ts registers at module
+// load, so a program that never imports std::thread has no summarizer.
+//
+// A summarize-on thread block: at close, the eager summarizer (a global
+// onThreadEnd hook) makes its own llm() call. That call's llmCall span
+// must be a CHILD of the threadEndHooks span — the attribution that was
+// missing during the 2026-07-09 incident. See test.js.
+node main() {
+  let reply = ""
+  thread(label: "attributed", summarize: true) {
+    userMessage("please greet me")
+    reply = llm("say hello")
+  }
+  return reply
+}

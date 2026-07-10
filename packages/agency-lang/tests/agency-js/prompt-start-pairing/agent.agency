@@ -1,0 +1,22 @@
+// main(): two-round tool loop — round 1 the model calls getArea, round 2
+// it answers. Each round must emit a promptStart BEFORE its
+// promptCompletion, all four events sharing the one llmCall span.
+// shaped(): the runaway fingerprint — a schema-constrained, capped call
+// must stamp hasResponseFormat=true and maxTokens on its start.
+// See test.js.
+def getArea(country: string): number {
+  return 100
+}
+
+type Shaped = {
+  answer: string
+}
+
+node main() {
+  return llm("Get the area of France using your getArea tool.", { tools: [getArea] })
+}
+
+node shaped() {
+  const result: Shaped = llm("give me json", { maxTokens: 123 })
+  return result.answer
+}

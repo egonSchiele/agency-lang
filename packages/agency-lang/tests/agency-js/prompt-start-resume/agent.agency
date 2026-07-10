@@ -1,0 +1,14 @@
+// Round 1: the model calls interruptTool, which raises an interrupt —
+// the run pauses mid-llm()-tool-loop and resumes via
+// respondToInterrupts. Round 2 answers. The resume must NOT re-emit
+// round 1's promptStart (the emission sits inside the same idempotent
+// pr.step as the completion), so the final log has exactly 2 starts and
+// 2 completions. See test.js.
+def interruptTool(): string {
+  interrupt("approve")
+  return "tool result"
+}
+
+node main() {
+  return llm("call the tool", { tools: [interruptTool] })
+}

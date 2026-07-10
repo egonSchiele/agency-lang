@@ -1,0 +1,14 @@
+{
+  "failData": "failed",
+  "retryData": "recovered",
+  "failPhase": {
+    "startCount": 1,
+    "completionCount": 0,
+    "llmErrorCount": 1,
+    "errorSharesStartSpan": true
+  },
+  "retryPhase": {
+    "startsAdded": 1,
+    "llmErrorsAdded": 0
+  }
+}

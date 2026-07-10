@@ -33,7 +33,7 @@ export type MemoryConfig = {
   model?: string;
   autoExtract?: { interval: number | null };
   compaction?: { trigger: "token" | "messages" | null; threshold: number | null };
-  embeddings?: { model: string | null }
+  embeddings?: { model: string | null; provider: string | null }
 }
 ```
 

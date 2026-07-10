@@ -1,0 +1,75 @@
+{
+  "sourceFile": "memoryWiring.agency",
+  "tests": [
+    {
+      "nodeName": "overrideFromSlot",
+      "input": "",
+      "expectedOutput": "\"text-embedding-3-small/openai\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "overrideNullCases",
+      "input": "",
+      "expectedOutput": "\"all-null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "keyMissingStates",
+      "input": "",
+      "expectedOutput": "\"false/true/false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "statusStates",
+      "input": "",
+      "expectedOutput": "\"key-missing:OPENROUTER_API_KEY/ready/no-override\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planOutcomes",
+      "input": "",
+      "expectedOutput": "\"skip/enable-default/enable-fallback/enable-override\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "configCarriesOverride",
+      "input": "",
+      "expectedOutput": "\"text-embedding-3-small/openai/true/true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "baseUrlCountsAsMissing",
+      "input": "",
+      "expectedOutput": "\"key-missing:LITELLM_BASE_URL/ready\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

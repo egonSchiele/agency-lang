@@ -64,7 +64,7 @@ export type MemoryConfig = {
   model?: string;
   autoExtract?: { interval: number | undefined };
   compaction?: { trigger: "token" | "messages" | undefined; threshold: number | undefined };
-  embeddings?: { model: string | undefined }
+  embeddings?: { model: string | undefined; provider: string | undefined }
 }
 
 effect std::memory::enableMemory { dir: string }

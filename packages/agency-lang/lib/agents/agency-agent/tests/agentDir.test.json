@@ -1,0 +1,15 @@
+{
+  "sourceFile": "agentDir.agency",
+  "tests": [
+    {
+      "nodeName": "agentDirHonorsSandbox",
+      "input": "",
+      "expectedOutput": "\"/tmp/agency-sandbox-test/true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

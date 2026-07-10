@@ -57,7 +57,8 @@ import {
   BUILTIN_POLICIES,
  } from "./lib/defaultPolicy.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
-import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
+import { parseModelFlag, parseModelSpec, knownProviders, embeddingSpecHasProvider, missingProviderEnvVar, Resolved } from "./lib/models.agency"
+import { SLOTS } from "./lib/slots.agency"
 import {
   buildLayers,
   resolveAll,
@@ -99,6 +100,12 @@ import {
   getCapabilityModelKey,
   getCapabilityProvider,
   refreshCapabilities,
+  embeddingKeyStatus,
+  memoryEnablePlan,
+  overrideFromResolved,
+  embeddingsOverride,
+  providerEnvMissing,
+  demoteProvider,
  } from "./shared.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -379,6 +386,15 @@ export def switchModel(
   ctx: Ctx,
   before: Record<string, Resolved>,
 ): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
+  // The caller builds ctx from currentProvider(), which returns the
+  // PROMOTED name on openai sessions. priceDefault and the built-in
+  // tables key by public provider names, so demote before resolving —
+  // otherwise a switch that lets any slot fall through to the built-in
+  // defaults fails with "openai-responses has no built-in defaults".
+  const ctx2: Ctx = {
+    provider: demoteProvider(ctx.provider),
+    price: ctx.price
+  }
   let nextSlots: Record<string, string> = {}
   for (key in Object.keys(prior.slots)) {
     nextSlots[key] = prior.slots[key]
@@ -388,9 +404,23 @@ export def switchModel(
     slots: nextSlots
   }
   const parsed = parseModelFlag(spec)
-  if (parsed.slot != "" && parsed.slot != "main" && parsed.slot != "reasoning") {
+  if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
     pushMessage(
-      color.red("Unknown model slot '${parsed.slot}'. Valid slots: main, reasoning."),
+      color.red("Unknown model slot '${parsed.slot}'. Valid slots: ${SLOTS.join(", ")}."),
+    )
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  if (parsed.slot == "embedding" && !embeddingSpecHasProvider(parsed.model)) {
+    // The embedding slot exists to point AWAY from the chat provider, so
+    // the provider can never be inferred. Require the explicit form.
+    pushMessage(
+      color.red(
+      "Embedding models need the provider/model form, e.g. embedding=openai/text-embedding-3-small.",
+    ),
     )
     return {
       session: prior,
@@ -417,7 +447,7 @@ export def switchModel(
     knownProviders(),
     providerEstablished,
   )
-  const all = resolveAll(layers, ctx)
+  const all = resolveAll(layers, ctx2)
   if (isFailure(all)) {
     pushMessage(color.red("Could not switch model: ${all.error}"))
     return {
@@ -441,6 +471,13 @@ export def switchModel(
   returns when a selective toggle lands.) Returns true if it emitted the notice. */
 export def reactToSlotChange(change: SlotChange): boolean {
   if (change.slot == "main" && change.before.provider != change.after.provider) {
+    // Skip the pause only when startup actually enabled memory WITH the
+    // override. A set-but-keyless slot took the fallback path, so memory
+    // runs on derived embeddings and the provider change still shifts
+    // the embedding space behind recall.
+    if (_memoryEmbeddingsPinned) {
+      return false
+    }
     pushMessage(
       color.dim(
       "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
@@ -450,6 +487,28 @@ export def reactToSlotChange(change: SlotChange): boolean {
     // provider switch, not asking the user — so don't surface an approval prompt.
     disableMemory() with approve
     return true
+  }
+  if (change.slot == "embedding") {
+    const override = overrideFromResolved(change.after)
+    if (override != null) {
+      const missing = missingProviderEnvVar(override.provider)
+      if (missing != "") {
+        pushMessage(
+          color.yellow(
+          "Warning: the embedding slot needs ${missing}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until it is exported.",
+        ),
+        )
+        return true
+      }
+      // The healthy path must not be silent: enableMemory already ran,
+      // so the user would otherwise believe embeddings switched now.
+      pushMessage(
+        color.dim(
+        "Embedding slot set: memory embeddings use ${override.provider}/${override.model} at next agent start.",
+      ),
+      )
+      return true
+    }
   }
   return false
 }
@@ -681,12 +740,23 @@ def editCapabilities() {
       patch = {
         memory: picked == "on"
       }
-      if (picked == "on" && providerLacksEmbeddings(getCapabilityProvider())) {
-        pushMessage(
-          color.dim(
-          "Note: ${getCapabilityProvider()} has no embeddings endpoint — memory runs with Tier-2 semantic recall disabled (structured recall still works).",
-        ),
-        )
+      if (picked == "on") {
+        const status = embeddingKeyStatus(getResolvedSlots())
+        if (status.state == "key-missing") {
+          pushMessage(
+            color.red(
+            "Cannot enable memory: the embedding slot needs ${status.varName}, which is not set. Export it, or point the embedding slot elsewhere via /model.",
+          ),
+          )
+          return
+        }
+        if (status.state == "no-override" && providerLacksEmbeddings(getCapabilityProvider())) {
+          pushMessage(
+            color.dim(
+            "Note: ${getCapabilityProvider()} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small.",
+          ),
+          )
+        }
       }
     }
   }
@@ -1233,16 +1303,41 @@ static const mainAgentTools = [
   generateImageFile,
 ]
 
-/** Enable memory only when the capability profile allows it.
+/** Enable memory when the capability profile allows it. When the user
+  pointed the embedding slot at a provider, embeddings run there. A
+  missing API key degrades to the default embedding behavior with one
+  notice. It never blocks startup. */
+// Whether startup actually enabled memory WITH the embedding override.
+// The pause guard in reactToSlotChange consults this instead of
+// re-deriving from the slots: a keyless override took the fallback path,
+// so memory runs on DERIVED embeddings and a main-provider change still
+// shifts the embedding space. Exported mutator so tests can drive the
+// guard directly.
+let _memoryEmbeddingsPinned = false
 
-  Providers without an embeddings endpoint default the field to off. A
-  user override still works: memory then runs with Tier-2 semantic recall
-  disabled, and std::memory prints its one-time notice. The embedding
-  slot is a no-op today, so nothing here validates against it. */
+export def markMemoryEmbeddingsPinned(pinned: boolean) {
+  _memoryEmbeddingsPinned = pinned
+}
+
 def maybeEnableMemory() {
-  if (getCapabilities().memory) {
-    enableAgentMemory()
+  const status = embeddingKeyStatus(getResolvedSlots())
+  const plan = memoryEnablePlan(getCapabilities().memory, status)
+  markMemoryEmbeddingsPinned(plan == "enable-override")
+  if (plan == "skip") {
+    return
   }
+  if (plan == "enable-override") {
+    enableAgentMemory(status.override)
+    return
+  }
+  if (plan == "enable-fallback") {
+    print(
+      color.dim(
+      "Memory: the embedding slot needs ${status.varName}, which is not set. Falling back to the default embedding behavior.",
+    ),
+    )
+  }
+  enableAgentMemory()
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
@@ -1722,6 +1817,7 @@ node main() {
     let modelGlobal = ""
     let fastFlag = ""
     let slowFlag = ""
+    let embeddingFlag = ""
     if (modelArg != "") {
       if (parsed.slot == "") {
         modelGlobal = parsed.model
@@ -1729,10 +1825,20 @@ node main() {
         fastFlag = parsed.model
       } else if (parsed.slot == "reasoning") {
         slowFlag = parsed.model
+      } else if (parsed.slot == "embedding") {
+        if (!embeddingSpecHasProvider(parsed.model)) {
+          print(
+            color.red(
+            "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small.",
+          ),
+          )
+          process.exit(1)
+        }
+        embeddingFlag = parsed.model
       } else {
         print(
           color.red(
-          "Unknown model slot '${parsed.slot}' in --model. Valid slots: main, reasoning.",
+          "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}.",
         ),
         )
         process.exit(1)
@@ -1746,7 +1852,7 @@ node main() {
     if (sm != "") {
       slowFlag = sm
     }
-    configureModels(modelGlobal, fastFlag, slowFlag, args.flags.provider ?? "")
+    configureModels(modelGlobal, fastFlag, slowFlag, embeddingFlag, args.flags.provider ?? "")
     configureSearch(false)
   }
 

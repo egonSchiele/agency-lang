@@ -163,3 +163,34 @@ node nullEntryAndReservedKeySurviveLoad(): string {
   }
   return "${models["broken"]}/${okEntry.summarize}"
 }
+
+node dropsBareEmbeddingSlotValue(): string {
+  const cleaned = sanitizeModelSettings(
+    {
+    slots: {
+      embedding: "text-embedding-3-small",
+      reasoning: "opus"
+    }
+  },
+  )
+  const slots = cleaned.slots
+  if (slots == null) {
+    return "no-slots"
+  }
+  return "${slots["embedding"]}/${slots["reasoning"]}"
+}
+
+node keepsPrefixedEmbeddingSlotValue(): string {
+  const cleaned = sanitizeModelSettings(
+    {
+    slots: {
+      embedding: "openai/text-embedding-3-small"
+    }
+  },
+  )
+  const slots = cleaned.slots
+  if (slots == null) {
+    return "no-slots"
+  }
+  return "${slots["embedding"]}"
+}

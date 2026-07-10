@@ -1,0 +1,20 @@
+import { setEnv } from "std::system"
+
+import { computeAgentDir } from "../shared.agency"
+
+// The memory dir must follow the sandbox variable, like settings and
+// policy do. Before this fix, sandboxed agent tests wrote to the real
+// ~/.agency-agent/memory. AGENCY_AGENT_DIR is a module-init static, so
+// this calls the def directly; a sandboxed process sets the variable
+// before launch.
+node agentDirHonorsSandbox(): string {
+  setEnv("AGENCY_AGENT_HOME", "/tmp/agency-sandbox-test") with approve
+  const sandboxed = computeAgentDir()
+  setEnv("AGENCY_AGENT_HOME", "") with approve
+  const normal = computeAgentDir()
+  // endsWith pins the empty-counts-as-unset rule: both real fallbacks end
+  // with the dir name, and the empty string a dropped guard would return
+  // does not.
+  const backToHome = normal.endsWith(".agency-agent")
+  return "${sandboxed}/${backToHome}"
+}

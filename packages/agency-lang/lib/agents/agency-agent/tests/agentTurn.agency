@@ -11,6 +11,7 @@ import {
   agentReply,
   switchModel,
   reactToSlotChange,
+  markMemoryEmbeddingsPinned,
   Session,
  } from "../agent.agency"
 import { knownProviders, Resolved } from "../lib/models.agency"
@@ -21,6 +22,7 @@ import {
   SlotChange,
  } from "../lib/resolution.agency"
 import { saveSettings } from "../lib/settings.agency"
+import { setEnv } from "std::system"
 import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
 
 node respondsToAMessage(): boolean {
@@ -84,8 +86,10 @@ static const SWITCH_BEFORE: Record<string, Resolved> = {
     via: "x"
   },
   embedding: {
+    // Derived slots never inherit the ctx provider under the resolution
+    // rules, so the resolved shape carries an empty provider.
     model: "",
-    provider: "anthropic",
+    provider: "",
     via: "x"
   }
 }
@@ -233,4 +237,162 @@ node parseModelsProviderArg(): boolean {
 node parseModelsTrailingSpaceIsEmpty(): boolean {
   const filters = parseModelsFilters("/models   ")
   return filters.provider == null
+}
+
+// The embedding slot accepts the provider/model form and resolves both
+// parts. Promotion must not touch the embed provider: promoteAll exempts
+// derived slots, so "openai" stays "openai".
+node switchAcceptsPrefixedEmbedding(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "embedding=openai/text-embedding-3-small", SWITCH_CTX, SWITCH_BEFORE)
+  const resolved = out.resolved["embedding"]
+  if (resolved == null) {
+    return "unresolved"
+  }
+  return "${resolved.model}/${resolved.provider}"
+}
+
+// A bare embedding model is refused and nothing changes.
+node switchRejectsBareEmbedding(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "embedding=text-embedding-3-small", SWITCH_CTX, SWITCH_BEFORE)
+  const resolved = out.resolved["embedding"]
+  let model = ""
+  if (resolved != null) {
+    model = resolved.model
+  }
+  return "${model}|${out.changes.length}"
+}
+
+// A global pin must not splash into the embedding slot.
+node pinDoesNotReachEmbedding(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "claude-opus-4-8", SWITCH_CTX, SWITCH_BEFORE)
+  const resolved = out.resolved["embedding"]
+  if (resolved == null || resolved.model == "") {
+    return "empty"
+  }
+  return "leaked: ${resolved.model}"
+}
+
+// A keyless embedding assignment warns; a healthy one prints the
+// next-start notice instead of staying silent. Both return true. The
+// openai-responses case pins the demotion: without it, the env-var
+// lookup gets the internal alias and neither message fires.
+node reactWarnsOnKeylessEmbeddingSlot(): string {
+  setEnv("OPENAI_API_KEY", "") with approve
+  const change: SlotChange = {
+    slot: "embedding",
+    before: {
+      model: "",
+      provider: "",
+      via: "x"
+    },
+    after: {
+      model: "text-embedding-3-small",
+      provider: "openai-responses",
+      via: "y"
+    }
+  }
+  const warned = reactToSlotChange(change)
+  setEnv("OPENAI_API_KEY", "test-key") with approve
+  const noticed = reactToSlotChange(change)
+  return "${warned}/${noticed}"
+}
+
+// Clearing the slot never warns, even when a key is missing.
+node reactStaysQuietOnClearedEmbeddingSlot(): boolean {
+  setEnv("OPENAI_API_KEY", "") with approve
+  const change: SlotChange = {
+    slot: "embedding",
+    before: {
+      model: "text-embedding-3-small",
+      provider: "openai",
+      via: "x"
+    },
+    after: {
+      model: "",
+      provider: "",
+      via: "y"
+    }
+  }
+  return reactToSlotChange(change)
+}
+
+static const MAIN_PROVIDER_CHANGE: SlotChange = {
+  slot: "main",
+  before: {
+    model: "claude-sonnet-4-6",
+    provider: "anthropic",
+    via: "x"
+  },
+  after: {
+    model: "gpt-5.5",
+    provider: "openai-responses",
+    via: "y"
+  }
+}
+
+// The pause is skipped only when startup actually enabled memory WITH
+// the override, recorded by the pinned flag.
+node mainProviderChangeSkipsPauseWithPinnedEmbedding(): boolean {
+  markMemoryEmbeddingsPinned(true)
+  return reactToSlotChange(MAIN_PROVIDER_CHANGE)
+}
+
+// The failure case the flag exists for: a set-but-keyless slot took the
+// fallback path at startup, so memory runs on DERIVED embeddings and the
+// provider change still shifts the embedding space. The pause must fire.
+node mainProviderChangeStillPausesWhenOverrideFellBack(): boolean {
+  markMemoryEmbeddingsPinned(false)
+  applyResolved({
+    "main": {
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      via: "test"
+    },
+    "embedding": {
+      model: "text-embedding-3-small",
+      provider: "openai",
+      via: "test"
+    }
+  })
+  return reactToSlotChange(MAIN_PROVIDER_CHANGE)
+}
+
+// Regression: a bare pin on an openai session. currentProvider() hands
+// switchModel the PROMOTED name, pins skip the embedding slot, and the
+// slot falls through to priceDefault, which used to fail with
+// "openai-responses has no built-in defaults" and revert the switch.
+node switchPinFromPromotedOpenaiSession(): string {
+  saveSettings({}) with approve
+  const promotedCtx: Ctx = {
+    provider: "openai-responses",
+    price: "standard"
+  }
+  const out = switchModel(freshSession(), "claude-sonnet-4-6", promotedCtx, SWITCH_BEFORE)
+  const main = out.resolved["main"]
+  const embedding = out.resolved["embedding"]
+  if (main == null || embedding == null) {
+    return "unresolved"
+  }
+  return "${main.model}/${embedding.model}|${embedding.via}"
+}
+
+// Regression: a per-slot switch on an openai session lets the OTHER chat
+// slot fall through to priceDefault. The demoted ctx must resolve it to
+// the openai built-ins instead of failing.
+node switchPerSlotFromPromotedOpenaiSession(): string {
+  saveSettings({}) with approve
+  const promotedCtx: Ctx = {
+    provider: "openai-responses",
+    price: "standard"
+  }
+  const out = switchModel(freshSession(), "reasoning=claude-opus-4-8", promotedCtx, SWITCH_BEFORE)
+  const main = out.resolved["main"]
+  const reasoning = out.resolved["reasoning"]
+  if (main == null || reasoning == null) {
+    return "unresolved"
+  }
+  return "${main.model}/${reasoning.model}"
 }

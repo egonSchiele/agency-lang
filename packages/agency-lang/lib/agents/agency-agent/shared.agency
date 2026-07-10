@@ -11,8 +11,8 @@
  */
 import { registerLocalModel } from "std::agency/local"
 import { keys } from "std::object"
-import { setLlmOptions } from "std::llm"
-import { enableMemory } from "std::memory"
+import { setLlmOptions, envVarFor } from "std::llm"
+import { enableMemory, MemoryConfig } from "std::memory"
 import { env } from "std::system"
 
 import {
@@ -20,8 +20,9 @@ import {
   Capabilities,
   ResolvedCapabilities,
  } from "./lib/capabilities.agency"
-import { resolveDetected, knownProviders, Resolved } from "./lib/models.agency"
+import { resolveDetected, knownProviders, missingProviderEnvVar, Resolved } from "./lib/models.agency"
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
+import { resolveAgentHome } from "./lib/config.agency"
 import { getCapabilitySettings, getModelSettings, loadSettings } from "./lib/settings.agency"
 import { slotKind } from "./lib/slots.agency"
 
@@ -58,12 +59,11 @@ export def resolveMaxToolCallRounds(
 // agency-lang#230. Falls back to `.` if `HOME` is unset (rare; mostly
 // a Windows concern — the `.` puts the dir under cwd as a last
 // resort instead of crashing module init).
-def computeAgentDir(): string {
-  const home = env("HOME")
-  if (home == null) {
-    return "./.agency-agent"
-  }
-  return "${home}/.agency-agent"
+export def computeAgentDir(): string {
+  // One resolver for the agent home: settings, policy, history, and the
+  // memory dir all go through resolveAgentHome, so the sandbox variable
+  // and the home fallback cannot drift between them.
+  return resolveAgentHome(env("AGENCY_AGENT_HOME"))
 }
 
 export static const AGENCY_AGENT_DIR = computeAgentDir()
@@ -79,14 +79,13 @@ export static const AGENCY_AGENT_DIR = computeAgentDir()
 // local run works fine without it. Calling `enableMemory(...)` from `main()`
 // is the documented pattern (see `stdlib/memory.agency`); `with approve`
 // auto-approves the dir creation and has the enclosing step path it needs
-// inside this def. We deliberately do NOT pin `embeddings.model`: for hosted
-// providers the memory layer derives it from the active LLM provider
-// (openai → text-embedding-3-small, google → text-embedding-004,
-// ollama → nomic-embed-text). Set `embeddings.model` explicitly to override.
-export def enableAgentMemory() {
-  enableMemory({
-    dir: "${AGENCY_AGENT_DIR}/memory"
-  }) with approve
+// inside this def. By default the memory layer derives the embedding
+// model from the active LLM provider (openai → text-embedding-3-small,
+// google → text-embedding-004, ollama → nomic-embed-text). When the user
+// assigned the embedding slot, the caller passes the override and memory
+// embeddings run on that model and provider instead.
+export def enableAgentMemory(embeddings: (EmbeddingsOverride | null) = null) {
+  enableMemory(memoryConfigFor(embeddings)) with approve
 }
 
 // The slow ("deep reasoning") model + its provider, set once by
@@ -133,6 +132,119 @@ export def demoteProvider(provider: string): string {
     return "openai"
   }
   return provider
+}
+
+
+/** The embedding slot's model and provider, demoted. */
+export type EmbeddingsOverride = {
+  model: string;
+  provider: string
+}
+
+/** Map one resolved slot value to an embeddings override. Null when the
+  value is absent, its model is empty, or its provider is empty. The
+  provider comes out demoted as belt-and-braces; promoteAll already
+  exempts derived slots, so demotion is normally a no-op here. This is
+  the single home of that rule. embeddingsOverride and reactToSlotChange
+  both use it. */
+export def overrideFromResolved(
+  resolved: (Resolved | null),
+): (EmbeddingsOverride | null) {
+  if (resolved == null || resolved.model == "" || resolved.provider == "") {
+    return null
+  }
+  return {
+    model: resolved.model,
+    provider: demoteProvider(resolved.provider)
+  }
+}
+
+/** The embeddings override from the resolved slots, or null. */
+export def embeddingsOverride(
+  slots: Record<string, Resolved>,
+): (EmbeddingsOverride | null) {
+  return overrideFromResolved(slots["embedding"])
+}
+
+/** True when the provider requires env configuration that is unset —
+  the API-key var, or the base-URL var for proxy providers. Providers
+  that require nothing never report missing. */
+export def providerEnvMissing(provider: string): boolean {
+  return missingProviderEnvVar(provider) != ""
+}
+
+/** The embedding-key question, answered once. Every checkpoint that
+  needs "is the embedding slot usable right now" consumes this instead
+  of re-deriving override plus demotion plus key check. */
+export type EmbeddingKeyStatus = {
+  state: ("no-override" | "key-missing" | "ready");
+  override: (EmbeddingsOverride | null);
+  varName: string
+}
+
+export def embeddingKeyStatus(
+  slots: Record<string, Resolved>,
+): EmbeddingKeyStatus {
+  const override = embeddingsOverride(slots)
+  if (override == null) {
+    return {
+      state: "no-override",
+      override: null,
+      varName: ""
+    }
+  }
+  const missing = missingProviderEnvVar(override.provider)
+  if (missing != "") {
+    return {
+      state: "key-missing",
+      override: override,
+      varName: missing
+    }
+  }
+  return {
+    state: "ready",
+    override: override,
+    varName: ""
+  }
+}
+
+/** Decide how maybeEnableMemory should enable memory. Pure, so the
+  branching is testable without the environment or the memory runtime. */
+export def memoryEnablePlan(
+  memoryOn: boolean,
+  status: EmbeddingKeyStatus,
+): ("skip" | "enable-default" | "enable-fallback" | "enable-override") {
+  if (!memoryOn) {
+    return "skip"
+  }
+  if (status.state == "no-override") {
+    return "enable-default"
+  }
+  if (status.state == "key-missing") {
+    return "enable-fallback"
+  }
+  return "enable-override"
+}
+
+/** Build the enableMemory config. Extracted so a test can assert the
+  wiring seam: the override reaches the config, and null keeps the
+  default shape. */
+export def memoryConfigFor(
+  embeddings: (EmbeddingsOverride | null),
+): MemoryConfig {
+  const dir = "${AGENCY_AGENT_DIR}/memory"
+  if (embeddings == null) {
+    return {
+      dir: dir
+    }
+  }
+  return {
+    dir: dir,
+    embeddings: {
+      model: embeddings.model,
+      provider: embeddings.provider
+    }
+  }
 }
 
 // Capability profile for the current main model. refreshCapabilities()
@@ -196,6 +308,13 @@ export def promoteAll(
   for (slot in Object.keys(slots)) {
     const resolved = slots[slot]
     if (resolved == null) {
+      continue
+    }
+    // The promotion exists for chat calls, which need the Responses API
+    // for hosted web search. A derived slot names an embed endpoint, so
+    // it keeps its public provider name.
+    if (slotKind(slot) == "derived") {
+      promoted[slot] = resolved
       continue
     }
     promoted[slot] = {
@@ -262,6 +381,7 @@ export def configureModels(
   model: string,
   fast: string,
   slow: string,
+  embedding: string,
   provider: string,
 ) {
   const settings = getModelSettings(loadSettings())
@@ -289,6 +409,9 @@ export def configureModels(
     price: "standard"
   }
   let cliSlots: Record<string, string> = {}
+  if (embedding != "") {
+    cliSlots["embedding"] = embedding
+  }
   if (fast != "") {
     cliSlots["main"] = fast
   }

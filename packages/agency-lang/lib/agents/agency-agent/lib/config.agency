@@ -18,7 +18,9 @@ export static const HISTORY_FILE = "history"
 // set-but-empty var, and without the guard every derived path would
 // silently become cwd-relative (a stray `settings.json` written into —
 // or read from — whatever directory the agent runs in).
-def resolveAgentHome(override: string | null): string {
+// Exported: shared.agency expresses the memory dir through this same
+// resolver, so the two agent-home decisions cannot drift.
+export def resolveAgentHome(override: string | null): string {
   if (override == null || override == "") {
     return path.join(os.homedir(), ".agency-agent")
   }

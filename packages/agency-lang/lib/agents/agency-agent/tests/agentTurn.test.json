@@ -4,25 +4,267 @@
       "nodeName": "respondsToAMessage",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "Hi from the agent!" }]
+      "llmMocks": [
+        {
+          "return": "Hi from the agent!"
+        }
+      ]
     },
-    { "nodeName": "applyResolvedSetsSlots", "input": "", "expectedOutput": "\"claude-sonnet-4-6|claude-opus-4-8|anthropic\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "promotesOpenaiProvider", "input": "", "expectedOutput": "\"openai-responses\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "switchPinsAllSlots", "input": "", "expectedOutput": "\"gpt-5.5|gpt-5.5\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "switchPerSlotOnly", "input": "", "expectedOutput": "\"claude-opus-4-8|claude-sonnet-4-6\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "switchReportsChanges", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "switchDoesNotMutatePrior", "input": "", "expectedOutput": "\"\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "switchRejectsUnknownSlot", "input": "", "expectedOutput": "\"claude-sonnet-4-6|0\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "reactNotifiesOnMainProviderChange", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "reactSilentOnSameProvider", "input": "", "expectedOutput": "false", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "modelItemsNonEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "modelItemsFilterOnlyAnthropic", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "modelItemsFilterNarrows", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "modelItemKeyIsModelName", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "parseModelsBareIsEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "parseModelsProviderArg", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "parseModelsTrailingSpaceIsEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    {
+      "nodeName": "applyResolvedSetsSlots",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6|claude-opus-4-8|anthropic\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "promotesOpenaiProvider",
+      "input": "",
+      "expectedOutput": "\"openai-responses\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchPinsAllSlots",
+      "input": "",
+      "expectedOutput": "\"gpt-5.5|gpt-5.5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchPerSlotOnly",
+      "input": "",
+      "expectedOutput": "\"claude-opus-4-8|claude-sonnet-4-6\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchReportsChanges",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchDoesNotMutatePrior",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchRejectsUnknownSlot",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reactNotifiesOnMainProviderChange",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reactSilentOnSameProvider",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelItemsNonEmpty",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelItemsFilterOnlyAnthropic",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelItemsFilterNarrows",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelItemKeyIsModelName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "parseModelsBareIsEmpty",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "parseModelsProviderArg",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "parseModelsTrailingSpaceIsEmpty",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchAcceptsPrefixedEmbedding",
+      "input": "",
+      "expectedOutput": "\"text-embedding-3-small/openai\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchRejectsBareEmbedding",
+      "input": "",
+      "expectedOutput": "\"|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pinDoesNotReachEmbedding",
+      "input": "",
+      "expectedOutput": "\"empty\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reactWarnsOnKeylessEmbeddingSlot",
+      "input": "",
+      "expectedOutput": "\"true/true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reactStaysQuietOnClearedEmbeddingSlot",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "mainProviderChangeSkipsPauseWithPinnedEmbedding",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchPinFromPromotedOpenaiSession",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6/|built-in:embedding(derived)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchPerSlotFromPromotedOpenaiSession",
+      "input": "",
+      "expectedOutput": "\"gpt-4o-mini/claude-opus-4-8\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "mainProviderChangeStillPausesWhenOverrideFellBack",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
   ]
 }

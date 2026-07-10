@@ -30,6 +30,7 @@ import { agentNames } from "../lib/config.agency"
 import { withWebSearch, getSearchBackend } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
 import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
+import { verify, renderGaps, unwrapVerdict } from "./verify.agency"
 
 
 // The file-system tools (`read` / `write` / `edit` / `ls` / `glob` /
@@ -175,6 +176,22 @@ when in conflict.
     progress and protects against forgetting a step. Mark items
     completed one at a time, NEVER batch the completions at the end.
     Skip the list for trivial single-step changes.
+13. **The deliverable is a WORKING, VERIFIED artifact — never a plan, a
+    stub, or a script you did not run.** Writing the code is half the job;
+    proving it works is the other half. After you build or change
+    something, actually run it (compile it, execute the program, run the
+    tests, curl the endpoint, query the db) and confirm the REAL result
+    is what was asked. "I wrote a setup script / config" is NOT done;
+    "I ran it and watched it work" is. Never fabricate or assume an output
+    you did not actually produce — if a step is blocked, say so plainly
+    and try another way.
+14. **Before you finish, re-read the request and satisfy every requirement
+    literally.** Work is judged on the EXACT output: the precise file path
+    and name, the exact format (JSON keys, field types, units,
+    signed-vs-unsigned, a trailing newline), and each explicit criterion.
+    Correct logic written to the wrong path — or the right data in the
+    wrong format — still fails. Do a final pass over the original ask and
+    confirm you hit each point before you stop.
 
 ## Agency syntax — common mistakes to never make
 
@@ -372,6 +389,12 @@ questions and there is NO next turn. Therefore:
   imperfect artifact on disk always beats producing nothing.
 - Leave the task COMPLETE on disk: write the required file(s), then verify
   (compile, run, run any tests) and fix what fails before you stop.
+- Your ONLY output is the state you leave on disk, and it is checked
+  automatically — often by hidden tests you cannot see. Under-verifying is
+  the number-one way these tasks fail. So satisfy the literal requirements
+  exactly (exact paths, filenames, and output format), run your solution to
+  confirm it actually produces the required result, and re-check each
+  requirement yourself — there is no feedback and no second try.
 - If you are running low on tool budget, spend the remaining calls
   producing and saving the best COMPLETE artifact you can. A working file
   on disk beats a perfect plan that was never written."""
@@ -404,6 +427,11 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   }
 
   let hasErrors = false
+  // Verification loop state (one-shot only). `needsFix` keeps the loop
+  // going when the verifier found gaps; `verifyRounds` caps the extra
+  // verify-fix cycles so cost stays bounded.
+  let needsFix = false
+  let verifyRounds = 0
   let iterations = 0
   // Declared per-call (was an implicit module global) so a value never
   // leaks between codeAgent invocations.
@@ -417,7 +445,7 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   let firstIteration = true
   thread(label: "code", summarize: true, session: "code") {
     setMemoryId("code")
-    while ((hasErrors || firstIteration) && iterations < 5) {
+    while ((hasErrors || needsFix || firstIteration) && iterations < 5) {
       firstIteration = false
       iterations += 1
       if (_first) {
@@ -448,6 +476,22 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
         hasErrors = true
       } else {
         hasErrors = false
+        // Fresh-eyes verification — one-shot only, only after the code
+        // typechecks clean, capped at 2 verify-fix cycles. `verify.invoke`
+        // returns a Result: a Failure (verifier crashed / no verdict)
+        // matches the else arm and we fail open, since verification can
+        // only help — never block or corrupt (the verifier never writes).
+        if (_oneShot && verifyRounds < 2) {
+          const verdictResult = verify.invoke(originalUserMsg)
+          const verdict = unwrapVerdict(verdictResult)
+          if (verdict.satisfied) {
+            needsFix = false
+          } else {
+            userMsg = "Your work isn't complete yet. A fresh review found these gaps:\n\n${renderGaps(verdict.gaps)}\n\nFix each gap; your work will be re-verified."
+            needsFix = true
+            verifyRounds += 1
+          }
+        }
       }
     }
 

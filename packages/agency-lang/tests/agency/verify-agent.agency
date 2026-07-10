@@ -1,0 +1,28 @@
+import { verify, renderGaps, unwrapVerdict, Verdict } from "../../lib/agents/agency-agent/subagents/verify.agency"
+
+// verify() end-to-end with scoped LLM mocks (no real API/tools — the
+// mocked phase-1 response has no tool calls, so the tool loop ends).
+node unsatisfied() {
+  const v = verify("Write a regex to /app/regex.txt")
+  return "${v.satisfied}|${renderGaps(v.gaps)}"
+}
+
+node satisfied() {
+  const v = verify("Write a regex to /app/regex.txt")
+  return "${v.satisfied}|${v.gaps.length}"
+}
+
+// unwrapVerdict — the safety-critical fail-open. Pure, no LLM.
+// A success Result passes the verdict through unchanged.
+node unwrapSuccess() {
+  const good: Verdict = { satisfied: false, gaps: ["x"] }
+  const v = unwrapVerdict(success(good))
+  return "${v.satisfied}|${v.gaps.length}"
+}
+
+// A failure Result (verifier crashed) fails OPEN — satisfied, no gaps —
+// so verification never blocks or breaks the agent.
+node unwrapFailure() {
+  const v = unwrapVerdict(failure("verifier boom"))
+  return "${v.satisfied}|${v.gaps.length}"
+}

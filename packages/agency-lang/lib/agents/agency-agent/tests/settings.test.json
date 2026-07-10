@@ -90,6 +90,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "nullEntryAndReservedKeySurviveLoad",
+      "input": "",
+      "expectedOutput": "\"undefined/true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

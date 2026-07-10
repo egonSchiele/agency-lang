@@ -140,3 +140,26 @@ node missingCapabilitiesIsEmpty(): string {
   }
   return "unexpected"
 }
+
+node nullEntryAndReservedKeySurviveLoad(): string {
+  // A hand-edited file with a null entry used to throw inside
+  // loadSettings (sanitizePatch read .prompt off null); a __proto__ key
+  // would reparent the record on assignment instead of storing. Both
+  // must be dropped with the valid sibling kept.
+  write(
+    SETTINGS_FILE,
+    "{\"capabilities\":{\"models\":{\"broken\":null,\"__proto__\":{\"summarize\":false},\"ok\":{\"summarize\":true}}}}",
+    POLICY_DIR,
+  ) with approve
+  const loaded = loadSettings() with approve
+  const caps = getCapabilitySettings(loaded)
+  const models = caps.models
+  if (models == null) {
+    return "no-models"
+  }
+  const okEntry = models["ok"]
+  if (okEntry == null) {
+    return "sibling-lost"
+  }
+  return "${models["broken"]}/${okEntry.summarize}"
+}

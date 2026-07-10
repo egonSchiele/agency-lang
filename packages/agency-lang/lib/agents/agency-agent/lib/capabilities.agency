@@ -252,6 +252,28 @@ def sanitizePatch(patch: CapabilityPatch, label: string): CapabilityPatch {
   return kept
 }
 
+/** Guard one record entry from a hand-edited file. Drops (with a warning)
+  a null or non-object entry — sanitizePatch would throw on those — and
+  the prototype-chain keys, whose assignment would silently reparent the
+  record instead of storing the entry. Sanitize is the single trust
+  boundary for hand-edited keys: merge/remove only ever see keys that
+  survived this pass or came from model resolution. */
+def validCapabilityEntry(key: string, entry: any, section: string): boolean {
+  if (key == "__proto__" || key == "constructor" || key == "prototype") {
+    print(
+      "Warning: settings.json capabilities ${section} has reserved key '${key}'; ignoring it.",
+    )
+    return false
+  }
+  if (entry == null || typeof entry != "object" || Array.isArray(entry)) {
+    print(
+      "Warning: settings.json capabilities ${section}.${key} is not an object; ignoring it.",
+    )
+    return false
+  }
+  return true
+}
+
 /** Sanitize the whole capabilities section from settings.json. Never throws;
   returns a NEW object (does not mutate the input). */
 export def sanitizeCapabilitySettings(user: CapabilitySettings): CapabilitySettings {
@@ -260,6 +282,9 @@ export def sanitizeCapabilitySettings(user: CapabilitySettings): CapabilitySetti
   if (models != null) {
     let keptModels: Record<string, CapabilityPatch> = {}
     for (modelKey in Object.keys(models)) {
+      if (!validCapabilityEntry(modelKey, models[modelKey], "models")) {
+        continue
+      }
       keptModels[modelKey] = sanitizePatch(models[modelKey], "models.${modelKey}")
     }
     out.models = keptModels
@@ -268,6 +293,9 @@ export def sanitizeCapabilitySettings(user: CapabilitySettings): CapabilitySetti
   if (providers != null) {
     let keptProviders: Record<string, CapabilityPatch> = {}
     for (providerKey in Object.keys(providers)) {
+      if (!validCapabilityEntry(providerKey, providers[providerKey], "providers")) {
+        continue
+      }
       keptProviders[providerKey] = sanitizePatch(providers[providerKey], "providers.${providerKey}")
     }
     out.providers = keptProviders

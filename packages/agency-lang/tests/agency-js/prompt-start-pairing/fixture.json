@@ -1,0 +1,18 @@
+{
+  "mainData": "ok",
+  "shapedData": "json-ok",
+  "startCount": 3,
+  "completionCount": 3,
+  "perSpanAlternation": true,
+  "spanCount": 2,
+  "firstStartShape": {
+    "toolCount": 1,
+    "hasResponseFormat": false,
+    "hasMessages": false,
+    "threadIdMatchesCompletion": true
+  },
+  "fingerprint": {
+    "found": true,
+    "maxTokens": 123
+  }
+}

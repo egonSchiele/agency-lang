@@ -493,6 +493,23 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
+  // In-flight visibility: record the request SHAPE before dispatch, so a
+  // call that never completes (hang, kill, runaway generation) still
+  // leaves a trace. Pairs with promptCompletion/llmError/promptCancelled
+  // by span + order. Un-awaited like promptCompletion (post() detaches
+  // the remote send; the file sink is a sync append). Sits inside the
+  // same idempotent pr.step as the completion, so resumed runs do not
+  // double-emit for replayed steps. Retries inside dispatchWithRetry
+  // share this one start.
+  ctx.statelogClient.promptStart({
+    model: JSON.stringify(clientConfig.model),
+    threadId: __threads()?.activeId() ?? null,
+    messageCount: messages.getMessages().length,
+    toolCount: tools.length,
+    hasResponseFormat: responseFormat != null,
+    maxTokens: clientConfig.maxTokens ?? null,
+  });
+
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
   try {
@@ -524,6 +541,13 @@ async function _runPrompt({
     // the `delivered` de-dup flag stays shared across the two trip paths.
     const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
     if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
+      // Terminate the promptStart pair: a cancelled call (race loser,
+      // Esc, timeout abort) is a NORMAL outcome, not a request failure —
+      // no llmError — but leaving the start unpaired would make every
+      // healthy race() render "never completed" warnings.
+      ctx.statelogClient.promptCancelled({
+        threadId: __threads()?.activeId() ?? null,
+      });
       throw new AgencyCancelledError(undefined, cause);
     }
     // The success-path `promptCompletion` event below is the only place the

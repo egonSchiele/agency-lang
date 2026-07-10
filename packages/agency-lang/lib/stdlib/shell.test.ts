@@ -139,3 +139,54 @@ describe("_exec / _bash cwd ~ expansion", () => {
     expect(result.stdout.trim()).not.toBe(fs.realpathSync(fakeHome));
   });
 });
+
+/**
+ * A missing spawn `cwd` used to surface as Node's cryptic
+ * `spawn <cmd> ENOENT`. `resolveSpawnCwd` now validates existence first
+ * and throws a clear, actionable message so an LLM agent can recover
+ * (create the directory, then retry). Regression target: the agent
+ * doing `setAgentCwd("/tmp/build")` before the `mkdir`.
+ */
+describe("_exec / _bash reject a nonexistent cwd with a clear error", () => {
+  let tmp: string;
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "shell-cwd-"));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("_bash throws 'does not exist', not 'spawn sh ENOENT'", async () => {
+    const ctx = makeMockCtx();
+    const missing = path.join(tmp, "not-created-yet");
+    await expect(
+      __internal_bash(ctx, new StateStack(), new ThreadStore(), "pwd", missing, 0, ""),
+    ).rejects.toThrow(/Working directory does not exist/);
+  });
+
+  it("_exec throws 'does not exist' for a missing cwd", async () => {
+    const ctx = makeMockCtx();
+    const missing = path.join(tmp, "nope");
+    await expect(
+      __internal_exec(ctx, new StateStack(), new ThreadStore(), "pwd", [], missing, 0, ""),
+    ).rejects.toThrow(/Working directory does not exist/);
+  });
+
+  it("rejects a cwd that exists but is a file (not a directory)", async () => {
+    const ctx = makeMockCtx();
+    const file = path.join(tmp, "afile");
+    fs.writeFileSync(file, "x");
+    await expect(
+      __internal_bash(ctx, new StateStack(), new ThreadStore(), "pwd", file, 0, ""),
+    ).rejects.toThrow(/is not a directory/);
+  });
+
+  it("still runs normally when the cwd exists", async () => {
+    const ctx = makeMockCtx();
+    const result = await __internal_bash(
+      ctx, new StateStack(), new ThreadStore(), "pwd", tmp, 0, "",
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe(fs.realpathSync(tmp));
+  });
+});

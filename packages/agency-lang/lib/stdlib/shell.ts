@@ -42,6 +42,43 @@ function buildSpawnOptions(
   return options;
 }
 
+/**
+ * Resolve a spawn `cwd` (empty string = inherit the parent's cwd) and verify
+ * the directory EXISTS before handing it to `child_process.spawn`.
+ *
+ * Node reports a missing spawn cwd as `spawn <command> ENOENT` — which reads
+ * as "the executable wasn't found" and gives an LLM agent nothing to act on.
+ * It fires whenever the agent points `cwd` at a directory it hasn't created
+ * yet — e.g. `setAgentCwd("/tmp/build")` (or `bash(cwd: "/tmp/build")`) before
+ * the `mkdir`, a chicken-and-egg the shell can't resolve because it can't even
+ * start in a directory that doesn't exist. Fail early with a clear, actionable
+ * message instead so the model creates the directory first.
+ */
+async function resolveSpawnCwd(
+  cwd: string,
+  allowedPaths: string[],
+): Promise<string> {
+  if (!cwd) return "";
+  const resolved = await resolveDir(cwd, allowedPaths, "cwd");
+  let stat;
+  try {
+    stat = await fs.stat(resolved);
+  } catch (e: any) {
+    if (e?.code === "ENOENT") {
+      throw new Error(
+        `Working directory does not exist: ${resolved}. ` +
+          "Create it first (e.g. `mkdir -p` from an existing directory) " +
+          "before running a command there.",
+      );
+    }
+    throw e;
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`Working directory is not a directory: ${resolved}.`);
+  }
+  return resolved;
+}
+
 export type ExecOptions = {
   /**
    * Allow-list of executable names. When set, only commands whose
@@ -85,15 +122,12 @@ async function execImpl(
     options?.blockedCommands ?? [],
   );
   if (cmdError) throw new Error(cmdError);
-  // Route through `resolveDir` (cwd-anchored) so `~` expansion +
-  // allow-list enforcement land in one place. Relative `cwd: "./sub"`
-  // stays anchored to `process.cwd()` (the existing semantics) because
-  // we pass `base: "cwd"`. Empty `cwd` is the "no override" sentinel —
-  // pass undefined to the spawn options so the child inherits the
-  // parent's cwd, matching the pre-migration behavior.
-  const cwdResolved = cwd
-    ? await resolveDir(cwd, options?.allowedPaths ?? [], "cwd")
-    : "";
+  // Route through `resolveSpawnCwd` (cwd-anchored) so `~` expansion,
+  // allow-list enforcement, and the exists-before-spawn check land in one
+  // place. Relative `cwd: "./sub"` stays anchored to `process.cwd()` (the
+  // existing semantics) because we pass `base: "cwd"`. Empty `cwd` is the
+  // "no override" sentinel — the child inherits the parent's cwd.
+  const cwdResolved = await resolveSpawnCwd(cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn(command, args, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
@@ -165,9 +199,7 @@ async function bashImpl(
     }
   }
   // See `execImpl` for the cwd-resolution rationale.
-  const cwdResolved = cwd
-    ? await resolveDir(cwd, options?.allowedPaths ?? [], "cwd")
-    : "";
+  const cwdResolved = await resolveSpawnCwd(cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }

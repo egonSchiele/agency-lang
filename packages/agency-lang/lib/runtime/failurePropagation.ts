@@ -151,7 +151,7 @@ export function checkFailureArgs(
  * the enclosing auto-try must convert it into a catchable failure).
  */
 export function checkTsFunctionArgs(
-  target: Function,
+  target: (...args: unknown[]) => unknown,
   fnName: string,
   args: unknown[],
 ): void {

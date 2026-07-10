@@ -54,7 +54,11 @@ export async function __call(
       `Named arguments are not supported for non-Agency function '${target.name || "(anonymous)"}'`,
     );
   }
-  checkTsFunctionArgs(target, target.name || "(anonymous)", descriptor.args);
+  checkTsFunctionArgs(
+    target as (...args: unknown[]) => unknown,
+    target.name || "(anonymous)",
+    descriptor.args,
+  );
   return target(...descriptor.args);
 }
 

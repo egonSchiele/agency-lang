@@ -26,3 +26,8 @@ node main() {
   const t: Tree = { value: 1, children: [] }
   return t
 }
+
+node llmTree() {
+  const suggested: Tree = llm("Suggest a small tree")
+  return suggested
+}

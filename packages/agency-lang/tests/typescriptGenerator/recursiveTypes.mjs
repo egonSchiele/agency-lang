@@ -268,6 +268,102 @@ await callHook({
     };
   }
 })
+graph.node("llmTree", async (__state: GraphState) => {
+  const __setupData = setupNode({
+    state: __state
+  });
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __ctx = getRuntimeContext().ctx;
+let __forked;
+let __functionCompleted = false;
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "recursiveTypes.agency", scopeName: "llmTree", threads: __setupData.threads });
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+await callHook({
+          name: "onNodeStart",
+          data: {
+            nodeName: "llmTree"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.suggested = await runPrompt({
+          prompt: `Suggest a small tree`,
+          messages: __threads().getOrCreateActive(),
+          responseFormat: z.object({
+            response: Tree
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
+// halt if this is an interrupt
+if (hasInterrupts(__stack.locals.suggested)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            messages: __threads(),
+            data: __stack.locals.suggested
+          })
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
+runner.halt({
+          messages: __threads(),
+          data: __stack.locals.suggested
+        })
+return;
+      });
+    })
+    if (runner.halted) return runner.haltResult;
+    await runner.hook(3, async () => {
+await callHook({
+        name: "onNodeEnd",
+        data: {
+          nodeName: "llmTree",
+          data: undefined
+        }
+      })
+    });
+    return {
+      messages: __threads(),
+      data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error
+    }
+    {
+              const __errMsg = __error instanceof Error ? __error.message : String(__error);
+              const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+              const __log = __createLogger(__ctx.logLevel);
+              __log.error(`Node llmTree crashed: ${__errMsg}`);
+              if (__errStack) __log.error(__errStack);
+              __ctx.statelogClient?.error?.({
+                errorType: "runtimeError",
+                message: __errMsg,
+                functionName: "llmTree",
+              });
+            }
+    return {
+      messages: __threads(),
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "llmTree" })
+    };
+  }
+})
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
@@ -281,6 +377,19 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
+export async function llmTree({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "llmTree",
+    data: {},
+    messages: messages,
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals,
+    registerTopLevelCallbacks: __registerTopLevelCallbacks,
+    moduleDir: __dirname
+  });
+}
+export const __llmTreeNodeParams = [];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
@@ -296,4 +405,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"recursiveTypes.agency:main":{"1":{"line":25,"col":2},"2":{"line":26,"col":2}}};
+export const __sourceMap = {"recursiveTypes.agency:main":{"1":{"line":25,"col":2},"2":{"line":26,"col":2}},"recursiveTypes.agency:llmTree":{"1":{"line":30,"col":2},"2":{"line":31,"col":2}}};

@@ -218,6 +218,15 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
     expect(isFailure(await __validateChainRecursive(1, ref))).toBe(true);
   });
 
+  it("a pure ref -> ref cycle fails on the consecutive-hop cap instead of hanging", async () => {
+    // Codegen rejects the alias shapes that emit this, but runtime
+    // termination must not depend on that guard staying airtight.
+    const a: TypeValidationDescriptor = { kind: "ref", get: () => b };
+    const b: TypeValidationDescriptor = { kind: "ref", get: () => a };
+    const r = await __validateChainRecursive(1, a);
+    expect(isFailure(r)).toBe(true);
+  });
+
   it("depth cap still bounds a cyclic ref walk", async () => {
     // A degenerate always-recursing descriptor must hit maxDepth, not hang.
     const selfRef: TypeValidationDescriptor = {

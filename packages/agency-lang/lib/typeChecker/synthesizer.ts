@@ -456,11 +456,12 @@ function synthLogical(
   const right = synthType(expr.right, scope, ctx);
   if (left === "any" || right === "any") return "any";
   const seen = new Map<string, VariableType>();
+  const aliases = ctx.getTypeAliases();
   const collect = (t: VariableType) => {
     if (t.type === "unionType") {
-      for (const m of t.types) seen.set(typeKey(m, ctx.getTypeAliases()), m);
+      for (const m of t.types) seen.set(typeKey(m, aliases), m);
     } else {
-      seen.set(typeKey(t, ctx.getTypeAliases()), t);
+      seen.set(typeKey(t, aliases), t);
     }
   };
   collect(left);
@@ -636,8 +637,9 @@ function synthArray(
   }
   // Deduplicate structurally identical types
   const seen = new Map<string, VariableType>();
+  const aliases = ctx.getTypeAliases();
   for (const t of concreteTypes) {
-    const key = typeKey(t, ctx.getTypeAliases());
+    const key = typeKey(t, aliases);
     if (!seen.has(key)) seen.set(key, t);
   }
   const unique = Array.from(seen.values());
@@ -1212,8 +1214,9 @@ function synthBlockReturnType(
   if (concrete.length === 1) return concrete[0];
   // Dedupe structurally identical types.
   const seen = new Map<string, VariableType>();
+  const aliases = ctx.getTypeAliases();
   for (const t of concrete) {
-    const key = typeKey(t, ctx.getTypeAliases());
+    const key = typeKey(t, aliases);
     if (!seen.has(key)) seen.set(key, t);
   }
   const unique = Array.from(seen.values());

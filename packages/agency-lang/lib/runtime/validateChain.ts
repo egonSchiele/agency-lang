@@ -141,11 +141,22 @@ export async function __validateChainRecursive(
   return walk(value, descriptor, 0, maxDepth);
 }
 
+/**
+ * Consecutive ref-hop cap. Structural kinds reset it, so it only bounds
+ * degenerate ref -> ref chains. Codegen rejects the alias shapes that
+ * would emit such chains (`type Loop = Loop`, `type A = B` + `type B = A`
+ * — see the circularity guard in processTypeAlias), so this is
+ * belt-and-suspenders: runtime termination must not depend on a
+ * compile-time guard staying airtight.
+ */
+const MAX_CONSECUTIVE_REF_HOPS = 8;
+
 async function walk(
   value: unknown,
   descriptor: TypeValidationDescriptor,
   depth: number,
   maxDepth: number,
+  refHops: number = 0,
 ): Promise<ResultValue> {
   if (depth > maxDepth) {
     return failure({
@@ -158,9 +169,17 @@ async function walk(
   if (isFailure(value)) return value as ResultValue;
 
   if (descriptor.kind === "ref") {
-    // Depth passes through unchanged: the structural kinds below the ref
-    // increment it, and maxDepth bounds runaway recursion.
-    return walk(value, descriptor.get(), depth, maxDepth);
+    // Depth passes through unchanged — the structural kinds below the ref
+    // increment it — but consecutive ref hops are capped so a descriptor
+    // cycle built purely from refs fails instead of hanging.
+    if (refHops >= MAX_CONSECUTIVE_REF_HOPS) {
+      return failure({
+        reason: "validation descriptor ref chain exceeded",
+        limit: MAX_CONSECUTIVE_REF_HOPS,
+        valuePreview: previewValue(value),
+      });
+    }
+    return walk(value, descriptor.get(), depth, maxDepth, refHops + 1);
   }
 
   // Step 1: parse + own validators at this node.

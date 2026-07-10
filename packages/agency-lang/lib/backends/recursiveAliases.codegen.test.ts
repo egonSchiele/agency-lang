@@ -88,6 +88,51 @@ node main() {
     expect(out).toContain("z.lazy(() => Later)");
   });
 
+  it("accepts a legitimate alias-of-alias (regression: guard false positive)", () => {
+    // `type Point = Coords` compiled on main but the first guard version
+    // rejected it: resolveTypeDeep leaves plain alias refs intact by
+    // design, so every bare-alias body looked circular. safeResolveType
+    // resolves the CHAIN; only chains that land back on a known alias ref
+    // (genuine cycles) throw.
+    const out = generate(`
+type Coords = {
+  x: number,
+}
+type Point = Coords
+node main() {
+  return 1
+}
+`);
+    expect(out).toMatch(/const Point = Coords/);
+  });
+
+  it("emits z.lazy for a FORWARD alias-of-alias", () => {
+    const out = generate(`
+type Point = Coords
+type Coords = {
+  x: number,
+}
+node main() {
+  return 1
+}
+`);
+    expect(out).toContain("const Point = z.lazy(() => Coords)");
+  });
+
+  it("rejects a bare two-alias cycle (type A = B, type B = A)", () => {
+    // Must STAY rejected: a validated bare cycle would emit ref -> ref
+    // descriptors with no structural node between them.
+    expect(() =>
+      generate(`
+type A = B
+type B = A
+node main() {
+  return 1
+}
+`),
+    ).toThrow(/circularly references itself with no structure/);
+  });
+
   it("rejects type Loop = Loop with a clear error", () => {
     expect(() =>
       generate(`

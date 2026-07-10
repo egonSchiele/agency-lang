@@ -95,7 +95,7 @@ import {
   hasAliasValidate,
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
-import { resolveTypeDeep } from "../typeChecker/assignability.js";
+import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
 import { isFunctionTyped } from "../typeChecker/utils.js";
 
 import { $, ts } from "../ir/builders.js";
@@ -794,17 +794,26 @@ export class TypeScriptBuilder {
           tags: [...(node.aliasedType.tags ?? []), ...node.tags],
         }
       : node.aliasedType;
-    // `type Loop = Loop` (directly or through a chain landing back on a
-    // bare self-reference) has no base case: its lazy schema would recurse
-    // at first parse. TS rejects the shape too.
-    if (
-      node.aliasedType.type === "typeAliasVariable" &&
-      resolveTypeDeep(node.aliasedType, this.scopes.visibleTypeAliasesFull())
-        .type === "typeAliasVariable"
-    ) {
-      throw new Error(
-        `Type alias '${node.aliasName}' circularly references itself with no structure. Give it an object, array, or union shape.`,
-      );
+    // `type Loop = Loop` (directly or via `type A = B` + `type B = A`) has
+    // no base case: its lazy schema would recurse at first parse, and its
+    // validation descriptors would chain ref -> ref forever. TS rejects the
+    // shape too. Resolve the alias CHAIN with safeResolveType — its
+    // in-progress guard leaves genuinely circular chains as a nominal ref,
+    // while a legitimate alias-of-alias (`type Point = Coords`) resolves
+    // through to the referenced body. An unknown alias also stays nominal
+    // but has no registry entry: fall through to the regular
+    // undefined-alias diagnostic instead of a misleading circularity error.
+    if (node.aliasedType.type === "typeAliasVariable") {
+      const aliasesFull = this.scopes.visibleTypeAliasesFull();
+      const chainEnd = safeResolveType(node.aliasedType, aliasesFull);
+      if (
+        chainEnd.type === "typeAliasVariable" &&
+        aliasesFull[chainEnd.aliasName]
+      ) {
+        throw new Error(
+          `Type alias '${node.aliasName}' circularly references itself with no structure. Give it an object, array, or union shape.`,
+        );
+      }
     }
     const zodSchema = this.zodSchemaFor(
       aliasedWithTags,

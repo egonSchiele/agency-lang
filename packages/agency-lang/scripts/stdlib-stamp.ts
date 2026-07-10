@@ -9,6 +9,7 @@
 // runs from `make doc`, which `make all` sequences after `make build`, so
 // a built dist is guaranteed). Contrast scripts/stage-agents.mjs, which
 // must run on bare node before dist exists and therefore stays plain .mjs.
+import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import {
@@ -17,8 +18,19 @@ import {
   hashBytes,
 } from "@/compiler/buildManifest.js";
 
-// dist/scripts/stdlib-stamp.js → package root is one level up.
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const stdlibHash = computeStdlibHash(path.join(packageRoot, "stdlib"));
-const compilerStamp = computeCompilerStamp(path.join(packageRoot, "dist", "lib"));
+// This file executes as dist/scripts/stdlib-stamp.js → the package root
+// is TWO levels up (the .mjs predecessor lived at scripts/, one level up
+// — that off-by-one shipped a constant stamp once; hence the loud guards
+// below instead of hashTree's silent empty hash for missing dirs).
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const stdlibDir = path.join(packageRoot, "stdlib");
+const distLib = path.join(packageRoot, "dist", "lib");
+for (const required of [stdlibDir, distLib]) {
+  if (!fs.existsSync(required)) {
+    console.error(`stdlib-stamp: expected directory missing: ${required}`);
+    process.exit(1);
+  }
+}
+const stdlibHash = computeStdlibHash(stdlibDir);
+const compilerStamp = computeCompilerStamp(distLib);
 console.log(hashBytes(stdlibHash + compilerStamp));

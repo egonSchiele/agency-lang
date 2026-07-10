@@ -60,8 +60,10 @@ export function syncAgents(srcDir, destDir) {
   return { copied, deleted };
 }
 
+// path.resolve for robustness even though node absolutizes argv[1] for
+// direct invocations — free hardening against exotic launchers.
 const invokedDirectly =
-  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+  process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (invokedDirectly) {
   const [src, dest] = process.argv.slice(2);
   if (!src || !dest) {

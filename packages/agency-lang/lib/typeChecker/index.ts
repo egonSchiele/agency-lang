@@ -146,7 +146,7 @@ export class TypeChecker {
     this.errors = [];
     const ctx = this.makeContext();
 
-    // 1. Validate type alias references
+    // Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
         for (const [name, entry] of Object.entries(scopeAliases)) {
@@ -184,7 +184,7 @@ export class TypeChecker {
       });
     }
 
-    // 1b. Warn on local definitions that shadow imported functions/nodes.
+    // Warn on local definitions that shadow imported functions/nodes.
     // functionDefs and nodeDefs are mutually exclusive by construction
     // (a name is parsed as one or the other, never both).
     const shadowWarning = (name: string, loc: SourceLocation | undefined) =>
@@ -200,7 +200,7 @@ export class TypeChecker {
       if (this.importedFunctions[name]) shadowWarning(name, def.loc);
     }
 
-    // 1c. Reserve names baked into the language. The synth pipeline relies
+    // Reserve names baked into the language. The synth pipeline relies
     // on `success(x)` and `failure(msg)` parameterizing ResultType, and on
     // `Result` being the built-in type. Allowing user definitions of these
     // names would silently change semantics.
@@ -225,7 +225,7 @@ export class TypeChecker {
       }
     }
 
-    // 1d. Reserved names cannot be `let`/`const` / `static const` declared
+    // Reserved names cannot be `let`/`const` / `static const` declared
     // either. The variable would be unusable as a function (e.g. `schema(X)`
     // always parses as a SchemaExpression regardless of scope), and shadowing
     // primitives like `success`/`failure` silently changes semantics.
@@ -268,7 +268,7 @@ export class TypeChecker {
       checkValidatedParamReturn(name, def);
     }
 
-    // 1f. Doc strings must not interpolate function/node parameters.
+    // Doc strings must not interpolate function/node parameters.
     // The description is built when the tool object is constructed at module
     // load time — long before the function is ever called — so parameter
     // values are simply not bound yet. Catch the obvious case here:
@@ -298,33 +298,33 @@ export class TypeChecker {
       checkDocStringParams(def);
     }
 
-    // 2. Infer return types
+    // Infer return types
     inferReturnTypes(ctx);
 
-    // 3. Build scopes (collects variable types and checks assignments)
+    // Build scopes (collects variable types and checks assignments)
     const scopes = buildScopes(ctx);
 
-    // 3a. Analyze interrupts (pure — returns transitive effect sets and pushes
+    // Analyze interrupts (pure — returns transitive effect sets and pushes
     // no diagnostics; the ctx.errors sites in interruptAnalysis.ts belong to the
     // consumer passes below). Moved ahead of flow/checkScopes so the handler-param
     // refinement can run before field-access checking.
     const interruptEffectsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
 
-    // 3b. Build the ambient effect→payload registry ONCE and share it with both
-    // the handler-param refinement (below) and checkEffectPayloads (6d). Building
+    // Build the ambient effect→payload registry ONCE and share it with both
+    // the handler-param refinement (below) and checkEffectPayloads below. Building
     // it once avoids double-reporting payload conflicts.
     const effectRegistry = buildEffectRegistry(ctx);
 
-    // 3c. H3: re-type each eligible inline handler param `e` as a per-effect
+    // H3: re-type each eligible inline handler param `e` as a per-effect
     // discriminated union carrying that effect's declared payload as `data`.
     // MUST run before checkScopes so `e.data` usage sites narrow correctly.
     refineInlineHandlerParams(scopes, interruptEffectsByFunction, ctx, effectRegistry);
 
-    // 3d. Build the flow graph AFTER the param retype, so its `typeAt` oracle is
+    // Build the flow graph AFTER the param retype, so its `typeAt` oracle is
     // seeded with the refined `e` (no stale-memo reset needed).
     buildFlowGraphs(scopes, ctx);
 
-    // 3e. Compute the value type of every expression-position `match` (union of
+    // Compute the value type of every expression-position `match` (union of
     // its matchYield types). Runs AFTER buildFlowGraphs so yield synthesis sees
     // flow-narrowed bindings (e.g. `"a" => e.val` under a discriminant match),
     // and before checkScopes so the `__matchval_<id>` synth hook and the
@@ -334,55 +334,55 @@ export class TypeChecker {
     // FlowEnvironment soundness contract) so no stale entry survives.
     computeMatchExprTypes(scopes, ctx);
 
-    // 4. Check function calls, return types, and expressions. `e.data` is now
+    // Check function calls, return types, and expressions. `e.data` is now
     // payload-typed → narrowing on `e.effect` makes `e.data` concrete here.
     checkScopes(scopes, ctx);
 
-    // 5a. Build the per-function interrupt call graph used by
+    // Build the per-function interrupt call graph used by
     // `agency interrupts` for static handler-set analysis. The
     // existing analyzeInterruptsFromScopes pass continues to compute
     // transitive kinds; this is purely additive structural info.
     const interruptCallGraph = buildInterruptCallGraph(scopes, ctx);
 
-    // 6. Check for unhandled interrupt warnings (uses transitive results)
+    // Check for unhandled interrupt warnings (uses transitive results)
     checkUnhandledInterruptWarnings(scopes, interruptEffectsByFunction, ctx);
 
-    // 6a. Reject `interrupt` inside any callback body. Callbacks fire as
+    // Reject `interrupt` inside any callback body. Callbacks fire as
     // side effects; their body cannot pause execution.
     checkCallbackBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
 
-    // 6b. Reject handlers whose body may itself raise an interrupt — that
+    // Reject handlers whose body may itself raise an interrupt — that
     // re-enters the handler chain and recurses (see HandlerRecursionError).
     checkHandlerBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
 
-    // 6c. Verify each function/node's declared `raises` clause is not
+    // Verify each function/node's declared `raises` clause is not
     // exceeded by its transitively-inferred effect set.
     checkRaisesDeclarations(interruptEffectsByFunction, ctx);
 
-    // 6d. Check interrupt payloads against `effect` declarations (shared registry).
+    // Check interrupt payloads against `effect` declarations (shared registry).
     checkEffectPayloads(scopes, ctx, effectRegistry);
 
-    // 6e. Match exhaustiveness over closed value types.
+    // Match exhaustiveness over closed value types.
     checkMatchExhaustiveness(scopes, ctx);
 
-    // 6f. Definite-return: a function with a non-void return type must `return`
+    // Definite-return: a function with a non-void return type must `return`
     // on every path. Reads the per-scope terminal flow node from buildFlowGraphs.
     checkDefiniteReturns(scopes, ctx);
 
-    // 7. Check for undefined function calls (config-controlled severity).
+    // Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);
 
-    // 8. Check for undefined variable references (config-controlled severity).
+    // Check for undefined variable references (config-controlled severity).
     checkUndefinedVariables(scopes, ctx);
 
-    // 9a. Tool-position binding validator: at every llm(...) call site
+    // Tool-position binding validator: at every llm(...) call site
     // with a statically-known tools array, require every function-typed
     // parameter to be bound (error) or warn when an optional one is left
     // dropped. See lib/typeChecker/toolBlockBinding.ts for the helpers
     // and docs/superpowers/specs/2026-06-03-tool-params-blocks-and-variadics-design.md §4.2(e).
     checkToolBlockBindings(this.program, ctx);
 
-    // 9. Validate static initializers + `static <bare>` statements.
+    // Validate static initializers + `static <bare>` statements.
     // Direct-only checks against the Phase A surface — per-run-only
     // primitive calls (e.g. `llm()`, `interrupt()`) and obvious
     // post-declaration mutations of statics. Cross-module global

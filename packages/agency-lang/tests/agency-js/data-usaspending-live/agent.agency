@@ -1,0 +1,28 @@
+import { usaspendingAwards, usaspendingAward } from "std::data/usaspending"
+
+// Real drift check: search, then drill into the first result's detail — returns awards.length only if
+// BOTH the search returned awards AND the detail parsed a recipient, so drift in either shape shows.
+node liveCheck(): number {
+  handle {
+    const awards = usaspendingAwards(recipient: "Lockheed Martin", limit: 3) catch []
+    if (awards.length == 0) {
+      return 0
+    }
+    const detailR = usaspendingAward(awards[0].generatedId)
+    if (detailR is failure(e)) {
+      return 0
+    }
+    if (detailR.value.recipient == "") {
+      return 0
+    }
+    return awards.length
+  } with (data) {
+    if (data.effect == "std::usaspending") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+    return reject()
+  }
+}

@@ -1,0 +1,259 @@
+import { fetchJSON, HttpMethod } from "std::http"
+import { keys } from "std::object"
+
+/** @module
+  ## USASpending — U.S. federal awards
+
+  Query [USASpending](https://api.usaspending.gov), the U.S. Treasury's award-level spending API:
+  which companies and organizations received federal contracts and grants, from which agency, for
+  how much. Use it to follow federal money — pairs with `std::data/people/littlesis` (who is
+  connected) and `std::data/finance/edgar` (company filings).
+
+  No API key required. `usaspendingAwards` searches; its results carry a `generatedId` you can drill
+  into with `usaspendingAward`, which also surfaces recipient executive compensation and sub-award
+  totals.
+
+  ### Usage
+
+  ```ts
+  import { usaspendingAwards } from "std::data/usaspending"
+
+  node main() {
+    const awards = usaspendingAwards(recipient: "Lockheed Martin", limit: 5) catch []
+    for (a in awards) {
+      print("${a.amount}  ${a.recipient}  (${a.awardingAgency})")
+    }
+  }
+  ```
+*/
+
+effect std::usaspending { op: string, query: string }
+
+static const USA_BASE = "https://api.usaspending.gov"
+static const USA_DOMAINS = ["api.usaspending.gov"]
+
+// Friendly award-type category → award_type_codes. Single source of truth: parseAwardType derives
+// both the lookup and the valid-list error message from this (like littlesis's CATEGORY_NAMES).
+static const AWARD_TYPE_CODES: Record<string, string[]> = {
+  contracts: ["A", "B", "C", "D"],
+  grants: ["02", "03", "04", "05"],
+  loans: ["07", "08"],
+  direct_payments: ["06", "10"],
+  other: ["09", "11", "-1"]
+}
+
+/** One federal award from a search. `generatedId` drills into usaspendingAward; `amount` is USD. */
+export type Award = {
+  internalId: number;
+  generatedId: string;
+  id: string;
+  recipient: string;
+  amount: number;
+  awardingAgency: string;
+  startDate: string;
+  endDate: string;
+  description: string
+}
+
+/** A recipient officer and their compensation. */
+export type Executive = {
+  name: string;
+  amount: number
+}
+
+/** Curated detail for one federal award. */
+export type AwardDetail = {
+  id: string;
+  category: string;
+  awardType: string;
+  description: string;
+  amount: number;
+  recipient: string;
+  recipientUei: string;
+  awardingAgency: string;
+  startDate: string;
+  endDate: string;
+  placeOfPerformance: string;
+  subawardCount: number;
+  subawardAmount: number;
+  executives: Executive[]
+}
+
+/** Map a friendly award-type category to its award_type_codes (one category per query — USASpending
+    won't mix contract and assistance codes). Unknown → failure listing the valid types. Pure. */
+safe def parseAwardType(t: string): Result<string[]> {
+  const codes = AWARD_TYPE_CODES[t] ?? null
+  if (codes == null) {
+    return failure("unknown awardType '${t}'; valid: ${keys(AWARD_TYPE_CODES).join(", ")}")
+  }
+  return success(codes)
+}
+
+/** Build the spending_by_award POST body. Optional filters are added only when provided (bracket
+    assignment on a mutable Record, as in policy[effect] / _firstEntry[category]). Pure. */
+safe def buildAwardsBody(codes: string[], recipient: string, agency: string, startDate: string, endDate: string, limit: number): Record<string, any> {
+  let filters: Record<string, any> = { award_type_codes: codes }
+  if (recipient != "") {
+    filters["recipient_search_text"] = [recipient]
+  }
+  if (agency != "") {
+    filters["agencies"] = [{ type: "awarding", tier: "toptier", name: agency }]
+  }
+  if (startDate != "" && endDate != "") {
+    filters["time_period"] = [{ start_date: startDate, end_date: endDate }]
+  }
+  return {
+    filters: filters,
+    fields: ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "Start Date", "End Date", "Description"],
+    limit: limit,
+    page: 1,
+    sort: "Award Amount",
+    order: "desc"
+  }
+}
+
+/** Build the award-detail path (accepts the numeric internal id or the generated hash). Pure. */
+safe def buildAwardPath(awardId: string): string {
+  return "/api/v2/awards/${encodeURIComponent(awardId)}/"
+}
+
+/** Reshape a spending_by_award body into Award[]. Results are keyed by human field names with
+    spaces, read via bracket access. Pure/total. */
+safe def parseAwards(raw: any): Award[] {
+  const r: any = raw ?? {}
+  const results = r.results ?? []
+  return map(results) as a {
+    const aw: any = a ?? {}
+    return {
+      internalId: aw.internal_id ?? 0,
+      generatedId: aw.generated_internal_id ?? "",
+      id: aw["Award ID"] ?? "",
+      recipient: aw["Recipient Name"] ?? "",
+      amount: aw["Award Amount"] ?? 0,
+      awardingAgency: aw["Awarding Agency"] ?? "",
+      startDate: aw["Start Date"] ?? "",
+      endDate: aw["End Date"] ?? "",
+      description: aw["Description"] ?? ""
+    }
+  }
+}
+
+/** Join city and state into "City, ST", or "" when both are missing. Pure. */
+safe def placeString(city: string, state: string): string {
+  if (city == "" && state == "") {
+    return ""
+  }
+  return "${city}, ${state}"
+}
+
+/** Curate the deep award-detail response into AwardDetail. Pure/total. */
+safe def parseAwardDetail(raw: any): AwardDetail {
+  const r: any = raw ?? {}
+  const recipient: any = r.recipient ?? {}
+  const awarding: any = r.awarding_agency ?? {}
+  const toptier: any = awarding.toptier_agency ?? {}
+  const pop: any = r.period_of_performance ?? {}
+  const place: any = r.place_of_performance ?? {}
+  const execDetails: any = r.executive_details ?? {}
+  const officers: any[] = execDetails.officers ?? []
+  const city = place.city_name ?? ""
+  const state = place.state_code ?? ""
+  return {
+    id: r.generated_unique_award_id ?? "",
+    category: r.category ?? "",
+    awardType: r.type_description ?? "",
+    description: r.description ?? "",
+    amount: r.total_obligation ?? 0,
+    recipient: recipient.recipient_name ?? "",
+    recipientUei: recipient.recipient_uei ?? "",
+    awardingAgency: toptier.name ?? "",
+    startDate: pop.start_date ?? "",
+    endDate: pop.end_date ?? "",
+    placeOfPerformance: placeString(city, state),
+    subawardCount: r.subaward_count ?? 0,
+    subawardAmount: r.total_subaward_amount ?? 0,
+    executives: map(officers) as o {
+      const off: any = o ?? {}
+      return {
+        name: off.name ?? "",
+        amount: off.amount ?? 0
+      }
+    }
+  }
+}
+
+/** Shared failure message for a failed USASpending fetch. Pure. */
+safe def usaspendingError(err: any): string {
+  return "USASpending request failed: ${err.message ?? err}"
+}
+
+/** Turn a fetch Result into an Award[] Result. Pure. */
+safe def awardsFinalize(fetchResult: any): Result<Award[]> {
+  return match (fetchResult) {
+    success(body) => success(parseAwards(body))
+    failure(err) => failure(usaspendingError(err))
+  }
+}
+
+/** Turn a fetch Result into an AwardDetail Result; a null body → failure. Pure. */
+safe def awardDetailFinalize(fetchResult: any): Result<AwardDetail> {
+  return match (fetchResult) {
+    success(body) => {
+      if (body == null) {
+        return failure("USASpending returned no award")
+      }
+      return success(parseAwardDetail(body))
+    }
+    failure(err) => failure(usaspendingError(err))
+  }
+}
+
+/** Fetch a USASpending path (GET or POST) and return the parsed-JSON Result. Raises
+    std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's own
+    std::usaspending prompt while an OUTER fetch handler still receives (and can reject/propagate) the
+    fetch — the POST search surfaces with method "POST" for policy gating. Private. */
+safe def usaspendingFetch(path: string, method: HttpMethod, body: Record<string, any> | string | null): Result raises <std::http::fetchJSON> {
+  handle {
+    return fetchJSON(baseUrl: USA_BASE, path: path, allowedDomains: USA_DOMAINS, method: method, body: body)
+  } with (data) {
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
+  }
+}
+
+export safe def usaspendingAwards(recipient: string = "", agency: string = "", awardType: string = "contracts", startDate: string = "", endDate: string = "", limit: number = 20): Result<Award[]> raises <std::usaspending, std::http::fetchJSON> {
+  """
+  Search U.S. federal awards. Returns each award's id, recipient, amount, awarding agency, dates, and
+  description, most-funded first. An empty result set returns an empty list.
+
+  @param recipient - Recipient or company name to filter by (blank = any)
+  @param agency - Awarding agency name to filter by (blank = any)
+  @param awardType - Award category: contracts, grants, loans, direct_payments, or other
+  @param startDate - ISO start date bounding the award period (blank with endDate = all time)
+  @param endDate - ISO end date bounding the award period
+  @param limit - Maximum number of awards to return (max 100)
+  """
+  const codesResult = parseAwardType(awardType)
+  if (codesResult is failure(msg)) {
+    return failure(msg)
+  }
+  const codes = codesResult.value
+  return interrupt std::usaspending("Search USASpending federal awards?", { op: "awards", query: recipient })
+  const body = buildAwardsBody(codes, recipient, agency, startDate, endDate, limit)
+  const result = usaspendingFetch("/api/v2/search/spending_by_award/", "POST", body)
+  return awardsFinalize(result)
+}
+
+export safe def usaspendingAward(awardId: string): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON> {
+  """
+  Fetch full detail for one federal award. Returns amount, recipient and UEI, awarding agency, dates,
+  place of performance, sub-award totals, and recipient executive compensation. Unknown id returns a
+  failure.
+
+  @param awardId - The award id: the generatedId from a search, or the numeric internalId as a string
+  """
+  return interrupt std::usaspending("Fetch this USASpending award?", { op: "award", query: awardId })
+  const result = usaspendingFetch(buildAwardPath(awardId), "GET", null)
+  return awardDetailFinalize(result)
+}

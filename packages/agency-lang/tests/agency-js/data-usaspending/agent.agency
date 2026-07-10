@@ -1,0 +1,130 @@
+import test { parseAwardType, buildAwardsBody, buildAwardPath, parseAwards, parseAwardDetail, usaspendingError, awardsFinalize, awardDetailFinalize, usaspendingAwards, usaspendingAward } from "std::data/usaspending"
+import { Network } from "std::capabilities"
+
+// --- pure-function wrappers ---
+
+node tParseAwardType(t: string): any {
+  const r = parseAwardType(t)
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return r.value
+}
+
+node tBuildAwardsBody(codes: string[], recipient: string, agency: string, startDate: string, endDate: string, limit: number): any {
+  return buildAwardsBody(codes, recipient, agency, startDate, endDate, limit)
+}
+
+node tAwardPath(awardId: string): string {
+  return buildAwardPath(awardId)
+}
+
+node tParseAwards(raw: any): any {
+  return parseAwards(raw)
+}
+
+node tParseAwardsNull(): any {
+  return parseAwards(null)
+}
+
+node tParseAwardDetail(raw: any): any {
+  return parseAwardDetail(raw)
+}
+
+node tAwardsFinalizeErr(): string {
+  const r = awardsFinalize(failure("boom"))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node tAwardDetailFinalizeNull(): string {
+  const r = awardDetailFinalize(success(null))
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS"
+}
+
+node tError(err: any): string {
+  return usaspendingError(err)
+}
+
+// --- gating / capability ---
+
+// Compile-time capability assertion: usaspendingAwards raises std::usaspending + std::http::fetchJSON.
+node netCheck() raises <Network> {
+  const r = usaspendingAwards(recipient: "x") catch []
+  return r.length
+}
+
+// Plain caller as a REPORTING node: returns "REJECTED: …" if the call failed (e.g. the interrupt was
+// rejected) or "SUCCESS" if it ran to a success. Lets the reject test prove the call HALTED, and the
+// Option-C test prove approving std::usaspending resumes to success.
+node callAwards(): string {
+  const r = usaspendingAwards(recipient: "Lockheed")
+  if (r is failure(e)) {
+    return "REJECTED: ${e}"
+  }
+  return "SUCCESS"
+}
+
+// Plain caller for the detail endpoint, so a test can inspect its { op: "award", query } payload.
+node callAward(): string {
+  const r = usaspendingAward("22834500")
+  if (r is failure(e)) {
+    return "REJECTED: ${e}"
+  }
+  return "SUCCESS"
+}
+
+// Governed caller: approve std::usaspending, PROPAGATE the fetch so std::http::fetchJSON surfaces
+// with { baseUrl, path, method } — asserted offline (method must be POST for the search), then reject.
+node callAwardsGoverned(): any {
+  handle {
+    return usaspendingAwards(recipient: "Lockheed")
+  } with (data) {
+    if (data.effect == "std::usaspending") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
+}
+
+// Governed caller for the GET detail — method must be GET, path must carry the id.
+node callAwardGoverned(): any {
+  handle {
+    return usaspendingAward("22834500")
+  } with (data) {
+    if (data.effect == "std::usaspending") {
+      return approve()
+    }
+    if (data.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
+}
+
+// Bad awardType fails BEFORE the interrupt → failure Result offline (no fetch, no interrupt).
+node callAwardsBad(): string {
+  const r = usaspendingAwards(awardType: "bogus")
+  if (r is failure(e)) {
+    return e
+  }
+  return "UNEXPECTED_SUCCESS_OR_INTERRUPT"
+}
+
+// --- fetch-mocked end-to-end (see fetchMocks.json); `with approve` lets the mocked fetch run ---
+
+node mockAwards(): any {
+  const r = usaspendingAwards(recipient: "Lockheed") with approve
+  return r catch "FAIL"
+}
+
+node mockAward(): any {
+  const r = usaspendingAward("22834500") with approve
+  return r catch "FAIL"
+}

@@ -1,0 +1,4 @@
+[
+  { "url": "https://api.usaspending.gov/api/v2/search/spending_by_award/", "method": "POST", "body": { "filters": { "award_type_codes": ["A", "B", "C", "D"], "recipient_search_text": ["Lockheed"] } }, "returnFile": "sample-awards.json" },
+  { "urlPattern": "api\\.usaspending\\.gov/api/v2/awards/22834500/", "returnFile": "sample-award-detail.json" }
+]

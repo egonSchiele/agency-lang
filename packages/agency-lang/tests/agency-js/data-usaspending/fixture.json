@@ -1,0 +1,134 @@
+{
+  "typeContracts": ["A", "B", "C", "D"],
+  "typeGrants": ["02", "03", "04", "05"],
+  "typeBad": "FAIL: unknown awardType 'bogus'; valid: contracts, grants, loans, direct_payments, other",
+  "bodyMinimal": {
+    "filters": { "award_type_codes": ["02", "03", "04", "05"] },
+    "fields": ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "Start Date", "End Date", "Description"],
+    "limit": 10,
+    "page": 1,
+    "sort": "Award Amount",
+    "order": "desc"
+  },
+  "bodyFull": {
+    "filters": {
+      "award_type_codes": ["A", "B", "C", "D"],
+      "recipient_search_text": ["Lockheed"],
+      "agencies": [{ "type": "awarding", "tier": "toptier", "name": "Department of Defense" }],
+      "time_period": [{ "start_date": "2023-01-01", "end_date": "2023-12-31" }]
+    },
+    "fields": ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "Start Date", "End Date", "Description"],
+    "limit": 5,
+    "page": 1,
+    "sort": "Award Amount",
+    "order": "desc"
+  },
+  "bodyStartOnly": {
+    "filters": { "award_type_codes": ["A", "B", "C", "D"] },
+    "fields": ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "Start Date", "End Date", "Description"],
+    "limit": 10,
+    "page": 1,
+    "sort": "Award Amount",
+    "order": "desc"
+  },
+  "awardPath": "/api/v2/awards/22834500/",
+  "awardPathEnc": "/api/v2/awards/a%20b%2Fc/",
+  "awards": [
+    {
+      "internalId": 22834500,
+      "generatedId": "CONT_AWD_SPE2DX16D1500_9700",
+      "id": "SPE2DX16D1500",
+      "recipient": "LOCKHEED MARTIN CORPORATION",
+      "amount": 12500000.5,
+      "awardingAgency": "Department of Defense",
+      "startDate": "2016-03-01",
+      "endDate": "2021-02-28",
+      "description": "AIRCRAFT PARTS"
+    }
+  ],
+  "awardsNull": [],
+  "awardsSparse": [
+    {
+      "internalId": 0,
+      "generatedId": "",
+      "id": "",
+      "recipient": "",
+      "amount": 0,
+      "awardingAgency": "",
+      "startDate": "",
+      "endDate": "",
+      "description": ""
+    }
+  ],
+  "detail": {
+    "id": "CONT_AWD_SPE2DX16D1500_9700",
+    "category": "contract",
+    "awardType": "DELIVERY ORDER",
+    "description": "AIRCRAFT PARTS",
+    "amount": 12500000.5,
+    "recipient": "LOCKHEED MARTIN CORPORATION",
+    "recipientUei": "ABC123DEF456",
+    "awardingAgency": "Department of Defense",
+    "startDate": "2016-03-01",
+    "endDate": "2021-02-28",
+    "placeOfPerformance": "FORT WORTH, TX",
+    "subawardCount": 3,
+    "subawardAmount": 4200000,
+    "executives": [
+      { "name": "Jane Doe", "amount": 20000000 },
+      { "name": "John Smith", "amount": 15000000 }
+    ]
+  },
+  "detailEmpty": {
+    "id": "",
+    "category": "",
+    "awardType": "",
+    "description": "",
+    "amount": 0,
+    "recipient": "",
+    "recipientUei": "",
+    "awardingAgency": "",
+    "startDate": "",
+    "endDate": "",
+    "placeOfPerformance": "",
+    "subawardCount": 0,
+    "subawardAmount": 0,
+    "executives": []
+  },
+  "awardsFinalizeErr": "USASpending request failed: boom",
+  "awardDetailFinalizeNull": "USASpending returned no award",
+  "errorMsg": "USASpending request failed: boom",
+  "errorMsgObj": "USASpending request failed: boom-msg",
+  "mockAwards": [
+    {
+      "internalId": 22834500,
+      "generatedId": "CONT_AWD_SPE2DX16D1500_9700",
+      "id": "SPE2DX16D1500",
+      "recipient": "LOCKHEED MARTIN CORPORATION",
+      "amount": 12500000.5,
+      "awardingAgency": "Department of Defense",
+      "startDate": "2016-03-01",
+      "endDate": "2021-02-28",
+      "description": "AIRCRAFT PARTS"
+    }
+  ],
+  "mockAward": {
+    "id": "CONT_AWD_SPE2DX16D1500_9700",
+    "category": "contract",
+    "awardType": "DELIVERY ORDER",
+    "description": "AIRCRAFT PARTS",
+    "amount": 12500000.5,
+    "recipient": "LOCKHEED MARTIN CORPORATION",
+    "recipientUei": "ABC123DEF456",
+    "awardingAgency": "Department of Defense",
+    "startDate": "2016-03-01",
+    "endDate": "2021-02-28",
+    "placeOfPerformance": "FORT WORTH, TX",
+    "subawardCount": 3,
+    "subawardAmount": 4200000,
+    "executives": [
+      { "name": "Jane Doe", "amount": 20000000 },
+      { "name": "John Smith", "amount": 15000000 }
+    ]
+  }
+}

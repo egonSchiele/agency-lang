@@ -42,7 +42,7 @@ export effectSet FileSystem = <FileRead, FileWrite>
 export effectSet Shell = <std::bash, std::exec, std::run>
 
 /** Anything that talks to the outside world over the network. */
-export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::wikidata>
+export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::wikidata, std::usaspending>
 
 /** The std::data/finance connectors (news + macro + filings). Each also raises
     std::http::fetchJSON, which is covered by the broader Network set. */

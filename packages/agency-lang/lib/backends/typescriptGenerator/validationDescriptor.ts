@@ -76,6 +76,17 @@ export function hasAnyValidateTag(
       return t.types.some((m) => hasAnyValidateTag(m, aliasesFull, seen));
     case "resultType":
       return hasAnyValidateTag(t.successType, aliasesFull, seen);
+    case "keyofType":
+      // keyof results are key-name literals and carry no validators, but
+      // the OPERAND may (over-approximation is safe: the descriptor is
+      // built from the RESOLVED type, so a false-positive gate only emits
+      // a validator-less descriptor).
+      return hasAnyValidateTag(t.operand, aliasesFull, seen);
+    case "indexedAccessType":
+      return (
+        hasAnyValidateTag(t.objectType, aliasesFull, seen) ||
+        hasAnyValidateTag(t.index, aliasesFull, seen)
+      );
     case "genericType": {
       // Type arguments may themselves carry @validate (e.g. `Array<Email>`).
       if (

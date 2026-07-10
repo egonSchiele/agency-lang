@@ -294,6 +294,16 @@ fatal at codegen via `resolveTypeDeep`. Located diagnostics are a named
 follow-up in the design spec
 (`docs/superpowers/specs/2026-07-09-utility-types-design.md`).
 
+### Type operators: keyof and indexed access
+
+`keyof T` and `T["key"]` are prefix/postfix type operators. Like the
+built-in generics, they evaluate EAGERLY in `resolveTypeWithGuard` (see
+`lib/typeChecker/typeOperators.ts`, which shares the argument helpers in
+`builtinGenerics.ts`), so no downstream pass sees the operator nodes.
+`keyof` yields a closed literal union, which plugs straight into match
+exhaustiveness and discriminant narrowing. The `keyof` keyword is in
+`RESERVED_TYPE_NAMES`.
+
 ## Type narrowing
 
 Flow-sensitive narrowing and exhaustiveness checking have their own subtree:

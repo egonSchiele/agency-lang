@@ -6,7 +6,12 @@ import { mergeTagSets } from "./mergeTags.js";
 import { applyValueArgs } from "./valueParamSubstitution.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import { typeKey } from "./typeKey.js";
-import { evalBuiltinGeneric, isBuiltinGenericName } from "./builtinGenerics.js";
+import {
+  evalBuiltinGeneric,
+  isBuiltinGenericName,
+  withUseSiteTags,
+} from "./builtinGenerics.js";
+import { evalIndexedAccess, evalKeyof } from "./typeOperators.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -92,6 +97,26 @@ function resolveTypeWithGuard(
     }
     const resolved = resolveTypeWithGuard(substitutedEntry.body, typeAliases, next);
     return attachAliasTags(resolved, substitutedEntry.tags);
+  }
+
+  if (vt.type === "keyofType") {
+    // Eager evaluation (lib/typeChecker/typeOperators.ts): the node never
+    // survives resolution. Occurrence tags thread through like the
+    // genericType branch below.
+    return withUseSiteTags(
+      evalKeyof(vt.operand, (t) =>
+        resolveTypeWithGuard(t, typeAliases, inProgress),
+      ),
+      vt.tags,
+    );
+  }
+  if (vt.type === "indexedAccessType") {
+    return withUseSiteTags(
+      evalIndexedAccess(vt.objectType, vt.index, (t) =>
+        resolveTypeWithGuard(t, typeAliases, inProgress),
+      ),
+      vt.tags,
+    );
   }
 
   if (vt.type === "genericType") {
@@ -248,6 +273,12 @@ function deepResolveNode(
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
   if (n.type === "genericType") return resolveType(n, typeAliases);
+  if (n.type === "keyofType" || n.type === "indexedAccessType") {
+    // Same routing as genericType: these evaluate to concrete types and
+    // must never reach the zod mapper unresolved — the mapper's fallback
+    // silently emits z.string(). See docs/dev/adding-features.md.
+    return resolveType(n, typeAliases);
+  }
   if (n.type === "typeAliasVariable") {
     const entry = typeAliases[n.aliasName];
     // Inline only generic aliases that can resolve themselves via defaults.

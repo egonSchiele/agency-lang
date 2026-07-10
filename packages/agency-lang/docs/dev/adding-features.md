@@ -13,6 +13,43 @@ Step-by-step guides for common tasks in the Agency codebase.
 
 ---
 
+## Adding a `VariableType` variant
+
+The source of truth is the header checklist in `lib/types/typeHints.ts`.
+Read it before you start; this section explains which parts the compiler
+enforces and which parts it cannot.
+
+Compiler-enforced (a missing case fails the build):
+
+- `substituteValueArgsInType` and `checkType` in
+  `lib/typeChecker/valueParamSubstitution.ts` — `never`-typed defaults.
+- `canonical` in `lib/typeChecker/typeKey.ts` — same mechanism.
+
+NOT enforced (a missing case fails silently or late):
+
+- `mapTypes` and `visitTypes` in `lib/typeChecker/typeWalker.ts` pass
+  unknown nodes through without visiting their children. Update the pair
+  together, per their own doc comment.
+- `formatTypeHint` (`lib/utils/formatType.ts`) throws at RUNTIME on an
+  unknown variant; `variableTypeToString`
+  (`lib/backends/typescriptGenerator/typeToString.ts`) prints the string
+  `"unknown"`.
+- `deepResolveNode` in `lib/typeChecker/assignability.ts` is the trap.
+  Passing nodes through unchanged is its CORRECT behavior for most
+  variants, so it cannot have an exhaustive switch. But a variant that
+  must resolve before codegen — any eagerly-evaluated form like the
+  utility types, `keyof`, or indexed access — silently reaches the zod
+  mapper unresolved without a case here, and the mapper falls back to
+  `z.string()`. No error anywhere; just a wrong schema.
+- `hasAnyValidateTag` and the descriptor builder in
+  `lib/backends/typescriptGenerator/validationDescriptor.ts` gate the
+  `@validate` emission path; a missing case silently skips validation.
+
+The rule that catches what the compiler cannot: every new variant gets a
+codegen test asserting its emitted schema against a NON-string shape
+(the fallback is `z.string()`, so a string assertion can be born green).
+See `lib/backends/typeOperators.codegen.test.ts` for the pattern.
+
 ## Adding a new pattern form
 
 Patterns (destructuring, `is`, match arms, for-loop binders) are

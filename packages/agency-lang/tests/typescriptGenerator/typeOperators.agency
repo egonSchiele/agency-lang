@@ -1,0 +1,14 @@
+type User = {
+  name: string,
+  age: number,
+}
+
+type Field = keyof User
+
+type Age = User["age"]
+
+node main() {
+  const f: Field = "name"
+  const a: Age = 1
+  return f
+}

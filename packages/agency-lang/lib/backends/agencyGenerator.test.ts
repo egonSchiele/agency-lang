@@ -68,6 +68,37 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
         input: 'def contact(c: Pick<User, "name" | "email">) { c }',
         expectedOutput: 'def contact(c: Pick<User, "name" | "email">) {\nc\n}',
       },
+
+      {
+        description: "keyof type hint round-trips",
+        input: "def f(k: keyof User) { k }",
+        expectedOutput: "def f(k: keyof User) {\nk\n}",
+      },
+      {
+        description: "indexed access type hint round-trips",
+        input: 'def f(x: User["name"]) { x }',
+        expectedOutput: 'def f(x: User["name"]) {\nx\n}',
+      },
+      {
+        description: "array-of-keyof keeps its parens (distinct from keyof-of-array)",
+        input: "def f(k: (keyof User)[]) { k }",
+        expectedOutput: "def f(k: (keyof User)[]) {\nk\n}",
+      },
+      {
+        description: "keyof-of-array stays unparenthesized",
+        input: "def f(k: keyof User[]) { k }",
+        expectedOutput: "def f(k: keyof User[]) {\nk\n}",
+      },
+      {
+        description: "keyof of a union keeps its parens",
+        input: "def f(k: keyof (A | B)) { k }",
+        expectedOutput: "def f(k: keyof (A | B)) {\nk\n}",
+      },
+      {
+        description: "indexed access on a union keeps its parens",
+        input: 'def f(x: (A | B)["k"]) { x }',
+        expectedOutput: 'def f(x: (A | B)["k"]) {\nx\n}',
+      },
     ];
 
     testCases.forEach(({ description, input, expectedOutput }) => {
@@ -90,6 +121,23 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
   });
 
   describe("Type preservation", () => {
+    it("preserves keyof and indexed access in alias declarations", () => {
+      const parseResult = parseAgency(
+        'type F = keyof User\ntype N = User["name"]',
+        {},
+        false,
+      );
+      expect(parseResult.success).toBe(true);
+
+      if (!parseResult.success) return;
+
+      const generator = new AgencyGenerator();
+      const result = generator.generate(parseResult.result);
+
+      expect(result.output).toContain("keyof User");
+      expect(result.output).toContain('User["name"]');
+    });
+
     it("preserves a utility type in a type alias declaration", () => {
       const parseResult = parseAgency("type UserPatch = Partial<User>", {}, false);
       expect(parseResult.success).toBe(true);

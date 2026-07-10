@@ -86,6 +86,7 @@ import {
   AgencyComment,
   AgencyMultiLineComment,
   ArrayType,
+  KeyofType,
   BlockType,
   BooleanLiteralType,
   NumberLiteralType,
@@ -992,44 +993,117 @@ export const parenthesizedTypeParser: Parser<VariableType> = memo(
   ),
 );
 
-export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
-  const parser = trace(
-    "arrayTypeParser",
+// The shared base for postfix type expressions (`T[]` arrays and
+// `T["key"]` indexed access). Extracted from arrayTypeParser so keyof can
+// reuse it with a different suffix arity — see postfixOperandParser.
+// Constructed per call (not at module scope): several members are
+// declared later in this file, exactly like the original arrayTypeParser
+// which built its or() inside the function body.
+const typePostfixBase: Parser<VariableType> = (input: string) =>
+  or(
+    parenthesizedTypeParser,
+    objectTypeParser,
+    lazy(() => resultTypeParser),
+    lazy(() => angleBracketsArrayTypeParser),
+    lazy(() => genericTypeParser),
+    primitiveTypeParser,
+    typeAliasVariableParser,
+  )(input);
+
+/**
+ * A postfix type suffix: `[]` wraps an array, `[<type>]` wraps an
+ * indexed access. Index brackets tolerate inner whitespace
+ * (`User[ "name" ]`), matching TypeScript; the bare `[]` array suffix
+ * stays space-intolerant, matching its old behavior.
+ */
+type TypeSuffix =
+  | { suffix: "array" }
+  | { suffix: "index"; index: VariableType };
+
+const typeSuffixParser: Parser<TypeSuffix> = or(
+  map(str("[]"), (): TypeSuffix => ({ suffix: "array" })),
+  map(
     seqC(
-      set("type", "arrayType"),
-      capture(
-        or(
-          parenthesizedTypeParser,
-          objectTypeParser,
-          lazy(() => resultTypeParser),
-          lazy(() => angleBracketsArrayTypeParser),
-          lazy(() => genericTypeParser),
-          primitiveTypeParser,
-          typeAliasVariableParser,
-        ),
-        "elementType",
-      ),
-      capture(count(str("[]")), "arrayDepth"),
+      char("["),
+      optionalSpaces,
+      capture(lazy(() => variableTypeParser), "index"),
+      optionalSpaces,
+      char("]"),
     ),
+    ({ index }): TypeSuffix => ({ suffix: "index", index }),
+  ),
+);
+
+/** Fold suffixes onto a base type, left to right. */
+function applyTypeSuffixes(
+  base: VariableType,
+  suffixes: TypeSuffix[],
+): VariableType {
+  return suffixes.reduce<VariableType>(
+    (current, s) =>
+      s.suffix === "array"
+        ? { type: "arrayType", elementType: current }
+        : { type: "indexedAccessType", objectType: current, index: s.index },
+    base,
   );
-  const result = parser(input);
-  if (result.success) {
-    // Wrap the elementType in ArrayType according to arrayDepth
-    let wrappedType: VariableType = result.result.elementType;
-    for (let i = 0; i < result.result.arrayDepth; i++) {
-      wrappedType = {
-        type: "arrayType",
-        elementType: wrappedType,
-      };
-    }
-    return {
-      success: true,
-      rest: result.rest,
-      result: wrappedType as ArrayType,
-    };
-  }
-  return result;
-};
+}
+
+/**
+ * Base + AT LEAST ONE suffix. As an or-chain member this parser must
+ * FAIL on a bare base (exactly like the old `count(str("[]"))`, which
+ * failed on zero matches), so bare types fall through to later
+ * alternatives. A zero-suffix variant in the or-chain would greedily
+ * match `keyof` as a plain identifier and break every keyof annotation,
+ * because or() commits to the first success.
+ *
+ * The name is historical: with index suffixes in the grammar, the
+ * top-level result may be an IndexedAccessType (`User["name"]`), so the
+ * declared type is Parser<VariableType>.
+ */
+export const arrayTypeParser: Parser<VariableType> = trace(
+  "arrayTypeParser",
+  map(
+    seqC(
+      capture(typePostfixBase, "base"),
+      capture(many1(typeSuffixParser), "suffixes"),
+    ),
+    ({ base, suffixes }) => applyTypeSuffixes(base, suffixes),
+  ),
+);
+
+/**
+ * Base + ZERO OR MORE suffixes. Only keyofTypeParser consumes this, so
+ * its bare-match greediness leaks nowhere: `keyof User`, `keyof User[]`,
+ * and `keyof User["a"]` all bind the full postfix expression.
+ */
+const postfixOperandParser: Parser<VariableType> = map(
+  seqC(
+    capture(typePostfixBase, "base"),
+    capture(many(typeSuffixParser), "suffixes"),
+  ),
+  ({ base, suffixes }) => applyTypeSuffixes(base, suffixes),
+);
+
+/**
+ * `keyof T` — prefix operator producing a KeyofType node. Binds to the
+ * full postfix expression that follows: `keyof User["address"]` means
+ * keyof (User["address"]) and `keyof User[]` means keyof (User[]).
+ * Union binds looser (the union parser splits on `|` before items
+ * parse), so `keyof A | keyof B` is a union of two keyofs.
+ *
+ * The whitespace after the keyword is REQUIRED and load-bearing: it is
+ * the keyword boundary that lets `keyofish` parse as a plain
+ * identifier. Do not make it optional.
+ */
+export const keyofTypeParser: Parser<KeyofType> = memo(
+  "keyofTypeParser",
+  seqC(
+    set("type", "keyofType"),
+    str("keyof"),
+    spaces,
+    capture(lazy(() => postfixOperandParser), "operand"),
+  ),
+);
 export const angleBracketsArrayTypeParser: Parser<ArrayType> = memo(
   "angleBracketsArrayTypeParser",
   seqC(
@@ -1303,6 +1377,7 @@ export const unionItemParser: Parser<VariableType> = memo(
   "unionItemParser",
   or(
     lazy(() => blockTypeParser),
+    lazy(() => keyofTypeParser),
     objectTypeParser,
     angleBracketsArrayTypeParser,
     arrayTypeParser,
@@ -1594,6 +1669,7 @@ export const variableTypeParser: Parser<VariableType> = memo(
   or(
     blockTypeParser,
     unionTypeParser,
+    keyofTypeParser,
     arrayTypeParser,
     objectTypeParser,
     angleBracketsArrayTypeParser,

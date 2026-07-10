@@ -62,6 +62,9 @@ const RESERVED_TYPE_NAMES = new Set<string>([
   "Result",
   "Success",
   "Failure",
+  // `keyof` is a keyword in type position; an alias with this name would
+  // silently change how annotations parse.
+  "keyof",
   ...RESERVED_GENERIC_NAMES,
 ]);
 

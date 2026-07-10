@@ -32,8 +32,12 @@ export function formatTypeHint(
   switch (vt.type) {
     case "primitiveType":
       return primitiveAliases?.[vt.value] ?? vt.value;
-    case "arrayType":
-      return `${recurse(vt.elementType)}[]`;
+    case "arrayType": {
+      // Parenthesize a keyof element: `(keyof User)[]` re-parses as
+      // written, while `keyof User[]` would re-parse as keyof (User[]).
+      const el = recurse(vt.elementType);
+      return vt.elementType.type === "keyofType" ? `(${el})[]` : `${el}[]`;
+    }
     case "stringLiteralType":
       return `"${vt.value}"`;
     case "numberLiteralType":
@@ -79,6 +83,26 @@ export function formatTypeHint(
     }
     case "genericType":
       return `${vt.name}<${vt.typeArgs.map(recurse).join(", ")}>`;
+    case "keyofType": {
+      // Parenthesize a union operand: `keyof (A | B)` must not print as
+      // `keyof A | B`, which re-parses as (keyof A) | B.
+      const op = recurse(vt.operand);
+      return vt.operand.type === "unionType"
+        ? `keyof (${op})`
+        : `keyof ${op}`;
+    }
+    case "indexedAccessType": {
+      // Parenthesize keyof and union objects for the same re-parse
+      // reasons as the arrayType case: `(A | B)["k"]` must not print as
+      // `A | B["k"]`.
+      const obj = recurse(vt.objectType);
+      const wrapped =
+        vt.objectType.type === "keyofType" ||
+        vt.objectType.type === "unionType"
+          ? `(${obj})`
+          : obj;
+      return `${wrapped}[${recurse(vt.index)}]`;
+    }
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }

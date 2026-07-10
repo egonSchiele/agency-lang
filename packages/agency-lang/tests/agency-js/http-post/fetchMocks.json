@@ -1,0 +1,5 @@
+[
+  { "url": "https://api.example.com/create", "method": "POST", "body": { "name": "widget" }, "return": { "id": 7 } },
+  { "url": "https://api.example.com/data", "return": { "answer": 42 } },
+  { "url": "https://api.example.com/raw", "method": "POST", "body": "hello-raw", "return": "ok-raw" }
+]

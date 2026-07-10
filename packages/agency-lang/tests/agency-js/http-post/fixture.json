@@ -1,0 +1,5 @@
+{
+  "postCreate": { "id": 7 },
+  "getData": { "answer": 42 },
+  "postRaw": "ok-raw"
+}

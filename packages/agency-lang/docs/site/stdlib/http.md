@@ -17,6 +17,19 @@ Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
   }
   ```
 
+## Types
+
+### HttpMethod
+
+An HTTP request method. Non-GET methods may carry a body.
+
+```ts
+/** An HTTP request method. Non-GET methods may carry a body. */
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L29))
+
 ## Effects
 
 ### std::http::fetch
@@ -24,7 +37,8 @@ Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
 ```ts
 effect std::http::fetch {
   baseUrl: string;
-  path: string
+  path: string;
+  method: string
 }
 ```
 
@@ -35,7 +49,8 @@ effect std::http::fetch {
 ```ts
 effect std::http::fetchJSON {
   baseUrl: string;
-  path: string
+  path: string;
+  method: string
 }
 ```
 
@@ -46,7 +61,8 @@ effect std::http::fetchJSON {
 ```ts
 effect std::http::fetchMarkdown {
   baseUrl: string;
-  path: string
+  path: string;
+  method: string
 }
 ```
 
@@ -57,7 +73,7 @@ effect std::http::fetchMarkdown {
 ### fetch
 
 ```ts
-fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
+fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: any): Result
 ```
 
 Fetch a URL and return the response as text.
@@ -66,6 +82,8 @@ Fetch a URL and return the response as text.
   @param path - Optional path appended to baseUrl
   @param headers - Custom request headers
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
+  @param method - The HTTP method
+  @param body - Request body: a string is sent as-is, a non-string is sent as JSON
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -79,17 +97,19 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | path | `string` | "" |
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
+| method | [HttpMethod](#httpmethod) | "GET" |
+| body | `any` | null |
 
 **Returns:** `Result`
 
 **Throws:** `std::http::fetch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L36))
 
 ### fetchJSON
 
 ```ts
-fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
+fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: any): Result
 ```
 
 Fetch a URL and return the response parsed as JSON.
@@ -98,6 +118,8 @@ Fetch a URL and return the response parsed as JSON.
   @param path - Optional path appended to baseUrl
   @param headers - Custom request headers
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
+  @param method - The HTTP method
+  @param body - Request body: a string is sent as-is, a non-string is sent as JSON
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -111,17 +133,19 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | path | `string` | "" |
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
+| method | [HttpMethod](#httpmethod) | "GET" |
+| body | `any` | null |
 
 **Returns:** `Result`
 
 **Throws:** `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L67))
 
 ### fetchMarkdown
 
 ```ts
-fetchMarkdown(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
+fetchMarkdown(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: any): Result
 ```
 
 Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
@@ -130,6 +154,8 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
   @param path - Optional path appended to baseUrl
   @param headers - Custom request headers
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
+  @param method - The HTTP method
+  @param body - Request body: a string is sent as-is, a non-string is sent as JSON
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -143,9 +169,11 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | path | `string` | "" |
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
+| method | [HttpMethod](#httpmethod) | "GET" |
+| body | `any` | null |
 
 **Returns:** `Result`
 
 **Throws:** `std::http::fetchMarkdown`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L98))

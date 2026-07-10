@@ -1,0 +1,30 @@
+import { fetch, fetchJSON } from "std::http"
+
+// POST with a JSON body → returns the mocked response. `with approve` lets the mocked fetch run.
+node postCreate(): any {
+  const r = fetchJSON(baseUrl: "https://api.example.com", path: "/create", method: "POST", body: { name: "widget" }) with approve
+  return r catch "FAIL"
+}
+
+// GET default → returns the mocked response (regression: existing GET path unchanged).
+node getData(): any {
+  const r = fetchJSON(baseUrl: "https://api.example.com", path: "/data") with approve
+  return r catch "FAIL"
+}
+
+// POST with a string body → sent as-is.
+node postRaw(): any {
+  const r = fetch(baseUrl: "https://api.example.com", path: "/raw", method: "POST", body: "hello-raw") with approve
+  return r catch "FAIL"
+}
+
+// Plain caller (no handler): raises std::http::fetchJSON so test.js can inspect the payload's method.
+node callPost(): any {
+  return fetchJSON(baseUrl: "https://api.example.com", path: "/x", method: "POST")
+}
+
+// PFA: a GET-locked fetcher. test.js asserts its raised interrupt carries method GET.
+node callPfaGet(): any {
+  const getOnly = fetchJSON.partial(method: "GET")
+  return getOnly(baseUrl: "https://api.example.com", path: "/x")
+}

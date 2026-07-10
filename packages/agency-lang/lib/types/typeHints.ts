@@ -11,10 +11,22 @@ import type { Expression } from "../types.js";
  *   `lib/typeChecker/valueParamSubstitution.ts` — both functions have
  *   exhaustive switches over this union (enforced by a `never`-typed
  *   default branch, so TypeScript will fail to compile if you forget).
+ * - `canonical` in `lib/typeChecker/typeKey.ts` — also never-enforced;
+ *   tsc catches a missing case.
+ * - `mapTypes` AND `visitTypes` in `lib/typeChecker/typeWalker.ts` —
+ *   NOT enforced. Both pass unknown nodes through silently; update the
+ *   pair together, per their own doc comment.
+ * - `deepResolveNode` in `lib/typeChecker/assignability.ts` — NOT
+ *   enforced, and it cannot be: passing nodes through unchanged is its
+ *   correct behavior for most variants. A variant that must resolve
+ *   before codegen (any eagerly-evaluated form) silently reaches the
+ *   zod mapper unresolved without a case here, and the mapper falls
+ *   back to z.string(). Pin every new variant with a codegen test
+ *   asserting a NON-string schema shape.
  *
  * Codegen sites (`mapTypeToSchema`, `descriptor`, `hasAnyValidateTag`)
  * also branch on `VariableType.type`; review them when adding a
- * variant.
+ * variant. Full walkthrough: docs/dev/adding-features.md.
  */
 export type VariableType =
   | PrimitiveType
@@ -29,7 +41,9 @@ export type VariableType =
   | ResultType
   | SchemaType
   | FunctionRefType
-  | GenericType;
+  | GenericType
+  | KeyofType
+  | IndexedAccessType;
 
 /**
  * A concrete generic-type usage: Record<string, number>, Container<string>, etc.
@@ -55,6 +69,31 @@ export type GenericType = {
  * Example: in `type Container<T> = { value: T }`, the `T` is a TypeParam.
  * Defaults allow bare use of the alias: `type StringMap<V = any> = Record<string, V>`.
  */
+/**
+ * `keyof T` — the union of an object type's key names. Exists only
+ * between parse and resolution: `resolveTypeWithGuard` evaluates it
+ * eagerly (lib/typeChecker/typeOperators.ts) and downstream code never
+ * sees the node.
+ */
+export type KeyofType = {
+  type: "keyofType";
+  operand: VariableType;
+  tags?: Tag[];
+};
+
+/**
+ * `T["key"]` — the type of one field. Same lifecycle as KeyofType:
+ * eagerly evaluated at resolution, invisible downstream. The index is a
+ * full type expression; it must RESOLVE to a string literal or a union
+ * of string literals.
+ */
+export type IndexedAccessType = {
+  type: "indexedAccessType";
+  objectType: VariableType;
+  index: VariableType;
+  tags?: Tag[];
+};
+
 export type TypeParam = {
   name: string;
   default?: VariableType;

@@ -38,6 +38,14 @@ export function mapTypes(
       });
     case "schemaType":
       return fn({ ...t, inner: mapTypes(t.inner, fn) });
+    case "keyofType":
+      return fn({ ...t, operand: mapTypes(t.operand, fn) });
+    case "indexedAccessType":
+      return fn({
+        ...t,
+        objectType: mapTypes(t.objectType, fn),
+        index: mapTypes(t.index, fn),
+      });
     case "blockType":
       return fn({
         ...t,
@@ -89,6 +97,11 @@ export function visitTypes(
       );
     case "schemaType":
       return visitTypes(t.inner, visit);
+    case "keyofType":
+      return visitTypes(t.operand, visit);
+    case "indexedAccessType":
+      if (visitTypes(t.objectType, visit)) return true;
+      return visitTypes(t.index, visit);
     case "blockType":
       for (const p of t.params)
         if (visitTypes(p.typeAnnotation, visit)) return true;

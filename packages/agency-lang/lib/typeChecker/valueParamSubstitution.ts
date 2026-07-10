@@ -682,6 +682,13 @@ function checkType(
       for (const p of vt.params) checkType(p.typeAnnotation, paramNames, aliasName);
       checkType(vt.returnType, paramNames, aliasName);
       break;
+    case "keyofType":
+      checkType(vt.operand, paramNames, aliasName);
+      break;
+    case "indexedAccessType":
+      checkType(vt.objectType, paramNames, aliasName);
+      checkType(vt.index, paramNames, aliasName);
+      break;
     // Leaf types: no inner valueArgs to inspect. Explicit cases plus a
     // `never`-typed default keep this exhaustive — TypeScript will fail
     // to compile if a new VariableType variant is added without a case.
@@ -773,6 +780,17 @@ export function substituteValueArgsInType(
           typeAnnotation: substituteValueArgsInType(p.typeAnnotation, bindings),
         })),
         returnType: substituteValueArgsInType(vt.returnType, bindings),
+      };
+    case "keyofType":
+      return {
+        ...vt,
+        operand: substituteValueArgsInType(vt.operand, bindings),
+      };
+    case "indexedAccessType":
+      return {
+        ...vt,
+        objectType: substituteValueArgsInType(vt.objectType, bindings),
+        index: substituteValueArgsInType(vt.index, bindings),
       };
     // primitiveType, stringLiteralType, numberLiteralType,
     // booleanLiteralType, functionRefType — no inner VariableType /

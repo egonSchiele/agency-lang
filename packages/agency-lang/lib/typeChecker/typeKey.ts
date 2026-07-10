@@ -81,6 +81,10 @@ function canonical(t: VariableType): string {
       return `{"numlit":${JSON.stringify(t.value)}}`;
     case "booleanLiteralType":
       return `{"boollit":${JSON.stringify(t.value)}}`;
+    case "keyofType":
+      return `{"keyof":${canonical(t.operand)}}`;
+    case "indexedAccessType":
+      return `{"index":[${canonical(t.objectType)},${canonical(t.index)}]}`;
     default: {
       // Exhaustiveness enforced per the typeHints.ts convention: a new
       // VariableType variant fails compilation here instead of silently

@@ -136,7 +136,12 @@ export function variableTypeToString(
       typeAliases,
       forFormatting,
     );
-    if (variableType.elementType.type === "unionType") {
+    if (
+      variableType.elementType.type === "unionType" ||
+      variableType.elementType.type === "keyofType"
+    ) {
+      // keyof parenthesizes for the same re-parse reason as unions:
+      // `keyof User[]` reads as keyof (User[]).
       return `(${inner})[]`;
     }
     return `${inner}[]`;
@@ -202,6 +207,22 @@ export function variableTypeToString(
       .map((a) => variableTypeToString(a, typeAliases, forFormatting))
       .join(", ");
     return `${variableType.name}<${args}>${formatValueArgs(variableType.valueArgs)}`;
+  } else if (variableType.type === "keyofType") {
+    return `keyof ${variableTypeToString(variableType.operand, typeAliases, forFormatting)}`;
+  } else if (variableType.type === "indexedAccessType") {
+    const obj = variableTypeToString(
+      variableType.objectType,
+      typeAliases,
+      forFormatting,
+    );
+    const wrapped =
+      variableType.objectType.type === "keyofType" ? `(${obj})` : obj;
+    const index = variableTypeToString(
+      variableType.index,
+      typeAliases,
+      forFormatting,
+    );
+    return `${wrapped}[${index}]`;
   }
   return "unknown";
 }

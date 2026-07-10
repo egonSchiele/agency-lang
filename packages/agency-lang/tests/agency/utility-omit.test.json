@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "{\"name\":\"a\",\"age\":1}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "omitted key not required; others parse"
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "remaining keys still required after Omit"
+    }
+  ]
+}

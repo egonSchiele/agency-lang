@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "{\"name\":\"a\",\"age\":1}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "all keys present passes Required"
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "missing formerly-optional key fails Required"
+    }
+  ]
+}

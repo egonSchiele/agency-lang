@@ -1,0 +1,25 @@
+// Pick<T, K>: result schema contains exactly the picked keys; zod strips
+// unknown keys on parse, so extra input keys vanish from the output.
+type User = {
+  name: string,
+  age: number,
+  email: string,
+}
+
+node accepts() {
+  const s = schema(Pick<User, "name" | "age">)
+  const r = s.parseJSON("{\"name\": \"a\", \"age\": 1, \"email\": \"x@y.z\"}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(Pick<User, "name" | "age">)
+  const r = s.parseJSON("{\"name\": \"a\"}")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

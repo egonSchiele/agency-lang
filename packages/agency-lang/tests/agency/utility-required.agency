@@ -1,0 +1,24 @@
+// Required<T>: strips null from every property, so a formerly-optional key
+// must be present and non-null at parse time.
+type User = {
+  name: string,
+  age?: number,
+}
+
+node accepts() {
+  const s = schema(Required<User>)
+  const r = s.parseJSON("{\"name\": \"a\", \"age\": 1}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(Required<User>)
+  const r = s.parseJSON("{\"name\": \"a\"}")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

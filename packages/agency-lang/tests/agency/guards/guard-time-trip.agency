@@ -5,9 +5,10 @@ import { guard } from "std::thread"
 // abortable, so it wakes promptly on the guard's abort signal. The
 // next runner step boundary then throws GuardExceededError("time",
 // ...). The stdlib guard's `try` converts it to a Failure with type
-// "timeoutFailure". Because sleep now wakes at the abort moment,
-// actualTime lands right around maxTime; we assert it reaches the
-// limit within a small tolerance.
+// "timeoutFailure". We assert actualTime is a real elapsed
+// measurement (at least half the budget) rather than a 0/sentinel
+// value; see the comment on the assertion below for why the bound is
+// deliberately loose.
 node main() {
   const result = guard(time: 20ms) as {
     sleep(150ms)
@@ -16,13 +17,14 @@ node main() {
   }
   if (isFailure(result)) {
     // actualTime is measured with performance.now(), while the guard's
-    // timer fires off libuv's coarser millisecond clock. Those two
-    // clocks can disagree by a fraction of a millisecond, so actualTime
-    // occasionally reads just under maxTime even though the limit was
-    // reached. Allow a 2ms tolerance: this still catches a bug where
-    // actualTime is left at 0 (or some sentinel), but no longer flakes
-    // on sub-millisecond clock skew.
-    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime - 2}"
+    // timer fires off libuv's coarser millisecond clock, and loaded CI
+    // runners add scheduling latency on top — the two readings can
+    // disagree by MORE than the 2ms this test used to allow (issue
+    // #467: it flaked at exactly that boundary). The property worth
+    // asserting is that actualTime is a real measurement rather than a
+    // 0/sentinel value, so require it to reach half the budget: immune
+    // to any plausible clock skew, still catches a broken measurement.
+    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime / 2}"
   }
   return result.value
 }

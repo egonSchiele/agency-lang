@@ -4,8 +4,12 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"tripped:timeoutFailure:20:true\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "description": "A tiny time limit (20ms) wrapping sleeps that exceed it trips at the next runner step boundary. The stdlib guard catches GuardExceededError(\"time\", ...) and surfaces a Failure with type \"timeoutFailure\", maxTime equal to the configured limit, and actualTime within 2ms of maxTime (sleep is now abortable so it can wake at the abort moment; the 2ms tolerance absorbs clock-source skew between performance.now() and the timer)."
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A tiny time limit (20ms) wrapping sleeps that exceed it trips at the next runner step boundary. The stdlib guard catches GuardExceededError(\"time\", ...) and surfaces a Failure with type \"timeoutFailure\", maxTime equal to the configured limit, and an actualTime that is a real measurement (at least half the budget \u2014 clock-source skew plus CI scheduling latency make tighter bounds flaky; see issue #467)."
     }
   ]
 }

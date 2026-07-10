@@ -425,6 +425,37 @@ export const _internal = {
   dropNullDefaultedArgs,
 };
 
+/** In-flight visibility: record the request SHAPE before dispatch, so a
+ *  call that never completes (hang, kill, runaway generation) still
+ *  leaves a trace. Pairs with promptCompletion/llmError/promptCancelled
+ *  by span + order. Un-awaited like promptCompletion (post() detaches
+ *  the remote send; the file sink is a sync append). Called inside the
+ *  same idempotent pr.step as the completion, so resumed runs do not
+ *  double-emit for replayed steps. Retries inside dispatchWithRetry
+ *  share the one start. */
+function emitPromptStart({
+  ctx,
+  messages,
+  tools,
+  responseFormat,
+  clientConfig,
+}: {
+  ctx: RuntimeContext<GraphState>;
+  messages: MessageThread;
+  tools: Tool[];
+  responseFormat?: any;
+  clientConfig: Partial<smoltalk.SmolConfig>;
+}): void {
+  ctx.statelogClient.promptStart({
+    model: JSON.stringify(clientConfig.model),
+    threadId: __threads()?.activeId() ?? null,
+    messageCount: messages.getMessages().length,
+    toolCount: tools.length,
+    hasResponseFormat: responseFormat != null,
+    maxTokens: clientConfig.maxTokens ?? null,
+  });
+}
+
 async function _runPrompt({
   ctx,
   messages,
@@ -493,22 +524,7 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  // In-flight visibility: record the request SHAPE before dispatch, so a
-  // call that never completes (hang, kill, runaway generation) still
-  // leaves a trace. Pairs with promptCompletion/llmError/promptCancelled
-  // by span + order. Un-awaited like promptCompletion (post() detaches
-  // the remote send; the file sink is a sync append). Sits inside the
-  // same idempotent pr.step as the completion, so resumed runs do not
-  // double-emit for replayed steps. Retries inside dispatchWithRetry
-  // share this one start.
-  ctx.statelogClient.promptStart({
-    model: JSON.stringify(clientConfig.model),
-    threadId: __threads()?.activeId() ?? null,
-    messageCount: messages.getMessages().length,
-    toolCount: tools.length,
-    hasResponseFormat: responseFormat != null,
-    maxTokens: clientConfig.maxTokens ?? null,
-  });
+  emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig });
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];

@@ -5,6 +5,7 @@ import { mapTypes } from "./typeWalker.js";
 import { mergeTagSets } from "./mergeTags.js";
 import { applyValueArgs } from "./valueParamSubstitution.js";
 import { resultToObjectUnion } from "./resultUnion.js";
+import { typeKey } from "./typeKey.js";
 import { evalBuiltinGeneric, isBuiltinGenericName } from "./builtinGenerics.js";
 
 /**
@@ -359,14 +360,59 @@ export function isOptionalType(
   return false;
 }
 
-// eslint-disable-next-line max-lines-per-function -- large switch over type kinds; refactor tracked separately
 export function isAssignable(
   source: VariableType | "any",
   target: VariableType | "any",
   typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
+  return isAssignableGuarded(source, target, typeAliases, new Set());
+}
+
+/**
+ * Coinductive entry point (issue #470). Cycles can only re-enter through a
+ * NAMED reference (typeAliasVariable / genericType) — internal recursive
+ * calls otherwise pass structurally smaller resolved nodes — so the pair
+ * key is only computed when a named node is involved (perf: typeKey stays
+ * off the hot path for plain structural comparisons). Re-encountering an
+ * in-flight pair means we are inside the very comparison that would prove
+ * or refute it — assume it holds, exactly like resolveTypeWithGuard's
+ * inProgress set and TypeScript's relation stack. Entries are REMOVED on
+ * exit (try/finally): only genuine in-flight cycles short-circuit; sibling
+ * repeats recompute real results.
+ */
+function isAssignableGuarded(
+  source: VariableType | "any",
+  target: VariableType | "any",
+  typeAliases: Record<string, TypeAliasEntry>,
+  inProgress: Set<string>,
+): boolean {
   if (source === "any" || target === "any") return true;
 
+  const named =
+    source.type === "typeAliasVariable" ||
+    source.type === "genericType" ||
+    target.type === "typeAliasVariable" ||
+    target.type === "genericType";
+  if (!named) {
+    return isAssignableInner(source, target, typeAliases, inProgress);
+  }
+  const pair = `${typeKey(source, typeAliases)}~>${typeKey(target, typeAliases)}`;
+  if (inProgress.has(pair)) return true;
+  inProgress.add(pair);
+  try {
+    return isAssignableInner(source, target, typeAliases, inProgress);
+  } finally {
+    inProgress.delete(pair);
+  }
+}
+
+// eslint-disable-next-line max-lines-per-function -- large switch over type kinds; refactor tracked separately
+function isAssignableInner(
+  source: VariableType,
+  target: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+  inProgress: Set<string>,
+): boolean {
   const resolvedSource = safeResolveType(source, typeAliases);
   const resolvedTarget = safeResolveType(target, typeAliases);
 
@@ -416,14 +462,14 @@ export function isAssignable(
   // Union type as source: every member must be assignable to target
   if (resolvedSource.type === "unionType") {
     return resolvedSource.types.every((t) =>
-      isAssignable(t, resolvedTarget, typeAliases),
+      isAssignableGuarded(t, resolvedTarget, typeAliases, inProgress),
     );
   }
 
   // Union type as target: source must be assignable to at least one member
   if (resolvedTarget.type === "unionType") {
     return resolvedTarget.types.some((t) =>
-      isAssignable(resolvedSource, t, typeAliases),
+      isAssignableGuarded(resolvedSource, t, typeAliases, inProgress),
     );
   }
 
@@ -509,11 +555,10 @@ export function isAssignable(
     resolvedSource.type === "arrayType" &&
     resolvedTarget.type === "arrayType"
   ) {
-    return isAssignable(
+    return isAssignableGuarded(
       resolvedSource.elementType,
       resolvedTarget.elementType,
-      typeAliases,
-    );
+      typeAliases, inProgress);
   }
 
   // Block types: contravariant in parameters, covariant in return — standard
@@ -526,19 +571,17 @@ export function isAssignable(
       return false;
     for (let i = 0; i < resolvedSource.params.length; i++) {
       if (
-        !isAssignable(
+        !isAssignableGuarded(
           resolvedTarget.params[i].typeAnnotation,
           resolvedSource.params[i].typeAnnotation,
-          typeAliases,
-        )
+          typeAliases, inProgress)
       )
         return false;
     }
-    return isAssignable(
+    return isAssignableGuarded(
       resolvedSource.returnType,
       resolvedTarget.returnType,
-      typeAliases,
-    );
+      typeAliases, inProgress);
   }
 
   // Result<T, E>: covariant in both type parameters.
@@ -547,8 +590,8 @@ export function isAssignable(
     resolvedTarget.type === "resultType"
   ) {
     return (
-      isAssignable(resolvedSource.successType, resolvedTarget.successType, typeAliases) &&
-      isAssignable(resolvedSource.failureType, resolvedTarget.failureType, typeAliases)
+      isAssignableGuarded(resolvedSource.successType, resolvedTarget.successType, typeAliases, inProgress) &&
+      isAssignableGuarded(resolvedSource.failureType, resolvedTarget.failureType, typeAliases, inProgress)
     );
   }
 
@@ -560,11 +603,10 @@ export function isAssignable(
   // target Result to its object union and check structurally. Only when the
   // source is NOT itself a Result (that case is handled covariantly above).
   if (resolvedTarget.type === "resultType" && resolvedSource.type !== "resultType") {
-    return isAssignable(
+    return isAssignableGuarded(
       resolvedSource,
       resultToObjectUnion(resolvedTarget, typeAliases),
-      typeAliases,
-    );
+      typeAliases, inProgress);
   }
 
   // Schema<T>: covariant in the validated type. There's no parser surface
@@ -574,7 +616,7 @@ export function isAssignable(
     resolvedSource.type === "schemaType" &&
     resolvedTarget.type === "schemaType"
   ) {
-    return isAssignable(resolvedSource.inner, resolvedTarget.inner, typeAliases);
+    return isAssignableGuarded(resolvedSource.inner, resolvedTarget.inner, typeAliases, inProgress);
   }
 
   // Record<K, V> -> Record<K, V>: covariant in both K and V.
@@ -583,16 +625,14 @@ export function isAssignable(
   // can pass Record<string, "approve"> where Record<string, string> is expected.
   if (isRecord(resolvedSource) && isRecord(resolvedTarget)) {
     return (
-      isAssignable(
+      isAssignableGuarded(
         resolvedSource.typeArgs[0],
         resolvedTarget.typeArgs[0],
-        typeAliases,
-      ) &&
-      isAssignable(
+        typeAliases, inProgress) &&
+      isAssignableGuarded(
         resolvedSource.typeArgs[1],
         resolvedTarget.typeArgs[1],
-        typeAliases,
-      )
+        typeAliases, inProgress)
     );
   }
 
@@ -608,7 +648,7 @@ export function isAssignable(
       for (const k of requiredKeys) if (!sourceKeys.has(k)) return false;
     }
     return resolvedSource.properties.every((p) =>
-      isAssignable(p.value, valueType, typeAliases),
+      isAssignableGuarded(p.value, valueType, typeAliases, inProgress),
     );
   }
 
@@ -633,7 +673,7 @@ export function isAssignable(
         if (isOptionalType(targetProp.value, typeAliases)) continue;
         return false;
       }
-      if (!isAssignable(sourceProp.value, targetProp.value, typeAliases))
+      if (!isAssignableGuarded(sourceProp.value, targetProp.value, typeAliases, inProgress))
         return false;
     }
     return true;
@@ -663,10 +703,10 @@ export function isAssignable(
       const sourceHint = sourceParams[i].typeHint;
       const targetHint = targetParams[i].typeHint;
       if (!sourceHint || !targetHint) continue;
-      if (!isAssignable(targetHint, sourceHint, typeAliases)) return false;
+      if (!isAssignableGuarded(targetHint, sourceHint, typeAliases, inProgress)) return false;
     }
     if (resolvedSource.returnType && resolvedTarget.returnType) {
-      return isAssignable(resolvedSource.returnType, resolvedTarget.returnType, typeAliases);
+      return isAssignableGuarded(resolvedSource.returnType, resolvedTarget.returnType, typeAliases, inProgress);
     }
     return true;
   }
@@ -692,14 +732,13 @@ export function isAssignable(
       const sourceHint = sourceParams[i].typeHint;
       const targetHint = resolvedTarget.params[i].typeAnnotation;
       if (!sourceHint || !targetHint) continue;
-      if (!isAssignable(targetHint, sourceHint, typeAliases)) return false;
+      if (!isAssignableGuarded(targetHint, sourceHint, typeAliases, inProgress)) return false;
     }
     if (resolvedSource.returnType && resolvedTarget.returnType) {
-      return isAssignable(
+      return isAssignableGuarded(
         resolvedSource.returnType,
         resolvedTarget.returnType,
-        typeAliases,
-      );
+        typeAliases, inProgress);
     }
     return true;
   }

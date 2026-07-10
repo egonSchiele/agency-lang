@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "{\"name\":\"a\",\"age\":1}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "picked keys survive; unpicked input keys are stripped"
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "missing picked key fails"
+    }
+  ]
+}

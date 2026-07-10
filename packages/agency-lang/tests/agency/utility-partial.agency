@@ -1,0 +1,24 @@
+// Partial<T>: schema parse (optional-coalesce mode) fills missing keys with
+// null; a wrongly-typed present key still fails.
+type User = {
+  name: string,
+  age: number,
+}
+
+node accepts() {
+  const s = schema(Partial<User>)
+  const r = s.parseJSON("{}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(Partial<User>)
+  const r = s.parseJSON("{\"name\": 123}")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

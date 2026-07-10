@@ -254,6 +254,27 @@ downstream code see e.g. `Schema<MyType>` and validate `.parse()` /
 `schema` is listed in `RESERVED_FUNCTION_NAMES` so users can't define
 their own `def schema()` (which would create parse ambiguity).
 
+### Built-in generic types
+
+ALL built-in generics — `Array`, `Schema`, `Record`, and the utility types
+`Partial`, `Required`, `Pick`, `Omit`, `NonNullable` — live in one
+registry (`lib/typeChecker/builtinGenerics.ts`) and are evaluated EAGERLY
+by `resolveTypeWithGuard`: each resolves to a plain type at resolution
+time (`Record` alone keeps its `genericType` wrapper for `z.record`
+lowering), so no downstream pass knows the forms exist. This is the litmus
+test for Agency type features: a type must be eagerly evaluable to a
+concrete, JSON-schema-able shape (which is why mapped and conditional
+types are permanently out of scope). Adding a built-in generic is one
+table entry; `BUILTIN_GENERIC_ARITY` (validate.ts) and
+`RESERVED_GENERIC_NAMES` (index.ts) are derived from the table. The five
+utility names are reserved; `Array`/`Schema`/`Record` keep their
+historical silently-shadowable behavior via the `reserved` flag. Semantic
+argument errors throw `TypeError` from the resolver: swallowed by
+`safeResolveType` at typecheck time (the annotation degrades to `any`),
+fatal at codegen via `resolveTypeDeep`. Located diagnostics are a named
+follow-up in the design spec
+(`docs/superpowers/specs/2026-07-09-utility-types-design.md`).
+
 ## Type narrowing
 
 Flow-sensitive narrowing and exhaustiveness checking have their own subtree:

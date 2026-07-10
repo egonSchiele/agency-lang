@@ -2,13 +2,9 @@ import { TypeAliasEntry, ValueParam, VariableType } from "../types.js";
 import { SourceLocation } from "../types/base.js";
 import { TypeCheckError } from "./types.js";
 import { visitTypes } from "./typeWalker.js";
-
-/** Built-in generic forms the typechecker / codegen know how to lower. */
-const BUILTIN_GENERIC_ARITY: Record<string, number> = {
-  Array: 1,
-  Schema: 1,
-  Record: 2,
-};
+// Built-in generic forms (Array, Schema, Record, utility types) and their
+// arities come from the single registry in builtinGenerics.ts.
+import { BUILTIN_GENERIC_ARITY } from "./builtinGenerics.js";
 
 /**
  * Validate value-param arity at a use site. Pushes one error to `errors`

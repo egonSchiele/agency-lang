@@ -646,6 +646,15 @@ function synthArray(
   return { type: "arrayType", elementType };
 }
 
+/**
+ * The null literal in expression position — either the dedicated `null` node
+ * or (as the parser produces in value position) a bare variableName named
+ * "null". Mirrors `isNullExpr` in narrowing.ts, which is private there.
+ */
+function isNullLiteralExpr(e: AgencyNode): boolean {
+  return e.type === "null" || (e.type === "variableName" && e.value === "null");
+}
+
 function synthObject(
   expr: AgencyNode & { type: "agencyObject" },
   scope: Scope,
@@ -673,7 +682,16 @@ function synthObject(
       computedKey?: AgencyNode;
       value: AgencyNode;
     };
-    const valueType = synthType(kv.value, scope, ctx);
+    // A null literal reaches synth as a bare variableName named "null" (the
+    // same shape narrowing's isNullExpr handles); synthType has no case for
+    // it and returns "any", which would bail out the WHOLE object literal
+    // below and silently skip assignment checking of every other property.
+    // Type it as null here so siblings keep their checks. Scoped to object
+    // literals on purpose: a general synthType null case would bind
+    // `let x = null` to the null type and break later reassignment.
+    const valueType = isNullLiteralExpr(kv.value)
+      ? NULL_T
+      : synthType(kv.value, scope, ctx);
     if (valueType === "any") {
       return "any";
     }

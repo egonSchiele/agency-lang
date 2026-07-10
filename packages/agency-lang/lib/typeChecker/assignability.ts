@@ -5,6 +5,7 @@ import { mapTypes } from "./typeWalker.js";
 import { mergeTagSets } from "./mergeTags.js";
 import { applyValueArgs } from "./valueParamSubstitution.js";
 import { resultToObjectUnion } from "./resultUnion.js";
+import { evalBuiltinGeneric, isBuiltinGenericName } from "./builtinGenerics.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -93,47 +94,20 @@ function resolveTypeWithGuard(
   }
 
   if (vt.type === "genericType") {
-    if (vt.name === "Array") {
-      if (vt.typeArgs.length !== 1) {
-        throw new TypeError(
-          `Array expects 1 type argument, got ${vt.typeArgs.length}`,
-        );
-      }
-      return {
-        type: "arrayType",
-        elementType: resolveTypeWithGuard(
-          vt.typeArgs[0],
-          typeAliases,
-          inProgress,
-        ),
-      };
-    }
-    if (vt.name === "Schema") {
-      if (vt.typeArgs.length !== 1) {
-        throw new TypeError(
-          `Schema expects 1 type argument, got ${vt.typeArgs.length}`,
-        );
-      }
-      return {
-        type: "schemaType",
-        inner: resolveTypeWithGuard(vt.typeArgs[0], typeAliases, inProgress),
-      };
-    }
-    if (vt.name === "Record") {
-      if (vt.typeArgs.length !== 2) {
-        throw new TypeError(
-          `Record expects 2 type arguments, got ${vt.typeArgs.length}`,
-        );
-      }
-      validateRecordKeyType(vt.typeArgs[0], typeAliases);
-      // Keep the genericType wrapper so codegen can lower to z.record / Record<K,V>;
-      // resolve inside so nested aliases/built-ins are normalized.
-      return {
-        ...vt,
-        typeArgs: vt.typeArgs.map((a) =>
-          resolveTypeWithGuard(a, typeAliases, inProgress),
-        ),
-      };
+    // ALL built-in generic forms (Array, Schema, Record, and the utility
+    // types) live in the builtinGenerics.ts registry and evaluate eagerly.
+    // The resolver callback carries this call's in-progress guard, so
+    // recursive alias arguments degrade gracefully (self-refs stay
+    // nominal). Tag handling is per-entry: utility types merge the
+    // occurrence's tags as the use-site layer; Array/Schema/Record keep
+    // their historical behavior.
+    if (isBuiltinGenericName(vt.name)) {
+      return evalBuiltinGeneric(
+        vt.name,
+        vt.typeArgs,
+        (t) => resolveTypeWithGuard(t, typeAliases, inProgress),
+        vt.tags,
+      );
     }
     // User-defined generic alias.
     const entry = typeAliases[vt.name];
@@ -218,24 +192,6 @@ function fillDefaults(
 }
 
 /**
- * Record keys must be a string-like or number-like primitive (or literal,
- * or a union of these). Booleans, objects, arrays etc. are not valid
- * because zod's `z.record` and TypeScript's `Record<K, V>` only support
- * key types that map to property keys.
- */
-function validateRecordKeyType(
-  keyType: VariableType,
-  typeAliases: Record<string, TypeAliasEntry>,
-): void {
-  const resolved = resolveType(keyType, typeAliases);
-  if (!isValidRecordKey(resolved)) {
-    throw new TypeError(
-      `Record key type must be string, number, a string literal, a number literal, or a union of those`,
-    );
-  }
-}
-
-/**
  * Upper bound on how many full-tree passes `resolveTypeDeep` will run before
  * giving up. Real generic-alias depth is tiny in practice (each pass strips
  * one level); this is purely a runaway-loop guard, not a real depth limit.
@@ -302,15 +258,6 @@ function deepResolveNode(
     }
   }
   return n;
-}
-
-function isValidRecordKey(t: VariableType): boolean {
-  if (t.type === "primitiveType")
-    return t.value === "string" || t.value === "number";
-  if (t.type === "stringLiteralType" || t.type === "numberLiteralType")
-    return true;
-  if (t.type === "unionType") return t.types.every(isValidRecordKey);
-  return false;
 }
 
 /** True if `t` is the built-in `Record<K, V>` generic (after resolution). */

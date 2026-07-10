@@ -62,13 +62,15 @@ describe("checkProposal", () => {
     expect(checkProposal("Job", `{ status: "fail", extra: 1 }`, aliases).ok).toBe(false);
   });
 
-  it("KNOWN FAIL-OPEN: an explicit null field skips the record check (language behavior, inherited)", () => {
-    // synthObject degrades the whole literal to "any" when any field
-    // synthesizes "any" (a bare null does), and checkType skips "any".
-    // Fail-open is acceptable — it can never wrongly reject. Pinned as a
-    // tripwire: if the language tightens null synthesis, this test diffs
-    // and gets updated deliberately.
-    expect(checkProposal("Job", `{ status: "nope", priority: null }`, aliases).ok).toBe(true);
+  it("an explicit null field no longer skips the record check (language tightened)", () => {
+    // Formerly a KNOWN FAIL-OPEN tripwire: synthObject degraded the whole
+    // literal to "any" when any field synthesized "any" (a bare null did),
+    // so checkType skipped it. The language now types null literals inside
+    // object literals (isNullLiteralExpr in synthesizer.ts), so a wrong
+    // sibling is caught even with a null field present — and a legitimate
+    // null still passes against its nullable annotation.
+    expect(checkProposal("Job", `{ status: "nope", priority: null }`, aliases).ok).toBe(false);
+    expect(checkProposal("Job", `{ status: "fail", priority: null }`, aliases).ok).toBe(true);
   });
 
   it("does NOT reject bare identifiers or interpolations — the mutator gates those", () => {

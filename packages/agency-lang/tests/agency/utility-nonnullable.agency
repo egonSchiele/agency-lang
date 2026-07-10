@@ -1,0 +1,19 @@
+// NonNullable<T>: the one non-object transform. The schema is the stripped
+// scalar, so null is rejected where string | null would have accepted it.
+node accepts() {
+  const s = schema(NonNullable<string | null>)
+  const r = s.parseJSON("\"x\"")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(NonNullable<string | null>)
+  const r = s.parseJSON("null")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

@@ -175,6 +175,34 @@ When you write an object *literal*, every key in the literal must be in its decl
 const cfg: Options = { modle: "gpt-4" }  // error: Unknown property 'modle'
 ```
 
+## Utility types
+
+Agency ships five built-in utility types modeled on TypeScript, adapted to
+Agency optionality (optional means `| null`; there is no `undefined`):
+
+| Type | What it does |
+|---|---|
+| `Partial<T>` | Every property becomes nullable: `p: V` → `p: V \| null` |
+| `Required<T>` | The inverse: strips `null` from every property |
+| `Pick<T, K>` | Keeps only the listed keys: `Pick<User, "name" \| "email">` |
+| `Omit<T, K>` | Removes the listed keys |
+| `NonNullable<T>` | Strips `null` from a single type: `NonNullable<string \| null>` is `string` |
+
+```ts
+type User = {
+  name: string,
+  age?: number,
+}
+
+def updateUser(id: string, changes: Partial<User>): string {
+  // changes.name is string | null — guard before use:
+  if (changes.name != null) {
+    return changes.name  // narrowed to string here
+  }
+  return "no name change"
+}
+```
+
 ## References
 
 - [Schemas](/guide/schemas)

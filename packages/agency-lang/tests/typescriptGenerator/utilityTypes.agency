@@ -1,0 +1,23 @@
+type User = {
+  name: string,
+  age?: number,
+}
+
+type UserPatch = Partial<User>
+
+type Contact = Pick<User, "name">
+
+def patch(changes: Partial<User>): string {
+  return "ok"
+}
+
+node main() {
+  const changes: UserPatch = { name: null, age: 1 }
+  const c: Contact = { name: "a" }
+  return patch(changes)
+}
+
+node llmPatch() {
+  const suggested: Partial<User> = llm("Suggest a partial user update")
+  return suggested
+}

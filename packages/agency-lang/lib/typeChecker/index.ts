@@ -51,13 +51,19 @@ import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
+import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
 import { validateStaticInit } from "./validateStaticInit.js";
 import { walkNodes } from "../utils/node.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
 /** Type-alias names that resolve to built-in types. */
-const RESERVED_TYPE_NAMES = new Set<string>(["Result", "Success", "Failure"]);
+const RESERVED_TYPE_NAMES = new Set<string>([
+  "Result",
+  "Success",
+  "Failure",
+  ...RESERVED_GENERIC_NAMES,
+]);
 
 export class TypeChecker {
   private program: AgencyProgram;

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { evalUtilityType, isUtilityTypeName, UTILITY_TYPE_ARITY } from "./utilityTypes.js";
+import { typecheckSource } from "./testUtils.js";
 import type { VariableType } from "../types.js";
 
 const STR: VariableType = { type: "primitiveType", value: "string" };
@@ -365,5 +366,132 @@ describe("argument resolution", () => {
         },
       ],
     });
+  });
+});
+
+describe("utility types through the full typecheck pipeline", () => {
+  it("accepts a valid Partial assignment (keys still required, values nullable)", () => {
+    const errors = typecheckSource(`
+type User = { name: string, age: number }
+node main() {
+  const changes: Partial<User> = { name: null, age: 1 }
+  return changes
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects a wrongly-typed property under Partial", () => {
+    // The anti-any sentinel: if the resolver branch threw and safeResolveType
+    // silently degraded Partial<User> to any, this would pass with 0 errors.
+    // NOTE: the RHS deliberately contains no null literal — a null literal
+    // synths to "any" (no case "null" in synthType), which makes synthObject
+    // bail and skip the check entirely. Pre-existing lenience, not utility-
+    // type behavior.
+    const errors = typecheckSource(`
+type User = { name: string, age: number }
+node main() {
+  const changes: Partial<User> = { name: 1, age: 2 }
+  return changes
+}
+`);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.map((e) => e.message).join("\n")).toMatch(/not assignable/);
+  });
+
+  it("narrows a Partial property with a null guard", () => {
+    const errors = typecheckSource(`
+type User = { name: string }
+def f(c: Partial<User>): string {
+  if (c.name != null) {
+    return c.name
+  }
+  return "none"
+}
+node main() {
+  return f({ name: "x" })
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("Pick produces a subset type", () => {
+    const errors = typecheckSource(`
+type User = { name: string, age: number }
+node main() {
+  const c: Pick<User, "name"> = { name: "x" }
+  return c
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("reports arity errors as located diagnostics", () => {
+    const errors = typecheckSource(`
+type User = { name: string }
+type Bad = Partial<User, User>
+node main() {
+  return 1
+}
+`);
+    expect(errors.map((e) => e.message).join("\n")).toMatch(
+      /Partial expects 1 type argument, got 2/,
+    );
+  });
+
+  it("rejects user redefinition of the five reserved names", () => {
+    const errors = typecheckSource(`
+type Partial = { x: number }
+node main() {
+  return 1
+}
+`);
+    expect(errors.map((e) => e.message).join("\n")).toMatch(
+      /'Partial' is a reserved built-in type/,
+    );
+  });
+
+  it("semantic argument errors do NOT surface as typecheck diagnostics (known gap, spec follow-up)", () => {
+    // Pins verified current behavior: the resolver TypeError is swallowed by
+    // safeResolveType (annotation degrades to any); the user first sees the
+    // error at codegen via resolveTypeDeep. Same as Record key errors today.
+    const errors = typecheckSource(`
+type User = { name: string }
+node main() {
+  const c: Pick<User, "nope"> = {}
+  return 1
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("bare Partial without type arguments: pin the current diagnostic", () => {
+    // Parses as a typeAliasVariable, missing the genericType branch entirely.
+    // The message is confusing for a reserved name, but pinning it makes the
+    // behavior a decision rather than an accident.
+    const errors = typecheckSource(`
+node main() {
+  const c: Partial = { }
+  return 1
+}
+`);
+    expect(errors.map((e) => e.message).join("\n")).toMatch(
+      /Type alias 'Partial' is not defined/,
+    );
+  });
+
+  it("a user generic alias can delegate to a utility type", () => {
+    // type PartialOf<T> = Partial<T>: the declaration validates clean (T is
+    // stubbed as a self-referential alias, no eager evaluation happens);
+    // the use site substitutes T := User, then re-resolves into the branch.
+    const errors = typecheckSource(`
+type User = { name: string, age: number }
+type PartialOf<T> = Partial<T>
+node main() {
+  const c: PartialOf<User> = { name: null, age: null }
+  return c
+}
+`);
+    expect(errors).toEqual([]);
   });
 });

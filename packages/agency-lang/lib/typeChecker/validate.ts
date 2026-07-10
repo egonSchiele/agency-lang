@@ -2,12 +2,14 @@ import { TypeAliasEntry, ValueParam, VariableType } from "../types.js";
 import { SourceLocation } from "../types/base.js";
 import { TypeCheckError } from "./types.js";
 import { visitTypes } from "./typeWalker.js";
+import { UTILITY_TYPE_ARITY } from "./utilityTypes.js";
 
 /** Built-in generic forms the typechecker / codegen know how to lower. */
 const BUILTIN_GENERIC_ARITY: Record<string, number> = {
   Array: 1,
   Schema: 1,
   Record: 2,
+  ...UTILITY_TYPE_ARITY,
 };
 
 /**

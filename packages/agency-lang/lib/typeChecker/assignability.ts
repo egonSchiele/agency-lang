@@ -5,6 +5,7 @@ import { mapTypes } from "./typeWalker.js";
 import { mergeTagSets } from "./mergeTags.js";
 import { applyValueArgs } from "./valueParamSubstitution.js";
 import { resultToObjectUnion } from "./resultUnion.js";
+import { evalUtilityType, isUtilityTypeName } from "./utilityTypes.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -134,6 +135,19 @@ function resolveTypeWithGuard(
           resolveTypeWithGuard(a, typeAliases, inProgress),
         ),
       };
+    }
+    // Built-in utility types: eagerly evaluate to a plain objectType /
+    // union so nothing downstream knows they exist. The resolver callback
+    // carries this call's in-progress guard, so recursive alias arguments
+    // degrade the same way Record args do (self-refs stay nominal).
+    if (isUtilityTypeName(vt.name)) {
+      const evaluated = evalUtilityType(vt.name, vt.typeArgs, (t) =>
+        resolveTypeWithGuard(t, typeAliases, inProgress),
+      );
+      // Sibling branches (Array/Schema/Record) drop use-site tags; we keep
+      // them DELIBERATELY so `@validate(...) Partial<User>` annotations
+      // survive. The divergence is intentional, not an oversight.
+      return attachAliasTags(evaluated, vt.tags);
     }
     // User-defined generic alias.
     const entry = typeAliases[vt.name];

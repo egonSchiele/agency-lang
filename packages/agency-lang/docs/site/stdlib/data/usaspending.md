@@ -49,7 +49,7 @@ export type Award = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L46))
 
 ### Executive
 
@@ -63,7 +63,7 @@ export type Executive = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L59))
 
 ### AwardDetail
 
@@ -89,7 +89,7 @@ export type AwardDetail = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L65))
 
 ## Effects
 
@@ -102,7 +102,7 @@ effect std::usaspending {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L30))
 
 ## Functions
 
@@ -118,9 +118,9 @@ Search U.S. federal awards. Returns each award's id, recipient, amount, awarding
   @param recipient - Recipient or company name to filter by (blank = any)
   @param agency - Awarding agency name to filter by (blank = any)
   @param awardType - Award category: contracts, grants, loans, direct_payments, or other
-  @param startDate - ISO start date bounding the award period (blank with endDate = all time)
-  @param endDate - ISO end date bounding the award period
-  @param limit - Maximum number of awards to return (max 100)
+  @param startDate - ISO start date bounding the award period; only applied when endDate is also set
+  @param endDate - ISO end date bounding the award period; only applied when startDate is also set
+  @param limit - Maximum number of awards to return
 
 **Parameters:**
 
@@ -137,7 +137,7 @@ Search U.S. federal awards. Returns each award's id, recipient, amount, awarding
 
 **Throws:** `std::usaspending`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L225))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L229))
 
 ### usaspendingAward
 
@@ -161,4 +161,4 @@ Fetch full detail for one federal award. Returns amount, recipient and UEI, awar
 
 **Throws:** `std::usaspending`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L252))

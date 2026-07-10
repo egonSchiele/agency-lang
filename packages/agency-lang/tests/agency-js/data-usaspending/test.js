@@ -65,6 +65,18 @@ const bad = await callAwardsBad();
 if (hasInterrupts(bad.data)) throw new Error("bad awardType must fail before raising std::usaspending");
 if (!String(bad.data).includes("unknown awardType")) throw new Error("bad awardType must fail with the validation message, got: " + bad.data);
 
+// (G) parseAwardType validates via own-key membership, so prototype-chain keys (__proto__, constructor)
+// are rejected, not accidentally accepted by bracket indexing.
+const proto = String(unwrap(await tParseAwardType("__proto__")));
+if (!proto.startsWith("FAIL")) throw new Error("parseAwardType must reject prototype keys like __proto__, got: " + proto);
+
+// (H) placeString single-component cases: city-only or state-only returns the lone component, never
+// a dangling ", ST" or "City, ".
+const cityOnly = unwrap(await tParseAwardDetail({ place_of_performance: { city_name: "FORT WORTH" } }));
+if (cityOnly.placeOfPerformance !== "FORT WORTH") throw new Error("city-only place must be 'FORT WORTH', got: " + cityOnly.placeOfPerformance);
+const stateOnly = unwrap(await tParseAwardDetail({ place_of_performance: { state_code: "TX" } }));
+if (stateOnly.placeOfPerformance !== "TX") throw new Error("state-only place must be 'TX', got: " + stateOnly.placeOfPerformance);
+
 writeFileSync(
   "__result.json",
   JSON.stringify(

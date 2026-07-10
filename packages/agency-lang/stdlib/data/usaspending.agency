@@ -82,11 +82,11 @@ export type AwardDetail = {
 /** Map a friendly award-type category to its award_type_codes (one category per query — USASpending
     won't mix contract and assistance codes). Unknown → failure listing the valid types. Pure. */
 safe def parseAwardType(t: string): Result<string[]> {
-  const codes = AWARD_TYPE_CODES[t] ?? null
-  if (codes == null) {
-    return failure("unknown awardType '${t}'; valid: ${keys(AWARD_TYPE_CODES).join(", ")}")
+  const valid = keys(AWARD_TYPE_CODES)
+  if (valid.indexOf(t) < 0) {
+    return failure("unknown awardType '${t}'; valid: ${valid.join(", ")}")
   }
-  return success(codes)
+  return success(AWARD_TYPE_CODES[t])
 }
 
 /** Build the spending_by_award POST body. Optional filters are added only when provided (bracket
@@ -138,10 +138,14 @@ safe def parseAwards(raw: any): Award[] {
   }
 }
 
-/** Join city and state into "City, ST", or "" when both are missing. Pure. */
+/** Join city and state into "City, ST". When only one is present, return it alone; when both are
+    missing, return "". Pure. */
 safe def placeString(city: string, state: string): string {
-  if (city == "" && state == "") {
-    return ""
+  if (city == "") {
+    return state
+  }
+  if (state == "") {
+    return city
   }
   return "${city}, ${state}"
 }
@@ -230,9 +234,9 @@ export safe def usaspendingAwards(recipient: string = "", agency: string = "", a
   @param recipient - Recipient or company name to filter by (blank = any)
   @param agency - Awarding agency name to filter by (blank = any)
   @param awardType - Award category: contracts, grants, loans, direct_payments, or other
-  @param startDate - ISO start date bounding the award period (blank with endDate = all time)
-  @param endDate - ISO end date bounding the award period
-  @param limit - Maximum number of awards to return (max 100)
+  @param startDate - ISO start date bounding the award period; only applied when endDate is also set
+  @param endDate - ISO end date bounding the award period; only applied when startDate is also set
+  @param limit - Maximum number of awards to return
   """
   const codesResult = parseAwardType(awardType)
   if (codesResult is failure(msg)) {

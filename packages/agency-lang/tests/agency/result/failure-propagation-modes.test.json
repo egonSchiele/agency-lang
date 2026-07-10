@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"handled first | any got failure | first:[{\\\"name\\\":\\\"pick\\\",\\\"param\\\":\\\"a\\\"}] | [{\\\"name\\\":\\\"gather\\\",\\\"param\\\":\\\"items\\\"}] | [{\\\"name\\\":\\\"pick\\\",\\\"param\\\":\\\"a\\\"}]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Result/any params accept; leftmost failure wins; variadic elements and .partial()-bound values are checked"
+    }
+  ]
+}

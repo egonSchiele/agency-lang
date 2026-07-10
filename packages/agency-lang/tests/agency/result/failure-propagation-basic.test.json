@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"propagated HTTP 404: report not found via [{\\\"name\\\":\\\"wordCount\\\",\\\"param\\\":\\\"text\\\"},{\\\"name\\\":\\\"formatSummary\\\",\\\"param\\\":\\\"report\\\"}]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a failure skips two typed/untyped params in a row and carries the two-hop trail"
+    }
+  ]
+}

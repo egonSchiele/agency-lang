@@ -1,0 +1,50 @@
+def handle(r: Result) {
+  if (isFailure(r)) {
+    return "handled ${r.error}"
+  }
+  return "not failure"
+}
+
+def anything(x: any) {
+  if (isFailure(x)) {
+    return "any got failure"
+  }
+  return "any got value"
+}
+
+def pick(a: string, b: string) {
+  return "ran pick"
+}
+
+def gather(...items) {
+  return "ran gather"
+}
+
+node main() {
+  const f1 = failure("first")
+  const f2 = failure("second")
+
+  const viaResult = handle(f1)
+  const viaAny = anything(f1)
+
+  let leftmost = "?"
+  const picked = pick(f1, f2)
+  if (isFailure(picked)) {
+    leftmost = "${picked.error}:${JSON.stringify(picked.skippedFunctions)}"
+  }
+
+  let variadic = "?"
+  const gathered = gather("ok", f1)
+  if (isFailure(gathered)) {
+    variadic = JSON.stringify(gathered.skippedFunctions)
+  }
+
+  let bound = "?"
+  const pickA = pick.partial(a: f1)
+  const boundOut = pickA("fine")
+  if (isFailure(boundOut)) {
+    bound = JSON.stringify(boundOut.skippedFunctions)
+  }
+
+  return "${viaResult} | ${viaAny} | ${leftmost} | ${variadic} | ${bound}"
+}

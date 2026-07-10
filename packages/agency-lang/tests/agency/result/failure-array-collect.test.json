@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"collected 4, failures 2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "arr.push(someFailure) must work: method arguments are never scanned (the TS-function check lives in __call only)"
+    }
+  ]
+}

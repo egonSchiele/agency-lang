@@ -1,0 +1,16 @@
+def bad(): Result {
+  return failure("boom")
+}
+
+def use(s: string) {
+  return "used"
+}
+
+node main() {
+  const f = bad()
+  const x = async use(f)
+  if (isFailure(x)) {
+    return "async propagated ${x.error}"
+  }
+  return "async not propagated"
+}

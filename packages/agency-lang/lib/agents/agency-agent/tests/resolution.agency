@@ -182,3 +182,55 @@ node buildLayersImmediacyOuter(): Resolved {
   return reasoning
 }
 
+
+// Rule 1: a derived slot always parses its provider prefix, even when the
+// session provider is established. buildLayers with providerEstablished
+// true must still split the embedding value.
+node derivedSlotAlwaysParsesPrefix(): Resolved {
+  const layers = buildLayers(
+    "",
+    {},
+    "",
+    {},
+    {
+    slots: {
+      embedding: "openai/text-embedding-3-small"
+    }
+  },
+    ["anthropic", "openai", "google"],
+    true,
+  )
+  return unwrapResolved(resolveSlot("embedding", layers, CTX))
+}
+
+// Rule 2: a derived slot with no provider prefix resolves with an EMPTY
+// provider instead of inheriting the ctx provider.
+node derivedSlotNeverInheritsProvider(): Resolved {
+  const layers = buildLayers(
+    "",
+    {},
+    "",
+    {},
+    {
+    slots: {
+      embedding: "text-embedding-3-small"
+    }
+  },
+    ["anthropic", "openai", "google"],
+    false,
+  )
+  return unwrapResolved(resolveSlot("embedding", layers, CTX))
+}
+
+// Rule 3: a global pin resolves the chat slots but never the embedding
+// slot, which falls through to the built-in empty derived value.
+node pinSkipsDerivedSlot(): string {
+  let cliLayer = emptyLayer("cli")
+  cliLayer.pin = {
+    model: "claude-opus-4-8",
+    provider: ""
+  }
+  const main = unwrapResolved(resolveSlot("main", [cliLayer], CTX))
+  const embedding = unwrapResolved(resolveSlot("embedding", [cliLayer], CTX))
+  return "${main.model}/${embedding.model}|${embedding.via}"
+}

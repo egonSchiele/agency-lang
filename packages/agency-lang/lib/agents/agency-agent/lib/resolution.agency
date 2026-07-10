@@ -4,7 +4,7 @@
 import { keys } from "std::object"
 import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
 import { ModelSettings } from "./settings.agency"
-import { canonicalSlot, SLOTS } from "./slots.agency"
+import { canonicalSlot, slotKind, SLOTS } from "./slots.agency"
 
 export type SlotValue = {
   model: string;
@@ -28,8 +28,15 @@ export type SlotChange = {
   after: Resolved
 }
 
-def finalProvider(value: SlotValue, ctx: Ctx): string {
+def finalProvider(slot: string, value: SlotValue, ctx: Ctx): string {
   if (value.provider == "") {
+    // Derived slots never inherit the main provider. The embedding slot
+    // exists to point somewhere ELSE, so inheriting is exactly wrong;
+    // an empty provider means "not usable" and downstream treats the
+    // slot as unset.
+    if (slotKind(slot) == "derived") {
+      return ""
+    }
     return ctx.provider
   }
   return value.provider
@@ -46,16 +53,19 @@ export def resolveSlot(
       return success(
         {
         model: perSlotValue.model,
-        provider: finalProvider(perSlotValue, ctx),
+        provider: finalProvider(slot, perSlotValue, ctx),
         via: "${layer.name}:per-slot"
       },
       )
     }
-    if (layer.pin != null) {
+    // A global pin names a chat model, so it must not splash into a
+    // derived slot. Without this guard, --model claude-opus-4-8 would
+    // become the memory embedding model.
+    if (layer.pin != null && slotKind(slot) != "derived") {
       return success(
         {
         model: layer.pin.model,
-        provider: finalProvider(layer.pin, ctx),
+        provider: finalProvider(slot, layer.pin, ctx),
         via: "${layer.name}:global-pin"
       },
       )
@@ -66,7 +76,7 @@ export def resolveSlot(
     return builtin
   }
   const resolved = builtin.value
-  if (resolved.provider == "") {
+  if (resolved.provider == "" && slotKind(slot) != "derived") {
     // Return a new object rather than mutating priceDefault's result, so this
     // stays pure and cannot alias a reused default.
     return success(
@@ -114,7 +124,12 @@ def slotMapToValues(
 ): Record<string, SlotValue> {
   let output: Record<string, SlotValue> = {}
   for (key in Object.keys(slots)) {
-    output[canonicalSlot(key)] = parseSlotValue(slots[key], providers, providerEstablished)
+    const canonical = canonicalSlot(key)
+    // A derived slot's value always parses its provider prefix. An
+    // established provider describes the CHAT session, and the whole
+    // point of a derived slot is to point somewhere else.
+    const established = providerEstablished && slotKind(canonical) != "derived"
+    output[canonical] = parseSlotValue(slots[key], providers, established)
   }
   return output
 }

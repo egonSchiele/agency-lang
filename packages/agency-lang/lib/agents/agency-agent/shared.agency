@@ -198,6 +198,13 @@ export def promoteAll(
     if (resolved == null) {
       continue
     }
+    // The promotion exists for chat calls, which need the Responses API
+    // for hosted web search. A derived slot names an embed endpoint, so
+    // it keeps its public provider name.
+    if (slotKind(slot) == "derived") {
+      promoted[slot] = resolved
+      continue
+    }
     promoted[slot] = {
       model: resolved.model,
       provider: promoteProvider(resolved.provider),
@@ -262,6 +269,7 @@ export def configureModels(
   model: string,
   fast: string,
   slow: string,
+  embedding: string,
   provider: string,
 ) {
   const settings = getModelSettings(loadSettings())
@@ -289,6 +297,9 @@ export def configureModels(
     price: "standard"
   }
   let cliSlots: Record<string, string> = {}
+  if (embedding != "") {
+    cliSlots["embedding"] = embedding
+  }
   if (fast != "") {
     cliSlots["main"] = fast
   }

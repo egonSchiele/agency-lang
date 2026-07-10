@@ -57,7 +57,7 @@ import {
   BUILTIN_POLICIES,
  } from "./lib/defaultPolicy.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
-import { parseModelFlag, knownProviders, Resolved } from "./lib/models.agency"
+import { parseModelFlag, parseModelSpec, knownProviders, Resolved } from "./lib/models.agency"
 import {
   buildLayers,
   resolveAll,
@@ -388,14 +388,31 @@ export def switchModel(
     slots: nextSlots
   }
   const parsed = parseModelFlag(spec)
-  if (parsed.slot != "" && parsed.slot != "main" && parsed.slot != "reasoning") {
+  if (parsed.slot != "" && parsed.slot != "main" && parsed.slot != "reasoning" && parsed.slot != "embedding") {
     pushMessage(
-      color.red("Unknown model slot '${parsed.slot}'. Valid slots: main, reasoning."),
+      color.red("Unknown model slot '${parsed.slot}'. Valid slots: main, reasoning, embedding."),
     )
     return {
       session: prior,
       resolved: before,
       changes: []
+    }
+  }
+  if (parsed.slot == "embedding") {
+    // The embedding slot exists to point AWAY from the chat provider, so
+    // the provider can never be inferred. Require the explicit form.
+    const spec2 = parseModelSpec(parsed.model, false, knownProviders())
+    if (spec2.provider == "") {
+      pushMessage(
+        color.red(
+        "Embedding models need the provider/model form, e.g. embedding=openai/text-embedding-3-small.",
+      ),
+      )
+      return {
+        session: prior,
+        resolved: before,
+        changes: []
+      }
     }
   }
   if (parsed.slot == "") {
@@ -1722,6 +1739,7 @@ node main() {
     let modelGlobal = ""
     let fastFlag = ""
     let slowFlag = ""
+    let embeddingFlag = ""
     if (modelArg != "") {
       if (parsed.slot == "") {
         modelGlobal = parsed.model
@@ -1729,10 +1747,21 @@ node main() {
         fastFlag = parsed.model
       } else if (parsed.slot == "reasoning") {
         slowFlag = parsed.model
+      } else if (parsed.slot == "embedding") {
+        const spec2 = parseModelSpec(parsed.model, false, knownProviders())
+        if (spec2.provider == "") {
+          print(
+            color.red(
+            "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small.",
+          ),
+          )
+          process.exit(1)
+        }
+        embeddingFlag = parsed.model
       } else {
         print(
           color.red(
-          "Unknown model slot '${parsed.slot}' in --model. Valid slots: main, reasoning.",
+          "Unknown model slot '${parsed.slot}' in --model. Valid slots: main, reasoning, embedding.",
         ),
         )
         process.exit(1)
@@ -1746,7 +1775,7 @@ node main() {
     if (sm != "") {
       slowFlag = sm
     }
-    configureModels(modelGlobal, fastFlag, slowFlag, args.flags.provider ?? "")
+    configureModels(modelGlobal, fastFlag, slowFlag, embeddingFlag, args.flags.provider ?? "")
     configureSearch(false)
   }
 

@@ -24,6 +24,7 @@ import { exists } from "std::shell"
 
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
 import { CapabilitySettings, sanitizeCapabilitySettings } from "./capabilities.agency"
+import { parseModelSpec, knownProviders } from "./models.agency"
 import { isKnownSlot, canonicalSlot } from "./slots.agency"
 
 
@@ -58,13 +59,25 @@ export def sanitizeModelSettings(settings: ModelSettings): ModelSettings {
   }
   let kept: Record<string, string> = {}
   for (key in Object.keys(slots)) {
-    if (isKnownSlot(key)) {
-      kept[canonicalSlot(key)] = slots[key]
-    } else {
+    if (!isKnownSlot(key)) {
       print(
         "Warning: settings.json model.slots has unknown slot '${key}'; ignoring it.",
       )
+      continue
     }
+    const canonical = canonicalSlot(key)
+    if (canonical == "embedding") {
+      // The embedding slot points away from the chat provider, so its
+      // provider can never be inferred. Require the explicit form.
+      const spec = parseModelSpec(slots[key], false, knownProviders())
+      if (spec.provider == "") {
+        print(
+          "Warning: settings.json model.slots.embedding needs the provider/model form, e.g. openai/text-embedding-3-small; ignoring it.",
+        )
+        continue
+      }
+    }
+    kept[canonical] = slots[key]
   }
   return {
     ...settings,

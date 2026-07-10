@@ -100,6 +100,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "dropsBareEmbeddingSlotValue",
+      "input": "",
+      "expectedOutput": "\"undefined/opus\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "keepsPrefixedEmbeddingSlotValue",
+      "input": "",
+      "expectedOutput": "\"openai/text-embedding-3-small\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

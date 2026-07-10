@@ -84,8 +84,10 @@ static const SWITCH_BEFORE: Record<string, Resolved> = {
     via: "x"
   },
   embedding: {
+    // Derived slots never inherit the ctx provider under the resolution
+    // rules, so the resolved shape carries an empty provider.
     model: "",
-    provider: "anthropic",
+    provider: "",
     via: "x"
   }
 }
@@ -233,4 +235,40 @@ node parseModelsProviderArg(): boolean {
 node parseModelsTrailingSpaceIsEmpty(): boolean {
   const filters = parseModelsFilters("/models   ")
   return filters.provider == null
+}
+
+// The embedding slot accepts the provider/model form and resolves both
+// parts. Promotion must not touch the embed provider: promoteAll exempts
+// derived slots, so "openai" stays "openai".
+node switchAcceptsPrefixedEmbedding(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "embedding=openai/text-embedding-3-small", SWITCH_CTX, SWITCH_BEFORE)
+  const resolved = out.resolved["embedding"]
+  if (resolved == null) {
+    return "unresolved"
+  }
+  return "${resolved.model}/${resolved.provider}"
+}
+
+// A bare embedding model is refused and nothing changes.
+node switchRejectsBareEmbedding(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "embedding=text-embedding-3-small", SWITCH_CTX, SWITCH_BEFORE)
+  const resolved = out.resolved["embedding"]
+  let model = ""
+  if (resolved != null) {
+    model = resolved.model
+  }
+  return "${model}|${out.changes.length}"
+}
+
+// A global pin must not splash into the embedding slot.
+node pinDoesNotReachEmbedding(): string {
+  saveSettings({}) with approve
+  const out = switchModel(freshSession(), "claude-opus-4-8", SWITCH_CTX, SWITCH_BEFORE)
+  const resolved = out.resolved["embedding"]
+  if (resolved == null || resolved.model == "") {
+    return "empty"
+  }
+  return "leaked: ${resolved.model}"
 }

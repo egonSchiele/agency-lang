@@ -43,6 +43,7 @@ const RESULT_FIELDS = new Set<string>([
   "args",
   "retryable",
   "success",
+  "skippedFunctions",
 ]);
 
 // The Result fields that exist on exactly one branch (everything except

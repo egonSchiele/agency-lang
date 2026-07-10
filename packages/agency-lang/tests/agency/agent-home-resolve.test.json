@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "resolveAgentHome honors a non-empty override, falls back to ~/.agency-agent when the override is null, and treats an empty string the same as unset (an empty AGENCY_AGENT_HOME must not turn the settings/policy paths into cwd-relative paths)."
+    }
+  ]
+}

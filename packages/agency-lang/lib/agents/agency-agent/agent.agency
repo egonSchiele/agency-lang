@@ -1607,6 +1607,10 @@ node main() {
         optional: true,
         description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, approve-all) or a path to a policy JSON file. with-writes auto-approves file writes and git changes scoped to the current directory and its children; approve-all approves EVERY interrupt with no scoping (sandbox use only). Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
       },
+      "agent-home": {
+        type: "string",
+        description: "Directory to use instead of ~/.agency-agent for settings, policy, and history (equivalent to the AGENCY_AGENT_HOME env var; the flag wins when both are set)"
+      },
       local: {
         type: "string",
         optional: true,
@@ -1638,11 +1642,14 @@ node main() {
   },
   )
 
-  // NOTE: --trace / --log-file are declared here only for --help and so
-  // parseArgs accepts them. runBundledAgent extracts them from the forwarded
-  // args and passes them to this process as the AGENCY_CONFIG_OVERRIDES env
-  // var, read when the RuntimeContext is constructed — before this main() runs.
-  // Do not re-handle them here.
+  // NOTE: --trace / --log-file / --agent-home are declared here only for
+  // --help and so parseArgs accepts them. runBundledAgent extracts them from
+  // the forwarded args and passes them to this process via env vars
+  // (AGENCY_CONFIG_OVERRIDES for the first two, AGENCY_AGENT_HOME for the
+  // last), read before this main() runs — the RuntimeContext consumes the
+  // config overrides at construction, and lib/config.agency derives the
+  // settings/policy/history paths from the agent home in its static-const
+  // initializers. Do not re-handle them here.
 
   if (args.flags.debug) {
     AGENT_DEBUG = true

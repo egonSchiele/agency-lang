@@ -1,0 +1,21 @@
+import test { resolveAgentHome } from "../../lib/agents/agency-agent/lib/config.agency"
+
+// resolveAgentHome turns the AGENCY_AGENT_HOME override (env var or
+// --agent-home flag) into the agent home directory. The load-bearing
+// case is the empty string: env("AGENCY_AGENT_HOME") returns "" when the
+// var is set-but-empty, and without the guard every derived path
+// (settings.json, policy.json, history) would silently become
+// cwd-relative — a destructive footgun.
+node main(): string {
+  if (resolveAgentHome("/custom/home") != "/custom/home") {
+    return "override ignored: ${resolveAgentHome("/custom/home")}"
+  }
+  const defaultHome = resolveAgentHome(null)
+  if (!defaultHome.endsWith(".agency-agent")) {
+    return "default is not ~/.agency-agent: ${defaultHome}"
+  }
+  if (resolveAgentHome("") != defaultHome) {
+    return "empty string not treated as unset: ${resolveAgentHome("")}"
+  }
+  return "ok"
+}

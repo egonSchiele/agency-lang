@@ -133,7 +133,6 @@ Safety guards that stop a program from running away.
 ```json
 {
   "maxCallDepth": 2048,
-  "failurePropagation": "on",
   "maxToolCallRounds": 10,
   "checkpoints": { "maxRestores": 100 }
 }
@@ -142,7 +141,6 @@ Safety guards that stop a program from running away.
 | Option | Description |
 | --- | --- |
 | `maxCallDepth` | The runaway-recursion guard. Default `2048`; raise it for legitimately deep recursion. |
-| `failurePropagation` | What happens when a failure value reaches a parameter not typed to accept Results. `"on"` (default) skips the call and propagates the failure. `"warn"` logs without changing behavior. `"off"` disables the checks. |
 | `maxToolCallRounds` | How many times the LLM can loop between calling tools and reacting to their output before Agency halts it. Default `10`. |
 | `checkpoints.maxRestores` | Cap on how often one checkpoint can be restored before it errors out. Default `100`. |
 

@@ -1,3 +1,4 @@
+import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
 import { __globals, agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
@@ -714,35 +715,45 @@ export class Runner {
       // Fire onThreadEnd so the registry stdlib hook sees the
       // close. We fire from `finally` so exceptions thrown inside
       // the body still record a close event.
-      try {
-        await invokeCallbacks({
-          ctx: this.ctx,
-          name: "onThreadEnd",
-          data: {
-            threadId: slug,
-            // Prefer persisted label so resumed threads emit the
-            // original label even when the resumption call site
-            // omits it (mirrors onThreadStart above).
-            label: closingThread?.label ?? opts.label ?? undefined,
-            eagerSummarize: opts.summarize === true,
-            messages: messagesSnapshot,
-          },
-        });
-      } catch (e) {
-        // Swallow hook errors in finally to avoid masking the
-        // primary exception. `fireWithGuard` inside invokeCallbacks
-        // already logs JS errors; this catch is belt-and-braces for
-        // unexpected throws from the dispatcher itself.
-        if (e instanceof RestoreSignal) throw e;
-        // Surface the failure as a structured statelog event so it
-        // shows up in traces (replaces the prior bare console.error).
-        // Optional chaining: older test contexts may construct a
-        // statelogClient without the threadEndHookError method.
-        this.ctx.statelogClient?.threadEndHookError?.({
+      await withThreadEndHooksEvents(
+        this.ctx.statelogClient,
+        {
           threadId: slug,
-          error: e instanceof Error ? e.message : String(e),
-        });
-      }
+          eagerSummarize: opts.summarize === true,
+          messageCount: messagesSnapshot.length,
+        },
+        async () => {
+          try {
+            await invokeCallbacks({
+              ctx: this.ctx,
+              name: "onThreadEnd",
+              data: {
+                threadId: slug,
+                // Prefer persisted label so resumed threads emit the
+                // original label even when the resumption call site
+                // omits it (mirrors onThreadStart above).
+                label: closingThread?.label ?? opts.label ?? undefined,
+                eagerSummarize: opts.summarize === true,
+                messages: messagesSnapshot,
+              },
+            });
+          } catch (e) {
+            // Swallow hook errors in finally to avoid masking the
+            // primary exception. `fireWithGuard` inside invokeCallbacks
+            // already logs JS errors; this catch is belt-and-braces for
+            // unexpected throws from the dispatcher itself.
+            if (e instanceof RestoreSignal) throw e;
+            // Surface the failure as a structured statelog event so it
+            // shows up in traces (replaces the prior bare console.error).
+            // Optional chaining: older test contexts may construct a
+            // statelogClient without the threadEndHookError method.
+            this.ctx.statelogClient?.threadEndHookError?.({
+              threadId: slug,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        },
+      );
     }
 
     if (this.halted) return;

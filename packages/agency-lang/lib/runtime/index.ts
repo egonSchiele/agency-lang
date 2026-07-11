@@ -87,7 +87,9 @@ export {
   respondToInterrupts,
 } from "./interrupts.js";
 
-export { checkPolicy, validatePolicy } from "./policy.js";
+export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
+
+export { resolveCliInterrupts } from "./runPolicyHandler.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 

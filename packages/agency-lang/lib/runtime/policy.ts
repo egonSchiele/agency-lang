@@ -21,6 +21,18 @@ export function checkPolicy(
   policy: Policy,
   interrupt: { effect: string; message: string; data: any; origin: string },
 ): PolicyResult {
+  return checkPolicyExplicit(policy, interrupt) ?? { type: "propagate" };
+}
+
+/** Like `checkPolicy`, but returns null when NO rule matched — callers that
+ * need to distinguish an explicit `propagate` rule from plain fall-through
+ * (e.g. the run-policy chain handler, which must stay silent on effects the
+ * policy never mentions) use this; everyone else keeps `checkPolicy`'s
+ * fall-through-is-propagate contract. */
+export function checkPolicyExplicit(
+  policy: Policy,
+  interrupt: { effect: string; message: string; data: any; origin: string },
+): PolicyResult | null {
   // Effect-specific rules take precedence over the wildcard.
   const rules = policy[interrupt.effect];
   if (rules) {
@@ -34,7 +46,7 @@ export function checkPolicy(
   // Wildcard catch-all: the `"*"` effect key applies to any interrupt whose
   // own effect had no matching rule. This is how an "approve-all" policy
   // covers effects it doesn't enumerate (a plain per-effect map would
-  // `propagate` — i.e. prompt — on anything unlisted).
+  // `propagate` — i.e. surface to the user — on anything unlisted).
   const wildcard = policy["*"];
   if (wildcard) {
     for (const rule of wildcard) {
@@ -44,7 +56,7 @@ export function checkPolicy(
     }
   }
 
-  return { type: "propagate" };
+  return null;
 }
 
 // picomatch fails to match patterns starting with `./` when combined

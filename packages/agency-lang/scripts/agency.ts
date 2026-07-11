@@ -295,8 +295,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "Comma-separated interrupt effects to auto-reject",
       )
       .option(
-        "--interactive",
-        "Prompt on effects the policy does not cover (default: reject)",
+        "-i, --interactive",
+        "Prompt on interrupts that surface unhandled (default: reject them)",
       );
   }
 

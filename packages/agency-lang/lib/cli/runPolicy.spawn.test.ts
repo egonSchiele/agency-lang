@@ -33,10 +33,79 @@ const FIXTURE = `node main() {
 }
 `;
 
-function makeDir(): string {
+// Same write, but the program handles the interrupt itself. The policy layer
+// must NOT override or prompt for an interrupt the code already settled.
+const HANDLED_FIXTURE = `node main() {
+  handle {
+    const r = write(filename: "policy-spawn-out.txt", content: "x", dir: ".")
+    match (r) {
+      success(_) => print("WRITE_OK")
+      failure(_) => print("WRITE_REJECTED")
+    }
+  } with approve
+}
+`;
+
+// A std::agency::run child whose interrupt nothing handles. The child's
+// bash interrupt relays through the root chain (silent — the policy only
+// covers std::run), the child pauses, and the interrupt bubbles up to the
+// root CLI endpoint. There it is rejected (non-interactive), the child
+// resumes with a failure Result — a rejection is not an abort — and returns
+// a marker naming which decision it observed.
+const SUBPROCESS_FIXTURE = `import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo hi")
+  if (isFailure(r)) {
+    return "child-saw-rejection"
+  }
+  return "child-saw-approval"
+}
+"""
+  const compiled = compile(source)
+  if (isFailure(compiled)) {
+    print("COMPILE_FAILED")
+    return ""
+  }
+  const result = run(compiled: compiled.value, node: "main")
+  if (isSuccess(result)) {
+    print("CHILD_RESULT: " + result.value.data)
+  } else {
+    print("CHILD_RUN_FAILED")
+  }
+}
+`;
+
+function makeDir(fixture: string = FIXTURE): string {
   const dir = mkdtempSync(path.join(tmpdir(), "runpol-spawn-"));
-  writeFileSync(path.join(dir, "writer.agency"), FIXTURE);
+  writeFileSync(path.join(dir, "writer.agency"), fixture);
   return dir;
+}
+
+// The subprocess fixture must live INSIDE the package dir: the nested
+// std::agency::run child materializes its compiled script under the parent's
+// cwd, and from os.tmpdir() that script cannot resolve the `agency-lang`
+// package (the CLI's resolver shim only covers the direct child).
+function makeLocalDir(fixture: string): string {
+  const dir = mkdtempSync(path.join(process.cwd(), ".runpol-spawn-"));
+  writeFileSync(path.join(dir, "writer.agency"), fixture);
+  return dir;
+}
+
+// Companion guard to rmTemp for makeLocalDir: only remove a direct
+// `.runpol-spawn-*` child of the package dir.
+function rmLocal(dir: string): void {
+  const root = realpathSync(process.cwd());
+  const resolved = realpathSync(dir);
+  if (
+    path.dirname(resolved) === root &&
+    path.basename(resolved).startsWith(".runpol-spawn-")
+  ) {
+    rmSync(resolved, { recursive: true, force: true });
+  }
 }
 
 async function runCli(dir: string, args: string[]) {
@@ -79,6 +148,54 @@ describe.skipIf(!existsSync(CLI))("agency run --policy flags (end-to-end)", () =
       rmTemp(dir);
     }
   });
+
+  it("an interrupt the code handles itself is NOT re-decided by --interactive", async () => {
+    // The program's own `with approve` settles the interrupt, so it never
+    // surfaces to the user endpoint. (Pre-endpoint behavior: the interactive
+    // handler joined the chain, prompted on non-TTY stdin, and fail-closed
+    // to reject — clobbering the code's approval.)
+    const dir = makeDir(HANDLED_FIXTURE);
+    try {
+      const { stdout, code } = await runCli(dir, ["--interactive"]);
+      expect(code).toBe(0);
+      expect(stdout).toMatch(/WRITE_OK/);
+      expect(stdout).not.toMatch(/WRITE_REJECTED/);
+    } finally {
+      rmTemp(dir);
+    }
+  });
+
+  it("a surfaced interrupt the policy does not cover is rejected and the run resumes", async () => {
+    // --approve std::read covers nothing here; std::write surfaces to the
+    // user endpoint, which (non-interactive) rejects it and resumes the run —
+    // the program observes the failure Result and exits cleanly.
+    const dir = makeDir();
+    try {
+      const { stdout, code } = await runCli(dir, ["--approve", "std::read"]);
+      expect(code).toBe(0);
+      expect(stdout).toMatch(/WRITE_REJECTED/);
+      expect(stdout).not.toMatch(/WRITE_OK/);
+    } finally {
+      rmTemp(dir);
+    }
+  });
+
+  it("a subprocess interrupt nothing handles surfaces to the endpoint too", async () => {
+    // std::agency::run child hits a bash interrupt with no handler anywhere;
+    // the policy approves only std::run. The child interrupt must bubble to
+    // the root endpoint (rejected here, prompted under --interactive), resume
+    // the child with the rejection, and let the whole tree finish cleanly.
+    const dir = makeLocalDir(SUBPROCESS_FIXTURE);
+    try {
+      const { stdout, code } = await runCli(dir, ["--approve", "std::run"]);
+      expect(code).toBe(0);
+      expect(stdout).toMatch(/CHILD_RESULT: child-saw-rejection/);
+    } finally {
+      rmLocal(dir);
+    }
+    // Compile + fork + pause + endpoint decision + nested resume: ~5s locally,
+    // slower on CI runners — well past vitest's 5s default.
+  }, 90_000);
 
   it("without any policy flag, an uncovered interrupt still reports unhandled", async () => {
     // No handler is installed when no flag is set (resolveRunPolicy returns null),

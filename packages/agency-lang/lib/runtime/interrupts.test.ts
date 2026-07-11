@@ -107,6 +107,54 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
   });
 });
 
+describe("interruptWithHandlers expectsValue", () => {
+  const makeCtx = (handlers: any[]): RuntimeContext<any> => {
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    ctx.handlers = handlers;
+    // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
+    // ctx.getRunId()), which a real run sets when the exec context is created.
+    ctx.runId = "test-run";
+    return ctx;
+  };
+
+  it("a surfaced assignment-position interrupt carries expectsValue", async () => {
+    const verdict = await interruptWithHandlers(
+      "unknown", "Question for user", {}, "o", makeCtx([]), undefined,
+      { expectsValue: true },
+    );
+    expect(Array.isArray(verdict)).toBe(true);
+    expect((verdict as any)[0].expectsValue).toBe(true);
+  });
+
+  it("a statement-position interrupt does NOT carry expectsValue", async () => {
+    const verdict = await interruptWithHandlers(
+      "std::error", "m", {}, "o", makeCtx([]),
+    );
+    expect(Array.isArray(verdict)).toBe(true);
+    expect((verdict as any)[0].expectsValue).toBeUndefined();
+  });
+
+  it("handlers see expectsValue on the interrupt they are deciding", async () => {
+    const seen: any[] = [];
+    const ctx = makeCtx([
+      async (intr: any) => {
+        seen.push(intr.expectsValue);
+        return { type: "approve", value: "Adit" };
+      },
+    ]);
+    const verdict = await interruptWithHandlers(
+      "unknown", "Question for user", {}, "o", ctx, undefined,
+      { expectsValue: true },
+    );
+    expect(verdict).toEqual({ type: "approve", value: "Adit" });
+    expect(seen).toEqual([true]);
+  });
+});
+
 describe("mergeChainOutcomes", () => {
   const approvedA = { kind: "approved", value: "a" } as const;
   const approvedB = { kind: "approved", value: "b" } as const;

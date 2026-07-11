@@ -11,7 +11,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
-  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   runExportedFunction as _runExportedFunction,
@@ -491,7 +491,7 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       data: {}
     };
     const __result = await main(initialState);
-    reportUnhandledInterrupts(__result)
+    await resolveCliInterrupts(__result, respondToInterrupts)
   } catch (__error: any) {
     console.error(`
 Agent crashed: ${__error.message}`)

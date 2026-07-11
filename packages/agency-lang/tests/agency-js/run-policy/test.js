@@ -24,24 +24,30 @@ const writeRejected =
   !Array.isArray(writeRes.data) &&
   /reject/i.test(s(writeRes.data));
 
-// Scenario 2: empty policy — fail-closed. Write is unlisted → rejected.
-// "handled (not an Interrupt[]) AND no file" together rule out both fail-open
-// (would create the file) and unhandled (would leave data as an array).
+// Scenario 2: empty policy — effects the policy does not mention are left to
+// the program (and ultimately the caller). Write is unlisted → the chain stays
+// silent and the interrupt SURFACES to this TS caller as an Interrupt[], with
+// no file created. (The reject-what-surfaces default lives in the CLI endpoint,
+// resolveCliInterrupts — not here.)
 process.env.AGENCY_RUN_POLICY = "{}";
 const dir2 = mkdtempSync(join(tmpdir(), "runpol-"));
 const writeRes2 = await writeIt({ dir: dir2, filename: "out.txt" });
-const failClosedRejected =
-  !Array.isArray(writeRes2.data) && !existsSync(join(dir2, "out.txt"));
+const unlistedSurfaced =
+  Array.isArray(writeRes2.data) &&
+  writeRes2.data[0].effect === "std::write" &&
+  !existsSync(join(dir2, "out.txt"));
 
-// Scenario 3: input-style interrupt under empty policy → reject, not a value.
+// Scenario 3: input-style interrupt (assignment position) under empty policy →
+// surfaces too, and carries expectsValue so the caller knows an approval value
+// is expected.
 const inputRes = await inputIt();
-const inputRejected =
-  !Array.isArray(inputRes.data) && /reject/i.test(s(inputRes.data));
+const inputSurfacedExpectsValue =
+  Array.isArray(inputRes.data) && inputRes.data[0].expectsValue === true;
 
 writeFileSync(
   "__result.json",
   JSON.stringify(
-    { readApproved, writeRejected, failClosedRejected, inputRejected },
+    { readApproved, writeRejected, unlistedSurfaced, inputSurfacedExpectsValue },
     null,
     2,
   ),

@@ -117,6 +117,10 @@ export type InterruptOpts<T = unknown> = {
    *  Optional — interrupts that carry no payload (e.g. a bare
    *  "needs user attention") can omit it. */
   data?: T;
+  /** Declare that the caller will USE the approval value (the TS analog of
+   *  an assignment-position raise, `const x = raise …`). Surfaces as
+   *  `Interrupt.expectsValue` so approvers know to provide one. */
+  expectsValue?: boolean;
 };
 
 export async function interrupt<T = unknown>(
@@ -168,6 +172,7 @@ export async function interrupt<T = unknown>(
     origin,
     ctx,
     stack,
+    { expectsValue: opts.expectsValue },
   );
 
   if (isRejected(handlerResult)) return handlerResult;

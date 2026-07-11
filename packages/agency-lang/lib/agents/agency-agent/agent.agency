@@ -24,6 +24,7 @@ import {
   builtinPolicyNames,
   BUILTIN_POLICIES,
  } from "std::policy"
+import { loadMcpTools, mergeMcpServers, isMcpAvailable, readProjectMcpConfig } from "std::mcp"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
@@ -78,8 +79,10 @@ import {
   providerLacksEmbeddings,
  } from "./lib/capabilities.agency"
 import {
+  Settings,
   getCapabilitySettings,
   getModelSettings,
+  getMcpServers,
   loadSettings,
   saveSettings,
  } from "./lib/settings.agency"
@@ -1304,6 +1307,36 @@ static const mainAgentTools = [
   generateImageFile,
 ]
 
+// MCP tools are appended to the coordinator's tools. ORDERING CONTRACT:
+// maybeLoadMcp (session start, in main()) must run before mainAgent's first
+// turn, or MCP tools silently vanish.
+let mcpTools: any[] = []
+
+export def setMcpTools(tools: any[]) {
+  mcpTools = tools
+}
+
+// MCP OAuth notification. The @agency-lang/mcp package opens the browser itself
+// (macOS-only today); we only print the URL so the user can complete auth.
+def onMcpOAuth(data: any) {
+  print(color.yellow("MCP authorization needed — opening browser. If it does not open, visit:\n${data.authUrl}"))
+}
+
+/** Load MCP tools from the project agency.json merged with the global settings
+  and hand them to the coordinator. No-op when @agency-lang/mcp is not installed
+  or no servers are configured. loadMcpTools warns-and-skips internally on any
+  per-server failure, so it always returns an array. */
+def maybeLoadMcp(settings: Settings) {
+  if (!isMcpAvailable()) {
+    return
+  }
+  const merged = mergeMcpServers(getMcpServers(settings), readProjectMcpConfig(cwd()))
+  if (keys(merged).length == 0) {
+    return
+  }
+  setMcpTools(loadMcpTools(merged, onMcpOAuth))
+}
+
 /** Enable memory when the capability profile allows it. When the user
   pointed the embedding slot at a provider, embeddings run there. A
   missing API key degrades to the default embedding behavior with one
@@ -1358,7 +1391,7 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     }
     const result = llm(prompt, {
       memory: true,
-      tools: mainAgentTools
+      tools: [...mainAgentTools, ...mcpTools]
     })
   }
   return result
@@ -1860,6 +1893,10 @@ node main() {
   // Persistent knowledge graph, gated on the capability profile. Must run
   // before any handler/REPL is installed.
   maybeEnableMemory()
+
+  // Connect configured MCP servers and hand their (policy-gated) tools to the
+  // coordinator. Must run before the first turn (mcpTools ordering contract).
+  maybeLoadMcp(loadSettings())
 
   // Positional args (everything after flags) are joined with spaces to
   // form the starting prompt. `--` ends flag parsing if a positional

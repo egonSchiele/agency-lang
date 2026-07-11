@@ -1,0 +1,42 @@
+// Gating semantics for the mcp::call effect the agent raises before every MCP
+// tool call. The effect is declared inline here (the supported form — effects
+// are not imported by name), a stand-in tool raises it, and `with approve` /
+// `with reject` decide the outcome. Proves: approve lets the call proceed,
+// reject blocks it (the call becomes a failure), and — because the payload
+// carries per-call args — approve keeps approving later calls with DIFFERENT
+// args (the "always keys on server+tool" behavior, end to end). No llm() calls.
+effect mcp::call {
+  server: string,
+  tool: string,
+  args: Record<string, any>
+}
+
+// Stand-in for a gated MCP tool: raises mcp::call, then proceeds. On reject the
+// interrupt halts this call with a failure, so "called" is only reached on
+// approve.
+def fakeMcpTool(p: string): string {
+  interrupt mcp::call("MCP tool call: fs -> read_file", {
+    server: "fs",
+    tool: "read_file",
+    args: { path: p }
+  })
+  return "called"
+}
+
+export node approves() {
+  return fakeMcpTool("/tmp/a") with approve
+}
+
+export node rejects() {
+  const result = fakeMcpTool("/tmp/a") with reject
+  if (isFailure(result)) {
+    return "rejected"
+  }
+  return "notrejected"
+}
+
+export node approvesTwiceDifferentArgs() {
+  let a = fakeMcpTool("/tmp/a") with approve
+  let b = fakeMcpTool("/tmp/b") with approve
+  return "${a},${b}"
+}

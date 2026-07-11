@@ -241,6 +241,7 @@ export function checkAssignmentValue(
       scope,
       `assignment to '${node.variableName}'`,
       ctx,
+      node.loc,
     );
     return;
   }

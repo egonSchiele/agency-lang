@@ -471,15 +471,19 @@ export function typeCheck(
   return checker.check();
 }
 
-export function formatErrors(
-  errors: TypeCheckError[],
-  errorType: "warning" | "error" = "error",
-): string {
+export function formatErrors(errors: TypeCheckError[]): string {
   return errors
     .map((err) => {
-      const kind = err.severity ?? errorType;
-      const colorFunc = kind === "warning" ? color.yellow : color.red;
-      return `${colorFunc(kind)}: ${err.message}`;
+      const colorFunc = err.severity === "warning" ? color.yellow : color.red;
+      // Display line/col are 1-indexed; loc stores 0-indexed values
+      // (docs/dev/locations.md). loc null = file-level diagnostic.
+      let where = "";
+      if (err.file && err.loc) {
+        where = `${err.file}:${err.loc.line + 1}:${err.loc.col + 1} - `;
+      } else if (err.file) {
+        where = `${err.file} - `;
+      }
+      return `${where}${colorFunc(err.severity)} ${err.code}: ${err.message}`;
     })
     .join("\n");
 }

@@ -164,16 +164,19 @@ export function checkType(
   scope: Scope,
   context: string,
   ctx: TypeCheckerContext,
+  fallbackLoc?: SourceLocation,
 ): void {
   if (expr.type === "functionCall" && expr.functionName === "llm") {
-    rejectRegexInLlmType(expectedType, expr.loc, context, ctx);
+    rejectRegexInLlmType(expectedType, expr.loc ?? fallbackLoc, context, ctx);
     return;
   }
 
   const actualType = synthType(expr, scope, ctx);
   if (actualType === "any") return;
 
-  emitAssignabilityError(actualType, expectedType, expr.loc, context, ctx);
+  // Literal value nodes may carry no loc of their own; anchor on the
+  // enclosing statement when the caller supplied one.
+  emitAssignabilityError(actualType, expectedType, expr.loc ?? fallbackLoc, context, ctx);
   if (expr.type === "agencyObject") {
     checkExcessObjectProperties(expr, expectedType, context, ctx);
   }

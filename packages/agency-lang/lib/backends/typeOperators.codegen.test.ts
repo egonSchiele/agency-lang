@@ -89,3 +89,50 @@ node main() {
     expect(out).toContain("const A = z.number()");
   });
 });
+
+// The zod mapper fallback is z.string(); assertions use shapes it cannot fake.
+describe("intersections in alias bodies (deepResolveNode routing)", () => {
+  it("a merged alias emits the full z.object with a non-string property", () => {
+    const out = generate(`
+type Named = {
+  name: string,
+}
+type Aged = {
+  age: number,
+}
+type Person = Named & Aged
+node main() {
+  return 1
+}
+`);
+    // The red-first run prints the real emission — match the OBSERVED
+    // string if zod spacing differs.
+    expect(out).toMatch(
+      /const Person = z\.object\(\{ "name": z\.string\(\), "age": z\.number\(\) \}\)/,
+    );
+  });
+
+  it("a validate tag on a shared key reaches the descriptor", () => {
+    const out = generate(`
+def positive(n: number): Result<number, string> {
+  if (n > 0) {
+    return success(n)
+  }
+  return failure("must be positive")
+}
+type A = {
+  @validate(positive)
+  id: number,
+}
+type B = {
+  id: number,
+}
+type Merged = A & B
+node main() {
+  return 1
+}
+`);
+    expect(out).toContain("(Merged as any).__agency_descriptor");
+    expect(out).toContain("const Merged = z.object");
+  });
+});

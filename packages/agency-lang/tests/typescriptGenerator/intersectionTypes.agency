@@ -1,0 +1,14 @@
+type Named = {
+  name: string,
+}
+
+type Aged = {
+  age: number,
+}
+
+type Person = Named & Aged
+
+node main() {
+  const p: Person = { name: "a", age: 3 }
+  return p
+}

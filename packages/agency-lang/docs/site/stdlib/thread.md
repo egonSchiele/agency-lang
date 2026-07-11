@@ -83,7 +83,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L253))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L254))
 
 ### ThreadInfo
 
@@ -99,7 +99,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L258))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L259))
 
 ## Functions
 
@@ -146,7 +146,11 @@ Add a user message to the current thread's message history. Use this
 ### image
 
 ```ts
-image(source: string, mimeType: string, base64: boolean): Attachment
+image(
+  source: string,
+  mimeType: string = "",
+  base64: boolean = false,
+): Attachment
 ```
 
 Build an image attachment for a multimodal llm() call. The source is
@@ -171,7 +175,12 @@ Build an image attachment for a multimodal llm() call. The source is
 ### file
 
 ```ts
-file(source: string, filename: string, mimeType: string, base64: boolean): Attachment
+file(
+  source: string,
+  filename: string = "",
+  mimeType: string = "",
+  base64: boolean = false,
+): Attachment
 ```
 
 Build a file (e.g. PDF) attachment for a multimodal llm() call.
@@ -288,12 +297,17 @@ Unlike the per-branch cost/token accessors, this reads process-wide
 ### guard
 
 ```ts
-guard(cost: number | null, time: number | null, block: () => any): Result
+guard(
+  cost: number | null = null,
+  time: number | null = null,
+  block: () -> any = null,
+): Result
 ```
 
 Run a block under a cost limit, a time limit, or both, aborting the
-  block as soon as either limit is exceeded. At least one of `cost` or
-  `time` must be supplied.
+  block as soon as either limit is exceeded. A null or negative value
+  disables that limit, so callers with an optional cap can always pass
+  something; with both limits disabled the block just runs.
 
   Returns a `Result`. On success it holds the block's return value. On a
   trip it holds a failure whose `error.type` is either "guardFailure"
@@ -301,8 +315,8 @@ Run a block under a cost limit, a time limit, or both, aborting the
   "timeoutFailure" (compute time exceeded, read `error.maxTime` and
   `error.actualTime`, in milliseconds).
 
-  @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null = no cost limit.
-  @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null = no time limit.
+  @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null or negative = no cost limit.
+  @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null or negative = no time limit.
   @param block - The work to run under the guard.
 
   Example:
@@ -353,7 +367,7 @@ Run a block under a cost limit, a time limit, or both, aborting the
 ### listThreads
 
 ```ts
-listThreads(lazySummarize: boolean): Result
+listThreads(lazySummarize: boolean = true): Result
 ```
 
 Return every thread in the current run, including the active one, as a
@@ -381,7 +395,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L330))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L331))
 
 ### currentThreadId
 
@@ -396,12 +410,12 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L383))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L384))
 
 ### getThread
 
 ```ts
-getThread(id: string, offset: number, limit: number): Result
+getThread(id: string, offset: number = 0, limit: number = 50): Result
 ```
 
 Read a slice of a thread's messages. Returns success holding `[]`
@@ -428,4 +442,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L393))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L394))

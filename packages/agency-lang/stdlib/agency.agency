@@ -4,6 +4,7 @@ import {
   _typecheck,
   _typecheckFile,
   _getEffects,
+  _retryableFailure,
   _parseAST,
   _writeAST,
   _format,
@@ -119,10 +120,10 @@ export def run(
   @param compiled - A compiled Agency program
   @param node - Which exported node to run
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
@@ -234,10 +235,10 @@ export def runFile(
   @param filename - The agency file to compile and run
   @param node - Which node to run
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
   @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
   const compileResult = try _compileFile(dir, filename)
@@ -254,6 +255,110 @@ export def runFile(
     stdout: stdout,
     maxCost: maxCost,
   )
+}
+
+// Reject out-of-range limit values with a message the model can act on.
+// Ceilings mirror LIMIT_CEILINGS in lib/runtime/ipc.ts (keep in sync).
+def checkRunCodeLimits(
+  wallClock: number,
+  memory: number,
+  ipcPayload: number,
+  stdout: number,
+): string {
+  const checks = [
+    { name: "wallClock", value: wallClock, max: 3600s, unit: "milliseconds" },
+    { name: "memory", value: memory, max: 4096mb, unit: "bytes" },
+    { name: "ipcPayload", value: ipcPayload, max: 1024mb, unit: "bytes" },
+    { name: "stdout", value: stdout, max: 100mb, unit: "bytes" },
+  ]
+  for (check in checks) {
+    if (check.value <= 0) {
+      return "${check.name} must be a positive number of ${check.unit} (got ${check.value})."
+    }
+    if (check.value > check.max) {
+      return "${check.name} is too large: ${check.value} ${check.unit} exceeds the maximum of ${check.max} ${check.unit}."
+    }
+  }
+  return ""
+}
+
+/** Just like `run`, any interrupts and guards defined in the parent process
+will apply to the child process. Any callbacks in scope will also apply.
+Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
+
+Designed for LLM tool use: compile() returns a CompiledProgram the model
+would have to echo back into run() verbatim (it will not — see the
+compile→run "CompiledProgram has no code" failure mode). runCode takes
+the source directly, so nothing large round-trips through the model.
+
+Declared `safe` (= okay to retry, see the LLM guide) so its pre-execution
+failures — bad limits, code that does not compile — reach a tool-calling
+model as RETRYABLE and it can correct itself instead of losing the tool.
+Re-running the child is handler-gated like any run(): each attempt
+re-raises std::run and the child's own effects re-prompt.
+*/
+export safe def runCode(
+  source: string,
+  node: string = "main",
+  args: Record<string, any> = {},
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
+  maxCost: number | null = null,
+): Result {
+  """
+  Compile Agency source code and execute one of its nodes in a subprocess,
+  returning the value the node returned. Prefer this over separate
+  compile() and run() calls. Only standard-library (`std::`) imports are
+  allowed in the source. Compile errors are returned as a failure without
+  running anything; fix the source and call again.
+
+  @param source - Agency source code as a string
+  @param node - Which exported node to run (default "main")
+  @param args - Arguments to pass to the node
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 3600000 = 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4294967296 = 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1073741824 = 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 104857600 = 100mb). Pass null for the default.
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
+  """
+  const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)
+  if (limitError != "") {
+    return _retryableFailure(limitError)
+  }
+  const compileResult = try _compile(source)
+  if (compileResult is failure(compileErr)) {
+    // Re-wrap as retryable: the model should fix the source and call
+    // again, not lose the tool. (`safe` alone is not enough — try-born
+    // failures start retryable:false; safe only preserves the bit.)
+    return _retryableFailure(compileErr)
+  }
+  const result = run(
+    compiled: compileResult.value,
+    node: node,
+    args: args,
+    wallClock: wallClock,
+    memory: memory,
+    ipcPayload: ipcPayload,
+    stdout: stdout,
+    maxCost: maxCost,
+  )
+  // run() succeeds with a subprocess envelope ({ data, tokens, ... }).
+  // runCode is built for LLM tool use, where the envelope reads as noise
+  // (token stats first, the actual result buried in .data) — return just
+  // the node's value. Callers who want the envelope use run().
+  if (result is success(envelope)) {
+    return success(envelope.data)
+  }
+  if (result is failure(runErr)) {
+    // Runtime failures (child crash, timeout, cost trip) are retryable
+    // at the tool level too: the model fixes the source or raises a
+    // limit and calls again, and every attempt re-raises std::run, so
+    // retries stay handler-gated.
+    return _retryableFailure(runErr)
+  }
+  return result
 }
 
 /** Unlike some of the other functions in this module,
@@ -456,7 +561,7 @@ If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code.
 Return only the complete program in the code field."""
 
-export def writeAgency(
+export safe def writeAgency(
   task: string,
   context: string = "",
   maxAttempts: number = 3,
@@ -472,7 +577,7 @@ export def writeAgency(
   @param maxAttempts - Max generation attempts before giving up (default 3)
   """
   const docsTool = docsSkill("guide")
-  let result: Result<string, WriteFailure> = failure({ source: "", errors: [] })
+  let result: Result<string, WriteFailure> = _retryableFailure({ source: "", errors: [] })
   thread(label: "writeAgency") {
     systemMessage(writeSysPrompt)
     let prompt = "Write an Agency program for this task:\n<task>\n${task}\n</task>"
@@ -487,7 +592,7 @@ export def writeAgency(
       const source = generated.code
       const checked = try _typecheck(source)
       if (checked is failure(parseErr)) {
-        result = failure({ source: source, errors: [] })
+        result = _retryableFailure({ source: source, errors: [] })
         // _typecheck throws for import-resolution failures as well as
         // parse failures. In the import case the re-parse succeeds and
         // renders no findings — fall back to the thrown error so the
@@ -498,13 +603,13 @@ export def writeAgency(
         }
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else if (checked.value.errors.length > 0) {
-        result = failure({ source: source, errors: checked.value.errors })
+        result = _retryableFailure({ source: source, errors: checked.value.errors })
         const findings = renderFeedback(success(reportFeedback(checked.value)))
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else {
         const compiled = try _compile(source)
         if (compiled is failure(compileErr)) {
-          result = failure({ source: source, errors: [] })
+          result = _retryableFailure({ source: source, errors: [] })
           prompt = "That code failed to compile: ${compileErr}\nReturn a corrected complete program."
         } else {
           result = success(source)

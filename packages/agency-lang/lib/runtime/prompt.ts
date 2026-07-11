@@ -30,7 +30,7 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { failure, isFailure } from "./result.js";
+import { failure, isFailure, isSuccess } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -176,6 +176,30 @@ function stringifyToolResult(result: any): string {
   } catch {
     return String(result);
   }
+}
+
+/** Unwrap a SUCCESS Result before it goes back to the model: the LLM
+ *  should see the tool's value, not the `{__type, success, value}`
+ *  envelope (a wrapped envelope makes the model re-derive `.value` and,
+ *  worse, reconstruct wrapped objects when echoing them into later tool
+ *  arguments — the compile→run CompiledProgram bug). Only the LLM-facing
+ *  message unwraps; the Result cached on the branch for Agency code is
+ *  untouched. Failures/rejections never reach this point (handled
+ *  upstream in the invoke path), but pass through unchanged
+ *  defensively. */
+function unwrapToolResultForLlm(result: any, toolName: string): any {
+  if (!isSuccess(result)) return result;
+  return (
+    result.value ?? `${toolName} ran successfully but did not return a value`
+  );
+}
+
+/** Render a failure Result's error for the model. String errors pass
+ *  through; structured errors (e.g. writeAgency's `{source, errors}`)
+ *  JSON-stringify — `String(error)` would send the useless
+ *  "[object Object]". */
+function toolErrorMessage(error: any): string {
+  return typeof error === "string" ? error : stringifyToolResult(error);
 }
 
 /** Truncate a tool result for the LLM if its serialized form exceeds
@@ -425,6 +449,8 @@ export const _internal = {
   stringifyToolResult,
   capToolResultForLlm,
   assertUniqueToolNames,
+  unwrapToolResultForLlm,
+  toolErrorMessage,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -1081,10 +1107,7 @@ export async function runPrompt(args: {
       }
 
       if (isFailure(toolResult)) {
-        const errorMessage =
-          typeof toolResult.error === "string"
-            ? toolResult.error
-            : String(toolResult.error);
+        const errorMessage = toolErrorMessage(toolResult.error);
         // Cap only what the LLM sees; statelog keeps the full message.
         const cappedError = String(
           capToolResultForLlm(errorMessage, toolResultCap),
@@ -1155,9 +1178,14 @@ export async function runPrompt(args: {
       }
 
       // Success: cache the result, push tool message (extracted helper
-      // keeps this arrow inside the max-lines-per-function budget).
+      // keeps this arrow inside the max-lines-per-function budget). The
+      // branch cache keeps the FULL value (Agency code may match on a
+      // Result); the model-facing message gets the unwrapped success
+      // value via unwrapToolResultForLlm inside the push helper.
+      // Nullish, NOT ||: legitimate falsy returns (false, 0, "") must
+      // reach the model and the branch cache as-is.
       toolResult =
-        toolResult ||
+        toolResult ??
         `${handler.name} ran successfully but did not return a value`;
       stack.setResultOnBranch(branchKey, toolResult);
       pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack });
@@ -1196,7 +1224,10 @@ export async function runPrompt(args: {
           // returns `any` (an under-cap structured result passes through
           // unstringified) and ToolMessage accepts it at runtime.
           appendReplyMarker(
-            capToolResultForLlm(toolResult, toolResultCap),
+            capToolResultForLlm(
+              unwrapToolResultForLlm(toolResult, handler.name),
+              toolResultCap,
+            ),
             replyMarker,
             stringifyToolResult,
           ) as any,

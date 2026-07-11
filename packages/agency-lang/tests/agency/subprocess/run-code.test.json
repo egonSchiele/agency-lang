@@ -1,0 +1,45 @@
+{
+  "tests": [
+    {
+      "nodeName": "basic",
+      "description": "runCode compiles and runs source in one call, returning the node result",
+      "input": "",
+      "expectedOutput": "5",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "compileFailure",
+      "description": "runCode surfaces compile failures as retryable, without spawning a subprocess",
+      "input": "",
+      "expectedOutput": "[\"compile failed as expected\",true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "tooLarge",
+      "description": "runCode rejects over-ceiling limits with a retryable failure naming the max",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runtimeFailure",
+      "description": "runCode surfaces child runtime crashes as retryable failures",
+      "input": "",
+      "expectedOutput": "[\"runtime failure\",true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "maxCostTrips",
+      "description": "runCode forwards maxCost to run",
+      "input": "",
+      "expectedOutput": "\"tripped:limit_exceeded:cost\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    }
+  ]
+}

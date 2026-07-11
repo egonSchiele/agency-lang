@@ -29,7 +29,7 @@ export type CompiledProgram = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L59))
 
 ### SourceLocation
 
@@ -42,7 +42,7 @@ export type SourceLocation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L63))
 
 ### TypeCheckDiagnostic
 
@@ -57,7 +57,7 @@ export type TypeCheckDiagnostic = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L70))
 
 ### TypeCheckReport
 
@@ -68,7 +68,7 @@ export type TypeCheckReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L79))
 
 ### EffectsByExport
 
@@ -79,7 +79,7 @@ Per-exported-symbol effect lists, keyed by node/function name.
 export type EffectsByExport = Record<string, string[]>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L273))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L378))
 
 ### Feedback
 
@@ -98,7 +98,7 @@ export type Feedback = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L291))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L396))
 
 ### WriteFailure
 
@@ -114,7 +114,7 @@ export type WriteFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L431))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L536))
 
 ### AST
 
@@ -137,7 +137,7 @@ export type AST = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L544))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L649))
 
 ## Effects
 
@@ -150,7 +150,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L41))
 
 ### std::write
 
@@ -161,7 +161,7 @@ effect std::write {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L45))
 
 ### std::run
 
@@ -177,7 +177,7 @@ effect std::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L49))
 
 ## Functions
 
@@ -199,7 +199,7 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L84))
 
 ### run
 
@@ -224,10 +224,10 @@ Execute a compiled Agency program in a subprocess and return the node's result.
   @param compiled - A compiled Agency program
   @param node - Which exported node to run
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
@@ -264,7 +264,7 @@ and a child process has maxDepth=5, maxDepth=3 is used.
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L104))
 
 ### runFile
 
@@ -289,10 +289,10 @@ Compile and execute an Agency file in a subprocess and return the node's result.
   @param filename - The agency file to compile and run
   @param node - Which node to run
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
   @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
 
 Just like `run`, any interrupts and guards defined in the parent process
@@ -317,7 +317,71 @@ Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` f
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L219))
+
+### runCode
+
+```ts
+runCode(
+  source: string,
+  node: string = "main",
+  args: Record<string, any> = {},
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
+  maxCost: number | null = null,
+): Result
+```
+
+Compile Agency source code and execute one of its nodes in a subprocess,
+  returning the value the node returned. Prefer this over separate
+  compile() and run() calls. Only standard-library (`std::`) imports are
+  allowed in the source. Compile errors are returned as a failure without
+  running anything; fix the source and call again.
+
+  @param source - Agency source code as a string
+  @param node - Which exported node to run (default "main")
+  @param args - Arguments to pass to the node
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 3600000 = 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4294967296 = 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1073741824 = 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 104857600 = 100mb). Pass null for the default.
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
+
+Just like `run`, any interrupts and guards defined in the parent process
+will apply to the child process. Any callbacks in scope will also apply.
+Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
+
+Designed for LLM tool use: compile() returns a CompiledProgram the model
+would have to echo back into run() verbatim (it will not — see the
+compile→run "CompiledProgram has no code" failure mode). runCode takes
+the source directly, so nothing large round-trips through the model.
+
+Declared `safe` (= okay to retry, see the LLM guide) so its pre-execution
+failures — bad limits, code that does not compile — reach a tool-calling
+model as RETRYABLE and it can correct itself instead of losing the tool.
+Re-running the child is handler-gated like any run(): each attempt
+re-raises std::run and the child's own effects re-prompt.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| source | `string` |  |
+| node | `string` | "main" |
+| args | `Record<string, any>` | {} |
+| wallClock | `number` | 60s |
+| memory | `number` | 512mb |
+| ipcPayload | `number` | 100mb |
+| stdout | `number` | 1mb |
+| maxCost | `number \| null` | null |
+
+**Returns:** `Result`
+
+**Throws:** `std::run`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L300))
 
 ### typecheck
 
@@ -341,7 +405,7 @@ Relative imports (./foo.agency) cannot be resolved from a source string.
 
 **Returns:** `Result<TypeCheckReport>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L263))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L368))
 
 ### getEffects
 
@@ -365,7 +429,7 @@ Map each exported node and function in the source to the list of
 
 **Returns:** `Result<EffectsByExport>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L380))
 
 ### mergeFeedback
 
@@ -388,7 +452,7 @@ Merge two feedback Results by concatenating their success arrays or
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L402))
 
 ### review
 
@@ -412,7 +476,7 @@ Review Agency source code. Always merges parse and typecheck findings;
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L368))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L473))
 
 ### renderFeedback
 
@@ -432,7 +496,7 @@ Render a feedback Result as human-readable text, one line per finding.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L399))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L504))
 
 ### feedbackHasErrors
 
@@ -453,7 +517,7 @@ True when any finding is an error, or when the feedback Result itself
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L411))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L516))
 
 ### writeAgency
 
@@ -484,7 +548,7 @@ Generate Agency source code for a task description. Typechecks each
 
 **Returns:** `Result<string, WriteFailure>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L459))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L564))
 
 ### typecheckFile
 
@@ -509,7 +573,7 @@ Type-check an Agency file on disk. The file is read from dir/filename,
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L524))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L629))
 
 ### parseAST
 
@@ -529,7 +593,7 @@ Parse Agency source code into an abstract syntax tree.
 
 **Returns:** `Result<AST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L550))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L655))
 
 ### writeAST
 
@@ -566,7 +630,7 @@ Output is canonical formatter output (the same style as `pnpm run fmt`):
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L562))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L667))
 
 ### format
 
@@ -586,7 +650,7 @@ Format Agency source code with the standard Agency formatter.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L584))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L689))
 
 ### formatFile
 
@@ -613,7 +677,7 @@ Read and write happen inside the same interrupt, so approving it approves both.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L595))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L700))
 
 ### walkAST
 
@@ -642,7 +706,7 @@ Walk every node in a deep-cloned copy of the AST, invoking the visitor
 
 **Returns:** [AST](#ast)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L614))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L719))
 
 ### getNodesOfType
 
@@ -664,7 +728,7 @@ Parse Agency source code and return every AST node whose `type` field matches an
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L634))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L739))
 
 ### getImports
 
@@ -684,7 +748,7 @@ Return every import statement in the source (i.e. `import { x } from "..."`).
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L644))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L749))
 
 ### getFunctions
 
@@ -704,7 +768,7 @@ Return every function definition (`def foo(...) { ... }`) in the source.
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L653))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L758))
 
 ### getGraphNodes
 
@@ -724,7 +788,7 @@ Return every graph node definition (`node main() { ... }`) in the source.
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L662))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L767))
 
 ### filterImports
 
@@ -776,7 +840,7 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
 
 **Returns:** `Result<{ source: string; filtered: boolean }>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L689))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L794))
 
 ### getVersion
 
@@ -788,4 +852,4 @@ Get the current version of the Agency standard library.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L715))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L820))

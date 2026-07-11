@@ -7,12 +7,7 @@ import {
   _readProjectMcpConfig,
   _mergeMcpServers,
   _loadMcpTools,
-  _loadMcpToolsWithStatus,
-  _loadMcpToolsForServer,
-  _addMcpServer,
-  _removeMcpServerFromFile,
-  _parseMcpCommand,
-  _dropMcpToolsForServer
+  _loadMcpToolsWithStatus
 } from "agency-lang/stdlib-lib/mcp.js"
 
 /// The result of loadMcpToolsWithStatus: the flat tool list plus a per-server
@@ -55,31 +50,4 @@ export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
 /// Like loadMcpTools, but also returns a per-server status map for /mcp.
 export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult {
   return _loadMcpToolsWithStatus(merged, onOAuthRequired)
-}
-
-/// Load gated tools for a single server (for hot-connect after `/mcp add`).
-export def loadMcpToolsForServer(server: string, merged: Record<string, any>, onOAuthRequired?): any[] {
-  return _loadMcpToolsForServer(server, merged, onOAuthRequired)
-}
-
-/// Validate `config` and write it into `file`'s mcpServers block (preserving
-/// other keys). Returns { ok, error? }; writes nothing on failure.
-export def addMcpServer(name: string, config: Record<string, any>, file: string): Record<string, any> {
-  return _addMcpServer(name, config, file)
-}
-
-/// Remove a server from `file`. Returns whether it existed.
-export def removeMcpServer(name: string, file: string): boolean {
-  return _removeMcpServerFromFile(file, name)
-}
-
-/// Parse a `/mcp` REPL argument string (text after `/mcp `) into
-/// { sub, name, config, global, error }.
-export def parseMcpCommand(argstr: string): Record<string, any> {
-  return _parseMcpCommand(argstr)
-}
-
-/// Drop a server's tools (module `mcp:<server>`) from a tool list.
-export def dropMcpToolsForServer(tools: any[], server: string): any[] {
-  return _dropMcpToolsForServer(tools, server)
 }

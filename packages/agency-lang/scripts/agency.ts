@@ -42,6 +42,7 @@ import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
+import { mcpAdd, mcpRemove, mcpList, type McpAddOptions } from "@/cli/mcp.js";
 import {
   runList as localList,
   runDownload as localDownload,
@@ -1317,6 +1318,35 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async () => {
       const startMcpServer = await loadMcpStartServer();
       startMcpServer();
+    });
+
+  // Manage the MCP servers the agency AGENT connects to (grouped under `mcp`
+  // alongside serving, like `claude mcp serve` vs `claude mcp add`).
+  mcpCmd
+    .command("list")
+    .description("List the agent's configured MCP servers")
+    .action(() => {
+      process.exitCode = mcpList();
+    });
+  mcpCmd
+    .command("add <name>")
+    .description("Add an MCP server the agent connects to")
+    .option("--command <cmd>", "stdio server command (e.g. npx)")
+    .option("--args <list>", "comma-separated stdio args")
+    .option("--url <url>", "HTTP server URL")
+    .option("--oauth", "authenticate the HTTP server with OAuth")
+    .option("--project", "write the project agency.json (default)")
+    .option("--global", "write the agent-home settings.json instead")
+    .action(async (name: string, opts: McpAddOptions) => {
+      process.exitCode = await mcpAdd(name, opts);
+    });
+  mcpCmd
+    .command("remove <name>")
+    .description("Remove an MCP server the agent connects to")
+    .option("--project", "remove from the project agency.json (default)")
+    .option("--global", "remove from the agent-home settings.json instead")
+    .action(async (name: string, opts: { global?: boolean }) => {
+      process.exitCode = await mcpRemove(name, opts);
     });
 
   const mcpSetupCmd = mcpCmd

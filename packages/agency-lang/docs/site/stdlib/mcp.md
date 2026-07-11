@@ -15,7 +15,7 @@ export type McpLoadResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L15))
 
 ## Effects
 
@@ -29,7 +29,7 @@ effect mcp::call {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L23))
 
 ## Functions
 
@@ -41,7 +41,7 @@ isMcpAvailable(): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L30))
 
 ### readProjectMcpConfig
 
@@ -57,7 +57,7 @@ readProjectMcpConfig(dir: string): Record<string, any>
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L35))
 
 ### mergeMcpServers
 
@@ -77,7 +77,7 @@ mergeMcpServers(
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
 
 ### loadMcpTools
 
@@ -94,7 +94,7 @@ loadMcpTools(merged: Record<string, any>, onOAuthRequired = null): any[]
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L46))
 
 ### loadMcpToolsWithStatus
 
@@ -114,98 +114,4 @@ loadMcpToolsWithStatus(
 
 **Returns:** [McpLoadResult](#mcploadresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L56))
-
-### loadMcpToolsForServer
-
-```ts
-loadMcpToolsForServer(
-  server: string,
-  merged: Record<string, any>,
-  onOAuthRequired = null,
-): any[]
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| server | `string` |  |
-| merged | `Record<string, any>` |  |
-| onOAuthRequired |  | null |
-
-**Returns:** `any[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L61))
-
-### addMcpServer
-
-```ts
-addMcpServer(
-  name: string,
-  config: Record<string, any>,
-  file: string,
-): Record<string, any>
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| config | `Record<string, any>` |  |
-| file | `string` |  |
-
-**Returns:** `Record<string, any>`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L67))
-
-### removeMcpServer
-
-```ts
-removeMcpServer(name: string, file: string): boolean
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| file | `string` |  |
-
-**Returns:** `boolean`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L72))
-
-### parseMcpCommand
-
-```ts
-parseMcpCommand(argstr: string): Record<string, any>
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| argstr | `string` |  |
-
-**Returns:** `Record<string, any>`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L78))
-
-### dropMcpToolsForServer
-
-```ts
-dropMcpToolsForServer(tools: any[], server: string): any[]
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| tools | `any[]` |  |
-| server | `string` |  |
-
-**Returns:** `any[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))

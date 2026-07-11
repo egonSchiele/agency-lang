@@ -3,6 +3,7 @@ import * as path from "path";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
+import { success, failure, isFailure, type ResultValue } from "../runtime/index.js";
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
 
 // Local structural types. Do NOT `import type … from "@agency-lang/mcp"`: the
@@ -145,146 +146,128 @@ export async function _loadMcpTools(
   return (await _loadMcpToolsWithStatus(merged, onOAuthRequired)).tools;
 }
 
-// ── Config management (mcp add/remove/list) ───────────────────────────────
-// Scope-agnostic: callers pass the target file (project agency.json or the
-// agent-home settings.json). The mcpServers block is read/written while every
-// other top-level key is preserved.
+// ── Config management (used by the `agency mcp` CLI) ───────────────────────
+// Scope-agnostic "how": callers pass the target file (project agency.json or
+// the agent-home settings.json). Every helper returns an Agency Result and the
+// mcpServers block is read/written while all other top-level keys are preserved.
 
-export type McpValidation = { ok: boolean; error?: string };
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-/** Validate an mcpServers map through the package schema (no throw). Returns a
- *  clear "not installed" failure when the package is absent. */
-export async function _validateMcpServers(servers: McpServers): Promise<McpValidation> {
+function serversOf(raw: Record<string, unknown>): McpServers {
+  return isPlainObject(raw.mcpServers) ? (raw.mcpServers as McpServers) : {};
+}
+
+/** Validate an mcpServers map through the package schema. success() when valid,
+ *  failure(message) otherwise — including a clear message when the package is
+ *  absent or too old to expose the validator. */
+export async function _validateMcpServers(servers: McpServers): Promise<ResultValue> {
   if (!isMcpAvailable()) {
-    return { ok: false, error: "@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp" };
+    return failure("@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp");
   }
   exposeResolvedMcpPath();
-  return mcpBridge.validateMcpServers(servers);
-}
-
-function _readJsonFile(file: string): Record<string, unknown> {
   try {
-    const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
-    return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  } catch {
-    return {};
+    return await mcpBridge.validateMcpServers(servers);
+  } catch (error) {
+    return failure(
+      `@agency-lang/mcp could not validate the config (upgrade the package?): ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
-function _writeJsonFile(file: string, data: Record<string, unknown>): void {
+/** Read a config file's top-level object. `null` when absent. failure() when it
+ *  exists but is unreadable / not valid JSON / not a JSON object — so the
+ *  add/remove writers never clobber a file they could not fully parse. */
+function readConfigObject(file: string): ResultValue {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return success(null);
+    }
+    return failure(`cannot read ${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return failure(`${file} is not valid JSON — fix it before editing servers (nothing was written)`);
+  }
+  if (!isPlainObject(parsed)) {
+    return failure(`${file} is not a JSON object (nothing was written)`);
+  }
+  return success(parsed);
+}
+
+function writeConfigObject(file: string, data: Record<string, unknown>): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
 }
 
-/** The mcpServers map from a config file (any file with an `mcpServers` key). */
+/** The mcpServers map from a config file. Lenient: a missing or unparseable
+ *  file reads as no servers (used by `list`, which must never crash). */
 export function _readMcpServersFromFile(file: string): McpServers {
-  const raw = _readJsonFile(file);
-  const servers = raw.mcpServers;
-  return servers && typeof servers === "object" ? (servers as McpServers) : {};
-}
-
-/** Add/overwrite one server in `file`, preserving all other top-level keys and
- *  using a null-prototype mcpServers map. Creates the file if absent. */
-export function _upsertMcpServerInFile(file: string, name: string, config: McpServerConfig): void {
-  const raw = _readJsonFile(file);
-  const existing = (raw.mcpServers && typeof raw.mcpServers === "object"
-    ? (raw.mcpServers as McpServers)
-    : {}) as McpServers;
-  raw.mcpServers = _mergeMcpServers(existing, { [name]: config });
-  _writeJsonFile(file, raw);
-}
-
-export type ParsedMcpCommand = {
-  sub: string;
-  name: string;
-  config: McpServerConfig | null;
-  global: boolean;
-  error: string | null;
-};
-
-/** Parse a `/mcp` REPL argument string (everything after `/mcp `), e.g.
- *  `add fs --command npx --args -y,x,/tmp` or `remove fs --global`. Assembles
- *  the stdio/http config for `add`. Returns `{ error }` on a usage problem. */
-export function _parseMcpCommand(argstr: string): ParsedMcpCommand {
-  const toks = argstr.trim().split(/\s+/).filter((t) => t.length > 0);
-  const out: ParsedMcpCommand = { sub: toks[0] ?? "", name: "", config: null, global: false, error: null };
-  let command: string | undefined;
-  let args: string | undefined;
-  let url: string | undefined;
-  let oauth = false;
-  const positionals: string[] = [];
-  for (let i = 1; i < toks.length; i++) {
-    const t = toks[i];
-    if (t === "--oauth") {
-      oauth = true;
-    } else if (t === "--global") {
-      out.global = true;
-    } else if (t === "--project") {
-      out.global = false;
-    } else if (t === "--command") {
-      command = toks[++i];
-    } else if (t === "--args") {
-      args = toks[++i];
-    } else if (t === "--url") {
-      url = toks[++i];
-    } else {
-      positionals.push(t);
-    }
+  const read = readConfigObject(file);
+  if (isFailure(read) || read.value === null) {
+    return {};
   }
-  out.name = positionals[0] ?? "";
-  if (out.sub === "add") {
-    if (!out.name) {
-      out.error = "usage: /mcp add <name> (--command <cmd> [--args a,b,c] | --url <url> [--oauth]) [--global]";
-    } else if (url) {
-      out.config = { type: "http", url, ...(oauth ? { auth: "oauth" } : {}) };
-    } else if (command) {
-      out.config = { command, ...(args ? { args: args.split(",") } : {}) };
-    } else {
-      out.error = `/mcp add "${out.name}": provide --command (stdio) or --url (http)`;
-    }
-  } else if (out.sub === "remove" && !out.name) {
-    out.error = "usage: /mcp remove <name> [--global]";
-  }
-  return out;
+  return serversOf(read.value as Record<string, unknown>);
 }
 
-/** Drop the tools belonging to `server` (module `mcp:<server>`) from a tool
- *  list — used by `/mcp remove` to update the live session. */
-export function _dropMcpToolsForServer(tools: AgencyFunction[], server: string): AgencyFunction[] {
-  const mod = `mcp:${server}`;
-  return tools.filter((t) => t.module !== mod);
-}
-
-/** Validate `config` then write it to `file`. Returns the validation result;
- *  writes nothing on failure. */
+/** Validate `config`, then add/overwrite it in `file`, preserving every other
+ *  top-level key (null-prototype servers map). Creates the file if absent;
+ *  never overwrites an existing-but-unparseable file. */
 export async function _addMcpServer(
   name: string,
   config: McpServerConfig,
   file: string,
-): Promise<McpValidation> {
-  const check = await _validateMcpServers({ [name]: config });
-  if (!check.ok) {
-    return check;
+): Promise<ResultValue> {
+  const valid = await _validateMcpServers({ [name]: config });
+  if (isFailure(valid)) {
+    return valid;
   }
-  _upsertMcpServerInFile(file, name, config);
-  return { ok: true };
+  const read = readConfigObject(file);
+  if (isFailure(read)) {
+    return read;
+  }
+  const raw = (read.value ?? {}) as Record<string, unknown>;
+  raw.mcpServers = _mergeMcpServers(serversOf(raw), { [name]: config });
+  try {
+    writeConfigObject(file, raw);
+  } catch (error) {
+    return failure(`cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return success(null);
 }
 
-/** Remove one server from `file`. Returns whether it existed; writes only if
- *  something changed. */
-export function _removeMcpServerFromFile(file: string, name: string): boolean {
-  const raw = _readJsonFile(file);
-  const existing = raw.mcpServers;
-  if (!existing || typeof existing !== "object" || !(name in (existing as McpServers))) {
-    return false;
+/** Remove one server from `file`. success(true) if it existed and was removed,
+ *  success(false) if it was not present, failure() if the file is unparseable. */
+export async function _removeMcpServer(name: string, file: string): Promise<ResultValue> {
+  const read = readConfigObject(file);
+  if (isFailure(read)) {
+    return read;
+  }
+  if (read.value === null) {
+    return success(false);
+  }
+  const raw = read.value as Record<string, unknown>;
+  const servers = serversOf(raw);
+  if (!Object.prototype.hasOwnProperty.call(servers, name)) {
+    return success(false);
   }
   const next: McpServers = Object.create(null);
-  for (const key of Object.keys(existing as McpServers)) {
+  for (const key of Object.keys(servers)) {
     if (key !== name) {
-      next[key] = (existing as McpServers)[key];
+      next[key] = servers[key];
     }
   }
   raw.mcpServers = next;
-  _writeJsonFile(file, raw);
-  return true;
+  try {
+    writeConfigObject(file, raw);
+  } catch (error) {
+    return failure(`cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return success(true);
 }

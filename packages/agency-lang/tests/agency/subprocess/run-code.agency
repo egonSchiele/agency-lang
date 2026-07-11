@@ -1,0 +1,70 @@
+import { runCode } from "std::agency"
+
+// runCode = compile + run in one call, designed for LLM tool use: the
+// model hands over source and never round-trips a CompiledProgram.
+node basic() {
+  const source = """
+def fib(n: number): number {
+  if (n <= 1) {
+    return n
+  }
+  let a = 0
+  let b = 1
+  let i = 2
+  while (i <= n) {
+    const next = a + b
+    a = b
+    b = next
+    i = i + 1
+  }
+  return b
+}
+node main() {
+  return fib(5)
+}
+"""
+  handle {
+    const result = runCode(source)
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+
+// A compile failure comes back as the compile Result, no subprocess and
+// no std::run interrupt (nothing to approve — the handler would reject).
+node compileFailure() {
+  const result = runCode("node {{{")
+  if (isFailure(result)) {
+    return "compile failed as expected"
+  }
+  return "unexpected success"
+}
+
+// maxCost forwards to run(): the mocked child trips at the second call.
+node maxCostTrips() {
+  const source = """
+node main() {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  const c = llm("Reply with: three")
+  return c
+}
+"""
+  handle {
+    const result = runCode(source, maxCost: 0.000003)
+    if (isFailure(result)) {
+      return "tripped:${result.error.reason}:${result.error.limit}"
+    }
+    return "did not trip"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

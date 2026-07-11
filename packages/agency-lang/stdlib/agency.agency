@@ -256,6 +256,56 @@ export def runFile(
   )
 }
 
+/** Just like `run`, any interrupts and guards defined in the parent process
+will apply to the child process. Any callbacks in scope will also apply.
+Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
+
+Designed for LLM tool use: compile() returns a CompiledProgram the model
+would have to echo back into run() verbatim (it will not — see the
+compile→run "CompiledProgram has no code" failure mode). runCode takes
+the source directly, so nothing large round-trips through the model.
+*/
+export def runCode(
+  source: string,
+  node: string = "main",
+  args: Record<string, any> = {},
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
+  maxCost: number | null = null,
+): Result {
+  """
+  Compile Agency source code and execute one of its nodes in a subprocess,
+  returning the node's result. Prefer this over separate compile() and
+  run() calls. Only standard-library (`std::`) imports are allowed in the
+  source. Compile errors are returned as a failure without running anything.
+
+  @param source - Agency source code as a string
+  @param node - Which exported node to run (default "main")
+  @param args - Arguments to pass to the node
+  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
+  @param memory - Max V8 heap size (default 512mb, max 4gb)
+  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
+  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
+  """
+  const compileResult = try _compile(source)
+  if (isFailure(compileResult)) {
+    return compileResult
+  }
+  return run(
+    compiled: compileResult.value,
+    node: node,
+    args: args,
+    wallClock: wallClock,
+    memory: memory,
+    ipcPayload: ipcPayload,
+    stdout: stdout,
+    maxCost: maxCost,
+  )
+}
+
 /** Unlike some of the other functions in this module,
 `typecheck` does not restrict imports to the standard library only.
 Relative imports (./foo.agency) cannot be resolved from a source string.

@@ -14,7 +14,8 @@ import {
   _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
-import { guard } from "std::thread"
+import { guard, systemMessage } from "std::thread"
+import { docsSkill } from "std::skills"
 
 /** @module
   Tools for compiling, type-checking, running, formatting, and inspecting
@@ -414,6 +415,93 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
   }
   // If the feedback itself is a failure, we can treat that as an error state.
   return true
+}
+
+type GeneratedCode = {
+  code: string
+}
+
+/** The failure payload writeAgency returns on retry exhaustion: the last
+generated source and its typecheck diagnostics. */
+export type WriteFailure = {
+  source: string;
+  errors: TypeCheckDiagnostic[]
+}
+
+// Kept in sync by hand with the syntax rules in the code subagent prompt
+// (lib/agents/agency-agent/subagents/code.agency) — the authoritative
+// source is docs/site/guide/basic-syntax.md, which the model can read
+// through the docs tool.
+static const writeSysPrompt = """You write code in the Agency language.
+Agency syntax rules you MUST follow:
+- Functions: def name(param: Type): ReturnType { ... }
+- Nodes: node name() { ... } — export the entry node.
+- if / while / for require parentheses AND curly braces: if (x > 5) { ... }
+- The ONLY for loop is for-in over an array: for (item in items) { ... }
+  There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
+  while loop:
+    let i = 1
+    while (i <= 3) {
+      print(i)
+      i = i + 1
+    }
+- Declare variables with let or const before use.
+- No Python-style colon blocks. Always { ... }.
+If you are unsure about syntax or a standard-library function, read the
+relevant page with the docs tool before writing code.
+Return only the complete program in the code field."""
+
+export def writeAgency(
+  task: string,
+  context: string = "",
+  maxAttempts: number = 3,
+): Result<string, WriteFailure> {
+  """
+  Generate Agency source code for a task description. Typechecks each
+  attempt and feeds diagnostics back to the model, up to maxAttempts
+  tries. Success holds source that compiles and typechecks; on retry
+  exhaustion the failure holds { source, errors } for the last attempt.
+
+  @param task - What the generated program should do
+  @param context - Optional extra material (available data, examples)
+  @param maxAttempts - Max generation attempts before giving up (default 3)
+  """
+  const docsTool = docsSkill("guide")
+  let result: Result<string, WriteFailure> = failure({ source: "", errors: [] })
+  thread(label: "writeAgency") {
+    systemMessage(writeSysPrompt)
+    let prompt = "Write an Agency program for this task:\n<task>\n${task}\n</task>"
+    if (context != "") {
+      prompt = prompt + "\n<context>\n${context}\n</context>"
+    }
+    let attempt = 0
+    let done = false
+    while (attempt < maxAttempts && !done) {
+      attempt = attempt + 1
+      const generated: GeneratedCode = llm(prompt, { tools: [docsTool] })
+      const source = generated.code
+      const checked = try _typecheck(source)
+      if (checked is failure(parseErr)) {
+        result = failure({ source: source, errors: [] })
+        const findings = renderFeedback(parseFeedback(source))
+        prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
+      } else if (checked.value.errors.length > 0) {
+        result = failure({ source: source, errors: checked.value.errors })
+        const findings = renderFeedback(success(reportFeedback(checked.value)))
+        prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
+      } else {
+        const compiled = try _compile(source)
+        if (compiled is failure(compileErr)) {
+          result = failure({ source: source, errors: [] })
+          prompt = "That code failed to compile: ${compileErr}\nReturn a corrected complete program."
+        } else {
+          result = success(source)
+          done = true
+        }
+      }
+    }
+  }
+  return result
 }
 
 type FilterImportsResult = {

@@ -1,4 +1,4 @@
-import { review as agencyReview, mergeFeedback, renderFeedback } from "std::agency"
+import { review as agencyReview, mergeFeedback } from "std::agency"
 import { setMemoryId } from "std::memory"
 
 // The review core (parse + typecheck findings, optional LLM code-vs-task

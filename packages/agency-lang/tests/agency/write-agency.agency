@@ -1,0 +1,40 @@
+import { writeAgency } from "std::agency"
+
+// First mock returns code with a type error (const type mismatch —
+// undeclared identifiers silently type as any and would not trip the
+// checker); second returns valid code. The repair loop must feed
+// diagnostics back and succeed on attempt 2.
+// (Mock caveat: this proves a retry happens, NOT that the second prompt
+// contained the diagnostics — the deterministic client returns mocks
+// regardless of input. That wiring is accepted as unverified here;
+// statelog inspection would be the mechanism if it ever matters.)
+node repairs() {
+  const result = writeAgency("return the number one")
+  if (result is failure(err)) {
+    return "failed"
+  }
+  return result.value.includes("export node main")
+}
+
+// First mock is unparseable (not just a type error), second is valid —
+// exercises the parse-failure branch of the loop.
+node repairsParse() {
+  const result = writeAgency("return the number one")
+  if (result is failure(err)) {
+    return "failed"
+  }
+  return result.value.includes("export node main")
+}
+
+// One attempt, permanently broken output -> exhaustion failure carrying
+// the last source and its diagnostics.
+node exhausts() {
+  const result = writeAgency("return the number one", maxAttempts: 1)
+  if (result is success(src)) {
+    return "unexpected success"
+  }
+  if (result is failure(err)) {
+    return [err.source.includes("const x: number"), err.errors.length > 0]
+  }
+  return "unreachable"
+}

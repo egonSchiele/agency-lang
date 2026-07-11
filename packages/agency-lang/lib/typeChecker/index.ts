@@ -323,8 +323,11 @@ export class TypeChecker {
     // MUST run before checkScopes so `e.data` usage sites narrow correctly.
     refineInlineHandlerParams(scopes, interruptEffectsByFunction, ctx, effectRegistry);
 
-    // Build the flow graph AFTER the param retype, so its `typeAt` oracle is
-    // seeded with the refined `e` (no stale-memo reset needed).
+    // Build the flow graph AFTER the param retype so the oracle is seeded with
+    // the refined `e` from the start. (Ordering kept for oracle-seeding
+    // quality; since the generation counter, a post-flow retype would also be
+    // sound — the declare would bump the generation and the memo would
+    // self-invalidate.)
     buildFlowGraphs(scopes, ctx);
 
     // Compute the value type of every expression-position `match` (union of
@@ -333,8 +336,7 @@ export class TypeChecker {
     // and before checkScopes so the `__matchval_<id>` synth hook and the
     // `matchExprSource` assignment check can read the results. Patches each
     // consumer variable's scope entry AND its eagerly-snapshotted `assign` flow
-    // node with the computed union, then resets the typeAt memo (per the
-    // FlowEnvironment soundness contract) so no stale entry survives.
+    // node with the computed union.
     computeMatchExprTypes(scopes, ctx);
 
     // Check function calls, return types, and expressions. `e.data` is now

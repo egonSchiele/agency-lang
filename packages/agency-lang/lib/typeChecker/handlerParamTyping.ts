@@ -89,10 +89,12 @@ export function refineInlineHandlerParams(
   ctx: TypeCheckerContext,
   registry: Record<string, ObjectType>,
 ): void {
-  // ORDERING ASSERTION (load-bearing — see TypeChecker.check()): this pass
-  // MUTATES scope types, so it must run BEFORE buildFlowGraphs seeds the
-  // typeAt memo. Running after would require the memo-reset contract this
-  // ordering exists to avoid; a reorder would silently produce stale types.
+  // ORDERING ASSERTION: this pass runs BEFORE buildFlowGraphs so the typeAt
+  // oracle is seeded with the refined `e` from its first query. Since the
+  // Scope generation counter (FlowMemo, flow.ts) a reorder would no longer
+  // produce stale types — the declare below bumps the generation and the memo
+  // self-invalidates — but running first is still strictly better: it avoids
+  // a whole-memo flush and keeps every pass reading the same refined types.
   if (ctx.flowEnv) {
     throw new Error(
       "refineInlineHandlerParams must run before buildFlowGraphs (ctx.flowEnv is already set)",
@@ -122,7 +124,7 @@ export function refineInlineHandlerParams(
       }
     });
   }
-  // No flow-env memo reset needed: this pass runs BEFORE `buildFlowGraphs`, so
-  // the flow graph's `typeAt` oracle is seeded from the refined scope from the
-  // start — there is no stale `e`-is-`any` cache to discard.
+  // Pre-flow ordering means the typeAt memo does not exist yet, so there is
+  // nothing to invalidate here; were this pass ever reordered after the flow
+  // build, the generation counter would cover it (see FlowMemo, flow.ts).
 }

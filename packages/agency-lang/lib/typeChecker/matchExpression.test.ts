@@ -268,3 +268,33 @@ describe("computeMatchExprTypes ordering assertion", () => {
     );
   });
 });
+
+describe("memo invalidation across computeMatchExprTypes phases", () => {
+  it("stale phase-1 memo entries do not suppress downstream diagnostics", () => {
+    // Two sequential expression-matches. The second match has the higher id,
+    // so computeMatchExprTypes phase 1 processes it FIRST and synthesizes its
+    // yield `first` — a typeAt query that memoizes the PRE-patch "any" at the
+    // flow node after the first consumer assignment. Phase 2 then patches
+    // `first` to string. The `const n: number = first` check in checkScopes
+    // resolves `first` through that same flow path: with a stale memo the
+    // cached "any" propagates (any is assignable to number — diagnostic
+    // SUPPRESSED); with invalidation (the generation counter; previously the
+    // manual memo reset) the diagnostic fires. Pins the production flush
+    // point end-to-end.
+    const errs = check(`def f(v: number): string {
+  const first = match(v) {
+    1 => "a"
+    _ => "b"
+  }
+  const second = match(v) {
+    1 => first
+    _ => "z"
+  }
+  const n: number = first
+  return second
+}`);
+    const messages = errs.join("\n");
+    expect(messages).toContain("not assignable");
+    expect(messages).toContain("number");
+  });
+});

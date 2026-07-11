@@ -81,3 +81,66 @@ describe("Scope", () => {
     expect(scope.lookup("toString")).toBeUndefined();
   });
 });
+
+describe("generation counter", () => {
+  it("declare bumps the tree-wide generation, readable from any scope", () => {
+    const root = new Scope("global");
+    const fn = new Scope("fn", root, true);
+    const g0 = fn.currentGeneration();
+    fn.declare("x", "any");
+    expect(fn.currentGeneration()).toBe(g0 + 1);
+    expect(root.currentGeneration()).toBe(g0 + 1);
+  });
+
+  it("re-declaring the same name and type still bumps", () => {
+    // computeMatchExprTypes phase 2 re-declares consumers with a type that can
+    // equal the existing entry; the paired assign-node patch relies on the
+    // bump regardless. Pins against a skip-if-unchanged "optimization".
+    const fn = new Scope("fn");
+    fn.declare("x", "any");
+    const g0 = fn.currentGeneration();
+    fn.declare("x", "any");
+    expect(fn.currentGeneration()).toBe(g0 + 1);
+  });
+
+  it("declareLocal on a detached child() scope does not bump", () => {
+    const fn = new Scope("fn");
+    const child = fn.child();
+    expect(child.detached).toBe(true);
+    const g0 = fn.currentGeneration();
+    child.declareLocal("cbParam", "any");
+    expect(fn.currentGeneration()).toBe(g0);
+  });
+
+  it("declareLocal through a NESTED detached chain does not bump", () => {
+    // walkWithNarrowing nests children per nested if — chains are real.
+    const fn = new Scope("fn");
+    const grandchild = fn.child().child();
+    const g0 = fn.currentGeneration();
+    grandchild.declareLocal("cbParam", "any");
+    expect(fn.currentGeneration()).toBe(g0);
+  });
+
+  it("declare from a detached child bumps (delegates to the function scope)", () => {
+    const fn = new Scope("fn");
+    const child = fn.child();
+    const g0 = fn.currentGeneration();
+    child.declare("real", "any");
+    expect(fn.currentGeneration()).toBe(g0 + 1);
+  });
+
+  it("declare through a NESTED detached chain bumps", () => {
+    const fn = new Scope("fn");
+    const grandchild = fn.child().child();
+    const g0 = fn.currentGeneration();
+    grandchild.declare("real", "any");
+    expect(fn.currentGeneration()).toBe(g0 + 1);
+  });
+
+  it("declareLocal on an attached scope bumps", () => {
+    const fn = new Scope("fn");
+    const g0 = fn.currentGeneration();
+    fn.declareLocal("x", "any");
+    expect(fn.currentGeneration()).toBe(g0 + 1);
+  });
+});

@@ -9,14 +9,19 @@ Agency's goal of giving agents *compile-time* feedback on the programs they writ
 The narrowing engine lives in `lib/typeChecker/narrowing.ts` (fact production) and
 is applied during scope building in `lib/typeChecker/scopes.ts`.
 
-> **Status — mid-migration.** Narrowing is moving from the **scope-chain** model
-> documented below to a **flow-typed** model where a single `typeAt(reference,
-> flowNode)` oracle answers "what is this variable's type at this program point"
-> for every pass. The bottom type `never` (the first prerequisite) has landed; the
-> flow graph itself has not. This page documents the **current** implementation
-> accurately, plus a capabilities matrix and the **planned** architecture. As each
-> flow-checker increment lands, the per-topic pages listed at the bottom get
-> filled in. See the design spec:
+> **Status — dual model, flow-typed primary.** The flow graph and the
+> `typeAt(reference, flowNode)` oracle have LANDED (the #359–#386 series):
+> every diagnostic pass (`checkScopes`, exhaustiveness, definite returns)
+> resolves types through the flow model, and `FlowEnvironment.memo`
+> invalidation is automatic (a Scope-tree generation counter — see
+> `FlowMemo` in `lib/typeChecker/flow.ts`). The scope-chain model documented
+> below survives for ONE job: declaration-time inference during
+> `buildScopes`, which runs before the flow graph exists. Both models share
+> fact production (`analyzeCondition`) and fact application
+> (`narrowByRefine`), so a new narrowing form lands in both automatically.
+> Fusing the walks and deleting the scope-chain path was assessed and
+> deliberately deferred (issue #471): the duplication is inert and the
+> precision delta was not worth the rebuild. Original design spec:
 > [`docs/superpowers/specs/2026-06-29-flow-typed-checker-design.md`](../../../superpowers/specs/2026-06-29-flow-typed-checker-design.md).
 
 ## Capabilities & limitations (current)
@@ -256,10 +261,11 @@ interrupt object. The raisable set is computed by `collectRaisableEffects`
 unhandled-interrupt check agree on "what can be raised."
 
 Two subtleties:
-- **Memo reset.** The pass mutates scope types after the flow graph + its
-  `typeAt` memo were built, so it discards `ctx.flowEnv.memo` (the flow env's
-  documented soundness contract) — otherwise `synthType(e.effect)` returns the
-  stale pre-refinement `any`.
+- **Ordering.** The pass runs before `buildFlowGraphs` so the oracle is
+  seeded with the refined `e` from the start. Historically this ordering was
+  load-bearing (a post-flow retype required a manual memo reset); since the
+  generation counter, the memo self-invalidates on `declare()` and the
+  ordering is an oracle-seeding-quality choice, not a soundness cliff.
 - **Not a breaking change.** Field-access checking runs in `checkScopes`, before
   this pass, so the refined object type only reaches `checkMatchExhaustiveness`;
   no `e.<field>` read is re-checked against the closed object.

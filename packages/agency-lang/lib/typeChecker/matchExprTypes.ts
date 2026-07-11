@@ -119,13 +119,9 @@ export function computeMatchExprTypes(
     });
   }
 
-  // Scope entries and flow-node types were rebound above; per the
-  // FlowEnvironment soundness contract, any typeAt result memoized during this
-  // pass (yield synthesis walks the flow graph) may now be stale. Drop the
-  // memo — checkScopes recomputes on demand.
-  if (ctx.flowEnv) {
-    ctx.flowEnv.memo = new WeakMap();
-  }
+  // Scope entries and flow-node types were rebound above. The declare() calls
+  // bumped the scope-tree generation, so typeAt discards its stale memo on the
+  // next query (see FlowMemo, flow.ts) — no manual reset needed.
 }
 
 /**

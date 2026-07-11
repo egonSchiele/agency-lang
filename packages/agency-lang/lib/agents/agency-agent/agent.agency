@@ -343,6 +343,7 @@ def builtinPalette(): Record<string, string> {
     "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
+    "/mcp": "List configured MCP servers and their tools",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
   }
@@ -865,6 +866,23 @@ def _runTurn(msg: string): boolean {
   if (trimmed == "/settings") {
     showCapabilities()
     editCapabilities()
+    return true
+  }
+  if (trimmed == "/mcp") {
+    if (!isMcpAvailable()) {
+      pushMessage(color.yellow("MCP is not installed. Run: npm install @agency-lang/mcp"))
+      return true
+    }
+    const merged = mergeMcpServers(getMcpServers(loadSettings()), readProjectMcpConfig(cwd()))
+    if (keys(merged).length == 0) {
+      pushMessage(color.dim("No MCP servers configured. Add an mcpServers block to agency.json or settings.json."))
+      return true
+    }
+    pushMessage(color.bold("MCP servers:"))
+    for (name in keys(merged)) {
+      pushMessage("  ${name}")
+    }
+    pushMessage(color.dim("Loaded ${mcpTools.length} MCP tool(s) this session."))
     return true
   }
   if (trimmed == "/search") {

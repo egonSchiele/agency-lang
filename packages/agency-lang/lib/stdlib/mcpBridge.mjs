@@ -65,3 +65,7 @@ export async function mcpToolToAgencyFunction(tool, callTool) {
 export async function packageVersion() {
   return (await load()).MCP_PACKAGE_VERSION;
 }
+
+export async function validateMcpServers(servers) {
+  return (await load()).validateMcpServers(servers);
+}

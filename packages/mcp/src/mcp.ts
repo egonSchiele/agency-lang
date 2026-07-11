@@ -117,7 +117,7 @@ export async function mcpRaw(
   return success(value);
 }
 
-export { readMcpConfig } from "./configReader.js";
+export { readMcpConfig, validateMcpServers } from "./configReader.js";
 export { mcpToolToAgencyFunction } from "./toolAdapter.js";
 
 export const MCP_PACKAGE_VERSION: string = (() => {

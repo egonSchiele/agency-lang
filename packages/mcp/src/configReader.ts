@@ -118,3 +118,20 @@ export function readMcpConfig(cwd?: string): Record<string, McpServerConfig> {
   const result = McpServersSchema.parse(raw.mcpServers);
   return result as Record<string, McpServerConfig>;
 }
+
+/** Validate an `mcpServers` map against the same schema `readMcpConfig` uses,
+ *  without throwing. Returns `{ ok: true }` or `{ ok: false, error }` with the
+ *  zod issues joined into a readable message. Used by `mcp add` to reject a bad
+ *  server before it is written to a config file. */
+export function validateMcpServers(
+  servers: Record<string, unknown>,
+): { ok: boolean; error?: string } {
+  const result = McpServersSchema.safeParse(servers);
+  if (result.success) {
+    return { ok: true };
+  }
+  const error = result.error.issues
+    .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+    .join("; ");
+  return { ok: false, error };
+}

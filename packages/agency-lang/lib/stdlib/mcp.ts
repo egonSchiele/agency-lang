@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
@@ -141,4 +143,72 @@ export async function _loadMcpTools(
   onOAuthRequired?: (d: unknown) => void | Promise<void>,
 ): Promise<AgencyFunction[]> {
   return (await _loadMcpToolsWithStatus(merged, onOAuthRequired)).tools;
+}
+
+// ── Config management (mcp add/remove/list) ───────────────────────────────
+// Scope-agnostic: callers pass the target file (project agency.json or the
+// agent-home settings.json). The mcpServers block is read/written while every
+// other top-level key is preserved.
+
+export type McpValidation = { ok: boolean; error?: string };
+
+/** Validate an mcpServers map through the package schema (no throw). Returns a
+ *  clear "not installed" failure when the package is absent. */
+export async function _validateMcpServers(servers: McpServers): Promise<McpValidation> {
+  if (!isMcpAvailable()) {
+    return { ok: false, error: "@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp" };
+  }
+  exposeResolvedMcpPath();
+  return mcpBridge.validateMcpServers(servers);
+}
+
+function _readJsonFile(file: string): Record<string, unknown> {
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
+    return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function _writeJsonFile(file: string, data: Record<string, unknown>): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+}
+
+/** The mcpServers map from a config file (any file with an `mcpServers` key). */
+export function _readMcpServersFromFile(file: string): McpServers {
+  const raw = _readJsonFile(file);
+  const servers = raw.mcpServers;
+  return servers && typeof servers === "object" ? (servers as McpServers) : {};
+}
+
+/** Add/overwrite one server in `file`, preserving all other top-level keys and
+ *  using a null-prototype mcpServers map. Creates the file if absent. */
+export function _upsertMcpServerInFile(file: string, name: string, config: McpServerConfig): void {
+  const raw = _readJsonFile(file);
+  const existing = (raw.mcpServers && typeof raw.mcpServers === "object"
+    ? (raw.mcpServers as McpServers)
+    : {}) as McpServers;
+  raw.mcpServers = _mergeMcpServers(existing, { [name]: config });
+  _writeJsonFile(file, raw);
+}
+
+/** Remove one server from `file`. Returns whether it existed; writes only if
+ *  something changed. */
+export function _removeMcpServerFromFile(file: string, name: string): boolean {
+  const raw = _readJsonFile(file);
+  const existing = raw.mcpServers;
+  if (!existing || typeof existing !== "object" || !(name in (existing as McpServers))) {
+    return false;
+  }
+  const next: McpServers = Object.create(null);
+  for (const key of Object.keys(existing as McpServers)) {
+    if (key !== name) {
+      next[key] = (existing as McpServers)[key];
+    }
+  }
+  raw.mcpServers = next;
+  _writeJsonFile(file, raw);
+  return true;
 }

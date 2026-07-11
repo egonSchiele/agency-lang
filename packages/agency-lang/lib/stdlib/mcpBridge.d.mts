@@ -21,3 +21,7 @@ export function mcpToolToAgencyFunction(
 ): Promise<unknown>;
 
 export function packageVersion(): Promise<string>;
+
+export function validateMcpServers(
+  servers: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }>;

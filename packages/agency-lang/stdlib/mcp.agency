@@ -2,7 +2,12 @@
   MCP (Model Context Protocol) integration for the agency agent. Loads tools
   from configured MCP servers and gates every call through the policy handler.
 */
-import { _isMcpAvailable, _readProjectMcpConfig } from "agency-lang/stdlib-lib/mcp.js"
+import {
+  _isMcpAvailable,
+  _readProjectMcpConfig,
+  _mergeMcpServers,
+  _loadMcpTools
+} from "agency-lang/stdlib-lib/mcp.js"
 
 // The effect an MCP tool call raises before its JSON-RPC fires. Raised from TS
 // (lib/stdlib/mcpGate.ts) via agency.interrupt with this exact name; declared
@@ -21,4 +26,15 @@ export def isMcpAvailable(): boolean {
 /// Read the mcpServers block from the project agency.json under `dir`.
 export def readProjectMcpConfig(dir: string): Record<string, any> {
   return _readProjectMcpConfig(dir)
+}
+
+/// Merge global and project mcpServers configs (project wins on collision).
+export def mergeMcpServers(global: Record<string, any>, project: Record<string, any>): Record<string, any> {
+  return _mergeMcpServers(global, project)
+}
+
+/// Load gated MCP tools for every server in `merged`. Returns [] when the
+/// package is absent, incompatible, or no servers are configured.
+export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
+  return _loadMcpTools(merged, onOAuthRequired)
 }

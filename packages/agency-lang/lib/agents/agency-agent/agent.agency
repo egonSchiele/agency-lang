@@ -24,7 +24,17 @@ import {
   builtinPolicyNames,
   BUILTIN_POLICIES,
  } from "std::policy"
-import { loadMcpToolsWithStatus, mergeMcpServers, isMcpAvailable, readProjectMcpConfig } from "std::mcp"
+import {
+  loadMcpToolsWithStatus,
+  loadMcpToolsForServer,
+  mergeMcpServers,
+  isMcpAvailable,
+  readProjectMcpConfig,
+  addMcpServer,
+  removeMcpServer,
+  parseMcpCommand,
+  dropMcpToolsForServer,
+} from "std::mcp"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
@@ -53,6 +63,7 @@ import {
   POLICY_PATH,
   SESSION_POLICY_PATH,
   HISTORY_PATH,
+  SETTINGS_PATH,
   ALWAYS_FIELDS,
  } from "./lib/config.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
@@ -343,7 +354,7 @@ def builtinPalette(): Record<string, string> {
     "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
-    "/mcp": "List configured MCP servers and their tools",
+    "/mcp": "List MCP servers (/mcp add <name> …, /mcp remove <name>)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
   }
@@ -866,6 +877,51 @@ def _runTurn(msg: string): boolean {
   if (trimmed == "/settings") {
     showCapabilities()
     editCapabilities()
+    return true
+  }
+  if (trimmed.startsWith("/mcp add ") || trimmed.startsWith("/mcp remove ")) {
+    if (!isMcpAvailable()) {
+      pushMessage(color.yellow("MCP is not installed. Run: npm install @agency-lang/mcp"))
+      return true
+    }
+    const parsed = parseMcpCommand(trimmed.slice(5))
+    if (parsed.error != null) {
+      pushMessage(color.red(parsed.error))
+      return true
+    }
+    // Default scope is the project agency.json; --global targets settings.json.
+    let target = "${cwd()}/agency.json"
+    if (parsed.global) {
+      target = SETTINGS_PATH
+    }
+    if (parsed.sub == "add") {
+      const res = addMcpServer(parsed.name, parsed.config, target)
+      if (res.ok != true) {
+        pushMessage(color.red("Could not add '${parsed.name}': ${res.error}"))
+        return true
+      }
+      // Hot-connect: load just this server and fold its tools into the session.
+      const merged = mergeMcpServers(getMcpServers(loadSettings()), readProjectMcpConfig(cwd()))
+      const newTools = loadMcpToolsForServer(parsed.name, merged, onMcpOAuth)
+      setMcpTools([...mcpTools, ...newTools])
+      let st = mcpServerStatus
+      if (newTools.length > 0) {
+        st[parsed.name] = "connected"
+      } else {
+        st[parsed.name] = "unavailable"
+      }
+      setMcpServerStatus(st)
+      pushMessage(color.green("Added and connected '${parsed.name}' (${newTools.length} tool(s))."))
+      return true
+    }
+    // remove
+    const removed = removeMcpServer(parsed.name, target)
+    if (removed) {
+      setMcpTools(dropMcpToolsForServer(mcpTools, parsed.name))
+      pushMessage(color.green("Removed '${parsed.name}'."))
+    } else {
+      pushMessage(color.dim("No server '${parsed.name}' in that config."))
+    }
     return true
   }
   if (trimmed == "/mcp") {

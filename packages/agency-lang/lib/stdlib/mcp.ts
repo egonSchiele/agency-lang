@@ -194,6 +194,67 @@ export function _upsertMcpServerInFile(file: string, name: string, config: McpSe
   _writeJsonFile(file, raw);
 }
 
+export type ParsedMcpCommand = {
+  sub: string;
+  name: string;
+  config: McpServerConfig | null;
+  global: boolean;
+  error: string | null;
+};
+
+/** Parse a `/mcp` REPL argument string (everything after `/mcp `), e.g.
+ *  `add fs --command npx --args -y,x,/tmp` or `remove fs --global`. Assembles
+ *  the stdio/http config for `add`. Returns `{ error }` on a usage problem. */
+export function _parseMcpCommand(argstr: string): ParsedMcpCommand {
+  const toks = argstr.trim().split(/\s+/).filter((t) => t.length > 0);
+  const out: ParsedMcpCommand = { sub: toks[0] ?? "", name: "", config: null, global: false, error: null };
+  let command: string | undefined;
+  let args: string | undefined;
+  let url: string | undefined;
+  let oauth = false;
+  const positionals: string[] = [];
+  for (let i = 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === "--oauth") {
+      oauth = true;
+    } else if (t === "--global") {
+      out.global = true;
+    } else if (t === "--project") {
+      out.global = false;
+    } else if (t === "--command") {
+      command = toks[++i];
+    } else if (t === "--args") {
+      args = toks[++i];
+    } else if (t === "--url") {
+      url = toks[++i];
+    } else {
+      positionals.push(t);
+    }
+  }
+  out.name = positionals[0] ?? "";
+  if (out.sub === "add") {
+    if (!out.name) {
+      out.error = "usage: /mcp add <name> (--command <cmd> [--args a,b,c] | --url <url> [--oauth]) [--global]";
+    } else if (url) {
+      out.config = { type: "http", url, ...(oauth ? { auth: "oauth" } : {}) };
+    } else if (command) {
+      out.config = { command, ...(args ? { args: args.split(",") } : {}) };
+    } else {
+      out.error = `/mcp add "${out.name}": provide --command (stdio) or --url (http)`;
+    }
+  } else if (out.sub === "remove" && !out.name) {
+    out.error = "usage: /mcp remove <name> [--global]";
+  }
+  return out;
+}
+
+/** Drop the tools belonging to `server` (module `mcp:<server>`) from a tool
+ *  list — used by `/mcp remove` to update the live session. */
+export function _dropMcpToolsForServer(tools: AgencyFunction[], server: string): AgencyFunction[] {
+  const mod = `mcp:${server}`;
+  return tools.filter((t) => t.module !== mod);
+}
+
 /** Validate `config` then write it to `file`. Returns the validation result;
  *  writes nothing on failure. */
 export async function _addMcpServer(

@@ -10,7 +10,9 @@ import {
   _loadMcpToolsWithStatus,
   _loadMcpToolsForServer,
   _addMcpServer,
-  _removeMcpServerFromFile
+  _removeMcpServerFromFile,
+  _parseMcpCommand,
+  _dropMcpToolsForServer
 } from "agency-lang/stdlib-lib/mcp.js"
 
 /// The result of loadMcpToolsWithStatus: the flat tool list plus a per-server
@@ -69,4 +71,15 @@ export def addMcpServer(name: string, config: Record<string, any>, file: string)
 /// Remove a server from `file`. Returns whether it existed.
 export def removeMcpServer(name: string, file: string): boolean {
   return _removeMcpServerFromFile(file, name)
+}
+
+/// Parse a `/mcp` REPL argument string (text after `/mcp `) into
+/// { sub, name, config, global, error }.
+export def parseMcpCommand(argstr: string): Record<string, any> {
+  return _parseMcpCommand(argstr)
+}
+
+/// Drop a server's tools (module `mcp:<server>`) from a tool list.
+export def dropMcpToolsForServer(tools: any[], server: string): any[] {
+  return _dropMcpToolsForServer(tools, server)
 }

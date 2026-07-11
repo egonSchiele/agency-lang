@@ -23,6 +23,9 @@ import {
   _readMcpServersFromFile,
   _upsertMcpServerInFile,
   _removeMcpServerFromFile,
+  _addMcpServer,
+  _parseMcpCommand,
+  _dropMcpToolsForServer,
 } from "./mcp.js";
 
 let dir: string;
@@ -75,5 +78,45 @@ describe("_validateMcpServers", () => {
   it("delegates to the bridge when available", async () => {
     (bridge.validateMcpServers as any).mockResolvedValueOnce({ ok: false, error: "bad" });
     expect(await _validateMcpServers({ a: {} })).toEqual({ ok: false, error: "bad" });
+  });
+});
+
+describe("_addMcpServer", () => {
+  it("writes on valid config and skips write on invalid", async () => {
+    const ok = await _addMcpServer("fs", { command: "npx" }, file);
+    expect(ok.ok).toBe(true);
+    expect(_readMcpServersFromFile(file)).toEqual({ fs: { command: "npx" } });
+
+    (bridge.validateMcpServers as any).mockResolvedValueOnce({ ok: false, error: "nope" });
+    const bad = await _addMcpServer("x", { url: "http://x" }, file);
+    expect(bad.ok).toBe(false);
+    expect(_readMcpServersFromFile(file).x).toBeUndefined(); // not written
+  });
+});
+
+describe("_parseMcpCommand", () => {
+  it("parses add stdio with comma args", () => {
+    const p = _parseMcpCommand("add fs --command npx --args -y,pkg,/tmp");
+    expect(p).toMatchObject({ sub: "add", name: "fs", global: false, error: null });
+    expect(p.config).toEqual({ command: "npx", args: ["-y", "pkg", "/tmp"] });
+  });
+  it("parses add http + oauth + global", () => {
+    const p = _parseMcpCommand("add gh --url https://x --oauth --global");
+    expect(p.global).toBe(true);
+    expect(p.config).toEqual({ type: "http", url: "https://x", auth: "oauth" });
+  });
+  it("errors when add has no transport", () => {
+    expect(_parseMcpCommand("add bad").error).toBeTruthy();
+  });
+  it("parses remove", () => {
+    expect(_parseMcpCommand("remove fs")).toMatchObject({ sub: "remove", name: "fs", error: null });
+  });
+});
+
+describe("_dropMcpToolsForServer", () => {
+  it("removes only the named server's tools", () => {
+    const tools = [{ module: "mcp:fs" }, { module: "mcp:gh" }, { module: "other" }] as any;
+    const left = _dropMcpToolsForServer(tools, "fs");
+    expect(left.map((t: any) => t.module)).toEqual(["mcp:gh", "other"]);
   });
 });

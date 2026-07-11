@@ -150,15 +150,7 @@ export class TypeChecker {
     this.errors = [];
     const ctx = this.makeContext();
 
-    // Locations of locally-declared type aliases, for diagnostics raised
-    // from the alias TABLE (which carries no locs). Imported aliases are
-    // not in program.nodes and resolve to null (file-level diagnostic).
-    const aliasDeclLocs: Record<string, SourceLocation> = Object.create(null);
-    for (const { node } of walkNodes(this.program.nodes)) {
-      if (node.type === "typeAlias" && node.loc) {
-        aliasDeclLocs[node.aliasName] = node.loc;
-      }
-    }
+    const aliasDeclLocs = this.collectAliasDeclLocs();
 
     // Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
@@ -261,68 +253,8 @@ export class TypeChecker {
       }
     }
 
-    // Validated params let a function short-circuit with a failure before
-    // the body runs. An explicit non-Result return type contradicts that.
-    // (Unannotated returns are auto-wrapped during inference instead.)
-    const checkValidatedParamReturn = (
-      name: string,
-      def: FunctionDefinition | GraphNodeDefinition,
-    ) => {
-      if (!def.parameters.some((p) => p.validated)) return;
-      if (!def.returnType) return;
-      const effective = effectiveReturnType(def);
-      if (effective && effective.type !== "resultType") {
-        const kind = def.type === "function" ? "Function" : "Node";
-        // {kind} is a closed enum value (Function | Node), not phrasing —
-        // allowed as a param per the sweep recipe.
-        this.errors.push(
-          diagnostic(
-            "validatedParamsRequireResult",
-            { kind, name },
-            def.loc ?? null,
-          ),
-        );
-      }
-    };
-    for (const [name, def] of Object.entries(this.functionDefs)) {
-      checkValidatedParamReturn(name, def);
-    }
-    for (const [name, def] of Object.entries(this.nodeDefs)) {
-      checkValidatedParamReturn(name, def);
-    }
-
-    // Doc strings must not interpolate function/node parameters.
-    // The description is built when the tool object is constructed at module
-    // load time — long before the function is ever called — so parameter
-    // values are simply not bound yet. Catch the obvious case here:
-    // `${param}` as a top-level interpolation expression.
-    const checkDocStringParams = (
-      def: FunctionDefinition | GraphNodeDefinition,
-    ) => {
-      if (!def.docString) return;
-      const paramNames = def.parameters.map((p) => p.name);
-      for (const seg of def.docString.segments) {
-        if (
-          seg.type === "interpolation" &&
-          seg.expression.type === "variableName" &&
-          paramNames.includes(seg.expression.value)
-        ) {
-          this.errors.push(
-            diagnostic(
-              "docStringParamInterpolation",
-              { param: seg.expression.value },
-              seg.loc ?? def.docString.loc ?? null,
-            ),
-          );
-        }
-      }
-    };
-    for (const def of Object.values(this.functionDefs)) {
-      checkDocStringParams(def);
-    }
-    for (const def of Object.values(this.nodeDefs)) {
-      checkDocStringParams(def);
-    }
+    this.checkValidatedParamReturns();
+    this.checkDocStringParams();
 
     // Infer return types
     inferReturnTypes(ctx);
@@ -419,15 +351,7 @@ export class TypeChecker {
     // import closure.
     validateStaticInit(this.program, this.errors);
 
-    // Stamp the source file onto every diagnostic, once. One checker
-    // instance checks exactly one file (ctx.currentFile), so a single
-    // assignment here beats threading the file through every push site.
-    const file = this.currentFile;
-    if (file !== undefined) {
-      for (const err of this.errors) {
-        err.file = file;
-      }
-    }
+    this.stampFileOnErrors();
 
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),
@@ -436,6 +360,97 @@ export class TypeChecker {
       interruptCallGraph,
       flowEnv: ctx.flowEnv,
     };
+  }
+
+  /** Validated params let a function short-circuit with a failure before
+   *  the body runs. An explicit non-Result return type contradicts that.
+   *  (Unannotated returns are auto-wrapped during inference instead.) */
+  private checkValidatedParamReturns(): void {
+    const checkOne = (
+      name: string,
+      def: FunctionDefinition | GraphNodeDefinition,
+    ) => {
+      if (!def.parameters.some((p) => p.validated)) return;
+      if (!def.returnType) return;
+      const effective = effectiveReturnType(def);
+      if (effective && effective.type !== "resultType") {
+        const kind = def.type === "function" ? "Function" : "Node";
+        // {kind} is a closed enum value (Function | Node), not phrasing —
+        // allowed as a param per the sweep recipe.
+        this.errors.push(
+          diagnostic(
+            "validatedParamsRequireResult",
+            { kind, name },
+            def.loc ?? null,
+          ),
+        );
+      }
+    };
+    for (const [name, def] of Object.entries(this.functionDefs)) {
+      checkOne(name, def);
+    }
+    for (const [name, def] of Object.entries(this.nodeDefs)) {
+      checkOne(name, def);
+    }
+  }
+
+  /** Doc strings must not interpolate function/node parameters. The
+   *  description is built when the tool object is constructed at module
+   *  load time — long before the function is ever called — so parameter
+   *  values are simply not bound yet. Catch the obvious case here:
+   *  `${param}` as a top-level interpolation expression. */
+  private checkDocStringParams(): void {
+    const checkOne = (def: FunctionDefinition | GraphNodeDefinition) => {
+      if (!def.docString) return;
+      const paramNames = def.parameters.map((p) => p.name);
+      for (const seg of def.docString.segments) {
+        if (
+          seg.type === "interpolation" &&
+          seg.expression.type === "variableName" &&
+          paramNames.includes(seg.expression.value)
+        ) {
+          this.errors.push(
+            diagnostic(
+              "docStringParamInterpolation",
+              { param: seg.expression.value },
+              seg.loc ?? def.docString.loc ?? null,
+            ),
+          );
+        }
+      }
+    };
+    for (const def of Object.values(this.functionDefs)) {
+      checkOne(def);
+    }
+    for (const def of Object.values(this.nodeDefs)) {
+      checkOne(def);
+    }
+  }
+
+  /** Locations of locally-declared type aliases, for diagnostics raised
+   *  from the alias TABLE (which carries no locs). Imported aliases are not
+   *  in program.nodes and resolve to null (file-level diagnostic). */
+  private collectAliasDeclLocs(): Record<string, SourceLocation> {
+    const aliasDeclLocs: Record<string, SourceLocation> = Object.create(null);
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type === "typeAlias" && node.loc) {
+        aliasDeclLocs[node.aliasName] = node.loc;
+      }
+    }
+    return aliasDeclLocs;
+  }
+
+  /** Stamp the source file onto every diagnostic, once. One checker instance
+   *  checks exactly one file (ctx.currentFile), so a single pass here beats
+   *  threading the file through every push site. */
+  private stampFileOnErrors(): void {
+    const file = this.currentFile;
+    if (file === undefined) {
+      return;
+    }
+    for (const err of this.errors) {
+      err.file = file;
+    }
   }
 
   private applySuppressions(errors: TypeCheckError[]): TypeCheckError[] {

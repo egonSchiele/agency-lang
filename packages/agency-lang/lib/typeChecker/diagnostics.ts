@@ -22,9 +22,12 @@ import type { TypeCheckError } from "./types.js";
  * {argumentWord} = argument|arguments for pluralization — because these are
  * enum-like values, not free-form phrasing.
  *
- * Deliberate `loc: null` (file-level) diagnostics, and why no AST node is
- * reachable at the site:
- *   (populated during the migration sweep; final list in the PR body)
+ * Deliberate `loc: null` (file-level) diagnostics: NO site hardcodes null.
+ * Every push passes the nearest AST node's loc; null occurs only dynamically,
+ * when the AST genuinely has none — e.g. a reserved-name diagnostic on an
+ * IMPORTED alias (no local declaration node), or a synthetic node. The
+ * location-audit suite (diagnosticLocations.test.ts) pins the sites that
+ * were loc-less before this registry existed.
  */
 export const DIAGNOSTICS = {
   reassignToConst: {

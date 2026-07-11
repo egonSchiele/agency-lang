@@ -860,6 +860,23 @@ function narrowedPathPrefix(
   return null;
 }
 
+/** The shared "property does not exist" push — one wording, three receiver
+ *  shapes (union member, object type, primitive-member fallback). */
+function pushPropertyDoesNotExist(
+  ctx: TypeCheckerContext,
+  property: string,
+  receiver: VariableType,
+  loc: SourceLocation | undefined,
+): void {
+  ctx.errors.push(
+    diagnostic(
+      "propertyDoesNotExist",
+      { property, type: formatTypeHint(receiver) },
+      loc ?? null,
+    ),
+  );
+}
+
 export function synthValueAccess(
   expr: ValueAccess,
   scope: Scope,
@@ -929,13 +946,7 @@ export function synthValueAccess(
             expr.loc,
           );
           if (memberType === null) {
-            ctx.errors.push(
-              diagnostic(
-                "propertyDoesNotExist",
-                { property: element.name, type: formatTypeHint(resolved) },
-                expr.loc ?? null,
-              ),
-            );
+            pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
             return "any";
           }
           currentType = memberType;
@@ -944,13 +955,7 @@ export function synthValueAccess(
           if (prop) {
             currentType = prop.value;
           } else {
-            ctx.errors.push(
-              diagnostic(
-                "propertyDoesNotExist",
-                { property: element.name, type: formatTypeHint(resolved) },
-                expr.loc ?? null,
-              ),
-            );
+            pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
             return "any";
           }
         } else if (resolved.type === "genericType" && resolved.name === "Record") {
@@ -963,13 +968,7 @@ export function synthValueAccess(
             currentType = resolvePropertyType(member.type, resolved);
             break;
           }
-          ctx.errors.push(
-            diagnostic(
-              "propertyDoesNotExist",
-              { property: element.name, type: formatTypeHint(resolved) },
-              expr.loc ?? null,
-            ),
-          );
+          pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
           return "any";
         }
         break;

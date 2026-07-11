@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { exprParser } from "./parsers.js";
+import { parseAgency } from "../parser.js";
 
 describe("exprParser", () => {
   describe("atoms", () => {
@@ -407,6 +408,66 @@ describe("exprParser", () => {
         if (result.result.type === "schemaExpression") {
           expect(result.result.typeArg.type).toBe("objectType");
         }
+      }
+    });
+  });
+
+  describe("schema(...) chaining (issue #480)", () => {
+    it("parses a chained call in expression position", () => {
+      const result = exprParser('schema(number).parseJSON("[1]")');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression", typeArg: { type: "primitiveType", value: "number" } },
+          chain: [{ kind: "methodCall", functionCall: { functionName: "parseJSON" } }],
+        });
+      }
+    });
+
+    it("accepts a type-grammar argument on the chained form", () => {
+      const result = exprParser('schema(number[]).parseJSON("[1]")');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression", typeArg: { type: "arrayType" } },
+        });
+      }
+    });
+
+    it("parses a two-element chain", () => {
+      const result = exprParser('schema(number).parseJSON("5").value');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression" },
+        });
+        if (result.result.type === "valueAccess") {
+          expect(result.result.chain).toHaveLength(2);
+          expect(result.result.chain[1]).toMatchObject({ kind: "property", name: "value" });
+        }
+      }
+    });
+
+    it("commits on an optional-chain head too", () => {
+      const result = exprParser('schema(number)?.parseJSON("[1]")');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression" },
+          chain: [{ kind: "methodCall", optional: true, functionCall: { functionName: "parseJSON" } }],
+        });
+      }
+    });
+
+    it("a malformed chain after the dot is a targeted parse error", () => {
+      const parsed = parseAgency("node main() {\n  const r = schema(number).123\n  return r\n}", {}, false);
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.message).toContain("expected a method call after schema(...)");
       }
     });
   });

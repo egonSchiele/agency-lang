@@ -1,0 +1,12 @@
+{
+  "retrySucceeds": "Ada",
+  "retrySucceedsCalls": 2,
+  "retriesExhausted": "failure",
+  "retriesExhaustedCalls": 3,
+  "retryDisabled": "failure",
+  "retryDisabledCalls": 1,
+  "branchDefault": "failure",
+  "branchDefaultCalls": 3,
+  "hookReasons": "invalidStructuredOutput",
+  "validationErrorEvents": 4
+}

@@ -30,26 +30,41 @@ as a base.
 ## Design (Approach A — approved)
 
 One new parser that COMPOSES the two existing ones, mirroring the established
-`parenAccessParser` idiom (`(expr).chain`):
+`parenAccessParser` idiom (`(expr).chain`). As-shipped (plan-level refinement,
+recorded in the plan self-review): the gate is `peek(dotParser)` rather than
+bare `many1`, and the chain is `parseError`-wrapped — once the dot is seen the
+user unambiguously meant a chain, so a malformed tail is a targeted hard error
+instead of the stranded-suffix failure. `withLoc` was added in PR review
+(expression position does not flow through `valueAccessParser`'s wrap):
 
 ```ts
-// `schema(T).method(...)...` — a schema expression used as an access-chain
-// base. many1 is the gate: bare `schema(T)` never matches here, so the plain
-// schemaExpressionParser alternatives (and everything that consumes them)
-// keep their exact current behavior. Mirrors parenAccessParser.
-const schemaAccessParser: Parser<ValueAccess> = map(
-  seqC(
-    capture(schemaExpressionParser, "base"),
-    capture(many1(chainElementParser), "chain"),
-  ),
-  (result) =>
-    ({
-      type: "valueAccess" as const,
-      base: result.base as unknown as AgencyNode,
-      chain: result.chain,
-    }) as ValueAccess,
+const schemaAccessParser: Parser<ValueAccess> = memo(
+  "schemaAccessParser",
+  withLoc(map(
+    seqC(
+      capture(schemaExpressionParser, "base"),
+      peek(dotParser),
+      captureCaptures(
+        parseError(
+          "expected a method call after schema(...), e.g. schema(number).parseJSON(input)",
+          capture(many1(chainElementParser), "chain"),
+        ),
+      ),
+    ),
+    (result) =>
+      ({
+        type: "valueAccess" as const,
+        base: result.base as unknown as AgencyNode,
+        chain: result.chain,
+      }) as ValueAccess,
+  )),
 );
 ```
+
+One consequence found during red-first execution and deliberately accepted
+(pinned): `const r = schema(number).123` previously parsed as two statements
+(`const r = schema(number)` followed by a bare float-literal statement
+`.123`); it is now the targeted parse error above.
 
 Inserted at exactly two sites:
 

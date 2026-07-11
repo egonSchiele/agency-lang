@@ -422,7 +422,20 @@ describe("exprParser", () => {
           base: { type: "schemaExpression", typeArg: { type: "primitiveType", value: "number" } },
           chain: [{ kind: "methodCall", functionCall: { functionName: "parseJSON" } }],
         });
+        // Unlike variable-base access, this path does not flow through
+        // valueAccessParser's withLoc wrap — schemaAccessParser carries its
+        // own. Without it, downstream diagnostics (e.g. Result-field guard
+        // errors on the chain) anchor to loc: undefined.
+        expect(result.result.loc).toBeDefined();
       }
+    });
+
+    it("try on a chained schema call parses as tryExpression", () => {
+      // Newly parses with this change (tryExpressionParser captures
+      // valueAccessParser, which now routes through the schema branch).
+      // Pinned so a future parser reshuffle cannot silently drop it.
+      const parsed = parseAgency('node main() {\n  const r = try schema(number).parseJSON("5")\n  return r\n}', {}, false);
+      expect(parsed.success).toBe(true);
     });
 
     it("accepts a type-grammar argument on the chained form", () => {

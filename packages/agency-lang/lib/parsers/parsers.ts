@@ -2681,7 +2681,7 @@ export const schemaExpressionParser: Parser<SchemaExpression> = memo(
  */
 export const schemaAccessParser: Parser<ValueAccess> = memo(
   "schemaAccessParser",
-  map(
+  withLoc(map(
     seqC(
       capture(schemaExpressionParser, "base"),
       peek(dotParser),
@@ -2698,7 +2698,7 @@ export const schemaAccessParser: Parser<ValueAccess> = memo(
         base: result.base as unknown as AgencyNode,
         chain: result.chain,
       }) as ValueAccess,
-  ),
+  )),
 );
 
 const baseAtom: Parser<Expression> = or(

@@ -6,8 +6,8 @@ node writeIt(args: { dir: string, filename: string }): any {
   return write(filename: args.filename, content: "WROTE_IT", dir: args.dir)
 }
 
-// Input-style interrupt (effect "unknown"): a policy yields only approve/reject,
-// never a free-text value. Pins spec non-goal #2 / behavior note #2.
+// Input-style interrupt (effect "unknown", assignment position): under an
+// empty policy it surfaces to the caller carrying expectsValue: true.
 node inputIt(): any {
   const answer = interrupt("Where should I write?")
   return answer

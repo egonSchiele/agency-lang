@@ -193,7 +193,9 @@ describe.skipIf(!existsSync(CLI))("agency run --policy flags (end-to-end)", () =
     } finally {
       rmLocal(dir);
     }
-  });
+    // Compile + fork + pause + endpoint decision + nested resume: ~5s locally,
+    // slower on CI runners — well past vitest's 5s default.
+  }, 90_000);
 
   it("without any policy flag, an uncovered interrupt still reports unhandled", async () => {
     // No handler is installed when no flag is set (resolveRunPolicy returns null),

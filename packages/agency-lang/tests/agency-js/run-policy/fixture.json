@@ -1,6 +1,6 @@
 {
   "readApproved": true,
   "writeRejected": true,
-  "failClosedRejected": true,
-  "inputRejected": true
+  "unlistedSurfaced": true,
+  "inputSurfacedExpectsValue": true
 }

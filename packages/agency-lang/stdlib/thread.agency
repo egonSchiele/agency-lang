@@ -295,8 +295,13 @@ def summarize(messages: ThreadMessage[]): string {
   }
   let summary = ""
   thread(hidden: true) {
-    const r: SummaryResult = llm("Summarize this conversation in 1-2 sentences:\n" + transcript, { maxTokens: 256 })
-    summary = r.summary
+    // Bang validation: a malformed summary is a failure Result. The
+    // summary stays "" then, which the cache treats as an intentional
+    // empty marker.
+    const result: SummaryResult! = llm("Summarize this conversation in 1-2 sentences:\n" + transcript, { maxTokens: 256 })
+    if (result is success(value)) {
+      summary = value.summary
+    }
   }
   return summary
 }

@@ -1,0 +1,7 @@
+{
+  "plainInvalid": "failure",
+  "bangInvalid": "failure",
+  "bangValid": "Ada",
+  "primitive": "42",
+  "validationErrorEvents": 2
+}

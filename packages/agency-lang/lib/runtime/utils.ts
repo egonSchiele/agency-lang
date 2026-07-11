@@ -3,6 +3,7 @@ import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
+import { failure, isSuccess, success, ResultValue } from "./result.js";
 
 export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
@@ -30,40 +31,62 @@ export function deepFreeze<T>(obj: T, seen: WeakSet<object> = new WeakSet()): T 
   return obj;
 }
 
-// not as necessary, smoltalk does this, though only when strict = true
-export function extractResponse(rawValue: any, schema: any): any {
+/** Strict structured-output extraction: unwrap the provider's response
+ *  shape and validate against the schema. Returns success(value) with the
+ *  validated value, or failure(schemaError) — never the raw content. The
+ *  unwrap heuristics mirror the shapes providers actually return: the
+ *  { response: ... } wrapper for primitive schemas, single-key wrappers,
+ *  stringified JSON, and single-element arrays. */
+export function extractStructuredResponse(
+  rawValue: any,
+  schema: any,
+): ResultValue {
   // 1. Direct match — try parsing as-is
   const direct = schema.safeParse(rawValue);
   if (direct.success) {
-    if ("response" in direct.data) {
-      return direct.data.response;
+    if (direct.data !== null && typeof direct.data === "object" && "response" in direct.data) {
+      return success(direct.data.response);
     }
-    return direct.data;
+    return success(direct.data);
+  }
+  const schemaError = direct.error?.message ?? "schema mismatch";
+
+  // 1.25 Envelope-skipping recovery. The codegen always requests the
+  // { response: T } envelope, and models routinely return bare T anyway.
+  // Validate the raw value against the INNER schema — this is schema-
+  // checked recovery, not a fail-open.
+  const responseShape = (schema as any).shape?.response;
+  if (responseShape && typeof responseShape.safeParse === "function") {
+    const inner = responseShape.safeParse(rawValue);
+    if (inner.success) {
+      return success(inner.data);
+    }
   }
 
   // 1.5 Look for { type: "object", properties: { response: { ... } } } pattern
-  if (rawValue.type === "object" && rawValue.properties) {
-    return extractResponse(rawValue.properties, schema);
+  if (rawValue != null && rawValue.type === "object" && rawValue.properties) {
+    return extractStructuredResponse(rawValue.properties, schema);
   }
 
-  // 2. String → try JSON.parse, then recurse
+  // 2. String → try JSON.parse, then recurse. A string that is not JSON
+  // cannot satisfy an object/wrapped schema that already failed step 1.
   if (typeof rawValue === "string") {
-    const stripped = rawValue;
     try {
-      return extractResponse(JSON.parse(stripped), schema);
-    } catch {}
-    return rawValue;
+      return extractStructuredResponse(JSON.parse(rawValue), schema);
+    } catch {
+      return failure(schemaError);
+    }
   }
 
   // 3. Null/undefined/primitive — nothing to unwrap
   if (rawValue == null || typeof rawValue !== "object") {
-    return rawValue;
+    return failure(schemaError);
   }
 
   // 4. Array with one element — unwrap
   if (Array.isArray(rawValue) && rawValue.length === 1) {
     const inner = schema.safeParse(rawValue[0]);
-    if (inner.success) return inner.data;
+    if (inner.success) return success(inner.data);
   }
 
   // 5. Object with "response" or "properties" key — unwrap
@@ -71,7 +94,7 @@ export function extractResponse(rawValue: any, schema: any): any {
   for (const key of wrapKeys) {
     if (key in rawValue) {
       const inner = schema.safeParse(rawValue[key]);
-      if (inner.success) return inner.data[key];
+      if (inner.success) return success(inner.data[key]);
     }
   }
 
@@ -79,16 +102,27 @@ export function extractResponse(rawValue: any, schema: any): any {
   const keys = Object.keys(rawValue);
   if (keys.length === 1) {
     const inner = schema.safeParse(rawValue[keys[0]]);
-    if (inner.success) return inner.data;
+    if (inner.success) return success(inner.data);
   }
 
   // 7. Shallow search — check every value of the object
   for (const key of keys) {
     const inner = schema.safeParse(rawValue[key]);
-    if (inner.success) return inner.data;
+    if (inner.success) return success(inner.data);
   }
 
-  // 8. Nothing worked — return the original value as-is
+  // 8. Nothing matched the schema.
+  return failure(schemaError);
+}
+
+// not as necessary, smoltalk does this, though only when strict = true.
+// Back-compat lenient wrapper: kept because it is publicly re-exported.
+// New code should use extractStructuredResponse, which can say NO.
+export function extractResponse(rawValue: any, schema: any): any {
+  const extracted = extractStructuredResponse(rawValue, schema);
+  if (isSuccess(extracted)) {
+    return extracted.value;
+  }
   return rawValue;
 }
 

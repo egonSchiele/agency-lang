@@ -30,7 +30,7 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { isFailure } from "./result.js";
+import { failure, isFailure, isSuccess } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -39,7 +39,7 @@ import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
-import { extractResponse, updateTokenStats } from "./utils.js";
+import { extractStructuredResponse, updateTokenStats } from "./utils.js";
 
 type Tool = {
   name: string;
@@ -1557,21 +1557,31 @@ export async function runPrompt(args: {
   }
 
   if (responseFormat) {
-    try {
-      const rawResult = JSON.parse(responseMessage.content || "");
-      const extracted = extractResponse(rawResult, responseFormat);
-      return extracted;
-    } catch (e) {
-      try {
-        const extracted = extractResponse(
-          responseMessage.content,
-          responseFormat,
-        );
-        return extracted;
-      } catch (e) {
-        return responseMessage.content;
-      }
+    // Strict contract (issue #494): a schema-constrained result either
+    // validates or comes back as a failure Result. It is NEVER the raw
+    // content masquerading as the declared type — that fail-open silently
+    // broke memory extraction for weeks. Bang-validated callers receive
+    // the failure untouched (validation never re-validates failures);
+    // plain typed callers hold a failure value they can inspect instead
+    // of a mistyped string.
+    const extracted = extractStructuredResponse(
+      responseMessage.content,
+      responseFormat,
+    );
+    if (isSuccess(extracted)) {
+      return extracted.value;
     }
+    const rawPreview = String(responseMessage.content ?? "").slice(0, 200);
+    const message =
+      `LLM structured output failed validation: ${extracted.error}. ` +
+      `Raw output (first 200 chars): ${JSON.stringify(rawPreview)}`;
+    // Loud in the statelog too, so a rotting integration is visible in
+    // logs even when the caller swallows the failure.
+    ctx.statelogClient.error({
+      errorType: "structuredOutput",
+      message,
+    });
+    return failure(message);
   }
 
   return responseMessage.content;

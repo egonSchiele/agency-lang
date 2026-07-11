@@ -34,9 +34,26 @@ export async function _readProjectMcpConfig(cwd: string): Promise<Record<string,
   }
 }
 
-/** Project wins over global on name collision. */
+export type McpLoadResult = {
+  tools: AgencyFunction[];
+  // Per-server outcome for `/mcp`: "connected" when its tools loaded,
+  // "unavailable" when it failed to connect or returned nothing.
+  status: Record<string, string>;
+};
+
+/** Project wins over global on name collision. Merges into a NULL-PROTOTYPE
+ *  target: server names are user-controlled (agency.json / settings.json), and
+ *  a key like "__proto__" — which the config schema's name regex permits —
+ *  must become a plain data key, never mutate a prototype. */
 export function _mergeMcpServers(global: McpServers, project: McpServers): McpServers {
-  return { ...global, ...project };
+  const out: McpServers = Object.create(null);
+  for (const key of Object.keys(global)) {
+    out[key] = global[key];
+  }
+  for (const key of Object.keys(project)) {
+    out[key] = project[key];
+  }
+  return out;
 }
 
 async function _mcpCompatible(): Promise<boolean> {
@@ -82,29 +99,46 @@ export async function _loadMcpToolsForServer(
   );
 }
 
-export async function _loadMcpTools(
+/** Load every configured server and report per-server status. Returns flat
+ *  tools plus a { server -> "connected" | "unavailable" } map for `/mcp`. */
+export async function _loadMcpToolsWithStatus(
   merged: McpServers,
   onOAuthRequired?: (d: unknown) => void | Promise<void>,
-): Promise<AgencyFunction[]> {
+): Promise<McpLoadResult> {
+  const empty: McpLoadResult = { tools: [], status: {} };
   if (!isMcpAvailable()) {
-    return [];
+    return empty;
   }
   if (!(await _mcpCompatible())) {
     console.warn("[mcp] @agency-lang/mcp version could not be verified; skipping MCP tools.");
-    return [];
+    return empty;
   }
   exposeResolvedMcpPath();
   const names = Object.keys(merged);
   if (names.length === 0) {
-    return [];
+    return empty;
   }
   // Prime the package's singleton on the FIRST server sequentially (its manager
   // creation is not concurrency-safe), then load the rest in parallel. getTools
   // is per-server guarded, so parallel connects to distinct servers are safe.
   const [first, ...rest] = names;
   const firstTools = await _loadMcpToolsForServer(first, merged, onOAuthRequired);
-  const restTools = await Promise.all(
-    rest.map((s) => _loadMcpToolsForServer(s, merged, onOAuthRequired)),
+  const restPairs = await Promise.all(
+    rest.map(async (s) => ({ server: s, tools: await _loadMcpToolsForServer(s, merged, onOAuthRequired) })),
   );
-  return [firstTools, ...restTools].flat();
+  const pairs = [{ server: first, tools: firstTools }, ...restPairs];
+  const tools: AgencyFunction[] = [];
+  const status: Record<string, string> = {};
+  for (const pair of pairs) {
+    status[pair.server] = pair.tools.length > 0 ? "connected" : "unavailable";
+    tools.push(...pair.tools);
+  }
+  return { tools, status };
+}
+
+export async function _loadMcpTools(
+  merged: McpServers,
+  onOAuthRequired?: (d: unknown) => void | Promise<void>,
+): Promise<AgencyFunction[]> {
+  return (await _loadMcpToolsWithStatus(merged, onOAuthRequired)).tools;
 }

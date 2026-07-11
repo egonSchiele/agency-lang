@@ -6,8 +6,16 @@ import {
   _isMcpAvailable,
   _readProjectMcpConfig,
   _mergeMcpServers,
-  _loadMcpTools
+  _loadMcpTools,
+  _loadMcpToolsWithStatus
 } from "agency-lang/stdlib-lib/mcp.js"
+
+/// The result of loadMcpToolsWithStatus: the flat tool list plus a per-server
+/// status map ("connected" / "unavailable").
+export type McpLoadResult = {
+  tools: any[];
+  status: Record<string, string>
+}
 
 // The effect an MCP tool call raises before its JSON-RPC fires. Raised from TS
 // (lib/stdlib/mcpGate.ts) via agency.interrupt with this exact name; declared
@@ -37,4 +45,9 @@ export def mergeMcpServers(global: Record<string, any>, project: Record<string, 
 /// package is absent, incompatible, or no servers are configured.
 export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
   return _loadMcpTools(merged, onOAuthRequired)
+}
+
+/// Like loadMcpTools, but also returns a per-server status map for /mcp.
+export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult {
+  return _loadMcpToolsWithStatus(merged, onOAuthRequired)
 }

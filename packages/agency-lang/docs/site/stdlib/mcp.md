@@ -4,6 +4,19 @@ name: "mcp"
 
 # mcp
 
+## Types
+
+### McpLoadResult
+
+```ts
+export type McpLoadResult = {
+  tools: any[];
+  status: Record<string, string>
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L15))
+
 ## Effects
 
 ### mcp::call
@@ -16,7 +29,7 @@ effect mcp::call {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L23))
 
 ## Functions
 
@@ -28,7 +41,7 @@ isMcpAvailable(): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L30))
 
 ### readProjectMcpConfig
 
@@ -44,7 +57,7 @@ readProjectMcpConfig(dir: string): Record<string, any>
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L35))
 
 ### mergeMcpServers
 
@@ -61,7 +74,7 @@ mergeMcpServers(global: Record<string, any>, project: Record<string, any>): Reco
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
 
 ### loadMcpTools
 
@@ -78,4 +91,21 @@ loadMcpTools(merged: Record<string, any>, onOAuthRequired): any[]
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L46))
+
+### loadMcpToolsWithStatus
+
+```ts
+loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired): McpLoadResult
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| merged | `Record<string, any>` |  |
+| onOAuthRequired |  | null |
+
+**Returns:** [McpLoadResult](#mcploadresult)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))

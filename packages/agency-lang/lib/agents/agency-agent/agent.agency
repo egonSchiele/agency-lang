@@ -24,7 +24,7 @@ import {
   builtinPolicyNames,
   BUILTIN_POLICIES,
  } from "std::policy"
-import { loadMcpTools, mergeMcpServers, isMcpAvailable, readProjectMcpConfig } from "std::mcp"
+import { loadMcpToolsWithStatus, mergeMcpServers, isMcpAvailable, readProjectMcpConfig } from "std::mcp"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
 import { highlight } from "std::syntax"
@@ -859,7 +859,7 @@ def _runTurn(msg: string): boolean {
   }
   if (trimmed == "/help") {
     pushMessage(
-      "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /paste, /help",
+      "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /mcp, /paste, /help",
     )
     return true
   }
@@ -880,7 +880,14 @@ def _runTurn(msg: string): boolean {
     }
     pushMessage(color.bold("MCP servers:"))
     for (name in keys(merged)) {
-      pushMessage("  ${name}")
+      // mcpServerStatus is populated at session start. A server present in the
+      // config but absent from the status map was never loaded (e.g. /mcp run
+      // before startup finished) — show it as unknown rather than connected.
+      let status = mcpServerStatus[name]
+      if (status == null) {
+        status = "not loaded"
+      }
+      pushMessage("  ${name} — ${status}")
     }
     pushMessage(color.dim("Loaded ${mcpTools.length} MCP tool(s) this session."))
     return true
@@ -1329,9 +1336,15 @@ static const mainAgentTools = [
 // maybeLoadMcp (session start, in main()) must run before mainAgent's first
 // turn, or MCP tools silently vanish.
 let mcpTools: any[] = []
+// Per-server load outcome ("connected" / "unavailable"), for /mcp.
+let mcpServerStatus: Record<string, string> = {}
 
 export def setMcpTools(tools: any[]) {
   mcpTools = tools
+}
+
+def setMcpServerStatus(status: Record<string, string>) {
+  mcpServerStatus = status
 }
 
 // MCP OAuth notification. The @agency-lang/mcp package opens the browser itself
@@ -1352,7 +1365,11 @@ def maybeLoadMcp(settings: Settings) {
   if (keys(merged).length == 0) {
     return
   }
-  setMcpTools(loadMcpTools(merged, onMcpOAuth))
+  // Always returns a result (per-server failures warn-and-skip internally), so
+  // there is no Failure branch. The status map drives /mcp.
+  const loaded = loadMcpToolsWithStatus(merged, onMcpOAuth)
+  setMcpTools(loaded.tools)
+  setMcpServerStatus(loaded.status)
 }
 
 /** Enable memory when the capability profile allows it. When the user

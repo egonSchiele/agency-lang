@@ -252,22 +252,6 @@ function sourceLink(
   return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line + 1}))`;
 }
 
-function formatSignature(
-  name: string,
-  params: FunctionParameter[],
-  returnType?: VariableType | null,
-): string {
-  const paramStr = params
-    .map((p) => {
-      const prefix = p.variadic ? "..." : "";
-      const typeStr = p.typeHint ? `: ${formatType(p.typeHint)}` : "";
-      return `${prefix}${p.name}${typeStr}`;
-    })
-    .join(", ");
-  const retStr = returnType ? `: ${formatType(returnType)}` : "";
-  return `${name}(${paramStr})${retStr}`;
-}
-
 const generator = new AgencyGenerator();
 
 function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
@@ -437,7 +421,7 @@ function generateFunctionSection(
   if (fns.length === 0) return null;
   const _parts = fns.map((fn) => {
     if (!fn.exported) return null; // skip non-exported functions
-    const sig = formatSignature(fn.functionName, fn.parameters, fn.returnType);
+    const sig = generator.signatureOf(fn);
     return section(
       heading(3, fn.functionName),
       codeFence(sig),
@@ -462,11 +446,7 @@ function generateNodeSection(
 ): string | null {
   if (nodes.length === 0) return null;
   const parts = nodes.map((node) => {
-    const sig = formatSignature(
-      node.nodeName,
-      node.parameters,
-      node.returnType,
-    );
+    const sig = generator.signatureOf(node);
     return section(
       heading(3, node.nodeName),
       codeFence(sig),

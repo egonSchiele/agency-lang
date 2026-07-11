@@ -23,6 +23,12 @@ function getManager(
   onOAuthRequired?: (data: any) => void | Promise<void>,
   config?: Record<string, McpServerConfig>,
 ): McpManager {
+  // The manager is a process-wide singleton built on the FIRST call. Both the
+  // injected `config` and `onOAuthRequired` are FIRST-CALLER-WINS: they are
+  // honored only when the singleton does not yet exist. If `mcp()` (which reads
+  // config from agency.json) runs before `mcpRaw({ config })`, the singleton is
+  // already built and the injected config is ignored — so we warn rather than
+  // silently drop it.
   if (!singleton) {
     const resolved = config ?? readMcpConfig();
     if (onOAuthRequired) registeredCallback = onOAuthRequired;
@@ -36,10 +42,17 @@ function getManager(
         }
       });
     }
-  } else if (onOAuthRequired && onOAuthRequired !== registeredCallback) {
-    console.warn(
-      "[mcp] onOAuthRequired callback was already set on the first mcp() call and cannot be changed. The callback passed here will be ignored.",
-    );
+  } else {
+    if (config) {
+      console.warn(
+        "[mcp] the MCP manager was already created by an earlier call; the config passed here is ignored. Ensure the config-injecting caller runs first.",
+      );
+    }
+    if (onOAuthRequired && onOAuthRequired !== registeredCallback) {
+      console.warn(
+        "[mcp] onOAuthRequired callback was already set on the first mcp() call and cannot be changed. The callback passed here will be ignored.",
+      );
+    }
   }
   return singleton;
 }

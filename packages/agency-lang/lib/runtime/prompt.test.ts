@@ -8,6 +8,7 @@ const {
   stringifyToolResult,
   capToolResultForLlm,
   assertUniqueToolNames,
+  unwrapToolResultForLlm,
 } = _internal;
 
 describe("assertUniqueToolNames", () => {
@@ -38,6 +39,44 @@ describe("assertUniqueToolNames", () => {
     expect(() =>
       assertUniqueToolNames([{ name: "x" }, { name: "x" }]),
     ).toThrow(/\.rename\(/);
+  });
+});
+
+describe("unwrapToolResultForLlm", () => {
+  const success = (value: unknown) => ({
+    __type: "resultType",
+    success: true,
+    value,
+  });
+
+  it("unwraps a success Result to its value (string)", () => {
+    expect(unwrapToolResultForLlm(success("hi"), "myTool")).toBe("hi");
+  });
+
+  it("unwraps a success Result to its value (object)", () => {
+    expect(
+      unwrapToolResultForLlm(success({ moduleId: "x" }), "myTool"),
+    ).toEqual({ moduleId: "x" });
+  });
+
+  it("substitutes the no-value message when a success holds null/undefined", () => {
+    expect(unwrapToolResultForLlm(success(null), "myTool")).toBe(
+      "myTool ran successfully but did not return a value",
+    );
+    expect(unwrapToolResultForLlm(success(undefined), "myTool")).toBe(
+      "myTool ran successfully but did not return a value",
+    );
+  });
+
+  it("passes plain values through unchanged", () => {
+    expect(unwrapToolResultForLlm("plain", "myTool")).toBe("plain");
+    const obj = { a: 1 };
+    expect(unwrapToolResultForLlm(obj, "myTool")).toBe(obj);
+  });
+
+  it("passes a failure Result through unchanged (handled upstream)", () => {
+    const fail = { __type: "resultType", success: false, error: "boom" };
+    expect(unwrapToolResultForLlm(fail, "myTool")).toBe(fail);
   });
 });
 

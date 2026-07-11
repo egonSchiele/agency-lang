@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { DIAGNOSTICS, diagnostic, renderMessage } from "./diagnostics.js";
+import {
+  formatOptionalUnboundWarning,
+  formatRequiredUnboundError,
+} from "../runtime/toolBlockDiagnostics.js";
 
 describe("diagnostic registry invariants", () => {
   const entries = Object.entries(DIAGNOSTICS);
@@ -24,9 +28,10 @@ describe("diagnostic registry invariants", () => {
     }
   });
 
-  it("every brace in a template is part of a well-formed {word} placeholder", () => {
+  it("every brace in a template is a {word} placeholder or an {{escape}}", () => {
     for (const [, entry] of entries) {
-      expect(entry.message.replace(/\{\w+\}/g, "")).not.toMatch(/[{}]/);
+      const withoutEscapes = entry.message.replace(/\{\{|\}\}/g, "");
+      expect(withoutEscapes.replace(/\{\w+\}/g, "")).not.toMatch(/[{}]/);
     }
   });
 });
@@ -40,6 +45,42 @@ describe("renderMessage", () => {
 
   it("THROWS on a missing param instead of rendering undefined", () => {
     expect(() => renderMessage("got '{a}'", {})).toThrow(/missing param 'a'/);
+  });
+
+  it("unescapes literal braces written as {{ and }}", () => {
+    expect(renderMessage("match (r) {{ {arm} }}", { arm: "..." })).toBe(
+      "match (r) { ... }",
+    );
+  });
+});
+
+describe("registry <-> runtime formatter locks", () => {
+  it("tool-binding templates render exactly what the runtime formatters produce", () => {
+    // The compile-time wording moved into the registry; the runtime backstop
+    // keeps its own formatters. This equality is what previously held "by
+    // construction" via a shared formatter — now it is pinned.
+    const typed = diagnostic(
+      "toolRequiredParamUnboundTyped",
+      { tool: "deploy", param: "block", type: "() => void" },
+      null,
+    );
+    expect(typed.message).toBe(
+      formatRequiredUnboundError("deploy", "block", "() => void"),
+    );
+    const untyped = diagnostic(
+      "toolRequiredParamUnbound",
+      { tool: "deploy", param: "block" },
+      null,
+    );
+    expect(untyped.message).toBe(formatRequiredUnboundError("deploy", "block"));
+    const dropped = diagnostic(
+      "toolOptionalParamsDropped",
+      { tool: "deploy", params: "'a', 'b'" },
+      null,
+    );
+    expect(dropped.message).toBe(
+      formatOptionalUnboundWarning("deploy", ["a", "b"]),
+    );
   });
 });
 
@@ -68,7 +109,7 @@ describe("diagnostic factory", () => {
       "Type 'string' is not assignable to type 'number'.",
     );
     // extra structured key (name) rides along in params without rendering
-    expect(err.params.name).toBe("x");
+    expect(err.params?.name).toBe("x");
   });
 
   it("renders the pluralized arity golden byte-identically", () => {

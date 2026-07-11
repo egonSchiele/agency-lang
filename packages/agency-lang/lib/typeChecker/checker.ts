@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import {
   AgencyNode,
   FunctionCall,
@@ -16,7 +17,7 @@ import { collectProgramShadowing } from "./shadowing.js";
 import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
-import type { BuiltinSignature, TypeCheckerContext } from "./types.js";
+import type { BuiltinSignature, TypeCheckerContext, TypeCheckError } from "./types.js";
 import {
   checkType,
   checkConditionType,
@@ -342,22 +343,39 @@ function checkCallAgainstBuiltinSig(
   for (const a of call.arguments) {
     if (a.type !== "namedArgument") continue;
     if (!(a.name in allowedNamed)) {
-      ctx.errors.push({
-        message:
-          allowedNames.length === 0
-            ? `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`
-            : `'${call.functionName}' does not accept the named argument '${a.name}'. Allowed: ${allowedNames.join(", ")}.`,
-        loc: call.loc,
-      });
+      if (allowedNames.length === 0) {
+        ctx.errors.push(
+          diagnostic(
+            "namedArgsOnlyAgencyFunctions",
+            { fn: call.functionName },
+            call.loc ?? null,
+          ),
+        );
+      } else {
+        ctx.errors.push(
+          diagnostic(
+            "namedArgNotAccepted",
+            {
+              fn: call.functionName,
+              name: a.name,
+              allowed: allowedNames.join(", "),
+            },
+            call.loc ?? null,
+          ),
+        );
+      }
       return;
     }
     // Duplicate named arg (Copilot #3) — mirrors the
     // checkNamedArgStructure behavior for Agency-defined functions.
     if (seenNamed.has(a.name)) {
-      ctx.errors.push({
-        message: `Duplicate named argument '${a.name}' in call to '${call.functionName}'.`,
-        loc: call.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "duplicateNamedArg",
+          { name: a.name, fn: call.functionName },
+          call.loc ?? null,
+        ),
+      );
       return;
     }
     seenNamed.add(a.name);
@@ -367,21 +385,30 @@ function checkCallAgainstBuiltinSig(
     if (expected !== "any") {
       const actual = synthType(a.value, scope, ctx);
       if (actual !== "any" && !isAssignable(actual, expected, typeAliases)) {
-        ctx.errors.push({
-          message: `Named argument '${a.name}' on '${call.functionName}' expects type '${formatTypeHint(expected)}', got '${formatTypeHint(actual)}'.`,
-          expectedType: formatTypeHint(expected),
-          actualType: formatTypeHint(actual),
-          loc: call.loc,
-        });
+        ctx.errors.push(
+          diagnostic(
+            "namedArgTypeMismatch",
+            {
+              name: a.name,
+              fn: call.functionName,
+              expected: formatTypeHint(expected),
+              actual: formatTypeHint(actual),
+            },
+            call.loc ?? null,
+          ),
+        );
         return;
       }
     }
   }
   if (call.block && !sig.acceptsBlock) {
-    ctx.errors.push({
-      message: `'${call.functionName}' does not accept a block argument.`,
-      loc: call.block.loc ?? call.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "blockArgNotAccepted",
+        { fn: call.functionName },
+        call.block.loc ?? call.loc ?? null,
+      ),
+    );
     return;
   }
   const minArgs = sig.minParams ?? sig.params.length;
@@ -498,10 +525,13 @@ function checkBlockArgShape(
       return true;
     }
   }
-  ctx.errors.push({
-    message: `'${call.functionName}' does not accept a block argument.`,
-    loc: call.block.loc ?? call.loc,
-  });
+  ctx.errors.push(
+    diagnostic(
+      "blockArgNotAccepted",
+      { fn: call.functionName },
+      call.block.loc ?? call.loc ?? null,
+    ),
+  );
   return false;
 }
 
@@ -524,8 +554,8 @@ function checkNamedArgStructure(
   if (namedStartIdx < 0) return true;
 
   let ok = true;
-  const pushErr = (message: string) => {
-    ctx.errors.push({ message, loc: call.loc });
+  const pushErr = (err: TypeCheckError) => {
+    ctx.errors.push(err);
     ok = false;
   };
 
@@ -540,13 +570,21 @@ function checkNamedArgStructure(
     const a = call.arguments[i];
     if (a.type === "splat") {
       pushErr(
-        `Splat argument cannot follow a named argument in call to '${call.functionName}'.`,
+        diagnostic(
+          "splatAfterNamedArg",
+          { fn: call.functionName },
+          call.loc ?? null,
+        ),
       );
       break;
     }
     if (a.type !== "namedArgument") {
       pushErr(
-        `Positional argument cannot follow a named argument in call to '${call.functionName}'.`,
+        diagnostic(
+          "positionalAfterNamedArg",
+          { fn: call.functionName },
+          call.loc ?? null,
+        ),
       );
       break;
     }
@@ -564,7 +602,11 @@ function checkNamedArgStructure(
     if (arg.type !== "namedArgument") continue;
     if (seen.has(arg.name)) {
       pushErr(
-        `Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`,
+        diagnostic(
+          "duplicateNamedArg",
+          { name: arg.name, fn: call.functionName },
+          call.loc ?? null,
+        ),
       );
       continue;
     }
@@ -572,11 +614,19 @@ function checkNamedArgStructure(
     const paramIdx = params.findIndex((p) => p.name === arg.name);
     if (paramIdx < 0) {
       pushErr(
-        `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
+        diagnostic(
+          "unknownNamedArg",
+          { name: arg.name, fn: call.functionName },
+          call.loc ?? null,
+        ),
       );
     } else if (paramIdx < namedStartIdx) {
       pushErr(
-        `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
+        diagnostic(
+          "namedArgConflictsPositional",
+          { name: arg.name, position: paramIdx + 1, fn: call.functionName },
+          call.loc ?? null,
+        ),
       );
     }
   }
@@ -598,7 +648,11 @@ function checkNamedArgStructure(
       const positionalCount = Math.min(namedStartIdx, call.arguments.length);
       if (positionalCount > fixedCount) {
         pushErr(
-          `Positional argument cannot feed variadic parameter '${variadicParam.name}' when it is also bound by name in call to '${call.functionName}'.`,
+          diagnostic(
+            "positionalFeedsNamedVariadic",
+            { param: variadicParam.name, fn: call.functionName },
+            call.loc ?? null,
+          ),
         );
       }
     }
@@ -626,17 +680,26 @@ function checkArity(
   // Count it so `f() as x { }` doesn't look like a 0-arg call.
   const argCount = call.arguments.length + (call.block ? 1 : 0);
   if (argCount >= minArgs && argCount <= maxArgs) return true;
-  ctx.errors.push({
-    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${argCount}.`,
-    loc: call.loc,
-  });
+  const arity = { fn: call.functionName, count: argCount };
+  const arityLoc = call.loc ?? null;
+  if (maxArgs === Infinity) {
+    ctx.errors.push(
+      diagnostic("callArityAtLeast", { ...arity, min: minArgs }, arityLoc),
+    );
+  } else if (minArgs === maxArgs) {
+    ctx.errors.push(
+      diagnostic("callArityExact", { ...arity, expected: minArgs }, arityLoc),
+    );
+  } else {
+    ctx.errors.push(
+      diagnostic(
+        "callArityRange",
+        { ...arity, min: minArgs, max: maxArgs },
+        arityLoc,
+      ),
+    );
+  }
   return false;
-}
-
-function formatArity(minArgs: number, maxArgs: number): string {
-  if (maxArgs === Infinity) return `at least ${minArgs}`;
-  if (minArgs === maxArgs) return `${minArgs}`;
-  return `${minArgs}-${maxArgs}`;
 }
 
 /**
@@ -691,12 +754,17 @@ function checkArgsAgainstParams(
       continue;
     }
     if (!isAssignable(argType, paramType, typeAliases)) {
-      ctx.errors.push({
-        message: `Argument type '${formatTypeHint(argType)}' is not assignable to parameter type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
-        expectedType: formatTypeHint(paramType),
-        actualType: formatTypeHint(argType),
-        loc: call.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "argNotAssignable",
+          {
+            actual: formatTypeHint(argType),
+            expected: formatTypeHint(paramType),
+            fn: call.functionName,
+          },
+          call.loc ?? null,
+        ),
+      );
     }
     if (innerArg.type === "agencyObject") {
       checkExcessObjectProperties(
@@ -726,11 +794,13 @@ function checkSplatAgainstRemainingParams(
   if (splatType === "any") return;
   if (splatType.type !== "arrayType") {
     const splatStr = formatTypeHint(splatType);
-    ctx.errors.push({
-      message: `Splat argument must be an array, got '${splatStr}' in call to '${call.functionName}'.`,
-      actualType: splatStr,
-      loc: call.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "splatMustBeArray",
+        { actual: splatStr, fn: call.functionName },
+        call.loc ?? null,
+      ),
+    );
     return;
   }
   const elementType = splatType.elementType;
@@ -746,12 +816,13 @@ function checkSplatAgainstRemainingParams(
     if (paramType === undefined || paramType === "any") continue;
     if (isAssignable(elementType, paramType, typeAliases)) continue;
     const paramStr = formatTypeHint(paramType);
-    ctx.errors.push({
-      message: `Splat element type '${elementStr}' is not assignable to parameter type '${paramStr}' in call to '${call.functionName}'.`,
-      expectedType: paramStr,
-      actualType: elementStr,
-      loc: call.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "splatElementNotAssignable",
+        { actual: elementStr, expected: paramStr, fn: call.functionName },
+        call.loc ?? null,
+      ),
+    );
   }
 }
 
@@ -889,12 +960,16 @@ function validatePipeArg(
   if (isAnyType(flowingType)) return;
 
   if (!isAssignable(flowingType, slotType, ctx.getTypeAliases())) {
-    ctx.errors.push({
-      message: `Type '${formatTypeHint(flowingType)}' is not assignable to pipe slot of type '${formatTypeHint(slotType)}'.`,
-      expectedType: formatTypeHint(slotType),
-      actualType: formatTypeHint(flowingType),
-      loc: expr.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "pipeSlotNotAssignable",
+        {
+          actual: formatTypeHint(flowingType),
+          expected: formatTypeHint(slotType),
+        },
+        expr.loc ?? null,
+      ),
+    );
   }
 }
 

@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
 import { parseMatchValId } from "../matchVal.js";
 import { recordLikeKeyValue } from "./recordLike.js";
@@ -53,13 +54,6 @@ const RESULT_BRANCH_FIELDS = new Set(
   [...RESULT_FIELDS].filter((f) => f !== "success"),
 );
 
-function resultFieldMessage(fieldName: string): string {
-  // Invariant (per lib/runtime/result.ts): `value` is the only success-only
-  // field; every other branch field is failure-only. Update if Result grows a
-  // new success-side field.
-  const branch = fieldName === "value" ? "success" : "failure";
-  return `'.${fieldName}' is only available on a ${branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) { … }'.`;
-}
 
 /**
  * Resolve a field access on a `ResultType` against the narrowing layer.
@@ -108,18 +102,12 @@ function strictMemberAccessSeverity(ctx: TypeCheckerContext): StrictSeverity {
   return ctx.config.typechecker?.strictMemberAccess ?? "error";
 }
 
-/** Emit a strict-member-access diagnostic at the configured severity. */
-function reportStrictMemberAccess(
-  ctx: TypeCheckerContext,
-  severity: "warn" | "error",
-  message: string,
-  loc: SourceLocation | undefined,
-): void {
-  ctx.errors.push({
-    message,
-    loc,
-    severity: severity === "warn" ? "warning" : "error",
-  });
+/** Map the strict-member-access CONFIG severity word to an error severity. */
+function strictSeverity(severity: "warn" | "error"): "warning" | "error" {
+  if (severity === "warn") {
+    return "warning";
+  }
+  return "error";
 }
 
 /**
@@ -178,11 +166,13 @@ function accessUnionField(
   }
   const severity = strictMemberAccessSeverity(ctx);
   if (missing && severity !== "silent") {
-    reportStrictMemberAccess(
-      ctx,
-      severity,
-      `Property '${fieldName}' is not available on every member of '${formatTypeHint(union)}'; narrow the value (e.g. with a guard) before accessing it.`,
-      loc,
+    ctx.errors.push(
+      diagnostic(
+        "unionFieldNotOnEveryMember",
+        { field: fieldName, union: formatTypeHint(union) },
+        loc ?? null,
+        { severity: strictSeverity(severity) },
+      ),
     );
   }
   return type;
@@ -219,7 +209,18 @@ function accessResultField(
     return null;
   }
   if (missing && RESULT_BRANCH_FIELDS.has(fieldName)) {
-    reportStrictMemberAccess(ctx, severity, resultFieldMessage(fieldName), loc);
+    // Invariant (per lib/runtime/result.ts): `value` is the only success-only
+    // field; every other branch field is failure-only. Update if Result grows
+    // a new success-side field.
+    const branch = fieldName === "value" ? "success" : "failure";
+    ctx.errors.push(
+      diagnostic(
+        "resultBranchFieldAccess",
+        { field: fieldName, branch },
+        loc ?? null,
+        { severity: strictSeverity(severity) },
+      ),
+    );
   }
   return type;
 }
@@ -418,10 +419,19 @@ function synthBinOp(
   if (DIMENSION_CHECK_OPS.has(op) &&
       expr.left.type === "unitLiteral" && expr.right.type === "unitLiteral" &&
       expr.left.dimension !== expr.right.dimension) {
-    ctx.errors.push({
-      message: `Cannot ${op} values of different dimensions (${expr.left.dimension} and ${expr.right.dimension}): '${formatUnitLiteral(expr.left)}' and '${formatUnitLiteral(expr.right)}'.`,
-      loc: expr.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "dimensionMismatch",
+        {
+          op,
+          leftDim: expr.left.dimension,
+          rightDim: expr.right.dimension,
+          left: formatUnitLiteral(expr.left),
+          right: formatUnitLiteral(expr.right),
+        },
+        expr.loc ?? null,
+      ),
+    );
   }
 
   if (BOOLEAN_OPS.has(op)) return BOOLEAN_T;
@@ -747,10 +757,9 @@ function validateAgencyFunctionMethod(
       (a: any) => !("type" in a && a.type === "namedArgument"),
     );
     if (hasNonNamed) {
-      ctx.errors.push({
-        message: `.partial() requires named arguments, e.g. fn.partial(a: 5).`,
-        loc: expr.loc,
-      });
+      ctx.errors.push(
+        diagnostic("partialRequiresNamedArgs", {}, expr.loc ?? null),
+      );
     }
     const params = fnDef?.parameters ?? importedSig?.parameters ?? null;
     if (!params) return;
@@ -761,10 +770,17 @@ function validateAgencyFunctionMethod(
     const typeAliases = ctx.getTypeAliases();
     for (const arg of namedArgs) {
       if (!paramNames.has(arg.name)) {
-        ctx.errors.push({
-          message: `Unknown parameter '${arg.name}' in .partial() call. '${baseName}' has parameters: ${[...paramNames].join(", ")}.`,
-          loc: expr.loc,
-        });
+        ctx.errors.push(
+          diagnostic(
+            "unknownPartialParameter",
+            {
+              name: arg.name,
+              fn: baseName,
+              params: [...paramNames].join(", "),
+            },
+            expr.loc ?? null,
+          ),
+        );
         continue;
       }
       const param = params.find((p) => p.name === arg.name);
@@ -782,12 +798,17 @@ function validateAgencyFunctionMethod(
         const actual = synthType(arg.value, scope, ctx);
         if (actual === "any") continue;
         if (!isAssignable(actual, expected, typeAliases)) {
-          ctx.errors.push({
-            message: `Argument type '${formatTypeHint(actual)}' is not assignable to parameter type '${formatTypeHint(expected)}' in .partial() call to '${baseName}'.`,
-            expectedType: formatTypeHint(expected),
-            actualType: formatTypeHint(actual),
-            loc: expr.loc,
-          });
+          ctx.errors.push(
+            diagnostic(
+              "partialArgNotAssignable",
+              {
+                actual: formatTypeHint(actual),
+                expected: formatTypeHint(expected),
+                fn: baseName,
+              },
+              expr.loc ?? null,
+            ),
+          );
         }
       }
     }
@@ -908,10 +929,13 @@ export function synthValueAccess(
             expr.loc,
           );
           if (memberType === null) {
-            ctx.errors.push({
-              message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
-              loc: expr.loc,
-            });
+            ctx.errors.push(
+              diagnostic(
+                "propertyDoesNotExist",
+                { property: element.name, type: formatTypeHint(resolved) },
+                expr.loc ?? null,
+              ),
+            );
             return "any";
           }
           currentType = memberType;
@@ -920,10 +944,13 @@ export function synthValueAccess(
           if (prop) {
             currentType = prop.value;
           } else {
-            ctx.errors.push({
-              message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
-              loc: expr.loc,
-            });
+            ctx.errors.push(
+              diagnostic(
+                "propertyDoesNotExist",
+                { property: element.name, type: formatTypeHint(resolved) },
+                expr.loc ?? null,
+              ),
+            );
             return "any";
           }
         } else if (resolved.type === "genericType" && resolved.name === "Record") {
@@ -936,10 +963,13 @@ export function synthValueAccess(
             currentType = resolvePropertyType(member.type, resolved);
             break;
           }
-          ctx.errors.push({
-            message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
-            loc: expr.loc,
-          });
+          ctx.errors.push(
+            diagnostic(
+              "propertyDoesNotExist",
+              { property: element.name, type: formatTypeHint(resolved) },
+              expr.loc ?? null,
+            ),
+          );
           return "any";
         }
         break;
@@ -1040,10 +1070,13 @@ function validatePrimitiveMethodCall(
 ): void {
   const args = call.arguments as (Expression | SplatExpression | NamedArgument)[];
   if (args.some((a) => "type" in a && a.type === "namedArgument")) {
-    ctx.errors.push({
-      message: `Named arguments are not supported on built-in method '.${call.functionName}()'.`,
-      loc: expr.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "namedArgsOnBuiltinMethod",
+        { method: call.functionName },
+        expr.loc ?? null,
+      ),
+    );
     return;
   }
   const hasSplat = args.some((a) => "type" in a && a.type === "splat");
@@ -1052,16 +1085,25 @@ function validatePrimitiveMethodCall(
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
     if (args.length < minArgs || args.length > maxArgs) {
-      const expected =
-        minArgs === maxArgs
-          ? `${minArgs}`
-          : maxArgs === Infinity
-            ? `at least ${minArgs}`
-            : `${minArgs}–${maxArgs}`;
-      ctx.errors.push({
-        message: `Method '.${call.functionName}()' expects ${expected} argument(s), got ${args.length}.`,
-        loc: expr.loc,
-      });
+      const arity = { method: call.functionName, count: args.length };
+      const loc = expr.loc ?? null;
+      if (minArgs === maxArgs) {
+        ctx.errors.push(
+          diagnostic("methodArityExact", { ...arity, expected: minArgs }, loc),
+        );
+      } else if (maxArgs === Infinity) {
+        ctx.errors.push(
+          diagnostic("methodArityAtLeast", { ...arity, min: minArgs }, loc),
+        );
+      } else {
+        ctx.errors.push(
+          diagnostic(
+            "methodArityRange",
+            { ...arity, min: minArgs, max: maxArgs },
+            loc,
+          ),
+        );
+      }
       return;
     }
   }
@@ -1075,12 +1117,17 @@ function validatePrimitiveMethodCall(
     const argType = synthType(arg as AgencyNode, scope, ctx);
     if (argType === "any") continue;
     if (!isAssignable(argType, slotType, typeAliases)) {
-      ctx.errors.push({
-        message: `Argument type '${formatTypeHint(argType)}' is not assignable to parameter type '${formatTypeHint(slotType)}' in call to '.${call.functionName}()'.`,
-        expectedType: formatTypeHint(slotType),
-        actualType: formatTypeHint(argType),
-        loc: expr.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "builtinMethodArgNotAssignable",
+          {
+            actual: formatTypeHint(argType),
+            expected: formatTypeHint(slotType),
+            method: call.functionName,
+          },
+          expr.loc ?? null,
+        ),
+      );
     }
   }
 }

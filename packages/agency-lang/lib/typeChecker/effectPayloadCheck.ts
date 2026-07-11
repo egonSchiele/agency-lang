@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import type { EffectDeclaration } from "../types/effectDeclaration.js";
 import type { VariableType } from "../types.js";
@@ -92,11 +93,10 @@ function reportSameFileDuplicates(
   const byFile = groupBy(entries, (e) => e.file);
   for (const [, dups] of Object.entries(byFile)) {
     if (dups.length < 2) continue;
-    ctx.errors.push({
-      message: `Effect '${effect}' is declared more than once in the same file.`,
-      severity: "error",
-      loc: dups[1].decl.loc, // point at the redundant declaration
-    });
+    // point at the redundant declaration
+    ctx.errors.push(
+      diagnostic("effectDeclaredTwice", { effect }, dups[1].decl.loc ?? null),
+    );
   }
 }
 
@@ -118,13 +118,9 @@ function mergePayload(
     (e) => !typesEqual(e.decl.payloadType, first.decl.payloadType, aliases),
   );
   if (!conflict) return first.decl.payloadType;
-  ctx.errors.push({
-    message:
-      `Conflicting payload types for effect '${effect}'. ` +
-      `All declarations of an effect must agree on its payload.`,
-    severity: "error",
-    loc: conflict.decl.loc,
-  });
+  ctx.errors.push(
+    diagnostic("effectPayloadConflict", { effect }, conflict.decl.loc ?? null),
+  );
   return null;
 }
 
@@ -150,11 +146,7 @@ function checkRaiseSite(
   // no named parameter — reject named args at this site as a separate error.
   const named = node.arguments.find((a) => a.type === "namedArgument");
   if (named) {
-    ctx.errors.push({
-      message: `Named arguments are not allowed on 'raise'/'interrupt'. Pass the data positionally.`,
-      severity: "error",
-      loc: node.loc,
-    });
+    ctx.errors.push(diagnostic("namedArgsOnRaise", {}, node.loc ?? null));
     return;
   }
 
@@ -168,13 +160,13 @@ function checkRaiseSite(
   // No data supplied.
   if (!dataArg) {
     if (required.length > 0) {
-      ctx.errors.push({
-        message:
-          `Effect '${node.effect}' expects data ${formatObject(payloadType)}, ` +
-          `but none was supplied.`,
-        severity: "error",
-        loc: node.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "effectDataMissing",
+          { effect: node.effect, payload: formatObject(payloadType) },
+          node.loc ?? null,
+        ),
+      );
     }
     return; // empty declaration + no data is fine
   }
@@ -189,19 +181,23 @@ function checkRaiseSite(
     for (const prop of required) {
       const got = argType.properties.find((p) => p.key === prop.key);
       if (!got) {
-        ctx.errors.push({
-          message: `Effect '${node.effect}' data field '${prop.key}' is missing.`,
-          severity: "error",
-          loc: node.loc,
-        });
+        ctx.errors.push(
+          diagnostic(
+            "effectDataFieldMissing",
+            { effect: node.effect, field: prop.key },
+            node.loc ?? null,
+          ),
+        );
         continue;
       }
       if (!isAssignable(got.value, prop.value, ctx.getTypeAliases())) {
-        ctx.errors.push({
-          message: `Effect '${node.effect}' data field '${prop.key}' has the wrong type.`,
-          severity: "error",
-          loc: node.loc,
-        });
+        ctx.errors.push(
+          diagnostic(
+            "effectDataFieldWrongType",
+            { effect: node.effect, field: prop.key },
+            node.loc ?? null,
+          ),
+        );
       }
     }
     return;
@@ -209,12 +205,13 @@ function checkRaiseSite(
 
   // Non-object data (e.g. a variable): fall back to whole-type assignability.
   if (!isAssignable(argType, payloadType, ctx.getTypeAliases())) {
-    ctx.errors.push({
-      message:
-        `Effect '${node.effect}' data does not match the declared ${formatObject(payloadType)}.`,
-      severity: "error",
-      loc: node.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "effectDataMismatch",
+        { effect: node.effect, payload: formatObject(payloadType) },
+        node.loc ?? null,
+      ),
+    );
   }
 }
 

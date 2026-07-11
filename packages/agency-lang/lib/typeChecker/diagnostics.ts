@@ -188,6 +188,290 @@ export const DIAGNOSTICS = {
     message:
       "{contextLabel} cannot `interrupt(...)` — interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body.",
   },
+  unionFieldNotOnEveryMember: {
+    code: "AG2008",
+    severity: "error",
+    message:
+      "Property '{field}' is not available on every member of '{union}'; narrow the value (e.g. with a guard) before accessing it.",
+  },
+  resultBranchFieldAccess: {
+    code: "AG2009",
+    severity: "error",
+    message:
+      "'.{field}' is only available on a {branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) {{ … }}'.",
+  },
+  dimensionMismatch: {
+    code: "AG2010",
+    severity: "error",
+    message:
+      "Cannot {op} values of different dimensions ({leftDim} and {rightDim}): '{left}' and '{right}'.",
+  },
+  propertyDoesNotExist: {
+    code: "AG2011",
+    severity: "error",
+    message: "Property '{property}' does not exist on type '{type}'.",
+  },
+  partialRequiresNamedArgs: {
+    code: "AG6003",
+    severity: "error",
+    message: ".partial() requires named arguments, e.g. fn.partial(a: 5).",
+  },
+  unknownPartialParameter: {
+    code: "AG6004",
+    severity: "error",
+    message:
+      "Unknown parameter '{name}' in .partial() call. '{fn}' has parameters: {params}.",
+  },
+  partialArgNotAssignable: {
+    code: "AG6005",
+    severity: "error",
+    message:
+      "Argument type '{actual}' is not assignable to parameter type '{expected}' in .partial() call to '{fn}'.",
+  },
+  namedArgsOnBuiltinMethod: {
+    code: "AG6006",
+    severity: "error",
+    message: "Named arguments are not supported on built-in method '.{method}()'.",
+  },
+  methodArityExact: {
+    code: "AG6007",
+    severity: "error",
+    message: "Method '.{method}()' expects {expected} argument(s), got {count}.",
+  },
+  methodArityAtLeast: {
+    code: "AG6008",
+    severity: "error",
+    message:
+      "Method '.{method}()' expects at least {min} argument(s), got {count}.",
+  },
+  methodArityRange: {
+    code: "AG6009",
+    severity: "error",
+    message: "Method '.{method}()' expects {min}–{max} argument(s), got {count}.",
+  },
+  builtinMethodArgNotAssignable: {
+    code: "AG6010",
+    severity: "error",
+    message:
+      "Argument type '{actual}' is not assignable to parameter type '{expected}' in call to '.{method}()'.",
+  },
+  namedArgsOnlyAgencyFunctions: {
+    code: "AG6011",
+    severity: "error",
+    message:
+      "Named arguments can only be used with Agency-defined functions, not '{fn}'.",
+  },
+  namedArgNotAccepted: {
+    code: "AG6012",
+    severity: "error",
+    message:
+      "'{fn}' does not accept the named argument '{name}'. Allowed: {allowed}.",
+  },
+  duplicateNamedArg: {
+    code: "AG6013",
+    severity: "error",
+    message: "Duplicate named argument '{name}' in call to '{fn}'.",
+  },
+  namedArgTypeMismatch: {
+    code: "AG6014",
+    severity: "error",
+    message:
+      "Named argument '{name}' on '{fn}' expects type '{expected}', got '{actual}'.",
+  },
+  blockArgNotAccepted: {
+    code: "AG6015",
+    severity: "error",
+    message: "'{fn}' does not accept a block argument.",
+  },
+  callArityExact: {
+    code: "AG6016",
+    severity: "error",
+    message: "Expected {expected} argument(s) for '{fn}', but got {count}.",
+  },
+  callArityAtLeast: {
+    code: "AG6017",
+    severity: "error",
+    message: "Expected at least {min} argument(s) for '{fn}', but got {count}.",
+  },
+  callArityRange: {
+    code: "AG6018",
+    severity: "error",
+    message: "Expected {min}-{max} argument(s) for '{fn}', but got {count}.",
+  },
+  argNotAssignable: {
+    code: "AG6019",
+    severity: "error",
+    message:
+      "Argument type '{actual}' is not assignable to parameter type '{expected}' in call to '{fn}'.",
+  },
+  splatMustBeArray: {
+    code: "AG6020",
+    severity: "error",
+    message: "Splat argument must be an array, got '{actual}' in call to '{fn}'.",
+  },
+  splatElementNotAssignable: {
+    code: "AG6021",
+    severity: "error",
+    message:
+      "Splat element type '{actual}' is not assignable to parameter type '{expected}' in call to '{fn}'.",
+  },
+  pipeSlotNotAssignable: {
+    code: "AG6022",
+    severity: "error",
+    message:
+      "Type '{actual}' is not assignable to pipe slot of type '{expected}'.",
+  },
+  splatAfterNamedArg: {
+    code: "AG6023",
+    severity: "error",
+    message: "Splat argument cannot follow a named argument in call to '{fn}'.",
+  },
+  positionalAfterNamedArg: {
+    code: "AG6024",
+    severity: "error",
+    message:
+      "Positional argument cannot follow a named argument in call to '{fn}'.",
+  },
+  unknownNamedArg: {
+    code: "AG6025",
+    severity: "error",
+    message: "Unknown named argument '{name}' in call to '{fn}'.",
+  },
+  namedArgConflictsPositional: {
+    code: "AG6026",
+    severity: "error",
+    message:
+      "Named argument '{name}' conflicts with positional argument at position {position} in call to '{fn}'.",
+  },
+  positionalFeedsNamedVariadic: {
+    code: "AG6027",
+    severity: "error",
+    message:
+      "Positional argument cannot feed variadic parameter '{param}' when it is also bound by name in call to '{fn}'.",
+  },
+  effectDeclaredTwice: {
+    code: "AG3002",
+    severity: "error",
+    message: "Effect '{effect}' is declared more than once in the same file.",
+  },
+  effectPayloadConflict: {
+    code: "AG3003",
+    severity: "error",
+    message:
+      "Conflicting payload types for effect '{effect}'. All declarations of an effect must agree on its payload.",
+  },
+  namedArgsOnRaise: {
+    code: "AG3004",
+    severity: "error",
+    message:
+      "Named arguments are not allowed on 'raise'/'interrupt'. Pass the data positionally.",
+  },
+  effectDataMissing: {
+    code: "AG3005",
+    severity: "error",
+    message: "Effect '{effect}' expects data {payload}, but none was supplied.",
+  },
+  effectDataFieldMissing: {
+    code: "AG3006",
+    severity: "error",
+    message: "Effect '{effect}' data field '{field}' is missing.",
+  },
+  effectDataFieldWrongType: {
+    code: "AG3007",
+    severity: "error",
+    message: "Effect '{effect}' data field '{field}' has the wrong type.",
+  },
+  effectDataMismatch: {
+    code: "AG3008",
+    severity: "error",
+    message: "Effect '{effect}' data does not match the declared {payload}.",
+  },
+  unhandledInterrupts: {
+    code: "AG3009",
+    severity: "warning",
+    message:
+      "Function '{fn}' may throw interrupts [{effects}] but is not inside a handler.",
+  },
+  handlerBodyRaises: {
+    code: "AG3010",
+    severity: "error",
+    message:
+      "Handler {handler} may raise interrupts [{effects}]. That would re-enter the handler chain (the dispatcher visits every handler, even the one currently running) and recurse until `HandlerRecursionError` fires at runtime. Restructure so the handler doesn't call interrupt-raising code (e.g. hoist file I/O out of the handler), or suppress this error with `// @tc-ignore` on the line above the `handle` block.",
+  },
+  interruptInCallback: {
+    code: "AG3011",
+    severity: "error",
+    message:
+      "`interrupt` is not allowed inside a callback body (callback registered on '{hook}' may raise [{effects}]). Callbacks fire as side effects; their body cannot pause execution to ask the user a question. Move the `interrupt` into the calling node/function instead, or use a runtime guard if you wanted budget enforcement.",
+  },
+  raisesNotAnEffectSet: {
+    code: "AG3012",
+    severity: "error",
+    message:
+      "'raises {ref}' is not an effect set. Declare '{ref}' with 'effectSet' (not 'type'), or use an inline set like '<...>'.",
+  },
+  raisesExceeded: {
+    code: "AG3013",
+    severity: "error",
+    message:
+      "{kind} '{name}' raises effect '{effect}', which exceeds its declared 'raises {declared}'. Add '{effect}' to the clause.",
+  },
+  valueMayRaiseAnyEffect: {
+    code: "AG3014",
+    severity: "error",
+    message:
+      "{who} may raise any effect (its type has no 'raises' clause), which exceeds the 'raises <{allowed}>' allowed by type '{type}'. Add a 'raises' clause to the value's type.",
+  },
+  valueEffectExceedsRaises: {
+    code: "AG3015",
+    severity: "error",
+    message:
+      "{who} raises effect '{effect}', which exceeds the 'raises <{allowed}>' allowed by type '{type}'. Add '{effect}' to the clause, or use a target type that allows it.",
+  },
+  undefinedFunction: {
+    code: "AG4004",
+    severity: "error",
+    message: "Function '{name}' is not defined.",
+  },
+  reservedBlockKeyword: {
+    code: "AG4006",
+    severity: "error",
+    message:
+      "`{keyword}` is a reserved block keyword. Write `{keyword} {{ ... }}` or `{keyword}(args) {{ ... }}` directly — the `as` keyword is not supported on {keyword} blocks (there's nothing to bind).",
+  },
+  undefinedVariable: {
+    code: "AG4007",
+    severity: "error",
+    message: "Variable '{name}' is not defined.",
+  },
+  matchNotExhaustive: {
+    code: "AG5002",
+    severity: "error",
+    message: "match is not exhaustive: missing {missing}.",
+  },
+  notAllPathsReturn: {
+    code: "AG2012",
+    severity: "error",
+    message: "Not all code paths return a value in '{fn}'.",
+  },
+  toolRequiredParamUnbound: {
+    code: "AG6028",
+    severity: "error",
+    message:
+      "Tool '{tool}' has required function-typed parameter '{param}' is unbound. Bind it with .partial({param}: <value>) before passing as a tool.",
+  },
+  toolRequiredParamUnboundTyped: {
+    code: "AG6029",
+    severity: "error",
+    message:
+      "Tool '{tool}' has required function-typed parameter '{param}' is unbound ({type}). Bind it with .partial({param}: <value>) before passing as a tool.",
+  },
+  toolOptionalParamsDropped: {
+    code: "AG6030",
+    severity: "warning",
+    message:
+      "Tool '{tool}' will be exposed to the LLM without optional function-typed parameter(s): {params}. The function body must be prepared to run with the declared default for each.",
+  },
   staticReassignedAtTopLevel: {
     code: "AG7004",
     severity: "error",
@@ -198,9 +482,19 @@ export const DIAGNOSTICS = {
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;
 
-/** The {placeholder} names of a template, as a string-literal union. */
+/**
+ * The {placeholder} names of a template, as a string-literal union.
+ * A candidate containing a brace or space is not a placeholder — it comes
+ * from an {{escaped}} literal-brace region — and is dropped (mirrors the
+ * runtime \w+ rule in renderMessage).
+ */
+type NonPlaceholderChar = "{" | "}" | " ";
+type IsPlaceholderName<P extends string> =
+  P extends `${string}${NonPlaceholderChar}${string}` ? false : true;
 type Placeholders<S extends string> =
-  S extends `${string}{${infer P}}${infer Rest}` ? P | Placeholders<Rest> : never;
+  S extends `${string}{${infer P}}${infer Rest}`
+    ? (IsPlaceholderName<P> extends true ? P : never) | Placeholders<Rest>
+    : never;
 
 /**
  * Typed params for a diagnostic: every {placeholder} in its template is a
@@ -216,7 +510,9 @@ export type DiagnosticParams<N extends DiagnosticName> = Record<
   Record<string, string | number>;
 
 /**
- * Render a template. Throws on a missing param: typed call sites cannot hit
+ * Render a template. Literal braces in message text are written as {{ and }}
+ * (unescaped after substitution, so they can never be misread as
+ * placeholders). Throws on a missing param: typed call sites cannot hit
  * this, but an `as any` caller or future untyped path must fail loudly
  * rather than ship the string "undefined" inside a user-facing message.
  */
@@ -224,15 +520,23 @@ export function renderMessage(
   template: string,
   params: Record<string, string | number>,
 ): string {
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
-    const value = params[key];
-    if (value === undefined) {
-      throw new Error(
-        `renderMessage: missing param '${key}' for template: ${template}`,
-      );
-    }
-    return String(value);
-  });
+  const OPEN_SENTINEL = "\u0000";
+  const CLOSE_SENTINEL = "\u0001";
+  const substituted = template
+    .replace(/\{\{/g, OPEN_SENTINEL)
+    .replace(/\}\}/g, CLOSE_SENTINEL)
+    .replace(/\{(\w+)\}/g, (_, key: string) => {
+      const value = params[key];
+      if (value === undefined) {
+        throw new Error(
+          `renderMessage: missing param '${key}' for template: ${template}`,
+        );
+      }
+      return String(value);
+    });
+  return substituted
+    .replace(new RegExp(OPEN_SENTINEL, "g"), "{")
+    .replace(new RegExp(CLOSE_SENTINEL, "g"), "}");
 }
 
 /**

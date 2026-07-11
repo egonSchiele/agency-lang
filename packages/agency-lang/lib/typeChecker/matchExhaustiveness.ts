@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { MatchArmMeta, MatchBlockCase } from "../types/matchBlock.js";
 import type { SourceLocation } from "../types/base.js";
@@ -206,11 +207,14 @@ function checkSite(site: MatchSite, configured: Severity, ctx: TypeCheckerContex
   if (missing.length === 0) {
     return;
   }
-  ctx.errors.push({
-    message: `match is not exhaustive: missing ${missing.map(describeCase).join(", ")}.`,
-    severity: severity === "warn" ? "warning" : "error",
-    loc: site.loc,
-  });
+  ctx.errors.push(
+    diagnostic(
+      "matchNotExhaustive",
+      { missing: missing.map(describeCase).join(", ") },
+      site.loc ?? null,
+      { severity: severity === "warn" ? "warning" : "error" },
+    ),
+  );
 }
 
 /** Normalize the two surviving match shapes to `(scrutineeType, arms)`. */

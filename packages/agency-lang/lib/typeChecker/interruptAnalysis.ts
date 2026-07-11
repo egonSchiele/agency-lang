@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
@@ -396,11 +397,13 @@ export function checkUnhandledInterruptWarnings(
       if (!kinds || kinds.length === 0) continue;
       if (isInsideHandler(ancestors)) continue;
       const kindList = kinds.map((ik) => ik.effect).join(", ");
-      ctx.errors.push({
-        message: `Function '${node.functionName}' may throw interrupts [${kindList}] but is not inside a handler.`,
-        severity: "warning",
-        loc: node.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "unhandledInterrupts",
+          { fn: node.functionName, effects: kindList },
+          node.loc ?? null,
+        ),
+      );
     }
   }
 }
@@ -441,19 +444,14 @@ export function checkHandlerBodyInterrupts(
           node.handler.kind === "functionRef"
             ? `'${node.handler.functionName}'`
             : "(inline)";
-        ctx.errors.push({
-          message:
-            `Handler ${handlerLabel} may raise interrupts [${kinds.join(", ")}]. ` +
-            `That would re-enter the handler chain (the dispatcher visits ` +
-            `every handler, even the one currently running) and recurse ` +
-            `until \`HandlerRecursionError\` fires at runtime. ` +
-            `Restructure so the handler doesn't call interrupt-raising ` +
-            `code (e.g. hoist file I/O out of the handler), or suppress ` +
-            `this error with \`// @tc-ignore\` on the line above the ` +
-            `\`handle\` block.`,
-          severity: "error",
-          loc: node.loc,
-        });
+        // {handler} is a subject reference — a quoted name or "(inline)".
+        ctx.errors.push(
+          diagnostic(
+            "handlerBodyRaises",
+            { handler: handlerLabel, effects: kinds.join(", ") },
+            node.loc ?? null,
+          ),
+        );
       }
     });
   }
@@ -561,17 +559,13 @@ export function checkCallbackBodyInterrupts(
       if (!kinds || kinds.length === 0) continue;
 
       const kindList = kinds.map((ik) => ik.effect).join(", ");
-      ctx.errors.push({
-        message:
-          `\`interrupt\` is not allowed inside a callback body ` +
-          `(callback registered on '${hookName}' may raise [${kindList}]). ` +
-          `Callbacks fire as side effects; their body cannot pause execution ` +
-          `to ask the user a question. Move the \`interrupt\` into the ` +
-          `calling node/function instead, or use a runtime guard if you ` +
-          `wanted budget enforcement.`,
-        severity: "error",
-        loc: node.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "interruptInCallback",
+          { hook: hookName, effects: kindList },
+          node.loc ?? null,
+        ),
+      );
     }
   }
 }

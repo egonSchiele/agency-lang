@@ -130,6 +130,12 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
         input: 'def f(x: (A & B)["id"]) { x }',
         expectedOutput: 'def f(x: (A & B)["id"]) {\nx\n}',
       },
+
+      {
+        description: "schema chaining round-trips (issue #480)",
+        input: 'def f(x: string) { const r = schema(number).parseJSON(x) }',
+        expectedOutput: 'def f(x: string) {\n  const r = schema(number).parseJSON(x)\n}',
+      },
     ];
 
     testCases.forEach(({ description, input, expectedOutput }) => {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { evalKeyof, evalIndexedAccess } from "./typeOperators.js";
+import { evalKeyof, evalIndexedAccess, evalIntersection } from "./typeOperators.js";
+import { typeKey } from "./typeKey.js";
 import { typecheckSource } from "./testUtils.js";
 import type { VariableType } from "../types.js";
 
@@ -7,6 +8,8 @@ const STR: VariableType = { type: "primitiveType", value: "string" };
 const NUM: VariableType = { type: "primitiveType", value: "number" };
 const AGE_TAG = { type: "tag" as const, name: "validate", arguments: [] };
 const id = (t: VariableType) => t;
+const eq = (a: VariableType, b: VariableType) =>
+  typeKey(a, {}) === typeKey(b, {});
 
 function user(): VariableType {
   return {
@@ -297,5 +300,277 @@ node main() {
 }
 `);
     expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("evalIntersection", () => {
+  const NAME_TAG = { type: "tag" as const, name: "validate", arguments: [] };
+
+  function named(): VariableType {
+    return {
+      type: "objectType",
+      properties: [
+        { key: "id", value: STR },
+        { key: "name", value: STR, tags: [NAME_TAG] },
+      ],
+    };
+  }
+
+  function aged(): VariableType {
+    return {
+      type: "objectType",
+      properties: [
+        { key: "id", value: STR },
+        { key: "age", value: NUM },
+      ],
+    };
+  }
+
+  it("merges disjoint keys in first-seen order", () => {
+    const out = evalIntersection([named(), aged()], id, eq);
+    expect(out).toMatchObject({
+      type: "objectType",
+      properties: [{ key: "id" }, { key: "name" }, { key: "age" }],
+    });
+  });
+
+  it("an identical shared key keeps one copy (non-object types included)", () => {
+    const out = evalIntersection([named(), aged()], id, eq) as {
+      properties: { key: string }[];
+    };
+    expect(out.properties.filter((p) => p.key === "id")).toHaveLength(1);
+  });
+
+  it("shared object-typed keys merge RECURSIVELY (nested level asserted)", () => {
+    const a: VariableType = {
+      type: "objectType",
+      properties: [
+        {
+          key: "config",
+          value: {
+            type: "objectType",
+            properties: [{ key: "host", value: STR }],
+          },
+        },
+      ],
+    };
+    const b: VariableType = {
+      type: "objectType",
+      properties: [
+        {
+          key: "config",
+          value: {
+            type: "objectType",
+            properties: [{ key: "port", value: NUM }],
+          },
+        },
+      ],
+    };
+    expect(evalIntersection([a, b], id, eq)).toEqual({
+      type: "objectType",
+      properties: [
+        {
+          key: "config",
+          value: {
+            type: "objectType",
+            properties: [
+              { key: "host", value: STR },
+              { key: "port", value: NUM },
+            ],
+          },
+        },
+      ],
+    });
+  });
+
+  it("a conflicting shared key errors, naming the key and both types", () => {
+    const a: VariableType = {
+      type: "objectType",
+      properties: [{ key: "id", value: STR }],
+    };
+    const b: VariableType = {
+      type: "objectType",
+      properties: [{ key: "id", value: NUM }],
+    };
+    expect(() => evalIntersection([a, b], id, eq)).toThrow(
+      /cannot intersect key 'id'.*string.*number/,
+    );
+  });
+
+  it("shared-key tags merge: BOTH validate chains survive", () => {
+    const a: VariableType = {
+      type: "objectType",
+      properties: [{ key: "id", value: STR, tags: [NAME_TAG] }],
+    };
+    const otherTag = { type: "tag" as const, name: "validate", arguments: [] };
+    const b: VariableType = {
+      type: "objectType",
+      properties: [{ key: "id", value: STR, tags: [otherTag] }],
+    };
+    const out = evalIntersection([a, b], id, eq) as {
+      properties: { tags?: { name: string }[] }[];
+    };
+    // mergeTagSets collapses stacked @validate tags into ONE combined
+    // tag; assert a validate tag survives rather than counting tags.
+    expect(out.properties[0].tags?.some((t) => t.name === "validate")).toBe(
+      true,
+    );
+  });
+
+  it("three-way merge groups ALL operands at once", () => {
+    const c: VariableType = {
+      type: "objectType",
+      properties: [{ key: "extra", value: STR }],
+    };
+    const out = evalIntersection([named(), aged(), c], id, eq);
+    expect(out).toMatchObject({
+      properties: [
+        { key: "id" },
+        { key: "name" },
+        { key: "age" },
+        { key: "extra" },
+      ],
+    });
+  });
+
+  it("rejects every non-object operand, including never", () => {
+    expect(() => evalIntersection([named(), NUM], id, eq)).toThrow(
+      /intersection expects an object type/,
+    );
+    expect(() =>
+      evalIntersection(
+        [named(), { type: "primitiveType", value: "never" }],
+        id,
+        eq,
+      ),
+    ).toThrow(/intersection expects an object type/);
+    const rec: VariableType = {
+      type: "genericType",
+      name: "Record",
+      typeArgs: [STR, NUM],
+    };
+    expect(() => evalIntersection([named(), rec], id, eq)).toThrow(
+      /intersection expects an object type/,
+    );
+  });
+
+  it("does not mutate its inputs", () => {
+    const a = named();
+    const snapshot = JSON.parse(JSON.stringify(a));
+    evalIntersection([a, aged()], id, eq);
+    expect(a).toEqual(snapshot);
+  });
+
+  it("is associative on RESOLVED results (compared by typeKey)", () => {
+    const extra: VariableType = {
+      type: "objectType",
+      properties: [{ key: "extra", value: STR }],
+    };
+    const resolve = (t: VariableType): VariableType =>
+      t.type === "intersectionType"
+        ? evalIntersection(t.types, resolve, eq)
+        : t;
+    const leftNested = evalIntersection(
+      [{ type: "intersectionType", types: [named(), aged()] }, extra],
+      resolve,
+      eq,
+    );
+    const rightNested = evalIntersection(
+      [named(), { type: "intersectionType", types: [aged(), extra] }],
+      resolve,
+      eq,
+    );
+    expect(typeKey(leftNested, {})).toBe(typeKey(rightNested, {}));
+  });
+});
+
+describe("intersections through the full pipeline", () => {
+  it("accepts a complete value against a merged type, rejects a partial one", () => {
+    const ok = typecheckSource(`
+type Named = { id: string, name: string }
+type Aged = { id: string, age: number }
+node main() {
+  const p: Named & Aged = { id: "1", name: "a", age: 3 }
+  return p
+}
+`);
+    expect(ok).toEqual([]);
+    const bad = typecheckSource(`
+type Named = { id: string, name: string }
+type Aged = { id: string, age: number }
+node main() {
+  const p: Named & Aged = { id: "1", name: "a" }
+  return p
+}
+`);
+    expect(bad.map((e) => e.message).join("\n")).toMatch(/not assignable/);
+  });
+
+  it("composes: Partial of a merge, keyof of a merge, index into a merge", () => {
+    const errors = typecheckSource(`
+type Named = { id: string, name: string }
+type Aged = { id: string, age: number }
+node main() {
+  const a: Partial<Named & Aged> = { id: null, name: null, age: null }
+  const k: keyof (Named & Aged) = "age"
+  const n: (Named & Aged)["age"] = 3
+  return k
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("a generic alias can delegate: type Mix<T> = T & Stamp", () => {
+    const errors = typecheckSource(`
+type Stamp = { createdAt: string }
+type Named = { name: string }
+type Mix<T> = T & Stamp
+node main() {
+  const m: Mix<Named> = { name: "a", createdAt: "now" }
+  return m
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("a recursive alias can be an operand (nominal self-refs survive)", () => {
+    const errors = typecheckSource(`
+type Tree = { value: number, children: Tree[] }
+node main() {
+  const t: Tree & { label: string } = {
+    value: 1,
+    children: [],
+    label: "root",
+  }
+  return t
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("an unknown alias inside an intersection is reported (visitTypes wiring)", () => {
+    // Review finding: validateTypeReferences walks via visitTypes, whose
+    // intersection case Task 1 added — prove the wiring instead of
+    // assuming it.
+    const errors = typecheckSource(`
+type A = { x: number }
+type X = A & Undefined
+node main() {
+  return 1
+}
+`);
+    expect(errors.map((e) => e.message).join("\n")).toMatch(
+      /Type alias 'Undefined' is not defined/,
+    );
+  });
+
+  it("semantic errors stay swallowed at typecheck time: string & number member", () => {
+    const errors = typecheckSource(`
+node main() {
+  const x: { id: string } & { id: number } = { id: "1" }
+  return x
+}
+`);
+    expect(errors).toEqual([]);
   });
 });

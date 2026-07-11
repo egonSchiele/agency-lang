@@ -1,0 +1,20 @@
+// Issue #480: method calls chained directly on schema(...) expressions.
+// The accept node uses a type-grammar argument (number[]) that could never
+// parse as a call argument, proving the chained form goes through the
+// schema atom. No LLM calls.
+
+node chainedAccept() {
+  const r = schema(number[]).parseJSON("[1,2,3]")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "failed"
+}
+
+node chainedReject() {
+  const r = schema(number).parseJSON("\"not a number\"")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

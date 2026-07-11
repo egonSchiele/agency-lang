@@ -2,7 +2,15 @@
 // `rm -rf dist/lib/agents && cp -r` recipe, which deleted every compiled
 // agent output on every make and made incremental agent skips impossible.
 // Rules:
-//   1. copy every file from src over dest (overwrite);
+//   1. copy every file from src over dest (overwrite) — EXCEPT a compiled
+//      `.js` whose `.agency` sibling exists in src. Such a `.js` is stale
+//      build litter left in the SOURCE tree (agents were once compiled
+//      in-place); the compiler is the sole author of the corresponding
+//      dest `.js`. Copying it would clobber the compiler's fresh dest
+//      output, and the manifest's fresh-skip (keyed on the unchanged
+//      `.agency` sourceHash) would then never re-emit it, shipping a stale
+//      module that imports symbols its source no longer defines (#498).
+//      Handwritten `.js` helpers (no `.agency` sibling) are still copied.
 //   2. delete dest files whose source counterpart is gone — a deleted
 //      foo.agency takes its compiled foo.js with it;
 //   3. never touch dest/docs/ (owned by the stage-agent-docs recipe) and
@@ -34,6 +42,12 @@ export function syncAgents(srcDir, destDir) {
   let copied = 0;
   for (const srcFile of walk(srcDir)) {
     const rel = path.relative(srcDir, srcFile);
+    // Never stage a compiled `.js` whose `.agency` sibling lives in src:
+    // it is stale build litter, and copying it would clobber the
+    // compiler-owned dest output the incremental skip trusts (see rule 1).
+    if (rel.endsWith(".js") && fs.existsSync(srcFile.replace(/\.js$/, ".agency"))) {
+      continue;
+    }
     const destFile = path.join(destDir, rel);
     fs.mkdirSync(path.dirname(destFile), { recursive: true });
     fs.copyFileSync(srcFile, destFile);

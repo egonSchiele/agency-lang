@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getModuleDir } from "../runtime/asyncContext.js";
+import { getStdlibDir } from "../importPaths.js";
 import { expandPath } from "./expandPath.js";
 
 /**
@@ -24,4 +25,14 @@ export function _readSkill(filepath: string): string {
   const dirname = getModuleDir();
   const fullPath = path.resolve(dirname, expandPath(filepath));
   return fs.readFileSync(fullPath, "utf8");
+}
+
+/**
+ * Absolute path to a section of the packaged Agency docs. `make` stages
+ * `docs/site/{guide,cli}` into `stdlib/docs/` (see stage-stdlib-docs in
+ * the makefile), and stdlib resolves in both dev and npm installs via
+ * getStdlibDir, so one copy serves compiled and source runs.
+ */
+export function _docsDir(section: "guide" | "cli"): string {
+  return path.join(getStdlibDir(), "docs", section);
 }

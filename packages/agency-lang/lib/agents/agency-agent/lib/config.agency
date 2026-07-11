@@ -96,5 +96,15 @@ export static const ALWAYS_FIELDS: ScopedRuleFields = {
     field: "subcommand",
     matchSubpaths: false
   },
+  ],
+  "mcp::call": [
+    {
+    field: "server",
+    matchSubpaths: false
+  },
+    {
+    field: "tool",
+    matchSubpaths: false
+  },
   ]
 }

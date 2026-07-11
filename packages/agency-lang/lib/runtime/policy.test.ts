@@ -303,3 +303,44 @@ describe("validatePolicy", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("checkPolicy for mcp::call", () => {
+  const intr = (data: any) => ({
+    effect: "mcp::call",
+    message: "m",
+    data,
+    origin: "o",
+  });
+
+  it("matches on server and on server+tool; args is not matchable", () => {
+    const rejectGithub = {
+      "mcp::call": [{ match: { server: "github" }, action: "reject" as const }],
+    };
+    expect(
+      checkPolicy(rejectGithub, intr({ server: "github", tool: "x", args: {} })).type,
+    ).toBe("reject");
+
+    const approveRead = {
+      "mcp::call": [
+        { match: { server: "fs", tool: "read_file" }, action: "approve" as const },
+      ],
+    };
+    expect(
+      checkPolicy(
+        approveRead,
+        intr({ server: "fs", tool: "read_file", args: { path: "/a" } }),
+      ).type,
+    ).toBe("approve");
+
+    // A rule that tries to match on args does NOT match (nested object) → propagate.
+    const argsRule = {
+      "mcp::call": [{ match: { args: "anything" }, action: "approve" as const }],
+    };
+    expect(
+      checkPolicy(
+        argsRule,
+        intr({ server: "fs", tool: "read_file", args: { path: "/a" } }),
+      ).type,
+    ).toBe("propagate");
+  });
+});

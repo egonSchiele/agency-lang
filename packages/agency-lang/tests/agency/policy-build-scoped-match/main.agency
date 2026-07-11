@@ -32,5 +32,22 @@ node main() {
   const m3 = buildScopedMatch(otherIntr, fields)
   if (keys(m3).length != 0) { return "FAIL: should be empty for unknown kind" }
 
+  // mcp::call pins server+tool and EXCLUDES the nested per-call args object, so
+  // an "always" rule keeps matching later calls with different args.
+  const mcpFields: ScopedRuleFields = {
+    "mcp::call": [
+      { field: "server", matchSubpaths: false },
+      { field: "tool", matchSubpaths: false },
+    ],
+  }
+  const mcpIntr = {
+    effect: "mcp::call",
+    data: { server: "fs", tool: "read_file", args: { path: "/tmp/a" } }
+  }
+  const m4 = buildScopedMatch(mcpIntr, mcpFields)
+  if (m4.server != "fs") { return "FAIL: mcp server not pinned" }
+  if (m4.tool != "read_file") { return "FAIL: mcp tool not pinned" }
+  if (keys(m4).length != 2) { return "FAIL: mcp match should be server+tool only, not args" }
+
   return "pass"
 }

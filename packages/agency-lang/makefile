@@ -65,6 +65,7 @@ build:
 	mkdir -p dist/lib/stdlib/providers
 	rm -f dist/lib/stdlib/providers/*.mjs
 	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
+	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 
 # Full reset: compiled TS, incremental scratch state, and the gitignored
 # stdlib .js siblings. Both dist/ AND stdlib/**/*.js ship in the npm

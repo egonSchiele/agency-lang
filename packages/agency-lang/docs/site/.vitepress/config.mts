@@ -8,6 +8,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
+      { text: "Agent", link: "/agent/index" },
       { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/index" },
       { text: "Packages", link: "/packages/" },
@@ -200,6 +201,15 @@ export default defineConfig({
           ],
         },
       ],
+      "/agent/": [
+        {
+          text: "Agent",
+          items: [
+            { text: "Overview", link: "/agent/index" },
+            { text: "MCP servers", link: "/agent/mcp" },
+          ],
+        },
+      ],
       "/cli/": [
         {
           text: "CLI",
@@ -301,6 +311,7 @@ export default defineConfig({
             { text: "llm", link: "/stdlib/llm" },
             { text: "markdown", link: "/stdlib/markdown" },
             { text: "math", link: "/stdlib/math" },
+            { text: "mcp", link: "/stdlib/mcp" },
             { text: "memory", link: "/stdlib/memory" },
             {
               text: "messaging",

@@ -43,7 +43,8 @@ export type ModelSettings = {
 export type Settings = {
   search?: SearchSettings;
   model?: ModelSettings;
-  capabilities?: CapabilitySettings
+  capabilities?: CapabilitySettings;
+  mcpServers?: Record<string, any>
 }
 
 /** Return a NEW ModelSettings with unknown slot keys dropped (warned). Does NOT
@@ -95,6 +96,14 @@ export def getCapabilitySettings(settings: Settings): CapabilitySettings {
     return {}
   }
   return settings.capabilities
+}
+
+/** The global mcpServers block, or empty when absent. */
+export def getMcpServers(settings: Settings): Record<string, any> {
+  if (settings.mcpServers == null) {
+    return {}
+  }
+  return settings.mcpServers
 }
 
 /*

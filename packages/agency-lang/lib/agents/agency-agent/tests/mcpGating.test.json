@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "approves",
+      "input": "",
+      "expectedOutput": "\"called\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "approvesTwiceDifferentArgs",
+      "input": "",
+      "expectedOutput": "\"called,called\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

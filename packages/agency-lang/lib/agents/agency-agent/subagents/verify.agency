@@ -1,0 +1,112 @@
+import { ls, glob, grep, exec } from "std::shell"
+import { systemMessage } from "std::thread"
+import { map } from "std::array"
+
+/*
+ * Verify subagent — a fresh-eyes critic for the code agent's one-shot
+ * loop. It re-reads the original task, inspects the working directory,
+ * RUNS the produced artifact against the task's own success criteria,
+ * and returns a structured `Verdict`. It never writes or edits — it
+ * reports gaps; the code agent fixes them. Modeled on `oracle.agency`.
+ */
+
+// Structured verdict the code-agent loop matches on.
+export type Verdict = {
+  satisfied: boolean;
+  gaps: string[];
+}
+
+// Inspect + run, but no `write`/`edit`: the verifier reports, it never
+// fixes. Uses `exec` (structured command + args, allow/block-listable) NOT
+// `bash` — a bash string can't be constrained, so a "read-only" claim over
+// it would be false. Partial-applied with `useAgentCwd` so paths resolve
+// against the same working directory the code agent used (`setAgentCwd`),
+// where the artifacts live.
+export static const verifyTools: any[] = [
+  read.partial(useAgentCwd: true),
+  ls.partial(useAgentCwd: true),
+  glob.partial(useAgentCwd: true),
+  grep.partial(useAgentCwd: true),
+  exec.partial(useAgentCwd: true),
+]
+
+export static const verifySysPrompt = """
+You **verify** whether a coding task was actually completed correctly.
+You do NOT fix anything — you inspect, run, and report.
+
+The grading tests are hidden and are NOT in this environment, so do not
+go looking for a test suite. Instead, **reconstruct the success check
+from the task's own description** — and any example usage or sample
+input/output it provides — then RUN the agent's artifact through it:
+apply the regex, execute the program, run the provided example, curl the
+endpoint, query the db. Run programs with the `exec` tool (a command plus
+an args array); install a package with `exec` ONLY if you need it to run
+the artifact.
+
+Check the output contract **literally**:
+- the exact required file path and name,
+- the exact format (JSON keys, field types, units, signed-vs-unsigned, a
+  trailing newline),
+- every explicit criterion in the request.
+
+If nothing is runnable, fall back to a close read of the artifact against
+the requirements. You are a best-effort proxy for the hidden grader —
+report gaps, don't fix them. When genuinely unsure, lean toward
+`satisfied` rather than blocking on uncertainty.
+"""
+
+// Render gaps as a bullet list for the re-prompt. Small, pure, testable.
+export def renderGaps(gaps: string[]): string {
+  return map(gaps, \g -> "- ${g}").join("\n")
+}
+
+// Unwrap a `try verify(...)` Result to a plain Verdict, failing OPEN on any
+// Failure (verifier crashed / no verdict) — verification can only help,
+// never block. The failure message is kept in `gaps` so it surfaces in the
+// trace instead of being swallowed; `satisfied` stays true so it doesn't
+// re-prompt the agent. Kept as a pure `safe def` so the `match` compiles
+// cleanly and the caller's loop body stays free of binder-in-`if` patterns
+// (which the stepped-loop codegen doesn't handle).
+export safe def unwrapVerdict(r: Result<Verdict>): Verdict {
+  return match (r) {
+    success(v) => v
+    failure(err) => failOpenVerdict(err)
+  }
+}
+
+// The fail-open verdict, carrying the failure message for observability.
+def failOpenVerdict(err: string): Verdict {
+  return { satisfied: true, gaps: ["verification could not run: ${err}"] }
+}
+
+// only add the system message the first time on the resumed thread
+let first = true
+
+export def verify(originalUserMsg: string): Verdict {
+  """
+  Fresh-eyes verification of the code agent's work. Inspects the working
+  directory, runs the produced artifact against the task's own success
+  criteria, and returns a structured verdict. Receives ONLY the original
+  task — never the agent's reply — so it judges the disk independently.
+
+  @param originalUserMsg - the original task description to verify against.
+  """
+  // Fail-safe default: if anything below is unclear, we stay `satisfied`
+  // so verification never blocks the agent (belt-and-suspenders; the
+  // caller also fails open on a Failure via `try` + `unwrapVerdict`).
+  let result: Verdict = { satisfied: true, gaps: [] }
+  thread(label: "verify", summarize: true, session: "verify") {
+    if (first) {
+      systemMessage(verifySysPrompt)
+      first = false
+    }
+    const task = "The coding task to verify was:\n\n${originalUserMsg}\n\nInspect the working directory, run the artifact against the task's own success criteria, and determine whether it is complete and correct."
+    // Phase 1: tool-enabled inspection → a text analysis.
+    const analysis: string = llm(task, { tools: verifyTools })
+    // Phase 2: convert the analysis to a structured verdict (no tools).
+    // The type annotation on `parsed` drives the structured-output schema.
+    const parsed: Verdict = llm("Convert this verification analysis into the structured verdict. List only concrete, actionable gaps. If the analysis is unclear or you cannot tell, return satisfied=true with no gaps (do not block on uncertainty).\n\nAnalysis:\n${analysis}")
+    result = parsed
+  }
+  return result
+}

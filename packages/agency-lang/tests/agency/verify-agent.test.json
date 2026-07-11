@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "nodeName": "unsatisfied",
+      "input": "",
+      "expectedOutput": "\"false|- /app/regex.txt was not created\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "verify": [
+          { "return": "The file /app/regex.txt does not exist; not complete." },
+          { "return": { "satisfied": false, "gaps": ["/app/regex.txt was not created"] } }
+        ]
+      }
+    },
+    {
+      "nodeName": "satisfied",
+      "input": "",
+      "expectedOutput": "\"true|0\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "verify": [
+          { "return": "Ran the regex against the sample; it matches. Complete." },
+          { "return": { "satisfied": true, "gaps": [] } }
+        ]
+      }
+    },
+    {
+      "nodeName": "unwrapSuccess",
+      "input": "",
+      "expectedOutput": "\"false|1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "unwrapFailure",
+      "input": "",
+      "expectedOutput": "\"true|- verification could not run: verifier boom\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    }
+  ]
+}

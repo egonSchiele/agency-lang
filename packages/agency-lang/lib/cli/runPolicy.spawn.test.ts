@@ -33,9 +33,22 @@ const FIXTURE = `node main() {
 }
 `;
 
-function makeDir(): string {
+// Same write, but the program handles the interrupt itself. The policy layer
+// must NOT override or prompt for an interrupt the code already settled.
+const HANDLED_FIXTURE = `node main() {
+  handle {
+    const r = write(filename: "policy-spawn-out.txt", content: "x", dir: ".")
+    match (r) {
+      success(_) => print("WRITE_OK")
+      failure(_) => print("WRITE_REJECTED")
+    }
+  } with approve
+}
+`;
+
+function makeDir(fixture: string = FIXTURE): string {
   const dir = mkdtempSync(path.join(tmpdir(), "runpol-spawn-"));
-  writeFileSync(path.join(dir, "writer.agency"), FIXTURE);
+  writeFileSync(path.join(dir, "writer.agency"), fixture);
   return dir;
 }
 
@@ -75,6 +88,37 @@ describe.skipIf(!existsSync(CLI))("agency run --policy flags (end-to-end)", () =
       expect(code).toBe(0);
       expect(stdout).toMatch(/WRITE_OK/);
       expect(stdout).not.toMatch(/WRITE_REJECTED/);
+    } finally {
+      rmTemp(dir);
+    }
+  });
+
+  it("an interrupt the code handles itself is NOT re-decided by --interactive", async () => {
+    // The program's own `with approve` settles the interrupt, so it never
+    // surfaces to the user endpoint. (Pre-endpoint behavior: the interactive
+    // handler joined the chain, prompted on non-TTY stdin, and fail-closed
+    // to reject — clobbering the code's approval.)
+    const dir = makeDir(HANDLED_FIXTURE);
+    try {
+      const { stdout, code } = await runCli(dir, ["--interactive"]);
+      expect(code).toBe(0);
+      expect(stdout).toMatch(/WRITE_OK/);
+      expect(stdout).not.toMatch(/WRITE_REJECTED/);
+    } finally {
+      rmTemp(dir);
+    }
+  });
+
+  it("a surfaced interrupt the policy does not cover is rejected and the run resumes", async () => {
+    // --approve std::read covers nothing here; std::write surfaces to the
+    // user endpoint, which (non-interactive) rejects it and resumes the run —
+    // the program observes the failure Result and exits cleanly.
+    const dir = makeDir();
+    try {
+      const { stdout, code } = await runCli(dir, ["--approve", "std::read"]);
+      expect(code).toBe(0);
+      expect(stdout).toMatch(/WRITE_REJECTED/);
+      expect(stdout).not.toMatch(/WRITE_OK/);
     } finally {
       rmTemp(dir);
     }

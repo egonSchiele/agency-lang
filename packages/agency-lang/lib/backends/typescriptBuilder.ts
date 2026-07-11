@@ -4308,11 +4308,20 @@ export class TypeScriptBuilder {
                 "__result",
                 ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
               ),
-              // Running `main` directly from the CLI: if it returned an
-              // unhandled interrupt, tell the user instead of exiting
-              // silently. Skipped when imported from TS (guard above is
-              // false), where the caller handles interrupts itself.
-              ts.call(ts.id("reportUnhandledInterrupts"), [ts.id("__result")]),
+              // Running `main` directly from the CLI: interrupts that no
+              // handler settled have surfaced to the user. resolveCliInterrupts
+              // is that user endpoint — under a run policy it decides each one
+              // (prompting with --interactive, rejecting otherwise) and resumes
+              // via respondToInterrupts; without a policy it reports the
+              // unhandled interrupt and exits non-zero. Skipped when imported
+              // from TS (guard above is false), where the caller handles
+              // interrupts itself.
+              ts.await(
+                ts.call(ts.id("resolveCliInterrupts"), [
+                  ts.id("__result"),
+                  ts.id("respondToInterrupts"),
+                ]),
+              ),
             ]),
             ts.statements([
               ts.consoleError(

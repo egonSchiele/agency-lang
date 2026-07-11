@@ -1373,14 +1373,23 @@ export const objectTypeParser: Parser<ObjectType> = memo(
   ),
 );
 
-export const unionItemParser: Parser<VariableType> = memo(
-  "unionItemParser",
+// The alternatives an intersection operand can be — the old
+// unionItemParser members, with ONE deliberate reorder: arrayTypeParser
+// (base + postfix suffixes) must run BEFORE objectTypeParser. The old
+// object-first order was only safe because the union parser's >=2-member
+// gate threw away single-member matches and fell through to
+// variableTypeParser (which orders arrayType first); the intersection
+// passthrough SUCCEEDS on single members, so an object-first chain would
+// commit to a bare `{ n: string }` and strand the `[]` suffix of
+// `{ n: string }[]` (found via stdlib/memory.agency failing to compile).
+export const intersectionItemParser: Parser<VariableType> = memo(
+  "intersectionItemParser",
   or(
     lazy(() => blockTypeParser),
     lazy(() => keyofTypeParser),
+    arrayTypeParser,
     objectTypeParser,
     angleBracketsArrayTypeParser,
-    arrayTypeParser,
     lazy(() => resultTypeParser),
     lazy(() => genericTypeParser),
     stringLiteralTypeParser,
@@ -1390,6 +1399,33 @@ export const unionItemParser: Parser<VariableType> = memo(
     typeAliasVariableParser,
     parenthesizedTypeParser,
   ),
+);
+
+const ampersand = seqR(
+  optionalSpacesOrNewline,
+  str("&"),
+  optionalSpacesOrNewline,
+);
+
+/**
+ * One precedence level below union items: `&` binds tighter than `|`
+ * and looser than postfix and keyof (all TS parity). A single member
+ * passes through unchanged — no node — so this parser is safe as a
+ * general alternative in variableTypeParser.
+ */
+export const intersectionTypeParser: Parser<VariableType> = map(
+  sepBy1(ampersand, intersectionItemParser),
+  (members): VariableType =>
+    members.length === 1
+      ? members[0]
+      : { type: "intersectionType", types: members },
+);
+
+// Union items are intersection EXPRESSIONS: this is what makes
+// `A & B | C` parse as (A & B) | C.
+export const unionItemParser: Parser<VariableType> = memo(
+  "unionItemParser",
+  intersectionTypeParser,
 );
 
 const pipe = seqR(optionalSpacesOrNewline, str("|"), optionalSpacesOrNewline);
@@ -1669,6 +1705,10 @@ export const variableTypeParser: Parser<VariableType> = memo(
   or(
     blockTypeParser,
     unionTypeParser,
+    // Bare `A & B` (one union member) fails unionTypeParser; this catches
+    // it. Its single-member passthrough also subsumes the alternatives
+    // below, which are kept only to avoid churn.
+    intersectionTypeParser,
     keyofTypeParser,
     arrayTypeParser,
     objectTypeParser,

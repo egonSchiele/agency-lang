@@ -33,10 +33,14 @@ export function formatTypeHint(
     case "primitiveType":
       return primitiveAliases?.[vt.value] ?? vt.value;
     case "arrayType": {
-      // Parenthesize a keyof element: `(keyof User)[]` re-parses as
-      // written, while `keyof User[]` would re-parse as keyof (User[]).
+      // Parenthesize keyof and intersection elements: `(keyof User)[]`
+      // and `(A & B)[]` re-parse as written, while the unparenthesized
+      // forms re-parse as keyof (User[]) and A & (B[]).
       const el = recurse(vt.elementType);
-      return vt.elementType.type === "keyofType" ? `(${el})[]` : `${el}[]`;
+      return vt.elementType.type === "keyofType" ||
+        vt.elementType.type === "intersectionType"
+        ? `(${el})[]`
+        : `${el}[]`;
     }
     case "stringLiteralType":
       return `"${vt.value}"`;
@@ -83,11 +87,20 @@ export function formatTypeHint(
     }
     case "genericType":
       return `${vt.name}<${vt.typeArgs.map(recurse).join(", ")}>`;
+    case "intersectionType":
+      // A union member needs parens (`(A | B) & C`) because & binds
+      // tighter; an intersection inside a union needs none for the same
+      // reason.
+      return vt.types
+        .map((m) => (m.type === "unionType" ? `(${recurse(m)})` : recurse(m)))
+        .join(" & ");
     case "keyofType": {
-      // Parenthesize a union operand: `keyof (A | B)` must not print as
-      // `keyof A | B`, which re-parses as (keyof A) | B.
+      // Parenthesize union AND intersection operands: `keyof (A | B)` /
+      // `keyof (A & B)` must not print bare, which would re-parse as
+      // (keyof A) | B and (keyof A) & B.
       const op = recurse(vt.operand);
-      return vt.operand.type === "unionType"
+      return vt.operand.type === "unionType" ||
+        vt.operand.type === "intersectionType"
         ? `keyof (${op})`
         : `keyof ${op}`;
     }
@@ -98,7 +111,8 @@ export function formatTypeHint(
       const obj = recurse(vt.objectType);
       const wrapped =
         vt.objectType.type === "keyofType" ||
-        vt.objectType.type === "unionType"
+        vt.objectType.type === "unionType" ||
+        vt.objectType.type === "intersectionType"
           ? `(${obj})`
           : obj;
       return `${wrapped}[${recurse(vt.index)}]`;

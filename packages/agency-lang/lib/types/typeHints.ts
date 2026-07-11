@@ -43,7 +43,8 @@ export type VariableType =
   | FunctionRefType
   | GenericType
   | KeyofType
-  | IndexedAccessType;
+  | IndexedAccessType
+  | IntersectionType;
 
 /**
  * A concrete generic-type usage: Record<string, number>, Container<string>, etc.
@@ -96,6 +97,19 @@ export type IndexedAccessType = {
   type: "indexedAccessType";
   objectType: VariableType;
   index: VariableType;
+  tags?: Tag[];
+};
+
+/**
+ * `A & B` — an n-ary intersection of object types. Same lifecycle as
+ * KeyofType: exists only between parse and resolution, where
+ * `evalIntersection` (lib/typeChecker/typeOperators.ts) merges the
+ * operands into a plain object type; downstream code never sees the
+ * node.
+ */
+export type IntersectionType = {
+  type: "intersectionType";
+  types: VariableType[];
   tags?: Tag[];
 };
 

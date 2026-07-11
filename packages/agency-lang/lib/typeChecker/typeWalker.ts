@@ -40,6 +40,8 @@ export function mapTypes(
       return fn({ ...t, inner: mapTypes(t.inner, fn) });
     case "keyofType":
       return fn({ ...t, operand: mapTypes(t.operand, fn) });
+    case "intersectionType":
+      return fn({ ...t, types: t.types.map((m) => mapTypes(m, fn)) });
     case "indexedAccessType":
       return fn({
         ...t,
@@ -99,6 +101,8 @@ export function visitTypes(
       return visitTypes(t.inner, visit);
     case "keyofType":
       return visitTypes(t.operand, visit);
+    case "intersectionType":
+      return t.types.some((m) => visitTypes(m, visit));
     case "indexedAccessType":
       if (visitTypes(t.objectType, visit)) return true;
       return visitTypes(t.index, visit);

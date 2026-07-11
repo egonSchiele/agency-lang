@@ -1,4 +1,5 @@
 import { VariableType } from "@/types.js";
+import { effectSetToSource } from "@/backends/typescriptGenerator/typeToString.js";
 
 /** Maps Agency primitive type names to their TypeScript equivalents. */
 export const TS_PRIMITIVE_ALIASES: Record<string, string> = {
@@ -70,7 +71,12 @@ export function formatTypeHint(
           return p.name ? `${p.name}: ${t}` : t;
         })
         .join(", ");
-      return `(${params}) ${arrow} ${recurse(vt.returnType)}`;
+      const base = `(${params}) ${arrow} ${recurse(vt.returnType)}`;
+      // Agency-only surface syntax. `formatTypeHint` has no alias map; rendering
+      // a clause needs member/alias names, not resolution, so `{}` is fine.
+      return target === "agency" && vt.raises
+        ? `${base} raises ${effectSetToSource(vt.raises, {})}`
+        : base;
     }
     case "resultType": {
       const s = recurse(vt.successType);

@@ -35,7 +35,12 @@ effect std::sendIMessage {
 ### sendIMessage
 
 ```ts
-sendIMessage(to: string, message: string, allowList: string[], blockList: string[]): Result
+sendIMessage(
+  to: string,
+  message: string,
+  allowList: string[] = [],
+  blockList: string[] = [],
+): Result
 ```
 
 Send an iMessage via the macOS Messages app.

@@ -49,7 +49,7 @@ export type Award = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L46))
 
 ### Executive
 
@@ -63,7 +63,7 @@ export type Executive = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L59))
 
 ### AwardDetail
 
@@ -89,7 +89,7 @@ export type AwardDetail = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L65))
 
 ## Effects
 
@@ -102,14 +102,21 @@ effect std::usaspending {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L30))
 
 ## Functions
 
 ### usaspendingAwards
 
 ```ts
-usaspendingAwards(recipient: string, agency: string, awardType: string, startDate: string, endDate: string, limit: number): Result<Award[]>
+usaspendingAwards(
+  recipient: string = "",
+  agency: string = "",
+  awardType: string = "contracts",
+  startDate: string = "",
+  endDate: string = "",
+  limit: number = 20,
+): Result<Award[]> raises <std::usaspending, std::http::fetchJSON>
 ```
 
 Search U.S. federal awards. Returns each award's id, recipient, amount, awarding agency, dates, and
@@ -137,12 +144,14 @@ Search U.S. federal awards. Returns each award's id, recipient, amount, awarding
 
 **Throws:** `std::usaspending`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L229))
 
 ### usaspendingAward
 
 ```ts
-usaspendingAward(awardId: string): Result<AwardDetail>
+usaspendingAward(
+  awardId: string,
+): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON>
 ```
 
 Fetch full detail for one federal award. Returns amount, recipient and UEI, awarding agency, dates,
@@ -161,4 +170,4 @@ Fetch full detail for one federal award. Returns amount, recipient and UEI, awar
 
 **Throws:** `std::usaspending`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/usaspending.agency#L252))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L252))

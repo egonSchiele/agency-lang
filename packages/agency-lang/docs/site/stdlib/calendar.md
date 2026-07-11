@@ -139,7 +139,13 @@ Check if Google Calendar has been authorized. Returns true if OAuth tokens exist
 ### listEvents
 
 ```ts
-listEvents(maxResults: number, timeMin: string, timeMax: string, query: string, calendarId: string): Result
+listEvents(
+  maxResults: number = 10,
+  timeMin: string = "",
+  timeMax: string = "",
+  query: string = "",
+  calendarId: string = "primary",
+): Result
 ```
 
 List upcoming events from Google Calendar. Returns an array of events, each with id, summary, description, location, start, end, and htmlLink.
@@ -169,7 +175,14 @@ List upcoming events from Google Calendar. Returns an array of events, each with
 ### createEvent
 
 ```ts
-createEvent(summary: string, start: string, end: string, description: string, location: string, calendarId: string): Result
+createEvent(
+  summary: string,
+  start: string,
+  end: string,
+  description: string = "",
+  location: string = "",
+  calendarId: string = "primary",
+): Result
 ```
 
 Create a new event on Google Calendar. Returns the created event.
@@ -201,7 +214,15 @@ Create a new event on Google Calendar. Returns the created event.
 ### updateEvent
 
 ```ts
-updateEvent(eventId: string, summary: string, start: string, end: string, description: string, location: string, calendarId: string): Result
+updateEvent(
+  eventId: string,
+  summary: string = "",
+  start: string = "",
+  end: string = "",
+  description: string = "",
+  location: string = "",
+  calendarId: string = "primary",
+): Result
 ```
 
 Update an existing event on Google Calendar. Pass the eventId and any fields to change. An empty string means "don't change". Returns the updated event.
@@ -235,7 +256,7 @@ Update an existing event on Google Calendar. Pass the eventId and any fields to 
 ### deleteEvent
 
 ```ts
-deleteEvent(eventId: string, calendarId: string): Result
+deleteEvent(eventId: string, calendarId: string = "primary"): Result
 ```
 
 Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.

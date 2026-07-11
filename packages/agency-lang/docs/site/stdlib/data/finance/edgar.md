@@ -68,7 +68,11 @@ effect std::edgar {
 ### edgarFilingsByCik
 
 ```ts
-edgarFilingsByCik(cik: string, formType: string, limit: number): Result<Filing[]>
+edgarFilingsByCik(
+  cik: string,
+  formType: string = "",
+  limit: number = 20,
+): Result<Filing[]> raises <std::edgar, std::http::fetchJSON>
 ```
 
 List recent SEC filings for a company by its CIK (Central Index Key). Returns filings with
@@ -96,7 +100,11 @@ List recent SEC filings for a company by its CIK (Central Index Key). Returns fi
 ### edgarFilings
 
 ```ts
-edgarFilings(ticker: string, formType: string, limit: number): Result<Filing[]>
+edgarFilings(
+  ticker: string,
+  formType: string = "",
+  limit: number = 20,
+): Result<Filing[]> raises <std::edgar, std::http::fetchJSON>
 ```
 
 List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").

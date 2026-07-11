@@ -127,7 +127,24 @@ export type TableBuilder = {
 ### table
 
 ```ts
-table(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: string, caption: string, cellPadding: number, width: Width, columns: ColumnSpec[], header: Cell[], body: CellRow[], footer: CellRow[], headerDivider: boolean, footerDivider: boolean, rowDividers: boolean, columnDividers: boolean, block: (TableBuilder) => void): LayoutNode
+table(
+  title: string = "",
+  titleColor: string = "",
+  borderStyle: BorderStyle = "rounded",
+  borderColor: string = "",
+  caption: string = "",
+  cellPadding: number = 1,
+  width: Width = null,
+  columns: ColumnSpec[] = null,
+  header: Cell[] = null,
+  body: CellRow[] = null,
+  footer: CellRow[] = null,
+  headerDivider: boolean = true,
+  footerDivider: boolean = true,
+  rowDividers: boolean = false,
+  columnDividers: boolean = true,
+  block: (TableBuilder) -> void = null,
+): LayoutNode
 ```
 
 Build a bordered table as a layout node. Pass the data form: `header`,

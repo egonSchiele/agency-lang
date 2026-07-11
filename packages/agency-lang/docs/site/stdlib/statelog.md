@@ -141,7 +141,10 @@ Record a value as the agent's user-facing response. May be called multiple times
 ### evalRecord
 
 ```ts
-evalRecord(statelogPath: string, allowedPaths: string[]): StatelogEvalRecord
+evalRecord(
+  statelogPath: string,
+  allowedPaths: string[] = [],
+): StatelogEvalRecord
 ```
 
 Parse a statelog JSONL file and return the same structured EvalRecord
@@ -166,7 +169,10 @@ Parse a statelog JSONL file and return the same structured EvalRecord
 ### evalValues
 
 ```ts
-evalValues(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
+evalValues(
+  statelogPath: string,
+  allowedPaths: string[] = [],
+): StatelogEvalValue[]
 ```
 
 Parse a statelog JSONL file and return the values recorded as eval values.
@@ -190,7 +196,10 @@ Mirrors `new StatelogParser(path).evalValues()` in TypeScript.
 ### evalOutputs
 
 ```ts
-evalOutputs(statelogPath: string, allowedPaths: string[]): StatelogEvalValue[]
+evalOutputs(
+  statelogPath: string,
+  allowedPaths: string[] = [],
+): StatelogEvalValue[]
 ```
 
 Parse a statelog JSONL file and return the values recorded as eval outputs.
@@ -214,7 +223,10 @@ Mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
 ### finalEvalOutput
 
 ```ts
-finalEvalOutput(statelogPath: string, allowedPaths: string[]): StatelogEvalValue | null
+finalEvalOutput(
+  statelogPath: string,
+  allowedPaths: string[] = [],
+): StatelogEvalValue | null
 ```
 
 Parse a statelog JSONL file and return the final eval output, or null when

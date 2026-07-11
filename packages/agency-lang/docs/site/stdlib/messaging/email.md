@@ -53,7 +53,19 @@ effect std::sendEmail {
 ### sendWithResend
 
 ```ts
-sendWithResend(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, allowList: string[], blockList: string[]): Result
+sendWithResend(
+  from: string,
+  to: string,
+  subject: string,
+  html: string = "",
+  text: string = "",
+  cc: string = "",
+  bcc: string = "",
+  replyTo: string = "",
+  apiKey: string = "",
+  allowList: string[] = [],
+  blockList: string[] = [],
+): Result
 ```
 
 Send an email using the Resend API.
@@ -97,7 +109,19 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 ### sendWithSendGrid
 
 ```ts
-sendWithSendGrid(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, allowList: string[], blockList: string[]): Result
+sendWithSendGrid(
+  from: string,
+  to: string,
+  subject: string,
+  html: string = "",
+  text: string = "",
+  cc: string = "",
+  bcc: string = "",
+  replyTo: string = "",
+  apiKey: string = "",
+  allowList: string[] = [],
+  blockList: string[] = [],
+): Result
 ```
 
 Send an email using the SendGrid API.
@@ -141,7 +165,21 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 ### sendWithMailgun
 
 ```ts
-sendWithMailgun(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, domain: string, region: string, allowList: string[], blockList: string[]): Result
+sendWithMailgun(
+  from: string,
+  to: string,
+  subject: string,
+  html: string = "",
+  text: string = "",
+  cc: string = "",
+  bcc: string = "",
+  replyTo: string = "",
+  apiKey: string = "",
+  domain: string = "",
+  region: string = "",
+  allowList: string[] = [],
+  blockList: string[] = [],
+): Result
 ```
 
 Send an email using the Mailgun API.

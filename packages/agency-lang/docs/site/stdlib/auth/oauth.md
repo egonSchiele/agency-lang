@@ -75,7 +75,16 @@ effect std::revokeAuth {
 ### authorize
 
 ```ts
-authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number, extraAuthParams: string): Result
+authorize(
+  name: string,
+  authUrl: string,
+  tokenUrl: string,
+  clientId: string,
+  clientSecret: string,
+  scopes: string,
+  port: number = 8914,
+  extraAuthParams: string = "",
+): Result
 ```
 
 Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider.

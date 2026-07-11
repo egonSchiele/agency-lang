@@ -1,0 +1,19 @@
+{
+  "sourceFile": "schema-chaining.agency",
+  "tests": [
+    {
+      "nodeName": "chainedAccept",
+      "input": "",
+      "expectedOutput": "[1,2,3]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Chained parseJSON accepts and returns the parsed value"
+    },
+    {
+      "nodeName": "chainedReject",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Chained parseJSON rejects a type mismatch"
+    }
+  ]
+}

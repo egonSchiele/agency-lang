@@ -2489,6 +2489,15 @@ export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | Val
   const parenResult = parenAccessParser(input);
   if (parenResult.success) return parenResult;
 
+  // Schema-with-chain must be tried before the general base parsers:
+  // `schema(number)` also matches _functionCallParser (as a call to an
+  // undefined function named `schema`), which would mis-tag the base.
+  // Call-time reference: schemaAccessParser is defined later in the module,
+  // which is safe inside a function body (the module is fully initialized
+  // before any parse runs) but would TDZ as a module-init value dependency.
+  const schemaResult = schemaAccessParser(input);
+  if (schemaResult.success) return schemaResult;
+
   const parser = seqC(
     capture(or(_functionCallParser, variableNameParser), "base"),
     capture(many(chainElementParser), "chain"),
@@ -2653,12 +2662,52 @@ export const schemaExpressionParser: Parser<SchemaExpression> = memo(
   ),
 );
 
+/**
+ * `schema(T).method(...)...` — a schema expression as an access-chain base
+ * (issue #480). The peek(dotParser) gate — `.` or `?.`, exactly the heads
+ * dotMethodCallParser accepts — keeps bare `schema(T)` on its existing path
+ * in every position. Once a dot is seen the user unambiguously meant a
+ * chain (`schema` is a reserved function name), so a malformed tail is a
+ * hard, targeted parse error (parseError throws TarsecError; parseAgency
+ * converts it to a message) instead of a backtrack into the stranded-suffix
+ * "expected node body" failure. The one form this newly rejects is
+ * `schema(T)` immediately followed by a leading-dot float statement
+ * (`schema(number).123` used to parse as two statements); the targeted
+ * error is the better outcome there. Mirrors parenAccessParser; the commit
+ * shape mirrors angleBracketsArrayTypeParser. Non-dot chain heads
+ * (`[i]`, `(args)`) stay non-committal and fall through to the bare atom.
+ * Chains never allow whitespace before the dot (dotParser starts at the
+ * dot, for every base), so the peek loses no multiline forms.
+ */
+export const schemaAccessParser: Parser<ValueAccess> = memo(
+  "schemaAccessParser",
+  withLoc(map(
+    seqC(
+      capture(schemaExpressionParser, "base"),
+      peek(dotParser),
+      captureCaptures(
+        parseError(
+          "expected a method call after schema(...), e.g. schema(number).parseJSON(input)",
+          capture(many1(chainElementParser), "chain"),
+        ),
+      ),
+    ),
+    (result) =>
+      ({
+        type: "valueAccess" as const,
+        base: result.base as unknown as AgencyNode,
+        chain: result.chain,
+      }) as ValueAccess,
+  )),
+);
+
 const baseAtom: Parser<Expression> = or(
   unaryTypeofParser,
   unaryVoidParser,
   unaryNotParser,
   tryExpressionParser,
   newExpressionParser,
+  schemaAccessParser,
   schemaExpressionParser,
   lazy(() => interruptExprParser),
   lazy(() => agencyArrayParser),

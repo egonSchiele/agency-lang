@@ -180,7 +180,16 @@ Build a plain text element. It carries no layout sizing of its own,
 ### line
 
 ```ts
-line(content: string, flex: number, width: number, height: number, fg: string, bg: string, bold: boolean, fill: string): Element
+line(
+  content: string,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  fg: string = "",
+  bg: string = "",
+  bold: boolean = false,
+  fill: string = "",
+): Element
 ```
 
 Build a single-line text element (height 1) so it does not stretch
@@ -226,7 +235,16 @@ Build a single-line text element (height 1) so it does not stretch
 ### list
 
 ```ts
-list(items: string[], selectedIndex: number, flex: number, width: number, height: number, border: boolean, borderColor: string, visible: boolean): Element
+list(
+  items: string[],
+  selectedIndex: number = 0,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  border: boolean = false,
+  borderColor: string = "",
+  visible: boolean = true,
+): Element
 ```
 
 Build a scrollable selectable list. `selectedIndex` highlights one
@@ -269,7 +287,14 @@ Build a scrollable selectable list. `selectedIndex` highlights one
 ### textInput
 
 ```ts
-textInput(value: string, flex: number, width: number, height: number, fg: string, bg: string): Element
+textInput(
+  value: string = "",
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  fg: string = "",
+  bg: string = "",
+): Element
 ```
 
 Build a single-line text input. The renderer displays `value` with
@@ -307,7 +332,19 @@ Build a single-line text input. The renderer displays `value` with
 ### column
 
 ```ts
-column(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+column(
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) -> void = null,
+): Element
 ```
 
 Build a vertical container; children stack top-to-bottom. Pass a
@@ -355,7 +392,19 @@ Build a vertical container; children stack top-to-bottom. Pass a
 ### row
 
 ```ts
-row(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+row(
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) -> void = null,
+): Element
 ```
 
 Build a horizontal container; children stack left-to-right. Pass a
@@ -400,7 +449,19 @@ Build a horizontal container; children stack left-to-right. Pass a
 ### box
 
 ```ts
-box(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+box(
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) -> void = null,
+): Element
 ```
 
 Build a direction-neutral container. Use it to apply styling
@@ -486,7 +547,13 @@ Read one key from the terminal, blocking until a key is pressed.
 ### runLoop
 
 ```ts
-runLoop(initialState: any, render: any, handleKey: any, isDone: any, tickMs: number): any
+runLoop(
+  initialState: any,
+  render: any,
+  handleKey: any,
+  isDone: any,
+  tickMs: number = null,
+): any
 ```
 
 Elm/Ink-style state machine driver. Renders `initialState`, waits
@@ -571,7 +638,12 @@ Remove all messages from the active REPL transcript. Use it for an
 ### select
 
 ```ts
-select(message: string, items: ChoiceItem[], allowFreeText: boolean, hint: string): Result<string>
+select(
+  message: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  hint: string = "",
+): Result<string>
 ```
 
 Ask the user to pick from a list with arrow keys (no type-to-filter).
@@ -605,7 +677,13 @@ Ask the user to pick from a list with arrow keys (no type-to-filter).
 ### autocomplete
 
 ```ts
-autocomplete(message: string, items: ChoiceItem[], allowFreeText: boolean, hint: string, cancelOnEscape: boolean): Result<string>
+autocomplete(
+  message: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  hint: string = "",
+  cancelOnEscape: boolean = false,
+): Result<string>
 ```
 
 Ask the user to pick from a list, filtering by typed text. Returns
@@ -642,7 +720,12 @@ Ask the user to pick from a list, filtering by typed text. Returns
 ### prompt
 
 ```ts
-prompt(message: string, initial: string, hint: string, validate: any): Result<string>
+prompt(
+  message: string,
+  initial: string = "",
+  hint: string = "",
+  validate: any = null,
+): Result<string>
 ```
 
 Ask the user for a line of free-form text. Returns `success(typed)`
@@ -679,7 +762,7 @@ Ask the user for a line of free-form text. Returns `success(typed)`
 ### confirm
 
 ```ts
-confirm(message: string, initial: boolean): Result<boolean>
+confirm(message: string, initial: boolean = false): Result<boolean>
 ```
 
 Ask the user a yes/no question. Returns `success(true)`,
@@ -705,7 +788,13 @@ Ask the user a yes/no question. Returns `success(true)`,
 ### chooseOption
 
 ```ts
-chooseOption(title: string, body: string, items: ChoiceItem[], allowFreeText: boolean, allowCancel: boolean): string
+chooseOption(
+  title: string,
+  body: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  allowCancel: boolean = false,
+): string
 ```
 
 Show a modal choice prompt and block until the user picks one. Returns
@@ -745,7 +834,15 @@ Show a modal choice prompt and block until the user picks one. Returns
 ### repl
 
 ```ts
-repl(status: any, onSubmit: any, prompt: string, historyFile: string, historyMax: number, paletteCommands: any, tickMs: number)
+repl(
+  status: any,
+  onSubmit: any,
+  prompt: string = "> ",
+  historyFile: string = "",
+  historyMax: number = 1000,
+  paletteCommands: any = null,
+  tickMs: number = null,
+)
 ```
 
 Drop-in REPL widget for interactive CLI agents. Bundles a scrollable

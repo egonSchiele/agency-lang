@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { exprParser } from "./parsers.js";
+import { parseAgency } from "../parser.js";
 
 describe("exprParser", () => {
   describe("atoms", () => {
@@ -408,6 +409,118 @@ describe("exprParser", () => {
           expect(result.result.typeArg.type).toBe("objectType");
         }
       }
+    });
+  });
+
+  describe("schema(...) chaining (issue #480)", () => {
+    it("parses a chained call in expression position", () => {
+      const result = exprParser('schema(number).parseJSON("[1]")');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression", typeArg: { type: "primitiveType", value: "number" } },
+          chain: [{ kind: "methodCall", functionCall: { functionName: "parseJSON" } }],
+        });
+        // Unlike variable-base access, this path does not flow through
+        // valueAccessParser's withLoc wrap — schemaAccessParser carries its
+        // own. Without it, downstream diagnostics (e.g. Result-field guard
+        // errors on the chain) anchor to loc: undefined.
+        expect(result.result.loc).toBeDefined();
+      }
+    });
+
+    it("try on a chained schema call parses as tryExpression", () => {
+      // Newly parses with this change (tryExpressionParser captures
+      // valueAccessParser, which now routes through the schema branch).
+      // Pinned so a future parser reshuffle cannot silently drop it.
+      const parsed = parseAgency('node main() {\n  const r = try schema(number).parseJSON("5")\n  return r\n}', {}, false);
+      expect(parsed.success).toBe(true);
+    });
+
+    it("accepts a type-grammar argument on the chained form", () => {
+      const result = exprParser('schema(number[]).parseJSON("[1]")');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression", typeArg: { type: "arrayType" } },
+        });
+      }
+    });
+
+    it("parses a two-element chain", () => {
+      const result = exprParser('schema(number).parseJSON("5").value');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression" },
+        });
+        if (result.result.type === "valueAccess") {
+          expect(result.result.chain).toHaveLength(2);
+          expect(result.result.chain[1]).toMatchObject({ kind: "property", name: "value" });
+        }
+      }
+    });
+
+    it("commits on an optional-chain head too", () => {
+      const result = exprParser('schema(number)?.parseJSON("[1]")');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toMatchObject({
+          type: "valueAccess",
+          base: { type: "schemaExpression" },
+          chain: [{ kind: "methodCall", optional: true, functionCall: { functionName: "parseJSON" } }],
+        });
+      }
+    });
+
+    it("a malformed chain after the dot is a targeted parse error", () => {
+      const parsed = parseAgency("node main() {\n  const r = schema(number).123\n  return r\n}", {}, false);
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.message).toContain("expected a method call after schema(...)");
+      }
+    });
+
+    function mainBody(source: string) {
+      const parsed = parseAgency(`node main() {\n  ${source}\n  return 1\n}`, {}, false);
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) throw new Error("unreachable");
+      const node = parsed.result.nodes.find((n) => n.type === "graphNode");
+      if (!node || node.type !== "graphNode") throw new Error("no graphNode");
+      return node.body;
+    }
+
+    it("statement position: chain on schema(...) is a schemaExpression-based access, not a call to schema", () => {
+      // Parsed as functionCall("schema") with the chain attached before this
+      // change — wrong node kind (undefined function, wrong codegen).
+      // Deliberate shape change, spec section Design/site 2.
+      const stmt = mainBody('schema(number).parseJSON("[1]")').find(
+        (n) => n.type === "valueAccess" || n.type === "functionCall",
+      );
+      expect(stmt).toMatchObject({
+        type: "valueAccess",
+        base: { type: "schemaExpression" },
+        chain: [{ kind: "methodCall", functionCall: { functionName: "parseJSON" } }],
+      });
+    });
+
+    it("statement position: bare schema(T) keeps its legacy functionCall shape", () => {
+      // The peek(dotParser) gate exists to preserve exactly this: a chainless
+      // schema(T) statement still parses as a call to `schema` (the checker
+      // flags it as reserved), NOT as a schemaExpression statement.
+      const stmt = mainBody("schema(number)").find((n) => n.type === "functionCall");
+      expect(stmt).toMatchObject({ type: "functionCall", functionName: "schema" });
+    });
+
+    it("assignment target: schema(T).foo = x still fails to parse", () => {
+      // The assignment parser rejects any non-variableName base ("assignment
+      // target must start with a variable name"), so this fails identically
+      // before and after schema chains became parseable.
+      const parsed = parseAgency("node main() {\n  schema(number).foo = 5\n  return 1\n}", {}, false);
+      expect(parsed.success).toBe(false);
     });
   });
 

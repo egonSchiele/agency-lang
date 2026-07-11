@@ -96,4 +96,38 @@ describe("Schema<T> type synthesis", () => {
     );
     expect(mismatch).toEqual([]);
   });
+
+  it("chained schema(...).parseJSON types like the bind-first form (issue #480)", () => {
+    // The chained form (no intermediate binding) must synth the same
+    // Result<number, any> the bind-first form does: assigning it to a
+    // Result binding is clean, and assigning it to a bare number errors
+    // (a silent `any` would pass both, so the error is the real pin).
+    const clean = errorsFrom(
+      [
+        "node main() {",
+        '  let chained: Result<number, any> = schema(number).parseJSON("5")',
+        "  let s = schema(number)",
+        '  let bound: Result<number, any> = s.parseJSON("5")',
+        "  print(chained)",
+        "  print(bound)",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect(clean.filter((e) => e.severity !== "warning")).toEqual([]);
+
+    const errors = errorsFrom(
+      [
+        "node main() {",
+        '  let n: number = schema(number).parseJSON("5")',
+        "  print(n)",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const mismatch = errors.filter(
+      (e) => e.message.includes("Result") && e.message.includes("number"),
+    );
+    expect(mismatch.length).toBeGreaterThanOrEqual(1);
+  });
 });

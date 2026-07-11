@@ -56,7 +56,7 @@ effect std::wikipedia::article {
 ### search
 
 ```ts
-search(query: string, limit: number): WikiSearchResult[]
+search(query: string, limit: number = 5): WikiSearchResult[]
 ```
 
 Search Wikipedia for articles matching a query. Each result has a title, description, and excerpt.

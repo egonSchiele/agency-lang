@@ -62,7 +62,10 @@ readProjectMcpConfig(dir: string): Record<string, any>
 ### mergeMcpServers
 
 ```ts
-mergeMcpServers(global: Record<string, any>, project: Record<string, any>): Record<string, any>
+mergeMcpServers(
+  global: Record<string, any>,
+  project: Record<string, any>,
+): Record<string, any>
 ```
 
 **Parameters:**
@@ -79,7 +82,7 @@ mergeMcpServers(global: Record<string, any>, project: Record<string, any>): Reco
 ### loadMcpTools
 
 ```ts
-loadMcpTools(merged: Record<string, any>, onOAuthRequired): any[]
+loadMcpTools(merged: Record<string, any>, onOAuthRequired = null): any[]
 ```
 
 **Parameters:**
@@ -96,7 +99,10 @@ loadMcpTools(merged: Record<string, any>, onOAuthRequired): any[]
 ### loadMcpToolsWithStatus
 
 ```ts
-loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired): McpLoadResult
+loadMcpToolsWithStatus(
+  merged: Record<string, any>,
+  onOAuthRequired = null,
+): McpLoadResult
 ```
 
 **Parameters:**

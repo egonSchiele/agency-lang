@@ -24,7 +24,16 @@ Returns base64 you can persist with `writeBinary()` or send onward with
 ### generateImage
 
 ```ts
-generateImage(prompt: string, model: string, provider: string, size: string, quality: string, images: string[], apiKey: string, baseUrl: string): Result
+generateImage(
+  prompt: string,
+  model: string = "",
+  provider: string = "",
+  size: string = "",
+  quality: string = "",
+  images: string[] = [],
+  apiKey: string = "",
+  baseUrl: string = "",
+): Result
 ```
 
 Generate an image from a text prompt using a hosted provider, optionally

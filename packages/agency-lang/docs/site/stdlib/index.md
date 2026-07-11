@@ -139,7 +139,7 @@ relative paths against the agent working directory.
 ### printJSON
 
 ```ts
-printJSON(obj: any, highlight: boolean)
+printJSON(obj: any, highlight: boolean = false)
 ```
 
 Print an object as formatted JSON to the console.
@@ -203,7 +203,13 @@ A long sleep wakes immediately on Ctrl-C, race-loser, or time-guard abort.
 ### read
 
 ```ts
-read(filename: string, dir: string, offset: number, limit: number, useAgentCwd: boolean): Result
+read(
+  filename: string,
+  dir: string = ".",
+  offset: number = 0,
+  limit: number = 0,
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Read the contents of a file and return it as a string.
@@ -233,7 +239,13 @@ Read the contents of a file and return it as a string.
 ### write
 
 ```ts
-write(filename: string, content: string, dir: string, mode: WriteMode, useAgentCwd: boolean): Result
+write(
+  filename: string,
+  content: string,
+  dir: string = ".",
+  mode: WriteMode = "overwrite",
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Write content to a file.
@@ -263,7 +275,13 @@ Write content to a file.
 ### writeBinary
 
 ```ts
-writeBinary(filename: string, base64: string, dir: string, mode: WriteMode, useAgentCwd: boolean): Result
+writeBinary(
+  filename: string,
+  base64: string,
+  dir: string = ".",
+  mode: WriteMode = "overwrite",
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
@@ -294,7 +312,11 @@ Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
 ### readBinary
 
 ```ts
-readBinary(filename: string, dir: string, useAgentCwd: boolean): Result
+readBinary(
+  filename: string,
+  dir: string = ".",
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Read a file and return its contents as a Base64-encoded string. Works for any
@@ -321,7 +343,7 @@ Read a file and return its contents as a Base64-encoded string. Works for any
 ### range
 
 ```ts
-range(start: number, end: number): number[]
+range(start: number, end: number = -1): number[]
 ```
 
 Generate an array of numbers. With one argument, counts from 0 to start-1;
@@ -344,7 +366,7 @@ Generate an array of numbers. With one argument, counts from 0 to start-1;
 ### map
 
 ```ts
-map(arr: any[], func: (any) => any): any[]
+map(arr: any[], func: (any) -> any): any[]
 ```
 
 Map a function over an array, returning a new array of results.
@@ -366,7 +388,7 @@ Map a function over an array, returning a new array of results.
 ### filter
 
 ```ts
-filter(arr: any[], func: (any) => any): any[]
+filter(arr: any[], func: (any) -> any): any[]
 ```
 
 Return a new array containing only the elements for which the function returns true.
@@ -388,7 +410,7 @@ Return a new array containing only the elements for which the function returns t
 ### exclude
 
 ```ts
-exclude(arr: any[], func: (any) => any): any[]
+exclude(arr: any[], func: (any) -> any): any[]
 ```
 
 Return a new array excluding elements for which the function returns true.
@@ -410,7 +432,7 @@ Return a new array excluding elements for which the function returns true.
 ### find
 
 ```ts
-find(arr: any[], func: (any) => any): any
+find(arr: any[], func: (any) -> any): any
 ```
 
 Return the first element for which the function returns true, or null if none match.
@@ -432,7 +454,7 @@ Return the first element for which the function returns true, or null if none ma
 ### findIndex
 
 ```ts
-findIndex(arr: any[], func: (any) => any): number
+findIndex(arr: any[], func: (any) -> any): number
 ```
 
 Return the index of the first element for which the function returns true, or -1 if none match.
@@ -454,7 +476,7 @@ Return the index of the first element for which the function returns true, or -1
 ### reduce
 
 ```ts
-reduce(arr: any[], initial: any, func: (any, any) => any): any
+reduce(arr: any[], initial: any, func: (any, any) -> any): any
 ```
 
 Reduce an array to a single value by applying a function to an accumulator and each element.
@@ -478,7 +500,7 @@ Reduce an array to a single value by applying a function to an accumulator and e
 ### flatMap
 
 ```ts
-flatMap(arr: any[], func: (any) => any): any[]
+flatMap(arr: any[], func: (any) -> any): any[]
 ```
 
 Map a function over an array and flatten the results by one level.
@@ -500,7 +522,7 @@ Map a function over an array and flatten the results by one level.
 ### every
 
 ```ts
-every(arr: any[], func: (any) => any): boolean
+every(arr: any[], func: (any) -> any): boolean
 ```
 
 Return true if the function returns true for every element in the array.
@@ -522,7 +544,7 @@ Return true if the function returns true for every element in the array.
 ### some
 
 ```ts
-some(arr: any[], func: (any) => any): boolean
+some(arr: any[], func: (any) -> any): boolean
 ```
 
 Return true if the function returns true for at least one element in the array.
@@ -544,7 +566,7 @@ Return true if the function returns true for at least one element in the array.
 ### count
 
 ```ts
-count(arr: any[], func: (any) => any): number
+count(arr: any[], func: (any) -> any): number
 ```
 
 Count the number of elements in the array for which the function returns true.
@@ -566,7 +588,7 @@ Count the number of elements in the array for which the function returns true.
 ### sortBy
 
 ```ts
-sortBy(arr: any[], func: (any) => any): any[]
+sortBy(arr: any[], func: (any) -> any): any[]
 ```
 
 Return a new array sorted by the values returned by the function, in ascending order.
@@ -588,7 +610,7 @@ Return a new array sorted by the values returned by the function, in ascending o
 ### unique
 
 ```ts
-unique(arr: any[], func: (any) => any): any[]
+unique(arr: any[], func: (any) -> any): any[]
 ```
 
 Return a new array with duplicate elements removed, using the function to determine the identity of each element.
@@ -610,7 +632,7 @@ Return a new array with duplicate elements removed, using the function to determ
 ### groupBy
 
 ```ts
-groupBy(arr: any[], func: (any) => any): any
+groupBy(arr: any[], func: (any) -> any): any
 ```
 
 Group elements of an array by the value returned by the function. Returns an object where keys are group names and values are arrays of elements.

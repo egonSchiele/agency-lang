@@ -211,7 +211,7 @@ Removes whatever memory configuration is on top, including a bottom
 ### memory
 
 ```ts
-memory(config: MemoryConfig, block: () => any): Result
+memory(config: MemoryConfig, block: () -> any = null): Result
 ```
 
 Run `block` with `config` as the active memory configuration, then

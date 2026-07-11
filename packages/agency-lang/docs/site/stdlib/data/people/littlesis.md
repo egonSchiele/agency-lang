@@ -105,7 +105,10 @@ effect std::littlesis {
 ### littlesisSearch
 
 ```ts
-littlesisSearch(name: string, page: number): Result<Entity[]>
+littlesisSearch(
+  name: string,
+  page: number = 1,
+): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
 Search LittleSis for people and organizations by name. Returns matching entities (id, name,
@@ -131,7 +134,9 @@ Search LittleSis for people and organizations by name. Returns matching entities
 ### littlesisEntity
 
 ```ts
-littlesisEntity(id: number): Result<Entity>
+littlesisEntity(
+  id: number,
+): Result<Entity> raises <std::littlesis, std::http::fetchJSON>
 ```
 
 Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the full profile
@@ -154,7 +159,11 @@ Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the
 ### littlesisRelationships
 
 ```ts
-littlesisRelationships(id: number, category: string, sort: string): Result<Relationship[]>
+littlesisRelationships(
+  id: number,
+  category: string = "",
+  sort: string = "",
+): Result<Relationship[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
 List an entity's relationships (typed edges) by its id. Each edge carries the two entity IDs,
@@ -182,7 +191,10 @@ List an entity's relationships (typed edges) by its id. Each edge carries the tw
 ### littlesisConnections
 
 ```ts
-littlesisConnections(id: number, category: string): Result<Entity[]>
+littlesisConnections(
+  id: number,
+  category: string = "",
+): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
 List the entities connected to an entity (neighbors, by name), optionally filtered by a

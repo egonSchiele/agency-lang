@@ -302,7 +302,14 @@ export type OptimizeResult = {
 ### evalRun
 
 ```ts
-evalRun(compiled: CompiledProgram, inputs: Input[], node: string, runsDir: string, runId: string, continueOnError: boolean): EvalRunResult
+evalRun(
+  compiled: CompiledProgram,
+  inputs: Input[],
+  node: string = "main",
+  runsDir: string = "runs/",
+  runId: string = "",
+  continueOnError: boolean = true,
+): EvalRunResult
 ```
 
 Run a compiled Agency program against a list of eval inputs sequentially, writing per-input statelog and eval artifacts under runsDir/runId, and return a summary of the run.
@@ -361,7 +368,11 @@ The shape mirrors the on-disk eval-record format. Top-level fields (traceId,
 ### evalJudge
 
 ```ts
-evalJudge(goal: string, recordPathA: string, recordPathB: string): PairwiseVerdict
+evalJudge(
+  goal: string,
+  recordPathA: string,
+  recordPathB: string,
+): PairwiseVerdict
 ```
 
 Pairwise-judge two eval records against a goal. Returns a structured verdict naming the winner ("A", "B", or "tie"), the judge's confidence as an integer from 0 to 100, and the reasoning the judge produced. Both record paths must point at JSON files in the EvalRecord shape produced by extracting an eval record.
@@ -391,7 +402,15 @@ Runs the bundled pairwise-judge program in a subprocess, so a real LLM call
 ### evalJudgeSuite
 
 ```ts
-evalJudgeSuite(runA: string, runB: string, inputs: Input[], samples: number, confidenceThreshold: number, marginThreshold: number, positionBias: "swap" | "none"): SuiteVerdict
+evalJudgeSuite(
+  runA: string,
+  runB: string,
+  inputs: Input[],
+  samples: number = 3,
+  confidenceThreshold: number = 50,
+  marginThreshold: number = 0,
+  positionBias: "swap" | "none" = "swap",
+): SuiteVerdict
 ```
 
 Judge two eval run directories by input id and aggregate the results into a suite verdict. Missing or failed input records are handled deterministically without calling the LLM judge; successful inputs are judged pairwise.
@@ -423,7 +442,23 @@ Judge two eval run directories by input id and aggregate the results into a suit
 ### optimize
 
 ```ts
-optimize(config: Record<string, any>, entryFile: string, workingDir: string, inputs: Input[], goal: string, node: string, iterations: number, samples: number, confidenceThreshold: number, marginThreshold: number, runsDir: string, runId: string, mutatorModel: string, writeback: boolean, verbosity: "silent" | "default"): OptimizeResult
+optimize(
+  config: Record<string, any>,
+  entryFile: string,
+  workingDir: string = ".",
+  inputs: Input[] = [],
+  goal: string = "",
+  node: string = "main",
+  iterations: number = 5,
+  samples: number = 3,
+  confidenceThreshold: number = 50,
+  marginThreshold: number = 0,
+  runsDir: string = "runs/optimize",
+  runId: string = "",
+  mutatorModel: string = "",
+  writeback: boolean = false,
+  verbosity: "silent" | "default" = "silent",
+): OptimizeResult
 ```
 
 Optimize declarations marked with the `optimize` modifier in an Agency file. For example, `optimize const prompt = "..."` marks a string declaration the optimizer may mutate while evaluating candidates against eval inputs. Targets are discovered across the local Agency import tree of entryFile. Provide exactly one of inputs or goal: a goal desugars to a single no-argument input.

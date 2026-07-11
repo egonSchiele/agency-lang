@@ -109,7 +109,10 @@ effect std::hackernews {
 ### hnStories
 
 ```ts
-hnStories(list: string, limit: number): Result<Story[]>
+hnStories(
+  list: string = "top",
+  limit: number = 30,
+): Result<Story[]> raises <std::hackernews, std::http::fetchJSON>
 ```
 
 Fetch a Hacker News story list and hydrate the top items into full stories (title, url, author,
@@ -135,7 +138,7 @@ Fetch a Hacker News story list and hydrate the top items into full stories (titl
 ### hnItem
 
 ```ts
-hnItem(id: number): Result<Item>
+hnItem(id: number): Result<Item> raises <std::hackernews, std::http::fetchJSON>
 ```
 
 Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its text, author,
@@ -158,7 +161,9 @@ Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its
 ### hnUser
 
 ```ts
-hnUser(username: string): Result<User>
+hnUser(
+  username: string,
+): Result<User> raises <std::hackernews, std::http::fetchJSON>
 ```
 
 Fetch a Hacker News user's public profile: karma, account age, about text, and submitted item
@@ -181,7 +186,12 @@ Fetch a Hacker News user's public profile: karma, account age, about text, and s
 ### hnSearch
 
 ```ts
-hnSearch(query: string, sort: string, tags: string, limit: number): Result<Story[]>
+hnSearch(
+  query: string,
+  sort: string = "relevance",
+  tags: string = "story",
+  limit: number = 20,
+): Result<Story[]> raises <std::hackernews, std::http::fetchJSON>
 ```
 
 Search Hacker News stories by keyword via the Algolia index. Returns matching stories (title,

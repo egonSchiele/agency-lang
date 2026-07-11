@@ -62,7 +62,7 @@ Resolve path segments into an absolute path, relative to the current working dir
 ### basename
 
 ```ts
-basename(p: string, ext: string): string
+basename(p: string, ext: string = ""): string
 ```
 
 Return the last portion of a path.

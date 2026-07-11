@@ -1,5 +1,13 @@
 # Changelog
 
+## Jul 11 2026 — v0.0.3
+
+### Added
+- **`validateMcpServers(servers)`** — validate an `mcpServers` map against the
+  same schema `readMcpConfig` uses, without throwing. Returns a `success()`
+  Result when valid, or a `failure()` whose error describes the problem. Used by
+  the agent's `mcp add` to reject a bad server before it is written.
+
 ## Jul 11 2026 — v0.0.2
 
 ### Added

@@ -46,6 +46,32 @@ from the `filesystem` server appears to the model as `filesystem__read_file`. A
 server that fails to connect is skipped with a warning; the agent and the other
 servers keep working.
 
+## Managing servers (`agency mcp add` / `remove` / `list`)
+
+You can manage servers without editing JSON, using the `agency mcp` commands.
+They default to the **project** `agency.json`; pass `--global` to write the
+agent-home `settings.json` instead. A server is validated before it is written,
+and other keys in the file are preserved.
+
+```bash
+# stdio server (args are comma-separated; values cannot contain a comma)
+agency mcp add filesystem --command npx \
+  --args -y,@modelcontextprotocol/server-filesystem,/tmp
+
+# HTTP server, with OAuth
+agency mcp add github --url https://api.githubcopilot.com/mcp/ --oauth --global
+
+agency mcp remove filesystem
+agency mcp list          # shows each server with its source (project/global)
+```
+
+`--oauth` only sets `auth: "oauth"`; OAuth client credentials are never written to
+config — supply them via the environment (see below).
+
+In the REPL, `/mcp` lists the servers loaded this session. (Adding/removing
+servers from inside the REPL is not yet supported — use `agency mcp add`, then
+they load on the next launch.)
+
 ## Approvals
 
 By default the agent **prompts before every MCP tool call**. To avoid repeating

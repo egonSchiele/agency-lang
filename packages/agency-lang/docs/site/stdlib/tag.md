@@ -35,7 +35,7 @@ Note: object/array tags are branch-local — they do not survive `fork`/`race`/
 ### tag
 
 ```ts
-tag(value: any, key: string, val: any): any
+tag(value: any, key: string, val: any = true): any
 ```
 
 Attach a tag to a value. Primitives are keyed by value; objects by

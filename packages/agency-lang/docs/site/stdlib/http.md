@@ -79,7 +79,14 @@ effect std::http::fetchMarkdown {
 ### fetch
 
 ```ts
-fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: Record<string, any> | string | null): Result
+fetch(
+  baseUrl: string,
+  path: string = "",
+  headers: Record<string, any> = {},
+  allowedDomains: string[] = [],
+  method: HttpMethod = "GET",
+  body: Record<string, any> | string | null = null,
+): Result
 ```
 
 Fetch a URL and return the response as text.
@@ -115,7 +122,14 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 ### fetchJSON
 
 ```ts
-fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: Record<string, any> | string | null): Result
+fetchJSON(
+  baseUrl: string,
+  path: string = "",
+  headers: Record<string, any> = {},
+  allowedDomains: string[] = [],
+  method: HttpMethod = "GET",
+  body: Record<string, any> | string | null = null,
+): Result
 ```
 
 Fetch a URL and return the response parsed as JSON.
@@ -151,7 +165,14 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 ### fetchMarkdown
 
 ```ts
-fetchMarkdown(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[], method: HttpMethod, body: Record<string, any> | string | null): Result
+fetchMarkdown(
+  baseUrl: string,
+  path: string = "",
+  headers: Record<string, any> = {},
+  allowedDomains: string[] = [],
+  method: HttpMethod = "GET",
+  body: Record<string, any> | string | null = null,
+): Result
 ```
 
 Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.

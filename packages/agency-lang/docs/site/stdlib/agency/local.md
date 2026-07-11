@@ -126,7 +126,7 @@ Map a curated short name or alias to its Hugging Face URI. Pass URIs and
 ### downloadModel
 
 ```ts
-downloadModel(value: string, cacheDir: string): string
+downloadModel(value: string, cacheDir: string = ""): string
 ```
 
 Download a model and return its local .gguf path.
@@ -149,7 +149,7 @@ Download a model and return its local .gguf path.
 ### listDownloadedModels
 
 ```ts
-listDownloadedModels(cacheDir: string): DownloadedModel[]
+listDownloadedModels(cacheDir: string = ""): DownloadedModel[]
 ```
 
 List downloaded .gguf models.
@@ -225,7 +225,7 @@ Remove a short-name alias.
 ### removeModel
 
 ```ts
-removeModel(name: string, cacheDir: string): bool
+removeModel(name: string, cacheDir: string = ""): bool
 ```
 
 Delete a downloaded model file.
@@ -258,7 +258,7 @@ Register the llama-cpp provider so local models can be used for LLM calls.
 ### registerLocalModel
 
 ```ts
-registerLocalModel(value: string, cacheDir: string): string
+registerLocalModel(value: string, cacheDir: string = ""): string
 ```
 
 Register the provider and ensure the model is downloaded. Returns the local
@@ -292,7 +292,7 @@ Print the usable-model catalog (curated names + your aliases) as an
 ### refreshCatalog
 
 ```ts
-refreshCatalog(url: string): RefreshResult
+refreshCatalog(url: string = ""): RefreshResult
 ```
 
 Fetch the remote model catalog and update the `source:"remote"` aliases in

@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
+import { success, failure, type ResultValue } from "agency-lang/runtime";
 import type { McpServerConfig } from "./types.js";
 
 const McpStdioServerSchema = z
@@ -117,4 +118,19 @@ export function readMcpConfig(cwd?: string): Record<string, McpServerConfig> {
 
   const result = McpServersSchema.parse(raw.mcpServers);
   return result as Record<string, McpServerConfig>;
+}
+
+/** Validate an `mcpServers` map against the same schema `readMcpConfig` uses,
+ *  without throwing. Returns a `success()` Result when valid, or a `failure()`
+ *  whose error joins the zod issues into a readable message. Used by `mcp add`
+ *  to reject a bad server before it is written to a config file. */
+export function validateMcpServers(servers: Record<string, unknown>): ResultValue {
+  const result = McpServersSchema.safeParse(servers);
+  if (result.success) {
+    return success(null);
+  }
+  const error = result.error.issues
+    .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+    .join("; ");
+  return failure(error);
 }

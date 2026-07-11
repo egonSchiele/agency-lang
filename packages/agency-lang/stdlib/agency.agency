@@ -279,6 +279,143 @@ export safe def getEffects(source: string): Result<EffectsByExport> {
   return try _getEffects(source)
 }
 
+/** One review finding. `error: true` means the code is broken (parse or
+type error, or the reviewer judged it does not do the task); `error:
+false` is advisory feedback, including typecheck warnings. */
+export type Feedback = {
+  error: boolean;
+  feedback: string;
+  data?: any
+}
+
+export def mergeFeedback(
+  a: Result<Feedback[]>,
+  b: Result<Feedback[]>,
+): Result<Feedback[]> {
+  """
+  Merge two feedback Results by concatenating their success arrays or
+  returning the first failure.
+
+  @param a - First feedback Result
+  @param b - Second feedback Result
+  """
+  if (a is success(aVal)) {
+    if (b is success(bVal)) {
+      return success([...aVal, ...bVal])
+    } else {
+      return b
+    }
+  } else {
+    return a
+  }
+}
+
+def parseFeedback(source: string): Result<Feedback[]> {
+  const result = try _parseAST(source)
+  if (result is failure(err)) {
+    return success([{ error: true, feedback: "Parse error: ${err}" }])
+  }
+  return success([])
+}
+
+// Report -> findings, separated from typecheckFeedback so writeAgency
+// can format an already-computed report without re-checking.
+def reportFeedback(report: TypeCheckReport): Feedback[] {
+  const feedback: Feedback[] = []
+  for (error in report.errors) {
+    feedback.push({ error: true, feedback: "Error: ${error.message}", data: error })
+  }
+  for (warning in report.warnings) {
+    feedback.push({ error: false, feedback: "Warning: ${warning.message}", data: warning })
+  }
+  return feedback
+}
+
+def typecheckFeedback(source: string): Result<Feedback[]> {
+  const result = try _typecheck(source)
+  if (result is failure(err)) {
+    return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
+  }
+  return success(reportFeedback(result.value))
+}
+
+def llmFeedback(source: string, task: string): Result<Feedback[]> {
+  let out: Result<Feedback[]> = success([])
+  thread(label: "review") {
+    const items: Feedback[] = llm("""You are reviewing Agency-language code.
+The code was written for this task:
+<task>
+${task}
+</task>
+
+<code>
+${source}
+</code>
+
+Return a list of feedback items. Set error=true only if the code does
+not accomplish the task. Keep feedback brief and concrete.""")
+    out = success(items)
+  }
+  return out
+}
+
+export def review(source: string, task: string = ""): Result<Feedback[]> {
+  """
+  Review Agency source code. Always merges parse and typecheck findings;
+  when a task description is given, an LLM pass also judges whether the
+  code accomplishes the task.
+
+  @param source - Agency source code as a string
+  @param task - Optional description of what the code should do
+  """
+  let feedback: Result<Feedback[]> = success([])
+  feedback = mergeFeedback(feedback, parseFeedback(source))
+  feedback = mergeFeedback(feedback, typecheckFeedback(source))
+  if (task != "") {
+    feedback = mergeFeedback(feedback, llmFeedback(source, task))
+  }
+  if (feedback is success(items)) {
+    if (items.length == 0) {
+      return success([{ error: false, feedback: "Code is valid with no errors or warnings." }])
+    }
+  }
+  return feedback
+}
+
+def renderSingleFeedback(f: Feedback): string {
+  if (f.error) {
+    return `Error: ${f.feedback}`
+  } else {
+    return `Feedback: ${f.feedback}`
+  }
+}
+
+export def renderFeedback(feedback: Result<Feedback[]>): string {
+  """
+  Render a feedback Result as human-readable text, one line per finding.
+
+  @param feedback - The Result review() returned
+  """
+  if (feedback is success(val)) {
+    return map(val, renderSingleFeedback).join("\n\n")
+  }
+  return feedback.error
+}
+
+export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
+  """
+  True when any finding is an error, or when the feedback Result itself
+  is a failure.
+
+  @param feedback - The Result review() returned
+  """
+  if (feedback is success(val)) {
+    return some(val, \f -> f.error)
+  }
+  // If the feedback itself is a failure, we can treat that as an error state.
+  return true
+}
+
 type FilterImportsResult = {
   source: string;
   filtered: boolean

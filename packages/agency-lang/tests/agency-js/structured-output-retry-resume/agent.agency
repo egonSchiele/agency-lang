@@ -1,0 +1,22 @@
+// The hard path: response 1 fails validation → feedback retry →
+// response 2 calls a tool that INTERRUPTS → resume → tool result →
+// response 3 is valid. Proves: the retry round re-enters the tool loop;
+// resume lands on the same attempt (no duplicate feedback, no
+// re-dispatch); the final value comes out clean.
+type Person = {
+  name: string;
+  age: number
+}
+
+def interruptTool(): string {
+  interrupt("approve")
+  return "tool result"
+}
+
+node main() {
+  const result: Person! = llm("give me a person", { tools: [interruptTool], validationRetries: 1 })
+  if (result is success(person)) {
+    return person.name
+  }
+  return "failure"
+}

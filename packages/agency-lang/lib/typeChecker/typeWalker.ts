@@ -102,7 +102,8 @@ export function visitTypes(
     case "keyofType":
       return visitTypes(t.operand, visit);
     case "intersectionType":
-      return t.types.some((m) => visitTypes(m, visit));
+      for (const m of t.types) if (visitTypes(m, visit)) return true;
+      return false;
     case "indexedAccessType":
       if (visitTypes(t.objectType, visit)) return true;
       return visitTypes(t.index, visit);

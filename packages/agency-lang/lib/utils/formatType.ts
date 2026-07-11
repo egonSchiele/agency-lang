@@ -33,11 +33,13 @@ export function formatTypeHint(
     case "primitiveType":
       return primitiveAliases?.[vt.value] ?? vt.value;
     case "arrayType": {
-      // Parenthesize keyof and intersection elements: `(keyof User)[]`
-      // and `(A & B)[]` re-parse as written, while the unparenthesized
-      // forms re-parse as keyof (User[]) and A & (B[]).
+      // Parenthesize keyof, union, and intersection elements:
+      // `(keyof User)[]`, `(A | B)[]`, and `(A & B)[]` re-parse as
+      // written, while the unparenthesized forms re-parse as
+      // keyof (User[]), A | (B[]), and A & (B[]).
       const el = recurse(vt.elementType);
       return vt.elementType.type === "keyofType" ||
+        vt.elementType.type === "unionType" ||
         vt.elementType.type === "intersectionType"
         ? `(${el})[]`
         : `${el}[]`;

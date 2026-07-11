@@ -103,6 +103,10 @@ function mergeObjects(
  * one group holding each side's declaration.
  */
 function groupPropertiesByKey(objects: ObjectType[]): ObjectProperty[][] {
+  // keyOrder preserves first-seen order; a plain Record iterated via
+  // Object.entries (or the groupBy in effectPayloadCheck.ts) reorders
+  // integer-like keys ("0", "1") ahead of string keys, and all-digit
+  // property keys are parseable.
   const keyOrder: string[] = [];
   // Null-prototype dict: keys are user-controlled property names, so
   // "__proto__"/"toString" must not collide with Object.prototype

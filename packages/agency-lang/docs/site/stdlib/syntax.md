@@ -158,7 +158,12 @@ Guess the programming language of a code snippet. Returns a highlight.js
 ### highlight
 
 ```ts
-highlight(code: string, language: string, mode: HighlightMode, theme: string | ColorScheme): string
+highlight(
+  code: string,
+  language: string = "plaintext",
+  mode: HighlightMode = "shell",
+  theme: string | ColorScheme = "vscode-dark",
+): string
 ```
 
 Syntax-highlight a code snippet and return the highlighted string.
@@ -195,7 +200,20 @@ Syntax-highlight a code snippet and return the highlighted string.
 ### diff
 
 ```ts
-diff(oldText: string, newText: string, context: number, lineNumbers: boolean, color: "auto" | boolean, oldLabel: string, newLabel: string, ignoreWhitespace: boolean, hunkHeaders: boolean, summary: boolean, language: string, theme: string | ColorScheme): string
+diff(
+  oldText: string,
+  newText: string,
+  context: number = -1,
+  lineNumbers: boolean = false,
+  color: "auto" | boolean = "auto",
+  oldLabel: string = "",
+  newLabel: string = "",
+  ignoreWhitespace: boolean = false,
+  hunkHeaders: boolean = false,
+  summary: boolean = false,
+  language: string = "",
+  theme: string | ColorScheme = "vscode-dark",
+): string
 ```
 
 Produce a human-readable diff of two strings and return it as a string.
@@ -239,7 +257,14 @@ Produce a human-readable diff of two strings and return it as a string.
 ### patch
 
 ```ts
-patch(oldText: string, newText: string, filename: string, context: number, ignoreWhitespace: boolean, newFilename: string): string
+patch(
+  oldText: string,
+  newText: string,
+  filename: string,
+  context: number = 3,
+  ignoreWhitespace: boolean = false,
+  newFilename: string = "",
+): string
 ```
 
 Produce a standard unified diff and return it as a string, in a format that

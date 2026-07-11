@@ -135,7 +135,9 @@ Return the environment variable that holds the API key for a recognized
 ### pickProvider
 
 ```ts
-pickProvider(order: string[]): Result<string>
+pickProvider(
+  order: string[] = ["anthropic", "google", "openai"],
+): Result<string>
 ```
 
 Return the first provider in `order` whose API-key environment variable

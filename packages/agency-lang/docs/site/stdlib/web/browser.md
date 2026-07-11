@@ -39,7 +39,15 @@ effect std::browserUse {
 ### browserUse
 
 ```ts
-browserUse(task: string, model: string, maxCostUsd: number, proxyCountryCode: string, timeout: number, apiKey: string, allowedDomains: string[]): Result
+browserUse(
+  task: string,
+  model: string = "",
+  maxCostUsd: number = 0,
+  proxyCountryCode: string = "",
+  timeout: number = 0,
+  apiKey: string = "",
+  allowedDomains: string[] = [],
+): Result
 ```
 
 Run a browser automation task described in natural language via the Browser Use cloud API. The managed browser has stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID.

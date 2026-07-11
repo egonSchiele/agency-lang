@@ -95,7 +95,7 @@ effect std::yc {
 ### ycBatch
 
 ```ts
-ycBatch(batch: string): Result<Company[]>
+ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
 Fetch the YC companies in a batch. Returns each company's id, name, one-liner, batch, status,
@@ -118,7 +118,9 @@ Fetch the YC companies in a batch. Returns each company's id, name, one-liner, b
 ### ycIndustry
 
 ```ts
-ycIndustry(industry: string): Result<Company[]>
+ycIndustry(
+  industry: string,
+): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
 Fetch the YC companies in an industry. Returns each company's profile. An unknown industry
@@ -141,7 +143,7 @@ Fetch the YC companies in an industry. Returns each company's profile. An unknow
 ### ycTag
 
 ```ts
-ycTag(tag: string): Result<Company[]>
+ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
 Fetch the YC companies with a tag. Returns each company's profile. An unknown tag returns a
@@ -164,7 +166,9 @@ Fetch the YC companies with a tag. Returns each company's profile. An unknown ta
 ### ycList
 
 ```ts
-ycList(list: string): Result<Company[]>
+ycList(
+  list: string = "top",
+): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
 Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-founded",
@@ -188,7 +192,7 @@ Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-fou
 ### ycMeta
 
 ```ts
-ycMeta(): Result<YcMeta>
+ycMeta(): Result<YcMeta> raises <std::yc, std::http::fetchJSON>
 ```
 
 Fetch the YC directory metadata: the available batch, industry, and tag slugs plus the

@@ -102,7 +102,16 @@ export type Width = number | "full" | string
 ### text
 
 ```ts
-text(content: string, fgColor: string, bgColor: string, bold: boolean, italic: boolean, dim: boolean, underline: boolean, align: Alignment): LayoutNode
+text(
+  content: string,
+  fgColor: string = "",
+  bgColor: string = "",
+  bold: boolean = false,
+  italic: boolean = false,
+  dim: boolean = false,
+  underline: boolean = false,
+  align: Alignment = "start",
+): LayoutNode
 ```
 
 A styled run of text. Newlines split it into multiple lines.
@@ -136,7 +145,11 @@ A styled run of text. Newlines split it into multiple lines.
 ### raw
 
 ```ts
-raw(content: string, align: Alignment, wrap: boolean): LayoutNode
+raw(
+  content: string,
+  align: Alignment = "start",
+  wrap: boolean = true,
+): LayoutNode
 ```
 
 A pre-styled string (may carry its own ANSI or newlines). Wraps to the
@@ -166,7 +179,7 @@ into surrounding borders.
 ### space
 
 ```ts
-space(count: number): LayoutNode
+space(count: number = 1): LayoutNode
 ```
 
 Blank space. Inside a row it adds columns; inside a column, rows.
@@ -186,7 +199,13 @@ Blank space. Inside a row it adds columns; inside a column, rows.
 ### hline
 
 ```ts
-hline(char: string, length: number, fgColor: string, bold: boolean, dim: boolean): LayoutNode
+hline(
+  char: string = "─",
+  length: number = 0,
+  fgColor: string = "",
+  bold: boolean = false,
+  dim: boolean = false,
+): LayoutNode
 ```
 
 A horizontal rule. Inside a column, leave length at 0 to span the column's width.
@@ -214,7 +233,13 @@ A horizontal rule. Inside a column, leave length at 0 to span the column's width
 ### vline
 
 ```ts
-vline(char: string, length: number, fgColor: string, bold: boolean, dim: boolean): LayoutNode
+vline(
+  char: string = "│",
+  length: number = 0,
+  fgColor: string = "",
+  bold: boolean = false,
+  dim: boolean = false,
+): LayoutNode
 ```
 
 A vertical rule. Inside a row, leave length at 0 to span the row's height.
@@ -242,7 +267,13 @@ A vertical rule. Inside a row, leave length at 0 to span the row's height.
 ### row
 
 ```ts
-row(gap: number, align: Alignment, width: Width, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+row(
+  gap: number = 0,
+  align: Alignment = "start",
+  width: Width = null,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) -> void = null,
+): LayoutNode
 ```
 
 A horizontal container. Children render left to right.
@@ -270,7 +301,13 @@ A horizontal container. Children render left to right.
 ### column
 
 ```ts
-column(gap: number, align: Alignment, width: Width, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+column(
+  gap: number = 0,
+  align: Alignment = "start",
+  width: Width = null,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) -> void = null,
+): LayoutNode
 ```
 
 A vertical container. Children render top to bottom.
@@ -298,7 +335,16 @@ A vertical container. Children render top to bottom.
 ### box
 
 ```ts
-box(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: string, padding: number, width: Width, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+box(
+  title: string = "",
+  titleColor: string = "",
+  borderStyle: BorderStyle = "rounded",
+  borderColor: string = "",
+  padding: number = 1,
+  width: Width = null,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) -> void = null,
+): LayoutNode
 ```
 
 A bordered panel. Multiple children stack vertically inside it.
@@ -332,7 +378,12 @@ A bordered panel. Multiple children stack vertically inside it.
 ### render
 
 ```ts
-render(node: LayoutNode, color: "auto" | boolean, cols: number, rows: number): string
+render(
+  node: LayoutNode,
+  color: "auto" | boolean = "auto",
+  cols: number = 0,
+  rows: number = 0,
+): string
 ```
 
 Render a layout tree to a styled, multi-line string ready to print.

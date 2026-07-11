@@ -86,7 +86,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 ### mapValues
 
 ```ts
-mapValues(obj: any, func: (any, string) => any): any
+mapValues(obj: any, func: (any, string) -> any): any
 ```
 
 Return a new object with the same keys, but with each value transformed by the function.
@@ -108,7 +108,7 @@ Return a new object with the same keys, but with each value transformed by the f
 ### mapEntries
 
 ```ts
-mapEntries(obj: any, func: (any, string) => any): any
+mapEntries(obj: any, func: (any, string) -> any): any
 ```
 
 Return a new object by applying the function to each entry.
@@ -130,7 +130,7 @@ Return a new object by applying the function to each entry.
 ### filterEntries
 
 ```ts
-filterEntries(obj: any, func: (any, string) => boolean): any
+filterEntries(obj: any, func: (any, string) -> boolean): any
 ```
 
 Return a new object containing only the entries for which the function returns true.
@@ -152,7 +152,7 @@ Return a new object containing only the entries for which the function returns t
 ### everyEntry
 
 ```ts
-everyEntry(obj: any, func: (any, string) => boolean): boolean
+everyEntry(obj: any, func: (any, string) -> boolean): boolean
 ```
 
 Return true if the function returns true for every entry in the object.
@@ -174,7 +174,7 @@ Return true if the function returns true for every entry in the object.
 ### someEntry
 
 ```ts
-someEntry(obj: any, func: (any, string) => boolean): boolean
+someEntry(obj: any, func: (any, string) -> boolean): boolean
 ```
 
 Return true if the function returns true for at least one entry in the object.

@@ -46,7 +46,7 @@ export type DayOfWeek =
 ### now
 
 ```ts
-now(timezone: string): string
+now(timezone: string = ""): string
 ```
 
 Get the current date and time as a timezone-aware ISO 8601 string (e.g. "2026-05-05T10:30:00-07:00").
@@ -68,7 +68,7 @@ Get the current date and time as an ISO 8601 string with timezone offset.
 ### today
 
 ```ts
-today(timezone: string): string
+today(timezone: string = ""): string
 ```
 
 Get today's date as a YYYY-MM-DD string (e.g. "2026-05-05").
@@ -90,7 +90,7 @@ Get today's date as a YYYY-MM-DD string.
 ### tomorrow
 
 ```ts
-tomorrow(timezone: string): string
+tomorrow(timezone: string = ""): string
 ```
 
 Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06").
@@ -208,7 +208,7 @@ Add days to a datetime string and return the new datetime. Note: adds a fixed 24
 ### nextDayOfWeek
 
 ```ts
-nextDayOfWeek(day: DayOfWeek, timezone: string): string
+nextDayOfWeek(day: DayOfWeek, timezone: string = ""): string
 ```
 
 Get the next occurrence of a given day of the week as a YYYY-MM-DD string. For example, passing "tuesday" returns the date of next Tuesday.
@@ -232,7 +232,7 @@ Get the date of the next occurrence of a day of the week (e.g. "monday").
 ### atTime
 
 ```ts
-atTime(date: string, time: string, timezone: string): string
+atTime(date: string, time: string, timezone: string = ""): string
 ```
 
 Combine a date and time into a full timezone-aware ISO 8601 string. For example, atTime("2026-05-10", "15:00", "America/Los_Angeles") returns "2026-05-10T15:00:00-07:00". Uses local timezone if not specified.
@@ -258,7 +258,7 @@ Combine a date (YYYY-MM-DD) and time (HH:MM) into a timezone-aware ISO 8601 stri
 ### startOfDay
 
 ```ts
-startOfDay(date: string, timezone: string): string
+startOfDay(date: string = "", timezone: string = ""): string
 ```
 
 Get midnight (00:00:00) of a given date as a timezone-aware ISO 8601 string. Uses today if no date provided.
@@ -282,7 +282,7 @@ Get the start of the day (midnight) as an ISO 8601 string.
 ### endOfDay
 
 ```ts
-endOfDay(date: string, timezone: string): string
+endOfDay(date: string = "", timezone: string = ""): string
 ```
 
 Get the end of the day (23:59:59) of a given date as a timezone-aware ISO 8601 string. Uses today if no date provided.
@@ -306,7 +306,7 @@ Get the end of the day (23:59:59) as an ISO 8601 string.
 ### startOfWeek
 
 ```ts
-startOfWeek(date: string, timezone: string): string
+startOfWeek(date: string = "", timezone: string = ""): string
 ```
 
 Get midnight on Sunday of the week containing the given date. Uses this week if no date provided.
@@ -330,7 +330,7 @@ Get the start of the current week (Sunday midnight) as an ISO 8601 string.
 ### endOfWeek
 
 ```ts
-endOfWeek(date: string, timezone: string): string
+endOfWeek(date: string = "", timezone: string = ""): string
 ```
 
 Get 23:59:59 on Saturday of the week containing the given date. Uses this week if no date provided.
@@ -354,7 +354,7 @@ Get the end of the current week (Saturday 23:59:59) as an ISO 8601 string.
 ### startOfMonth
 
 ```ts
-startOfMonth(date: string, timezone: string): string
+startOfMonth(date: string = "", timezone: string = ""): string
 ```
 
 Get midnight on the 1st of the month containing the given date. Uses this month if no date provided.
@@ -378,7 +378,7 @@ Get the start of the month (1st at midnight) as an ISO 8601 string.
 ### endOfMonth
 
 ```ts
-endOfMonth(date: string, timezone: string): string
+endOfMonth(date: string = "", timezone: string = ""): string
 ```
 
 Get 23:59:59 on the last day of the month containing the given date. Uses this month if no date provided.

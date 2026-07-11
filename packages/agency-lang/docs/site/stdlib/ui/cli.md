@@ -25,7 +25,14 @@ A line-mode REPL for CLI agents, driven by Node's `readline` instead of
 ### repl
 
 ```ts
-repl(status: any, onSubmit: any, prompt: string, historyFile: string, historyMax: number, paletteCommands: any)
+repl(
+  status: any,
+  onSubmit: any,
+  prompt: string = "> ",
+  historyFile: string = "",
+  historyMax: number = 1000,
+  paletteCommands: any = null,
+)
 ```
 
 Line-mode REPL with the same call signature as the std::ui TUI repl,
@@ -87,7 +94,7 @@ Clear the input history of the currently running `repl()` session: both
 ### hline
 
 ```ts
-hline(char: string, width: number): string
+hline(char: string = "─", width: number = null): string
 ```
 
 **Parameters:**

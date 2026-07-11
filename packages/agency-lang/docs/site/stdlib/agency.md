@@ -158,7 +158,18 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 ### run
 
 ```ts
-run(compiled: CompiledProgram, node: string, args: Record<string, any>, wallClock: number, memory: number, ipcPayload: number, stdout: number, logFile: string, cwd: string, maxDepth: number): Result
+run(
+  compiled: CompiledProgram,
+  node: string,
+  args: Record<string, any> = {},
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
+  logFile: string = "",
+  cwd: string = "",
+  maxDepth: number = 5,
+): Result
 ```
 
 Execute a compiled Agency program in a subprocess and return the node's result.
@@ -208,7 +219,16 @@ and a child process has maxDepth=5, maxDepth=3 is used.
 ### runFile
 
 ```ts
-runFile(dir: string, filename: string, node: string, args: Record<string, any>, wallClock: number, memory: number, ipcPayload: number, stdout: number): Result
+runFile(
+  dir: string,
+  filename: string,
+  node: string,
+  args: Record<string, any> = {},
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
+): Result
 ```
 
 Compile and execute an Agency file in a subprocess and return the node's result.
@@ -318,7 +338,12 @@ Parse Agency source code into an abstract syntax tree.
 ### writeAST
 
 ```ts
-writeAST(ast: AST, dir: string, filename: string, overwrite: boolean): Result
+writeAST(
+  ast: AST,
+  dir: string,
+  filename: string,
+  overwrite: boolean = true,
+): Result
 ```
 
 Format an AST as Agency source and write it to dir/filename. Absolute paths and .. segments cannot escape dir. Symlinks on existing files are followed and re-checked.
@@ -397,7 +422,7 @@ Read and write happen inside the same interrupt, so approving it approves both.
 ### walkAST
 
 ```ts
-walkAST(ast: AST, visitor: (node: any, ancestors: any[]) => any): AST
+walkAST(ast: AST, visitor: (node: any, ancestors: any[]) -> any): AST
 ```
 
 Walk every node in a deep-cloned copy of the AST, invoking the visitor
@@ -508,7 +533,13 @@ Return every graph node definition (`node main() { ... }`) in the source.
 ### filterImports
 
 ```ts
-filterImports(source: string, allowedPackages: string[], excludedPackages: string[], allowKinds: string[], excludeKinds: string[]): Result<{ source: string; filtered: boolean }>
+filterImports(
+  source: string,
+  allowedPackages: string[] = [],
+  excludedPackages: string[] = [],
+  allowKinds: string[] = [],
+  excludeKinds: string[] = [],
+): Result<{ source: string; filtered: boolean }>
 ```
 
 Filter imports in Agency source code according to the given policy.

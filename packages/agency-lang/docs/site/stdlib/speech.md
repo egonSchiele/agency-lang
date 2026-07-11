@@ -52,7 +52,13 @@ effect std::transcribe {
 ### speak
 
 ```ts
-speak(text: string, voice: string, rate: number, outputFile: string, allowedPaths: string[])
+speak(
+  text: string,
+  voice: string = "",
+  rate: number = 0,
+  outputFile: string = "",
+  allowedPaths: string[] = [],
+)
 ```
 
 Speak text aloud using text-to-speech.
@@ -83,7 +89,11 @@ playback.
 ### record
 
 ```ts
-record(outputFile: string, silenceTimeout: number, allowedPaths: string[]): string
+record(
+  outputFile: string = "",
+  silenceTimeout: number = 2000,
+  allowedPaths: string[] = [],
+): string
 ```
 
 Record audio from the microphone. Recording stops when the user presses Enter, or after the silence timeout elapses.
@@ -118,7 +128,11 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
 ### transcribe
 
 ```ts
-transcribe(filepath: string, language: string, allowedPaths: string[]): string
+transcribe(
+  filepath: string,
+  language: string = "",
+  allowedPaths: string[] = [],
+): string
 ```
 
 Transcribe an audio file to text using OpenAI's Whisper API.

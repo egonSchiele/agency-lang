@@ -80,7 +80,11 @@ effect std::dbnomics {
 ### dbnomicsSeries
 
 ```ts
-dbnomicsSeries(provider: string, dataset: string, series: string): Result<DbnomicsSeries>
+dbnomicsSeries(
+  provider: string,
+  dataset: string,
+  series: string,
+): Result<DbnomicsSeries> raises <std::dbnomics, std::http::fetchJSON>
 ```
 
 Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series codes

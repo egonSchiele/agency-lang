@@ -146,7 +146,11 @@ Add a user message to the current thread's message history. Use this
 ### image
 
 ```ts
-image(source: string, mimeType: string, base64: boolean): Attachment
+image(
+  source: string,
+  mimeType: string = "",
+  base64: boolean = false,
+): Attachment
 ```
 
 Build an image attachment for a multimodal llm() call. The source is
@@ -171,7 +175,12 @@ Build an image attachment for a multimodal llm() call. The source is
 ### file
 
 ```ts
-file(source: string, filename: string, mimeType: string, base64: boolean): Attachment
+file(
+  source: string,
+  filename: string = "",
+  mimeType: string = "",
+  base64: boolean = false,
+): Attachment
 ```
 
 Build a file (e.g. PDF) attachment for a multimodal llm() call.
@@ -288,7 +297,11 @@ Unlike the per-branch cost/token accessors, this reads process-wide
 ### guard
 
 ```ts
-guard(cost: number | null, time: number | null, block: () => any): Result
+guard(
+  cost: number | null = null,
+  time: number | null = null,
+  block: () -> any = null,
+): Result
 ```
 
 Run a block under a cost limit, a time limit, or both, aborting the
@@ -353,7 +366,7 @@ Run a block under a cost limit, a time limit, or both, aborting the
 ### listThreads
 
 ```ts
-listThreads(lazySummarize: boolean): Result
+listThreads(lazySummarize: boolean = true): Result
 ```
 
 Return every thread in the current run, including the active one, as a
@@ -401,7 +414,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 ### getThread
 
 ```ts
-getThread(id: string, offset: number, limit: number): Result
+getThread(id: string, offset: number = 0, limit: number = 50): Result
 ```
 
 Read a slice of a thread's messages. Returns success holding `[]`

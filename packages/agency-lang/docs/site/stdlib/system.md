@@ -100,7 +100,14 @@ Show a native OS notification. Returns true if the notification was sent.
 ### screenshot
 
 ```ts
-screenshot(filepath: string, x: number, y: number, width: number, height: number, allowedPaths: string[])
+screenshot(
+  filepath: string,
+  x: number = -1,
+  y: number = -1,
+  width: number = -1,
+  height: number = -1,
+  allowedPaths: string[] = [],
+)
 ```
 
 Take a screenshot and save it to a file. Pass x, y, width, and height to capture a specific region.
@@ -133,7 +140,7 @@ screencapture.
 ### exit
 
 ```ts
-exit(code: number)
+exit(code: number = 0)
 ```
 
 Terminate the process immediately with the given exit code. Use with caution. This skips any cleanup or pending operations.

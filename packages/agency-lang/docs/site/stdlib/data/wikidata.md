@@ -88,7 +88,10 @@ effect std::wikidata {
 ### wikidataSearch
 
 ```ts
-wikidataSearch(name: string, limit: number): Result<Entity[]>
+wikidataSearch(
+  name: string,
+  limit: number = 5,
+): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON>
 ```
 
 Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
@@ -114,7 +117,9 @@ Search Wikidata for entities by name. Returns matches with QID, label, descripti
 ### wikidataEntity
 
 ```ts
-wikidataEntity(qid: string): Result<EntityDetail>
+wikidataEntity(
+  qid: string,
+): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON>
 ```
 
 Fetch one Wikidata entity by its QID. Returns the English label, description, aliases, and claims
@@ -138,7 +143,9 @@ Fetch one Wikidata entity by its QID. Returns the English label, description, al
 ### wikidataQuery
 
 ```ts
-wikidataQuery(sparql: string): Result<Record<string, string>[]>
+wikidataQuery(
+  sparql: string,
+): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON>
 ```
 
 Run a SPARQL query against the Wikidata Query Service and return rows (each a map of the SELECTed

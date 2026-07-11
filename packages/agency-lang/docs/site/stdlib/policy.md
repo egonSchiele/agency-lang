@@ -385,7 +385,10 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 ### buildScopedMatch
 
 ```ts
-buildScopedMatch(intr: Record<string, any>, fields: ScopedRuleFields): Record<string, string>
+buildScopedMatch(
+  intr: Record<string, any>,
+  fields: ScopedRuleFields,
+): Record<string, string>
 ```
 
 Build a match object for an interrupt, pinned to the configured fields. Returns {} when the effect has no configured fields.
@@ -432,7 +435,11 @@ Build a match object for an interrupt, pinned to the configured fields. Returns 
 ### recordRule
 
 ```ts
-recordRule(policy: Policy, effect: InterruptEffect, action: "approve" | "reject"): Policy
+recordRule(
+  policy: Policy,
+  effect: InterruptEffect,
+  action: "approve" | "reject",
+): Policy
 ```
 
 Return a new policy with a catch-all rule for an effect appended. A single bare rule covers every future interrupt of that effect.
@@ -476,7 +483,11 @@ Return a new policy with a catch-all rule for an effect appended. A single bare 
 ### recordScopedRule
 
 ```ts
-recordScopedRule(policy: Policy, intr: Record<string, any>, fields: ScopedRuleFields): Policy
+recordScopedRule(
+  policy: Policy,
+  intr: Record<string, any>,
+  fields: ScopedRuleFields,
+): Policy
 ```
 
 Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the configured fields, so it approves only future interrupts matching this one's field values.
@@ -567,7 +578,7 @@ setPolicy(path: string, policy: Policy)
 ### writePolicyFile
 
 ```ts
-writePolicyFile(path: string, policy: Policy, allowedPaths: string[])
+writePolicyFile(path: string, policy: Policy, allowedPaths: string[] = [])
 ```
 
 Validate and write a policy to a JSON file. Throws if the policy is invalid.
@@ -616,7 +627,11 @@ flushPolicy()
 ### cliPolicyHandler
 
 ```ts
-cliPolicyHandler(file: string, fields: ScopedRuleFields, policy: Policy | null): any
+cliPolicyHandler(
+  file: string,
+  fields: ScopedRuleFields,
+  policy: Policy | null = null,
+): any
 ```
 
 CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.

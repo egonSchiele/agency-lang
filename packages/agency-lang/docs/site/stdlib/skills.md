@@ -75,7 +75,7 @@ effect std::skills::commandsDir {
 ### skillsDir
 
 ```ts
-skillsDir(dir: string, layout: "flat" | "standard")
+skillsDir(dir: string, layout: "flat" | "standard" = "standard")
 ```
 
 Build a skills tool for an LLM over a directory of skills.

@@ -36,7 +36,15 @@ effect std::sendSms {
 ### sendSms
 
 ```ts
-sendSms(to: string, body: string, from: string, accountSid: string, authToken: string, allowList: string[], blockList: string[]): Result
+sendSms(
+  to: string,
+  body: string,
+  from: string = "",
+  accountSid: string = "",
+  authToken: string = "",
+  allowList: string[] = [],
+  blockList: string[] = [],
+): Result
 ```
 
 Send an SMS text message via the Twilio API.

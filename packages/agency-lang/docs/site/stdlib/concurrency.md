@@ -26,7 +26,12 @@ Concurrency primitives for coordinating work inside one Agency run. Use
 ### withLock
 
 ```ts
-withLock(name: string, timeoutMs: number | null, warnAfterMs: number | null, block: () => any): any
+withLock(
+  name: string,
+  timeoutMs: number | null = null,
+  warnAfterMs: number | null = null,
+  block: () -> any = null,
+): any
 ```
 
 Run a block while holding a named per-run mutex. Branches of the same run

@@ -157,7 +157,14 @@ effect std::fred {
 ### fredSeries
 
 ```ts
-fredSeries(seriesId: string, observationStart: string, observationEnd: string, frequency: FredFrequency | null, units: FredUnits | null, limit: number): Result<FredSeries>
+fredSeries(
+  seriesId: string,
+  observationStart: string = "",
+  observationEnd: string = "",
+  frequency: FredFrequency | null = null,
+  units: FredUnits | null = null,
+  limit: number = 0,
+): Result<FredSeries> raises <std::fred, std::http::fetchJSON>
 ```
 
 Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
@@ -193,7 +200,9 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 ### fredSeriesInfo
 
 ```ts
-fredSeriesInfo(seriesId: string): Result<FredSeriesInfo>
+fredSeriesInfo(
+  seriesId: string,
+): Result<FredSeriesInfo> raises <std::fred, std::http::fetchJSON>
 ```
 
 Fetch metadata about a FRED series by its id: its human title, display units, frequency, and

@@ -97,7 +97,18 @@ export type ChartBuilder = {
 ### barChart
 
 ```ts
-barChart(title: string, mode: BarMode, keys: BarKey[], data: Bar[], showValues: boolean, legend: boolean, max: number, barChar: string, width: Width, block: (ChartBuilder) => void): LayoutNode
+barChart(
+  title: string = "",
+  mode: BarMode = "grouped",
+  keys: BarKey[] = null,
+  data: Bar[] = null,
+  showValues: boolean = true,
+  legend: boolean = true,
+  max: number = 0,
+  barChar: string = "█",
+  width: Width = null,
+  block: (ChartBuilder) -> void = null,
+): LayoutNode
 ```
 
 Build a horizontal bar chart as a layout node. Pass the data form:

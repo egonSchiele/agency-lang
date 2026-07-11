@@ -67,7 +67,11 @@ effect std::gdelt {
 ### gdeltNews
 
 ```ts
-gdeltNews(query: string, maxRecords: number, timespan: string): Result<NewsArticle[]>
+gdeltNews(
+  query: string,
+  maxRecords: number = 25,
+  timespan: string = "3d",
+): Result<NewsArticle[]> raises <std::gdelt, std::http::fetchJSON>
 ```
 
 Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns recent

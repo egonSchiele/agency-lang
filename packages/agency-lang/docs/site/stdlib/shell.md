@@ -91,7 +91,17 @@ effect std::glob {
 ### exec
 
 ```ts
-exec(command: string, args: string[], cwd: string, timeout: number, stdin: string, allowedExecutables: string[], blockedCommands: string[], allowedPaths: string[], useAgentCwd: boolean): ExecResult
+exec(
+  command: string,
+  args: string[] = [],
+  cwd: string = "",
+  timeout: number = 0,
+  stdin: string = "",
+  allowedExecutables: string[] = [],
+  blockedCommands: string[] = [],
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): ExecResult
 ```
 
 Run an executable directly with an array of arguments, bypassing the shell, and return its stdout, stderr, and exit code. Arguments are passed straight to the process without shell interpretation, which prevents command injection. Prefer this whenever you have a known command and structured arguments.
@@ -129,7 +139,15 @@ Run an executable directly with an array of arguments, bypassing the shell, and 
 ### bash
 
 ```ts
-bash(command: string, cwd: string, timeout: number, stdin: string, blockedCommands: string[], allowedPaths: string[], useAgentCwd: boolean): ExecResult
+bash(
+  command: string,
+  cwd: string = "",
+  timeout: number = 0,
+  stdin: string = "",
+  blockedCommands: string[] = [],
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): ExecResult
 ```
 
 Run a shell command string via sh -c and return its stdout, stderr, and exit code. The shell interprets the string, so pipes, redirects, and globbing work. Interpolated values are also subject to shell interpretation, so prefer running an executable directly with structured arguments when passing untrusted or dynamic values.
@@ -167,7 +185,13 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 ### ls
 
 ```ts
-ls(dir: string, recursive: boolean, maxResults: number, allowedPaths: string[], useAgentCwd: boolean): Result
+ls(
+  dir: string = ".",
+  recursive: boolean = false,
+  maxResults: number = 1000,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 List entries in a directory. Each entry has name, path, type ("file", "dir", "symlink", or "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read.
@@ -199,7 +223,14 @@ List entries in a directory. Each entry has name, path, type ("file", "dir", "sy
 ### grep
 
 ```ts
-grep(pattern: string, dir: string, flags: string, maxResults: number, allowedPaths: string[], useAgentCwd: boolean): Result
+grep(
+  pattern: string,
+  dir: string = ".",
+  flags: string = "",
+  maxResults: number = 200,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Fails if the pattern is not a valid regex or the directory cannot be read.
@@ -233,7 +264,13 @@ Search for a regex pattern in files under a directory. Returns matches with file
 ### glob
 
 ```ts
-glob(pattern: string, dir: string, maxResults: number, allowedPaths: string[], useAgentCwd: boolean): Result
+glob(
+  pattern: string,
+  dir: string = ".",
+  maxResults: number = 500,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read.
@@ -263,7 +300,13 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the p
 ### stat
 
 ```ts
-stat(filename: string, dir: string, allowedPaths: string[], useAgentCwd: boolean, followSymlinks: boolean): StatInfo
+stat(
+  filename: string,
+  dir: string = "",
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+  followSymlinks: boolean = false,
+): StatInfo
 ```
 
 Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms.
@@ -291,7 +334,12 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 ### exists
 
 ```ts
-exists(filename: string, dir: string, allowedPaths: string[], useAgentCwd: boolean): boolean
+exists(
+  filename: string,
+  dir: string = "",
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): boolean
 ```
 
 Return true if a file or directory exists at the given path. Probing a path outside allowedPaths raises an error rather than silently returning false.

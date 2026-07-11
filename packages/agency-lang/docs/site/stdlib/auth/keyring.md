@@ -64,7 +64,7 @@ effect std::deleteSecret {
 ### setSecret
 
 ```ts
-setSecret(key: string, value: string, service: string): Result
+setSecret(key: string, value: string, service: string = "agency-lang"): Result
 ```
 
 Store a secret in the system keyring, overwriting any existing value for the same key.
@@ -90,7 +90,7 @@ Store a secret in the system keyring, overwriting any existing value for the sam
 ### getSecret
 
 ```ts
-getSecret(key: string, service: string): Result
+getSecret(key: string, service: string = "agency-lang"): Result
 ```
 
 Retrieve a secret from the system keyring. Returns the secret value, or null if not found.
@@ -114,7 +114,7 @@ Retrieve a secret from the system keyring. Returns the secret value, or null if 
 ### deleteSecret
 
 ```ts
-deleteSecret(key: string, service: string): Result
+deleteSecret(key: string, service: string = "agency-lang"): Result
 ```
 
 Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.

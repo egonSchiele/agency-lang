@@ -507,7 +507,7 @@ Composes well with the pipe operator, e.g. `read(filename, dir) |> frontmatter`.
 ### walk
 
 ```ts
-walk(blocks: any[], block: (any) => any): any[]
+walk(blocks: any[], block: (any) -> any): any[]
 ```
 
 Walk a Markdown AST top-down, calling `block` on every block and inline

@@ -39,7 +39,7 @@ effect std::weather {
 ### weather
 
 ```ts
-weather(location: string, units: "imperial" | "metric"): Result
+weather(location: string, units: "imperial" | "metric" = "imperial"): Result
 ```
 
 Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a text description.

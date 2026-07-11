@@ -259,7 +259,7 @@ effect std::git::restore {
 ### gitStatus
 
 ```ts
-gitStatus(cwd: string): GitStatus
+gitStatus(cwd: string = ""): GitStatus raises <std::git::status>
 ```
 
 Show the working-tree status: current branch, ahead/behind counts, and
@@ -281,7 +281,15 @@ Show the working-tree status: current branch, ahead/behind counts, and
 ### gitLog
 
 ```ts
-gitLog(n: number, oneline: boolean, path: string, ref: string, author: string, allowedPaths: string[], cwd: string): GitLog
+gitLog(
+  n: number = 20,
+  oneline: boolean = false,
+  path: string = "",
+  ref: string = "",
+  author: string = "",
+  allowedPaths: string[] = [],
+  cwd: string = "",
+): GitLog raises <std::git::log>
 ```
 
 Show commit history as structured commits.
@@ -317,7 +325,14 @@ Show commit history as structured commits.
 ### gitDiff
 
 ```ts
-gitDiff(ref: string, ref2: string, staged: boolean, path: string, allowedPaths: string[], cwd: string): GitDiff
+gitDiff(
+  ref: string = "",
+  ref2: string = "",
+  staged: boolean = false,
+  path: string = "",
+  allowedPaths: string[] = [],
+  cwd: string = "",
+): GitDiff raises <std::git::diff>
 ```
 
 Show a diff as a structured per-file summary plus the raw unified patch.
@@ -351,7 +366,7 @@ Show a diff as a structured per-file summary plus the raw unified patch.
 ### gitShow
 
 ```ts
-gitShow(ref: string, cwd: string): GitDiff
+gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show>
 ```
 
 Show a commit as a structured per-file summary plus the raw patch. Line
@@ -375,7 +390,7 @@ Show a commit as a structured per-file summary plus the raw patch. Line
 ### gitBranchList
 
 ```ts
-gitBranchList(cwd: string): GitBranch[]
+gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList>
 ```
 
 List local branches with their current-marker, upstream, and sha.
@@ -396,7 +411,7 @@ List local branches with their current-marker, upstream, and sha.
 ### gitRemoteList
 
 ```ts
-gitRemoteList(cwd: string): GitRemote[]
+gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList>
 ```
 
 List configured remotes with their fetch/push URLs.
@@ -417,7 +432,11 @@ List configured remotes with their fetch/push URLs.
 ### gitBlame
 
 ```ts
-gitBlame(path: string, ref: string, cwd: string): BlameLine[]
+gitBlame(
+  path: string,
+  ref: string = "",
+  cwd: string = "",
+): BlameLine[] raises <std::git::blame>
 ```
 
 Show line-by-line authorship for a file.
@@ -442,7 +461,7 @@ Show line-by-line authorship for a file.
 ### gitStashList
 
 ```ts
-gitStashList(cwd: string): GitStash[]
+gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList>
 ```
 
 List stashes with their ref and description.
@@ -463,7 +482,12 @@ List stashes with their ref and description.
 ### gitAdd
 
 ```ts
-gitAdd(paths: string[], all: boolean, allowedPaths: string[], cwd: string): string
+gitAdd(
+  paths: string[] = [],
+  all: boolean = false,
+  allowedPaths: string[] = [],
+  cwd: string = "",
+): string raises <std::git::add>
 ```
 
 Stage changes for commit.
@@ -494,7 +518,7 @@ Stage changes for commit.
 ### gitCommit
 
 ```ts
-gitCommit(message: string, cwd: string): string
+gitCommit(message: string, cwd: string = ""): string raises <std::git::commit>
 ```
 
 Create a commit from the staged changes.
@@ -517,7 +541,11 @@ Create a commit from the staged changes.
 ### gitCheckout
 
 ```ts
-gitCheckout(target: string, force: boolean, cwd: string): string
+gitCheckout(
+  target: string,
+  force: boolean = false,
+  cwd: string = "",
+): string raises <std::git::checkout>
 ```
 
 Check out a branch, commit, or path.
@@ -544,7 +572,11 @@ Bind `force: false` via `.partial()` to forbid discarding local changes.
 ### gitSwitch
 
 ```ts
-gitSwitch(branch: string, create: boolean, cwd: string): string
+gitSwitch(
+  branch: string,
+  create: boolean = false,
+  cwd: string = "",
+): string raises <std::git::switch>
 ```
 
 Switch to a branch.
@@ -569,7 +601,10 @@ Switch to a branch.
 ### gitBranchCreate
 
 ```ts
-gitBranchCreate(branch: string, cwd: string): string
+gitBranchCreate(
+  branch: string,
+  cwd: string = "",
+): string raises <std::git::branchCreate>
 ```
 
 Create a new branch at HEAD (does not switch to it).
@@ -592,7 +627,12 @@ Create a new branch at HEAD (does not switch to it).
 ### gitBranchDelete
 
 ```ts
-gitBranchDelete(branch: string, force: boolean, protectedBranches: string[], cwd: string): string
+gitBranchDelete(
+  branch: string,
+  force: boolean = false,
+  protectedBranches: string[] = [],
+  cwd: string = "",
+): string raises <std::git::branchDelete>
 ```
 
 Delete a local branch.
@@ -622,7 +662,10 @@ Guardrails: bind `force: false` and/or a `protectedBranches` list via
 ### gitStashPush
 
 ```ts
-gitStashPush(message: string, cwd: string): string
+gitStashPush(
+  message: string = "",
+  cwd: string = "",
+): string raises <std::git::stashPush>
 ```
 
 Stash the working-tree changes.
@@ -645,7 +688,7 @@ Stash the working-tree changes.
 ### gitStashPop
 
 ```ts
-gitStashPop(cwd: string): string
+gitStashPop(cwd: string = ""): string raises <std::git::stashPop>
 ```
 
 Apply and drop the most recent stash.
@@ -666,7 +709,12 @@ Apply and drop the most recent stash.
 ### gitRestore
 
 ```ts
-gitRestore(paths: string[], staged: boolean, allowedPaths: string[], cwd: string): string
+gitRestore(
+  paths: string[],
+  staged: boolean = false,
+  allowedPaths: string[] = [],
+  cwd: string = "",
+): string raises <std::git::restore>
 ```
 
 Restore files to a previous state.

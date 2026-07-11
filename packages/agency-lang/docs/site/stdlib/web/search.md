@@ -53,7 +53,15 @@ effect std::tavilySearch {
 ### search
 
 ```ts
-search(query: string, count: number, apiKey: string, country: string, searchLang: string, safesearch: string, freshness: string): SearchResult[]
+search(
+  query: string,
+  count: number = 5,
+  apiKey: string = "",
+  country: string = "",
+  searchLang: string = "",
+  safesearch: string = "",
+  freshness: string = "",
+): SearchResult[]
 ```
 
 Search the web. Returns a list of results with title, url, and description.
@@ -87,7 +95,13 @@ Search the web. Returns a list of results with title, url, and description.
 ### tavilySearch
 
 ```ts
-tavilySearch(query: string, count: number, apiKey: string, searchDepth: string, topic: string): SearchResult[]
+tavilySearch(
+  query: string,
+  count: number = 5,
+  apiKey: string = "",
+  searchDepth: string = "",
+  topic: string = "",
+): SearchResult[]
 ```
 
 Search the web with Tavily, a search API built for AI agents. Returns a list of results with title, url, and description.

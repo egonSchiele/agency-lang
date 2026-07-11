@@ -94,7 +94,12 @@ effect std::remove {
 ### edit
 
 ```ts
-edit(filename: string, edits: Edit[], dir: string, useAgentCwd: boolean): Result
+edit(
+  filename: string,
+  edits: Edit[],
+  dir: string = ".",
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Edit a single file by applying one or more text replacements atomically. Each edit's oldText must match a unique, non-overlapping region of the file as it stands when that edit runs (after earlier edits in the same call). If any edit fails, nothing is written.
@@ -129,7 +134,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 ### applyPatch
 
 ```ts
-applyPatch(patch: string, allowedPaths: string[]): Result
+applyPatch(patch: string, allowedPaths: string[] = []): Result
 ```
 
 Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
@@ -153,7 +158,11 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 ### mkdir
 
 ```ts
-mkdir(dir: string, allowedPaths: string[], useAgentCwd: boolean): Result
+mkdir(
+  dir: string,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
@@ -179,7 +188,12 @@ Create a directory, including any missing parent directories. Idempotent: succee
 ### copy
 
 ```ts
-copy(src: string, dest: string, allowedPaths: string[], useAgentCwd: boolean): Result
+copy(
+  src: string,
+  dest: string,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
@@ -207,7 +221,12 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 ### move
 
 ```ts
-move(src: string, dest: string, allowedPaths: string[], useAgentCwd: boolean): Result
+move(
+  src: string,
+  dest: string,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
@@ -235,7 +254,11 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 ### remove
 
 ```ts
-remove(target: string, allowedPaths: string[], useAgentCwd: boolean): Result
+remove(
+  target: string,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+): Result
 ```
 
 Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.

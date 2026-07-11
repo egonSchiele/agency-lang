@@ -43,7 +43,6 @@
   },
   "files": [
     "./dist",
-    "./dist/lib/agents/docs/appendix/**/*.md",
     "./stdlib/**/*.agency",
     "./stdlib/**/*.js",
     "./stdlib/docs/**/*.md",

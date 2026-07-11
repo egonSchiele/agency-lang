@@ -153,23 +153,13 @@ export def run(
     depth: _subprocessDepth() + 1
   })
 
-  // NOTE: the two _run call sites below must keep IDENTICAL argument
-  // lists (Agency has no zero-arg lambda to factor the call through).
-  if (maxCost == null) {
-    return try _run(
-      compiled,
-      node,
-      args,
-      wallClock,
-      memory,
-      ipcPayload,
-      stdout,
-      configOverrides,
-      cwd,
-      maxDepth,
-    )
+  // A negative cost disables the guard, so the no-cap case runs through
+  // the same single call site with an inert guard.
+  let costCap = -1.0
+  if (maxCost != null) {
+    costCap = maxCost
   }
-  const guarded = guard(cost: maxCost) as {
+  const guarded = guard(cost: costCap) as {
     return try _run(
       compiled,
       node,
@@ -483,7 +473,14 @@ export def writeAgency(
       const checked = try _typecheck(source)
       if (checked is failure(parseErr)) {
         result = failure({ source: source, errors: [] })
-        const findings = renderFeedback(parseFeedback(source))
+        // _typecheck throws for import-resolution failures as well as
+        // parse failures. In the import case the re-parse succeeds and
+        // renders no findings — fall back to the thrown error so the
+        // model always gets a diagnostic to repair against.
+        let findings = renderFeedback(parseFeedback(source))
+        if (findings == "") {
+          findings = "${parseErr}"
+        }
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else if (checked.value.errors.length > 0) {
         result = failure({ source: source, errors: checked.value.errors })

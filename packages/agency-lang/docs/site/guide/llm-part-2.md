@@ -59,6 +59,23 @@ Connection drops (ECONNRESET, fetch failed, …), `5xx`, `429`. A `429` is for r
 
 The call returns a `Failure`, which is covered in the chapter on [error handling](/guide/error-handling). 
 
+### Validation retries
+
+Transport retries handle a provider that failed to answer. Validation
+retries handle a provider that answered with the wrong shape. When an
+`llm()` call declares a result type and the response fails validation,
+Agency sends the validation error back to the model and asks again:
+
+```ts
+const person: Person = llm("Describe a scientist", { validationRetries: 2 })
+```
+
+After the retries run out, the call returns a failure. Use the bang
+syntax (`Person!`) to handle it locally, or `catch` for a default value.
+Validation retries cost tokens, unlike transport retries, so they are
+off by default. `setLlmOptions({ validationRetries: 2 })` sets a
+branch-wide default.
+
 ## Other options to llm()
 
 You can pass an options object as the second parameter, or use named arguments. All options are optional, and are grouped below by purpose.
@@ -87,11 +104,12 @@ You can pass an options object as the second parameter, or use named arguments. 
 
 ### Resilience
 
-| Option | Type |
-|---|---|
-| `retries` | `number` |
-| `timeout` | `duration` |
-| `backoff` | `{ initial?: duration, factor?: number, max?: duration }` |
+| Option | Type | Description |
+|---|---|---|
+| `retries` | `number` | Transport retries: the provider failed to answer. |
+| `timeout` | `duration` | Per-attempt deadline. |
+| `backoff` | `{ initial?: duration, factor?: number, max?: duration }` | Wait between transport retries. |
+| `validationRetries` | `number` | Retries when a structured-output response fails schema validation. Each retry sends the validation error back to the model. Disabled by default (0). Independent of `retries`. |
 
 See [retries and timeouts](#retries-and-timeouts) for more info.
 

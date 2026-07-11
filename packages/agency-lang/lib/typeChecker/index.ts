@@ -444,13 +444,7 @@ export class TypeChecker {
   }
 
   private deduplicateErrors(): TypeCheckError[] {
-    const seen = new Set<string>();
-    return this.errors.filter((err) => {
-      const key = `${err.message}:${err.loc?.start ?? -1}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return dedupeErrors(this.errors);
   }
 
   /** Delegating method preserved for test compatibility. */
@@ -469,6 +463,26 @@ export function typeCheck(
 ): TypeCheckResult {
   const checker = new TypeChecker(program, config, info);
   return checker.check();
+}
+
+/**
+ * Drop exact duplicates: same code, same rendered message, and same position.
+ * The message stays in the key deliberately — one code can render different
+ * params at one position (e.g. two assignability checks against different
+ * expected types), and both must survive. This is the emit-once band-aid
+ * until synth becomes pure (issue: emit-once follow-up); the key just must
+ * never be LOSSIER than code+message+position.
+ */
+export function dedupeErrors(errors: TypeCheckError[]): TypeCheckError[] {
+  const seen = new Set<string>();
+  return errors.filter((err) => {
+    const key = `${err.code}:${err.message}:${err.loc?.start ?? -1}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 export function formatErrors(errors: TypeCheckError[]): string {

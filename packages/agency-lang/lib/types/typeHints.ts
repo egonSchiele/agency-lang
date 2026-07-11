@@ -180,7 +180,8 @@ export type BlockType = {
   returnType: VariableType;
   tags?: Tag[];
   /** Effect set this function-typed value may raise (`-> T raises <...>`).
-   *  Phase 1: parsed and formatted only; compatibility is not yet checked. */
+   *  Enforced: a function value may not flow into this type if it raises more
+   *  than the clause allows (see `checkFunctionTypeRaises`). */
   raises?: VariableType;
 };
 

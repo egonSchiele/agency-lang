@@ -1,6 +1,8 @@
 import type { InterruptEffect } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
+import { safeResolveType } from "./assignability.js";
+import { resolveEffectSet } from "./effectSets.js";
 import { walkNodes, type WalkAncestor } from "../utils/node.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
@@ -109,6 +111,24 @@ function collectFromScope(info: ScopeInfo, ctx: TypeCheckerContext): FunctionPro
   return profile;
 }
 
+/** The effects a callee declares when it is a function-typed VARIABLE (a
+ *  callback), read from its type's `raises` clause. Returns [] for a named
+ *  `def` (its type is a `functionRefType`, not a `blockType`, so it is not
+ *  double-counted — the callee lookup already covers it) and for `<*>` (which
+ *  has no concrete labels to attribute; see the v1 limitation in the guide). */
+function calleeDeclaredEffects(
+  functionName: string,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): string[] {
+  const t = scope.lookup(functionName);
+  if (t === undefined || t === "any") return [];
+  const resolved = safeResolveType(t, ctx.getTypeAliases());
+  if (resolved.type !== "blockType" || !resolved.raises) return [];
+  const set = resolveEffectSet(resolved.raises, ctx.getTypeAliases());
+  return set.any ? [] : set.labels;
+}
+
 /** Walk one AST body and produce a `FunctionProfile`: direct interrupt
  *  kinds plus the names of every callee — including function references
  *  passed as arguments (e.g. `llm(..., { tools: [deploy] })`) and `goto`
@@ -128,6 +148,12 @@ function collectFromBody(
       addUnique(kinds, node.effect);
     } else if (node.type === "functionCall") {
       addUnique(callees, node.functionName);
+      // A call THROUGH a function-typed variable (a callback) contributes the
+      // variable's declared effects. Named-def callees resolve via the callee
+      // lookup above and are skipped here (they aren't blockTypes).
+      for (const label of calleeDeclaredEffects(node.functionName, scope, ctx)) {
+        addUnique(kinds, label);
+      }
       for (const name of functionRefsInArgs(node.arguments, scope, ctx)) {
         addUnique(callees, name);
       }

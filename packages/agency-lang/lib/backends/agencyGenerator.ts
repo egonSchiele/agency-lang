@@ -49,7 +49,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { variableTypeToString, effectSetToSource } from "./typescriptGenerator/typeToString.js";
 import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -947,15 +947,10 @@ export class AgencyGenerator {
 
   // Function methods
 
-  // Render an effect-set TYPE to its surface form. `<*>` (stored as the `any`
-  // primitive) prints as `<*>`; a named set reference prints bare (`FsKinds`);
-  // an inline flagged union renders as `<...>` via variableTypeToString.
-  // Single source of truth for both effectSet declarations and raises clauses.
+  // Delegates to `effectSetToSource` (the single source of truth); kept for
+  // subclass call sites.
   protected effectSetTypeToString(type: VariableType): string {
-    if (type.type === "primitiveType" && type.value === "any") {
-      return "<*>";
-    }
-    return variableTypeToString(type, this.typeAliases, true);
+    return effectSetToSource(type, this.typeAliases);
   }
 
   // Render a ` raises ...` clause for a def/node signature, or "" when absent.

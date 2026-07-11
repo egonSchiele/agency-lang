@@ -194,6 +194,21 @@ export function _upsertMcpServerInFile(file: string, name: string, config: McpSe
   _writeJsonFile(file, raw);
 }
 
+/** Validate `config` then write it to `file`. Returns the validation result;
+ *  writes nothing on failure. */
+export async function _addMcpServer(
+  name: string,
+  config: McpServerConfig,
+  file: string,
+): Promise<McpValidation> {
+  const check = await _validateMcpServers({ [name]: config });
+  if (!check.ok) {
+    return check;
+  }
+  _upsertMcpServerInFile(file, name, config);
+  return { ok: true };
+}
+
 /** Remove one server from `file`. Returns whether it existed; writes only if
  *  something changed. */
 export function _removeMcpServerFromFile(file: string, name: string): boolean {

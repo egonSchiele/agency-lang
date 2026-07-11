@@ -47,6 +47,14 @@ describe("resolveRunPolicy", () => {
     expect(p["std::write"]).toEqual([{ action: "reject" }]);
   });
 
+  it("splits effect lists on commas and/or whitespace", () => {
+    const r = resolveRunPolicy({ approve: "std::read std::ls,std::grep", cwd: "/x" });
+    const p = JSON.parse(r!.policyJson);
+    expect(p["std::read"]).toEqual([{ action: "approve" }]);
+    expect(p["std::ls"]).toEqual([{ action: "approve" }]);
+    expect(p["std::grep"]).toEqual([{ action: "approve" }]);
+  });
+
   it("layers inline over a built-in base, inline first", () => {
     const r = resolveRunPolicy({
       policy: "recommended",

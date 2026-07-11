@@ -34,3 +34,24 @@ export const DETERMINISTIC_IMAGE_COST = 0.04;
  * firing on small/medium threads while still bounding very long ones.
  */
 export const MEMORY_COMPACTION_DEFAULT_THRESHOLD = 50000;
+
+// ---- Environment variables ------------------------------------------------
+// Env-var names used as the wire contract between processes. Defined here (one
+// place) so the writer and reader agree by construction.
+
+/**
+ * Set by `agency run --policy/--approve/--reject` on the spawned child: the
+ * resolved `Policy` as JSON. Read by the runtime to install the root policy
+ * handler (`installRunPolicyHandler`).
+ */
+export const AGENCY_RUN_POLICY = "AGENCY_RUN_POLICY";
+
+/**
+ * Set to `AGENCY_RUN_POLICY_INTERACTIVE_ON` by `agency run --interactive`.
+ * When present, the root policy handler prompts on effects the policy doesn't
+ * cover instead of rejecting them.
+ */
+export const AGENCY_RUN_POLICY_INTERACTIVE = "AGENCY_RUN_POLICY_INTERACTIVE";
+
+/** The truthy sentinel value for `AGENCY_RUN_POLICY_INTERACTIVE`. */
+export const AGENCY_RUN_POLICY_INTERACTIVE_ON = "1";

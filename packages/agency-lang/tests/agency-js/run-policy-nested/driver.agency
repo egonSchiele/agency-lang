@@ -1,8 +1,10 @@
 import { compile, run } from "std::agency"
 
 // Runs generated code that does a read and a write inside a std::agency::run
-// subprocess. The generated code's interrupts forward up to the root policy
-// handler installed in THIS (root) process — the child does not install its own.
+// subprocess. The generated code's interrupts are enforced by the root policy
+// handler (installed in this root process). By design the subprocess forwards
+// its interrupts up rather than installing its own handler; that mechanism is
+// pinned by the installRunPolicyHandler IPC-skip unit test, not this test.
 node main(args: { readDir: string, readName: string }): any {
   const source = """
 node main(rd: string, rn: string): any {

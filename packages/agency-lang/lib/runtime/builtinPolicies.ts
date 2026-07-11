@@ -61,10 +61,20 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::git::stashList": approve,
 };
 
+// Escape picomatch metacharacters so a literal directory path is matched
+// verbatim inside the scope pattern. Without this, a baseDir containing `{`,
+// `}`, `,`, `*`, etc. could widen the glob and approve writes/git operations
+// outside the intended directory.
+function escapeGlob(s: string): string {
+  return s.replace(/[\\*?{}()[\]!@+|,^$]/g, "\\$&");
+}
+
 // Glob matching a directory and everything under it — same convention
-// std::policy's buildScopedMatch uses for "approve-always-here".
+// std::policy's buildScopedMatch uses for "approve-always-here". `baseDir` is
+// escaped so only the brace/`**` in THIS pattern are treated as globs.
 function dirScope(baseDir: string): string {
-  return `{${baseDir},${baseDir}/**}`;
+  const b = escapeGlob(baseDir);
+  return `{${b},${b}/**}`;
 }
 
 // `recommended` plus mutating file-system and git-write effects, each

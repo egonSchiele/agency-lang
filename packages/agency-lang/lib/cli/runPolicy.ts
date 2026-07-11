@@ -14,12 +14,11 @@ export type RunPolicyFlags = {
   cwd: string;
 };
 
+// Split on commas and/or whitespace, so `--approve "std::read, std::ls"`,
+// `--approve std::read,std::ls`, and `--approve "std::read std::ls"` all work.
 function splitEffects(list: string | undefined): string[] {
   if (!list) return [];
-  return list
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  return list.split(/[\s,]+/).filter((s) => s.length > 0);
 }
 
 function loadBase(policy: string | undefined, cwd: string): Policy {
@@ -36,9 +35,17 @@ function loadBase(policy: string | undefined, cwd: string): Policy {
       )}) or a readable file`,
     );
   }
+  let raw: string;
+  try {
+    raw = readFileSync(policy, "utf-8");
+  } catch (e) {
+    // A read failure (permissions, an ENOENT race after existsSync) is a
+    // distinct failure mode from bad JSON — report it as such.
+    throw new Error(`could not read policy file ${policy}: ${String(e)}`);
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(policy, "utf-8"));
+    parsed = JSON.parse(raw);
   } catch (e) {
     throw new Error(`policy file ${policy} is not valid JSON: ${String(e)}`);
   }

@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   makeRunPolicyHandler,
   terminalPrompt,
+  parsePromptAnswer,
   installRunPolicyHandler,
   type PromptFn,
 } from "./runPolicyHandler.js";
-import { AGENCY_RUN_POLICY } from "./runPolicyEnv.js";
+import { AGENCY_RUN_POLICY } from "@/constants.js";
 
 const intr = (effect: string, data: any = {}) => ({
   effect,
@@ -75,6 +76,33 @@ describe("makeRunPolicyHandler", () => {
       { interactive: false, prompt: neverPrompt },
     );
     expect((await h(intr("anything::at::all")))!.type).toBe("approve");
+  });
+});
+
+describe("parsePromptAnswer", () => {
+  it("maps short forms to decisions", () => {
+    expect(parsePromptAnswer("a")).toBe("approve");
+    expect(parsePromptAnswer("r")).toBe("reject");
+    expect(parsePromptAnswer("aa")).toBe("approve-always");
+    expect(parsePromptAnswer("rr")).toBe("reject-always");
+  });
+
+  it("accepts spelled-out words (so 'approve' isn't silently a reject)", () => {
+    expect(parsePromptAnswer("approve")).toBe("approve");
+    expect(parsePromptAnswer("reject")).toBe("reject");
+    expect(parsePromptAnswer("approve-always")).toBe("approve-always");
+    expect(parsePromptAnswer("reject-always")).toBe("reject-always");
+  });
+
+  it("is case- and whitespace-insensitive", () => {
+    expect(parsePromptAnswer("  AA \n")).toBe("approve-always");
+    expect(parsePromptAnswer("Approve")).toBe("approve");
+  });
+
+  it("fails closed on anything unrecognized", () => {
+    expect(parsePromptAnswer("")).toBe("reject");
+    expect(parsePromptAnswer("yes")).toBe("reject");
+    expect(parsePromptAnswer("maybe")).toBe("reject");
   });
 });
 

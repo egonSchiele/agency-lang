@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import picomatch from "picomatch";
 import {
   builtinPolicy,
   builtinPolicyNames,
@@ -33,6 +34,15 @@ describe("builtinPolicy", () => {
     ]);
     // cwd field (git)
     expect(p!["std::git::commit"]).toEqual([{ match: { cwd: scope }, action: "approve" }]);
+  });
+
+  it("scopes with-writes literally even when baseDir has glob metacharacters", () => {
+    const p = builtinPolicy("with-writes", "/a,b");
+    const pattern = p!["std::write"][0].match!.dir;
+    // Inside the real directory: matches. Widened brace alternatives (/a, b): not.
+    expect(picomatch.isMatch("/a,b/file.txt", pattern)).toBe(true);
+    expect(picomatch.isMatch("/a/file.txt", pattern)).toBe(false);
+    expect(picomatch.isMatch("b", pattern)).toBe(false);
   });
 
   it("resolves 'approve-all' to a single wildcard approve", () => {

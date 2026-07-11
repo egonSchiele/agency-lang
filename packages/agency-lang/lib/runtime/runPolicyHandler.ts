@@ -6,8 +6,8 @@ import { isIpcMode } from "./subprocessRunInfo.js";
 import {
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
-  INTERACTIVE_ON,
-} from "./runPolicyEnv.js";
+  AGENCY_RUN_POLICY_INTERACTIVE_ON,
+} from "@/constants.js";
 import readline from "readline";
 
 type Intr = { effect: string; message: string; data: any; origin: string };
@@ -40,7 +40,13 @@ export function makeRunPolicyHandler(
   policy: Policy,
   opts: { interactive: boolean; prompt: PromptFn },
 ): HandlerFn {
-  const working: Policy = JSON.parse(JSON.stringify(policy));
+  // Null-prototype so indexing/writing by an untrusted, program-controlled
+  // `intr.effect` (e.g. "__proto__", "constructor") can't reach or mutate a
+  // prototype — it's just an ordinary string key on a bare object.
+  const working: Policy = Object.assign(
+    Object.create(null) as Policy,
+    JSON.parse(JSON.stringify(policy)),
+  );
 
   // Prepend a catch-all rule for `effect` so checkPolicy serves it first.
   const remember = (effect: string, action: PolicyRule["action"]): void => {
@@ -61,11 +67,41 @@ export function makeRunPolicyHandler(
   };
 }
 
+// Map a raw terminal answer to a decision. Accepts the short forms shown in the
+// prompt (a / r / aa / rr) and the spelled-out words; anything unrecognized is a
+// safe reject (fail-closed). Pure and exported so the four cases are unit-tested
+// without readline plumbing.
+export function parsePromptAnswer(raw: string): PromptDecision {
+  const choice = raw.trim().toLowerCase();
+  if (choice === "aa" || choice === "approve-always") return "approve-always";
+  if (choice === "rr" || choice === "reject-always") return "reject-always";
+  if (choice === "a" || choice === "approve") return "approve";
+  return "reject";
+}
+
+// Terminal prompts share ONE physical stdin, so concurrent interrupts (fork /
+// race raising several at once) must be surfaced one at a time — two readline
+// interfaces reading the same stdin would interleave and clobber each other.
+// This process-global chain queues prompts so the user answers them in
+// sequence. Process-global is correct here: it guards the terminal itself, not
+// per-run state.
+let promptQueue: Promise<unknown> = Promise.resolve();
+
 // Terminal prompt used by installRunPolicyHandler. Falls back to reject
 // (fail-closed) when stdin is not a TTY rather than hanging. Exported so the
 // non-TTY fallback is unit-testable.
 export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
   if (!process.stdin.isTTY) return "reject";
+  const run = promptQueue.then(() => promptOnce(intr));
+  // Keep the chain alive whether or not this prompt resolves cleanly.
+  promptQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function promptOnce(intr: Intr): Promise<PromptDecision> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stderr,
@@ -79,11 +115,7 @@ export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
         resolve,
       ),
     );
-    const choice = answer.trim().toLowerCase();
-    if (choice === "aa") return "approve-always";
-    if (choice === "rr") return "reject-always";
-    if (choice === "a") return "approve";
-    return "reject";
+    return parsePromptAnswer(answer);
   } finally {
     rl.close();
   }
@@ -113,7 +145,8 @@ export function installRunPolicyHandler(execCtx: {
     throw new Error(`${AGENCY_RUN_POLICY} is not a valid policy: ${valid.error}`);
   }
 
-  const interactive = process.env[AGENCY_RUN_POLICY_INTERACTIVE] === INTERACTIVE_ON;
+  const interactive =
+    process.env[AGENCY_RUN_POLICY_INTERACTIVE] === AGENCY_RUN_POLICY_INTERACTIVE_ON;
   const handler = makeRunPolicyHandler(policy as Policy, {
     interactive,
     prompt: terminalPrompt,

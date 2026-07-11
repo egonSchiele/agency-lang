@@ -17,9 +17,16 @@ writeFileSync(join(dir, "in.txt"), "NESTED_READABLE");
 const res = await main({ readDir: dir, readName: "in.txt" });
 const out = JSON.stringify(res.data);
 
-// Selective enforcement (NOT blanket reject): read APPROVED inside the child
-// (its content came back) AND write REJECTED inside the child (no file on disk,
-// rejection visible).
+// Proves the policy REACHES interrupts raised inside the std::agency::run
+// subprocess, and does so SELECTIVELY (not a blanket reject): the generated
+// code's read is APPROVED (its content came back) while its write is REJECTED
+// (no file on disk, rejection visible).
+//
+// Note: this test does NOT by itself pin the *mechanism* (forward-to-root vs.
+// child-installs-its-own). The child inherits the same policy, and a local
+// reject is final (gatherChainOutcome), so the outcome is identical either way.
+// The `installRunPolicyHandler` IPC-skip unit test in runPolicyHandler.test.ts
+// is what guards "the subprocess must not install its own handler".
 const readApproved = out.includes("NESTED_READABLE");
 const writeRejected = !existsSync(join(dir, "gen-out.txt")) && /reject/i.test(out);
 

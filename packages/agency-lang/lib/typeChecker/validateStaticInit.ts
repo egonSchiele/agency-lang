@@ -58,7 +58,7 @@ export function validateStaticInit(
       const a = inner as Assignment;
       const label = `Static const \`${a.variableName}\``;
       errors.push(
-        ...checkBannedBuiltinCalls(a.value as AgencyNode, label),
+        ...checkBannedBuiltinCalls(a.value as AgencyNode, label, a.variableName),
       );
       continue;
     }

@@ -75,8 +75,9 @@ export type TypeCheckDiagnostic = {
   message: string;
   loc?: SourceLocation;
   /** Structured payload of the diagnostic (the values rendered into the
-  message, e.g. the expected and actual type strings). */
-  params: Record<string, string>
+  message, e.g. the expected and actual type strings; counts and positions
+  are numbers). */
+  params: Record<string, string | number>
 }
 
 export type TypeCheckReport = {

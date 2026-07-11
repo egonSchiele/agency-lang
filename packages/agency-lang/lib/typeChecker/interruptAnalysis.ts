@@ -1,4 +1,4 @@
-import { diagnostic } from "./diagnostics.js";
+import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
@@ -445,12 +445,16 @@ export function checkHandlerBodyInterrupts(
             ? `'${node.handler.functionName}'`
             : "(inline)";
         // {handler} is a subject reference — a quoted name or "(inline)".
+        // handlerName rides along as a structured extra when one exists.
+        const params: DiagnosticParams<"handlerBodyRaises"> = {
+          handler: handlerLabel,
+          effects: kinds.join(", "),
+        };
+        if (node.handler.kind === "functionRef") {
+          params.handlerName = node.handler.functionName;
+        }
         ctx.errors.push(
-          diagnostic(
-            "handlerBodyRaises",
-            { handler: handlerLabel, effects: kinds.join(", ") },
-            node.loc ?? null,
-          ),
+          diagnostic("handlerBodyRaises", params, node.loc ?? null),
         );
       }
     });

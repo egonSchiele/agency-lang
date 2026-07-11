@@ -54,3 +54,8 @@ tests/integration/statelog/.tmp/
 # clean pass; kept on failure or when OPTIMIZE_EFFICACY_KEEP_RUNS=1 for
 # debugging real-LLM runs without re-spending tokens)
 **/optimize-efficacy-runs-*/
+
+# A/B verdict artifact from `eval optimize` runs at the agency-lang package
+# root — transient output, never a fixture (got committed by accident once;
+# see PR #517 review).
+packages/agency-lang/a.vs.b.verdict.json

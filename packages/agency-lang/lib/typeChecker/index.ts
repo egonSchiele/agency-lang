@@ -429,7 +429,10 @@ export class TypeChecker {
 
   /** Locations of locally-declared type aliases, for diagnostics raised
    *  from the alias TABLE (which carries no locs). Imported aliases are not
-   *  in program.nodes and resolve to null (file-level diagnostic). */
+   *  in program.nodes and resolve to null (file-level diagnostic). Keyed by
+   *  bare name: a same-named alias in another scope wins last-visited, so a
+   *  diagnostic can anchor on the wrong (same-file) declaration — accepted
+   *  imprecision, still strictly better than no location. */
   private collectAliasDeclLocs(): Record<string, SourceLocation> {
     const aliasDeclLocs: Record<string, SourceLocation> = Object.create(null);
     for (const { node } of walkNodes(this.program.nodes)) {

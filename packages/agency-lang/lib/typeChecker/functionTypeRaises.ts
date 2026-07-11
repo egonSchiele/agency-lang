@@ -1,4 +1,4 @@
-import { diagnostic } from "./diagnostics.js";
+import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { SourceLocation } from "../types/base.js";
 import type { TypeCheckError } from "./types.js";
 import type {
@@ -150,7 +150,16 @@ function exceedances(
   loc: SourceLocation | null,
 ): TypeCheckError[] {
   const who = source.sourceName ? `'${source.sourceName}'` : "this value";
-  const shared = { who, allowed: allowed.labels.join(", "), type: allowed.name };
+  // sourceName rides along as a structured extra when one exists — {who}
+  // is display phrasing, not something consumers should parse.
+  const shared: DiagnosticParams<"valueMayRaiseAnyEffect"> = {
+    who,
+    allowed: allowed.labels.join(", "),
+    type: allowed.name,
+  };
+  if (source.sourceName) {
+    shared.sourceName = source.sourceName;
+  }
   if (source.any) {
     return [diagnostic("valueMayRaiseAnyEffect", shared, loc)];
   }

@@ -167,7 +167,7 @@ node main() {
 }
 ```
 
-**`// @tc-ignore AG6019`** — Silences only the named diagnostic codes on the next line (every error now prints its `AG####` code). Separate multiple codes with commas or spaces; anything else on the directive line is treated as a comment. A malformed code (like `AG601` or lowercase `ag6019`) suppresses *nothing* — a typo must not silently widen to suppress-everything.
+**`// @tc-ignore AG6019`** — Silences only the named `AG####` codes on the next line (comma- or space-separated; trailing prose is ignored). A malformed code like `AG601` suppresses *nothing*, so a typo never widens to suppress-everything.
 
 ```ts
 node main() {
@@ -175,8 +175,6 @@ node main() {
   double("not a number")   // only the argument-type error is suppressed
 }
 ```
-
-Note: every diagnostic now carries a source location, so a bare `// @tc-ignore` reaches some errors it previously could not (errors that once had no location were immune to line suppression).
 
 ## Excess property checks
 

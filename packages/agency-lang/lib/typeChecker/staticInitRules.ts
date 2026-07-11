@@ -21,7 +21,7 @@
  * `staticStatement` respectively) and runs the same rule set against
  * the inner expression / statement.
  */
-import { diagnostic } from "./diagnostics.js";
+import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { AgencyNode, Expression } from "../types.js";
 import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
@@ -68,6 +68,7 @@ export const BANNED_BUILTINS_IN_STATIC_INIT: Record<string, string> = {
 export function checkBannedBuiltinCalls(
   expr: Expression | AgencyNode,
   contextLabel: string,
+  staticName?: string,
 ): TypeCheckError[] {
   const errors: TypeCheckError[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
@@ -81,19 +82,29 @@ export function checkBannedBuiltinCalls(
     if (node.type === "functionCall") {
       const reason = BANNED_BUILTINS_IN_STATIC_INIT[node.functionName];
       if (reason) {
+        // Extra structured keys beyond the template: consumers reading
+        // params should not have to parse the contextLabel phrase.
+        const params: DiagnosticParams<"bannedBuiltinInStaticInit"> = {
+          contextLabel,
+          builtin: node.functionName,
+          reason,
+        };
+        if (staticName !== undefined) {
+          params.staticName = staticName;
+        }
         errors.push(
-          diagnostic(
-            "bannedBuiltinInStaticInit",
-            { contextLabel, builtin: node.functionName, reason },
-            node.loc ?? null,
-          ),
+          diagnostic("bannedBuiltinInStaticInit", params, node.loc ?? null),
         );
       }
       continue;
     }
     if (node.type === "interruptStatement") {
+      const params: DiagnosticParams<"interruptInStaticInit"> = { contextLabel };
+      if (staticName !== undefined) {
+        params.staticName = staticName;
+      }
       errors.push(
-        diagnostic("interruptInStaticInit", { contextLabel }, node.loc ?? null),
+        diagnostic("interruptInStaticInit", params, node.loc ?? null),
       );
     }
   }

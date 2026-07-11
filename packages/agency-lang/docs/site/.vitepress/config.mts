@@ -82,6 +82,7 @@ export default defineConfig({
             },
             { text: "Agency Config File", link: "/guide/agency-config-file" },
             { text: "Testing", link: "/guide/testing" },
+            { text: "MCP servers (agent)", link: "/guide/mcp-agent" },
           ],
         },
         {

@@ -54,6 +54,7 @@ import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
 import { validateStaticInit } from "./validateStaticInit.js";
 import { walkNodes } from "../utils/node.js";
+import { diagnostic } from "./diagnostics.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -149,6 +150,16 @@ export class TypeChecker {
     this.errors = [];
     const ctx = this.makeContext();
 
+    // Locations of locally-declared type aliases, for diagnostics raised
+    // from the alias TABLE (which carries no locs). Imported aliases are
+    // not in program.nodes and resolve to null (file-level diagnostic).
+    const aliasDeclLocs: Record<string, SourceLocation> = Object.create(null);
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type === "typeAlias" && node.loc) {
+        aliasDeclLocs[node.aliasName] = node.loc;
+      }
+    }
+
     // Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
@@ -171,9 +182,13 @@ export class TypeChecker {
               if (p.default) {
                 seenDefault = true;
               } else if (seenDefault) {
-                this.errors.push({
-                  message: `Type parameter '${p.name}' (no default) must come before parameters that have defaults in '${name}'.`,
-                });
+                this.errors.push(
+                  diagnostic(
+                    "typeParamDefaultOrder",
+                    { param: p.name, alias: name },
+                    aliasDeclLocs[name] ?? null,
+                  ),
+                );
               }
             }
           }
@@ -191,11 +206,7 @@ export class TypeChecker {
     // functionDefs and nodeDefs are mutually exclusive by construction
     // (a name is parsed as one or the other, never both).
     const shadowWarning = (name: string, loc: SourceLocation | undefined) =>
-      this.errors.push({
-        message: `'${name}' shadows an imported function.`,
-        severity: "warning",
-        loc,
-      });
+      this.errors.push(diagnostic("shadowsImportedFunction", { name }, loc ?? null));
     for (const [name, def] of Object.entries(this.functionDefs)) {
       if (this.importedFunctions[name]) shadowWarning(name, def.loc);
     }
@@ -208,10 +219,7 @@ export class TypeChecker {
     // `Result` being the built-in type. Allowing user definitions of these
     // names would silently change semantics.
     const reservedFn = (name: string, loc: SourceLocation | undefined) =>
-      this.errors.push({
-        message: `'${name}' is a reserved built-in; cannot be redefined.`,
-        loc,
-      });
+      this.errors.push(diagnostic("reservedBuiltinRedefined", { name }, loc ?? null));
     for (const [name, def] of Object.entries(this.functionDefs)) {
       if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
     }
@@ -221,9 +229,13 @@ export class TypeChecker {
     for (const [, aliases] of this.scopedTypeAliases.scopes()) {
       for (const name of Object.keys(aliases)) {
         if (RESERVED_TYPE_NAMES.has(name)) {
-          this.errors.push({
-            message: `'${name}' is a reserved built-in type; cannot be redefined.`,
-          });
+          this.errors.push(
+            diagnostic(
+              "reservedBuiltinTypeRedefined",
+              { name },
+              aliasDeclLocs[name] ?? null,
+            ),
+          );
         }
       }
     }
@@ -239,10 +251,13 @@ export class TypeChecker {
       if (node.type !== "assignment") continue;
       if (!node.declKind) continue;
       if (RESERVED_FUNCTION_NAMES.has(node.variableName)) {
-        this.errors.push({
-          message: `'${node.variableName}' is a reserved built-in; cannot be redefined.`,
-          loc: node.loc,
-        });
+        this.errors.push(
+          diagnostic(
+            "reservedBuiltinRedefined",
+            { name: node.variableName },
+            node.loc ?? null,
+          ),
+        );
       }
     }
 
@@ -258,10 +273,15 @@ export class TypeChecker {
       const effective = effectiveReturnType(def);
       if (effective && effective.type !== "resultType") {
         const kind = def.type === "function" ? "Function" : "Node";
-        this.errors.push({
-          message: `${kind} '${name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.`,
-          loc: def.loc,
-        });
+        // {kind} is a closed enum value (Function | Node), not phrasing —
+        // allowed as a param per the sweep recipe.
+        this.errors.push(
+          diagnostic(
+            "validatedParamsRequireResult",
+            { kind, name },
+            def.loc ?? null,
+          ),
+        );
       }
     };
     for (const [name, def] of Object.entries(this.functionDefs)) {
@@ -287,10 +307,13 @@ export class TypeChecker {
           seg.expression.type === "variableName" &&
           paramNames.includes(seg.expression.value)
         ) {
-          this.errors.push({
-            message: `Cannot interpolate parameter '${seg.expression.value}' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.`,
-            loc: seg.loc ?? def.docString.loc,
-          });
+          this.errors.push(
+            diagnostic(
+              "docStringParamInterpolation",
+              { param: seg.expression.value },
+              seg.loc ?? def.docString.loc ?? null,
+            ),
+          );
         }
       }
     };

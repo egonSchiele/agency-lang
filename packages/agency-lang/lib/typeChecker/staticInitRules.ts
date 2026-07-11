@@ -21,6 +21,7 @@
  * `staticStatement` respectively) and runs the same rule set against
  * the inner expression / statement.
  */
+import { diagnostic } from "./diagnostics.js";
 import type { AgencyNode, Expression } from "../types.js";
 import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
@@ -80,26 +81,20 @@ export function checkBannedBuiltinCalls(
     if (node.type === "functionCall") {
       const reason = BANNED_BUILTINS_IN_STATIC_INIT[node.functionName];
       if (reason) {
-        errors.push({
-          message:
-            `${contextLabel} cannot call \`${node.functionName}(...)\` — ` +
-            `${reason}, but static initializers run once at process startup ` +
-            `before any per-run state exists. Move this call into a node ` +
-            `or a function called from a node.`,
-          loc: node.loc,
-        });
+        errors.push(
+          diagnostic(
+            "bannedBuiltinInStaticInit",
+            { contextLabel, builtin: node.functionName, reason },
+            node.loc ?? null,
+          ),
+        );
       }
       continue;
     }
     if (node.type === "interruptStatement") {
-      errors.push({
-        message:
-          `${contextLabel} cannot \`interrupt(...)\` — interrupts pause the ` +
-          `per-run execution stack, but static initializers run once at ` +
-          `process startup before any agent run has begun. Move this ` +
-          `into a node body.`,
-        loc: node.loc,
-      });
+      errors.push(
+        diagnostic("interruptInStaticInit", { contextLabel }, node.loc ?? null),
+      );
     }
   }
   return errors;
@@ -162,13 +157,11 @@ export function checkStaticMutation(
   if (node.type === "assignment") {
     if (node.declKind) return null;
     if (!staticNames[node.variableName]) return null;
-    return {
-      message:
-        `Cannot reassign static \`${node.variableName}\` at module top ` +
-        `level — statics are immutable after initialization. Use a global ` +
-        `(\`const\`/\`let\` without \`static\`) if you need a mutable value.`,
-      loc: node.loc,
-    };
+    return diagnostic(
+      "staticReassignedAtTopLevel",
+      { name: node.variableName },
+      node.loc ?? null,
+    );
   }
   // Method-call shape: `x.push(...)` at top level.
   if (node.type === "valueAccess") {

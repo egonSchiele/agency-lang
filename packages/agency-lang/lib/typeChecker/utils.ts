@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { BlockType } from "../types/typeHints.js";
@@ -140,10 +141,9 @@ function rejectRegexInLlmType(
   ctx: TypeCheckerContext,
 ): void {
   if (containsRegex(t)) {
-    ctx.errors.push({
-      message: `'regex' cannot appear in an llm() structured-output type (${context}); LLMs can't return regex values through JSON.`,
-      loc,
-    });
+    ctx.errors.push(
+      diagnostic("regexInStructuredOutput", { context }, loc ?? null),
+    );
   }
 }
 
@@ -195,12 +195,17 @@ export function emitAssignabilityError(
 ): void {
   if (actual === "any") return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
-  ctx.errors.push({
-    message: `Type '${formatTypeHint(actual)}' is not assignable to type '${formatTypeHint(expected)}' (${context}).`,
-    expectedType: formatTypeHint(expected),
-    actualType: formatTypeHint(actual),
-    loc,
-  });
+  ctx.errors.push(
+    diagnostic(
+      "typeNotAssignableInContext",
+      {
+        actual: formatTypeHint(actual),
+        expected: formatTypeHint(expected),
+        context,
+      },
+      loc ?? null,
+    ),
+  );
 }
 
 /**
@@ -228,12 +233,13 @@ export function checkConditionType(
   if (isAssignable(actualType, BOOLEAN_T, typeAliases)) {
     return;
   }
-  ctx.errors.push({
-    message: `Type '${formatTypeHint(actualType)}' is not assignable to type 'boolean' (condition).`,
-    expectedType: formatTypeHint(BOOLEAN_T),
-    actualType: formatTypeHint(actualType),
-    loc: condition.loc,
-  });
+  ctx.errors.push(
+    diagnostic(
+      "conditionNotBoolean",
+      { actual: formatTypeHint(actualType) },
+      condition.loc ?? null,
+    ),
+  );
 }
 
 /**
@@ -255,10 +261,13 @@ export function checkExcessObjectProperties(
     if ("type" in entry) continue; // splat
     if (entry.computedKey) continue; // computed key — can't statically check
     if (!known.has(entry.key)) {
-      ctx.errors.push({
-        message: `Unknown property '${entry.key}' on type '${formatTypeHint(expectedType)}' (${context}).`,
-        loc: literal.loc,
-      });
+      ctx.errors.push(
+        diagnostic(
+          "unknownProperty",
+          { key: entry.key, expected: formatTypeHint(expectedType), context },
+          literal.loc ?? null,
+        ),
+      );
     }
   }
 }

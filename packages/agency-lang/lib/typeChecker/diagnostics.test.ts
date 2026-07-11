@@ -58,6 +58,30 @@ describe("diagnostic factory", () => {
     expect(err.loc).toEqual({ line: 3, col: 2, start: 40, end: 55 });
   });
 
+  it("renders the multi-param assignability golden byte-identically", () => {
+    const err = diagnostic(
+      "typeNotAssignable",
+      { actual: "string", expected: "number", name: "x" },
+      null,
+    );
+    expect(err.message).toBe(
+      "Type 'string' is not assignable to type 'number'.",
+    );
+    // extra structured key (name) rides along in params without rendering
+    expect(err.params.name).toBe("x");
+  });
+
+  it("renders the pluralized arity golden byte-identically", () => {
+    const err = diagnostic(
+      "tooManyTypeArgs",
+      { alias: "Pair", max: 1, argumentWord: "argument", count: 3, context: "f" },
+      null,
+    );
+    expect(err.message).toBe(
+      "Pair expects at most 1 type argument, got 3 (referenced in 'f').",
+    );
+  });
+
   it("severity override wins over the registry default", () => {
     const err = diagnostic("reassignToConst", { name: "c" }, null, {
       severity: "warning",

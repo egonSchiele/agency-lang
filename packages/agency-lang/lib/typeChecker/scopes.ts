@@ -24,6 +24,7 @@ import { checkMatchExprYields } from "./matchExprTypes.js";
 import { NUMBER_T } from "./primitives.js";
 import { recordLikeKeyValue } from "./recordLike.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
+import { diagnostic } from "./diagnostics.js";
 import { expressionChildren } from "../utils/node.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
@@ -102,10 +103,13 @@ export function declareVariable(
   if (node.type !== "assignment") return;
 
   if (node.exported && !(node.static && node.declKind === "const")) {
-    ctx.errors.push({
-      message: `Only 'static const' declarations can be exported. Use 'export static const ${node.variableName} = ...' instead.`,
-      loc: node.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "exportRequiresStaticConst",
+        { name: node.variableName },
+        node.loc ?? null,
+      ),
+    );
   }
 
   // Reassignment to a const binding (no accessChain — property writes on
@@ -115,11 +119,9 @@ export function declareVariable(
     !node.accessChain &&
     scope.isConst(node.variableName)
   ) {
-    ctx.errors.push({
-      message: `Cannot reassign to constant '${node.variableName}'.`,
-      variableName: node.variableName,
-      loc: node.loc,
-    });
+    ctx.errors.push(
+      diagnostic("reassignToConst", { name: node.variableName }, node.loc ?? null),
+    );
   }
 
   const newType = node.typeHint;
@@ -181,11 +183,13 @@ export function declareVariable(
   if (node.accessChain) return;
 
   if (ctx.config.typechecker?.strictTypes) {
-    ctx.errors.push({
-      message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
-      variableName: node.variableName,
-      loc: node.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "missingAnnotationStrictMode",
+        { name: node.variableName },
+        node.loc ?? null,
+      ),
+    );
   }
   const inferred = synthType(node.value, scope, ctx);
   scope.declare(node.variableName, widenType(inferred), isConst);
@@ -316,13 +320,17 @@ function reportNotAssignable(
 ): void {
   if (actual === "any" || expected === "any") return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
-  ctx.errors.push({
-    message: `Type '${formatTypeHint(actual)}' is not assignable to type '${formatTypeHint(expected)}'.`,
-    variableName,
-    expectedType: formatTypeHint(expected),
-    actualType: formatTypeHint(actual),
-    loc,
-  });
+  ctx.errors.push(
+    diagnostic(
+      "typeNotAssignable",
+      {
+        actual: formatTypeHint(actual),
+        expected: formatTypeHint(expected),
+        name: variableName,
+      },
+      loc ?? null,
+    ),
+  );
 }
 
 // Operators that mutate their left operand. Compound assigns (`+=` etc.)
@@ -351,11 +359,9 @@ function checkConstMutations(
     node.left.type === "variableName" &&
     scope.isConst(node.left.value)
   ) {
-    ctx.errors.push({
-      message: `Cannot reassign to constant '${node.left.value}'.`,
-      variableName: node.left.value,
-      loc: node.loc,
-    });
+    ctx.errors.push(
+      diagnostic("reassignToConst", { name: node.left.value }, node.loc ?? null),
+    );
   }
 
   // Recurse via the shared expressionChildren walker (lib/utils/node.ts) — the
@@ -432,11 +438,13 @@ export function walkScopeBody(
         } else {
           itemType = "any";
           secondType = "any";
-          ctx.errors.push({
-            message: `For-loop iterable must be an array or Record, got '${formatTypeHint(iterableType)}'.`,
-            actualType: formatTypeHint(iterableType),
-            loc: node.iterable.loc,
-          });
+          ctx.errors.push(
+            diagnostic(
+              "forLoopIterableType",
+              { actual: formatTypeHint(iterableType) },
+              node.iterable.loc ?? null,
+            ),
+          );
         }
         scope.declare(node.itemVar as string, itemType);
         if (node.indexVar) {
@@ -495,11 +503,9 @@ export function walkScopeBody(
         walkScopeBody(node.body, scope, ctx);
         if (node.handler.kind === "inline") {
           if (node.handler.param.validated) {
-            ctx.errors.push({
-              message:
-                "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
-              loc: node.loc,
-            });
+            ctx.errors.push(
+              diagnostic("handlerParamValidated", {}, node.loc ?? null),
+            );
           }
           scope.declare(
             node.handler.param.name,

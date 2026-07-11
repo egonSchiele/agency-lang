@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import { TypeAliasEntry, ValueParam, VariableType } from "../types.js";
 import { SourceLocation } from "../types/base.js";
 import { TypeCheckError } from "./types.js";
@@ -20,19 +21,36 @@ function checkValueArgsArity(
 ): boolean {
   // Use site has value args, but the alias takes no value params.
   if ((!valueParams || valueParams.length === 0) && valueArgsLen > 0) {
-    errors.push({
-      message: `Type '${aliasName}' is not a value-parameterized type but was given ${valueArgsLen} value argument${valueArgsLen === 1 ? "" : "s"} (referenced in '${context}').`,
-      loc,
-    });
+    errors.push(
+      diagnostic(
+        "notValueParameterized",
+        {
+          alias: aliasName,
+          count: valueArgsLen,
+          argumentWord: valueArgsLen === 1 ? "argument" : "arguments",
+          context,
+        },
+        loc ?? null,
+      ),
+    );
     return true;
   }
   if (!valueParams) return false;
 
   if (valueArgsLen > valueParams.length) {
-    errors.push({
-      message: `${aliasName} expects at most ${valueParams.length} value argument${valueParams.length === 1 ? "" : "s"}, got ${valueArgsLen} (referenced in '${context}').`,
-      loc,
-    });
+    errors.push(
+      diagnostic(
+        "tooManyValueArgs",
+        {
+          alias: aliasName,
+          max: valueParams.length,
+          argumentWord: valueParams.length === 1 ? "argument" : "arguments",
+          count: valueArgsLen,
+          context,
+        },
+        loc ?? null,
+      ),
+    );
     return true;
   }
   // Each missing value arg must have a default.
@@ -41,15 +59,26 @@ function checkValueArgsArity(
       // Phrase the message based on whether ANY args were supplied.
       if (valueArgsLen === 0) {
         const formals = valueParams.map((p) => p.name).join(", ");
-        errors.push({
-          message: `'${aliasName}' is a value-parameterized type and requires value arguments — write '${aliasName}(${formals})' (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic(
+            "valueArgsRequired",
+            { alias: aliasName, formals, context },
+            loc ?? null,
+          ),
+        );
       } else {
-        errors.push({
-          message: `${aliasName} requires at least ${i + 1} value argument${i === 0 ? "" : "s"} (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic(
+            "tooFewValueArgs",
+            {
+              alias: aliasName,
+              min: i + 1,
+              argumentWord: i === 0 ? "argument" : "arguments",
+              context,
+            },
+            loc ?? null,
+          ),
+        );
       }
       return true;
     }
@@ -68,20 +97,26 @@ export function validateTypeReferences(
     if (t.type === "typeAliasVariable") {
       const entry = typeAliases[t.aliasName];
       if (!entry) {
-        errors.push({
-          message: `Type alias '${t.aliasName}' is not defined (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic(
+            "unknownTypeAlias",
+            { alias: t.aliasName, context },
+            loc ?? null,
+          ),
+        );
         return;
       }
       // Bare reference to a generic alias is only legal if every type
       // parameter has a default. Otherwise the user wrote `StringMap` where
       // they needed `StringMap<...>`.
       if (entry.typeParams && entry.typeParams.some((p) => !p.default)) {
-        errors.push({
-          message: `Generic type '${t.aliasName}' requires type arguments (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic(
+            "genericRequiresTypeArgs",
+            { alias: t.aliasName, context },
+            loc ?? null,
+          ),
+        );
       }
       // Bare reference to a value-parameterized alias is only legal if
       // every value param has a default. `DivisibleBy` with no args when
@@ -103,42 +138,66 @@ export function validateTypeReferences(
       const builtinArity = BUILTIN_GENERIC_ARITY[t.name];
       if (builtinArity !== undefined) {
         if (t.typeArgs.length !== builtinArity) {
-          errors.push({
-            message: `${t.name} expects ${builtinArity} type argument${builtinArity === 1 ? "" : "s"}, got ${t.typeArgs.length} (referenced in '${context}').`,
-            loc,
-          });
+          errors.push(
+            diagnostic(
+              "builtinGenericArity",
+              {
+                alias: t.name,
+                expected: builtinArity,
+                argumentWord: builtinArity === 1 ? "argument" : "arguments",
+                count: t.typeArgs.length,
+                context,
+              },
+              loc ?? null,
+            ),
+          );
         }
         return;
       }
       const entry = typeAliases[t.name];
       if (!entry) {
-        errors.push({
-          message: `Unknown generic type '${t.name}' (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic("unknownGenericType", { alias: t.name, context }, loc ?? null),
+        );
         return;
       }
       if (!entry.typeParams) {
-        errors.push({
-          message: `Type '${t.name}' is not a generic type (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic("notGenericType", { alias: t.name, context }, loc ?? null),
+        );
         return;
       }
       if (t.typeArgs.length > entry.typeParams.length) {
-        errors.push({
-          message: `${t.name} expects at most ${entry.typeParams.length} type argument${entry.typeParams.length === 1 ? "" : "s"}, got ${t.typeArgs.length} (referenced in '${context}').`,
-          loc,
-        });
+        errors.push(
+          diagnostic(
+            "tooManyTypeArgs",
+            {
+              alias: t.name,
+              max: entry.typeParams.length,
+              argumentWord: entry.typeParams.length === 1 ? "argument" : "arguments",
+              count: t.typeArgs.length,
+              context,
+            },
+            loc ?? null,
+          ),
+        );
         return;
       }
       // Missing args are only legal when every missing param has a default.
       for (let i = t.typeArgs.length; i < entry.typeParams.length; i++) {
         if (!entry.typeParams[i].default) {
-          errors.push({
-            message: `${t.name} requires at least ${i + 1} type argument${i === 0 ? "" : "s"} (referenced in '${context}').`,
-            loc,
-          });
+          errors.push(
+            diagnostic(
+              "tooFewTypeArgs",
+              {
+                alias: t.name,
+                min: i + 1,
+                argumentWord: i === 0 ? "argument" : "arguments",
+                context,
+              },
+              loc ?? null,
+            ),
+          );
           return;
         }
       }

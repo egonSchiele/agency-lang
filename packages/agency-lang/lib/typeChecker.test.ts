@@ -171,7 +171,7 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("no type annotation");
       expect(errors[0].message).toContain("strict mode");
-      expect(errors[0].variableName).toBe("x");
+      expect(errors[0].params?.name).toBe("x");
     });
   });
 
@@ -533,7 +533,7 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].variableName).toBe("x");
+      expect(errors[0].params?.name).toBe("x");
     });
   });
 
@@ -1582,9 +1582,9 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].variableName).toBe("x");
-      expect(errors[0].expectedType).toBe("number");
-      expect(errors[0].actualType).toBe('"hello"');
+      expect(errors[0].params?.name).toBe("x");
+      expect(errors[0].params?.expected).toBe("number");
+      expect(errors[0].params?.actual).toBe('"hello"');
     });
   });
 
@@ -2376,8 +2376,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
 
     it("should pass when function return type matches variable annotation", () => {
@@ -2455,8 +2455,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].actualType).toBe('"hello"');
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe('"hello"');
+      expect(errors[0].params?.expected).toBe("number");
     });
   });
 

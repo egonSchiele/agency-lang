@@ -11,6 +11,13 @@ import {
   _checkPolicy,
   _validatePolicy,
   _writePolicyFile,
+  _builtinPolicy,
+  _builtinPolicyNames,
+  _BUILTIN_POLICIES,
+  _minimalAutoApprovePolicy,
+  _recommendedAutoApprovePolicy,
+  _withWritesPolicy,
+  _approveAllPolicy,
  } from "agency-lang/stdlib-lib/policy.js"
 
 
@@ -79,6 +86,35 @@ export type PolicyRule = {
  * through to `propagate` (i.e. ask the next handler in the chain).
  */
 export type Policy = Record<InterruptEffect, PolicyRule[]>
+
+/**
+ * Built-in policies, re-exported from the runtime single source of truth
+ * (`lib/runtime/builtinPolicies.ts`) so the agent and other Agency code share
+ * exactly what `agency run --policy <name>` uses.
+ *
+ * - `minimalAutoApprovePolicy` — memory + the safe read-only agency subcommands.
+ * - `recommendedAutoApprovePolicy` — reads and web/search; writes/shell/git prompt.
+ * - `approveAllPolicy` — approve everything (disposable sandboxes only).
+ * - `withWritesPolicy(baseDir)` — recommended + writes/git scoped to `baseDir`.
+ * - `builtinPolicy(name, baseDir)` — resolve a name to a `Policy` (null if unknown).
+ * - `builtinPolicyNames()` / `BUILTIN_POLICIES` — the names and their descriptions.
+ */
+export static const minimalAutoApprovePolicy = _minimalAutoApprovePolicy
+export static const recommendedAutoApprovePolicy = _recommendedAutoApprovePolicy
+export static const approveAllPolicy = _approveAllPolicy
+export static const BUILTIN_POLICIES = _BUILTIN_POLICIES
+
+export def withWritesPolicy(baseDir: string) {
+  return _withWritesPolicy(baseDir)
+}
+
+export def builtinPolicy(name: string, baseDir: string) {
+  return _builtinPolicy(name, baseDir)
+}
+
+export def builtinPolicyNames(): string[] {
+  return _builtinPolicyNames()
+}
 
 /**
  * The five answers `cliPolicyHandler`'s prompt accepts:

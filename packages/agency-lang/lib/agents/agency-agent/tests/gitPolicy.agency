@@ -4,11 +4,11 @@
  * LLM. Exhaustive because a write leaking into auto-approve is the worst-case
  * bug for this module.
  */
-import { checkPolicy } from "std::policy"
 import {
+  checkPolicy,
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
- } from "../lib/defaultPolicy.agency"
+} from "std::policy"
 
 static const GIT_READS = [
   "std::git::status", "std::git::log", "std::git::diff", "std::git::show",

@@ -18,6 +18,11 @@ import {
   cliPolicyHandler,
   parsePolicyFile,
   setPolicy,
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+  builtinPolicy,
+  builtinPolicyNames,
+  BUILTIN_POLICIES,
  } from "std::policy"
 import { exists } from "std::shell"
 import { commandsDir, expandSlash } from "std::skills"
@@ -49,13 +54,6 @@ import {
   HISTORY_PATH,
   ALWAYS_FIELDS,
  } from "./lib/config.agency"
-import {
-  minimalAutoApprovePolicy,
-  recommendedAutoApprovePolicy,
-  builtinPolicy,
-  builtinPolicyNames,
-  BUILTIN_POLICIES,
- } from "./lib/defaultPolicy.agency"
 import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
 import { parseModelFlag, parseModelSpec, knownProviders, embeddingSpecHasProvider, missingProviderEnvVar, Resolved } from "./lib/models.agency"
 import { SLOTS } from "./lib/slots.agency"

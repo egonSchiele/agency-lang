@@ -4,11 +4,11 @@
  * the exec-based `agencyCli` tool, while leaving other subcommands to
  * prompt. Pure policy logic — no LLM, no real command execution.
  */
-import { checkPolicy } from "std::policy"
 import {
+  checkPolicy,
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
- } from "../lib/defaultPolicy.agency"
+} from "std::policy"
 
 def execIntr(subcommand: string): any {
   // Mirrors the shape `exec("agency", [subcommand, ...])` raises:

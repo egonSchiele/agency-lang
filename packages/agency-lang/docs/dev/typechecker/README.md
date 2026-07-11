@@ -304,6 +304,17 @@ built-in generics, they evaluate EAGERLY in `resolveTypeWithGuard` (see
 exhaustiveness and discriminant narrowing. The `keyof` keyword is in
 `RESERVED_TYPE_NAMES`.
 
+`A & B` joins the family: `evalIntersection` merges object types in a
+group-combine-build pipeline (all operands grouped by key at once, so
+n-ary merging is associative by construction), with shared keys
+intersecting recursively and both sides' `@validate` chains applying.
+Operands are object-only. One deliberate TypeScript divergence:
+`A & never` ERRORS here rather than absorbing to `never` — a silently
+never-typed schema would be a debugging trap in a schema-producing
+language. Structural equality for shared keys is INJECTED into the
+evaluator (a `typeKey`-based comparator built on the real alias table)
+so `typeOperators.ts` keeps its no-assignability-import cycle rule.
+
 ## Type narrowing
 
 Flow-sensitive narrowing and exhaustiveness checking have their own subtree:

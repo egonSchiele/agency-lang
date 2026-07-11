@@ -70,4 +70,18 @@ describe("agency run --policy flags (end-to-end)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("without any policy flag, an uncovered interrupt still reports unhandled", async () => {
+    // No handler is installed when no flag is set (resolveRunPolicy returns null),
+    // so the write propagates unhandled: reportUnhandledInterrupts prints the
+    // handlers-guide message and exits non-zero — today's behavior, unchanged.
+    const dir = makeDir();
+    try {
+      const { stdout, stderr, code } = await runCli(dir, []);
+      expect(code).not.toBe(0);
+      expect(stdout + stderr).toMatch(/was not handled/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

@@ -269,13 +269,17 @@ function pushGuardImpl(
   // Return the pushed guards' ids (innermost-last) so the caller can scope a
   // `try` to convert ONLY its own guards' trips (C2 ownedGuardIds). The array
   // length also drives the LIFO pop, replacing the old count.
+  // A null OR negative limit disables that dimension: no guard is pushed,
+  // so the block runs unmetered for it. Negative-as-disabled lets callers
+  // with an optional cap (e.g. run()'s maxCost) keep a single guarded call
+  // site instead of branching on "no limit".
   const ids: string[] = [];
-  if (costLimit != null) {
+  if (costLimit != null && costLimit >= 0) {
     const g = new CostGuard(costLimit);
     stack.pushGuard(g);
     ids.push(g.guardId);
   }
-  if (timeLimit != null) {
+  if (timeLimit != null && timeLimit >= 0) {
     const g = new TimeGuard(timeLimit);
     stack.pushGuard(g);
     ids.push(g.guardId);

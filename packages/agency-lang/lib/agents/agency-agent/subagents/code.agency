@@ -23,7 +23,7 @@ import {
   gitAdd, gitCommit, gitCheckout, gitSwitch, gitBranchCreate, gitBranchDelete,
   gitStashPush, gitStashPop, gitRestore,
  } from "std::git"
-import { skillsDir } from "std::skills"
+import { skillsDir, docsSkill } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
@@ -47,8 +47,11 @@ import { verify, renderGaps, unwrapVerdict } from "./verify.agency"
 // in by leaving the binding in place). See `skills/superpowers/
 // ATTRIBUTION.txt` for the upstream MIT license.
 static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
-static const docSkill = skillsDir("../docs/guide", "flat") with approve
-static const cliSkill = skillsDir("../docs/cli", "flat") with approve
+
+// Packaged language guide + CLI reference via std::skills docsSkill (no
+// startup approval interrupt — the docs ship with the stdlib).
+static const docSkill = docsSkill("guide")
+static const cliSkill = docsSkill("cli")
 
 export def agencyCli(args: string[]): any {
   """

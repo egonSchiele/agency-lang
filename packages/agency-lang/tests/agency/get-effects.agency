@@ -1,0 +1,24 @@
+import { getEffects } from "std::agency"
+
+// Transitive: run calls helper which calls the std write tool. Only
+// exported symbols appear in the map, and bare interrupts surface as
+// the "unknown" sentinel.
+node main() {
+  const src = """
+def helper() {
+  write("out.txt", "hi")
+}
+export node run() {
+  helper()
+}
+export node ask() {
+  const ok = interrupt("proceed?")
+  return ok
+}
+"""
+  const fx = getEffects(src)
+  if (fx is failure(err)) {
+    return "failed: ${err}"
+  }
+  return fx.value
+}

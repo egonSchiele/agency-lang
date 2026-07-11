@@ -12,6 +12,7 @@ import { frontmatter } from "std::markdown"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
+import { _docsDir } from "agency-lang/stdlib-lib/skills.js"
 
 /** @module
   Give an LLM access to a directory of skills, and support Claude-Code-style
@@ -154,18 +155,7 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
 effect std::skills::skillsDir { dir: string, layout: "flat" | "standard" }
 effect std::skills::commandsDir { dir: string }
 
-export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
-  """
-  Build a skills tool for an LLM over a directory of skills.
-
-  @param dir - Directory containing the skills.
-  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
-  """
-  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: dir,
-    layout: layout
-  })
-
+def buildSkillsTool(dir: string, layout: "flat" | "standard") {
   let pattern = "*/SKILL.md"
   if (layout == "flat") {
     pattern = "*.{md,markdown}"
@@ -190,6 +180,38 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   // tool is named `read` (the base of `read.partial`), so two of them in one
   // `tools:` list trip the provider's unique-name requirement.
   return read.partial(dir: dir).describe(description).rename(skillToolName(dir))
+}
+
+export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
+  """
+  Build a skills tool for an LLM over a directory of skills.
+
+  @param dir - Directory containing the skills.
+  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
+  """
+  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
+    dir: dir,
+    layout: layout
+  })
+
+  return buildSkillsTool(dir, layout)
+}
+
+export def docsSkill(section: "guide" | "cli") {
+  """
+  Build a docs tool for an LLM over the packaged Agency documentation.
+  "guide" serves the language guide (syntax, types, control flow);
+  "cli" serves the CLI reference. The returned tool lists every page in
+  its description and lets the model read any one on demand.
+
+  @param section - Which documentation set to serve: "guide" or "cli".
+  """
+  // No approval interrupt for the startup scan: these docs ship inside
+  // the agency package, so scanning them carries the same trust as
+  // running the stdlib itself. The returned tool is read.partial, so
+  // every read the LLM later performs still raises std::read and goes
+  // through handlers/policies exactly like any other read tool.
+  return buildSkillsTool(_docsDir(section), "flat")
 }
 
 // ============================================================

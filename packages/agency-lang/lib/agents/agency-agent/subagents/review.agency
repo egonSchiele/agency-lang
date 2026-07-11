@@ -1,69 +1,41 @@
-import { typecheck, parseAST } from "std::agency"
-import { map, filter, some } from "std::array"
+import {
+  review as agencyReview,
+  mergeFeedback,
+  renderFeedback as stdRenderFeedback,
+  feedbackHasErrors as stdFeedbackHasErrors,
+ } from "std::agency"
 import { setMemoryId } from "std::memory"
-import { systemMessage } from "std::thread"
 
-import { agentNames } from "../lib/config.agency"
+// The review core (parse + typecheck findings, optional LLM code-vs-task
+// judgment, rendering helpers) lives in std::agency now — this subagent
+// only owns the agent-shaped wrapper: extracting snippets from a chat
+// message and reviewing each one. Consumers keep importing the shared
+// surface from this module via the type + thin wrappers below.
+//
+// NOT `export { ... } from "std::agency"`: re-exporting the Feedback
+// type alongside functions whose tool schemas reference it generates
+// `const Feedback = _reexport_Feedback` AFTER the tool registrations
+// that use it, so importing the compiled module throws "Cannot access
+// Feedback before initialization" (pre-existing codegen ordering bug;
+// same TDZ family as the prelude-wrapped stdlib re-export carve-outs).
 
-
-// NOTE: `reviewAgent`/`review` typecheck and parse snippets directly and
-// never call the LLM with skill tools (the tool path below is commented
-// out), so the doc `skillsDir(...)` scans this file used to do at module
-// load were pure startup cost with no consumer. Removed. If the LLM tool
-// path is reinstated, build the skills lazily inside `review` (see the
-// other subagents) rather than as eager `static const`s.
-
-type AgencyCode = {
-  code: string
-}
-
+/** Structurally identical to std::agency Feedback. */
 export type Feedback = {
   error: boolean;
   feedback: string;
   data?: any
 }
 
-/**
-  * Merges two `Result<Feedback[]>` values by concatenating their success
-  * arrays or returning the first failure. Used to combine typecheck
-  * feedback with LLM-generated feedback.
-  */
-def mergeFeedback(
-  a: Result<Feedback[]>,
-  b: Result<Feedback[]>,
-): Result<Feedback[]> {
-  if (a is success(aVal)) {
-    if (b is success(bVal)) {
-      return success([...aVal, ...bVal])
-    } else {
-      return b
-    }
-  } else {
-    return a
-  }
-}
-
-export def renderSingleFeedback(f: Feedback): string {
-  if (f.error) {
-    return `Error: ${f.feedback}`
-  } else {
-    return `Feedback: ${f.feedback}`
-  }
-}
-
 export def renderFeedback(feedback: Result<Feedback[]>): string {
-  if (feedback is success(val)) {
-    return map(val, renderSingleFeedback).join("\n\n")
-  }
-  return feedback.error
+  return stdRenderFeedback(feedback)
 }
 
 export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
-  if (feedback is success(val)) {
-    return some(val, \f -> f.error)
-  }
-  // If the feedback itself is a failure, we can treat that as an error state.
-  return true
+  return stdFeedbackHasErrors(feedback)
+}
+
+type AgencyCode = {
+  code: string
 }
 
 export def reviewAgent(userMsg: string, allowHandoff: boolean): string {
@@ -89,83 +61,8 @@ export def review(userMsg: string): Result<Feedback[]> {
     let feedback: Result<Feedback[]> = success([])
 
     for (codeSnippet in snippets) {
-      const parseResult = _parse(codeSnippet.code)
-      const typecheckResult = _typecheck(codeSnippet.code)
-      feedback = mergeFeedback(feedback, parseResult)
-      feedback = mergeFeedback(feedback, typecheckResult)
+      feedback = mergeFeedback(feedback, agencyReview(codeSnippet.code))
     }
-    /*     if (!_first) {
-      systemMessage(reviewSysPrompt)
-      _first = true
-    }
- */
-    /*     const tools = [...reviewTools]
-    const otherAgents = filter(agentNames, \name -> name != "review")
-    if (allowHandoff) {
-      tools.push(handoff.partial(validCategories: otherAgents))
-    }
-    reply = llm(userMsg, {
-      memory: true,
-      tools: tools
-    }) */
   }
   return feedback
-}
-
-def _typecheck(agencyCode: string): Result<Feedback[]> {
-  const result = typecheck(agencyCode)
-  if (result is success(val)) {
-    const { errors, warnings } = val
-    if (errors.length == 0 && warnings.length == 0) {
-      return success(
-        [
-        {
-        error: false,
-        feedback: "Code is valid with no errors or warnings."
-      },
-      ],
-      )
-    }
-    const feedback: Feedback[] = []
-    for (error in errors) {
-      feedback.push(
-        {
-        error: true,
-        feedback: `Error: ${error.message}`,
-        data: error
-      },
-      )
-    }
-    for (warning in warnings) {
-      feedback.push(
-        {
-        error: true,
-        feedback: `Warning: ${warning.message}`,
-        data: warning
-      },
-      )
-    }
-    return success(feedback)
-  }
-  return failure(
-    `Typecheck failed with the following errors:\n\n${JSON.stringify(result.error, null, 2)}`,
-  )
-}
-
-def _parse(agencyCode: string): Result<Feedback[]> {
-  const result = parseAST(agencyCode)
-  if (result is success(val)) {
-    return success(
-      [
-      {
-      error: false,
-      feedback: "Code is valid with no errors or warnings."
-    },
-    ],
-    )
-  }
-
-  return failure(
-    `Parse failed with the following errors:\n\n${JSON.stringify(result.error, null, 2)}`,
-  )
 }

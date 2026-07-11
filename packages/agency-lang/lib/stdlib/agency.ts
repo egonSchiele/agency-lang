@@ -1,4 +1,4 @@
-import { compileSource, typeCheckSource, TypeCheckReport } from "../compiler/compile.js";
+import { compileSource, typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep } from "path";
 import { parseAgency, replaceBlankLines } from "../parser.js";
@@ -171,6 +171,10 @@ export function _subprocessDepth(): number {
 
 export function _typecheck(source: string): TypeCheckReport {
   return typeCheckSource(source);
+}
+
+export function _getEffects(source: string): Record<string, string[]> {
+  return getEffectsFromSource(source);
 }
 
 // The real file path is handed to the type-checker so relative imports in

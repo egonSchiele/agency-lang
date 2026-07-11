@@ -23,14 +23,16 @@ define stage-agent-sources
 	node ./scripts/stage-agents.mjs lib/agents dist/lib/agents
 endef
 
-# Stage the doc markdown the agents read at runtime. rm before cp -r:
-# copying onto an existing dir NESTS (guide/guide) — that artifact exists
-# in pre-Stage-C tarballs; these copies must be idempotent.
-define stage-agent-docs
-	mkdir -p dist/lib/agents/docs
-	rm -rf dist/lib/agents/docs/guide dist/lib/agents/docs/cli
-	cp -r docs/site/guide dist/lib/agents/docs/guide
-	cp -r docs/site/cli dist/lib/agents/docs/cli
+# Stage the doc markdown into the stdlib so std::skills::docsSkill can
+# serve it (resolved via getStdlibDir, which works in dev and npm
+# installs). rm before cp -r: copying onto an existing dir NESTS
+# (guide/guide) — that artifact exists in pre-Stage-C tarballs; these
+# copies must be idempotent.
+define stage-stdlib-docs
+	mkdir -p stdlib/docs
+	rm -rf stdlib/docs/guide stdlib/docs/cli
+	cp -r docs/site/guide stdlib/docs/guide
+	cp -r docs/site/cli stdlib/docs/cli
 endef
 
 all:
@@ -84,16 +86,17 @@ clean:
 compile-agency:
 	$(stage-agent-sources)
 	node ./dist/scripts/agency.js compile stdlib/ $(AGENT_PATHS)
-	$(stage-agent-docs)
+	$(stage-stdlib-docs)
 
 # Selective-use aliases (same recipes, one root set each).
 stdlib:
 	node ./dist/scripts/agency.js compile stdlib/
+	$(stage-stdlib-docs)
 
 agents:
 	$(stage-agent-sources)
 	node ./dist/scripts/agency.js compile $(AGENT_PATHS)
-	$(stage-agent-docs)
+	$(stage-stdlib-docs)
 
 test:
 	pnpm run test

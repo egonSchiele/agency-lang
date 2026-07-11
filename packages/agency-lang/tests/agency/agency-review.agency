@@ -1,0 +1,27 @@
+import { review, feedbackHasErrors } from "std::agency"
+
+// task="" -> pure parse+typecheck feedback, no LLM call.
+// (That no-LLM property is NOT pinned by this test — the deterministic
+// mock cannot assert absence of traffic. Accepted gap.)
+node lintOnly() {
+  // A real type error: undeclared identifiers silently type as `any`
+  // (known checker hole), so use a const type mismatch instead.
+  const bad = review("node main() { const x: number = \"s\"\n  return x }")
+  const good = review("export node main() { return 1 }")
+  return [feedbackHasErrors(bad), feedbackHasErrors(good)]
+}
+
+// Unparseable source exercises parseFeedback, not just typecheck.
+node parseError() {
+  const fb = review("node main() {{{")
+  return feedbackHasErrors(fb)
+}
+
+// task!="" -> an LLM pass judges code-vs-task and merges its feedback
+// in. The mock returns an ERROR finding on otherwise-clean code, so the
+// only way this returns true is if the LLM item actually flowed through
+// mergeFeedback — a stub llmFeedback returning success([]) fails here.
+node withTask() {
+  const fb = review("export node main() { return 1 }", task: "return the number two")
+  return feedbackHasErrors(fb)
+}

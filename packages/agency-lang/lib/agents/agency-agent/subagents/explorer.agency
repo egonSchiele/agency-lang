@@ -11,7 +11,7 @@
  * and broad. Read-only — no write/edit/bash tools.
  */
 import { ls, glob, grep } from "std::shell"
-import { skillsDir } from "std::skills"
+import { docsSkill } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { withWebSearch } from "../lib/search.agency"
@@ -21,8 +21,8 @@ import { getSlowModel, getSlowProvider } from "../shared.agency"
 // Relative paths resolve against the agent working directory (set by
 // `agent.agency` at startup), so no per-tool anchoring is needed.
 
-static const docSkill = skillsDir("../docs/guide", "flat") with approve
-static const cliSkill = skillsDir("../docs/cli", "flat") with approve
+static const docSkill = docsSkill("guide")
+static const cliSkill = docsSkill("cli")
 
 export static const explorerSysPrompt = """
 You are the **explorer** — a read-only researcher called by other

@@ -90,7 +90,7 @@ function checkImportPolicy(
   return { success: false, errors: violations };
 }
 
-export { typeCheckSource } from "./typecheck.js";
+export { typeCheckSource, getEffectsFromSource } from "./typecheck.js";
 export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
 export function compileSource(

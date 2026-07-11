@@ -1,0 +1,69 @@
+{
+  "tests": [
+    {
+      "nodeName": "trips",
+      "description": "maxCost trips and surfaces as limit_exceeded with limit=cost; handler sees the cap in the payload",
+      "input": "",
+      "expectedOutput": "\"tripped:limit_exceeded:cost\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    },
+    {
+      "nodeName": "generous",
+      "description": "a generous maxCost does not trip",
+      "input": "",
+      "expectedOutput": "\"three\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    },
+    {
+      "nodeName": "nested",
+      "description": "an inner maxCost trip does not trip a generous outer guard",
+      "input": "",
+      "expectedOutput": "\"inner only:cost\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    },
+    {
+      "nodeName": "passthrough",
+      "description": "a non-cost failure passes through untranslated under maxCost",
+      "input": "",
+      "expectedOutput": "\"passthrough-ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    },
+    {
+      "nodeName": "runFileTrips",
+      "description": "runFile forwards maxCost to run and trips the same way",
+      "input": "",
+      "expectedOutput": "\"tripped:limit_exceeded:cost\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" },
+        { "return": "three" }
+      ]
+    }
+  ]
+}

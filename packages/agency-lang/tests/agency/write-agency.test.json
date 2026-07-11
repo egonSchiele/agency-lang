@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "repairs",
+      "description": "writeAgency feeds typecheck diagnostics back and succeeds on retry",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "export node main() { const x: number = \"s\"\n  return x }" } },
+        { "return": { "code": "export node main() { return 1 }" } }
+      ]
+    },
+    {
+      "nodeName": "repairsParse",
+      "description": "writeAgency recovers from unparseable output",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "node {{{" } },
+        { "return": { "code": "export node main() { return 1 }" } }
+      ]
+    },
+    {
+      "nodeName": "exhausts",
+      "description": "writeAgency returns the last source and diagnostics on retry exhaustion",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "export node main() { const x: number = \"s\"\n  return x }" } }
+      ]
+    }
+  ]
+}

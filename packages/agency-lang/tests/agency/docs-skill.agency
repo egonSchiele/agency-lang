@@ -1,0 +1,26 @@
+import { docsSkill } from "std::skills"
+
+// Both docsSkill builds happen OUTSIDE the handle block on purpose: the
+// test runner fails any test whose interrupt reaches the top unhandled,
+// so building out here pins the no-startup-interrupt property. Moving
+// the builds inside the handler would silently unpin it.
+//
+// The returned tools are read.partial, so the reads below still raise
+// std::read — approved by the handler. `read` returns a Result.
+node main() {
+  const guideTool = docsSkill("guide")
+  const cliTool = docsSkill("cli")
+  let guideOk = false
+  let cliOk = false
+  handle {
+    const guidePage = guideTool(filename: "basic-syntax.md")
+    if (guidePage is success(guideText)) {
+      guideOk = guideText.includes("def")
+    }
+    const cliPage = cliTool(filename: "doc.md")
+    if (cliPage is success(cliText)) {
+      cliOk = cliText.includes("agency")
+    }
+  } with approve
+  return [guideOk, cliOk]
+}

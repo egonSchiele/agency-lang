@@ -58,7 +58,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L155))
 
 ### std::skills::commandsDir
 
@@ -68,7 +68,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L156))
 
 ## Functions
 
@@ -92,7 +92,28 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
+
+### docsSkill
+
+```ts
+docsSkill(section: "guide" | "cli")
+```
+
+Build a docs tool for an LLM over the packaged Agency documentation.
+  "guide" serves the language guide (syntax, types, control flow);
+  "cli" serves the CLI reference. The returned tool lists every page in
+  its description and lets the model read any one on demand.
+
+  @param section - Which documentation set to serve: "guide" or "cli".
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| section | `"guide" \| "cli"` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L200))
 
 ### commandsDir
 
@@ -146,7 +167,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L262))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L284))
 
 ### expandSlash
 
@@ -185,4 +206,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L319))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L341))

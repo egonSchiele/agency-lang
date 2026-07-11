@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "nodeName": "lintOnly",
+      "description": "review with no task flags type errors and passes clean code",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "parseError",
+      "description": "review surfaces parse failures as error findings",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "withTask",
+      "description": "review with a task merges LLM feedback into the findings",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": [
+            { "error": true, "feedback": "The code returns one, not two." }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import {
   _compileFile,
   _typecheck,
   _typecheckFile,
+  _getEffects,
   _parseAST,
   _writeAST,
   _format,
@@ -13,6 +14,8 @@ import {
   _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
+import { guard, systemMessage } from "std::thread"
+import { docsSkill } from "std::skills"
 
 /** @module
   Tools for compiling, type-checking, running, formatting, and inspecting
@@ -46,7 +49,7 @@ effect std::run {
   moduleId: string;
   node: string;
   args: Record<string, any>;
-  limits: { wallClock: number; memory: number; ipcPayload: number; stdout: number };
+  limits: { wallClock: number; memory: number; ipcPayload: number; stdout: number; maxCost: number | null };
   cwd: string;
   logFile: string;
   depth: number
@@ -90,7 +93,8 @@ export safe def compile(source: string): Result {
 Any interrupts and guards defined in the parent process will
 apply to the child process. Any callbacks in scope will also apply.
 Exceeding a resource limit kills the subprocess and returns a
-limit_exceeded failure.
+limit_exceeded failure. Exceeding maxCost kills the subprocess and
+returns a limit_exceeded failure, like the other limits.
 
 For `maxDepth`, if an ancestor process has a lower maxDepth,
 the lower value is used. For example, if a parent process has maxDepth=3
@@ -107,6 +111,7 @@ export def run(
   logFile: string = "",
   cwd: string = "",
   maxDepth: number = 5,
+  maxCost: number | null = null,
 ): Result {
   """
   Execute a compiled Agency program in a subprocess and return the node's result.
@@ -121,6 +126,7 @@ export def run(
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
   let configOverrides = null
   if (logFile != "") {
@@ -139,25 +145,70 @@ export def run(
       wallClock: wallClock,
       memory: memory,
       ipcPayload: ipcPayload,
-      stdout: stdout
+      stdout: stdout,
+      maxCost: maxCost
     },
     cwd: cwd,
     logFile: logFile,
     depth: _subprocessDepth() + 1
   })
 
-  return try _run(
-    compiled,
-    node,
-    args,
-    wallClock,
-    memory,
-    ipcPayload,
-    stdout,
-    configOverrides,
-    cwd,
-    maxDepth,
-  )
+  // Two call sites on purpose. Wrapping the no-cap path in an inert
+  // guard block breaks nested subprocess pause/resume: when THIS process
+  // is itself a subprocess that pauses on a bubbled interrupt, resuming
+  // its serialized stack through the guard block loses the block's
+  // return value and run() yields undefined (see the nested-pause-resume
+  // fixture, which caught this in CI). Keep the argument lists below
+  // IDENTICAL.
+  if (maxCost == null) {
+    return try _run(
+      compiled,
+      node,
+      args,
+      wallClock,
+      memory,
+      ipcPayload,
+      stdout,
+      configOverrides,
+      cwd,
+      maxDepth,
+    )
+  }
+  const guarded = guard(cost: maxCost) as {
+    return try _run(
+      compiled,
+      node,
+      args,
+      wallClock,
+      memory,
+      ipcPayload,
+      stdout,
+      configOverrides,
+      cwd,
+      maxDepth,
+    )
+  }
+  // guard() runs the block through a try-style call, which passes a
+  // returned Result through unchanged — so `guarded` IS the child's
+  // Result on success (no double wrapping), and a guardFailure only
+  // when the cost guard itself tripped.
+  if (guarded is failure(err)) {
+    if (err.type == "guardFailure") {
+      // Present cost caps in the same limit_exceeded shape as the other
+      // run() limits (shape mirrors makeLimitFailure in lib/runtime/ipc.ts
+      // — keep the two in sync).
+      return failure(
+        {
+        reason: "limit_exceeded",
+        limit: "cost",
+        threshold: maxCost,
+        value: err.actualCost,
+        message: "Subprocess exceeded cost limit of ${maxCost} (used ${err.actualCost})"
+      },
+      )
+    }
+  }
+  return guarded
 }
 
 /** Just like `run`, any interrupts and guards defined in the parent process
@@ -173,6 +224,7 @@ export def runFile(
   memory: number = 512mb,
   ipcPayload: number = 100mb,
   stdout: number = 1mb,
+  maxCost: number | null = null,
 ): Result {
   """
   Compile and execute an Agency file in a subprocess and return the node's result.
@@ -186,6 +238,7 @@ export def runFile(
   @param memory - Max V8 heap size (default 512mb, max 4gb)
   @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
   @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
   const compileResult = try _compileFile(dir, filename)
   if (isFailure(compileResult)) {
@@ -199,6 +252,7 @@ export def runFile(
     memory: memory,
     ipcPayload: ipcPayload,
     stdout: stdout,
+    maxCost: maxCost,
   )
 }
 
@@ -213,6 +267,253 @@ export safe def typecheck(source: string): Result<TypeCheckReport> {
   @param source - Agency source code as a string
   """
   return try _typecheck(source)
+}
+
+/** Per-exported-symbol effect lists, keyed by node/function name. */
+export type EffectsByExport = Record<string, string[]>
+
+export safe def getEffects(source: string): Result<EffectsByExport> {
+  """
+  Map each exported node and function in the source to the list of
+  interrupt effects it can raise, transitively. Bare `interrupt(...)`
+  sites appear as the sentinel "unknown", so the envelope never
+  silently under-reports. Use this to show or check what a program can
+  do before running it.
+
+  @param source - Agency source code as a string
+  """
+  return try _getEffects(source)
+}
+
+/** One review finding. `error: true` means the code is broken (parse or
+type error, or the reviewer judged it does not do the task); `error:
+false` is advisory feedback, including typecheck warnings. */
+export type Feedback = {
+  error: boolean;
+  feedback: string;
+  data?: any
+}
+
+export def mergeFeedback(
+  a: Result<Feedback[]>,
+  b: Result<Feedback[]>,
+): Result<Feedback[]> {
+  """
+  Merge two feedback Results by concatenating their success arrays or
+  returning the first failure.
+
+  @param a - First feedback Result
+  @param b - Second feedback Result
+  """
+  if (a is success(aVal)) {
+    if (b is success(bVal)) {
+      return success([...aVal, ...bVal])
+    } else {
+      return b
+    }
+  } else {
+    return a
+  }
+}
+
+def parseFeedback(source: string): Result<Feedback[]> {
+  const result = try _parseAST(source)
+  if (result is failure(err)) {
+    return success([{ error: true, feedback: "Parse error: ${err}" }])
+  }
+  return success([])
+}
+
+// Report -> findings, separated from typecheckFeedback so writeAgency
+// can format an already-computed report without re-checking.
+def reportFeedback(report: TypeCheckReport): Feedback[] {
+  const feedback: Feedback[] = []
+  for (error in report.errors) {
+    feedback.push({ error: true, feedback: "Error: ${error.message}", data: error })
+  }
+  for (warning in report.warnings) {
+    feedback.push({ error: false, feedback: "Warning: ${warning.message}", data: warning })
+  }
+  return feedback
+}
+
+def typecheckFeedback(source: string): Result<Feedback[]> {
+  const result = try _typecheck(source)
+  if (result is failure(err)) {
+    return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
+  }
+  return success(reportFeedback(result.value))
+}
+
+def llmFeedback(source: string, task: string): Result<Feedback[]> {
+  let out: Result<Feedback[]> = success([])
+  thread(label: "review") {
+    const items: Feedback[] = llm("""You are reviewing Agency-language code.
+The code was written for this task:
+<task>
+${task}
+</task>
+
+<code>
+${source}
+</code>
+
+Return a list of feedback items. Set error=true only if the code does
+not accomplish the task. Keep feedback brief and concrete.""")
+    out = success(items)
+  }
+  return out
+}
+
+export def review(source: string, task: string = ""): Result<Feedback[]> {
+  """
+  Review Agency source code. Always merges parse and typecheck findings;
+  when a task description is given, an LLM pass also judges whether the
+  code accomplishes the task.
+
+  @param source - Agency source code as a string
+  @param task - Optional description of what the code should do
+  """
+  let feedback: Result<Feedback[]> = success([])
+  feedback = mergeFeedback(feedback, parseFeedback(source))
+  feedback = mergeFeedback(feedback, typecheckFeedback(source))
+  if (task != "") {
+    feedback = mergeFeedback(feedback, llmFeedback(source, task))
+  }
+  if (feedback is success(items)) {
+    if (items.length == 0) {
+      return success([{ error: false, feedback: "Code is valid with no errors or warnings." }])
+    }
+  }
+  return feedback
+}
+
+def renderSingleFeedback(f: Feedback): string {
+  if (f.error) {
+    return `Error: ${f.feedback}`
+  } else {
+    return `Feedback: ${f.feedback}`
+  }
+}
+
+export def renderFeedback(feedback: Result<Feedback[]>): string {
+  """
+  Render a feedback Result as human-readable text, one line per finding.
+
+  @param feedback - The Result review() returned
+  """
+  if (feedback is success(val)) {
+    return map(val, renderSingleFeedback).join("\n\n")
+  }
+  return feedback.error
+}
+
+export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
+  """
+  True when any finding is an error, or when the feedback Result itself
+  is a failure.
+
+  @param feedback - The Result review() returned
+  """
+  if (feedback is success(val)) {
+    return some(val, \f -> f.error)
+  }
+  // If the feedback itself is a failure, we can treat that as an error state.
+  return true
+}
+
+type GeneratedCode = {
+  code: string
+}
+
+/** The failure payload writeAgency returns on retry exhaustion: the last
+generated source and its typecheck diagnostics. */
+export type WriteFailure = {
+  source: string;
+  errors: TypeCheckDiagnostic[]
+}
+
+// Kept in sync by hand with the syntax rules in the code subagent prompt
+// (lib/agents/agency-agent/subagents/code.agency) — the authoritative
+// source is docs/site/guide/basic-syntax.md, which the model can read
+// through the docs tool.
+static const writeSysPrompt = """You write code in the Agency language.
+Agency syntax rules you MUST follow:
+- Functions: def name(param: Type): ReturnType { ... }
+- Nodes: node name() { ... } — export the entry node.
+- if / while / for require parentheses AND curly braces: if (x > 5) { ... }
+- The ONLY for loop is for-in over an array: for (item in items) { ... }
+  There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
+  while loop:
+    let i = 1
+    while (i <= 3) {
+      print(i)
+      i = i + 1
+    }
+- Declare variables with let or const before use.
+- No Python-style colon blocks. Always { ... }.
+If you are unsure about syntax or a standard-library function, read the
+relevant page with the docs tool before writing code.
+Return only the complete program in the code field."""
+
+export def writeAgency(
+  task: string,
+  context: string = "",
+  maxAttempts: number = 3,
+): Result<string, WriteFailure> {
+  """
+  Generate Agency source code for a task description. Typechecks each
+  attempt and feeds diagnostics back to the model, up to maxAttempts
+  tries. Success holds source that compiles and typechecks; on retry
+  exhaustion the failure holds { source, errors } for the last attempt.
+
+  @param task - What the generated program should do
+  @param context - Optional extra material (available data, examples)
+  @param maxAttempts - Max generation attempts before giving up (default 3)
+  """
+  const docsTool = docsSkill("guide")
+  let result: Result<string, WriteFailure> = failure({ source: "", errors: [] })
+  thread(label: "writeAgency") {
+    systemMessage(writeSysPrompt)
+    let prompt = "Write an Agency program for this task:\n<task>\n${task}\n</task>"
+    if (context != "") {
+      prompt = prompt + "\n<context>\n${context}\n</context>"
+    }
+    let attempt = 0
+    let done = false
+    while (attempt < maxAttempts && !done) {
+      attempt = attempt + 1
+      const generated: GeneratedCode = llm(prompt, { tools: [docsTool] })
+      const source = generated.code
+      const checked = try _typecheck(source)
+      if (checked is failure(parseErr)) {
+        result = failure({ source: source, errors: [] })
+        // _typecheck throws for import-resolution failures as well as
+        // parse failures. In the import case the re-parse succeeds and
+        // renders no findings — fall back to the thrown error so the
+        // model always gets a diagnostic to repair against.
+        let findings = renderFeedback(parseFeedback(source))
+        if (findings == "") {
+          findings = "${parseErr}"
+        }
+        prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
+      } else if (checked.value.errors.length > 0) {
+        result = failure({ source: source, errors: checked.value.errors })
+        const findings = renderFeedback(success(reportFeedback(checked.value)))
+        prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
+      } else {
+        const compiled = try _compile(source)
+        if (compiled is failure(compileErr)) {
+          result = failure({ source: source, errors: [] })
+          prompt = "That code failed to compile: ${compileErr}\nReturn a corrected complete program."
+        } else {
+          result = success(source)
+          done = true
+        }
+      }
+    }
+  }
+  return result
 }
 
 type FilterImportsResult = {

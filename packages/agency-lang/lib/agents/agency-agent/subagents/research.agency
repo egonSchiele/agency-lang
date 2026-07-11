@@ -13,7 +13,7 @@ import { todoWrite, todoList, handoff } from "std::agent"
 import { filter } from "std::array"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall, setMemoryId } from "std::memory"
-import { skillsDir } from "std::skills"
+import { docsSkill } from "std::skills"
 import { highlight } from "std::syntax"
 import { systemMessage } from "std::thread"
 import {
@@ -26,19 +26,13 @@ import { agentNames } from "../lib/config.agency"
 import { withWebSearch } from "../lib/search.agency"
 
 
-// Bundled docs live one level above the agent's compiled JS. Built
-// once at module load — `skillsDir` reads + parses every `.md`
-// file's frontmatter and bakes a description listing all available
-// skills into the returned tool. `static` caches this across runs;
-// `with approve` auto-approves the init-time `glob` and `read`
-// interrupts (the binding itself is the user opt-in).
-static const docSkill = skillsDir("../docs/guide", "flat") with approve
-
-// Same pattern for the CLI reference (`agency run`, `agency test`,
-// `agency compile`, ...) and the appendix (built-ins, callbacks,
-// advanced types). Each becomes its own tool so the LLM can pick
-// the right corpus instead of grepping a giant blob of docs.
-static const cliSkill = skillsDir("../docs/cli", "flat") with approve
+// Packaged docs served via std::skills docsSkill (no startup approval
+// interrupt — the docs ship with the stdlib). Built once at module
+// load; `static` caches the tool across runs. Guide and CLI reference
+// are separate tools so the LLM can pick the right corpus instead of
+// grepping a giant blob of docs.
+static const docSkill = docsSkill("guide")
+static const cliSkill = docsSkill("cli")
 
 export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language

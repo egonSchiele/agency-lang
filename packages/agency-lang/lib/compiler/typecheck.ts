@@ -90,10 +90,18 @@ function toDiagnostic(err: TypeCheckErrorShape): TypeCheckDiagnostic {
 // symbol table sees — letting relative imports in `source` resolve against
 // that directory. Otherwise a fresh tempdir is used and relative imports
 // will not resolve.
-export function typeCheckSource(
+/** Shared parse→symbols→resolve→lift→build→check pipeline. Both
+ * typeCheckSource and getEffectsFromSource consume this; keep the
+ * security-relevant allowTestImports: false decision HERE, once. */
+function runCheckerPipeline<T>(
   source: string,
-  sourcePath?: string,
-): TypeCheckReport {
+  sourcePath: string | undefined,
+  fn: (result: {
+    checkResult: ReturnType<typeof typeCheck>;
+    symbolTable: SymbolTable;
+    syntheticPath: string;
+  }) => T,
+): T {
   const parseResult = parseAgency(source, {}, true);
   if (!parseResult.success) {
     throw new Error(parseResult.message ?? "Failed to parse Agency source");
@@ -103,9 +111,9 @@ export function typeCheckSource(
   return withSourcePath(source, sourcePath, (syntheticPath) => {
     const symbolTable = SymbolTable.build(syntheticPath, {});
     const reExported = resolveReExports(program, symbolTable, syntheticPath);
-    // `typeCheckSource` is agent-reachable (std::agency typecheck), not just
-    // an editor path — so it must agree with execution: code that run()/
-    // compileSource would reject should not typecheck as valid. Deny
+    // This pipeline is agent-reachable (std::agency typecheck/getEffects),
+    // not just an editor path — so it must agree with execution: code that
+    // run()/compileSource would reject should not check as valid. Deny
     // `import test` here; the LSP (lib/lsp/diagnostics.ts) independently
     // allows it for editor support.
     const resolved = resolveImports(reExported, symbolTable, syntheticPath, {
@@ -113,16 +121,49 @@ export function typeCheckSource(
     });
     const lifted = liftCallbackBlocks(resolved);
     const info = buildCompilationUnit(lifted, symbolTable, syntheticPath, source);
-    const { errors } = typeCheck(lifted, { typechecker: { enabled: true } }, info);
+    const checkResult = typeCheck(lifted, { typechecker: { enabled: true } }, info);
+    return fn({ checkResult, symbolTable, syntheticPath });
+  });
+}
 
+export function typeCheckSource(
+  source: string,
+  sourcePath?: string,
+): TypeCheckReport {
+  return runCheckerPipeline(source, sourcePath, ({ checkResult }) => {
     // Partition into errors and warnings in a single pass. The only severity
     // values the type-checker emits are "error" and "warning" (see
     // lib/typeChecker/types.ts), so anything not "warning" is treated as
     // "error" by toDiagnostic's default.
     const out: TypeCheckReport = { errors: [], warnings: [] };
-    for (const err of errors) {
+    for (const err of checkResult.errors) {
       const d = toDiagnostic(err);
       (d.severity === "warning" ? out.warnings : out.errors).push(d);
+    }
+    return out;
+  });
+}
+
+export type EffectsByExport = Record<string, string[]>;
+
+/**
+ * Map each EXPORTED node/function in `source` to the transitive list of
+ * interrupt effects it can raise. Reads the propagated map typeCheck
+ * returns (same data raises-checking enforces — see lib/cli/policy.ts
+ * for the precedent). Bare `interrupt(...)` sites surface as the
+ * "unknown" sentinel — the envelope is fail-closed by design. Type
+ * errors in `source` do not prevent extraction; parse failures throw.
+ */
+export function getEffectsFromSource(source: string): EffectsByExport {
+  return runCheckerPipeline(source, undefined, ({ checkResult, symbolTable, syntheticPath }) => {
+    const { interruptEffectsByFunction } = checkResult;
+    const out: EffectsByExport = {};
+    const fileSymbols = symbolTable.getFile(syntheticPath) ?? {};
+    for (const [name, sym] of Object.entries(fileSymbols)) {
+      const isCallable = sym.kind === "function" || sym.kind === "node";
+      if (!isCallable || !sym.exported) continue;
+      const names = (interruptEffectsByFunction[name] ?? []).map((e) => e.effect);
+      out[name] = names.filter((n, i) => names.indexOf(n) === i).sort();
     }
     return out;
   });

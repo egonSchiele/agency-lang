@@ -177,13 +177,12 @@ const cfg: Options = { modle: "gpt-4" }  // error: Unknown property 'modle'
 
 ## Utility types
 
-Agency ships five built-in utility types modeled on TypeScript, adapted to
-Agency optionality (optional means `| null`; there is no `undefined`):
+Agency ships with five built-in utility types:
 
 | Type | What it does |
 |---|---|
-| `Partial<T>` | Every property becomes nullable: `p: V` → `p: V \| null` |
-| `Required<T>` | The inverse: strips `null` from every property |
+| `Partial<T>` | Every property becomes optional: `p: V` → `p: V \| null` |
+| `Required<T>` | The inverse: every property becomes required |
 | `Pick<T, K>` | Keeps only the listed keys: `Pick<User, "name" \| "email">` |
 | `Omit<T, K>` | Removes the listed keys |
 | `NonNullable<T>` | Strips `null` from a single type: `NonNullable<string \| null>` is `string` |
@@ -195,9 +194,10 @@ type User = {
 }
 
 def updateUser(id: string, changes: Partial<User>): string {
-  // changes.name is string | null — guard before use:
+  // changes.name is now string | null
   if (changes.name != null) {
-    return changes.name  // narrowed to string here
+    // narrowed to string here
+    return changes.name
   }
   return "no name change"
 }
@@ -215,13 +215,49 @@ type Tree = {
 }
 ```
 
-`schema(Tree)` validates nested payloads at every level, and `@validate`
-annotations on nested fields fire at every depth through the `!`
-validated-assignment form.
+> Note that Anthropic does not support recursive types as LLM output contracts
+(OpenAI and Gemini do).
 
-Anthropic does not support recursive types as LLM output contracts
-(OpenAI and Gemini do). On Anthropic, parse the response yourself with
-`schema(Tree).parseJSON(...)`.
+## `keyof`
+
+`keyof T` is the union of an object type's keys.
+
+```ts
+type User = {
+  name: string,
+  email: string,
+}
+
+// "name" | "email"
+type Field = keyof User
+```
+
+## Indexed access types
+
+ `T["key"]` is the
+type of one field:
+
+```ts
+type User = {
+  name: string,
+  email: string,
+}
+
+// string
+type Name = User["name"]
+```
+
+## Type intersection
+
+```ts
+type Named = { id: string, name: string }
+type Aged = { id: string, age: number }
+
+// { id, name, age }
+type Person = Named & Aged
+```
+
+If both objects contain the same key, we'll try to merge them, but if the types are totally different and cannot be merged (eg `string` and `number`), that's an error.
 
 ## References
 

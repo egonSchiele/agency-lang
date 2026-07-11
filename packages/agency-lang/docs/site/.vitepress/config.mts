@@ -8,7 +8,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
-      { text: "Agent", link: "/agent/index" },
+      /* { text: "Agent", link: "/agent/index" }, */
       { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/index" },
       { text: "Packages", link: "/packages/" },

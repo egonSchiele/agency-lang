@@ -1,5 +1,12 @@
 # FlowEnvironment memo auto-invalidation via a Scope generation counter
 
+> **Errata (point-in-time record; see the plan rev-2 header for the corrected
+> versions):** two claims below were superseded by later review rounds —
+> "O(depth) (depth ≤ 3)" (narrowing child chains nest arbitrarily; the shipped
+> `scope.ts` comment has the corrected wording, and the hot-path read is O(1)
+> via the parent-less flow-env root) and "median of 7" in the Tests section
+> (the shipped perf gate is 3 warmup + 25 timed iterations).
+
 **Issue:** #471 (part 2). Part 1 of that issue — fusing flow-graph construction
 into the scope walk and deleting the legacy child-scope narrowing path — is
 **deliberately descoped** after owner review (2026-07-10): its remaining unique

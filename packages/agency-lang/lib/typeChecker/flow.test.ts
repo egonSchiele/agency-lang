@@ -541,7 +541,7 @@ describe("PathSegment helpers + index resolution (M2)", () => {
 });
 
 describe("memo auto-invalidation (generation counter)", () => {
-  it("returns the fresh type after a scope mutation (stale on main)", () => {
+  it("returns the fresh type after a scope mutation (stale without the generation check)", () => {
     const scope = new Scope("fn");
     scope.declare("x", NUM);
     const start: FlowNode = { kind: "start", scope };

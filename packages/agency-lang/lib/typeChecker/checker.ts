@@ -69,7 +69,7 @@ function variadicNamedSlotType(
   return { type: "arrayType", elementType: typeHint };
 }
 
-type ParamSlot = {
+export type ParamSlot = {
   type: VariableType | "any" | undefined;
   validated: boolean;
   /** Original parameter name. Absent for builtins (which can't take named args). */
@@ -102,7 +102,7 @@ export type ParamSignature = {
   resolveSlot(req: SlotRequest): ParamSlot | undefined;
 };
 
-function paramListSignature(
+export function paramListSignature(
   params: FunctionParameter[],
   argCount: number,
 ): ParamSignature {

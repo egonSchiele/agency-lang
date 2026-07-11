@@ -21,3 +21,9 @@ export function mcpToolToAgencyFunction(
 ): Promise<unknown>;
 
 export function packageVersion(): Promise<string>;
+
+import type { ResultValue } from "../runtime/index.js";
+
+export function validateMcpServers(
+  servers: Record<string, unknown>,
+): Promise<ResultValue>;

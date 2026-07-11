@@ -42,6 +42,7 @@ import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
+import { mcpAdd, mcpRemove, mcpList, type McpAddOptions } from "@/cli/mcp.js";
 import {
   runList as localList,
   runDownload as localDownload,
@@ -426,9 +427,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("extract")
     .description(
       "Extract a structured eval record from a statelog file. " +
-        "Use this on the trace of one agent run to produce a JSON " +
-        "artifact you can grade with an LLM judge or compare against " +
-        "another run.",
+      "Use this on the trace of one agent run to produce a JSON " +
+      "artifact you can grade with an LLM judge or compare against " +
+      "another run.",
     )
     .argument("<file>", "Path to a .statelog.jsonl file")
     .option(
@@ -490,51 +491,51 @@ export function createProgram(deps: CliDependencies = {}): Command {
   // Registered under both `agency eval optimize` and the top-level `agency optimize`.
   const addOptimizeCommand = (parent: Command): void => {
     parent
-    .command("optimize")
-    .description("Optimize marked Agency declarations against an eval goal or input suite")
-    .argument("<agent>", "Agency file target: file.agency[:node]")
-    .option("--goal <text>", "Goal to optimize for")
-    .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
-    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-    .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
-    .option("--validation-split <ratio>", "Hold out this fraction of inputs for validation", (v) => parseFloat(v))
-    .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
-    .option("--run-id <id>", "Run id / output subdirectory")
-    .option("--runs-dir <path>", "Optimizer runs output directory")
-    .option("--no-writeback", "Do not write the champion back to source files")
-    .option("--mutator-model <model>", "Model to use for proposing mutations")
-    .option("--optimizer <nameOrPath>", "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)")
-    .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
-    .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
-    .option("--samples <n>", "Judge samples per input", parseInt)
-    .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
-    .option("--margin-threshold <n>", "Suite win margin required", parseInt)
-    .option("--silent", "Print nothing; artifacts are still written")
-    .action(async (agent: string, opts: {
-      goal?: string;
-      inputs?: string;
-      graders?: string;
-      validationInputs?: string;
-      validationSplit?: number;
-      iterations?: number;
-      runId?: string;
-      runsDir?: string;
-      writeback: boolean;
-      mutatorModel?: string;
-      optimizer?: string;
-      minibatch?: number;
-      seed?: number;
-      samples?: number;
-      confidenceThreshold?: number;
-      marginThreshold?: number;
-      silent?: boolean;
-    }) => {
-      const result = await evalOptimize({ ...opts, agent, config: getConfig() });
-      if (!opts.silent) {
-        console.log(`Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`);
-        console.log(path.join(result.runDir, "summary.json"));
-      }
-    });
+      .command("optimize")
+      .description("Optimize marked Agency declarations against an eval goal or input suite")
+      .argument("<agent>", "Agency file target: file.agency[:node]")
+      .option("--goal <text>", "Goal to optimize for")
+      .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+      .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+      .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
+      .option("--validation-split <ratio>", "Hold out this fraction of inputs for validation", (v) => parseFloat(v))
+      .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
+      .option("--run-id <id>", "Run id / output subdirectory")
+      .option("--runs-dir <path>", "Optimizer runs output directory")
+      .option("--no-writeback", "Do not write the champion back to source files")
+      .option("--mutator-model <model>", "Model to use for proposing mutations")
+      .option("--optimizer <nameOrPath>", "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)")
+      .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
+      .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
+      .option("--samples <n>", "Judge samples per input", parseInt)
+      .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
+      .option("--margin-threshold <n>", "Suite win margin required", parseInt)
+      .option("--silent", "Print nothing; artifacts are still written")
+      .action(async (agent: string, opts: {
+        goal?: string;
+        inputs?: string;
+        graders?: string;
+        validationInputs?: string;
+        validationSplit?: number;
+        iterations?: number;
+        runId?: string;
+        runsDir?: string;
+        writeback: boolean;
+        mutatorModel?: string;
+        optimizer?: string;
+        minibatch?: number;
+        seed?: number;
+        samples?: number;
+        confidenceThreshold?: number;
+        marginThreshold?: number;
+        silent?: boolean;
+      }) => {
+        const result = await evalOptimize({ ...opts, agent, config: getConfig() });
+        if (!opts.silent) {
+          console.log(`Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`);
+          console.log(path.join(result.runDir, "summary.json"));
+        }
+      });
   };
   addOptimizeCommand(evalCmd);
   addOptimizeCommand(program);
@@ -1317,6 +1318,35 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async () => {
       const startMcpServer = await loadMcpStartServer();
       startMcpServer();
+    });
+
+  // Manage the MCP servers the agency AGENT connects to (grouped under `mcp`
+  // alongside serving, like `claude mcp serve` vs `claude mcp add`).
+  mcpCmd
+    .command("list")
+    .description("List the Agency agent's configured MCP servers")
+    .action(() => {
+      process.exitCode = mcpList();
+    });
+  mcpCmd
+    .command("add <name>")
+    .description("Add an MCP server the Agency agent connects to")
+    .option("--command <cmd>", "stdio server command (e.g. npx)")
+    .option("--args <list>", "comma-separated stdio args")
+    .option("--url <url>", "HTTP server URL")
+    .option("--oauth", "authenticate the HTTP server with OAuth")
+    .option("--project", "write the project agency.json (default)")
+    .option("--global", "write the agent-home settings.json instead")
+    .action(async (name: string, opts: McpAddOptions) => {
+      process.exitCode = await mcpAdd(name, opts);
+    });
+  mcpCmd
+    .command("remove <name>")
+    .description("Remove an MCP server the Agency agent connects to")
+    .option("--project", "remove from the project agency.json (default)")
+    .option("--global", "remove from the agent-home settings.json instead")
+    .action(async (name: string, opts: { global?: boolean }) => {
+      process.exitCode = await mcpRemove(name, opts);
     });
 
   const mcpSetupCmd = mcpCmd

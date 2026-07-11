@@ -68,12 +68,16 @@ export type SourceLocation = {
 }
 
 export type TypeCheckDiagnostic = {
+  /** Stable AG#### diagnostic code. Suppress one line with
+  `// @tc-ignore AG####`, or match on it instead of parsing the message. */
+  code: string;
   severity: string;
   message: string;
   loc?: SourceLocation;
-  variableName?: string;
-  expectedType?: string;
-  actualType?: string
+  /** Structured payload of the diagnostic (the values rendered into the
+  message, e.g. the expected and actual type strings; counts and positions
+  are numbers). */
+  params: Record<string, string | number>
 }
 
 export type TypeCheckReport = {

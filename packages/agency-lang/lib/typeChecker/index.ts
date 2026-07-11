@@ -54,6 +54,7 @@ import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
 import { validateStaticInit } from "./validateStaticInit.js";
 import { walkNodes } from "../utils/node.js";
+import { diagnostic } from "./diagnostics.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -149,6 +150,8 @@ export class TypeChecker {
     this.errors = [];
     const ctx = this.makeContext();
 
+    const aliasDeclLocs = this.collectAliasDeclLocs();
+
     // Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
@@ -171,9 +174,13 @@ export class TypeChecker {
               if (p.default) {
                 seenDefault = true;
               } else if (seenDefault) {
-                this.errors.push({
-                  message: `Type parameter '${p.name}' (no default) must come before parameters that have defaults in '${name}'.`,
-                });
+                this.errors.push(
+                  diagnostic(
+                    "typeParamDefaultOrder",
+                    { param: p.name, alias: name },
+                    aliasDeclLocs[name] ?? null,
+                  ),
+                );
               }
             }
           }
@@ -191,11 +198,7 @@ export class TypeChecker {
     // functionDefs and nodeDefs are mutually exclusive by construction
     // (a name is parsed as one or the other, never both).
     const shadowWarning = (name: string, loc: SourceLocation | undefined) =>
-      this.errors.push({
-        message: `'${name}' shadows an imported function.`,
-        severity: "warning",
-        loc,
-      });
+      this.errors.push(diagnostic("shadowsImportedFunction", { name }, loc ?? null));
     for (const [name, def] of Object.entries(this.functionDefs)) {
       if (this.importedFunctions[name]) shadowWarning(name, def.loc);
     }
@@ -208,10 +211,7 @@ export class TypeChecker {
     // `Result` being the built-in type. Allowing user definitions of these
     // names would silently change semantics.
     const reservedFn = (name: string, loc: SourceLocation | undefined) =>
-      this.errors.push({
-        message: `'${name}' is a reserved built-in; cannot be redefined.`,
-        loc,
-      });
+      this.errors.push(diagnostic("reservedBuiltinRedefined", { name }, loc ?? null));
     for (const [name, def] of Object.entries(this.functionDefs)) {
       if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
     }
@@ -221,9 +221,13 @@ export class TypeChecker {
     for (const [, aliases] of this.scopedTypeAliases.scopes()) {
       for (const name of Object.keys(aliases)) {
         if (RESERVED_TYPE_NAMES.has(name)) {
-          this.errors.push({
-            message: `'${name}' is a reserved built-in type; cannot be redefined.`,
-          });
+          this.errors.push(
+            diagnostic(
+              "reservedBuiltinTypeRedefined",
+              { name },
+              aliasDeclLocs[name] ?? null,
+            ),
+          );
         }
       }
     }
@@ -239,67 +243,18 @@ export class TypeChecker {
       if (node.type !== "assignment") continue;
       if (!node.declKind) continue;
       if (RESERVED_FUNCTION_NAMES.has(node.variableName)) {
-        this.errors.push({
-          message: `'${node.variableName}' is a reserved built-in; cannot be redefined.`,
-          loc: node.loc,
-        });
+        this.errors.push(
+          diagnostic(
+            "reservedBuiltinRedefined",
+            { name: node.variableName },
+            node.loc ?? null,
+          ),
+        );
       }
     }
 
-    // Validated params let a function short-circuit with a failure before
-    // the body runs. An explicit non-Result return type contradicts that.
-    // (Unannotated returns are auto-wrapped during inference instead.)
-    const checkValidatedParamReturn = (
-      name: string,
-      def: FunctionDefinition | GraphNodeDefinition,
-    ) => {
-      if (!def.parameters.some((p) => p.validated)) return;
-      if (!def.returnType) return;
-      const effective = effectiveReturnType(def);
-      if (effective && effective.type !== "resultType") {
-        const kind = def.type === "function" ? "Function" : "Node";
-        this.errors.push({
-          message: `${kind} '${name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.`,
-          loc: def.loc,
-        });
-      }
-    };
-    for (const [name, def] of Object.entries(this.functionDefs)) {
-      checkValidatedParamReturn(name, def);
-    }
-    for (const [name, def] of Object.entries(this.nodeDefs)) {
-      checkValidatedParamReturn(name, def);
-    }
-
-    // Doc strings must not interpolate function/node parameters.
-    // The description is built when the tool object is constructed at module
-    // load time — long before the function is ever called — so parameter
-    // values are simply not bound yet. Catch the obvious case here:
-    // `${param}` as a top-level interpolation expression.
-    const checkDocStringParams = (
-      def: FunctionDefinition | GraphNodeDefinition,
-    ) => {
-      if (!def.docString) return;
-      const paramNames = def.parameters.map((p) => p.name);
-      for (const seg of def.docString.segments) {
-        if (
-          seg.type === "interpolation" &&
-          seg.expression.type === "variableName" &&
-          paramNames.includes(seg.expression.value)
-        ) {
-          this.errors.push({
-            message: `Cannot interpolate parameter '${seg.expression.value}' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.`,
-            loc: seg.loc ?? def.docString.loc,
-          });
-        }
-      }
-    };
-    for (const def of Object.values(this.functionDefs)) {
-      checkDocStringParams(def);
-    }
-    for (const def of Object.values(this.nodeDefs)) {
-      checkDocStringParams(def);
-    }
+    this.checkValidatedParamReturns();
+    this.checkDocStringParams();
 
     // Infer return types
     inferReturnTypes(ctx);
@@ -396,6 +351,8 @@ export class TypeChecker {
     // import closure.
     validateStaticInit(this.program, this.errors);
 
+    this.stampFileOnErrors();
+
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),
       scopes,
@@ -405,19 +362,107 @@ export class TypeChecker {
     };
   }
 
+  /** Validated params let a function short-circuit with a failure before
+   *  the body runs. An explicit non-Result return type contradicts that.
+   *  (Unannotated returns are auto-wrapped during inference instead.) */
+  private checkValidatedParamReturns(): void {
+    const checkOne = (
+      name: string,
+      def: FunctionDefinition | GraphNodeDefinition,
+    ) => {
+      if (!def.parameters.some((p) => p.validated)) return;
+      if (!def.returnType) return;
+      const effective = effectiveReturnType(def);
+      if (effective && effective.type !== "resultType") {
+        const kind = def.type === "function" ? "Function" : "Node";
+        // {kind} is a closed enum value (Function | Node), not phrasing —
+        // allowed as a param per the sweep recipe.
+        this.errors.push(
+          diagnostic(
+            "validatedParamsRequireResult",
+            { kind, name },
+            def.loc ?? null,
+          ),
+        );
+      }
+    };
+    for (const [name, def] of Object.entries(this.functionDefs)) {
+      checkOne(name, def);
+    }
+    for (const [name, def] of Object.entries(this.nodeDefs)) {
+      checkOne(name, def);
+    }
+  }
+
+  /** Doc strings must not interpolate function/node parameters. The
+   *  description is built when the tool object is constructed at module
+   *  load time — long before the function is ever called — so parameter
+   *  values are simply not bound yet. Catch the obvious case here:
+   *  `${param}` as a top-level interpolation expression. */
+  private checkDocStringParams(): void {
+    const checkOne = (def: FunctionDefinition | GraphNodeDefinition) => {
+      if (!def.docString) return;
+      const paramNames = def.parameters.map((p) => p.name);
+      for (const seg of def.docString.segments) {
+        if (
+          seg.type === "interpolation" &&
+          seg.expression.type === "variableName" &&
+          paramNames.includes(seg.expression.value)
+        ) {
+          this.errors.push(
+            diagnostic(
+              "docStringParamInterpolation",
+              { param: seg.expression.value },
+              seg.loc ?? def.docString.loc ?? null,
+            ),
+          );
+        }
+      }
+    };
+    for (const def of Object.values(this.functionDefs)) {
+      checkOne(def);
+    }
+    for (const def of Object.values(this.nodeDefs)) {
+      checkOne(def);
+    }
+  }
+
+  /** Locations of locally-declared type aliases, for diagnostics raised
+   *  from the alias TABLE (which carries no locs). Imported aliases are not
+   *  in program.nodes and resolve to null (file-level diagnostic). Keyed by
+   *  bare name: a same-named alias in another scope wins last-visited, so a
+   *  diagnostic can anchor on the wrong (same-file) declaration — accepted
+   *  imprecision, still strictly better than no location. */
+  private collectAliasDeclLocs(): Record<string, SourceLocation> {
+    const aliasDeclLocs: Record<string, SourceLocation> = Object.create(null);
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type === "typeAlias" && node.loc) {
+        aliasDeclLocs[node.aliasName] = node.loc;
+      }
+    }
+    return aliasDeclLocs;
+  }
+
+  /** Stamp the source file onto every diagnostic, once. One checker instance
+   *  checks exactly one file (ctx.currentFile), so a single pass here beats
+   *  threading the file through every push site. */
+  private stampFileOnErrors(): void {
+    const file = this.currentFile;
+    if (file === undefined) {
+      return;
+    }
+    for (const err of this.errors) {
+      err.file = file;
+    }
+  }
+
   private applySuppressions(errors: TypeCheckError[]): TypeCheckError[] {
     if (this.sourceText === undefined) return errors;
     return applySuppressions(errors, parseSuppressions(this.sourceText));
   }
 
   private deduplicateErrors(): TypeCheckError[] {
-    const seen = new Set<string>();
-    return this.errors.filter((err) => {
-      const key = `${err.message}:${err.loc?.start ?? -1}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return dedupeErrors(this.errors);
   }
 
   /** Delegating method preserved for test compatibility. */
@@ -438,15 +483,39 @@ export function typeCheck(
   return checker.check();
 }
 
-export function formatErrors(
-  errors: TypeCheckError[],
-  errorType: "warning" | "error" = "error",
-): string {
+/**
+ * Drop exact duplicates: same code, same rendered message, and same position.
+ * The message stays in the key deliberately — one code can render different
+ * params at one position (e.g. two assignability checks against different
+ * expected types), and both must survive. This is the emit-once band-aid
+ * until synth becomes pure (issue: emit-once follow-up); the key just must
+ * never be LOSSIER than code+message+position.
+ */
+export function dedupeErrors(errors: TypeCheckError[]): TypeCheckError[] {
+  const seen = new Set<string>();
+  return errors.filter((err) => {
+    const key = `${err.code}:${err.message}:${err.loc?.start ?? -1}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+export function formatErrors(errors: TypeCheckError[]): string {
   return errors
     .map((err) => {
-      const kind = err.severity ?? errorType;
-      const colorFunc = kind === "warning" ? color.yellow : color.red;
-      return `${colorFunc(kind)}: ${err.message}`;
+      const colorFunc = err.severity === "warning" ? color.yellow : color.red;
+      // Display line/col are 1-indexed; loc stores 0-indexed values
+      // (docs/dev/locations.md). loc null = file-level diagnostic.
+      let where = "";
+      if (err.file && err.loc) {
+        where = `${err.file}:${err.loc.line + 1}:${err.loc.col + 1} - `;
+      } else if (err.file) {
+        where = `${err.file} - `;
+      }
+      return `${where}${colorFunc(err.severity)} ${err.code}: ${err.message}`;
     })
     .join("\n");
 }

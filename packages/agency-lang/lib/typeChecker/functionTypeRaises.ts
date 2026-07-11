@@ -1,3 +1,6 @@
+import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
+import type { SourceLocation } from "../types/base.js";
+import type { TypeCheckError } from "./types.js";
 import type {
   VariableType,
   Expression,
@@ -138,24 +141,32 @@ function targetAllowed(
   return { labels: allowed.labels, name };
 }
 
-/** The error message(s) when `source` exceeds what `allowed` permits: one per
- *  offending effect, or a single message when the source may raise anything. */
+/** The diagnostic(s) when `source` exceeds what `allowed` permits: one per
+ *  offending effect, or a single one when the source may raise anything.
+ *  {who} is a subject reference — a quoted name or "this value". */
 function exceedances(
   source: FnEffects,
   allowed: { labels: string[]; name: string },
-): string[] {
+  loc: SourceLocation | null,
+): TypeCheckError[] {
   const who = source.sourceName ? `'${source.sourceName}'` : "this value";
-  const permitted = `'raises <${allowed.labels.join(", ")}>' allowed by type '${allowed.name}'`;
+  // sourceName rides along as a structured extra when one exists — {who}
+  // is display phrasing, not something consumers should parse.
+  const shared: DiagnosticParams<"valueMayRaiseAnyEffect"> = {
+    who,
+    allowed: allowed.labels.join(", "),
+    type: allowed.name,
+  };
+  if (source.sourceName) {
+    shared.sourceName = source.sourceName;
+  }
   if (source.any) {
-    return [
-      `${who} may raise any effect (its type has no 'raises' clause), which exceeds the ${permitted}. Add a 'raises' clause to the value's type.`,
-    ];
+    return [diagnostic("valueMayRaiseAnyEffect", shared, loc)];
   }
   return source.labels
     .filter((effect) => !allowed.labels.includes(effect))
-    .map(
-      (effect) =>
-        `${who} raises effect '${effect}', which exceeds the ${permitted}. Add '${effect}' to the clause, or use a target type that allows it.`,
+    .map((effect) =>
+      diagnostic("valueEffectExceedsRaises", { ...shared, effect }, loc),
     );
 }
 
@@ -178,8 +189,8 @@ export function checkFunctionTypeRaises(
             interruptEffectsByFunction,
             ctx,
           );
-          for (const message of exceedances(source, allowed)) {
-            ctx.errors.push({ message, severity: "error", loc: flow.source.loc });
+          for (const err of exceedances(source, allowed, flow.source.loc ?? null)) {
+            ctx.errors.push(err);
           }
         }
       }

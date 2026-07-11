@@ -11,7 +11,7 @@
  *     backstop (lib/runtime/agencyFunction.ts :: validateForLLM).
  *   - `isBound`, `classifyToolParam`, `resolveStaticTools`, `paramsOfTool`
  *     — defined here; consumed only by this validator.
- *   - `formatRequiredUnboundError`, `formatOptionalUnboundWarning`
+ *   - registry entries toolRequiredParamUnbound[Typed] / toolOptionalParamsDropped
  *     (lib/runtime/toolBlockDiagnostics.ts) — shared with the runtime so
  *     compile-time and runtime error wording cannot drift.
  *
@@ -21,6 +21,7 @@
  * identifiers) are intentionally skipped here — the runtime backstop
  * (`AgencyFunction.validateForLLM`) covers them at request time.
  */
+import { diagnostic } from "./diagnostics.js";
 import {
   AgencyNode,
   AgencyProgram,
@@ -28,10 +29,6 @@ import {
   ValueAccess,
 } from "../types.js";
 import { walkNodes } from "../utils/node.js";
-import {
-  formatOptionalUnboundWarning,
-  formatRequiredUnboundError,
-} from "../runtime/toolBlockDiagnostics.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { isFunctionTyped } from "./utils.js";
 import type { TypeCheckerContext } from "./types.js";
@@ -175,10 +172,13 @@ export function checkToolBlockBindings(
 }
 
 /**
- * Sole formatter site for the tool-binding diagnostics. All wording flows
- * through `formatRequiredUnboundError` / `formatOptionalUnboundWarning`,
- * which the runtime backstop also calls — that's what makes the
- * compile-time-vs-runtime unified-wording test (#42) pass by construction.
+ * Sole emit site for the compile-time tool-binding diagnostics. Wording now
+ * lives in the diagnostic registry (toolRequiredParamUnbound[Typed] /
+ * toolOptionalParamsDropped); the runtime backstop keeps its own formatters
+ * (lib/runtime/toolBlockDiagnostics.ts). Two locks keep the wording from
+ * drifting: the unified-wording test (#42, asserts the rendered error
+ * contains formatUnboundClause) and the registry-vs-formatter equality test
+ * in diagnostics.test.ts.
  */
 function emitDiagnostics(
   llmCall: AgencyNode,
@@ -193,19 +193,40 @@ function emitDiagnostics(
       const typeStr = cls.param.typeHint
         ? formatTypeHint(cls.param.typeHint)
         : undefined;
-      ctx.errors.push({
-        message: formatRequiredUnboundError(toolName, cls.param.name, typeStr),
-        loc: llmCall.loc,
-      });
+      // Two entries (typed/untyped) — conditional phrasing per the registry
+      // rule. A cross-check test locks the template text to the runtime's
+      // shared formatUnboundClause so the canonical clause cannot drift.
+      if (typeStr === undefined) {
+        ctx.errors.push(
+          diagnostic(
+            "toolRequiredParamUnbound",
+            { tool: toolName, param: cls.param.name },
+            llmCall.loc ?? null,
+          ),
+        );
+      } else {
+        ctx.errors.push(
+          diagnostic(
+            "toolRequiredParamUnboundTyped",
+            { tool: toolName, param: cls.param.name, type: typeStr },
+            llmCall.loc ?? null,
+          ),
+        );
+      }
     } else if (cls.kind === "optional-unbound") {
       optionalDropped.push(cls.param.name);
     }
   }
   if (optionalDropped.length > 0) {
-    ctx.errors.push({
-      message: formatOptionalUnboundWarning(toolName, optionalDropped),
-      severity: "warning",
-      loc: llmCall.loc,
-    });
+    ctx.errors.push(
+      diagnostic(
+        "toolOptionalParamsDropped",
+        {
+          tool: toolName,
+          params: optionalDropped.map((n) => `'${n}'`).join(", "),
+        },
+        llmCall.loc ?? null,
+      ),
+    );
   }
 }

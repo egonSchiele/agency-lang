@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { Scope } from "./scope.js";
 import type { AgencyNode, VariableNameLiteral } from "../types.js";
@@ -138,9 +139,9 @@ function checkVariableRef(
     scopeHas: (name) => scope.has(name),
   });
   if (resolution.kind !== "unresolved") return;
-  ctx.errors.push({
-    message: `Variable '${ref.value}' is not defined.`,
-    severity: mode === "warn" ? "warning" : "error",
-    loc: ref.loc,
-  });
+  ctx.errors.push(
+    diagnostic("undefinedVariable", { name: ref.value }, ref.loc ?? null, {
+      severity: mode === "warn" ? "warning" : "error",
+    }),
+  );
 }

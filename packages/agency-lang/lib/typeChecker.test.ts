@@ -98,8 +98,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
-      expect(errors[0].expectedType).toBe("string");
-      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
     });
 
     it("should error with wrong number of arguments", () => {
@@ -171,7 +171,7 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("no type annotation");
       expect(errors[0].message).toContain("strict mode");
-      expect(errors[0].variableName).toBe("x");
+      expect(errors[0].params?.name).toBe("x");
     });
   });
 
@@ -533,7 +533,7 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].variableName).toBe("x");
+      expect(errors[0].params?.name).toBe("x");
     });
   });
 
@@ -697,8 +697,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
   });
 
@@ -739,7 +739,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].params?.actual).toBe("number");
     });
 
     it("should infer boolean for comparison operations", () => {
@@ -778,7 +778,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("boolean");
+      expect(errors[0].params?.actual).toBe("boolean");
     });
 
     it("should infer string for + with a string operand", () => {
@@ -817,7 +817,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].params?.actual).toBe("string");
     });
   });
 
@@ -857,7 +857,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number[]");
+      expect(errors[0].params?.actual).toBe("number[]");
     });
   });
 
@@ -954,8 +954,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
 
     it("should resolve index access on typed array", () => {
@@ -1002,8 +1002,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
 
     it("should resolve .length on array to number", () => {
@@ -1050,7 +1050,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].params?.actual).toBe("number");
     });
   });
 
@@ -1087,7 +1087,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].params?.actual).toBe("string");
     });
   });
 
@@ -1124,7 +1124,7 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
-      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].params?.actual).toBe("number");
     });
   });
 
@@ -1178,8 +1178,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
 
     it("should infer index variable as number", () => {
@@ -1230,8 +1230,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
   });
 
@@ -1262,7 +1262,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("boolean");
+      expect(errors[0].params?.actual).toBe("boolean");
     });
   });
 
@@ -1376,8 +1376,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
   });
 
@@ -1582,9 +1582,9 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].variableName).toBe("x");
-      expect(errors[0].expectedType).toBe("number");
-      expect(errors[0].actualType).toBe('"hello"');
+      expect(errors[0].params?.name).toBe("x");
+      expect(errors[0].params?.expected).toBe("number");
+      expect(errors[0].params?.actual).toBe('"hello"');
     });
   });
 
@@ -1645,8 +1645,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
   });
 
@@ -1712,8 +1712,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
   });
 
@@ -1754,7 +1754,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("boolean");
+      expect(errors[0].params?.actual).toBe("boolean");
     });
 
     it("should infer boolean for || operator", () => {
@@ -1793,7 +1793,7 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("boolean");
+      expect(errors[0].params?.actual).toBe("boolean");
     });
   });
 
@@ -1834,8 +1834,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
 
     it("should infer number for * operator", () => {
@@ -1874,8 +1874,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
 
     it("should infer number for / operator", () => {
@@ -1914,8 +1914,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
   });
 
@@ -2085,8 +2085,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
 
     it("types the second loop variable as the property value for an object literal", () => {
@@ -2180,8 +2180,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
 
     it("still types the second loop variable as the index for arrays", () => {
@@ -2233,8 +2233,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
 
     it("index access on an object literal yields the property value type (not any)", () => {
@@ -2295,8 +2295,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("number");
-      expect(errors[0].expectedType).toBe("string");
+      expect(errors[0].params?.actual).toBe("number");
+      expect(errors[0].params?.expected).toBe("string");
     });
   });
 
@@ -2376,8 +2376,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
 
     it("should pass when function return type matches variable annotation", () => {
@@ -2455,8 +2455,8 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to type");
-      expect(errors[0].actualType).toBe('"hello"');
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe('"hello"');
+      expect(errors[0].params?.expected).toBe("number");
     });
   });
 
@@ -2498,8 +2498,8 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].params?.actual).toBe("string");
+      expect(errors[0].params?.expected).toBe("number");
     });
 
     it("should infer any from fetchJSON() return type (passes any check)", () => {
@@ -6965,7 +6965,7 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable");
-      expect(errors[0].expectedType).toBe("string[]");
+      expect(errors[0].params?.expected).toBe("string[]");
     });
 
     it("should accept .partial() binding a variadic via the named-array form", () => {

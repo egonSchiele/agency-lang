@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { VariableType } from "../types.js";
 
@@ -44,12 +45,15 @@ export function checkDefiniteReturns(
     if (!requiresReturn(info.returnType)) continue;
     const terminal = terminals[info.scopeKey];
     if (terminal && terminal.kind !== "exit") {
-      ctx.errors.push({
-        message: `Not all code paths return a value in '${info.name}'.`,
-        severity: severity === "warn" ? "warning" : "error",
-        // Point at the signature, not the first statement in the body.
-        loc: ctx.functionDefs[info.name]?.loc,
-      });
+      // Point at the signature, not the first statement in the body.
+      ctx.errors.push(
+        diagnostic(
+          "notAllPathsReturn",
+          { fn: info.name },
+          ctx.functionDefs[info.name]?.loc ?? null,
+          { severity: severity === "warn" ? "warning" : "error" },
+        ),
+      );
     }
   }
 }

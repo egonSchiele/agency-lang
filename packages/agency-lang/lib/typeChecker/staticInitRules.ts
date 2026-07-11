@@ -21,6 +21,7 @@
  * `staticStatement` respectively) and runs the same rule set against
  * the inner expression / statement.
  */
+import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { AgencyNode, Expression } from "../types.js";
 import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
@@ -67,6 +68,7 @@ export const BANNED_BUILTINS_IN_STATIC_INIT: Record<string, string> = {
 export function checkBannedBuiltinCalls(
   expr: Expression | AgencyNode,
   contextLabel: string,
+  staticName?: string,
 ): TypeCheckError[] {
   const errors: TypeCheckError[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
@@ -80,26 +82,30 @@ export function checkBannedBuiltinCalls(
     if (node.type === "functionCall") {
       const reason = BANNED_BUILTINS_IN_STATIC_INIT[node.functionName];
       if (reason) {
-        errors.push({
-          message:
-            `${contextLabel} cannot call \`${node.functionName}(...)\` — ` +
-            `${reason}, but static initializers run once at process startup ` +
-            `before any per-run state exists. Move this call into a node ` +
-            `or a function called from a node.`,
-          loc: node.loc,
-        });
+        // Extra structured keys beyond the template: consumers reading
+        // params should not have to parse the contextLabel phrase.
+        const params: DiagnosticParams<"bannedBuiltinInStaticInit"> = {
+          contextLabel,
+          builtin: node.functionName,
+          reason,
+        };
+        if (staticName !== undefined) {
+          params.staticName = staticName;
+        }
+        errors.push(
+          diagnostic("bannedBuiltinInStaticInit", params, node.loc ?? null),
+        );
       }
       continue;
     }
     if (node.type === "interruptStatement") {
-      errors.push({
-        message:
-          `${contextLabel} cannot \`interrupt(...)\` — interrupts pause the ` +
-          `per-run execution stack, but static initializers run once at ` +
-          `process startup before any agent run has begun. Move this ` +
-          `into a node body.`,
-        loc: node.loc,
-      });
+      const params: DiagnosticParams<"interruptInStaticInit"> = { contextLabel };
+      if (staticName !== undefined) {
+        params.staticName = staticName;
+      }
+      errors.push(
+        diagnostic("interruptInStaticInit", params, node.loc ?? null),
+      );
     }
   }
   return errors;
@@ -162,13 +168,11 @@ export function checkStaticMutation(
   if (node.type === "assignment") {
     if (node.declKind) return null;
     if (!staticNames[node.variableName]) return null;
-    return {
-      message:
-        `Cannot reassign static \`${node.variableName}\` at module top ` +
-        `level — statics are immutable after initialization. Use a global ` +
-        `(\`const\`/\`let\` without \`static\`) if you need a mutable value.`,
-      loc: node.loc,
-    };
+    return diagnostic(
+      "staticReassignedAtTopLevel",
+      { name: node.variableName },
+      node.loc ?? null,
+    );
   }
   // Method-call shape: `x.push(...)` at top level.
   if (node.type === "valueAccess") {
@@ -179,14 +183,11 @@ export function checkStaticMutation(
       if (elem.kind !== "methodCall") continue;
       const methodName = elem.functionCall.functionName;
       if (!MUTATING_METHODS[methodName]) continue;
-      return {
-        message:
-          `Cannot mutate static \`${name}\` via \`.${methodName}(...)\` at ` +
-          `module top level — statics are deep-frozen after initialization. ` +
-          `Use a global (\`const\`/\`let\` without \`static\`) if you need ` +
-          `a mutable value.`,
-        loc: node.loc,
-      };
+      return diagnostic(
+        "staticMutatedViaMethod",
+        { name, method: methodName },
+        node.loc ?? null,
+      );
     }
   }
   return null;

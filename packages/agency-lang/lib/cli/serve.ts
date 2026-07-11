@@ -63,7 +63,7 @@ function compileForServe(file: string, options: { quiet?: boolean } = {}): Compi
       console.error(formatErrors(typeErrors));
     }
     if (warnings.length > 0) {
-      console.error(formatErrors(warnings, "warning"));
+      console.error(formatErrors(warnings));
     }
     Object.assign(interruptEffectsByName, result.interruptEffectsByFunction);
   }

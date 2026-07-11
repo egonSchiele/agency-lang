@@ -149,7 +149,7 @@ export function compileSource(
       const { errors } = typeCheck(liftedProgram, config, info);
       if (errors.length > 0) {
         const hasFatal = errors.some(
-          (e) => (e.severity ?? "error") === "error",
+          (e) => e.severity === "error",
         );
         if (hasFatal) {
           return {

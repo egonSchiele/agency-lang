@@ -108,8 +108,8 @@ describe("variadic named-arg binding (compile-time)", () => {
     const errs = errorsOnly(diags);
     const a = errs.find((e) => /not assignable/.test(e.message));
     expect(a).toBeDefined();
-    expect(a!.expectedType).toBe("number[]");
-    expect(a!.actualType).toBe("number");
+    expect(a!.params?.expected).toBe("number[]");
+    expect(a!.params?.actual).toBe("number");
   });
 
   // #6: wrong element type. Use a typed const so the array's element type
@@ -125,8 +125,8 @@ describe("variadic named-arg binding (compile-time)", () => {
     const errs = errorsOnly(diags);
     const a = errs.find((e) => /not assignable/.test(e.message));
     expect(a).toBeDefined();
-    expect(a!.expectedType).toBe("number[]");
-    expect(a!.actualType).toBe("string[]");
+    expect(a!.params?.expected).toBe("number[]");
+    expect(a!.params?.actual).toBe("string[]");
   });
 
   // #7: right element, wrong nesting — proves the named slot is T[], not T.
@@ -177,7 +177,7 @@ describe("variadic named-arg binding (compile-time)", () => {
     const errs = errorsOnly(diags);
     const a = errs.find((e) => /not assignable/.test(e.message));
     expect(a).toBeDefined();
-    expect(a!.expectedType).toBe("number[]");
+    expect(a!.params?.expected).toBe("number[]");
   });
 
   // #11: block-typed param still nameable as plain named arg (regression

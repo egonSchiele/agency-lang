@@ -327,6 +327,12 @@ export function buildCompilationUnit(
     }
     unit.interruptEffectsByFunction = interruptEffectsByFunction;
     unit.symbolTable = symbolTable;
+  }
+
+  // The unit's file identity does not depend on cross-file resolution:
+  // diagnostics stamp `file` from it (TypeChecker.currentFile), so keep it
+  // whenever the caller supplied one, symbol table or not.
+  if (fromFile) {
     unit.fromFile = fromFile;
   }
 

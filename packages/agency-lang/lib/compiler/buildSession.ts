@@ -646,10 +646,10 @@ function runTypecheck(
   if (errors.length === 0) return;
   if (tc?.strict) {
     console.error(formatErrors(errors));
-    const hasFatal = errors.some((e) => (e.severity ?? "error") === "error");
+    const hasFatal = errors.some((e) => e.severity === "error");
     if (hasFatal) process.exit(1);
   } else {
-    console.warn(formatErrors(errors, "warning"));
+    console.warn(formatErrors(errors));
   }
 }
 

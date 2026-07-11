@@ -167,6 +167,15 @@ node main() {
 }
 ```
 
+**`// @tc-ignore AG6019`** — Silences only the named `AG####` codes on the next line (comma- or space-separated; trailing prose is ignored). A malformed code like `AG601` suppresses *nothing*, so a typo never widens to suppress-everything.
+
+```ts
+node main() {
+  // @tc-ignore AG6019
+  double("not a number")   // only the argument-type error is suppressed
+}
+```
+
 ## Excess property checks
 
 When you write an object *literal*, every key in the literal must be in its declared type. This helps catch typos like `modle:` instead of `model:`:

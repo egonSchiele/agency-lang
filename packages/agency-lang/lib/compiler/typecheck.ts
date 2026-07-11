@@ -16,6 +16,10 @@ import { parseAgency } from "@/parser.js";
 import { safeDeleteDirectory } from "../utils.js";
 
 export type TypeCheckDiagnostic = {
+  /** Stable AG#### diagnostic code — suppress one line with
+   *  `// @tc-ignore AG####`, or match on it programmatically instead of
+   *  parsing the message. */
+  code: string;
   severity: "error" | "warning";
   message: string;
   loc?: {
@@ -24,9 +28,9 @@ export type TypeCheckDiagnostic = {
     start: number;
     end: number;
   };
-  variableName?: string;
-  expectedType?: string;
-  actualType?: string;
+  /** Structured payload of the diagnostic (the values that were rendered
+   *  into the message, e.g. `expected` / `actual` type strings). */
+  params: Record<string, string | number>;
 };
 
 export type TypeCheckReport = {
@@ -35,12 +39,11 @@ export type TypeCheckReport = {
 };
 
 type TypeCheckErrorShape = {
+  code: string;
   message: string;
-  severity?: "error" | "warning";
-  loc?: TypeCheckDiagnostic["loc"];
-  variableName?: string;
-  expectedType?: string;
-  actualType?: string;
+  severity: "error" | "warning";
+  loc: TypeCheckDiagnostic["loc"] | null;
+  params: Record<string, string | number>;
 };
 
 // Provide a path the symbol table can use to resolve relative imports.
@@ -71,12 +74,13 @@ function withSourcePath<T>(
 
 function toDiagnostic(err: TypeCheckErrorShape): TypeCheckDiagnostic {
   return {
-    severity: err.severity ?? "error",
+    code: err.code,
+    severity: err.severity,
     message: err.message,
-    loc: err.loc,
-    variableName: err.variableName,
-    expectedType: err.expectedType,
-    actualType: err.actualType,
+    // File-level diagnostics carry loc: null internally; the public shape
+    // uses absence.
+    loc: err.loc ?? undefined,
+    params: err.params,
   };
 }
 

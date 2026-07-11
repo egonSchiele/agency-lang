@@ -15,14 +15,28 @@ import type {
 } from "../compilationUnit.js";
 import type { InterruptEffect, SymbolTable } from "../symbolTable.js";
 import type { InterruptCallGraph } from "./interruptAnalysis.js";
+// Type-only import: diagnostics.ts type-imports TypeCheckError from here, so
+// this pair of type-only imports has no runtime cycle.
+import type { DiagnosticName } from "./diagnostics.js";
 
+// Every checker diagnostic is built by the diagnostic() factory
+// (lib/typeChecker/diagnostics.ts) from the DIAGNOSTICS registry — the
+// single source of codes, default severities, and message templates.
 export type TypeCheckError = {
+  /** Stable AG#### code from the registry (suppression, docs, tests). */
+  code: string;
+  /** The registry key — the diagnostic's programmatic identity. */
+  name: DiagnosticName;
+  /** Rendered message (template + params). */
   message: string;
-  severity?: "error" | "warning"; // defaults to "error" when omitted
-  variableName?: string;
-  expectedType?: string;
-  actualType?: string;
-  loc?: SourceLocation;
+  severity: "error" | "warning";
+  /** The structured payload: template placeholders plus any extra
+   *  machine-readable keys the site attached. */
+  params: Record<string, string | number>;
+  /** null = deliberate file-level diagnostic (no AST node reachable). */
+  loc: SourceLocation | null;
+  /** Source file, stamped once in TypeChecker.check(). */
+  file?: string;
 };
 
 export type TypeCheckResult = {

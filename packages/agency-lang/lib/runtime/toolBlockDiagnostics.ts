@@ -1,3 +1,5 @@
+import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
+
 /**
  * Single source of truth for the wording of "unbound function-typed tool
  * parameter" diagnostics.
@@ -16,17 +18,25 @@ export function formatUnboundClause(paramName: string): string {
   return `required function-typed parameter '${paramName}' is unbound`;
 }
 
-/** Compile-time tool-binding diagnostic. */
+/** Compile-time tool-binding diagnostic — rendered from the diagnostic
+ *  registry so the wording is single-sourced by construction (the checker
+ *  emits the same entries via diagnostic()). */
 export function formatRequiredUnboundError(
   toolName: string,
   paramName: string,
   paramType?: string,
 ): string {
-  const typeFragment = paramType ? ` (${paramType})` : "";
-  return (
-    `Tool '${toolName}' has ${formatUnboundClause(paramName)}${typeFragment}. ` +
-    `Bind it with .partial(${paramName}: <value>) before passing as a tool.`
-  );
+  if (paramType === undefined) {
+    return renderMessage(DIAGNOSTICS.toolRequiredParamUnbound.message, {
+      tool: toolName,
+      param: paramName,
+    });
+  }
+  return renderMessage(DIAGNOSTICS.toolRequiredParamUnboundTyped.message, {
+    tool: toolName,
+    param: paramName,
+    type: paramType,
+  });
 }
 
 /** Runtime backstop diagnostic — same canonical clause, slightly different framing. */
@@ -45,14 +55,12 @@ export function formatOptionalUnboundWarning(
   toolName: string,
   paramNames: string[],
 ): string {
-  const list = paramNames.map((n) => `'${n}'`).join(", ");
   // "Optional" here means the param declares a default value. When the
   // LLM omits it, the normal defaulting path fills in that declared
   // default (often `null`), not `undefined` — so the body must be ready
   // to run with whatever the default is.
-  return (
-    `Tool '${toolName}' will be exposed to the LLM without optional ` +
-    `function-typed parameter(s): ${list}. The function body must be ` +
-    `prepared to run with the declared default for each.`
-  );
+  return renderMessage(DIAGNOSTICS.toolOptionalParamsDropped.message, {
+    tool: toolName,
+    params: paramNames.map((n) => `'${n}'`).join(", "),
+  });
 }

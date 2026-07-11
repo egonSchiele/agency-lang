@@ -857,7 +857,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));
-          if (errors.some((e) => (e.severity ?? "error") === "error")) {
+          if (errors.some((e) => e.severity === "error")) {
             hasErrors = true;
           }
         } else {

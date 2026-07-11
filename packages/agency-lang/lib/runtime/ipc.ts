@@ -184,6 +184,7 @@ export type IpcInterruptMessage = {
     message: string;
     data: any;
     origin: string;
+    expectsValue?: boolean;
   };
 };
 
@@ -336,6 +337,7 @@ export async function sendInterruptToParent(
     message: string;
     data: any;
     origin: string;
+    expectsValue?: boolean;
   },
   interruptId: string,
 ): Promise<HandlerChainOutcome> {
@@ -752,7 +754,7 @@ function attachStdoutForwarder(
 }
 
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
-  const { effect, message, data, origin } = msg.interrupt;
+  const { effect, message, data, origin, expectsValue } = msg.interrupt;
   try {
     // Report this process's chain OUTCOME; the child merges and decides.
     // The child's interruptId is relayed into the chain walk so this
@@ -767,7 +769,7 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
       () => gatherChainOutcome(
-        { effect, message, data, origin },
+        { effect, message, data, origin, expectsValue },
         s.ctx,
         s.stateStack,
         msg.interruptId,

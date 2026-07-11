@@ -66,6 +66,11 @@ export type Interrupt<T = any> = {
   checkpoint?: Checkpoint;
   state?: InterruptState; // kept for backward compat migration shim
   runId: string; // unique ID for the agent run, persists across interrupt pauses/resumes
+  // True when the raise site ASSIGNS the approval value (`const x = raise …`):
+  // whoever approves this interrupt is expected to provide a value, and a
+  // plain approve resolves the variable to `true`. Set by the compiler; absent
+  // (falsy) on statement-position raises.
+  expectsValue?: boolean;
 };
 
 export function interrupt<T = any>(opts: {
@@ -75,6 +80,7 @@ export function interrupt<T = any>(opts: {
   origin: string;
   runId: string;
   interruptId?: string;
+  expectsValue?: boolean;
 }): Interrupt<T> {
   return {
     type: "interrupt",
@@ -84,6 +90,7 @@ export function interrupt<T = any>(opts: {
     interruptId: opts.interruptId || nanoid(),
     data: opts.data,
     runId: opts.runId,
+    ...(opts.expectsValue ? { expectsValue: true } : {}),
   };
 }
 
@@ -160,6 +167,17 @@ export type HandlerChainOutcome =
   | { kind: "propagated" }
   | { kind: "noResponse" };
 
+/** The interrupt fields visible to handlers and relayed between processes:
+ * everything identifying WHAT is being decided, without the per-dispatch
+ * bookkeeping (ids, checkpoints) the origin process owns. */
+export type InterruptInfo = {
+  effect: string;
+  message: string;
+  data: any;
+  origin: string;
+  expectsValue?: boolean;
+};
+
 /** Maximum nested-dispatch depth for `runHandlerChain`. Each dispatch descends
  *  one level in `handlerChainDepthALS`; exceeding this limit throws
  *  `HandlerRecursionError`. Picked to be well above any plausible legitimate
@@ -194,7 +212,7 @@ async function runHandlerChain(
   ctx: RuntimeContext<any>,
   stack: StateStack | undefined,
   interruptId: string,
-  interruptObj: { effect: string; message: string; data: any; origin: string },
+  interruptObj: InterruptInfo,
 ): Promise<HandlerChainOutcome> {
   // Descend one level in the CURRENT async lineage (see
   // `handlerChainDepthALS`). Concurrent sibling dispatches each read the same
@@ -316,7 +334,7 @@ export function mergeChainOutcomes(
  * evaluating a child's interrupt) contribute only handlerDecision events
  * to the shared trace. */
 export async function gatherChainOutcome(
-  interruptObj: { effect: string; message: string; data: any; origin: string },
+  interruptObj: InterruptInfo,
   ctx: RuntimeContext<any>,
   stack: StateStack | undefined,
   interruptId: string,
@@ -345,7 +363,7 @@ function renderVerdict(
   merged: HandlerChainOutcome,
   ctx: RuntimeContext<any>,
   interruptId: string,
-  interruptObj: { effect: string; message: string; data: any; origin: string },
+  interruptObj: InterruptInfo,
   resolvedBy: "ipc" | "handler",
 ): Interrupt[] | Approved | Rejected {
   const { effect, message, data, origin } = interruptObj;
@@ -374,7 +392,15 @@ function renderVerdict(
   // interrupts will have interruptThrown but no matching checkpointCreated
   // from the runtime. A future improvement could add checkpoint events to
   // the generated templates.
-  const intr = interrupt({ effect, message, data, origin, runId: ctx.getRunId(), interruptId });
+  const intr = interrupt({
+    effect,
+    message,
+    data,
+    origin,
+    runId: ctx.getRunId(),
+    interruptId,
+    expectsValue: interruptObj.expectsValue,
+  });
   ctx.statelogClient.interruptThrown({
     interruptId: intr.interruptId,
     interruptData: data,
@@ -389,8 +415,14 @@ export async function interruptWithHandlers<T = any>(
   origin: string,
   ctx: RuntimeContext<any>,
   stack?: StateStack,
+  // `expectsValue: true` marks an assignment-position raise (`const x = raise
+  // …`): handlers and the surfaced Interrupt see that an approval value is
+  // expected. Optional trailing object so already-compiled 6-arg calls keep
+  // working.
+  opts?: { expectsValue?: boolean },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
-  const interruptObj = { effect, message, data, origin };
+  const interruptObj: InterruptInfo = { effect, message, data, origin };
+  if (opts?.expectsValue) interruptObj.expectsValue = true;
   const interruptId = nanoid();
   // The origin dispatch of the distributed chain: gatherChainOutcome walks
   // the local segment and — in IPC mode — consults the parent and merges

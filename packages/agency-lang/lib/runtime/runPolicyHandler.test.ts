@@ -2,11 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import {
   makeRunPolicyHandler,
   terminalPrompt,
+  terminalValuePrompt,
   parsePromptAnswer,
+  parseValueAnswer,
   installRunPolicyHandler,
   resolveCliInterrupts,
   formatInterruptPrompt,
   type PromptFn,
+  type ValuePromptFn,
 } from "./runPolicyHandler.js";
 import type { Interrupt, InterruptResponse } from "./interrupts.js";
 import {
@@ -73,6 +76,19 @@ describe("parsePromptAnswer", () => {
     expect(parsePromptAnswer("")).toBe("reject");
     expect(parsePromptAnswer("yes")).toBe("reject");
     expect(parsePromptAnswer("maybe")).toBe("reject");
+  });
+});
+
+describe("parseValueAnswer", () => {
+  it("typed text becomes the approval value verbatim", () => {
+    expect(parseValueAnswer("Adit")).toEqual({ type: "approve", value: "Adit" });
+    // Even text that looks like a decision keyword IS the answer.
+    expect(parseValueAnswer("r")).toEqual({ type: "approve", value: "r" });
+  });
+
+  it("an empty or whitespace-only line rejects (incl. the EOF fallback)", () => {
+    expect(parseValueAnswer("").type).toBe("reject");
+    expect(parseValueAnswer("   ").type).toBe("reject");
   });
 });
 
@@ -153,6 +169,14 @@ describe("terminalPrompt", () => {
         origin: "t",
       });
       expect(d).toBe("reject");
+      const v = await terminalValuePrompt({
+        effect: "myapp::foo",
+        message: "m",
+        data: {},
+        origin: "t",
+        expectsValue: true,
+      });
+      expect(v.type).toBe("reject");
     } finally {
       Object.defineProperty(process.stdin, "isTTY", {
         value: prev,
@@ -229,8 +253,17 @@ describe("resolveCliInterrupts", () => {
     messages: {} as any,
     data: effects.map(surfaced),
   });
+  const valueInterrupt = (effect: string): Interrupt => ({
+    ...surfaced(effect),
+    expectsValue: true,
+  });
   const promptWith = (answers: string[]): PromptFn => {
     return async () => answers.shift() as any;
+  };
+  const INTERACTIVE_ENV = {
+    [AGENCY_RUN_POLICY]: READ_OK,
+    [AGENCY_RUN_POLICY_INTERACTIVE]: AGENCY_RUN_POLICY_INTERACTIVE_ON,
+    AGENCY_IPC: undefined,
   };
 
   it("returns the result untouched when there are no interrupts", async () => {
@@ -333,6 +366,82 @@ describe("resolveCliInterrupts", () => {
           2,
           [surfaced("myapp::foo")],
           [{ type: "approve", value: undefined }],
+        );
+      },
+    );
+  });
+
+  it("interactive: a value-expecting interrupt gets the value prompt, not a/r", async () => {
+    await withEnv(INTERACTIVE_ENV, async () => {
+      const respond = vi.fn(async () => done);
+      const prompt = vi.fn();
+      const valuePrompt: ValuePromptFn = vi.fn(async () => ({
+        type: "approve",
+        value: "Adit",
+      } as any));
+      const result = await resolveCliInterrupts(
+        { messages: {} as any, data: [valueInterrupt("std::input")] },
+        respond,
+        { prompt: prompt as any, valuePrompt },
+      );
+      expect(result).toBe(done);
+      expect(prompt).not.toHaveBeenCalled();
+      expect(valuePrompt).toHaveBeenCalledTimes(1);
+      expect(respond).toHaveBeenCalledWith(
+        [valueInterrupt("std::input")],
+        [{ type: "approve", value: "Adit" }],
+      );
+    });
+  });
+
+  it("value-expecting interrupts bypass remembered 'always' decisions", async () => {
+    await withEnv(INTERACTIVE_ENV, async () => {
+      // Round 1: a statement interrupt of effect E answered approve-always.
+      // Round 2: a VALUE interrupt of the same effect E — must still hit the
+      // value prompt (a standing approve can't answer a question).
+      const rounds = [
+        { messages: {} as any, data: [valueInterrupt("myapp::foo")] },
+        done,
+      ];
+      const respond = vi.fn(async () => rounds.shift()!);
+      const valuePrompt: ValuePromptFn = vi.fn(async () => ({
+        type: "approve",
+        value: "42",
+      } as any));
+      const result = await resolveCliInterrupts(
+        withInterrupts("myapp::foo"),
+        respond,
+        { prompt: promptWith(["approve-always"]), valuePrompt },
+      );
+      expect(result).toBe(done);
+      expect(valuePrompt).toHaveBeenCalledTimes(1);
+      expect(respond).toHaveBeenNthCalledWith(
+        2,
+        [valueInterrupt("myapp::foo")],
+        [{ type: "approve", value: "42" }],
+      );
+    });
+  });
+
+  it("non-interactive: a value-expecting interrupt is rejected without prompting", async () => {
+    await withEnv(
+      {
+        [AGENCY_RUN_POLICY]: READ_OK,
+        [AGENCY_RUN_POLICY_INTERACTIVE]: undefined,
+        AGENCY_IPC: undefined,
+      },
+      async () => {
+        const respond = vi.fn(async () => done);
+        const valuePrompt = vi.fn();
+        await resolveCliInterrupts(
+          { messages: {} as any, data: [valueInterrupt("std::input")] },
+          respond,
+          { valuePrompt: valuePrompt as any },
+        );
+        expect(valuePrompt).not.toHaveBeenCalled();
+        expect(respond).toHaveBeenCalledWith(
+          [valueInterrupt("std::input")],
+          [{ type: "reject", value: undefined }],
         );
       },
     );

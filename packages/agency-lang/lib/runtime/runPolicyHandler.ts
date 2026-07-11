@@ -17,7 +17,13 @@ import {
 import readline from "readline";
 import { color } from "@/utils/termcolors.js";
 
-type Intr = { effect: string; message: string; data: any; origin: string };
+type Intr = {
+  effect: string;
+  message: string;
+  data: any;
+  origin: string;
+  expectsValue?: boolean;
+};
 
 export type PromptDecision =
   | "approve"
@@ -26,6 +32,10 @@ export type PromptDecision =
   | "reject-always";
 
 export type PromptFn = (intr: Intr) => Promise<PromptDecision>;
+
+// Prompt for a value-expecting interrupt (`const x = raise …`): returns the
+// full response (approve carries the typed answer) rather than a decision.
+export type ValuePromptFn = (intr: Intr) => Promise<InterruptResponse>;
 
 // How each prompt decision resolves: the immediate action, and whether to
 // remember it for the rest of the run.
@@ -76,18 +86,49 @@ export function parsePromptAnswer(raw: string): PromptDecision {
 // per-run state.
 let promptQueue: Promise<unknown> = Promise.resolve();
 
-// Terminal prompt used by installRunPolicyHandler. Falls back to reject
-// (fail-closed) when stdin is not a TTY rather than hanging. Exported so the
-// non-TTY fallback is unit-testable.
-export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
-  if (!process.stdin.isTTY) return "reject";
-  const run = promptQueue.then(() => promptOnce(intr));
+// Serialize a prompt through the terminal queue (see promptQueue above).
+function queuePrompt<T>(fn: () => Promise<T>): Promise<T> {
+  const run = promptQueue.then(fn);
   // Keep the chain alive whether or not this prompt resolves cleanly.
   promptQueue = run.then(
     () => undefined,
     () => undefined,
   );
   return run;
+}
+
+// Terminal approve/reject prompt used by resolveCliInterrupts. Falls back to
+// reject (fail-closed) when stdin is not a TTY rather than hanging. Exported
+// so the non-TTY fallback is unit-testable.
+export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
+  if (!process.stdin.isTTY) return "reject";
+  return queuePrompt(async () =>
+    parsePromptAnswer(
+      await askLine(
+        formatInterruptPrompt(intr) +
+          `(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: `,
+      ),
+    ),
+  );
+}
+
+// Terminal prompt for a value-expecting interrupt: the interrupt message IS
+// the question, and the typed line becomes the approval value. Same non-TTY
+// fail-closed contract as terminalPrompt.
+export async function terminalValuePrompt(intr: Intr): Promise<InterruptResponse> {
+  if (!process.stdin.isTTY) return reject();
+  return queuePrompt(async () =>
+    parseValueAnswer(
+      await askLine(formatInterruptPrompt(intr) + `answer (empty line rejects): `),
+    ),
+  );
+}
+
+// Map a typed line to a response for a value-expecting interrupt: the text is
+// the approval value verbatim; an empty/whitespace-only line (including stdin
+// EOF, which askLine surfaces as "") rejects. Pure and exported for tests.
+export function parseValueAnswer(raw: string): InterruptResponse {
+  return raw.trim() === "" ? reject() : approve(raw);
 }
 
 // Render the interrupt banner shown above the approve/reject question:
@@ -121,25 +162,21 @@ export function formatInterruptPrompt(intr: Intr): string {
   return lines.join("\n");
 }
 
-async function promptOnce(intr: Intr): Promise<PromptDecision> {
+// Ask one question on the terminal and return the typed line. Stdin EOF (^D,
+// or a closed pipe) while the question is pending would otherwise leave the
+// promise unsettled forever — the process would die with an "unsettled
+// top-level await" instead of a decision — so it resolves to "" (which every
+// caller parses to a safe reject).
+async function askLine(question: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stderr,
   });
   try {
-    const answer: string = await new Promise((resolve) => {
-      // Stdin EOF (^D, or a closed pipe) while the question is pending would
-      // otherwise leave this promise unsettled forever — the process would
-      // die with an "unsettled top-level await" instead of a decision. Treat
-      // it as an empty answer, which parses to a safe reject.
+    return await new Promise((resolve) => {
       rl.once("close", () => resolve(""));
-      rl.question(
-        formatInterruptPrompt(intr) +
-          `(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: `,
-        resolve,
-      );
+      rl.question(question, resolve);
     });
-    return parsePromptAnswer(answer);
   } finally {
     rl.close();
   }
@@ -189,16 +226,20 @@ export function installRunPolicyHandler(execCtx: {
 //
 // Decisions: `--interactive` prompts on the terminal ("always" answers are
 // remembered for the rest of the run); without it every surfaced interrupt
-// is rejected (the documented default). Without any policy flag at all, this
-// falls back to reportUnhandledInterrupts — print the handlers-guide message
-// and exit non-zero, exactly the historical no-flag behavior.
+// is rejected (the documented default). Value-expecting interrupts
+// (`const x = raise …`, expectsValue) get the answer prompt instead — the
+// typed line becomes the approval value — and skip the remembered map both
+// ways: a standing approve/reject can't answer a question, and answering a
+// question shouldn't create a standing rule. Without any policy flag at all,
+// this falls back to reportUnhandledInterrupts — print the handlers-guide
+// message and exit non-zero, exactly the historical no-flag behavior.
 export async function resolveCliInterrupts(
   result: RunNodeResult<any>,
   respond: (
     interrupts: Interrupt[],
     responses: InterruptResponse[],
   ) => Promise<RunNodeResult<any>>,
-  opts?: { prompt?: PromptFn },
+  opts?: { prompt?: PromptFn; valuePrompt?: ValuePromptFn },
 ): Promise<RunNodeResult<any>> {
   if (!hasInterrupts(result.data)) return result;
   // No policy flag (or an IPC subprocess, which never owns the terminal):
@@ -211,6 +252,7 @@ export async function resolveCliInterrupts(
   const interactive =
     process.env[AGENCY_RUN_POLICY_INTERACTIVE] === AGENCY_RUN_POLICY_INTERACTIVE_ON;
   const prompt = opts?.prompt ?? terminalPrompt;
+  const valuePrompt = opts?.valuePrompt ?? terminalValuePrompt;
   // Standing user decisions from "(aa)/(rr)" answers, keyed by effect.
   // Null-prototype so a program-controlled effect name (e.g. "__proto__")
   // is just an ordinary string key.
@@ -221,6 +263,10 @@ export async function resolveCliInterrupts(
     const interrupts: Interrupt[] = result.data;
     const responses: InterruptResponse[] = [];
     for (const intr of interrupts) {
+      if (intr.expectsValue) {
+        responses.push(interactive ? await valuePrompt(intr) : reject());
+        continue;
+      }
       let action = remembered[intr.effect];
       if (!action && interactive) {
         const outcome = DECISIONS[await prompt(intr)];

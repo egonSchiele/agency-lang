@@ -37,7 +37,15 @@ export type Approved = { type: "approve"; value?: any };
 export type Propagated = { type: "propagate" };
 
 export type HandlerFn = (
-  interrupt: { effect: string; message: string; data: any; origin: string },
+  interrupt: {
+    effect: string;
+    message: string;
+    data: any;
+    origin: string;
+    // True for assignment-position raises (`const x = raise …`) — an
+    // approval value is expected. See Interrupt.expectsValue.
+    expectsValue?: boolean;
+  },
 ) => Promise<Approved | Rejected | Propagated | undefined>;
 
 /* tokenstats

@@ -223,7 +223,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack());
+  const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
     runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });

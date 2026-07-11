@@ -133,7 +133,9 @@ export type FlowEnvironment = {
    * which runs AFTER `buildFlowGraphs` (so yield synthesis sees narrowing) and
    * therefore must patch the eagerly-snapshotted `type` on this node with the
    * computed union — otherwise downstream reads of `x` resolve through typeAt
-   * to the stale "any" recorded at build time. Optional: bare envs in tests.
+   * to the stale "any" recorded at build time. The paired consumer re-declare
+   * bumps the generation, so the memo needs no manual reset. Optional: bare
+   * envs in tests.
    */
   matchConsumerAssignFlows?: WeakMap<AgencyNode, FlowNode>;
 };

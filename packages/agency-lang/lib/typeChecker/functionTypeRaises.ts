@@ -8,6 +8,7 @@ import { resolveEffectSet } from "./effectSets.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { paramListSignature } from "./checker.js";
 import { functionValueEffects } from "./functionValueEffects.js";
+import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
 
 /**
  * Enforce a `raises` clause on a function type. When a function value flows into
@@ -32,6 +33,17 @@ function targetAllowed(
   const targetStr =
     target.type === "typeAliasVariable" ? target.aliasName : formatTypeHint(target);
   return { labels: set.labels, targetStr };
+}
+
+/** Run both `raises`-enforcement passes: declared clauses on `def`/`node`
+ *  (`checkRaisesDeclarations`) and clauses on function types (this file). */
+export function checkAllRaises(
+  scopes: ScopeInfo[],
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  ctx: TypeCheckerContext,
+): void {
+  checkRaisesDeclarations(interruptEffectsByFunction, ctx);
+  checkFunctionTypeRaises(scopes, interruptEffectsByFunction, ctx);
 }
 
 export function checkFunctionTypeRaises(

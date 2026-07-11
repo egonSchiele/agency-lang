@@ -40,8 +40,7 @@ import {
   checkCallbackBodyInterrupts,
   checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
-import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
-import { checkFunctionTypeRaises } from "./functionTypeRaises.js";
+import { checkAllRaises } from "./functionTypeRaises.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
@@ -361,13 +360,9 @@ export class TypeChecker {
     // re-enters the handler chain and recurses (see HandlerRecursionError).
     checkHandlerBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
 
-    // Verify each function/node's declared `raises` clause is not
-    // exceeded by its transitively-inferred effect set.
-    checkRaisesDeclarations(interruptEffectsByFunction, ctx);
-
-    // Enforce a `raises` clause on a function TYPE: a function value may not
-    // flow into a function type that allows fewer effects than it raises.
-    checkFunctionTypeRaises(scopes, interruptEffectsByFunction, ctx);
+    // Verify declared `raises` clauses (on def/node and on function types) are
+    // not exceeded by the values' inferred effect sets.
+    checkAllRaises(scopes, interruptEffectsByFunction, ctx);
 
     // Check interrupt payloads against `effect` declarations (shared registry).
     checkEffectPayloads(scopes, ctx, effectRegistry);

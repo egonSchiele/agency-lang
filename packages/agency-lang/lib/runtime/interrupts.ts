@@ -11,6 +11,7 @@ import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { loadProviderModules } from "./providerModules.js";
+import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
@@ -533,6 +534,11 @@ export async function respondToInterrupts(args: {
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  // Re-install the CLI-driven root policy handler on the resumed exec context
+  // (handlers are never checkpointed). Guarded no-op unless AGENCY_RUN_POLICY
+  // is set and this is the root process. Mirrors the runNode install so the
+  // policy survives a resumed leg.
+  installRunPolicyHandler(execCtx);
   // A cross-process resume starts with an empty provider registry (registration
   // is process-global, not part of serialized checkpoint state), so re-register
   // before resuming. Idempotent in-process via loadProviderModules' guard.

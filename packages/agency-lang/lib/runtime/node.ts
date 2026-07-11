@@ -17,6 +17,7 @@ import { __initAllRegistered } from "./crossModuleInitRegistry.js";
 import { loadProviderModules } from "./providerModules.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
+import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
@@ -347,6 +348,11 @@ export async function runNode({
   // `node main() { route({ systemPrompt: foreignStatic }) }` case where a
   // foreign static is read only from a function body).
   await initFreshExecCtx(execCtx, { initializeGlobals, registerTopLevelCallbacks, moduleDir });
+  // Install the CLI-driven root policy handler (agency run --policy). No-op
+  // unless AGENCY_RUN_POLICY is set and this is the root process (not an IPC
+  // subprocess). Installed here — after the exec context exists, before the
+  // node body runs — so it is the outermost handler and cannot be bypassed.
+  installRunPolicyHandler(execCtx);
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
   if (callbacks) {

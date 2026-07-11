@@ -56,6 +56,7 @@ import { modelsList, modelsRefresh } from "@/cli/hostedModels.js";
 import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
+import { resolveRunPolicy } from "@/cli/runPolicy.js";
 import { interruptsCmd } from "@/cli/interrupts.js";
 import {
   scheduleAdd,
@@ -86,7 +87,13 @@ import { serveMcp, serveHttp } from "@/cli/serve.js";
 // Per-run flags for `agency run` / the hidden default command: the shared
 // CliFlags (mapped onto config by applyCliFlags in config.ts) plus --resume,
 // which is a run-only concern, not a config field.
-type RunOptions = CliFlags & { resume?: string };
+type RunOptions = CliFlags & {
+  resume?: string;
+  policy?: string;
+  approve?: string;
+  reject?: string;
+  interactive?: boolean;
+};
 
 // commander option parsers. Match the WHOLE string against digits so
 // `parseInt`'s silent truncation ("1.5"→1, "3abc"→3, "0x10"→16) can't sneak an
@@ -155,7 +162,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   function runWithOptions(input: string, options: RunOptions) {
     const config = applyCliFlags(getConfig(), options, input);
-    run(config, input, undefined, options.resume);
+    let runPolicy;
+    try {
+      runPolicy =
+        resolveRunPolicy({
+          policy: options.policy,
+          approve: options.approve,
+          reject: options.reject,
+          interactive: options.interactive,
+          cwd: process.cwd(),
+        }) ?? undefined;
+    } catch (e) {
+      console.error(`Error: ${(e as Error).message}`);
+      process.exit(2);
+    }
+    run(config, input, undefined, options.resume, runPolicy);
   }
 
   program
@@ -259,6 +280,22 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--max-tool-result-chars <n>",
         "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
         parseNonNegativeInt,
+      )
+      .option(
+        "--policy <name|path>",
+        "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
+      )
+      .option(
+        "--approve <effects>",
+        "Comma-separated interrupt effects to auto-approve",
+      )
+      .option(
+        "--reject <effects>",
+        "Comma-separated interrupt effects to auto-reject",
+      )
+      .option(
+        "--interactive",
+        "Prompt on effects the policy does not cover (default: reject)",
       );
   }
 

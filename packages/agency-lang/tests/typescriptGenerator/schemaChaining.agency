@@ -1,0 +1,4 @@
+node main() {
+  const r = schema(number).parseJSON("[1]")
+  print(r)
+}

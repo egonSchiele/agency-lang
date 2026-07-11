@@ -790,6 +790,7 @@ export async function runPrompt(args: {
     retries: ccRetries,
     timeout: ccTimeout,
     backoff: ccBackoff,
+    validationRetries: ccValidationRetries,
     ...restClientConfig
   } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> &
     RetryConfig & {
@@ -805,8 +806,16 @@ export async function runPrompt(args: {
   //      verbatim as `clientConfig`, which may include retry/timeout/backoff)
   //   3. branch defaults (`stack.other.llmDefaults`, set by `setLlmOptions`)
   //   4. built-in defaults
+  // Known limitation: when a direct TS caller passes `args.retryConfig`,
+  // only the fields that caller sets apply (same as retries/timeout/backoff
+  // have always behaved on that path).
   const perCallRetry: RetryConfig =
-    args.retryConfig ?? { retries: ccRetries, timeout: ccTimeout, backoff: ccBackoff };
+    args.retryConfig ?? {
+      retries: ccRetries,
+      timeout: ccTimeout,
+      backoff: ccBackoff,
+      validationRetries: ccValidationRetries,
+    };
   const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
   const retryPolicy = resolveRetryPolicy(perCallRetry, branchRetryDefaults);
 

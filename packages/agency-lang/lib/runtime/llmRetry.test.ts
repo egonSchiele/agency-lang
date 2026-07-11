@@ -60,7 +60,7 @@ describe("classifyLlmError", () => {
   });
 });
 
-const policy = { retries: 2, timeout: 0, backoff: { initial: 100, factor: 2, max: 1000 } };
+const policy = { retries: 2, timeout: 0, backoff: { initial: 100, factor: 2, max: 1000 }, validationRetries: 0 };
 
 describe("decideRetry", () => {
   it("propagates user aborts", () => {
@@ -100,6 +100,7 @@ describe("resolveRetryPolicy", () => {
       retries: 2,
       timeout: 600000,
       backoff: { initial: 500, factor: 2, max: 10000 },
+      validationRetries: 0,
     });
   });
 
@@ -137,5 +138,32 @@ describe("enrichSchemaLimitationError (#487)", () => {
   it("returns null for unrelated errors", () => {
     expect(enrichSchemaLimitationError(new Error("rate limited"))).toBeNull();
     expect(enrichSchemaLimitationError("not an error")).toBeNull();
+  });
+});
+
+describe("resolveRetryPolicy — validationRetries", () => {
+  it("defaults validationRetries to 0 (opt-in)", () => {
+    const p = resolveRetryPolicy({}, {});
+    expect(p.validationRetries).toBe(0);
+  });
+
+  it("per-call value beats branch default", () => {
+    const p = resolveRetryPolicy({ validationRetries: 3 }, { validationRetries: 5 });
+    expect(p.validationRetries).toBe(3);
+  });
+
+  it("per-call 0 beats a truthy branch default (falsy override respected)", () => {
+    const p = resolveRetryPolicy({ validationRetries: 0 }, { validationRetries: 3 });
+    expect(p.validationRetries).toBe(0);
+  });
+
+  it("branch default beats the built-in", () => {
+    const p = resolveRetryPolicy({}, { validationRetries: 2 });
+    expect(p.validationRetries).toBe(2);
+  });
+
+  it("clamps negative values to 0", () => {
+    const p = resolveRetryPolicy({ validationRetries: -2 }, {});
+    expect(p.validationRetries).toBe(0);
   });
 });

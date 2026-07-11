@@ -133,7 +133,7 @@ describe("armCallTimeout", () => {
 });
 
 describe("runWithRetry", () => {
-  const policy = { retries: 2, timeout: 0, backoff: { initial: 1, factor: 2, max: 10 } };
+  const policy = { retries: 2, timeout: 0, backoff: { initial: 1, factor: 2, max: 10 }, validationRetries: 0 };
   const noHooks = { onRetry: async () => {}, onTimeout: async () => {} };
   // Test normalizer: read status off a SmolError, else just the message.
   const normalize = (err: unknown) => {
@@ -217,7 +217,7 @@ describe("runWithRetry", () => {
 
   it("#8 timeout with retries:0 fires onLLMTimeout once, no retry, surfaces", async () => {
     vi.useFakeTimers();
-    const timeoutPolicy = { retries: 0, timeout: 20, backoff: policy.backoff };
+    const timeoutPolicy = { retries: 0, timeout: 20, backoff: policy.backoff, validationRetries: 0 };
     let timeouts = 0;
     const dispatch = (signal: AbortSignal | undefined) => {
       return new Promise((_resolve, reject) => {
@@ -263,7 +263,7 @@ describe("runWithRetry", () => {
         order.push("timeout");
       },
     };
-    const timeoutPolicy = { retries: 1, timeout: 20, backoff: { initial: 1, factor: 2, max: 5 } };
+    const timeoutPolicy = { retries: 1, timeout: 20, backoff: { initial: 1, factor: 2, max: 5 }, validationRetries: 0 };
 
     const promise = _internal.runWithRetry(dispatch, timeoutPolicy, undefined, hooks, normalize);
     await vi.advanceTimersByTimeAsync(30);
@@ -274,7 +274,7 @@ describe("runWithRetry", () => {
   });
 
   it("the exhaustion message reads 'attempt(s)', not 'retries' (so retries:0 reads correctly)", async () => {
-    const zeroRetryPolicy = { retries: 0, timeout: 0, backoff: policy.backoff };
+    const zeroRetryPolicy = { retries: 0, timeout: 0, backoff: policy.backoff, validationRetries: 0 };
     const dispatch = async () => {
       throw new SmolError("503", { status: 503 });
     };

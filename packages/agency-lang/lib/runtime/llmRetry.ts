@@ -115,18 +115,27 @@ function classifyByMessage(message: string): Classification {
 }
 
 export type RetryPolicy = {
+  /** Transport retries: the provider failed to answer (timeout, 5xx,
+   *  dropped connection). Independent of validationRetries. */
   retries: number;
   timeout: number;
   backoff: { initial: number; factor: number; max: number };
+  /** Validation retries: the provider answered, but the structured output
+   *  failed schema validation. Each retry feeds the validation error back
+   *  to the model. Independent of `retries` — setting one never affects
+   *  the other. 0 disables (the default: validation retries cost tokens). */
+  validationRetries: number;
 };
 
 /** Built-in policy: 2 retries, a 10-minute per-call deadline, exponential
- *  backoff (500ms × 2, capped at 10s). Per-call llm() options and
- *  setLlmOptions / agency.json defaults override these (see resolveRetryPolicy). */
+ *  backoff (500ms × 2, capped at 10s), validation retries off. Per-call
+ *  llm() options and setLlmOptions / agency.json defaults override these
+ *  (see resolveRetryPolicy). */
 export const DEFAULT_RETRY_POLICY: RetryPolicy = {
   retries: 2,
   timeout: 600000,
   backoff: { initial: 500, factor: 2, max: 10000 },
+  validationRetries: 0,
 };
 
 export type RetryDecision =
@@ -177,6 +186,7 @@ export type RetryConfig = {
   retries?: number;
   timeout?: number;
   backoff?: { initial?: number; factor?: number; max?: number };
+  validationRetries?: number;
 };
 
 function firstDefined<T>(...values: Array<T | undefined>): T {
@@ -200,6 +210,14 @@ export function resolveRetryPolicy(opts: RetryConfig, branchDefaults: RetryConfi
   return {
     retries: firstDefined(opts.retries, branchDefaults.retries, DEFAULT_RETRY_POLICY.retries),
     timeout: firstDefined(opts.timeout, branchDefaults.timeout, DEFAULT_RETRY_POLICY.timeout),
+    validationRetries: Math.max(
+      0,
+      firstDefined(
+        opts.validationRetries,
+        branchDefaults.validationRetries,
+        DEFAULT_RETRY_POLICY.validationRetries,
+      ),
+    ),
     backoff: {
       initial: firstDefined(
         opts.backoff?.initial,

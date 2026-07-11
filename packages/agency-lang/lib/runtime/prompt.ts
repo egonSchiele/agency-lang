@@ -16,7 +16,7 @@ import {
 } from "./replyAttachments.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { abortableSleep } from "../stdlib/abortable.js";
-import { decideRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
+import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 import {
@@ -30,7 +30,7 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { failure, isFailure, isSuccess } from "./result.js";
+import { failure, isFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -738,6 +738,7 @@ export async function runPrompt(args: {
     self.removedTools = args.removedTools || [];
     self.toolErrorCounts = {};
     self.toolCallRound = 0;
+    self.validationAttempt = 0;
     self.messagesJSON = null;
     self.pendingToolCalls = null;
   }
@@ -1207,311 +1208,402 @@ export async function runPrompt(args: {
       );
     };
 
-    // Handle tool calls
-    while (toolCalls.length > 0) {
-      if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
-      // Capture round BEFORE incrementing so pr.step keys are stable
-      // across resume. The actual increment happens inside the
-      // `nextLlmCall` step body, after a successful LLM round — that
-      // way bailout from a per-tool callback leaves the counter
-      // unchanged and resume re-enters this iteration with the same
-      // `round` value, so completedSteps keys match.
-      const round = self.toolCallRound;
+    // Validation-retry outer loop: each iteration drains tool calls, then
+    // validates the final assistant message when a responseFormat is set.
+    // A "retry" decision pushes the validation error back to the model as
+    // a user message, dispatches one more round, and loops. Bounded by
+    // retryPolicy.validationRetries via decideValidationRetry.
+    while (true) {
+      // Handle tool calls
+      while (toolCalls.length > 0) {
+        if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
+        // Capture round BEFORE incrementing so pr.step keys are stable
+        // across resume. The actual increment happens inside the
+        // `nextLlmCall` step body, after a successful LLM round — that
+        // way bailout from a per-tool callback leaves the counter
+        // unchanged and resume re-enters this iteration with the same
+        // `round` value, so completedSteps keys match.
+        const round = self.toolCallRound;
 
-      // Tool calls in one round run concurrently via pr.parallel. Each
-      // tool gets its own BranchRunner. If any branch's `step` returns
-      // interrupts, sibling branches still run to completion; pr.parallel
-      // batches the collected interrupts, stamps ONE shared checkpoint,
-      // and throws PromptBailout — bailout is caught at the outer try.
-      //
-      // `removedTools` and `toolErrorCounts` use eventually-consistent
-      // semantics across branches (strategy B in the plan): same-round
-      // removal is best-effort and removals always take effect from the
-      // NEXT round (the .filter() after this parallel call).
-      const parallelResult = await pr.parallel(
-        `round.${round}.tools`,
-        toolCalls,
-        // keyFor: MUST match the branchKey the body uses below
-        // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
-        // operate on the same branch. Keyed by the tool call's POSITION in
-        // the round, not its id: some providers (notably Google Gemini)
-        // return tool calls with no id — Gemini matches responses to calls
-        // by function name + position, so smoltalk defaults the missing id
-        // to "". Two id-less parallel calls would otherwise collide on the
-        // branch key ("tool_") and trip `runBatch: duplicate child key`.
-        // The id is folded in after the index only for readability; the
-        // index alone guarantees uniqueness within the round.
-        (toolCall, i) => `tool_${i}_${toolCall.id}`,
-        async (toolCall, b, index) => {
-          if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
+        // Tool calls in one round run concurrently via pr.parallel. Each
+        // tool gets its own BranchRunner. If any branch's `step` returns
+        // interrupts, sibling branches still run to completion; pr.parallel
+        // batches the collected interrupts, stamps ONE shared checkpoint,
+        // and throws PromptBailout — bailout is caught at the outer try.
+        //
+        // `removedTools` and `toolErrorCounts` use eventually-consistent
+        // semantics across branches (strategy B in the plan): same-round
+        // removal is best-effort and removals always take effect from the
+        // NEXT round (the .filter() after this parallel call).
+        const parallelResult = await pr.parallel(
+          `round.${round}.tools`,
+          toolCalls,
+          // keyFor: MUST match the branchKey the body uses below
+          // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
+          // operate on the same branch. Keyed by the tool call's POSITION in
+          // the round, not its id: some providers (notably Google Gemini)
+          // return tool calls with no id — Gemini matches responses to calls
+          // by function name + position, so smoltalk defaults the missing id
+          // to "". Two id-less parallel calls would otherwise collide on the
+          // branch key ("tool_") and trip `runBatch: duplicate child key`.
+          // The id is folded in after the index only for readability; the
+          // index alone guarantees uniqueness within the round.
+          (toolCall, i) => `tool_${i}_${toolCall.id}`,
+          async (toolCall, b, index) => {
+            if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
 
-          // Per-call slug used for the branch key, every resume-idempotency
-          // step path, and the per-tool timing key below. Position-based so
-          // it stays unique even when `toolCall.id` is "" (see keyFor). Must
-          // NOT leak into message `tool_call_id` fields — those keep the
-          // real (possibly empty) id so provider pairing / threadRepair are
-          // byte-for-byte unchanged.
-          const callSlug = `${index}_${toolCall.id}`;
+            // Per-call slug used for the branch key, every resume-idempotency
+            // step path, and the per-tool timing key below. Position-based so
+            // it stays unique even when `toolCall.id` is "" (see keyFor). Must
+            // NOT leak into message `tool_call_id` fields — those keep the
+            // real (possibly empty) id so provider pairing / threadRepair are
+            // byte-for-byte unchanged.
+            const callSlug = `${index}_${toolCall.id}`;
 
-          const handler = toolFunctions.find(
-            (fn) => fn.name === toolCall.name,
-          );
-          if (!handler) {
-            await b.step(
-              `round.${round}.tool.${callSlug}.unhandled`,
-              async () => {
-                console.error(
-                  `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
-                );
-                messages.push(
-                  smoltalk.toolMessage(
-                    `Error: No handler found for tool call ${toolCall.name}`,
-                    { tool_call_id: toolCall.id, name: toolCall.name },
-                  ),
-                );
-              },
+            const handler = toolFunctions.find(
+              (fn) => fn.name === toolCall.name,
             );
-            return;
-          }
-
-          if (self.toolCallRound >= effectiveMaxToolCallRounds) {
-            await b.step(
-              `round.${round}.tool.${callSlug}.tooManyRounds`,
-              async () => {
-                messages.push(
-                  smoltalk.toolMessage(
-                    `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
-                    { tool_call_id: toolCall.id, name: toolCall.name },
-                  ),
-                );
-              },
-            );
-            return;
-          }
-
-
-          // Gated start (strategy B): if the tool is already in
-          // removedTools (either from a prior round or from an earlier
-          // sibling in this round that pushed first), skip with a
-          // notice toolMessage.
-          if (removedTools.includes(handler.name)) {
-            await b.step(
-              `round.${round}.tool.${callSlug}.removed`,
-              async () => {
-                messages.push(
-                  smoltalk.toolMessage(
-                    `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
-                    { tool_call_id: toolCall.id, name: toolCall.name },
-                  ),
-                );
-              },
-            );
-            return;
-          }
-
-          const branchKey = `tool_${callSlug}`;
-          // Note: a "cached result" short-circuit used to live here for
-          // resume after a sibling interrupt; idempotency is now handled
-          // uniformly by completedSteps inside b.step (start/invoke/end
-          // each get marked done on success and skipped on resume).
-          const branchStack = stack.getOrCreateBranch(branchKey).stack;
-          const namedArgs = dropNullDefaultedArgs(
-            toolCall.arguments,
-            handler.params,
-          );
-
-          await b.step(
-            `round.${round}.tool.${callSlug}.start`,
-            async () => {
-              // Pass `branchStack` so scoped callbacks registered inside
-              // the branch's frame chain are discovered by
-              // `gatherCallbacks`. Callback bodies cannot interrupt
-              // (typechecker-enforced), so this is purely about scope
-              // discovery, not interrupt routing.
-              await invokeCallbacks({
-                ctx,
-                name: "onToolCallStart",
-                data: { toolName: handler.name, args: namedArgs },
-                stateStack: branchStack,
-              });
-            },
-          );
-          if (b.interrupts) return;
-
-          const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
-          let toolResult: any;
-          let invokeOutcome:
-            | "success"
-            | "failed"
-            | "rejected"
-            | "interrupted"
-            | "crashed" = "success";
-
-          // Persist the measured tool execution duration in
-          // self.runnerState so resume (where the invoke step is
-          // skipped) doesn't report ~0ms to onToolCallEnd /
-          // statelogClient.toolCall. Keyed per tool call id; rides
-          // along with completedSteps on the same frame.
-          self.runnerState.toolTimings ??= {};
-          // IMPORTANT: keep the toolExecution span open across the
-          // invoke + end-hook + log steps so the toolCall event inherits
-          // the toolExecution span_id (logsViewer aggregates tool
-          // duration off that). try/finally guarantees we close it even
-          // on bailout / unexpected throw.
-          try {
-            const toolCallStartTime = performance.now();
-            // Emit toolCallStart inside the same toolExecution span as
-            // the (later) toolCall end event so consumers can pair the
-            // two by span_id. Wrap in b.step so resume-replay doesn't
-            // duplicate the event. Designed to leave a trace of every
-            // tool that began even when the run is killed before it
-            // completes (the matching toolCall event won't fire).
-            await b.step(
-              `round.${round}.tool.${callSlug}.logStart`,
-              async () => {
-                ctx.statelogClient.toolCallStart({
-                  toolName: handler.name,
-                  args: namedArgs,
-                  model: JSON.stringify(clientConfig.model),
-                  threadId: __threads()?.activeId() ?? null,
-                });
-              },
-            );
-            // Invoke step: returns the interrupts when the tool halts
-            // with them so BranchRunner.step can collect. All other
-            // outcomes (success, failure, reject, crash) update outer
-            // state in place via runInvokeStep; the step completes
-            // (returns void unless interrupted) and is marked done so
-            // resume skips this whole block.
-            await b.step(
-              `round.${round}.tool.${callSlug}.invoke`,
-              async () => {
-                const outcome = await runInvokeStep({
-                  handler,
-                  toolCall,
-                  namedArgs,
-                  branchKey,
-                  branchStack,
-                });
-                toolResult = outcome.toolResult;
-                invokeOutcome = outcome.invokeOutcome;
-                if (outcome.invokeOutcome === "success") {
-                  self.runnerState.toolTimings[callSlug] =
-                    performance.now() - toolCallStartTime;
-                }
-                return outcome.interrupts;
-              },
-            );
-
-            if (b.interrupts || invokeOutcome !== "success") return;
-
-            // On resume after an end-hook bailout, the `invoke` step is
-            // skipped and `toolResult` is undefined. Restore it from the
-            // per-branch result that `setResultOnBranch` persisted before
-            // the bailout, so the end-hook sees the actual tool output.
-            if (toolResult === undefined) {
-              toolResult = stack.getBranch(branchKey)?.result?.result;
+            if (!handler) {
+              await b.step(
+                `round.${round}.tool.${callSlug}.unhandled`,
+                async () => {
+                  console.error(
+                    `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+                  );
+                  messages.push(
+                    smoltalk.toolMessage(
+                      `Error: No handler found for tool call ${toolCall.name}`,
+                      { tool_call_id: toolCall.id, name: toolCall.name },
+                    ),
+                  );
+                },
+              );
+              return;
             }
 
-            // Reuse the persisted duration so onToolCallEnd /
-            // statelogClient.toolCall always report the real exec time,
-            // not the resume pass's overhead.
-            const timeTaken: number =
-              self.runnerState.toolTimings[callSlug] ?? 0;
+            if (self.toolCallRound >= effectiveMaxToolCallRounds) {
+              await b.step(
+                `round.${round}.tool.${callSlug}.tooManyRounds`,
+                async () => {
+                  messages.push(
+                    smoltalk.toolMessage(
+                      `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
+                      { tool_call_id: toolCall.id, name: toolCall.name },
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+
+
+            // Gated start (strategy B): if the tool is already in
+            // removedTools (either from a prior round or from an earlier
+            // sibling in this round that pushed first), skip with a
+            // notice toolMessage.
+            if (removedTools.includes(handler.name)) {
+              await b.step(
+                `round.${round}.tool.${callSlug}.removed`,
+                async () => {
+                  messages.push(
+                    smoltalk.toolMessage(
+                      `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
+                      { tool_call_id: toolCall.id, name: toolCall.name },
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+
+            const branchKey = `tool_${callSlug}`;
+            // Note: a "cached result" short-circuit used to live here for
+            // resume after a sibling interrupt; idempotency is now handled
+            // uniformly by completedSteps inside b.step (start/invoke/end
+            // each get marked done on success and skipped on resume).
+            const branchStack = stack.getOrCreateBranch(branchKey).stack;
+            const namedArgs = dropNullDefaultedArgs(
+              toolCall.arguments,
+              handler.params,
+            );
+
             await b.step(
-              `round.${round}.tool.${callSlug}.end`,
+              `round.${round}.tool.${callSlug}.start`,
               async () => {
-                // Same scope-discovery rationale as the .start hook.
+                // Pass `branchStack` so scoped callbacks registered inside
+                // the branch's frame chain are discovered by
+                // `gatherCallbacks`. Callback bodies cannot interrupt
+                // (typechecker-enforced), so this is purely about scope
+                // discovery, not interrupt routing.
                 await invokeCallbacks({
                   ctx,
-                  name: "onToolCallEnd",
-                  data: {
-                    toolName: handler.name,
-                    result: toolResult,
-                    timeTaken,
-                  },
+                  name: "onToolCallStart",
+                  data: { toolName: handler.name, args: namedArgs },
                   stateStack: branchStack,
                 });
               },
             );
-            // Wrap the toolCall log in its own b.step so it's idempotent
-            // when pr.parallel re-runs a fully-completed branch on resume
-            // (e.g. after a later `nextLlmCall` step bails). Without this
-            // guard, every re-entry would emit a duplicate toolCall event.
-            await b.step(
-              `round.${round}.tool.${callSlug}.log`,
-              async () => {
-                ctx.statelogClient.toolCall({
-                  toolName: handler.name,
-                  args: namedArgs,
-                  output: toolResult,
-                  model: JSON.stringify(clientConfig.model),
-                  timeTaken,
-                  threadId: __threads()?.activeId() ?? null,
-                });
-              },
+            if (b.interrupts) return;
+
+            const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
+            let toolResult: any;
+            let invokeOutcome:
+              | "success"
+              | "failed"
+              | "rejected"
+              | "interrupted"
+              | "crashed" = "success";
+
+            // Persist the measured tool execution duration in
+            // self.runnerState so resume (where the invoke step is
+            // skipped) doesn't report ~0ms to onToolCallEnd /
+            // statelogClient.toolCall. Keyed per tool call id; rides
+            // along with completedSteps on the same frame.
+            self.runnerState.toolTimings ??= {};
+            // IMPORTANT: keep the toolExecution span open across the
+            // invoke + end-hook + log steps so the toolCall event inherits
+            // the toolExecution span_id (logsViewer aggregates tool
+            // duration off that). try/finally guarantees we close it even
+            // on bailout / unexpected throw.
+            try {
+              const toolCallStartTime = performance.now();
+              // Emit toolCallStart inside the same toolExecution span as
+              // the (later) toolCall end event so consumers can pair the
+              // two by span_id. Wrap in b.step so resume-replay doesn't
+              // duplicate the event. Designed to leave a trace of every
+              // tool that began even when the run is killed before it
+              // completes (the matching toolCall event won't fire).
+              await b.step(
+                `round.${round}.tool.${callSlug}.logStart`,
+                async () => {
+                  ctx.statelogClient.toolCallStart({
+                    toolName: handler.name,
+                    args: namedArgs,
+                    model: JSON.stringify(clientConfig.model),
+                    threadId: __threads()?.activeId() ?? null,
+                  });
+                },
+              );
+              // Invoke step: returns the interrupts when the tool halts
+              // with them so BranchRunner.step can collect. All other
+              // outcomes (success, failure, reject, crash) update outer
+              // state in place via runInvokeStep; the step completes
+              // (returns void unless interrupted) and is marked done so
+              // resume skips this whole block.
+              await b.step(
+                `round.${round}.tool.${callSlug}.invoke`,
+                async () => {
+                  const outcome = await runInvokeStep({
+                    handler,
+                    toolCall,
+                    namedArgs,
+                    branchKey,
+                    branchStack,
+                  });
+                  toolResult = outcome.toolResult;
+                  invokeOutcome = outcome.invokeOutcome;
+                  if (outcome.invokeOutcome === "success") {
+                    self.runnerState.toolTimings[callSlug] =
+                      performance.now() - toolCallStartTime;
+                  }
+                  return outcome.interrupts;
+                },
+              );
+
+              if (b.interrupts || invokeOutcome !== "success") return;
+
+              // On resume after an end-hook bailout, the `invoke` step is
+              // skipped and `toolResult` is undefined. Restore it from the
+              // per-branch result that `setResultOnBranch` persisted before
+              // the bailout, so the end-hook sees the actual tool output.
+              if (toolResult === undefined) {
+                toolResult = stack.getBranch(branchKey)?.result?.result;
+              }
+
+              // Reuse the persisted duration so onToolCallEnd /
+              // statelogClient.toolCall always report the real exec time,
+              // not the resume pass's overhead.
+              const timeTaken: number =
+                self.runnerState.toolTimings[callSlug] ?? 0;
+              await b.step(
+                `round.${round}.tool.${callSlug}.end`,
+                async () => {
+                  // Same scope-discovery rationale as the .start hook.
+                  await invokeCallbacks({
+                    ctx,
+                    name: "onToolCallEnd",
+                    data: {
+                      toolName: handler.name,
+                      result: toolResult,
+                      timeTaken,
+                    },
+                    stateStack: branchStack,
+                  });
+                },
+              );
+              // Wrap the toolCall log in its own b.step so it's idempotent
+              // when pr.parallel re-runs a fully-completed branch on resume
+              // (e.g. after a later `nextLlmCall` step bails). Without this
+              // guard, every re-entry would emit a duplicate toolCall event.
+              await b.step(
+                `round.${round}.tool.${callSlug}.log`,
+                async () => {
+                  ctx.statelogClient.toolCall({
+                    toolName: handler.name,
+                    args: namedArgs,
+                    output: toolResult,
+                    model: JSON.stringify(clientConfig.model),
+                    timeTaken,
+                    threadId: __threads()?.activeId() ?? null,
+                  });
+                },
+              );
+            } finally {
+              ctx.statelogClient.endSpan(toolSpanId);
+            }
+          },
+        );
+
+        // pr.parallel returns a RunBatchResult tagged union; if any tool
+        // branch surfaced interrupts, runBatch already stamped the shared
+        // checkpoint. Bail out of runPrompt with the merged batch — the
+        // outer caller checkpoints / propagates as usual. (Replaces the
+        // former PromptBailout throw with an explicit return so runBatch's
+        // no-throw-Interrupt contract is preserved.)
+        if (parallelResult.kind === "interrupts") {
+          shouldPop = false;
+          return parallelResult.interrupts;
+        }
+
+        // All tool calls complete — runBatch already popped branches on the
+        // no-interrupt success path, but call again defensively in case any
+        // branchFn-level cleanup added new branches mid-flight.
+        stack.popBranches();
+        tools = tools.filter((t) => !removedTools.includes(t.name));
+        toolFunctions = toolFunctions.filter(
+          (fn) => !removedTools.includes(fn.name),
+        );
+
+        // Reply attachments harvested from this round's tools (and any
+        // earlier round whose injection was pre-empted by an interrupt):
+        // inject ONE labeled user message after ALL tool results — the
+        // provider adjacency rules require the assistant's tool calls to
+        // be answered by every tool result before any other message.
+        // Resume-safety (verified): pr.step marks the key in
+        // completedSteps and skips it on resume; PromptRunner snapshots
+        // messagesJSON in beforeCheckpoint (promptRunner.ts) so a
+        // checkpoint stamped after this step completes carries the
+        // injected message, and resume restores messages from
+        // messagesJSON — the same mechanism that preserves sibling
+        // tool-message pushes. Clearing the buffer inside the step keeps
+        // the outer guard consistent on replay. The explicit messagesJSON
+        // write matches the pattern at the first-LLM-call and nextLlmCall
+        // sites.
+        const pendingReplies = (self.runnerState.replyAttachments ??
+          []) as HarvestedReplyAttachment[];
+        if (pendingReplies.length > 0) {
+          await pr.step(`round.${round}.attachReplies`, async () => {
+            messages.push(
+              smoltalk.userMessage(
+                buildReplyUserMessage(pendingReplies) as smoltalk.UserContentInput,
+              ),
             );
-          } finally {
-            ctx.statelogClient.endSpan(toolSpanId);
-          }
-        },
-      );
+            self.runnerState.replyAttachments = [];
+            self.messagesJSON = messages.toJSON().messages;
+          });
+        }
 
-      // pr.parallel returns a RunBatchResult tagged union; if any tool
-      // branch surfaced interrupts, runBatch already stamped the shared
-      // checkpoint. Bail out of runPrompt with the merged batch — the
-      // outer caller checkpoints / propagates as usual. (Replaces the
-      // former PromptBailout throw with an explicit return so runBatch's
-      // no-throw-Interrupt contract is preserved.)
-      if (parallelResult.kind === "interrupts") {
-        shouldPop = false;
-        return parallelResult.interrupts;
-      }
-
-      // All tool calls complete — runBatch already popped branches on the
-      // no-interrupt success path, but call again defensively in case any
-      // branchFn-level cleanup added new branches mid-flight.
-      stack.popBranches();
-      tools = tools.filter((t) => !removedTools.includes(t.name));
-      toolFunctions = toolFunctions.filter(
-        (fn) => !removedTools.includes(fn.name),
-      );
-
-      // Reply attachments harvested from this round's tools (and any
-      // earlier round whose injection was pre-empted by an interrupt):
-      // inject ONE labeled user message after ALL tool results — the
-      // provider adjacency rules require the assistant's tool calls to
-      // be answered by every tool result before any other message.
-      // Resume-safety (verified): pr.step marks the key in
-      // completedSteps and skips it on resume; PromptRunner snapshots
-      // messagesJSON in beforeCheckpoint (promptRunner.ts) so a
-      // checkpoint stamped after this step completes carries the
-      // injected message, and resume restores messages from
-      // messagesJSON — the same mechanism that preserves sibling
-      // tool-message pushes. Clearing the buffer inside the step keeps
-      // the outer guard consistent on replay. The explicit messagesJSON
-      // write matches the pattern at the first-LLM-call and nextLlmCall
-      // sites.
-      const pendingReplies = (self.runnerState.replyAttachments ??
-        []) as HarvestedReplyAttachment[];
-      if (pendingReplies.length > 0) {
-        await pr.step(`round.${round}.attachReplies`, async () => {
-          messages.push(
-            smoltalk.userMessage(
-              buildReplyUserMessage(pendingReplies) as smoltalk.UserContentInput,
-            ),
-          );
-          self.runnerState.replyAttachments = [];
+        // Next LLM call wrapped in pr.step for resume idempotency. Once
+        // marked done, resume re-entries skip the LLM call. The llmCall
+        // span stays open across rounds (one span per llm() call), so we
+        // do NOT close/reopen it here — this round's promptCompletion
+        // nests under the same span as the first round's.
+        await pr.step(`round.${round}.nextLlmCall`, async () => {
+          const nextResult = await _runPrompt({
+            ctx,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+            retryPolicy,
+          });
+          messages = nextResult.messages;
+          toolCalls = nextResult.toolCalls;
+          // Increment the round counter only after a successful LLM round,
+          // so resume after a tool-batch interrupt re-enters the SAME round.
+          self.toolCallRound = round + 1;
           self.messagesJSON = messages.toJSON().messages;
+          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
         });
       }
+      // Tool calls are drained. No schema means nothing to validate; the
+      // plain-content return after the finally handles it.
+      if (!responseFormat) {
+        break;
+      }
 
-      // Next LLM call wrapped in pr.step for resume idempotency. Once
-      // marked done, resume re-entries skip the LLM call. The llmCall
-      // span stays open across rounds (one span per llm() call), so we
-      // do NOT close/reopen it here — this round's promptCompletion
-      // nests under the same span as the first round's.
-      await pr.step(`round.${round}.nextLlmCall`, async () => {
+      // Validate the last ASSISTANT message, not the last message: a
+      // resume that replays past a completed feedback step arrives here
+      // with our own feedback user message at the tail, and a string
+      // schema would happily "validate" it via envelope-skip recovery.
+      const lastAssistant = [...messages.getMessages()]
+        .reverse()
+        .find((m) => m.role === "assistant");
+      const validationExtract = extractStructuredResponse(
+        lastAssistant?.content,
+        responseFormat,
+      );
+      const validationAttempt = self.validationAttempt as number;
+      const decision = decideValidationRetry(
+        validationExtract,
+        lastAssistant?.content,
+        validationAttempt,
+        retryPolicy,
+      );
+
+      if (decision.kind === "accept") {
+        return decision.value;
+      }
+      if (decision.kind === "surfaceFailure") {
+        // Strict contract (issue #494): schema-constrained output either
+        // validates or comes back as a failure Result, never raw content.
+        // Loud in the statelog too, so a rotting integration is visible
+        // even when the caller swallows the failure. Fires with the
+        // llmCall span still open; pairing consumers ignore error events.
+        ctx.statelogClient.error({
+          errorType: "structuredOutput",
+          message: decision.message,
+        });
+        return failure(decision.message);
+      }
+
+      // decision.kind === "retry". Steps mirror attachReplies/nextLlmCall:
+      // keys derive from the PERSISTED counter, and the counter only
+      // advances inside the dispatch step, so a resume re-entry recomputes
+      // identical keys and skips completed steps instead of double-pushing
+      // feedback or double-counting the attempt.
+      await pr.step(`validation.${validationAttempt}.feedback`, async () => {
+        // Same hook transport retries fire (the agent renders it as a
+        // "retrying" line). Inside the step so a resume replay does not
+        // re-emit it. No backoff sleep: the provider is healthy, the
+        // content was just wrong.
+        await callHook({
+          ctx,
+          name: "onLLMRetry",
+          data: {
+            attempt: validationAttempt + 1,
+            maxRetries: retryPolicy.validationRetries,
+            delayMs: 0,
+            reason: decision.reason,
+            detail: decision.detail,
+          },
+        });
+        messages.push(smoltalk.userMessage(decision.feedback));
+        self.messagesJSON = messages.toJSON().messages;
+      });
+      await pr.step(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
           ctx,
           messages,
@@ -1524,12 +1616,15 @@ export async function runPrompt(args: {
         });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
-        // Increment the round counter only after a successful LLM round,
-        // so resume after a tool-batch interrupt re-enters the SAME round.
-        self.toolCallRound = round + 1;
+        // Advance ONLY here, like nextLlmCall advances toolCallRound: a
+        // bailout before this step completes leaves the counter unchanged,
+        // so resume re-enters the SAME attempt with the same step keys.
+        self.validationAttempt = validationAttempt + 1;
         self.messagesJSON = messages.toJSON().messages;
         self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
       });
+      // Loop: the retry response may itself contain tool calls; the inner
+      // loop drains them before validation runs again.
     }
   } catch (error) {
     if (error instanceof PromptBailout) {
@@ -1565,33 +1660,7 @@ export async function runPrompt(args: {
     );
   }
 
-  if (responseFormat) {
-    // Strict contract (issue #494): a schema-constrained result either
-    // validates or comes back as a failure Result. It is NEVER the raw
-    // content masquerading as the declared type — that fail-open silently
-    // broke memory extraction for weeks. Bang-validated callers receive
-    // the failure untouched (validation never re-validates failures);
-    // plain typed callers hold a failure value they can inspect instead
-    // of a mistyped string.
-    const extracted = extractStructuredResponse(
-      responseMessage.content,
-      responseFormat,
-    );
-    if (isSuccess(extracted)) {
-      return extracted.value;
-    }
-    const rawPreview = String(responseMessage.content ?? "").slice(0, 200);
-    const message =
-      `LLM structured output failed validation: ${extracted.error}. ` +
-      `Raw output (first 200 chars): ${JSON.stringify(rawPreview)}`;
-    // Loud in the statelog too, so a rotting integration is visible in
-    // logs even when the caller swallows the failure.
-    ctx.statelogClient.error({
-      errorType: "structuredOutput",
-      message,
-    });
-    return failure(message);
-  }
-
+  // Only the no-schema path reaches here; schema-constrained calls return
+  // from inside the validation-retry loop above (issue #494).
   return responseMessage.content;
 }

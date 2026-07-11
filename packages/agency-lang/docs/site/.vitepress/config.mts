@@ -163,6 +163,7 @@ export default defineConfig({
         },
         {
           text: "Appendix",
+          collapsed: true,
           items: [
             { text: "VSCode Extension", link: "/guide/vscode-extension" },
             {

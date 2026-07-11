@@ -24,10 +24,10 @@ which starts the server over stdio. You'd only run this yourself if you're wirin
 
 ## Other editors and coding agents
 
-Not on VS Code? The same language server works with any LSP-aware editor, and Agency can scaffold the config for popular coding agents for you:
+The same language server works with any LSP-aware editor, and Agency can scaffold the config for popular coding agents for you:
 
 ```bash
 agency lsp setup claude-code codex
 ```
 
-Supported targets are `claude-code`, `codex`, `opencode`, and `pi`. Agency also ships an MCP server (`agency mcp`) that exposes Agency-aware tools — typecheck, parse, run a node — to coding agents. See the [editor and coding-agent integration reference](/cli/editor-integration) for the full picture.
+Supported targets are `claude-code`, `codex`, `opencode`, and `pi`. See the [editor and coding-agent integration reference](/cli/editor-integration) for more information.

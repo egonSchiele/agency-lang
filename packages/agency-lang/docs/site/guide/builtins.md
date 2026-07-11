@@ -54,12 +54,6 @@ For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `rang
 | `isSuccess` | `isSuccess(result): boolean` | Check whether a `Result` is a success. |
 | `isFailure` | `isFailure(result): boolean` | Check whether a `Result` is a failure. See [Error Handling](/guide/error-handling). |
 
-## Errors
-
-| Name | Signature | Description |
-|---|---|---|
-| `throw` | `throw(message): void` | Raise an exception, unwinding the current function or node. The argument is coerced to a string for the error message. |
-
 ## Function and Tool Methods
 
 These are built-in methods you can call on any Agency function or tool value (they each return a new tool, so they chain).

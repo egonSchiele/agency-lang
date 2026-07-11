@@ -13,21 +13,18 @@ There are some [syntactical differences](/guide/basic-syntax). For example, Agen
 - Lambdas (it has [blocks](/guide/blocks))
 - Conditional types
 
-On the other hand, Agency has a lot of things built into the language that TypeScript doesn't. Most of them exist to make writing *agents* safe and easy:
+On the other hand, Agency has a lot of things built into the language that TypeScript doesn't. Most of them exist to make writing agents safe and easy:
 
-- [LLM calls](/guide/llm) as a first-class primitive — `llm(...)` is part of the language, with structured output and tools that are just ordinary [functions](/guide/functions).
-- [Interrupts](/guide/interrupts) — a function can pause execution to ask for approval or input before it does something risky, and resume right where it left off.
-- [Handlers](/guide/handlers) — `handle` blocks that decide how to respond to interrupts. These are Agency's core safety infrastructure.
-- [Effects and `raises`](/guide/effects-and-raises) — the compiler statically tracks which effects (and interrupts) a function can trigger, so you can see and constrain what your code is allowed to do.
-- [Policies](/guide/policies) — reusable rules for approving or rejecting interrupts.
-- [Checkpointing and resumability](/guide/checkpointing) — execution state is snapshotted as the program runs, so you can rewind, retry, or resume a run after an interrupt (even [from TypeScript](/guide/interrupts-from-typescript)).
-- A graph-based execution model built on [nodes](/guide/nodes).
-- A built-in [`Result` type and error handling](/guide/error-handling), with flow-sensitive narrowing so the compiler makes you handle failures.
+- Human-in-the-loop support through [interrupts](/guide/interrupts) and [checkpointing](/guide/checkpointing). These let you pause a run, ask a human for input, and then resume the run from the same point. Also see [interrupts, part 2](/guide/interrupts-part-2.md).
+- [Handlers](/guide/handlers), [Effects and `raises`](/guide/effects-and-raises) — all of these offer safety guarantees that TypeScript doesn't have.
 - [Pattern matching](/guide/pattern-matching) with exhaustiveness checking.
-- [Guards](/guide/guards) — constrain and validate what an LLM is allowed to return.
-- [Runtime validation](/guide/type-validation) — assert that values match a schema at runtime, right in the type.
+- [Guards](/guide/guards) — set time and cost limits on LLM calls.
+- [Runtime validation](/guide/type-validation) — do runtime validation using your types, no need to write separate Zod schemas.
 - [Partial function application](/guide/partial-application) as a language feature.
-- Built-in [concurrency](/guide/concurrency) (`fork`) that works correctly with interrupts and checkpoints.
-- A [memory layer](/guide/memory) and [message threads](/guide/message-threads) for managing LLM conversation history.
-- An [agent-focused standard library](/guide/agency-stdlib) — web search, browsers, messaging, and more.
-- Built-in tooling: a [testing framework](/guide/testing), [observability and tracing](/guide/observability), and an interactive [debugger](/guide/debugging) you can rewind.
+- [Blocks](/guide/blocks).
+- [State isolation](/guide/state-isolation).
+- A huge, [agent-focused standard library](/guide/agency-stdlib) — web search, browsers, messaging, and more.
+
+And of course you can easily [call TypeScript code from Agency](http://localhost:5173/guide/ts-interop.html), so you can use the best of both worlds. Agency compiles to TypeScript or JavaScript, so it fits right in with your existing stack.
+
+See [Why Agency?](/guide/why-agency) for a more detailed discussion.

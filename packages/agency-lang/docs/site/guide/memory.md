@@ -3,6 +3,8 @@ name: Memory
 description: How to give an agent long-term memory — remembering facts across runs, recalling them on demand, auto-injecting them into LLM calls, and approving what gets written.
 ---
 
+*This feature is in active development. This information may be out of date.*
+
 # Memory
 
 Memory lets your agent remember things between runs — a user's preferences, past

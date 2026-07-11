@@ -1,14 +1,7 @@
-import { diff } from "std::syntax"
-import { box, render } from "std::ui/layout"
-const file1 = read("testfile") with approve
-const file2 = read("testfile2") with approve
-
 node main() {
-  const res = diff(file1 catch "", file2 catch "", color: true)
-
-  //print(res)
-  const panel = box(title: "Hello", padding: 1) as b {
-    b.raw(res)
-  }
-  //print(render(panel))
+  raise std::error("This is a test error", {
+    a: 1,
+    b: 2
+  })
+  print("This will not be printed if rejected")
 }

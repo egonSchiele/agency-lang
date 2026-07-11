@@ -3,6 +3,7 @@ import {
   _compileFile,
   _typecheck,
   _typecheckFile,
+  _getEffects,
   _parseAST,
   _writeAST,
   _format,
@@ -213,6 +214,22 @@ export safe def typecheck(source: string): Result<TypeCheckReport> {
   @param source - Agency source code as a string
   """
   return try _typecheck(source)
+}
+
+/** Per-exported-symbol effect lists, keyed by node/function name. */
+export type EffectsByExport = Record<string, string[]>
+
+export safe def getEffects(source: string): Result<EffectsByExport> {
+  """
+  Map each exported node and function in the source to the list of
+  interrupt effects it can raise, transitively. Bare `interrupt(...)`
+  sites appear as the sentinel "unknown", so the envelope never
+  silently under-reports. Use this to show or check what a program can
+  do before running it.
+
+  @param source - Agency source code as a string
+  """
+  return try _getEffects(source)
 }
 
 type FilterImportsResult = {

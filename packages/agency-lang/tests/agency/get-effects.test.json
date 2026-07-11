@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "getEffects returns per-exported-symbol transitive effect lists with the unknown sentinel",
+      "input": "",
+      "expectedOutput": "{\"run\":[\"std::write\"],\"ask\":[\"unknown\"]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

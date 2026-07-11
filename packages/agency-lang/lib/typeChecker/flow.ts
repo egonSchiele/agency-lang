@@ -84,6 +84,24 @@ export type FlowNode =
   | { kind: "loop"; prev: FlowNode; widened: Record<string, ScopeType> }
   | { kind: "exit" };
 
+/**
+ * The typeAt memo plus the scope-tree generation it was filled under. A BOX
+ * shared by reference across every env that wraps the same check run —
+ * including the spread copies the synthesizer makes ({ ...ctx.flowEnv,
+ * typeAliases }) — so an invalidation made through any env is visible to all.
+ * Mutate the box fields in place; the `readonly` on FlowEnvironment.memo
+ * makes replacing the box itself a compile error.
+ */
+export type FlowMemo = {
+  gen: number;
+  map: WeakMap<FlowNode, Record<string, ScopeType>>;
+};
+
+/** A fresh memo box. gen -1 guarantees the first typeAt query stamps it. */
+export function freshMemo(): FlowMemo {
+  return { gen: -1, map: new WeakMap() };
+}
+
 export type FlowEnvironment = {
   scope: Scope;
   flowOf: WeakMap<AgencyNode, FlowNode>;
@@ -92,15 +110,16 @@ export type FlowEnvironment = {
    * Per-flow-node, per-reference-key memo for typeAt. WeakMap because keys are
    * FlowNode identities; without it, nested joins/loops re-walk super-linearly.
    *
-   * SOUNDNESS CONTRACT: a `FlowEnvironment` is valid only for a single
-   * type-check pass. The cache is keyed by FlowNode identity, but `start` nodes
-   * read `scope.lookup(...)` — if the underlying `Scope` mutates (a new
-   * declaration is added, a type is rebound) after a `start`-rooted query has
-   * been memoized, the cache will return stale results. Discard the env (or
-   * call `env.memo = new WeakMap()`) at any point where the scope contents
-   * could have changed.
+   * Invalidation is AUTOMATIC for Scope mutations: `start` nodes read
+   * `scope.lookup(...)` live, so any scope mutation stales the cache — typeAt
+   * compares `memo.gen` against the scope tree generation
+   * (Scope.currentGeneration) on entry and rebuilds the map on mismatch.
+   * Passes that retype scope entries (e.g. computeMatchExprTypes) need no
+   * manual reset: their declare() calls bump the generation. A FlowNode
+   * patched IN PLACE (assignFlow.type = ...) is invisible to the counter and
+   * still needs a paired declare() bump — see matchConsumerAssignFlows.
    */
-  memo: WeakMap<FlowNode, Record<string, ScopeType>>;
+  readonly memo: FlowMemo;
   /**
    * The end-of-body flow node per scopeKey, populated by `buildFlowGraphs`.
    * `exit` means every path through that scope diverges (returns). Consumed by
@@ -165,14 +184,26 @@ export function applyRefine(
  * Memoized per (flow node, reference key).
  */
 export function typeAt(ref: Reference, at: FlowNode, env: FlowEnvironment): ScopeType {
+  // Auto-invalidation: a mismatch means some attached scope mutated since the
+  // memo was filled (see FlowMemo). Every entry is suspect — start nodes read
+  // scopes live — so drop the whole map (lazy full invalidation, the same
+  // semantics as the manual resets this replaced). INVARIANT: nothing mutates
+  // scopes mid-walk — gen is stamped before computing, so a mid-walk mutation
+  // would go unnoticed for entries computed earlier in the same walk.
+  // Recursive typeAt calls re-check harmlessly under that invariant.
+  const gen = env.scope.currentGeneration();
+  if (env.memo.gen !== gen) {
+    env.memo.map = new WeakMap();
+    env.memo.gen = gen;
+  }
   const key = referenceKey(ref);
-  let perNode = env.memo.get(at);
+  let perNode = env.memo.map.get(at);
   if (perNode === undefined) {
     // Null-prototype dict: keys are source identifiers (variable names), so a
     // ref named "__proto__" / "toString" / "constructor" must not collide with
     // Object.prototype on read. Mirrors scope.ts's own-property discipline.
     perNode = Object.create(null) as Record<string, ScopeType>;
-    env.memo.set(at, perNode);
+    env.memo.map.set(at, perNode);
   }
   const cached = perNode[key];
   if (cached !== undefined) return cached;

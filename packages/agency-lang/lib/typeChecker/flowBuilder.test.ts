@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { Scope } from "./scope.js";
-import { typeAt, type FlowEnvironment, type FlowNode, type PathSegment } from "./flow.js";
-import { buildFlowGraph } from "./flowBuilder.js";
+import { typeAt, freshMemo, type FlowEnvironment, type FlowNode, type PathSegment } from "./flow.js";
+import { buildFlowGraph, buildFlowGraphs } from "./flowBuilder.js";
 import { walkNodes } from "../utils/node.js";
 import type { AgencyNode, VariableType } from "../types.js";
+import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 
 const NUM: VariableType = { type: "primitiveType", value: "number" };
 const STR: VariableType = { type: "primitiveType", value: "string" };
@@ -29,7 +30,7 @@ function freshEnv(
   scope: Scope,
   typeAliases: FlowEnvironment["typeAliases"] = {},
 ): FlowEnvironment {
-  return { scope, flowOf: new WeakMap(), typeAliases, memo: new WeakMap() };
+  return { scope, flowOf: new WeakMap(), typeAliases, memo: freshMemo() };
 }
 
 const ref = (variable: string) => ({ variable, chain: [] as PathSegment[] });
@@ -265,4 +266,17 @@ describe("attachExpressionsToFlow — short-circuit", () => {
     const rightU = find([andExpr.right as AgencyNode], (n) => n.type === "valueAccess");
     expect(typeAt(ref("u"), env.flowOf.get(rightU)!, env)).toEqual(memberA);
   });
+});
+
+it("rejects a detached child scope as a flow root", () => {
+  const detachedScope = new Scope("fn").child();
+  const info = {
+    scope: detachedScope,
+    body: [],
+    name: "f",
+    scopeKey: "fn:f",
+    file: "",
+  } as ScopeInfo;
+  const ctx = { getTypeAliases: () => ({}) } as unknown as TypeCheckerContext;
+  expect(() => buildFlowGraphs([info], ctx)).toThrow(/detached/);
 });

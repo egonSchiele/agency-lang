@@ -10,6 +10,7 @@ import {
   flowHasNarrowFor,
   isPrefixOf,
   segKey,
+  freshMemo,
   type FlowNode,
   type FlowEnvironment,
 } from "./flow.js";
@@ -63,7 +64,7 @@ describe("uniteTypes", () => {
 });
 
 function env(scope: Scope): FlowEnvironment {
-  return { scope, flowOf: new WeakMap(), typeAliases: {}, memo: new WeakMap() };
+  return { scope, flowOf: new WeakMap(), typeAliases: {}, memo: freshMemo() };
 }
 const ref = (variable: string) => ({ variable, chain: [] as PathSegment[] });
 
@@ -320,7 +321,7 @@ describe("typeAt — property paths (M1)", () => {
     const e: FlowEnvironment = {
       scope: s,
       flowOf: new WeakMap(),
-      memo: new WeakMap(),
+      memo: freshMemo(),
       typeAliases: { Box: { body: boxType } },
     };
     expect(typeAt(pathRef("box", "r"), { kind: "start", scope: s }, e)).toEqual(RESULT);
@@ -536,5 +537,113 @@ describe("PathSegment helpers + index resolution (M2)", () => {
     const reassigned: FlowNode = { kind: "assign", prev: narrowed, ref: { variable: "arr", chain: [idx(0)] }, type: RESULT };
     const after = typeAt({ variable: "arr", chain: [idx(0)] }, reassigned, env(s));
     expect(typeof after === "object" && after.type).toBe("resultType");
+  });
+});
+
+describe("memo auto-invalidation (generation counter)", () => {
+  it("returns the fresh type after a scope mutation (stale on main)", () => {
+    const scope = new Scope("fn");
+    scope.declare("x", NUM);
+    const start: FlowNode = { kind: "start", scope };
+    const e = env(scope);
+    expect(typeAt(ref("x"), start, e)).toEqual(NUM); // memoized
+    scope.declare("x", STR); // a later pass retypes x
+    expect(typeAt(ref("x"), start, e)).toEqual(STR);
+  });
+
+  it("a declare bump also covers a paired in-place assign-node patch", () => {
+    // Pins the computeMatchExprTypes phase-2 contract: patch assignFlow.type
+    // AND re-declare the consumer; the declare bump invalidates entries
+    // derived from the old snapshot.
+    const scope = new Scope("fn");
+    scope.declare("x", "any");
+    const start: FlowNode = { kind: "start", scope };
+    const assign: Extract<FlowNode, { kind: "assign" }> = {
+      kind: "assign",
+      prev: start,
+      ref: ref("x"),
+      type: "any",
+    };
+    const e = env(scope);
+    expect(typeAt(ref("x"), assign, e)).toBe("any"); // memoized under old gen
+    assign.type = STR;
+    scope.declare("x", STR);
+    expect(typeAt(ref("x"), assign, e)).toEqual(STR);
+  });
+
+  it("an invalidation is visible through a spread-copied env (shared box)", () => {
+    // The synthesizer queries through { ...ctx.flowEnv, typeAliases } copies
+    // (synthesizer.ts). The box is shared by reference, so a flush triggered
+    // through ANY env must be visible through every copy.
+    const scope = new Scope("fn");
+    scope.declare("x", NUM);
+    const start: FlowNode = { kind: "start", scope };
+    const e = env(scope);
+    expect(typeAt(ref("x"), start, e)).toEqual(NUM); // memoize via original
+    scope.declare("x", STR);
+    const copy = { ...e, typeAliases: {} };
+    expect(typeAt(ref("x"), start, copy)).toEqual(STR); // read via the COPY
+  });
+
+  it("a memo hit survives through a spread copy (no mutation)", () => {
+    const scope = new Scope("fn");
+    scope.declare("x", STR);
+    const start: FlowNode = { kind: "start", scope };
+    const a1: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: STR };
+    const a2: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: NUM };
+    const join: FlowNode = { kind: "join", prev: [a1, a2] };
+    const e = env(scope);
+    const first = typeAt(ref("x"), join, e);
+    const copy = { ...e, typeAliases: {} };
+    expect(typeAt(ref("x"), join, copy)).toBe(first); // identity => shared memo
+  });
+
+  it("declareLocal on a detached child does not flush the memo (identity pin)", () => {
+    // Recomputing this join constructs a FRESH union object (uniteTypes), so
+    // object identity across queries proves a memo hit. Guards the perf
+    // carve-out: lambda-param child scopes must not flush the memo.
+    const scope = new Scope("fn");
+    scope.declare("x", STR);
+    const start: FlowNode = { kind: "start", scope };
+    const a1: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: STR };
+    const a2: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: NUM };
+    const join: FlowNode = { kind: "join", prev: [a1, a2] };
+    const e = env(scope);
+    const first = typeAt(ref("x"), join, e);
+    scope.child().declareLocal("cbParam", STR); // the synthesizer pattern
+    expect(typeAt(ref("x"), join, e)).toBe(first); // same object => memo hit
+  });
+
+  it("a declare into an UNRELATED standalone scope tree does not flush", () => {
+    // Lazy inferReturnTypeFor declares into its own new Scope(...) tree
+    // mid-checkScopes; those bumps must not touch the main tree memo.
+    const scope = new Scope("fn");
+    scope.declare("x", STR);
+    const start: FlowNode = { kind: "start", scope };
+    const a1: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: STR };
+    const a2: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: NUM };
+    const join: FlowNode = { kind: "join", prev: [a1, a2] };
+    const e = env(scope);
+    const first = typeAt(ref("x"), join, e);
+    const standalone = new Scope("inference");
+    standalone.declare("y", NUM);
+    expect(typeAt(ref("x"), join, e)).toBe(first); // memo hit survives
+  });
+
+  it("an unrelated attached declare flushes the whole memo (lazy semantics)", () => {
+    // Deliberate pin of whole-memo (not per-name) invalidation, so a future
+    // change to finer granularity is a conscious decision with a test diff.
+    const scope = new Scope("fn");
+    scope.declare("x", STR);
+    const start: FlowNode = { kind: "start", scope };
+    const a1: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: STR };
+    const a2: FlowNode = { kind: "assign", prev: start, ref: ref("x"), type: NUM };
+    const join: FlowNode = { kind: "join", prev: [a1, a2] };
+    const e = env(scope);
+    const first = typeAt(ref("x"), join, e);
+    scope.declare("unrelated", NUM);
+    const second = typeAt(ref("x"), join, e);
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first); // recomputed => memo was flushed
   });
 });

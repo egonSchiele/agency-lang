@@ -12,6 +12,7 @@ import {
   widenAtLoopBackEdge,
   chainToSegments,
   declaredPathType,
+  freshMemo,
 } from "./flow.js";
 
 /**
@@ -378,7 +379,7 @@ export function buildFlowGraph(
  */
 export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   const flowOf: WeakMap<AgencyNode, FlowNode> = new WeakMap();
-  const memo: WeakMap<FlowNode, Record<string, ScopeType>> = new WeakMap();
+  const memo = freshMemo();
   const matchConsumerAssignFlows: WeakMap<AgencyNode, FlowNode> = new WeakMap();
   const typeAliases = ctx.getTypeAliases();
   // Null-prototype: scopeKeys derive from user-controlled function/node names, so
@@ -386,6 +387,11 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
   // Object.prototype on write or read (mirrors the flow memo dicts in flow.ts).
   const scopeTerminals: Record<string, FlowNode> = Object.create(null);
   for (const info of scopes) {
+    if (info.scope.detached) {
+      throw new Error(
+        `buildFlowGraphs: scope for ${info.scopeKey} is a detached child scope. Flow start nodes must be built over function/top-level scopes only - detached scopes do not bump the generation counter, so a start node over one would silently un-protect the typeAt memo.`,
+      );
+    }
     const env: FlowEnvironment = {
       scope: info.scope,
       flowOf,
@@ -399,6 +405,8 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
       env,
     );
   }
+  // Empty scopes list fallback: an orphan root whose generation never moves.
+  // Harmless — no flow nodes exist to memoize against in that case.
   const rootScope = scopes[0]?.scope ?? new Scope("global");
   ctx.flowEnv = {
     scope: rootScope,

@@ -124,7 +124,7 @@ export function computeMatchExprTypes(
   // pass (yield synthesis walks the flow graph) may now be stale. Drop the
   // memo — checkScopes recomputes on demand.
   if (ctx.flowEnv) {
-    ctx.flowEnv.memo = new WeakMap();
+    ctx.flowEnv.memo.map = new WeakMap();
   }
 }
 

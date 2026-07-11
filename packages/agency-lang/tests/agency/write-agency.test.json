@@ -26,9 +26,9 @@
     },
     {
       "nodeName": "exhausts",
-      "description": "writeAgency returns the last source and diagnostics on retry exhaustion",
+      "description": "writeAgency returns the last source and diagnostics on retry exhaustion, retryable",
       "input": "",
-      "expectedOutput": "[true,true]",
+      "expectedOutput": "[true,true,true]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [

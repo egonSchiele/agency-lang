@@ -257,14 +257,27 @@ export def runFile(
   )
 }
 
-// Ceilings for runCode's human-unit limit params, mirroring
-// LIMIT_CEILINGS in lib/runtime/ipc.ts (keep in sync).
-def checkRunCodeLimit(name: string, value: number, max: number, unit: string): string {
-  if (value <= 0) {
-    return "${name} must be a positive number of ${unit} (got ${value})."
-  }
-  if (value > max) {
-    return "${name} is too large: ${value} ${unit} exceeds the maximum of ${max} ${unit}."
+// Reject out-of-range limit values with a message the model can act on.
+// Ceilings mirror LIMIT_CEILINGS in lib/runtime/ipc.ts (keep in sync).
+def checkRunCodeLimits(
+  wallClock: number,
+  memory: number,
+  ipcPayload: number,
+  stdout: number,
+): string {
+  const checks = [
+    { name: "wallClock", value: wallClock, max: 3600s, unit: "milliseconds" },
+    { name: "memory", value: memory, max: 4096mb, unit: "bytes" },
+    { name: "ipcPayload", value: ipcPayload, max: 1024mb, unit: "bytes" },
+    { name: "stdout", value: stdout, max: 100mb, unit: "bytes" },
+  ]
+  for (check in checks) {
+    if (check.value <= 0) {
+      return "${check.name} must be a positive number of ${check.unit} (got ${check.value})."
+    }
+    if (check.value > check.max) {
+      return "${check.name} is too large: ${check.value} ${check.unit} exceeds the maximum of ${check.max} ${check.unit}."
+    }
   }
   return ""
 }
@@ -277,10 +290,6 @@ Designed for LLM tool use: compile() returns a CompiledProgram the model
 would have to echo back into run() verbatim (it will not — see the
 compile→run "CompiledProgram has no code" failure mode). runCode takes
 the source directly, so nothing large round-trips through the model.
-Unlike `run`/`runFile` (which take canonical milliseconds/bytes and are
-what unit literals like `60s`/`512mb` produce), runCode takes human
-units — seconds and megabytes — because models fill numeric parameters
-from the docs and reliably pick human units.
 
 Declared `safe` (= okay to retry, see the LLM guide) so its pre-execution
 failures — bad limits, code that does not compile — reach a tool-calling
@@ -292,10 +301,10 @@ export safe def runCode(
   source: string,
   node: string = "main",
   args: Record<string, any> = {},
-  wallClockSeconds: number = 60,
-  memoryMb: number = 512,
-  ipcPayloadMb: number = 100,
-  stdoutMb: number = 1,
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
   maxCost: number | null = null,
 ): Result {
   """
@@ -308,39 +317,31 @@ export safe def runCode(
   @param source - Agency source code as a string
   @param node - Which exported node to run (default "main")
   @param args - Arguments to pass to the node
-  @param wallClockSeconds - Max wall-clock SECONDS before the subprocess is killed (default 60, max 3600). Omit for the default.
-  @param memoryMb - Max V8 heap size in MEGABYTES (default 512, max 4096). Omit for the default.
-  @param ipcPayloadMb - Max single IPC message size in MEGABYTES (default 100, max 1024). Omit for the default.
-  @param stdoutMb - Max combined stdout+stderr output in MEGABYTES (default 1, max 100). Omit for the default.
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 3600000 = 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4294967296 = 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1073741824 = 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 104857600 = 100mb). Pass null for the default.
   @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
   """
-  let limitError = checkRunCodeLimit("wallClockSeconds", wallClockSeconds, 3600, "seconds")
-  if (limitError == "") {
-    limitError = checkRunCodeLimit("memoryMb", memoryMb, 4096, "megabytes")
-  }
-  if (limitError == "") {
-    limitError = checkRunCodeLimit("ipcPayloadMb", ipcPayloadMb, 1024, "megabytes")
-  }
-  if (limitError == "") {
-    limitError = checkRunCodeLimit("stdoutMb", stdoutMb, 100, "megabytes")
-  }
+  const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)
   if (limitError != "") {
     return _retryableFailure(limitError)
   }
   const compileResult = try _compile(source)
   if (compileResult is failure(compileErr)) {
     // Re-wrap as retryable: the model should fix the source and call
-    // again, not lose the tool.
+    // again, not lose the tool. (`safe` alone is not enough — try-born
+    // failures start retryable:false; safe only preserves the bit.)
     return _retryableFailure(compileErr)
   }
   const result = run(
     compiled: compileResult.value,
     node: node,
     args: args,
-    wallClock: wallClockSeconds * 1000,
-    memory: memoryMb * 1048576,
-    ipcPayload: ipcPayloadMb * 1048576,
-    stdout: stdoutMb * 1048576,
+    wallClock: wallClock,
+    memory: memory,
+    ipcPayload: ipcPayload,
+    stdout: stdout,
     maxCost: maxCost,
   )
   // run() succeeds with a subprocess envelope ({ data, tokens, ... }).
@@ -349,6 +350,13 @@ export safe def runCode(
   // the node's value. Callers who want the envelope use run().
   if (result is success(envelope)) {
     return success(envelope.data)
+  }
+  if (result is failure(runErr)) {
+    // Runtime failures (child crash, timeout, cost trip) are retryable
+    // at the tool level too: the model fixes the source or raises a
+    // limit and calls again, and every attempt re-raises std::run, so
+    // retries stay handler-gated.
+    return _retryableFailure(runErr)
   }
   return result
 }
@@ -553,7 +561,7 @@ If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code.
 Return only the complete program in the code field."""
 
-export def writeAgency(
+export safe def writeAgency(
   task: string,
   context: string = "",
   maxAttempts: number = 3,
@@ -569,7 +577,7 @@ export def writeAgency(
   @param maxAttempts - Max generation attempts before giving up (default 3)
   """
   const docsTool = docsSkill("guide")
-  let result: Result<string, WriteFailure> = failure({ source: "", errors: [] })
+  let result: Result<string, WriteFailure> = _retryableFailure({ source: "", errors: [] })
   thread(label: "writeAgency") {
     systemMessage(writeSysPrompt)
     let prompt = "Write an Agency program for this task:\n<task>\n${task}\n</task>"
@@ -584,7 +592,7 @@ export def writeAgency(
       const source = generated.code
       const checked = try _typecheck(source)
       if (checked is failure(parseErr)) {
-        result = failure({ source: source, errors: [] })
+        result = _retryableFailure({ source: source, errors: [] })
         // _typecheck throws for import-resolution failures as well as
         // parse failures. In the import case the re-parse succeeds and
         // renders no findings — fall back to the thrown error so the
@@ -595,13 +603,13 @@ export def writeAgency(
         }
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else if (checked.value.errors.length > 0) {
-        result = failure({ source: source, errors: checked.value.errors })
+        result = _retryableFailure({ source: source, errors: checked.value.errors })
         const findings = renderFeedback(success(reportFeedback(checked.value)))
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else {
         const compiled = try _compile(source)
         if (compiled is failure(compileErr)) {
-          result = failure({ source: source, errors: [] })
+          result = _retryableFailure({ source: source, errors: [] })
           prompt = "That code failed to compile: ${compileErr}\nReturn a corrected complete program."
         } else {
           result = success(source)

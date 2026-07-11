@@ -22,6 +22,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "runtimeFailure",
+      "description": "runCode surfaces child runtime crashes as retryable failures",
+      "input": "",
+      "expectedOutput": "[\"runtime failure\",true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "maxCostTrips",
       "description": "runCode forwards maxCost to run",
       "input": "",

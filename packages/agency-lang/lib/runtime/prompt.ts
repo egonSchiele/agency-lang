@@ -1182,8 +1182,10 @@ export async function runPrompt(args: {
       // branch cache keeps the FULL value (Agency code may match on a
       // Result); the model-facing message gets the unwrapped success
       // value via unwrapToolResultForLlm inside the push helper.
+      // Nullish, NOT ||: legitimate falsy returns (false, 0, "") must
+      // reach the model and the branch cache as-is.
       toolResult =
-        toolResult ||
+        toolResult ??
         `${handler.name} ran successfully but did not return a value`;
       stack.setResultOnBranch(branchKey, toolResult);
       pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack });

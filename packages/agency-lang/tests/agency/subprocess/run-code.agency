@@ -48,15 +48,35 @@ node compileFailure() {
   return "unexpected success"
 }
 
-// Limit params are human units (seconds / megabytes) with ceilings; a
-// too-large value is a retryable failure naming the limit and maximum.
+// Limit params are canonical units (ms / bytes, same as unit literals)
+// with ceilings; a too-large value is a retryable failure naming the
+// limit and maximum.
 node tooLarge() {
-  const result = runCode("node main() { return 1 }", wallClockSeconds: 999999)
+  const result = runCode("node main() { return 1 }", wallClock: 999999999)
   if (isFailure(result)) {
     const message = "${result.error}"
-    return [result.retryable, message.includes("3600")]
+    return [result.retryable, message.includes("3600000")]
   }
   return "unexpected success"
+}
+
+// A run()-level failure (here: the requested node does not exist; same
+// path as child module-init crashes) is retryable too: the model fixes
+// the source or node name and calls again, rather than losing the tool.
+// (A crash INSIDE the child node is different: the child converts it to
+// a failure Result and run() succeeds with it as the node's value.)
+node runtimeFailure() {
+  handle {
+    const result = runCode("node main() { return 1 }", node: "missing")
+    if (isFailure(result)) {
+      return ["runtime failure", result.retryable]
+    }
+    return "unexpected success"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
 }
 
 // maxCost forwards to run(): the mocked child trips at the second call.

@@ -69,6 +69,12 @@ describe("unwrapToolResultForLlm", () => {
     );
   });
 
+  it("preserves legitimate falsy success values (false, 0, empty string)", () => {
+    expect(unwrapToolResultForLlm(success(false), "myTool")).toBe(false);
+    expect(unwrapToolResultForLlm(success(0), "myTool")).toBe(0);
+    expect(unwrapToolResultForLlm(success(""), "myTool")).toBe("");
+  });
+
   it("passes plain values through unchanged", () => {
     expect(unwrapToolResultForLlm("plain", "myTool")).toBe("plain");
     const obj = { a: 1 };

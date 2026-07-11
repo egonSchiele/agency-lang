@@ -14,6 +14,7 @@ import {
   _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
+import { guard } from "std::thread"
 
 /** @module
   Tools for compiling, type-checking, running, formatting, and inspecting
@@ -47,7 +48,7 @@ effect std::run {
   moduleId: string;
   node: string;
   args: Record<string, any>;
-  limits: { wallClock: number; memory: number; ipcPayload: number; stdout: number };
+  limits: { wallClock: number; memory: number; ipcPayload: number; stdout: number; maxCost: number | null };
   cwd: string;
   logFile: string;
   depth: number
@@ -91,7 +92,8 @@ export safe def compile(source: string): Result {
 Any interrupts and guards defined in the parent process will
 apply to the child process. Any callbacks in scope will also apply.
 Exceeding a resource limit kills the subprocess and returns a
-limit_exceeded failure.
+limit_exceeded failure. Exceeding maxCost kills the subprocess and
+returns a limit_exceeded failure, like the other limits.
 
 For `maxDepth`, if an ancestor process has a lower maxDepth,
 the lower value is used. For example, if a parent process has maxDepth=3
@@ -108,6 +110,7 @@ export def run(
   logFile: string = "",
   cwd: string = "",
   maxDepth: number = 5,
+  maxCost: number | null = null,
 ): Result {
   """
   Execute a compiled Agency program in a subprocess and return the node's result.
@@ -122,6 +125,7 @@ export def run(
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
   let configOverrides = null
   if (logFile != "") {
@@ -140,25 +144,65 @@ export def run(
       wallClock: wallClock,
       memory: memory,
       ipcPayload: ipcPayload,
-      stdout: stdout
+      stdout: stdout,
+      maxCost: maxCost
     },
     cwd: cwd,
     logFile: logFile,
     depth: _subprocessDepth() + 1
   })
 
-  return try _run(
-    compiled,
-    node,
-    args,
-    wallClock,
-    memory,
-    ipcPayload,
-    stdout,
-    configOverrides,
-    cwd,
-    maxDepth,
-  )
+  // NOTE: the two _run call sites below must keep IDENTICAL argument
+  // lists (Agency has no zero-arg lambda to factor the call through).
+  if (maxCost == null) {
+    return try _run(
+      compiled,
+      node,
+      args,
+      wallClock,
+      memory,
+      ipcPayload,
+      stdout,
+      configOverrides,
+      cwd,
+      maxDepth,
+    )
+  }
+  const guarded = guard(cost: maxCost) as {
+    return try _run(
+      compiled,
+      node,
+      args,
+      wallClock,
+      memory,
+      ipcPayload,
+      stdout,
+      configOverrides,
+      cwd,
+      maxDepth,
+    )
+  }
+  // guard() runs the block through a try-style call, which passes a
+  // returned Result through unchanged — so `guarded` IS the child's
+  // Result on success (no double wrapping), and a guardFailure only
+  // when the cost guard itself tripped.
+  if (guarded is failure(err)) {
+    if (err.type == "guardFailure") {
+      // Present cost caps in the same limit_exceeded shape as the other
+      // run() limits (shape mirrors makeLimitFailure in lib/runtime/ipc.ts
+      // — keep the two in sync).
+      return failure(
+        {
+        reason: "limit_exceeded",
+        limit: "cost",
+        threshold: maxCost,
+        value: err.actualCost,
+        message: "Subprocess exceeded cost limit of ${maxCost} (used ${err.actualCost})"
+      },
+      )
+    }
+  }
+  return guarded
 }
 
 /** Just like `run`, any interrupts and guards defined in the parent process
@@ -174,6 +218,7 @@ export def runFile(
   memory: number = 512mb,
   ipcPayload: number = 100mb,
   stdout: number = 1mb,
+  maxCost: number | null = null,
 ): Result {
   """
   Compile and execute an Agency file in a subprocess and return the node's result.
@@ -187,6 +232,7 @@ export def runFile(
   @param memory - Max V8 heap size (default 512mb, max 4gb)
   @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
   @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
   const compileResult = try _compileFile(dir, filename)
   if (isFailure(compileResult)) {
@@ -200,6 +246,7 @@ export def runFile(
     memory: memory,
     ipcPayload: ipcPayload,
     stdout: stdout,
+    maxCost: maxCost,
   )
 }
 

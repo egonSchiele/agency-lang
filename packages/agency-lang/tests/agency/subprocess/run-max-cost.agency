@@ -1,0 +1,127 @@
+import { compile, run, runFile } from "std::agency"
+import { guard } from "std::thread"
+
+// The child makes 3 mocked llm() calls at 0.000002 each. maxCost caps at
+// 0.000003: the second call trips the under-the-hood guard, and run()
+// translates the trip into the uniform limit_exceeded failure shape.
+def childSource(): string {
+  return """
+node main() {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  const c = llm("Reply with: three")
+  return c
+}
+"""
+}
+
+// The handler REJECTS unless the interrupt payload carries the cap in
+// limits.maxCost — this is what pins the payload change: if maxCost is
+// missing from the payload, the run is rejected and the output differs.
+node trips() {
+  const compileResult = compile(childSource())
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main", maxCost: 0.000003)
+    if (isFailure(result)) {
+      return "tripped:${result.error.reason}:${result.error.limit}"
+    }
+    return "did not trip"
+  } with (e) {
+    if (e.effect == "std::run" && e.data.limits.maxCost == 0.000003) {
+      return approve()
+    }
+    return reject()
+  }
+}
+
+node generous() {
+  const compileResult = compile(childSource())
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main", maxCost: 1.0)
+    if (isFailure(result)) {
+      return "tripped"
+    }
+    return result.value.data
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+
+// Guard nesting: the inner maxCost trip must NOT trip a generous outer
+// guard. guard() passes a returned Result through unchanged, so `outer`
+// is run()'s own Result: a guardFailure here would mean the OUTER guard
+// tripped; the inner trip arrives as the translated limit_exceeded.
+node nested() {
+  const compileResult = compile(childSource())
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const outer = guard(cost: 10.0) as {
+      return run(compiled: compileResult.value, node: "main", maxCost: 0.000003)
+    }
+    if (isFailure(outer)) {
+      if (outer.error.type == "guardFailure") {
+        return "outer tripped"
+      }
+      return "inner only:${outer.error.limit}"
+    }
+    return "nothing tripped"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+
+// A failure that is NOT a cost trip must pass through untranslated:
+// the node name does not exist, and maxCost is generous.
+node passthrough() {
+  const compileResult = compile(childSource())
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "missing", maxCost: 1.0)
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded") {
+        return "wrongly translated"
+      }
+      return "passthrough-ok"
+    }
+    return "unexpected success"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+
+// runFile must actually forward maxCost in its delegating run() call —
+// this is one forgotten argument away from a silent no-op.
+node runFileTrips() {
+  handle {
+    const result = runFile(
+      dir: "tests/agency/subprocess/runfile-maxcost-target",
+      filename: "sub.agency",
+      node: "main",
+      maxCost: 0.000003,
+    )
+    if (isFailure(result)) {
+      return "tripped:${result.error.reason}:${result.error.limit}"
+    }
+    return "did not trip"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

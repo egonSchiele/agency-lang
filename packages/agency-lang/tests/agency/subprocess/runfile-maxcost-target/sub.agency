@@ -1,0 +1,6 @@
+node main() {
+  const a = llm("Reply with: one")
+  const b = llm("Reply with: two")
+  const c = llm("Reply with: three")
+  return c
+}

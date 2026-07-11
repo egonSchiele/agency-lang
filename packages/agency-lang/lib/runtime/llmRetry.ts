@@ -7,7 +7,8 @@ export type LLMRetryReason =
   | "streamInterrupted"
   | "rateLimit"
   | "serverError"
-  | "overloaded";
+  | "overloaded"
+  | "invalidStructuredOutput";
 
 export type Classification =
   | { kind: "retryable"; reason: LLMRetryReason; detail: string; retryAfterMs?: number }

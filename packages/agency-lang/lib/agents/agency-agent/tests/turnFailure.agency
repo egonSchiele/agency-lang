@@ -33,3 +33,7 @@ node unknownFailureEchoesRawError(): boolean {
   const msg = formatTurnFailure("some other problem")
   return msg.includes("some other problem")
 }
+
+node invalidOutputLabel(): boolean {
+  return retryReasonLabel("invalidStructuredOutput") == "Output failed validation"
+}

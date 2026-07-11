@@ -419,6 +419,16 @@ export class TypeChecker {
     // import closure.
     validateStaticInit(this.program, this.errors);
 
+    // Stamp the source file onto every diagnostic, once. One checker
+    // instance checks exactly one file (ctx.currentFile), so a single
+    // assignment here beats threading the file through every push site.
+    const file = this.currentFile;
+    if (file !== undefined) {
+      for (const err of this.errors) {
+        err.file = file;
+      }
+    }
+
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),
       scopes,

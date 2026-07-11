@@ -478,6 +478,12 @@ export const DIAGNOSTICS = {
     message:
       "Cannot reassign static `{name}` at module top level — statics are immutable after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.",
   },
+  staticMutatedViaMethod: {
+    code: "AG7005",
+    severity: "error",
+    message:
+      "Cannot mutate static `{name}` via `.{method}(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;
@@ -558,6 +564,6 @@ export function diagnostic<N extends DiagnosticName>(
     message: renderMessage(entry.message, params),
     severity: overrides?.severity ?? entry.severity,
     params,
-    loc: loc ?? undefined, // transitional; the required-fields flip makes this `loc` verbatim
+    loc,
   };
 }

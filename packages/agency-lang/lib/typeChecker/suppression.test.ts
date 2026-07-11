@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applySuppressions, parseSuppressions } from "./suppression.js";
+import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckError } from "./types.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
@@ -62,8 +63,8 @@ describe("parseSuppressions", () => {
 
 describe("applySuppressions", () => {
   const err = (line: number, message = "boom"): TypeCheckError => ({
+    ...diagnostic("reassignToConst", { name: "x" }, { line, col: 0, start: 0, end: 0 }),
     message,
-    loc: { line, col: 0, start: 0, end: 0 },
   });
 
   it("returns the input unchanged when no suppressions apply", () => {
@@ -85,9 +86,13 @@ describe("applySuppressions", () => {
   });
 
   it("never drops errors with no loc", () => {
-    const errs: TypeCheckError[] = [{ message: "global" }, err(3)];
+    const fileLevel: TypeCheckError = {
+      ...diagnostic("reassignToConst", { name: "x" }, null),
+      message: "global",
+    };
+    const errs: TypeCheckError[] = [fileLevel, err(3)];
     const r = applySuppressions(errs, { nocheck: false, ignoreLines: new Set([3]) });
-    expect(r).toEqual([{ message: "global" }]);
+    expect(r).toEqual([fileLevel]);
   });
 });
 

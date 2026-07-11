@@ -19,22 +19,24 @@ import type { InterruptCallGraph } from "./interruptAnalysis.js";
 // this pair of type-only imports has no runtime cycle.
 import type { DiagnosticName } from "./diagnostics.js";
 
-// TRANSITIONAL SHAPE during the diagnostics migration: the registry fields
-// (code/name/params/file) are optional while call sites move to the
-// diagnostic() factory file-by-file; the final flip makes them required,
-// makes severity required, changes loc to `SourceLocation | null`, and
-// DELETES variableName/expectedType/actualType (their values live in params).
+// Every checker diagnostic is built by the diagnostic() factory
+// (lib/typeChecker/diagnostics.ts) from the DIAGNOSTICS registry — the
+// single source of codes, default severities, and message templates.
 export type TypeCheckError = {
+  /** Stable AG#### code from the registry (suppression, docs, tests). */
+  code: string;
+  /** The registry key — the diagnostic's programmatic identity. */
+  name: DiagnosticName;
+  /** Rendered message (template + params). */
   message: string;
-  severity?: "error" | "warning"; // defaults to "error" when omitted
-  code?: string;
-  name?: DiagnosticName;
-  params?: Record<string, string | number>;
+  severity: "error" | "warning";
+  /** The structured payload: template placeholders plus any extra
+   *  machine-readable keys the site attached. */
+  params: Record<string, string | number>;
+  /** null = deliberate file-level diagnostic (no AST node reachable). */
+  loc: SourceLocation | null;
+  /** Source file, stamped once in TypeChecker.check(). */
   file?: string;
-  variableName?: string;
-  expectedType?: string;
-  actualType?: string;
-  loc?: SourceLocation;
 };
 
 export type TypeCheckResult = {

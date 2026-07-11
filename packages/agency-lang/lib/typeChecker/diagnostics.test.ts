@@ -131,8 +131,6 @@ describe("diagnostic factory", () => {
   });
 
   it("loc null is carried through (file-level diagnostic)", () => {
-    // Task 4 flips this to .toBe(null) when TypeCheckError.loc becomes
-    // `SourceLocation | null`.
-    expect(diagnostic("reassignToConst", { name: "c" }, null).loc).toBeUndefined();
+    expect(diagnostic("reassignToConst", { name: "c" }, null).loc).toBe(null);
   });
 });

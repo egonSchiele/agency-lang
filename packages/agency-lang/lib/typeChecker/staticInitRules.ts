@@ -172,14 +172,11 @@ export function checkStaticMutation(
       if (elem.kind !== "methodCall") continue;
       const methodName = elem.functionCall.functionName;
       if (!MUTATING_METHODS[methodName]) continue;
-      return {
-        message:
-          `Cannot mutate static \`${name}\` via \`.${methodName}(...)\` at ` +
-          `module top level — statics are deep-frozen after initialization. ` +
-          `Use a global (\`const\`/\`let\` without \`static\`) if you need ` +
-          `a mutable value.`,
-        loc: node.loc,
-      };
+      return diagnostic(
+        "staticMutatedViaMethod",
+        { name, method: methodName },
+        node.loc ?? null,
+      );
     }
   }
   return null;

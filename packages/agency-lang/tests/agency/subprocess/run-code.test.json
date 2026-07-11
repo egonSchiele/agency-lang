@@ -9,9 +9,16 @@
     },
     {
       "nodeName": "compileFailure",
-      "description": "runCode surfaces compile failures without spawning a subprocess",
+      "description": "runCode surfaces compile failures as retryable, without spawning a subprocess",
       "input": "",
-      "expectedOutput": "\"compile failed as expected\"",
+      "expectedOutput": "[\"compile failed as expected\",true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "tooLarge",
+      "description": "runCode rejects over-ceiling limits with a retryable failure naming the max",
+      "input": "",
+      "expectedOutput": "[true,true]",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

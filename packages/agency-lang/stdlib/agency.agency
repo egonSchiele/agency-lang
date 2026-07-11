@@ -4,6 +4,7 @@ import {
   _typecheck,
   _typecheckFile,
   _getEffects,
+  _retryableFailure,
   _parseAST,
   _writeAST,
   _format,
@@ -119,10 +120,10 @@ export def run(
   @param compiled - A compiled Agency program
   @param node - Which exported node to run
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
   @param logFile - Optional statelog JSONL file path for this subprocess run
   @param cwd - Optional working directory for this subprocess run
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
@@ -234,10 +235,10 @@ export def runFile(
   @param filename - The agency file to compile and run
   @param node - Which node to run
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
+  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
+  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
+  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
   @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
   const compileResult = try _compileFile(dir, filename)
@@ -256,6 +257,18 @@ export def runFile(
   )
 }
 
+// Ceilings for runCode's human-unit limit params, mirroring
+// LIMIT_CEILINGS in lib/runtime/ipc.ts (keep in sync).
+def checkRunCodeLimit(name: string, value: number, max: number, unit: string): string {
+  if (value <= 0) {
+    return "${name} must be a positive number of ${unit} (got ${value})."
+  }
+  if (value > max) {
+    return "${name} is too large: ${value} ${unit} exceeds the maximum of ${max} ${unit}."
+  }
+  return ""
+}
+
 /** Just like `run`, any interrupts and guards defined in the parent process
 will apply to the child process. Any callbacks in scope will also apply.
 Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
@@ -264,46 +277,80 @@ Designed for LLM tool use: compile() returns a CompiledProgram the model
 would have to echo back into run() verbatim (it will not — see the
 compile→run "CompiledProgram has no code" failure mode). runCode takes
 the source directly, so nothing large round-trips through the model.
+Unlike `run`/`runFile` (which take canonical milliseconds/bytes and are
+what unit literals like `60s`/`512mb` produce), runCode takes human
+units — seconds and megabytes — because models fill numeric parameters
+from the docs and reliably pick human units.
+
+Declared `safe` (= okay to retry, see the LLM guide) so its pre-execution
+failures — bad limits, code that does not compile — reach a tool-calling
+model as RETRYABLE and it can correct itself instead of losing the tool.
+Re-running the child is handler-gated like any run(): each attempt
+re-raises std::run and the child's own effects re-prompt.
 */
-export def runCode(
+export safe def runCode(
   source: string,
   node: string = "main",
   args: Record<string, any> = {},
-  wallClock: number = 60s,
-  memory: number = 512mb,
-  ipcPayload: number = 100mb,
-  stdout: number = 1mb,
+  wallClockSeconds: number = 60,
+  memoryMb: number = 512,
+  ipcPayloadMb: number = 100,
+  stdoutMb: number = 1,
   maxCost: number | null = null,
 ): Result {
   """
   Compile Agency source code and execute one of its nodes in a subprocess,
-  returning the node's result. Prefer this over separate compile() and
-  run() calls. Only standard-library (`std::`) imports are allowed in the
-  source. Compile errors are returned as a failure without running anything.
+  returning the value the node returned. Prefer this over separate
+  compile() and run() calls. Only standard-library (`std::`) imports are
+  allowed in the source. Compile errors are returned as a failure without
+  running anything; fix the source and call again.
 
   @param source - Agency source code as a string
   @param node - Which exported node to run (default "main")
   @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
-  @param memory - Max V8 heap size (default 512mb, max 4gb)
-  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
-  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
-  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
+  @param wallClockSeconds - Max wall-clock SECONDS before the subprocess is killed (default 60, max 3600). Omit for the default.
+  @param memoryMb - Max V8 heap size in MEGABYTES (default 512, max 4096). Omit for the default.
+  @param ipcPayloadMb - Max single IPC message size in MEGABYTES (default 100, max 1024). Omit for the default.
+  @param stdoutMb - Max combined stdout+stderr output in MEGABYTES (default 1, max 100). Omit for the default.
+  @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
   """
-  const compileResult = try _compile(source)
-  if (isFailure(compileResult)) {
-    return compileResult
+  let limitError = checkRunCodeLimit("wallClockSeconds", wallClockSeconds, 3600, "seconds")
+  if (limitError == "") {
+    limitError = checkRunCodeLimit("memoryMb", memoryMb, 4096, "megabytes")
   }
-  return run(
+  if (limitError == "") {
+    limitError = checkRunCodeLimit("ipcPayloadMb", ipcPayloadMb, 1024, "megabytes")
+  }
+  if (limitError == "") {
+    limitError = checkRunCodeLimit("stdoutMb", stdoutMb, 100, "megabytes")
+  }
+  if (limitError != "") {
+    return _retryableFailure(limitError)
+  }
+  const compileResult = try _compile(source)
+  if (compileResult is failure(compileErr)) {
+    // Re-wrap as retryable: the model should fix the source and call
+    // again, not lose the tool.
+    return _retryableFailure(compileErr)
+  }
+  const result = run(
     compiled: compileResult.value,
     node: node,
     args: args,
-    wallClock: wallClock,
-    memory: memory,
-    ipcPayload: ipcPayload,
-    stdout: stdout,
+    wallClock: wallClockSeconds * 1000,
+    memory: memoryMb * 1048576,
+    ipcPayload: ipcPayloadMb * 1048576,
+    stdout: stdoutMb * 1048576,
     maxCost: maxCost,
   )
+  // run() succeeds with a subprocess envelope ({ data, tokens, ... }).
+  // runCode is built for LLM tool use, where the envelope reads as noise
+  // (token stats first, the actual result buried in .data) — return just
+  // the node's value. Callers who want the envelope use run().
+  if (result is success(envelope)) {
+    return success(envelope.data)
+  }
+  return result
 }
 
 /** Unlike some of the other functions in this module,

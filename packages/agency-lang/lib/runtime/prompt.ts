@@ -194,6 +194,14 @@ function unwrapToolResultForLlm(result: any, toolName: string): any {
   );
 }
 
+/** Render a failure Result's error for the model. String errors pass
+ *  through; structured errors (e.g. writeAgency's `{source, errors}`)
+ *  JSON-stringify — `String(error)` would send the useless
+ *  "[object Object]". */
+function toolErrorMessage(error: any): string {
+  return typeof error === "string" ? error : stringifyToolResult(error);
+}
+
 /** Truncate a tool result for the LLM if its serialized form exceeds
  *  `cap` characters. Returns the ORIGINAL value untouched when within
  *  the cap (so smoltalk serializes it exactly as before) or when the cap
@@ -442,6 +450,7 @@ export const _internal = {
   capToolResultForLlm,
   assertUniqueToolNames,
   unwrapToolResultForLlm,
+  toolErrorMessage,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -1098,10 +1107,7 @@ export async function runPrompt(args: {
       }
 
       if (isFailure(toolResult)) {
-        const errorMessage =
-          typeof toolResult.error === "string"
-            ? toolResult.error
-            : String(toolResult.error);
+        const errorMessage = toolErrorMessage(toolResult.error);
         // Cap only what the LLM sees; statelog keeps the full message.
         const cappedError = String(
           capToolResultForLlm(errorMessage, toolResultCap),

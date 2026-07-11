@@ -26,7 +26,8 @@ node main() {
   handle {
     const result = runCode(source)
     if (isSuccess(result)) {
-      return result.value.data
+      // runCode unwraps the run() envelope: value IS the node's result.
+      return result.value
     }
     return "run failed"
   } with (e) {
@@ -36,12 +37,24 @@ node main() {
   }
 }
 
-// A compile failure comes back as the compile Result, no subprocess and
-// no std::run interrupt (nothing to approve — the handler would reject).
+// A compile failure comes back as a RETRYABLE failure (the tool loop
+// keeps the tool so the model can fix the source and call again), with
+// no subprocess spawned and no std::run interrupt raised.
 node compileFailure() {
   const result = runCode("node {{{")
   if (isFailure(result)) {
-    return "compile failed as expected"
+    return ["compile failed as expected", result.retryable]
+  }
+  return "unexpected success"
+}
+
+// Limit params are human units (seconds / megabytes) with ceilings; a
+// too-large value is a retryable failure naming the limit and maximum.
+node tooLarge() {
+  const result = runCode("node main() { return 1 }", wallClockSeconds: 999999)
+  if (isFailure(result)) {
+    const message = "${result.error}"
+    return [result.retryable, message.includes("3600")]
   }
   return "unexpected success"
 }

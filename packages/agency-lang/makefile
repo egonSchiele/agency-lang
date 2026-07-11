@@ -33,6 +33,16 @@ define stage-agent-docs
 	cp -r docs/site/cli dist/lib/agents/docs/cli
 endef
 
+# Stage the same docs into the stdlib so std::skills::docsSkill can serve
+# them (resolved via getStdlibDir, which works in dev and npm installs).
+# Same rm-before-cp idempotency rule as above.
+define stage-stdlib-docs
+	mkdir -p stdlib/docs
+	rm -rf stdlib/docs/guide stdlib/docs/cli
+	cp -r docs/site/guide stdlib/docs/guide
+	cp -r docs/site/cli stdlib/docs/cli
+endef
+
 all:
 	pnpm run templates && $(MAKE) build && $(MAKE) compile-agency && $(MAKE) doc
 
@@ -85,15 +95,18 @@ compile-agency:
 	$(stage-agent-sources)
 	node ./dist/scripts/agency.js compile stdlib/ $(AGENT_PATHS)
 	$(stage-agent-docs)
+	$(stage-stdlib-docs)
 
 # Selective-use aliases (same recipes, one root set each).
 stdlib:
 	node ./dist/scripts/agency.js compile stdlib/
+	$(stage-stdlib-docs)
 
 agents:
 	$(stage-agent-sources)
 	node ./dist/scripts/agency.js compile $(AGENT_PATHS)
 	$(stage-agent-docs)
+	$(stage-stdlib-docs)
 
 test:
 	pnpm run test

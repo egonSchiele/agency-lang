@@ -85,16 +85,9 @@ Notes:
 
 - The built-in names are `recommended`, `minimal`, `with-writes`, and `approve-all`.
 - `--approve` and `--reject` take comma-separated [effect](/guide/effects) names. Reject takes precedence, so if you have an effect in both approve and reject, it gets rejected.
-- The [rules of handlers](/guide/handlers.md#the-rules-of-handlers) still apply. Think of the policy's explicit rules as just another handler: a `--reject` beats a handler's approve, and a handler's reject beats an `--approve`.
-- Effects the policy doesn't mention are left entirely to your program's handlers. The policy only steps in again for interrupts that *surface* — ones no handler settled, or ones a handler explicitly `propagate`d.
+- The [rules of handlers](/guide/handlers.md#the-rules-of-handlers) still apply. Think of this as just another handler.
 
 ### The `--interactive` flag
 
-An interrupt that nothing settles — no handler in your program approves or rejects it, and no explicit policy rule covers it — *surfaces to the user*, the same way it would surface to a TypeScript caller as a returned `Interrupt[]`. What happens then depends on how you ran the program:
-
-- With `--interactive` (or `-i` for short), you become that user: the CLI prompts you to approve or reject each surfaced interrupt, then resumes the run with your answer. Answering `aa` (approve-always) or `rr` (reject-always) remembers the decision for the rest of the run.
-- With a policy but no `--interactive`, surfaced interrupts are rejected and the run continues.
-- With no policy flags at all, a surfaced interrupt crashes the run with a pointer to the [handlers guide](/guide/handlers.md).
-
-Interrupts your program already handles never surface, so `--interactive` never re-asks about them. A handler that `propagate`s does the opposite — it forces the interrupt to surface, so it always reaches the prompt.
+By default, any interrupts that aren't addressed by your policy, and aren't handled by your agent, will cause a crash. Run with the `--interactive` flag if you want to be prompted to approve or reject those interrupts instead.
 

@@ -107,7 +107,15 @@ export function formatInterruptPrompt(intr: Intr): string {
     intr.data != null &&
     !(typeof intr.data === "object" && Object.keys(intr.data).length === 0);
   if (hasData) {
-    lines.push(JSON.stringify(intr.data, null, 2));
+    // Best-effort: interrupt data is program-controlled and may not be
+    // serializable (circular references, BigInt). The prompt must still
+    // render — a throw here would crash the run right as it asks for a
+    // decision.
+    try {
+      lines.push(JSON.stringify(intr.data, null, 2));
+    } catch {
+      lines.push(String(intr.data));
+    }
   }
   lines.push("");
   return lines.join("\n");

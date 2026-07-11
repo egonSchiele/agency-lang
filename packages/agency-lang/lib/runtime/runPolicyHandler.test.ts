@@ -124,6 +124,17 @@ describe("formatInterruptPrompt", () => {
     );
     expect(out).toContain("─".repeat(50));
   });
+
+  it("does not throw on unserializable data (circular, BigInt)", () => {
+    const circular: any = { name: "loop" };
+    circular.self = circular;
+    for (const data of [circular, { n: BigInt(1) }]) {
+      const out = plain(
+        formatInterruptPrompt({ effect: "e", message: "m", data, origin: "t" }),
+      );
+      expect(out).toContain("[object Object]"); // best-effort String() fallback
+    }
+  });
 });
 
 describe("terminalPrompt", () => {
@@ -174,26 +185,26 @@ async function withEnv(
 }
 
 describe("installRunPolicyHandler", () => {
-  it("pushes a handler when AGENCY_RUN_POLICY is set (root process)", () => {
-    withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: undefined }, () => {
+  it("pushes a handler when AGENCY_RUN_POLICY is set (root process)", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: undefined }, () => {
       const pushed: unknown[] = [];
       installRunPolicyHandler({ pushHandler: (h) => pushed.push(h) });
       expect(pushed).toHaveLength(1);
     });
   });
 
-  it("is a no-op when AGENCY_RUN_POLICY is unset", () => {
-    withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, () => {
+  it("is a no-op when AGENCY_RUN_POLICY is unset", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, () => {
       const pushed: unknown[] = [];
       installRunPolicyHandler({ pushHandler: (h) => pushed.push(h) });
       expect(pushed).toHaveLength(0);
     });
   });
 
-  it("is a no-op in an IPC subprocess even when the policy env is set", () => {
+  it("is a no-op in an IPC subprocess even when the policy env is set", async () => {
     // isIpcMode() reads AGENCY_IPC === "1". The policy lives at the root; a
     // subprocess forwards its interrupts up, so it must NOT install its own.
-    withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: "1" }, () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: "1" }, () => {
       const pushed: unknown[] = [];
       installRunPolicyHandler({ pushHandler: (h) => pushed.push(h) });
       expect(pushed).toHaveLength(0);

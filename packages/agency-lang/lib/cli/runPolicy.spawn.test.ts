@@ -46,10 +46,66 @@ const HANDLED_FIXTURE = `node main() {
 }
 `;
 
+// A std::agency::run child whose interrupt nothing handles. The child's
+// bash interrupt relays through the root chain (silent — the policy only
+// covers std::run), the child pauses, and the interrupt bubbles up to the
+// root CLI endpoint. There it is rejected (non-interactive), the child
+// resumes with a failure Result — a rejection is not an abort — and returns
+// a marker naming which decision it observed.
+const SUBPROCESS_FIXTURE = `import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo hi")
+  if (isFailure(r)) {
+    return "child-saw-rejection"
+  }
+  return "child-saw-approval"
+}
+"""
+  const compiled = compile(source)
+  if (isFailure(compiled)) {
+    print("COMPILE_FAILED")
+    return ""
+  }
+  const result = run(compiled: compiled.value, node: "main")
+  if (isSuccess(result)) {
+    print("CHILD_RESULT: " + result.value.data)
+  } else {
+    print("CHILD_RUN_FAILED")
+  }
+}
+`;
+
 function makeDir(fixture: string = FIXTURE): string {
   const dir = mkdtempSync(path.join(tmpdir(), "runpol-spawn-"));
   writeFileSync(path.join(dir, "writer.agency"), fixture);
   return dir;
+}
+
+// The subprocess fixture must live INSIDE the package dir: the nested
+// std::agency::run child materializes its compiled script under the parent's
+// cwd, and from os.tmpdir() that script cannot resolve the `agency-lang`
+// package (the CLI's resolver shim only covers the direct child).
+function makeLocalDir(fixture: string): string {
+  const dir = mkdtempSync(path.join(process.cwd(), ".runpol-spawn-"));
+  writeFileSync(path.join(dir, "writer.agency"), fixture);
+  return dir;
+}
+
+// Companion guard to rmTemp for makeLocalDir: only remove a direct
+// `.runpol-spawn-*` child of the package dir.
+function rmLocal(dir: string): void {
+  const root = realpathSync(process.cwd());
+  const resolved = realpathSync(dir);
+  if (
+    path.dirname(resolved) === root &&
+    path.basename(resolved).startsWith(".runpol-spawn-")
+  ) {
+    rmSync(resolved, { recursive: true, force: true });
+  }
 }
 
 async function runCli(dir: string, args: string[]) {
@@ -121,6 +177,21 @@ describe.skipIf(!existsSync(CLI))("agency run --policy flags (end-to-end)", () =
       expect(stdout).not.toMatch(/WRITE_OK/);
     } finally {
       rmTemp(dir);
+    }
+  });
+
+  it("a subprocess interrupt nothing handles surfaces to the endpoint too", async () => {
+    // std::agency::run child hits a bash interrupt with no handler anywhere;
+    // the policy approves only std::run. The child interrupt must bubble to
+    // the root endpoint (rejected here, prompted under --interactive), resume
+    // the child with the rejection, and let the whole tree finish cleanly.
+    const dir = makeLocalDir(SUBPROCESS_FIXTURE);
+    try {
+      const { stdout, code } = await runCli(dir, ["--approve", "std::run"]);
+      expect(code).toBe(0);
+      expect(stdout).toMatch(/CHILD_RESULT: child-saw-rejection/);
+    } finally {
+      rmLocal(dir);
     }
   });
 

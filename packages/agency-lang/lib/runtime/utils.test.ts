@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { deepFreeze, updateTokenStats } from "./utils.js";
+import { deepFreeze, extractStructuredResponse, updateTokenStats } from "./utils.js";
+import { isSuccess, isFailure } from "./result.js";
+import { z } from "zod";
 import { GlobalStore } from "./state/globalStore.js";
 
 const usage = (i: number, o: number) => ({
@@ -154,5 +156,32 @@ describe("updateTokenStats per-model breakdown", () => {
       outputTokens: 1,
       totalCost: 0.0002,
     });
+  });
+});
+
+describe("extractStructuredResponse — wrapper-key unwrapping (step 5)", () => {
+  const envelope = z.object({ response: z.number() });
+
+  it("unwraps a properties-wrapped envelope instead of returning success(undefined)", () => {
+    // Regression (PR #500 review): the old heuristic returned
+    // inner.data["properties"], which is undefined for this common shape.
+    const r = extractStructuredResponse({ properties: { response: 42 } }, envelope);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) {
+      expect(r.value).toBe(42);
+    }
+  });
+
+  it("unwraps a double-wrapped response envelope", () => {
+    const r = extractStructuredResponse({ response: { response: 42 } }, envelope);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) {
+      expect(r.value).toBe(42);
+    }
+  });
+
+  it("still fails when the wrapped value does not match the schema", () => {
+    const r = extractStructuredResponse({ properties: { response: "prose" } }, envelope);
+    expect(isFailure(r)).toBe(true);
   });
 });

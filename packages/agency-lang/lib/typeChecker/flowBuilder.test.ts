@@ -77,6 +77,21 @@ describe("buildFlowGraph — linear", () => {
     expect(end.kind).toBe("exit");
   });
 
+  it("`return interrupt effect(...)` falls through — later statements stay reachable", () => {
+    // The gated-work idiom (stdlib git/wikipedia/memory): `return interrupt`
+    // resumes past itself on approval, so the statements after it are live.
+    // Before this fix the flow builder treated it as `exit`, so refs after it
+    // got no flow node and narrowing silently degraded to bare scope.lookup.
+    const body = parseBody(`return interrupt confirm("sure?")\nlet x = 5\nprint(x)`);
+    const scope = new Scope("t");
+    scope.declare("x", NUM);
+    const env = freshEnv(scope);
+    const end = buildFlowGraph(body, { kind: "start", scope }, env);
+    expect(end.kind).not.toBe("exit");
+    const xRef = find(body, (n) => n.type === "variableName" && n.value === "x");
+    expect(env.flowOf.get(xRef)).toBeDefined();
+  });
+
   it("stops at unreachable code after a return (no throw, even with a later loop)", () => {
     const body = parseBody(`return x\nwhile (c) {\n  y = 1\n}`);
     const scope = new Scope("t");

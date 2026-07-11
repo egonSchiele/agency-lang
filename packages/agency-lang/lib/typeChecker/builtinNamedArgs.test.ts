@@ -135,3 +135,21 @@ describe("builtin named-arg validation (llm options)", () => {
     expect(errors.some((e) => /constructor/.test(e.message))).toBe(true);
   });
 });
+
+describe("llm() validationRetries option", () => {
+  it("accepts validationRetries on llm()", () => {
+    const errors = errorsFrom(
+      `node main() {\n  const r: string = llm("hi", { validationRetries: 2 })\n  print(r)\n}`,
+    );
+    const unknown = errors.filter((e) => e.message.includes("Unknown property"));
+    expect(unknown).toHaveLength(0);
+  });
+
+  it("accepts validationRetries on setLlmOptions", () => {
+    const errors = errorsFrom(
+      `import { setLlmOptions } from "std::llm"\nnode main() {\n  setLlmOptions({ validationRetries: 2 })\n}`,
+    );
+    const unknown = errors.filter((e) => e.message.includes("Unknown property"));
+    expect(unknown).toHaveLength(0);
+  });
+});

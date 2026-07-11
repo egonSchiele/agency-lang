@@ -1,5 +1,7 @@
 import { isAbortError, readCause } from "./errors.js";
 import type { NormalizedLLMError } from "./llmClient.js";
+import { isSuccess, type ResultValue } from "./result.js";
+import { truncate } from "./truncate.js";
 
 export type LLMRetryReason =
   | "timeout"
@@ -7,7 +9,8 @@ export type LLMRetryReason =
   | "streamInterrupted"
   | "rateLimit"
   | "serverError"
-  | "overloaded";
+  | "overloaded"
+  | "invalidStructuredOutput";
 
 export type Classification =
   | { kind: "retryable"; reason: LLMRetryReason; detail: string; retryAfterMs?: number }
@@ -115,18 +118,27 @@ function classifyByMessage(message: string): Classification {
 }
 
 export type RetryPolicy = {
+  /** Transport retries: the provider failed to answer (timeout, 5xx,
+   *  dropped connection). Independent of validationRetries. */
   retries: number;
   timeout: number;
   backoff: { initial: number; factor: number; max: number };
+  /** Validation retries: the provider answered, but the structured output
+   *  failed schema validation. Each retry feeds the validation error back
+   *  to the model. Independent of `retries` — setting one never affects
+   *  the other. 0 disables (the default: validation retries cost tokens). */
+  validationRetries: number;
 };
 
 /** Built-in policy: 2 retries, a 10-minute per-call deadline, exponential
- *  backoff (500ms × 2, capped at 10s). Per-call llm() options and
- *  setLlmOptions / agency.json defaults override these (see resolveRetryPolicy). */
+ *  backoff (500ms × 2, capped at 10s), validation retries off. Per-call
+ *  llm() options and setLlmOptions / agency.json defaults override these
+ *  (see resolveRetryPolicy). */
 export const DEFAULT_RETRY_POLICY: RetryPolicy = {
   retries: 2,
   timeout: 600000,
   backoff: { initial: 500, factor: 2, max: 10000 },
+  validationRetries: 0,
 };
 
 export type RetryDecision =
@@ -177,6 +189,7 @@ export type RetryConfig = {
   retries?: number;
   timeout?: number;
   backoff?: { initial?: number; factor?: number; max?: number };
+  validationRetries?: number;
 };
 
 function firstDefined<T>(...values: Array<T | undefined>): T {
@@ -200,6 +213,14 @@ export function resolveRetryPolicy(opts: RetryConfig, branchDefaults: RetryConfi
   return {
     retries: firstDefined(opts.retries, branchDefaults.retries, DEFAULT_RETRY_POLICY.retries),
     timeout: firstDefined(opts.timeout, branchDefaults.timeout, DEFAULT_RETRY_POLICY.timeout),
+    validationRetries: Math.max(
+      0,
+      firstDefined(
+        opts.validationRetries,
+        branchDefaults.validationRetries,
+        DEFAULT_RETRY_POLICY.validationRetries,
+      ),
+    ),
     backoff: {
       initial: firstDefined(
         opts.backoff?.initial,
@@ -239,4 +260,59 @@ export function enrichSchemaLimitationError(err: unknown): Error | null {
     `schema(YourType).parseJSON(...) on it, or switch this call to a provider that ` +
     `supports recursive schemas (OpenAI, Gemini). Provider error: ${err.message}`;
   return err;
+}
+
+export type ValidationDecision =
+  | { kind: "accept"; value: unknown }
+  | { kind: "surfaceFailure"; message: string }
+  | { kind: "retry"; feedback: string; reason: LLMRetryReason; detail: string };
+
+/** The user message injected before a validation retry. The response format
+ *  is still enforced by the request's responseFormat, so the message only
+ *  says WHAT was wrong, not the whole schema.
+ *  COUPLING: the agency-js retry tests key their mock on the literal
+ *  "did not match the required output format". Rewording this string
+ *  breaks those mocks loudly (they stop returning valid JSON). */
+export function buildValidationRetryMessage(error: string): string {
+  return (
+    `Your previous response did not match the required output format. ` +
+    `Validation error: ${truncate(error, 2000)}\n` +
+    `Respond again. Return only the structured output, with no extra text.`
+  );
+}
+
+/**
+ * Pure decision for one drained response under a structured-output schema:
+ * accept it, retry with feedback, or surface a failure. The validation
+ * twin of `decideRetry` — no I/O, no hooks — so the policy is testable in
+ * isolation and runPrompt's loop stays a thin driver. Takes the extraction
+ * ResultValue rather than running the extraction itself, so this module
+ * does not import runtime/utils (import cycle) and the function stays
+ * pure over data.
+ *
+ * The 2000/500 truncation caps differ on purpose: the feedback goes back
+ * to the model (roomy); the hook detail goes to UI/telemetry (tight).
+ */
+export function decideValidationRetry(
+  extracted: ResultValue,
+  rawContent: unknown,
+  attempt: number,
+  policy: RetryPolicy,
+): ValidationDecision {
+  if (isSuccess(extracted)) {
+    return { kind: "accept", value: extracted.value };
+  }
+  const error = String(extracted.error);
+  if (attempt >= policy.validationRetries) {
+    const message =
+      `LLM structured output failed validation: ${error}. ` +
+      `Raw output (first 200 chars): ${JSON.stringify(truncate(rawContent))}`;
+    return { kind: "surfaceFailure", message };
+  }
+  return {
+    kind: "retry",
+    feedback: buildValidationRetryMessage(error),
+    reason: "invalidStructuredOutput",
+    detail: truncate(error, 500),
+  };
 }

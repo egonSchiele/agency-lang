@@ -194,8 +194,16 @@ export def remember(content: string) {
 
     thread {
       const prompt = _buildExtractionPrompt(content)
-      const result: ExtractionResult = llm(prompt)
-      _applyExtractionResult(result)
+      // Bang validation: a malformed extraction is a failure Result, not
+      // a mistyped value. Before this, a provider returning prose or an
+      // empty string crashed the tool and memory silently stopped
+      // persisting (issue #494).
+      const result: ExtractionResult! = llm(prompt)
+      if (result is success(extraction)) {
+        _applyExtractionResult(extraction)
+      } else {
+        return result
+      }
     }
   }
 }
@@ -233,8 +241,14 @@ export def forget(query: string) {
 
     thread {
       const prompt = _buildForgetPrompt(query)
-      const result: ForgetResult = llm(prompt)
-      _applyForgetResult(result)
+      // Bang validation, same contract as remember: malformed output is
+      // a failure Result the caller can see, never a crash.
+      const result: ForgetResult! = llm(prompt)
+      if (result is success(forgetPlan)) {
+        _applyForgetResult(forgetPlan)
+      } else {
+        return result
+      }
     }
   }
 }

@@ -17,6 +17,7 @@ import {
 import type { BlockArgument } from "@/types/blockArgument.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { color } from "@/utils/termcolors.js";
+import { bodySlots } from "@/utils/bodySlots.js";
 
 /** `BlockArgument` is a child of `FunctionCall`, not a standalone statement,
  * so it isn't in the `AgencyNode` union. But blocks DO appear on the ancestors
@@ -394,58 +395,30 @@ export function* walkNodes(
     if (walkNodeDebug)
       console.log(color.magenta("walkNodes:"), { node, ancestors });
     yield { node, ancestors, scopes };
-    if (node.type === "function") {
-      yield* walkNodes(
-        node.body,
-        [...ancestors, node],
-        [...scopes, functionScope(node.functionName)],
-      );
-    } else if (node.type === "graphNode") {
-      yield* walkNodes(
-        node.body,
-        [...ancestors, node],
-        [...scopes, nodeScope(node.nodeName)],
-      );
-    } else if (node.type === "newExpression") {
+    // Expression descent: per-type, hand-enumerated below. Statement-BODY
+    // descent is NOT enumerated here — it runs generically at the end of
+    // this iteration, driven by `bodySlots` (bodySlots.ts), the shared
+    // body-field table `mapBodies` rewrites by.
+    if (node.type === "newExpression") {
       yield* walkNodes(node.arguments as AgencyNode[], [...ancestors, node], scopes);
     } else if (node.type === "ifElse") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
-      yield* walkNodes(node.thenBody, [...ancestors, node], scopes);
-      if (node.elseBody) {
-        yield* walkNodes(node.elseBody, [...ancestors, node], scopes);
-      }
     } else if (node.type === "forLoop") {
       yield* walkNodes([node.iterable as AgencyNode], [...ancestors, node], scopes);
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "whileLoop") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
-    } else if (
-      node.type === "messageThread" ||
-      node.type === "parallelBlock" ||
-      node.type === "seqBlock"
-    ) {
+    } else if (node.type === "messageThread") {
       // messageThread carries optional named-arg expressions
       // (`label`, `summarize`, `continue`, `session`, `hidden`).
       // They must be walked so the symbol-table resolver populates
       // the `scope` field on any variable references inside them —
       // otherwise codegen emits bare identifiers instead of
       // `__stack.locals.foo`.
-      if (node.type === "messageThread") {
-        if (node.label) yield* walkNodes([node.label as AgencyNode], [...ancestors, node], scopes);
-        if (node.summarize) yield* walkNodes([node.summarize as AgencyNode], [...ancestors, node], scopes);
-        if (node.continueExpr) yield* walkNodes([node.continueExpr as AgencyNode], [...ancestors, node], scopes);
-        if (node.sessionExpr) yield* walkNodes([node.sessionExpr as AgencyNode], [...ancestors, node], scopes);
-        if (node.hidden) yield* walkNodes([node.hidden as AgencyNode], [...ancestors, node], scopes);
-      }
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
-    } else if (node.type === "handleBlock") {
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
-      if (node.handler.kind === "inline") {
-        yield* walkNodes(node.handler.body, [...ancestors, node], scopes);
-      }
-    } else if (node.type === "withModifier") {
-      yield* walkNodes([node.statement], [...ancestors, node], scopes);
+      if (node.label) yield* walkNodes([node.label as AgencyNode], [...ancestors, node], scopes);
+      if (node.summarize) yield* walkNodes([node.summarize as AgencyNode], [...ancestors, node], scopes);
+      if (node.continueExpr) yield* walkNodes([node.continueExpr as AgencyNode], [...ancestors, node], scopes);
+      if (node.sessionExpr) yield* walkNodes([node.sessionExpr as AgencyNode], [...ancestors, node], scopes);
+      if (node.hidden) yield* walkNodes([node.hidden as AgencyNode], [...ancestors, node], scopes);
     } else if (node.type === "returnStatement" || node.type === "matchYield") {
       if (node.value) yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "gotoStatement") {
@@ -479,20 +452,6 @@ export function* walkNodes(
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
       }
-      if (node.block) {
-        yield* walkNodes(
-          node.block.body,
-          [...ancestors, node, node.block],
-          scopes,
-        );
-      }
-    } else if (node.type === "blockArgument") {
-      // A standalone block expression (a `\… -> …` lambda passed as a
-      // named-arg / positional value, or assigned to a variable). Descend
-      // into its body with the block pushed onto `ancestors` so block-scope
-      // resolution treats it as a frame and resolves references to enclosing
-      // block locals (otherwise they emit bare, unscoped identifiers).
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
       for (const caseItem of node.cases) {
@@ -501,7 +460,6 @@ export function* walkNodes(
         if (caseItem.caseValue !== "_") {
           yield* walkNodes([caseItem.caseValue as AgencyNode], [...ancestors, node], scopes);
         }
-        yield* walkNodes(caseItem.body, [...ancestors, node], scopes);
       }
     } else if (node.type === "valueAccess") {
       yield* walkNodes([node.base], [...ancestors, node], scopes);
@@ -560,6 +518,23 @@ export function* walkNodes(
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
       }
+    }
+    // Generic statement-body descent, driven by the shared `bodySlots`
+    // table. Function/node definitions push their own scope; a
+    // functionCall's inline `block:` pushes the block onto `ancestors` so
+    // block-scope resolution treats it as a frame (references to enclosing
+    // block locals would otherwise emit bare, unscoped identifiers).
+    for (const slot of bodySlots(node)) {
+      let childScopes = scopes;
+      if (node.type === "function") {
+        childScopes = [...scopes, functionScope(node.functionName)];
+      } else if (node.type === "graphNode") {
+        childScopes = [...scopes, nodeScope(node.nodeName)];
+      }
+      const childAncestors: WalkAncestor[] = slot.blockAncestor
+        ? [...ancestors, node, slot.blockAncestor]
+        : [...ancestors, node];
+      yield* walkNodes(slot.body, childAncestors, childScopes);
     }
   }
 }

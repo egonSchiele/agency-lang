@@ -27,6 +27,7 @@ import { z } from "zod";
 import * as smoltalk from "smoltalk";
 import { agency, type ThreadInfoTS } from "../runtime/agency.js";
 import { registerGlobalHook } from "../runtime/hooks.js";
+import { isFailure } from "../runtime/result.js";
 import { MessageThread } from "../runtime/state/messageThread.js";
 import { createLogger } from "../logger.js";
 
@@ -218,6 +219,20 @@ export async function _eagerSummarizeIfNeeded(evt: {
         maxTokens: 256,
       },
     );
+    // The structured-output contract returns a failure Result when the
+    // model's summary did not validate (issue #494). Treat it like the
+    // other best-effort failures: record it, keep the thread usable.
+    if (isFailure(result)) {
+      const ctxMaybe = agency.ctxMaybe();
+      createLogger(ctxMaybe?.logLevel ?? "info").debug(
+        `eager summarize failed validation for thread ${evt.threadId}: ${(result as any).error}`,
+      );
+      ctxMaybe?.statelogClient?.threadEndHookError?.({
+        threadId: evt.threadId,
+        error: String((result as any).error),
+      });
+      return;
+    }
     _setThreadSummary(evt.threadId, result.summary);
   } catch (e) {
     // Best-effort — lazy summarize will retry on next listThreads().

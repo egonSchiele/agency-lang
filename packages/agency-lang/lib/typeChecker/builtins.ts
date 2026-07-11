@@ -108,6 +108,9 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
         ],
       }),
     },
+    // Validation retries: re-ask the model when structured output fails
+    // schema validation. `0` disables. Independent of `retries`.
+    { key: "validationRetries", value: optional(number) },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
 ];

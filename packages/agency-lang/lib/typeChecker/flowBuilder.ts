@@ -213,6 +213,14 @@ const statementRules: StatementRuleTable = {
 
   returnStatement: (node, flow, env) => {
     attachExpressionsToFlow(node.value, flow, env);
+    // `return interrupt effect(...)` may RESUME: on approval, execution falls
+    // through to the next statement (the gated-work idiom — see stdlib
+    // git/wikipedia/memory). Treating it as `exit` would leave every statement
+    // after it flow-less, silently degrading narrowing to bare scope.lookup.
+    // Same passThrough-on-may-resume convention as `raise` (whileLoop note).
+    if ((node.value as AgencyNode | undefined)?.type === "interruptStatement") {
+      return flow;
+    }
     return { kind: "exit" };
   },
 

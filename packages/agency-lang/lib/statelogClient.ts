@@ -1219,7 +1219,7 @@ export class StatelogClient {
     sourceLocation,
     tools,
   }: {
-    errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded";
+    errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded" | "structuredOutput";
     message: string;
     functionName?: string;
     retryable?: boolean;

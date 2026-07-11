@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { classifyLlmError, decideRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
+import {
+  classifyLlmError,
+  decideRetry,
+  decideValidationRetry,
+  DEFAULT_RETRY_POLICY,
+  enrichSchemaLimitationError,
+  resolveRetryPolicy,
+  type RetryPolicy,
+} from "./llmRetry.js";
+import { success, failure } from "./result.js";
 import { AgencyAbort, makeAbortCause } from "./errors.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 
@@ -60,7 +69,7 @@ describe("classifyLlmError", () => {
   });
 });
 
-const policy = { retries: 2, timeout: 0, backoff: { initial: 100, factor: 2, max: 1000 } };
+const policy = { retries: 2, timeout: 0, backoff: { initial: 100, factor: 2, max: 1000 }, validationRetries: 0 };
 
 describe("decideRetry", () => {
   it("propagates user aborts", () => {
@@ -100,6 +109,7 @@ describe("resolveRetryPolicy", () => {
       retries: 2,
       timeout: 600000,
       backoff: { initial: 500, factor: 2, max: 10000 },
+      validationRetries: 0,
     });
   });
 
@@ -137,5 +147,75 @@ describe("enrichSchemaLimitationError (#487)", () => {
   it("returns null for unrelated errors", () => {
     expect(enrichSchemaLimitationError(new Error("rate limited"))).toBeNull();
     expect(enrichSchemaLimitationError("not an error")).toBeNull();
+  });
+});
+
+describe("resolveRetryPolicy — validationRetries", () => {
+  it("defaults validationRetries to 0 (opt-in)", () => {
+    const p = resolveRetryPolicy({}, {});
+    expect(p.validationRetries).toBe(0);
+  });
+
+  it("per-call value beats branch default", () => {
+    const p = resolveRetryPolicy({ validationRetries: 3 }, { validationRetries: 5 });
+    expect(p.validationRetries).toBe(3);
+  });
+
+  it("per-call 0 beats a truthy branch default (falsy override respected)", () => {
+    const p = resolveRetryPolicy({ validationRetries: 0 }, { validationRetries: 3 });
+    expect(p.validationRetries).toBe(0);
+  });
+
+  it("branch default beats the built-in", () => {
+    const p = resolveRetryPolicy({}, { validationRetries: 2 });
+    expect(p.validationRetries).toBe(2);
+  });
+
+  it("clamps negative values to 0", () => {
+    const p = resolveRetryPolicy({ validationRetries: -2 }, {});
+    expect(p.validationRetries).toBe(0);
+  });
+});
+
+const POLICY_2: RetryPolicy = { ...DEFAULT_RETRY_POLICY, validationRetries: 2 };
+
+describe("decideValidationRetry", () => {
+  it("accepts a successful extraction regardless of attempt", () => {
+    const d = decideValidationRetry(success({ name: "Ada" }), "raw", 99, POLICY_2);
+    expect(d).toEqual({ kind: "accept", value: { name: "Ada" } });
+  });
+
+  it("retries below the cap, with feedback naming the error", () => {
+    const d = decideValidationRetry(failure("expected object"), "prose", 0, POLICY_2);
+    expect(d.kind).toBe("retry");
+    if (d.kind === "retry") {
+      expect(d.reason).toBe("invalidStructuredOutput");
+      expect(d.feedback).toContain("expected object");
+      expect(d.feedback).toContain("did not match the required output format");
+    }
+  });
+
+  it("surfaces a failure at the cap (attempt == validationRetries)", () => {
+    const d = decideValidationRetry(failure("expected object"), "prose text here", 2, POLICY_2);
+    expect(d.kind).toBe("surfaceFailure");
+    if (d.kind === "surfaceFailure") {
+      expect(d.message).toContain("expected object");
+      expect(d.message).toContain("prose text here");
+    }
+  });
+
+  it("validationRetries 0 surfaces immediately", () => {
+    const p = { ...DEFAULT_RETRY_POLICY, validationRetries: 0 };
+    const d = decideValidationRetry(failure("bad"), "raw", 0, p);
+    expect(d.kind).toBe("surfaceFailure");
+  });
+
+  it("truncates a huge validation error in the feedback", () => {
+    const d = decideValidationRetry(failure("x".repeat(10000)), "raw", 0, POLICY_2);
+    if (d.kind === "retry") {
+      expect(d.feedback.length).toBeLessThan(3000);
+    } else {
+      throw new Error("expected retry");
+    }
   });
 });

@@ -29,6 +29,12 @@
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "invalidOutputLabel",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

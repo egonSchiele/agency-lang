@@ -39,7 +39,10 @@ export type LlmDefaults = {
   reasoningEffort?: "low" | "medium" | "high";
   maxTokens?: number;
   maxToolResultChars?: number;
-  maxToolCallRounds?: number
+  maxToolCallRounds?: number;
+  retries?: number;
+  timeout?: number;
+  validationRetries?: number
 }
 
 export def setLlmOptions(opts: LlmDefaults) {

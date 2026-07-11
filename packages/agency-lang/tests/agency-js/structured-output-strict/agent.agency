@@ -1,0 +1,37 @@
+// The structured-output contract: a schema-constrained llm() result that
+// cannot be parsed and validated is a FAILURE, never the raw content
+// masquerading as the declared type. Regression test for the fail-open
+// that silently broke memory extraction (issue #494).
+type Person = {
+  name: string;
+  age: number
+}
+
+node plainInvalid() {
+  const result: Person = llm("give me prose")
+  if (isFailure(result)) {
+    return "failure"
+  }
+  return "not-failure:${typeof result}"
+}
+
+node bangInvalid() {
+  const result: Person! = llm("give me prose")
+  if (result is success(person)) {
+    return "unexpected-success"
+  }
+  return "failure"
+}
+
+node bangValid() {
+  const result: Person! = llm("give me json")
+  if (result is success(person)) {
+    return person.name
+  }
+  return "unexpected-failure"
+}
+
+node primitiveStillWorks() {
+  const count: number = llm("give me a number")
+  return "${count}"
+}

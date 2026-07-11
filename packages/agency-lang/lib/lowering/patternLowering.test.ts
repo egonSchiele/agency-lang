@@ -752,3 +752,42 @@ match ((r is success) && y) {
     expect(findTaggedAssignment(lifted.nodes)).toBeDefined();
   });
 });
+
+describe("lowering inside thread blocks", () => {
+  it("lowers `if (r is success(v))` inside a thread block — no isExpression survives", () => {
+    // Regression: mapBodies had no messageThread case, so lowering never
+    // descended into `thread { ... }` bodies. The raw isExpression reached
+    // the TypeScriptBuilder, which crashed with
+    // "Unhandled Agency node type: isExpression".
+    const lowered = lower(`
+thread {
+  let r = foo()
+  if (r is success(v)) {
+    print(v)
+  } else {
+    print("failed")
+  }
+}
+`);
+    const survived = walkNodesArray(lowered).some(
+      ({ node }) => node.type === "isExpression",
+    );
+    expect(survived).toBe(false);
+  });
+});
+
+describe("lowering inside with-wrapped statements", () => {
+  it("lowers a boolean `is` inside `stmt with approve` — no isExpression survives", () => {
+    // Regression: mapBodies (now bodySlots) skipped withModifier, so the
+    // wrapped statement was never lowered and a raw isExpression could
+    // reach codegen.
+    const lowered = lower(`
+let r = foo()
+print(r is success) with approve
+`);
+    const survived = walkNodesArray(lowered).some(
+      ({ node }) => node.type === "isExpression",
+    );
+    expect(survived).toBe(false);
+  });
+});

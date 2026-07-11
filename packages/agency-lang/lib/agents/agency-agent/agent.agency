@@ -235,6 +235,9 @@ export def retryReasonLabel(reason: string): string {
   if (reason == "serverError") {
     return "Server error"
   }
+  if (reason == "invalidStructuredOutput") {
+    return "Output failed validation"
+  }
   return reason
 }
 

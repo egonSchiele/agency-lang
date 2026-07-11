@@ -87,11 +87,12 @@ You can pass an options object as the second parameter, or use named arguments. 
 
 ### Resilience
 
-| Option | Type |
-|---|---|
-| `retries` | `number` |
-| `timeout` | `duration` |
-| `backoff` | `{ initial?: duration, factor?: number, max?: duration }` |
+| Option | Type | Description |
+|---|---|---|
+| `retries` | `number` | Transport retries: the provider failed to answer. |
+| `timeout` | `duration` | Per-attempt deadline. |
+| `backoff` | `{ initial?: duration, factor?: number, max?: duration }` | Wait between transport retries. |
+| `validationRetries` | `number` | Retries when a structured-output response fails schema validation. Each retry sends the validation error back to the model. Disabled by default (0). Independent of `retries`. |
 
 See [retries and timeouts](#retries-and-timeouts) for more info.
 

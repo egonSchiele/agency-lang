@@ -1,0 +1,58 @@
+// Validation-retry contract, end to end. The mock returns prose by
+// default; it returns valid JSON only when answering a feedback message
+// in the retrySucceeds flow. retryReasons captures the onLLMRetry hook
+// so the reason string is pinned end-to-end (the label test in
+// turnFailure.agency cannot catch a typo in the firing site).
+import { setLlmOptions } from "std::llm"
+
+type Person = {
+  name: string;
+  age: number
+}
+
+let retryReasons: string[] = []
+
+callback("onLLMRetry") as data {
+  retryReasons.push(data.reason)
+}
+
+node retrySucceeds() {
+  const result: Person = llm("give me a person", { validationRetries: 1 })
+  if (isFailure(result)) {
+    return "unexpected-failure"
+  }
+  return result.name
+}
+
+node retriesExhausted() {
+  const result: Person! = llm("always prose", { validationRetries: 2 })
+  if (result is success(person)) {
+    return "unexpected-success"
+  }
+  return "failure"
+}
+
+node retryDisabled() {
+  const result: Person! = llm("always prose", { validationRetries: 0 })
+  if (result is success(person)) {
+    return "unexpected-success"
+  }
+  return "failure"
+}
+
+node branchDefault() {
+  setLlmOptions({ validationRetries: 2 })
+  const result: Person! = llm("always prose")
+  if (result is success(person)) {
+    return "unexpected-success"
+  }
+  return "failure"
+}
+
+node hookReasons() {
+  const result: Person! = llm("always prose", { validationRetries: 1 })
+  if (result is success(person)) {
+    return "unexpected-success"
+  }
+  return retryReasons.join(",")
+}

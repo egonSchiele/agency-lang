@@ -8,6 +8,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
+      { text: "Agent", link: "/agent/index" },
       { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/index" },
       { text: "Packages", link: "/packages/" },
@@ -82,7 +83,6 @@ export default defineConfig({
             },
             { text: "Agency Config File", link: "/guide/agency-config-file" },
             { text: "Testing", link: "/guide/testing" },
-            { text: "MCP servers (agent)", link: "/guide/mcp-agent" },
           ],
         },
         {
@@ -198,6 +198,15 @@ export default defineConfig({
               text: "Cross-Thread Context Sharing",
               link: "/guide/cross-thread-context",
             },
+          ],
+        },
+      ],
+      "/agent/": [
+        {
+          text: "Agent",
+          items: [
+            { text: "Overview", link: "/agent/index" },
+            { text: "MCP servers", link: "/agent/mcp" },
           ],
         },
       ],

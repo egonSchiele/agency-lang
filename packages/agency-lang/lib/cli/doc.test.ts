@@ -14,6 +14,25 @@ afterEach(() => {
 });
 
 describe("generateDoc", () => {
+  it("renders a function's raises clause and wraps a long signature", () => {
+    const inputDir = path.join(tmpDir, "input-raises");
+    const outputDir = path.join(tmpDir, "output-raises");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "cfg.agency"),
+      "export def load(path: string, encoding: string, fallback: string, retries: number): string raises <std::read> {\n" +
+        "  return read(path)\n}\n",
+    );
+
+    generateDoc({}, path.join(inputDir, "cfg.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "cfg.md"), "utf-8");
+
+    // The declared raises clause is rendered in the signature.
+    expect(output).toContain("raises <std::read>");
+    // The long signature wraps one param per line (not one long line).
+    expect(output).toContain("load(\n  path: string,");
+  });
+
   it("generates docs for a file with types, functions, and nodes", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");

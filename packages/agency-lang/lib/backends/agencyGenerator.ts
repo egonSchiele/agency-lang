@@ -964,10 +964,16 @@ export class AgencyGenerator {
     return ` raises ${this.effectSetTypeToString(raises)}`;
   }
 
-  protected processFunctionDefinition(node: FunctionDefinition): string {
-    const tags = this.formatAttachedTags(node);
-    const { functionName, body, parameters } = node;
-
+  /** Build the signature line(s) for a `def`/`node` — the given `prefix`,
+   *  wrapped params, return type, and `raises` clause — with `opener`
+   *  appended (`" {"` for a full definition, `""` for a signature-only
+   *  render). The params wrap onto their own lines via `wrapList` when they
+   *  don't fit. */
+  private buildSignature(
+    prefix: string,
+    node: FunctionDefinition | GraphNodeDefinition,
+    opener: string,
+  ): string {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
@@ -975,21 +981,34 @@ export class AgencyGenerator {
         returnTypeBang
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
+    return this.wrapList(
+      this.renderParams(node.parameters),
+      prefix,
+      "(",
+      ")",
+      `${returnTypeStr}${raisesStr}${opener}`,
+    );
+  }
+
+  /** The signature of a `def`/`node` with no keyword and no body — just
+   *  `name(params): ReturnType raises <...>` — used by `agency doc`. Params
+   *  wrap onto their own lines the same way the formatter wraps source, and
+   *  the declared `raises` clause is included. */
+  signatureOf(node: FunctionDefinition | GraphNodeDefinition): string {
+    const name = node.type === "function" ? node.functionName : node.nodeName;
+    return this.buildSignature(name, node, "");
+  }
+
+  protected processFunctionDefinition(node: FunctionDefinition): string {
+    const tags = this.formatAttachedTags(node);
+    const { body } = node;
 
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
     if (node.safe) prefixes.push("safe");
     prefixes.push("def");
-
-    const prefix = `${prefixes.join(" ")} ${functionName}`;
-    const renderedParams = this.renderParams(parameters);
-    const signature = this.wrapList(
-      renderedParams,
-      prefix,
-      "(",
-      ")",
-      `${returnTypeStr}${raisesStr} {`,
-    );
+    const prefix = `${prefixes.join(" ")} ${node.functionName}`;
+    const signature = this.buildSignature(prefix, node, " {");
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -1487,24 +1506,9 @@ export class AgencyGenerator {
 
   protected processGraphNode(node: GraphNodeDefinition): string {
     const tags = this.formatAttachedTags(node);
-    const { nodeName, body, parameters } = node;
-    const returnTypeBang = node.returnTypeValidated ? "!" : "";
-    const returnTypeStr = node.returnType
-      ? ": " +
-        variableTypeToString(node.returnType, this.typeAliases, true) +
-        returnTypeBang
-      : "";
-    const raisesStr = this.formatRaisesClause(node.raises);
-    const exportPrefix = node.exported ? "export " : "";
-    const prefix = `${exportPrefix}node ${nodeName}`;
-    const renderedParams = this.renderParams(parameters);
-    const signature = this.wrapList(
-      renderedParams,
-      prefix,
-      "(",
-      ")",
-      `${returnTypeStr}${raisesStr} {`,
-    );
+    const { body } = node;
+    const prefix = `${node.exported ? "export " : ""}node ${node.nodeName}`;
+    const signature = this.buildSignature(prefix, node, " {");
 
     let result = this.indentStr(`${signature}\n`);
 

@@ -1,18 +1,32 @@
+import { createRequire } from "node:module";
 import { McpManager } from "./mcpManager.js";
 import { mcpToolToAgencyFunction } from "./toolAdapter.js";
 import { readMcpConfig } from "./configReader.js";
-import type { McpServerConfig } from "./types.js";
+import type { McpServerConfig, McpTool } from "./types.js";
 import { success, failure, registerGlobalHook, type ResultValue } from "agency-lang/runtime";
 
 let singleton: McpManager | null = null;
 let cleanupRegistered = false;
 let registeredCallback: ((data: any) => void | Promise<void>) | undefined;
 
-function getManager(onOAuthRequired?: (data: any) => void | Promise<void>): McpManager {
+export type McpRawOptions = {
+  config?: Record<string, McpServerConfig>;
+  onOAuthRequired?: (data: any) => void | Promise<void>;
+};
+
+export type McpRawResult = {
+  tools: McpTool[];
+  callTool: (server: string, tool: string, args: Record<string, unknown>) => Promise<string>;
+};
+
+function getManager(
+  onOAuthRequired?: (data: any) => void | Promise<void>,
+  config?: Record<string, McpServerConfig>,
+): McpManager {
   if (!singleton) {
-    const config = readMcpConfig();
+    const resolved = config ?? readMcpConfig();
     if (onOAuthRequired) registeredCallback = onOAuthRequired;
-    singleton = new McpManager(config, { onOAuthRequired });
+    singleton = new McpManager(resolved, { onOAuthRequired });
     if (!cleanupRegistered) {
       cleanupRegistered = true;
       registerGlobalHook("onAgentEnd", async () => {
@@ -63,5 +77,51 @@ export async function mcp(
 
   return success(agencyFunctions);
 }
+
+export async function mcpRaw(
+  serverName: string,
+  options?: McpRawOptions,
+): Promise<ResultValue> {
+  let manager: McpManager;
+  try {
+    manager = getManager(options?.onOAuthRequired, options?.config);
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : String(error));
+  }
+  let result: ResultValue;
+  try {
+    result = await manager.getTools(serverName);
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : String(error));
+  }
+  if (!result.success) {
+    return result;
+  }
+  const value: McpRawResult = {
+    tools: result.value,
+    callTool: (server, tool, args) => manager.callTool(server, tool, args),
+  };
+  return success(value);
+}
+
+export { readMcpConfig } from "./configReader.js";
+export { mcpToolToAgencyFunction } from "./toolAdapter.js";
+
+export const MCP_PACKAGE_VERSION: string = (() => {
+  // Resolve the package.json from BOTH src/mcp.ts (../package.json, vitest) and
+  // the built dist/src/mcp.js (../../package.json). Try nearest-first.
+  const require = createRequire(import.meta.url);
+  for (const rel of ["../package.json", "../../package.json"]) {
+    try {
+      const version = require(rel).version;
+      if (typeof version === "string" && version.length > 0) {
+        return version;
+      }
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return "0.0.0";
+})();
 
 export type { McpTool, McpServerConfig } from "./types.js";

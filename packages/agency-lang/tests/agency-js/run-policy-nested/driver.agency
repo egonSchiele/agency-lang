@@ -1,0 +1,16 @@
+import { compile, run } from "std::agency"
+
+// Runs generated code that does a read and a write inside a std::agency::run
+// subprocess. The generated code's interrupts forward up to the root policy
+// handler installed in THIS (root) process — the child does not install its own.
+node main(args: { readDir: string, readName: string }): any {
+  const source = """
+node main(rd: string, rn: string): any {
+  const r = read(filename: rn, dir: rd)
+  const w = write(filename: "gen-out.txt", content: "x", dir: rd)
+  return { readOk: r is success, readVal: r, writeOk: w is success, writeVal: w }
+}
+"""
+  const program = compile(source)
+  return run(program.value, "main", { rd: args.readDir, rn: args.readName })
+}

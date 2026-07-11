@@ -301,6 +301,7 @@ export default defineConfig({
             { text: "llm", link: "/stdlib/llm" },
             { text: "markdown", link: "/stdlib/markdown" },
             { text: "math", link: "/stdlib/math" },
+            { text: "mcp", link: "/stdlib/mcp" },
             { text: "memory", link: "/stdlib/memory" },
             {
               text: "messaging",

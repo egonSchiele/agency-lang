@@ -1,0 +1,24 @@
+/**
+  MCP (Model Context Protocol) integration for the agency agent. Loads tools
+  from configured MCP servers and gates every call through the policy handler.
+*/
+import { _isMcpAvailable, _readProjectMcpConfig } from "agency-lang/stdlib-lib/mcp.js"
+
+// The effect an MCP tool call raises before its JSON-RPC fires. Raised from TS
+// (lib/stdlib/mcpGate.ts) via agency.interrupt with this exact name; declared
+// here so policy authors can write `handle mcp::call` blocks inspecting e.args.
+effect mcp::call {
+  server: string,
+  tool: string,
+  args: Record<string, any>
+}
+
+/// True when the @agency-lang/mcp package is installed and reachable.
+export def isMcpAvailable(): boolean {
+  return _isMcpAvailable()
+}
+
+/// Read the mcpServers block from the project agency.json under `dir`.
+export def readProjectMcpConfig(dir: string): Record<string, any> {
+  return _readProjectMcpConfig(dir)
+}

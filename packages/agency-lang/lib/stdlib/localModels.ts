@@ -781,7 +781,7 @@ let cachedGlobalRoots: string[] | null = null;
  *  itself a `node_modules` dir, e.g. `/opt/homebrew/lib/node_modules` for
  *  Homebrew npm, `~/Library/pnpm/global/5/node_modules` for pnpm). Failures
  *  (tool not installed, exit non-zero, dir missing) are silently skipped. */
-function globalNodeModulesRoots(): string[] {
+export function globalNodeModulesRoots(): string[] {
   if (cachedGlobalRoots !== null) {
     return cachedGlobalRoots;
   }

@@ -25,6 +25,9 @@ stdlib/index.ts
 stdlib/array.ts
 stdlib/object.ts
 stdlib/strategy.ts
+# Packaged docs staged into the stdlib by make (stage-stdlib-docs); build
+# output like stdlib/**/*.js, but .md so the broad *.js rule misses it.
+packages/agency-lang/stdlib/docs/
 **/traces/*
 **/statelog.log
 **/log.jsonl

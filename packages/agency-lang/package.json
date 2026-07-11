@@ -48,6 +48,7 @@
     "./dist/lib/agents/docs/appendix/**/*.md",
     "./stdlib/**/*.agency",
     "./stdlib/**/*.js",
+    "./stdlib/docs/**/*.md",
     "./scripts/hooks/postinstall.js"
   ],
   "exports": {

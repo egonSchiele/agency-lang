@@ -15,10 +15,22 @@ import type {
 } from "../compilationUnit.js";
 import type { InterruptEffect, SymbolTable } from "../symbolTable.js";
 import type { InterruptCallGraph } from "./interruptAnalysis.js";
+// Type-only import: diagnostics.ts type-imports TypeCheckError from here, so
+// this pair of type-only imports has no runtime cycle.
+import type { DiagnosticName } from "./diagnostics.js";
 
+// TRANSITIONAL SHAPE during the diagnostics migration: the registry fields
+// (code/name/params/file) are optional while call sites move to the
+// diagnostic() factory file-by-file; the final flip makes them required,
+// makes severity required, changes loc to `SourceLocation | null`, and
+// DELETES variableName/expectedType/actualType (their values live in params).
 export type TypeCheckError = {
   message: string;
   severity?: "error" | "warning"; // defaults to "error" when omitted
+  code?: string;
+  name?: DiagnosticName;
+  params?: Record<string, string | number>;
+  file?: string;
   variableName?: string;
   expectedType?: string;
   actualType?: string;

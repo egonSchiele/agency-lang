@@ -470,6 +470,45 @@ describe("exprParser", () => {
         expect(parsed.message).toContain("expected a method call after schema(...)");
       }
     });
+
+    function mainBody(source: string) {
+      const parsed = parseAgency(`node main() {\n  ${source}\n  return 1\n}`, {}, false);
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) throw new Error("unreachable");
+      const node = parsed.result.nodes.find((n) => n.type === "graphNode");
+      if (!node || node.type !== "graphNode") throw new Error("no graphNode");
+      return node.body;
+    }
+
+    it("statement position: chain on schema(...) is a schemaExpression-based access, not a call to schema", () => {
+      // Parsed as functionCall("schema") with the chain attached before this
+      // change — wrong node kind (undefined function, wrong codegen).
+      // Deliberate shape change, spec section Design/site 2.
+      const stmt = mainBody('schema(number).parseJSON("[1]")').find(
+        (n) => n.type === "valueAccess" || n.type === "functionCall",
+      );
+      expect(stmt).toMatchObject({
+        type: "valueAccess",
+        base: { type: "schemaExpression" },
+        chain: [{ kind: "methodCall", functionCall: { functionName: "parseJSON" } }],
+      });
+    });
+
+    it("statement position: bare schema(T) keeps its legacy functionCall shape", () => {
+      // The peek(dotParser) gate exists to preserve exactly this: a chainless
+      // schema(T) statement still parses as a call to `schema` (the checker
+      // flags it as reserved), NOT as a schemaExpression statement.
+      const stmt = mainBody("schema(number)").find((n) => n.type === "functionCall");
+      expect(stmt).toMatchObject({ type: "functionCall", functionName: "schema" });
+    });
+
+    it("assignment target: schema(T).foo = x still fails to parse", () => {
+      // The assignment parser rejects any non-variableName base ("assignment
+      // target must start with a variable name"), so this fails identically
+      // before and after schema chains became parseable.
+      const parsed = parseAgency("node main() {\n  schema(number).foo = 5\n  return 1\n}", {}, false);
+      expect(parsed.success).toBe(false);
+    });
   });
 
   describe("parens followed by an access chain", () => {

@@ -2489,6 +2489,15 @@ export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | Val
   const parenResult = parenAccessParser(input);
   if (parenResult.success) return parenResult;
 
+  // Schema-with-chain must be tried before the general base parsers:
+  // `schema(number)` also matches _functionCallParser (as a call to an
+  // undefined function named `schema`), which would mis-tag the base.
+  // Call-time reference: schemaAccessParser is defined later in the module,
+  // which is safe inside a function body (the module is fully initialized
+  // before any parse runs) but would TDZ as a module-init value dependency.
+  const schemaResult = schemaAccessParser(input);
+  if (schemaResult.success) return schemaResult;
+
   const parser = seqC(
     capture(or(_functionCallParser, variableNameParser), "base"),
     capture(many(chainElementParser), "chain"),

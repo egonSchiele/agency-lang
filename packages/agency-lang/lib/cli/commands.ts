@@ -7,6 +7,11 @@ import { createRequire } from "module";
 import * as path from "path";
 
 import { RunStrategy } from "../importStrategy.js";
+import {
+  AGENCY_RUN_POLICY,
+  AGENCY_RUN_POLICY_INTERACTIVE,
+  INTERACTIVE_ON,
+} from "@/runtime/runPolicyEnv.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { fileURLToPath, pathToFileURL } from "url";
 import {
@@ -250,6 +255,7 @@ export function run(
   inputFile: string,
   outputFile?: string,
   resumeFile?: string,
+  runPolicy?: { policyJson: string; interactive: boolean },
 ): void {
   const output = compile(config, inputFile, outputFile, {
     importStrategy: new RunStrategy(),
@@ -262,9 +268,12 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = resumeFile
-    ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
-    : process.env;
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;
+  if (runPolicy) {
+    env[AGENCY_RUN_POLICY] = runPolicy.policyJson;
+    if (runPolicy.interactive) env[AGENCY_RUN_POLICY_INTERACTIVE] = INTERACTIVE_ON;
+  }
 
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`

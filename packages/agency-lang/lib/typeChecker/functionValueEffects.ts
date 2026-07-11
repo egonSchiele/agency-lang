@@ -1,4 +1,5 @@
-import type { Expression } from "../types.js";
+import type { AgencyNode, Expression } from "../types.js";
+import type { BlockType } from "../types/typeHints.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { synthType } from "./synthesizer.js";
@@ -7,72 +8,86 @@ import { resolveEffectSet } from "./effectSets.js";
 import { collectRaisableEffects } from "./interruptAnalysis.js";
 import { AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
 
-/** The effects a function-valued expression may raise. `any: true` means "may
- *  raise anything" — a resolved function type with no `raises` clause.
- *  `sourceName` is the base function name when known, for the diagnostic. */
+/** The effects a function-valued expression may raise. `any` means "may raise
+ *  anything" — a function type with no `raises` clause. `sourceName` is the base
+ *  function's name when known, for the diagnostic. */
 export type FnEffects = { any: boolean; labels: string[]; sourceName?: string };
 
-/** If `expr` is a partial-application / preapprove / describe / rename chain
- *  on a named function, return that base function's name; else null. These
- *  chains synth to "any", so the name must be recovered syntactically. Effects
- *  are unchanged from the base (e.g. preapprove does not drop an effect). */
-export function pfaBaseName(expr: Expression): string | null {
+type EffectMap = Record<string, InterruptEffect[]>;
+
+const NO_EFFECTS: FnEffects = { any: false, labels: [] };
+
+// -- One small function per kind of function value ---------------------------
+
+/** A partial-application / `.preapprove()` / `.describe()` / `.rename()` chain
+ *  raises exactly what the value it wraps raises. Such chains synth to `"any"`,
+ *  so we return the wrapped base expression and let the caller recurse on it. */
+function pfaBase(expr: Expression): Expression | null {
   if (expr.type !== "valueAccess") return null;
-  if (expr.base.type !== "variableName") return null;
-  const allPfaMethods = expr.chain.every(
-    (el) =>
-      el.kind === "methodCall" &&
-      (el.functionCall.functionName === "partial" ||
-        el.functionCall.functionName in AGENCY_FUNCTION_METHOD_TYPES),
+  const onlyPfaMethods = expr.chain.every(
+    (element) =>
+      element.kind === "methodCall" &&
+      (element.functionCall.functionName === "partial" ||
+        element.functionCall.functionName in AGENCY_FUNCTION_METHOD_TYPES),
   );
-  return allPfaMethods ? expr.base.value : null;
+  return onlyPfaMethods ? (expr.base as Expression) : null;
 }
 
-function byName(
-  name: string,
-  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
-): FnEffects {
-  const labels = (interruptEffectsByFunction[name] ?? []).map((e) => e.effect);
-  return { any: false, labels, sourceName: name };
+/** A named function reference: its transitively-inferred effect set. */
+function effectsOfNamedRef(name: string, effects: EffectMap): FnEffects {
+  return {
+    any: false,
+    labels: (effects[name] ?? []).map((effect) => effect.effect),
+    sourceName: name,
+  };
 }
+
+/** A block value: the effects raised by its body. */
+function effectsOfBlock(
+  body: AgencyNode[],
+  info: ScopeInfo,
+  effects: EffectMap,
+  ctx: TypeCheckerContext,
+): FnEffects {
+  return { any: false, labels: collectRaisableEffects(body, info, effects, ctx) };
+}
+
+/** An opaque function-typed value (a variable / parameter): only its type's
+ *  clause is known. No clause means it may raise anything (the strict rule). */
+function effectsOfFunctionType(type: BlockType, ctx: TypeCheckerContext): FnEffects {
+  if (!type.raises) return { any: true, labels: [] };
+  const resolved = resolveEffectSet(type.raises, ctx.getTypeAliases());
+  return { any: resolved.any, labels: resolved.labels };
+}
+
+// -- Dispatch on which kind of function value this expression is -------------
 
 export function functionValueEffects(
   expr: Expression,
   info: ScopeInfo,
-  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  effects: EffectMap,
   ctx: TypeCheckerContext,
 ): FnEffects {
-  // A block value: its effects are its body's effects. No name.
   if (expr.type === "blockArgument") {
-    return {
-      any: false,
-      labels: collectRaisableEffects(expr.body, info, interruptEffectsByFunction, ctx),
-    };
+    return effectsOfBlock(expr.body, info, effects, ctx);
   }
 
-  // A PFA / preapprove / describe / rename chain synths to "any"; recover the
-  // base name and use the base function's effect set.
-  const base = pfaBaseName(expr);
-  if (base) return byName(base, interruptEffectsByFunction);
+  const base = pfaBase(expr);
+  if (base) {
+    return functionValueEffects(base, info, effects, ctx);
+  }
 
   const synthed = synthType(expr, info.scope, ctx);
-  // "any" is the checker's unknown/fail-open value, NOT "raises anything". Claim
-  // no effects so an untypeable expression never trips the check.
-  if (synthed === "any") return { any: false, labels: [] };
-
-  const t = safeResolveType(synthed, ctx.getTypeAliases());
-
-  // A named function reference.
-  if (t.type === "functionRefType") return byName(t.name, interruptEffectsByFunction);
-
-  // An opaque function-typed value: only its type's clause is known. No clause
-  // means it may raise anything (the strict rule).
-  if (t.type === "blockType") {
-    if (!t.raises) return { any: true, labels: [] };
-    const resolved = resolveEffectSet(t.raises, ctx.getTypeAliases());
-    return { any: resolved.any, labels: resolved.labels };
+  if (synthed === "any") {
+    return NO_EFFECTS; // unknown type — claim nothing (the checker's fail-open convention)
   }
 
-  // Not a function value we can reason about → claim nothing.
-  return { any: false, labels: [] };
+  const type = safeResolveType(synthed, ctx.getTypeAliases());
+  if (type.type === "functionRefType") {
+    return effectsOfNamedRef(type.name, effects);
+  }
+  if (type.type === "blockType") {
+    return effectsOfFunctionType(type, ctx);
+  }
+  return NO_EFFECTS;
 }

@@ -32,3 +32,22 @@ describe("a callback call contributes to the caller's inferred effects", () => {
     expect(exceeds(src)).toBe(false);
   });
 });
+
+describe("a handler that calls a raising callback trips the handler diagnostic", () => {
+  const handlerErr = (src: string): boolean =>
+    typecheckSource(src).some((e) => /handler/i.test(e.message));
+
+  it("fires when the handler body calls a raising callback", () => {
+    const src = `def useIt(cb: (string) -> string raises <std::read>) {
+      handle { print("hi") } with (payload) { print(cb("x")) }
+    }`;
+    expect(handlerErr(src)).toBe(true);
+  });
+
+  it("stays clean when the callback raises nothing", () => {
+    const src = `def useIt(cb: (string) -> string raises <>) {
+      handle { print("hi") } with (payload) { print(cb("x")) }
+    }`;
+    expect(handlerErr(src)).toBe(false);
+  });
+});

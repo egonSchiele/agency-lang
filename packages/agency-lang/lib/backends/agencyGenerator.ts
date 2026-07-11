@@ -947,10 +947,8 @@ export class AgencyGenerator {
 
   // Function methods
 
-  // Render an effect-set TYPE to its surface form. `<*>` (stored as the `any`
-  // primitive) prints as `<*>`; a named set reference prints bare (`FsKinds`);
-  // an inline flagged union renders as `<...>` via variableTypeToString.
-  // Single source of truth for both effectSet declarations and raises clauses.
+  // Delegates to `effectSetToSource` (the single source of truth); kept for
+  // subclass call sites.
   protected effectSetTypeToString(type: VariableType): string {
     return effectSetToSource(type, this.typeAliases);
   }

@@ -88,4 +88,27 @@ describe("raises on function types is enforced", () => {
     const src = `${PRELUDE}\ndef hof(cb: (string) -> string) { print(cb("x")) }\nnode main() { hof(pure) }`;
     expect(msgs(src)).not.toMatch(/exceeds/);
   });
+
+  it("partial on a callback variable is checked (base recovered through scope)", () => {
+    const src = `${PRELUDE}\ndef hof(cb: (string) -> string raises <std::read>) { let danger: Callback = cb.preapprove() }`;
+    expect(msgs(src)).toMatch(/std::read/);
+  });
+
+  it("does NOT check a block-local return against the enclosing function", () => {
+    // The block returns `reads` into a raises<*> slot (legal); `pick` returns pure.
+    const src = `${PRELUDE}\ndef runBlock(cb: (string) -> string raises <*>): string { return cb("x") }\ndef pick(): Callback {\n  let r = runBlock() as s { return reads }\n  return pure\n}`;
+    expect(msgs(src)).not.toMatch(/exceeds/);
+  });
+
+  it("does NOT resolve a method call against a same-named global def", () => {
+    // `[1].push(reads)` is Array.push, not the global `push(cb: Callback)`.
+    const src = `${PRELUDE}\ndef push(cb: Callback) { print("noop") }\nnode main() {\n  let xs = [1]\n  xs.push(reads)\n}`;
+    expect(msgs(src)).not.toMatch(/exceeds/);
+  });
+
+  it("stops positional pairing at a splat", () => {
+    // `reads` sits after a splat, whose width is unknown, so it is not paired.
+    const src = `${PRELUDE}\ndef f(a: number, cb: Callback) { print("noop") }\nnode main() {\n  let ns = [1]\n  f(...ns, reads)\n}`;
+    expect(msgs(src)).not.toMatch(/exceeds/);
+  });
 });

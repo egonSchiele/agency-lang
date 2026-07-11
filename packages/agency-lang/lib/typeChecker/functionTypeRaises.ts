@@ -1,124 +1,199 @@
-import type { VariableType, Expression } from "../types.js";
+import type {
+  VariableType,
+  Expression,
+  Assignment,
+  ReturnStatement,
+  FunctionCall,
+  FunctionParameter,
+  AgencyNode,
+} from "../types.js";
 import type { InterruptEffect } from "../symbolTable.js";
-import type { SourceLocation } from "../types/base.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
-import { walkNodes } from "../utils/node.js";
+import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { safeResolveType } from "./assignability.js";
 import { resolveEffectSet } from "./effectSets.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { paramListSignature } from "./checker.js";
-import { functionValueEffects } from "./functionValueEffects.js";
 import { checkRaisesDeclarations } from "./raisesDiagnostic.js";
+import { functionValueEffects, type FnEffects } from "./functionValueEffects.js";
 
 /**
- * Enforce a `raises` clause on a function type. When a function value flows into
- * a function type that declares a `raises` clause — via a declaration/
- * assignment, a call argument, or a return — the value may not raise more than
- * the clause allows. Runs after effect inference, next to
- * `checkRaisesDeclarations`. Assignability stays purely structural; this pass
- * owns the effect comparison so it can produce a precise message.
+ * Enforce a `raises` clause on a function TYPE. When a function value flows into
+ * a function type that declares a `raises` clause, the value may not raise more
+ * than the clause allows. Assignability stays purely structural; this pass owns
+ * the effect comparison so the message can name the offending effect.
+ *
+ * The pass reads top-down: `valueFlows` says WHERE a function value meets a
+ * function type; `targetAllowed` + `exceedances` say what counts as too much;
+ * `functionValueEffects` (its own file) says what a given value raises.
  */
 
-// If `target` is a function type WITH a `raises` clause, return the effects it
-// allows. Null means "no constraint": not a function type, no clause, or `<*>`.
+type EffectMap = Record<string, InterruptEffect[]>;
+
+/** A function value flowing into a typed slot. `target` is the slot's declared
+ *  type, or a nullish value when there is none (then there's nothing to check). */
+type Flow = { source: Expression; target: VariableType | "any" | null | undefined };
+
+// -- WHERE: the sites a node introduces --------------------------------------
+
+/** `let cb: Callback = f` or a bare `cb = f`. Object-field targets are skipped. */
+function assignmentFlows(node: Assignment, info: ScopeInfo): Flow[] {
+  if (node.accessChain && node.accessChain.length > 0) return [];
+  if (node.value.type === "messageThread") return [];
+  const target = node.typeHint ?? info.scope.lookup(node.variableName);
+  return [{ source: node.value, target }];
+}
+
+/** `return f`. A return inside a block belongs to the block, not the enclosing
+ *  function, so its slot is a different clause and we skip it here. */
+function returnFlows(
+  node: ReturnStatement,
+  ancestors: WalkAncestor[],
+  info: ScopeInfo,
+): Flow[] {
+  if (isInsideBlock(ancestors)) return [];
+  if (!node.value) return [];
+  return [{ source: node.value, target: info.returnType }];
+}
+
+/** The callee's declared parameters — local `def`/`node` or imported — or null
+ *  when the name isn't a resolvable function (a truthy inherited
+ *  Object.prototype method like "constructor" has no `parameters`). */
+function calleeParams(
+  functionName: string,
+  ctx: TypeCheckerContext,
+): FunctionParameter[] | null {
+  const def = ctx.functionDefs[functionName] ?? ctx.nodeDefs[functionName];
+  const params = def?.parameters ?? ctx.importedFunctions[functionName]?.parameters;
+  return Array.isArray(params) ? params : null;
+}
+
+/** Each function-valued call argument against its parameter's type. Positional
+ *  pairing stops at the first splat, whose width is statically unknown. */
+function argumentFlows(node: FunctionCall, params: FunctionParameter[]): Flow[] {
+  const sig = paramListSignature(params, node.arguments.length);
+  const flows: Flow[] = [];
+  for (let i = 0; i < node.arguments.length; i++) {
+    const arg = node.arguments[i];
+    if (arg.type === "splat") break;
+    const slot =
+      arg.type === "namedArgument"
+        ? sig.resolveSlot({ kind: "named", name: arg.name })
+        : sig.resolveSlot({ kind: "positional", index: i });
+    const source = arg.type === "namedArgument" ? arg.value : arg;
+    flows.push({ source, target: slot?.type });
+  }
+  return flows;
+}
+
+/** A trailing block binds to the LAST parameter (the backend pushes it as the
+ *  final positional argument). */
+function blockFlow(node: FunctionCall, params: FunctionParameter[]): Flow[] {
+  if (!node.block) return [];
+  const last = params[params.length - 1];
+  return [{ source: node.block, target: last?.typeHint }];
+}
+
+/** `f(reads)` / `runIt(cb: reads)` / `m(xs) as x { ... }`. A method call
+ *  (`x.foo(...)`) resolves against the chain, not a same-named global def. */
+function callFlows(
+  node: FunctionCall,
+  ancestors: WalkAncestor[],
+  ctx: TypeCheckerContext,
+): Flow[] {
+  if (ancestors[ancestors.length - 1]?.type === "valueAccess") return [];
+  const params = calleeParams(node.functionName, ctx);
+  if (!params) return [];
+  return [...argumentFlows(node, params), ...blockFlow(node, params)];
+}
+
+/** Every place a function value flows into a typed slot, for one AST node. */
+function valueFlows(
+  node: AgencyNode,
+  ancestors: WalkAncestor[],
+  info: ScopeInfo,
+  ctx: TypeCheckerContext,
+): Flow[] {
+  if (node.type === "assignment") return assignmentFlows(node, info);
+  if (node.type === "returnStatement") return returnFlows(node, ancestors, info);
+  if (node.type === "functionCall") return callFlows(node, ancestors, ctx);
+  return [];
+}
+
+// -- HOW MUCH: what the target allows, and what exceeds it --------------------
+
+/** The effects a function-type target allows, or null for no constraint: not a
+ *  function type, no `raises` clause, or `<*>` (which allows anything). */
 function targetAllowed(
   target: VariableType | "any" | null | undefined,
   ctx: TypeCheckerContext,
-): { labels: string[]; targetStr: string } | null {
+): { labels: string[]; name: string } | null {
   if (!target || target === "any") return null;
   const resolved = safeResolveType(target, ctx.getTypeAliases());
   if (resolved.type !== "blockType" || !resolved.raises) return null;
-  const set = resolveEffectSet(resolved.raises, ctx.getTypeAliases());
-  if (set.any) return null; // `<*>` allows anything
-  const targetStr =
+  const allowed = resolveEffectSet(resolved.raises, ctx.getTypeAliases());
+  if (allowed.any) return null;
+  const name =
     target.type === "typeAliasVariable" ? target.aliasName : formatTypeHint(target);
-  return { labels: set.labels, targetStr };
+  return { labels: allowed.labels, name };
+}
+
+/** The error message(s) when `source` exceeds what `allowed` permits: one per
+ *  offending effect, or a single message when the source may raise anything. */
+function exceedances(
+  source: FnEffects,
+  allowed: { labels: string[]; name: string },
+): string[] {
+  const who = source.sourceName ? `'${source.sourceName}'` : "this value";
+  const permitted = `'raises <${allowed.labels.join(", ")}>' allowed by type '${allowed.name}'`;
+  if (source.any) {
+    return [
+      `${who} may raise any effect (its type has no 'raises' clause), which exceeds the ${permitted}. Add a 'raises' clause to the value's type.`,
+    ];
+  }
+  return source.labels
+    .filter((effect) => !allowed.labels.includes(effect))
+    .map(
+      (effect) =>
+        `${who} raises effect '${effect}', which exceeds the ${permitted}. Add '${effect}' to the clause, or use a target type that allows it.`,
+    );
+}
+
+// -- The pass ----------------------------------------------------------------
+
+export function checkFunctionTypeRaises(
+  scopes: ScopeInfo[],
+  interruptEffectsByFunction: EffectMap,
+  ctx: TypeCheckerContext,
+): void {
+  for (const info of scopes) {
+    ctx.withScope(info.scopeKey, () => {
+      for (const { node, ancestors } of walkNodes(info.body)) {
+        for (const flow of valueFlows(node, ancestors, info, ctx)) {
+          const allowed = targetAllowed(flow.target, ctx);
+          if (!allowed) continue;
+          const source = functionValueEffects(
+            flow.source,
+            info,
+            interruptEffectsByFunction,
+            ctx,
+          );
+          for (const message of exceedances(source, allowed)) {
+            ctx.errors.push({ message, severity: "error", loc: flow.source.loc });
+          }
+        }
+      }
+    });
+  }
 }
 
 /** Run both `raises`-enforcement passes: declared clauses on `def`/`node`
  *  (`checkRaisesDeclarations`) and clauses on function types (this file). */
 export function checkAllRaises(
   scopes: ScopeInfo[],
-  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  interruptEffectsByFunction: EffectMap,
   ctx: TypeCheckerContext,
 ): void {
   checkRaisesDeclarations(interruptEffectsByFunction, ctx);
   checkFunctionTypeRaises(scopes, interruptEffectsByFunction, ctx);
-}
-
-export function checkFunctionTypeRaises(
-  scopes: ScopeInfo[],
-  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
-  ctx: TypeCheckerContext,
-): void {
-  const check = (
-    src: Expression,
-    target: VariableType | "any" | null | undefined,
-    info: ScopeInfo,
-    loc: SourceLocation | undefined,
-  ): void => {
-    const allowed = targetAllowed(target, ctx);
-    if (!allowed) return;
-    const e = functionValueEffects(src, info, interruptEffectsByFunction, ctx);
-    const who = e.sourceName ? `'${e.sourceName}'` : "this value";
-    const allow = `'raises <${allowed.labels.join(", ")}>' allowed by type '${allowed.targetStr}'`;
-    if (e.any) {
-      ctx.errors.push({
-        message: `${who} may raise any effect (its type has no 'raises' clause), which exceeds the ${allow}. Add a 'raises' clause to the value's type.`,
-        severity: "error",
-        loc,
-      });
-      return;
-    }
-    for (const effect of e.labels) {
-      if (!allowed.labels.includes(effect)) {
-        ctx.errors.push({
-          message: `${who} raises effect '${effect}', which exceeds the ${allow}. Add '${effect}' to the clause, or use a target type that allows it.`,
-          severity: "error",
-          loc,
-        });
-      }
-    }
-  };
-
-  for (const info of scopes) {
-    ctx.withScope(info.scopeKey, () => {
-      for (const { node } of walkNodes(info.body)) {
-        if (node.type === "assignment") {
-          // Object-field targets (`x.y = f`) are out of scope.
-          if (node.accessChain && node.accessChain.length > 0) continue;
-          if (node.value.type === "messageThread") continue;
-          // Annotated declaration uses the annotation; a bare re-assignment
-          // (`cb = f`) uses the variable's declared type.
-          const target = node.typeHint ?? info.scope.lookup(node.variableName);
-          check(node.value, target, info, node.loc);
-        } else if (node.type === "returnStatement") {
-          if (node.value) check(node.value, info.returnType, info, node.loc);
-        } else if (node.type === "functionCall") {
-          const def = ctx.functionDefs[node.functionName] ?? ctx.nodeDefs[node.functionName];
-          // `functionDefs` is a plain object, so a callee named "constructor" /
-          // "toString" resolves to an inherited Object.prototype method — truthy
-          // but with no `parameters`. Require a real parameter list.
-          if (!def || !Array.isArray(def.parameters)) continue;
-          const sig = paramListSignature(def.parameters, node.arguments.length);
-          node.arguments.forEach((arg, i) => {
-            if (arg.type === "splat") return;
-            if (arg.type === "namedArgument") {
-              const t = sig.resolveSlot({ kind: "named", name: arg.name })?.type;
-              check(arg.value, t, info, node.loc);
-            } else {
-              const t = sig.resolveSlot({ kind: "positional", index: i })?.type;
-              check(arg, t, info, node.loc);
-            }
-          });
-          // A trailing block binds to the LAST parameter (the backend pushes it
-          // as the final positional argument).
-          if (node.block) {
-            const last = def.parameters[def.parameters.length - 1];
-            check(node.block, last?.typeHint, info, node.loc);
-          }
-        }
-      }
-    });
-  }
 }

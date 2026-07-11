@@ -89,12 +89,17 @@ export function extractStructuredResponse(
     if (inner.success) return success(inner.data);
   }
 
-  // 5. Object with "response" or "properties" key — unwrap
+  // 5. Object with "response" or "properties" key — strip the wrapper and
+  // recurse, so step 1's direct-match (and its envelope unwrap) does the
+  // extraction. The old form indexed the validated value by the SAME key
+  // again (`inner.data[key]`), which returned undefined for shapes like
+  // { properties: { response: 42 } } (PR #500 review). Terminates: each
+  // recursion strips one layer of a finite, acyclic provider payload.
   const wrapKeys = ["response", "properties"];
   for (const key of wrapKeys) {
     if (key in rawValue) {
-      const inner = schema.safeParse(rawValue[key]);
-      if (inner.success) return success(inner.data[key]);
+      const inner = extractStructuredResponse(rawValue[key], schema);
+      if (isSuccess(inner)) return inner;
     }
   }
 

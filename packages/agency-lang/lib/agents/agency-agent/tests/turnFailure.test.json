@@ -4,61 +4,37 @@
       "nodeName": "connectionLostLabel",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "unknownReasonPassesThrough",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "connectionLostFailureIsFriendly",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "timeoutFailureIsFriendly",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "unknownFailureEchoesRawError",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "invalidOutputLabel",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

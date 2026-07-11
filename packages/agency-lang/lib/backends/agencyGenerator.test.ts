@@ -99,6 +99,37 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
         input: 'def f(x: (A | B)["k"]) { x }',
         expectedOutput: 'def f(x: (A | B)["k"]) {\nx\n}',
       },
+
+      {
+        description: "intersection round-trips",
+        input: "def f(x: A & B) { x }",
+        expectedOutput: "def f(x: A & B) {\nx\n}",
+      },
+      {
+        description: "intersection inside a union round-trips without parens",
+        input: "def f(x: A & B | C) { x }",
+        expectedOutput: "def f(x: A & B | C) {\nx\n}",
+      },
+      {
+        description: "union operand keeps its parens under intersection",
+        input: "def f(x: (A | B) & C) { x }",
+        expectedOutput: "def f(x: (A | B) & C) {\nx\n}",
+      },
+      {
+        description: "intersection operand keeps parens under keyof",
+        input: "def f(x: keyof (A & B)) { x }",
+        expectedOutput: "def f(x: keyof (A & B)) {\nx\n}",
+      },
+      {
+        description: "intersection element keeps parens under array suffix",
+        input: "def f(x: (A & B)[]) { x }",
+        expectedOutput: "def f(x: (A & B)[]) {\nx\n}",
+      },
+      {
+        description: "intersection object keeps parens under indexed access",
+        input: 'def f(x: (A & B)["id"]) { x }',
+        expectedOutput: 'def f(x: (A & B)["id"]) {\nx\n}',
+      },
     ];
 
     testCases.forEach(({ description, input, expectedOutput }) => {
@@ -121,6 +152,18 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
   });
 
   describe("Type preservation", () => {
+    it("preserves an intersection in a type alias declaration", () => {
+      const parseResult = parseAgency("type Person = Named & Aged", {}, false);
+      expect(parseResult.success).toBe(true);
+
+      if (!parseResult.success) return;
+
+      const generator = new AgencyGenerator();
+      const result = generator.generate(parseResult.result);
+
+      expect(result.output).toContain("Named & Aged");
+    });
+
     it("preserves keyof and indexed access in alias declarations", () => {
       const parseResult = parseAgency(
         'type F = keyof User\ntype N = User["name"]',

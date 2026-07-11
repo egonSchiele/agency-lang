@@ -138,7 +138,8 @@ export function variableTypeToString(
     );
     if (
       variableType.elementType.type === "unionType" ||
-      variableType.elementType.type === "keyofType"
+      variableType.elementType.type === "keyofType" ||
+      variableType.elementType.type === "intersectionType"
     ) {
       // keyof parenthesizes for the same re-parse reason as unions:
       // `keyof User[]` reads as keyof (User[]).
@@ -207,15 +208,23 @@ export function variableTypeToString(
       .map((a) => variableTypeToString(a, typeAliases, forFormatting))
       .join(", ");
     return `${variableType.name}<${args}>${formatValueArgs(variableType.valueArgs)}`;
+  } else if (variableType.type === "intersectionType") {
+    return variableType.types
+      .map((m) => {
+        const s = variableTypeToString(m, typeAliases, forFormatting);
+        return m.type === "unionType" ? `(${s})` : s;
+      })
+      .join(" & ");
   } else if (variableType.type === "keyofType") {
     const op = variableTypeToString(
       variableType.operand,
       typeAliases,
       forFormatting,
     );
-    // Parenthesize a union operand: `keyof (A | B)` must not print as
-    // `keyof A | B`, which re-parses as (keyof A) | B.
-    return variableType.operand.type === "unionType"
+    // Parenthesize union AND intersection operands: `keyof (A | B)` /
+    // `keyof (A & B)` must not print bare (wrong re-parse precedence).
+    return variableType.operand.type === "unionType" ||
+      variableType.operand.type === "intersectionType"
       ? `keyof (${op})`
       : `keyof ${op}`;
   } else if (variableType.type === "indexedAccessType") {
@@ -226,7 +235,8 @@ export function variableTypeToString(
     );
     const wrapped =
       variableType.objectType.type === "keyofType" ||
-      variableType.objectType.type === "unionType"
+      variableType.objectType.type === "unionType" ||
+      variableType.objectType.type === "intersectionType"
         ? `(${obj})`
         : obj;
     const index = variableTypeToString(

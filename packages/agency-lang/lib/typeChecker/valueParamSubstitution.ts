@@ -685,6 +685,9 @@ function checkType(
     case "keyofType":
       checkType(vt.operand, paramNames, aliasName);
       break;
+    case "intersectionType":
+      for (const m of vt.types) checkType(m, paramNames, aliasName);
+      break;
     case "indexedAccessType":
       checkType(vt.objectType, paramNames, aliasName);
       checkType(vt.index, paramNames, aliasName);
@@ -785,6 +788,11 @@ export function substituteValueArgsInType(
       return {
         ...vt,
         operand: substituteValueArgsInType(vt.operand, bindings),
+      };
+    case "intersectionType":
+      return {
+        ...vt,
+        types: vt.types.map((m) => substituteValueArgsInType(m, bindings)),
       };
     case "indexedAccessType":
       return {

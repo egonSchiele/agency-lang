@@ -11,7 +11,7 @@ import {
   isBuiltinGenericName,
   withUseSiteTags,
 } from "./builtinGenerics.js";
-import { evalIndexedAccess, evalKeyof } from "./typeOperators.js";
+import { evalIndexedAccess, evalIntersection, evalKeyof } from "./typeOperators.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -97,6 +97,20 @@ function resolveTypeWithGuard(
     }
     const resolved = resolveTypeWithGuard(substitutedEntry.body, typeAliases, next);
     return attachAliasTags(resolved, substitutedEntry.tags);
+  }
+
+  if (vt.type === "intersectionType") {
+    // Comparator built on the REAL alias table — assignability owns
+    // typeKey, so equality is injected the same way `resolve` is (the
+    // typeOperators CYCLE RULE).
+    return withUseSiteTags(
+      evalIntersection(
+        vt.types,
+        (t) => resolveTypeWithGuard(t, typeAliases, inProgress),
+        (a, b) => typeKey(a, typeAliases) === typeKey(b, typeAliases),
+      ),
+      vt.tags,
+    );
   }
 
   if (vt.type === "keyofType") {
@@ -273,7 +287,11 @@ function deepResolveNode(
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
   if (n.type === "genericType") return resolveType(n, typeAliases);
-  if (n.type === "keyofType" || n.type === "indexedAccessType") {
+  if (
+    n.type === "keyofType" ||
+    n.type === "indexedAccessType" ||
+    n.type === "intersectionType"
+  ) {
     // Same routing as genericType: these evaluate to concrete types and
     // must never reach the zod mapper unresolved — the mapper's fallback
     // silently emits z.string(). See docs/dev/adding-features.md.

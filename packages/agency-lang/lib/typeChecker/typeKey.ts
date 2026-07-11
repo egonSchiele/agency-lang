@@ -85,6 +85,9 @@ function canonical(t: VariableType): string {
       return `{"keyof":${canonical(t.operand)}}`;
     case "indexedAccessType":
       return `{"index":[${canonical(t.objectType)},${canonical(t.index)}]}`;
+    case "intersectionType":
+      // Sorted — intersection is commutative.
+      return `{"intersect":[${t.types.map(canonical).sort().join(",")}]}`;
     default: {
       // Exhaustiveness enforced per the typeHints.ts convention: a new
       // VariableType variant fails compilation here instead of silently

@@ -87,6 +87,8 @@ export function hasAnyValidateTag(
         hasAnyValidateTag(t.objectType, aliasesFull, seen) ||
         hasAnyValidateTag(t.index, aliasesFull, seen)
       );
+    case "intersectionType":
+      return t.types.some((m) => hasAnyValidateTag(m, aliasesFull, seen));
     case "genericType": {
       // Type arguments may themselves carry @validate (e.g. `Array<Email>`).
       if (

@@ -1,0 +1,27 @@
+// A merged type's schema requires keys from BOTH sides. (Schema bound
+// to a variable first — #480.)
+type Named = {
+  name: string,
+}
+
+type Aged = {
+  age: number,
+}
+
+node accepts() {
+  const s = schema(Named & Aged)
+  const r = s.parseJSON("{\"name\": \"a\", \"age\": 3}")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "parse failed"
+}
+
+node rejects() {
+  const s = schema(Named & Aged)
+  const r = s.parseJSON("{\"name\": \"a\"}")
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "accepted"
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "accepts",
+      "input": "",
+      "expectedOutput": "{\"name\":\"a\",\"age\":3}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "complete merged object parses"
+    },
+    {
+      "nodeName": "rejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "missing right-side key rejected"
+    }
+  ]
+}

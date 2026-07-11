@@ -26,6 +26,38 @@ describe("syncAgents", () => {
     expect(fs.existsSync(path.join(dest, "review/agent.js"))).toBe(true);
   });
 
+  test("never overwrites a dest compiled .js with a stale src .js (issue #498)", () => {
+    // A .js with a .agency sibling in src is a stale compiled artifact
+    // left in the SOURCE tree; the compiler is the sole author of the dest
+    // .js. Copying it would clobber the compiler's fresh dest output, and
+    // the manifest's fresh-skip would then never re-emit it.
+    const src = tree({
+      "agency-agent/lib/defaultPolicy.agency": "src-v2",
+      "agency-agent/lib/defaultPolicy.js": "STALE-compiled-output",
+    });
+    const dest = tree({
+      "agency-agent/lib/defaultPolicy.agency": "src-v1",
+      "agency-agent/lib/defaultPolicy.js": "FRESH-compiled-output",
+    });
+    syncAgents(src, dest);
+    // Source is synced; the compiler-owned output is left untouched.
+    expect(fs.readFileSync(path.join(dest, "agency-agent/lib/defaultPolicy.agency"), "utf-8")).toBe(
+      "src-v2",
+    );
+    expect(fs.readFileSync(path.join(dest, "agency-agent/lib/defaultPolicy.js"), "utf-8")).toBe(
+      "FRESH-compiled-output",
+    );
+  });
+
+  test("still copies handwritten .js helpers that have no .agency sibling", () => {
+    const src = tree({ "agency-agent/toolWiring.js": "handwritten" });
+    const dest = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "agency-stage-")), "dest");
+    syncAgents(src, dest);
+    expect(fs.readFileSync(path.join(dest, "agency-agent/toolWiring.js"), "utf-8")).toBe(
+      "handwritten",
+    );
+  });
+
   test("deletes orphaned sources AND their compiled siblings", () => {
     const src = tree({ "review/keep.agency": "k" });
     const dest = tree({

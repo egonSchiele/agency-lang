@@ -114,6 +114,19 @@ function effectSetMemberToSource(
   return variableTypeToString(member, typeAliases, true);
 }
 
+/** Render a `raises` clause back to Agency source: `<*>` for the `any`
+ *  primitive, otherwise delegate to variableTypeToString, which renders an
+ *  effect-set union as `<...>` and a type-alias reference by name. Single
+ *  source of truth for rendering a raises clause (AgencyGenerator delegates
+ *  here). */
+export function effectSetToSource(
+  type: VariableType,
+  typeAliases: Record<string, VariableType>,
+): string {
+  if (type.type === "primitiveType" && type.value === "any") return "<*>";
+  return variableTypeToString(type, typeAliases, true);
+}
+
 export function variableTypeToString(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
@@ -196,7 +209,12 @@ export function variableTypeToString(
       })
       .join(", ");
     const ret = variableTypeToString(variableType.returnType, typeAliases, forFormatting);
-    return `(${params}) ${arrow} ${ret}`;
+    // `raises` is Agency-only surface syntax; never emit it into TS codegen (`=>`).
+    const raisesStr =
+      forFormatting && variableType.raises
+        ? ` raises ${effectSetToSource(variableType.raises, typeAliases)}`
+        : "";
+    return `(${params}) ${arrow} ${ret}${raisesStr}`;
   } else if (variableType.type === "resultType") {
     const s = variableTypeToString(variableType.successType, typeAliases, forFormatting);
     const f = variableTypeToString(variableType.failureType, typeAliases, forFormatting);

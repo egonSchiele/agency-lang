@@ -51,11 +51,36 @@ describe("formatter: effect sets, raises clauses, raise statement", () => {
       input: "def s(): number raises <> { return 1 }",
       expectedOutput: "def s(): number raises <> {\n  return 1\n}",
     },
+    {
+      description: "raises on a function type is preserved",
+      input: "type Callback = (string) -> string raises <std::read>",
+      expectedOutput: "type Callback = (string) -> string raises <std::read>",
+    },
+    {
+      description: "raises <> on a function type is preserved",
+      input: "type Pure = (string) -> string raises <>",
+      expectedOutput: "type Pure = (string) -> string raises <>",
+    },
+    {
+      description: "raises <*> on a function type is preserved",
+      input: "type AnyFn = (string) -> string raises <*>",
+      expectedOutput: "type AnyFn = (string) -> string raises <*>",
+    },
+    {
+      description: "a function type with no clause stays clause-free",
+      input: "type Plain = (string) -> string",
+      expectedOutput: "type Plain = (string) -> string",
+    },
   ];
 
   cases.forEach(({ description, input, expectedOutput }) => {
     it(description, () => {
       expect(fmt(input)).toBe(expectedOutput);
     });
+  });
+
+  it("format is a fixed point for a function-type raises clause", () => {
+    const once = fmt("type Callback = (string) -> string raises <std::read>");
+    expect(fmt(once)).toBe(once);
   });
 });

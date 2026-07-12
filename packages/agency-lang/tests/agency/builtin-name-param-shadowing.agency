@@ -1,0 +1,33 @@
+// Regression (issue #453): a function parameter whose name collides with a
+// BUILTIN_VARIABLE (`color`) must shadow the builtin inside the function body.
+//
+// Before the fix, a reference to such a parameter compiled to a bare JS
+// identifier instead of `__stack.args.color`. The parameter default is applied
+// only to the stack slot (`__stack.args.color`), so the body read the
+// undefaulted local (the `__UNSET` sentinel) and the default was silently lost.
+// This surfaced as std::ui/layout `render(node)` stripping color on the default
+// `color: "auto"` path even in an interactive terminal.
+
+def useColor(color: string = "auto"): string {
+  return color
+}
+
+// A local (not a param) named `color` must also shadow the builtin.
+def localShadow(): string {
+  const color = "local-wins"
+  return color
+}
+
+node testDefaultUsed() {
+  // `color` omitted at the call site: the body must observe the applied
+  // default "auto", not the internal sentinel.
+  return useColor()
+}
+
+node testExplicitPassed() {
+  return useColor("explicit")
+}
+
+node testLocalShadow() {
+  return localShadow()
+}

@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "testDefaultUsed",
+      "input": "",
+      "expectedOutput": "\"auto\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "omitted `color` param sees its applied default, not the __UNSET sentinel"
+    },
+    {
+      "nodeName": "testExplicitPassed",
+      "input": "",
+      "expectedOutput": "\"explicit\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "explicitly passed `color` value flows through the body"
+    },
+    {
+      "nodeName": "testLocalShadow",
+      "input": "",
+      "expectedOutput": "\"local-wins\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "a local named `color` shadows the builtin inside the body"
+    }
+  ]
+}

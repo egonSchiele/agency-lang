@@ -52,6 +52,7 @@ static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with a
 // startup approval interrupt — the docs ship with the stdlib).
 static const docSkill = docsSkill("guide")
 static const cliSkill = docsSkill("cli")
+static const diagnosticsSkill = docsSkill("diagnostics")
 
 export def agencyCli(args: string[]): any {
   """
@@ -81,6 +82,9 @@ call the bundled docs tools — they are authoritative for Agency:
   * `docSkill` — the language guide (syntax, types, error handling,
                  built-ins, callbacks, advanced types)
   * `cliSkill` — the CLI reference (`agency run`, `agency test`, ...)
+  * `diagnosticsSkill` — type-checker diagnostic codes (AG####) with
+                 explanations and fixes; consult it when `typecheck` reports
+                 an error code you want to understand or resolve
 Pick whichever matches the question rather than guessing.
 
 **Stay focused on the current task.** Most follow-ups ("can you make it
@@ -360,6 +364,7 @@ export static const codeTools: any[] = [
   superpowersSkill,
   docSkill,
   cliSkill,
+  diagnosticsSkill,
   todoWrite,
   todoList,
   oracleAgent.partial(allowHandoff: false),

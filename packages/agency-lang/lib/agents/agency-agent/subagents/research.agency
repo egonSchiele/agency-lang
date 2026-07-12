@@ -33,6 +33,7 @@ import { withWebSearch } from "../lib/search.agency"
 // grepping a giant blob of docs.
 static const docSkill = docsSkill("guide")
 static const cliSkill = docsSkill("cli")
+static const diagnosticsSkill = docsSkill("diagnostics")
 
 export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language
@@ -61,6 +62,8 @@ When you need information:
                         built-ins, callbacks, advanced types
     * `cliSkill`      — CLI reference (`agency run`, `agency test`,
                         `agency compile`, ...)
+    * `diagnosticsSkill` — type-checker diagnostic codes (AG####)
+                        with explanations and fixes
   Pick whichever matches the question rather than guessing.
 
 - For **general knowledge**, prefer the lighter tools first:
@@ -120,6 +123,7 @@ underlining, and properly highlighted code fences.
 export static const researchTools: any[] = [
   docSkill,
   cliSkill,
+  diagnosticsSkill,
   wikipediaSearch.rename("wikipedia_search"),
   wikipediaSummary.rename("wikipedia_summary"),
   wikipediaArticle.rename("wikipedia_article"),

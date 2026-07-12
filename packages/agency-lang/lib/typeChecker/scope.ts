@@ -1,6 +1,6 @@
 import type { VariableType } from "../types.js";
 
-export type ScopeType = VariableType | "any";
+export type ScopeType = VariableType;
 
 export class Scope {
   readonly key: string;

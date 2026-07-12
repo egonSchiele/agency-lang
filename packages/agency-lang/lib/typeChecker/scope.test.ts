@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { describe, it, expect } from "vitest";
 import { Scope } from "./scope.js";
 import type { VariableType } from "../types.js";
@@ -87,7 +88,7 @@ describe("generation counter", () => {
     const root = new Scope("global");
     const fn = new Scope("fn", root, true);
     const g0 = fn.currentGeneration();
-    fn.declare("x", "any");
+    fn.declare("x", ANY_T);
     expect(fn.currentGeneration()).toBe(g0 + 1);
     expect(root.currentGeneration()).toBe(g0 + 1);
   });
@@ -97,9 +98,9 @@ describe("generation counter", () => {
     // equal the existing entry; the paired assign-node patch relies on the
     // bump regardless. Pins against a skip-if-unchanged "optimization".
     const fn = new Scope("fn");
-    fn.declare("x", "any");
+    fn.declare("x", ANY_T);
     const g0 = fn.currentGeneration();
-    fn.declare("x", "any");
+    fn.declare("x", ANY_T);
     expect(fn.currentGeneration()).toBe(g0 + 1);
   });
 
@@ -108,7 +109,7 @@ describe("generation counter", () => {
     const child = fn.child();
     expect(child.detached).toBe(true);
     const g0 = fn.currentGeneration();
-    child.declareLocal("cbParam", "any");
+    child.declareLocal("cbParam", ANY_T);
     expect(fn.currentGeneration()).toBe(g0);
   });
 
@@ -117,7 +118,7 @@ describe("generation counter", () => {
     const fn = new Scope("fn");
     const grandchild = fn.child().child();
     const g0 = fn.currentGeneration();
-    grandchild.declareLocal("cbParam", "any");
+    grandchild.declareLocal("cbParam", ANY_T);
     expect(fn.currentGeneration()).toBe(g0);
   });
 
@@ -125,7 +126,7 @@ describe("generation counter", () => {
     const fn = new Scope("fn");
     const child = fn.child();
     const g0 = fn.currentGeneration();
-    child.declare("real", "any");
+    child.declare("real", ANY_T);
     expect(fn.currentGeneration()).toBe(g0 + 1);
   });
 
@@ -133,14 +134,14 @@ describe("generation counter", () => {
     const fn = new Scope("fn");
     const grandchild = fn.child().child();
     const g0 = fn.currentGeneration();
-    grandchild.declare("real", "any");
+    grandchild.declare("real", ANY_T);
     expect(fn.currentGeneration()).toBe(g0 + 1);
   });
 
   it("declareLocal on an attached scope bumps", () => {
     const fn = new Scope("fn");
     const g0 = fn.currentGeneration();
-    fn.declareLocal("x", "any");
+    fn.declareLocal("x", ANY_T);
     expect(fn.currentGeneration()).toBe(g0 + 1);
   });
 });

@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { describe, it, expect } from "vitest";
 import {
   referenceKey,
@@ -38,7 +39,7 @@ describe("referenceKey", () => {
 
 describe("uniteTypes", () => {
   it("any dominates", () => {
-    expect(uniteTypes(["any", STR], {})).toBe("any");
+    expect(uniteTypes([ANY_T, STR], {})).toEqual(ANY_T);
   });
   it("drops never members (identity element)", () => {
     expect(uniteTypes([NEVER_T, STR], {})).toEqual(STR);
@@ -103,7 +104,7 @@ describe("typeAt", () => {
     scope.declare("x", STR);
     const start: FlowNode = { kind: "start", scope };
     expect(typeAt(ref("x"), start, env(scope))).toEqual(STR);
-    expect(typeAt(ref("y"), start, env(scope))).toBe("any");
+    expect(typeAt(ref("y"), start, env(scope))).toEqual(ANY_T);
   });
 
   it("assign: overrides the matching reference only", () => {
@@ -146,7 +147,7 @@ describe("typeAt", () => {
         keep: true,
       },
     };
-    expect(typeAt(ref("u"), narrow, env(scope))).toBe("any");
+    expect(typeAt(ref("u"), narrow, env(scope))).toEqual(ANY_T);
   });
 
   it("join: unites the predecessors", () => {
@@ -300,13 +301,13 @@ describe("typeAt — property paths (M1)", () => {
 
   it("start: missing property → any", () => {
     const s = boxScope();
-    expect(typeAt(pathRef("box", "bogus"), { kind: "start", scope: s }, env(s))).toBe("any");
+    expect(typeAt(pathRef("box", "bogus"), { kind: "start", scope: s }, env(s))).toEqual(ANY_T);
   });
 
   it("start: non-object base → any (no primitive-member lookup)", () => {
     const s = new Scope("p");
     s.declare("str", STR);
-    expect(typeAt(pathRef("str", "length"), { kind: "start", scope: s }, env(s))).toBe("any");
+    expect(typeAt(pathRef("str", "length"), { kind: "start", scope: s }, env(s))).toEqual(ANY_T);
   });
 
   it("start: Record<K,V> base → V", () => {
@@ -397,7 +398,7 @@ describe("typeAt — path prefix invalidation (M1)", () => {
     // box.r.value re-resolves from the reassigned (un-narrowed) Result → success
     // member's `.value` is gone; structural resolve of `.value` on a resultType
     // is "any" (diagnostic-free resolvePath).
-    expect(typeAt(pathRef("box", "r", "value"), reassigned, env(s))).toBe("any");
+    expect(typeAt(pathRef("box", "r", "value"), reassigned, env(s))).toEqual(ANY_T);
   });
 
   it("loop back-edge: a body reassign of the base re-resolves box.r from widened", () => {
@@ -516,7 +517,7 @@ describe("PathSegment helpers + index resolution (M2)", () => {
   });
 
   it("returns any for an index on a non-array, non-Record receiver", () => {
-    expect(at("n", [idx(0)], NUM)).toBe("any");
+    expect(at("n", [idx(0)], NUM)).toEqual(ANY_T);
   });
 
   it("resolves an index segment into a Record<K,V> value type", () => {
@@ -526,7 +527,7 @@ describe("PathSegment helpers + index resolution (M2)", () => {
 
   it("returns any for an index hop into an objectType", () => {
     const OBJ: VariableType = { type: "objectType", properties: [{ key: "a", value: NUM }] };
-    expect(at("o", [idx(0)], OBJ)).toBe("any");
+    expect(at("o", [idx(0)], OBJ)).toEqual(ANY_T);
   });
 
   it("assigning arr[0] invalidates arr[0] (index exact-key + element re-resolve)", () => {
@@ -556,16 +557,16 @@ describe("memo auto-invalidation (generation counter)", () => {
     // AND re-declare the consumer; the declare bump invalidates entries
     // derived from the old snapshot.
     const scope = new Scope("fn");
-    scope.declare("x", "any");
+    scope.declare("x", ANY_T);
     const start: FlowNode = { kind: "start", scope };
     const assign: Extract<FlowNode, { kind: "assign" }> = {
       kind: "assign",
       prev: start,
       ref: ref("x"),
-      type: "any",
+      type: ANY_T,
     };
     const e = env(scope);
-    expect(typeAt(ref("x"), assign, e)).toBe("any"); // memoized under old gen
+    expect(typeAt(ref("x"), assign, e)).toEqual(ANY_T); // memoized under old gen
     assign.type = STR;
     scope.declare("x", STR);
     expect(typeAt(ref("x"), assign, e)).toEqual(STR);

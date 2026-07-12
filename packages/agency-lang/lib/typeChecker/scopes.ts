@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import {
   AgencyNode,
   FunctionDefinition,
@@ -67,7 +68,7 @@ function buildDefScope(
   // top-level scope is fully walked before any def scope is built).
   const scope = new Scope(sk, topLevelScope, true);
   for (const param of def.parameters) {
-    scope.declare(param.name, param.typeHint ?? "any");
+    scope.declare(param.name, param.typeHint ?? ANY_T);
   }
   ctx.withScope(sk, () => {
     walkScopeBody(def.body, scope, ctx);
@@ -294,7 +295,7 @@ function synthAccessChainTargetType(
   scope: Scope,
   ctx: TypeCheckerContext,
   flowNode: FlowNode | undefined,
-): VariableType | "any" {
+): VariableType {
   const base: VariableNameLiteral = {
     type: "variableName",
     value: variableName,
@@ -315,8 +316,8 @@ function synthAccessChainTargetType(
 function reportNotAssignable(
   ctx: TypeCheckerContext,
   variableName: string,
-  actual: VariableType | "any",
-  expected: VariableType | "any",
+  actual: VariableType,
+  expected: VariableType,
   loc: SourceLocation | undefined,
 ): void {
   if (isAnyType(actual) || isAnyType(expected)) return;
@@ -400,7 +401,7 @@ export function walkScopeBody(
       case "importStatement":
         for (const importName of node.importedNames) {
           for (const name of getImportedNames(importName)) {
-            scope.declare(name, "any");
+            scope.declare(name, ANY_T);
           }
         }
         break;
@@ -410,8 +411,8 @@ export function walkScopeBody(
         // first (element for arrays, key for records/objects); `secondType`
         // is the second (numeric index for arrays, VALUE for records/objects),
         // mirroring how the runtime `Runner.loop` passes callback arguments.
-        let itemType: VariableType | "any";
-        let secondType: VariableType | "any";
+        let itemType: VariableType;
+        let secondType: VariableType;
         // Record-like: `for (k, v in obj)` binds key + value. A shared helper
         // (`recordLikeKeyValue`) handles both `Record<K, V>` and structural
         // object literals (`objectType`), so this typer and index-access
@@ -426,10 +427,10 @@ export function walkScopeBody(
             ? undefined
             : recordLikeKeyValue(iterableType);
         if (isAnyType(iterableType)) {
-          itemType = "any";
+          itemType = ANY_T;
           // Iterable kind is unknown, so the second var could be either an
           // index or a value — leave it as `any` rather than assume a number.
-          secondType = "any";
+          secondType = ANY_T;
         } else if (iterableType.type === "arrayType") {
           itemType = iterableType.elementType;
           secondType = NUMBER_T;
@@ -437,8 +438,8 @@ export function walkScopeBody(
           itemType = recordLike.key;
           secondType = recordLike.value;
         } else {
-          itemType = "any";
-          secondType = "any";
+          itemType = ANY_T;
+          secondType = ANY_T;
           ctx.errors.push(
             diagnostic(
               "forLoopIterableType",
@@ -510,7 +511,7 @@ export function walkScopeBody(
           }
           scope.declare(
             node.handler.param.name,
-            node.handler.param.typeHint ?? "any",
+            node.handler.param.typeHint ?? ANY_T,
           );
           walkScopeBody(node.handler.body, scope, ctx);
         }
@@ -527,7 +528,7 @@ export function walkScopeBody(
             const slotType = slot?.params[i]?.typeAnnotation;
             scope.declare(
               param.name,
-              param.typeHint ?? slotType ?? "any",
+              param.typeHint ?? slotType ?? ANY_T,
             );
           });
           walkScopeBody(node.block.body, scope, ctx);

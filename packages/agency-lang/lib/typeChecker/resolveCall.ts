@@ -125,8 +125,8 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
     returnType: NUMBER_T,
   }),
-  isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
-  isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
+  isNaN: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
+  isFinite: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
   encodeURIComponent: callable({ params: [STRING_T], returnType: STRING_T }),
   decodeURIComponent: callable({ params: [STRING_T], returnType: STRING_T }),
   encodeURI: callable({ params: [STRING_T], returnType: STRING_T }),
@@ -136,17 +136,17 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
   clearTimeout: callable(),
   clearInterval: callable(),
   queueMicrotask: callable(),
-  structuredClone: callable({ params: ["any"], returnType: "any" }),
+  structuredClone: callable({ params: [ANY_T], returnType: ANY_T }),
   BigInt: callable(),
   Symbol: callable(),
 
   // --- Namespaces ---
   JSON: namespace({
-    parse: callable({ params: [STRING_T], returnType: "any" }),
+    parse: callable({ params: [STRING_T], returnType: ANY_T }),
     // JSON.stringify(value, replacer?, space?). Replacer can be many things —
     // type as `any` to avoid false positives.
     stringify: callable({
-      params: ["any", "any", { type: "unionType", types: [STRING_T, NUMBER_T] }],
+      params: [ANY_T, ANY_T, { type: "unionType", types: [STRING_T, NUMBER_T] }],
       minParams: 1,
       returnType: STRING_T,
     }),
@@ -179,22 +179,22 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     random: callable({ params: [], returnType: NUMBER_T }),
   }),
   Object: namespace({
-    keys: callable({ params: ["any"], returnType: stringArray }),
-    values: callable({ params: ["any"], returnType: anyArray }),
-    entries: callable({ params: ["any"], returnType: anyArray }),
-    fromEntries: callable({ params: [anyArray], returnType: "any" }),
+    keys: callable({ params: [ANY_T], returnType: stringArray }),
+    values: callable({ params: [ANY_T], returnType: anyArray }),
+    entries: callable({ params: [ANY_T], returnType: anyArray }),
+    fromEntries: callable({ params: [anyArray], returnType: ANY_T }),
     // `Object.create(proto, props?)` — used e.g. with `null` to make a
     // null-prototype map that's safe against user-controlled keys like
     // "__proto__" (see std::index `groupBy`).
-    create: callable({ params: ["any", "any"], minParams: 1, returnType: "any" }),
+    create: callable({ params: [ANY_T, ANY_T], minParams: 1, returnType: ANY_T }),
     assign: callable(),
-    freeze: callable({ params: ["any"], returnType: "any" }),
-    getOwnPropertyNames: callable({ params: ["any"], returnType: stringArray }),
-    getPrototypeOf: callable({ params: ["any"], returnType: "any" }),
+    freeze: callable({ params: [ANY_T], returnType: ANY_T }),
+    getOwnPropertyNames: callable({ params: [ANY_T], returnType: stringArray }),
+    getPrototypeOf: callable({ params: [ANY_T], returnType: ANY_T }),
     setPrototypeOf: callable(),
   }),
   Array: namespace({
-    isArray: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isArray: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
     from: callable(),
     of: callable(),
   }),
@@ -205,15 +205,15 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
       fromCharCode: callable({ params: [], restParam: NUMBER_T, returnType: STRING_T }),
       raw: callable(),
     },
-    { params: ["any"], minParams: 0, returnType: STRING_T },
+    { params: [ANY_T], minParams: 0, returnType: STRING_T },
   ),
   // `Number(x)` coerces to a number; the rest are member helpers.
   Number: namespace(
     {
-      isInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
-      isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
-      isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
-      isSafeInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+      isInteger: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
+      isFinite: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
+      isNaN: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
+      isSafeInteger: callable({ params: [ANY_T], returnType: BOOLEAN_T }),
       parseFloat: callable({
         params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
         returnType: NUMBER_T,
@@ -224,10 +224,10 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
         returnType: NUMBER_T,
       }),
     },
-    { params: ["any"], minParams: 0, returnType: NUMBER_T },
+    { params: [ANY_T], minParams: 0, returnType: NUMBER_T },
   ),
   // `Boolean(x)` coerces any value to a boolean.
-  Boolean: callable({ params: ["any"], minParams: 0, returnType: BOOLEAN_T }),
+  Boolean: callable({ params: [ANY_T], minParams: 0, returnType: BOOLEAN_T }),
   Date: namespace({
     now: callable({ params: [], returnType: NUMBER_T }),
     parse: callable({ params: [STRING_T], returnType: NUMBER_T }),

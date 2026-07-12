@@ -228,7 +228,7 @@ function functionRefsInArgs(
 }
 
 /** Recursively extract function names from a synthesized type. */
-function functionNamesFromType(t: VariableType | "any", out: string[]): void {
+function functionNamesFromType(t: VariableType, out: string[]): void {
   if (isAnyType(t)) return;
   switch (t.type) {
     case "functionRefType":

@@ -1,3 +1,4 @@
+import { isAnyType } from "../typeChecker/utils.js";
 import type { BuiltinSignature } from "../typeChecker/types.js";
 import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
 import { JS_GLOBALS, lookupJsMember } from "../typeChecker/resolveCall.js";
@@ -10,14 +11,14 @@ import { formatTypeHint } from "../utils/formatType.js";
  */
 function formatSig(sig: BuiltinSignature): string {
   const parts = sig.params.map((p) =>
-    p === "any" ? "any" : formatTypeHint(p),
+    isAnyType(p) ? "any" : formatTypeHint(p),
   );
   if (sig.restParam !== undefined) {
     const rest =
-      sig.restParam === "any" ? "any" : formatTypeHint(sig.restParam);
+      isAnyType(sig.restParam) ? "any" : formatTypeHint(sig.restParam);
     parts.push(`...${rest}[]`);
   }
-  const ret = sig.returnType === "any" ? "any" : formatTypeHint(sig.returnType);
+  const ret = isAnyType(sig.returnType) ? "any" : formatTypeHint(sig.returnType);
   return `(${parts.join(", ")}) => ${ret}`;
 }
 

@@ -196,7 +196,7 @@ export function checkType(
  * neither hand-rolls the message.
  */
 export function emitAssignabilityError(
-  actual: VariableType | "any",
+  actual: VariableType,
   expected: VariableType,
   loc: SourceLocation | undefined,
   context: string,

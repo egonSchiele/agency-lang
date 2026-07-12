@@ -13,7 +13,7 @@ type Severity = "silent" | "warn" | "error";
 type CaseValue = MatchArmMeta["caseValue"]; // MatchPattern | "_"
 type NormalizedArm = { caseValue: CaseValue; guarded: boolean };
 type MatchSite = {
-  scrutineeType: VariableType | "any";
+  scrutineeType: VariableType;
   arms: NormalizedArm[];
   loc: SourceLocation | undefined;
   /** True when the match is used in expression position (`const x = match(...)`).

@@ -99,7 +99,7 @@ function allDistinct(values: (string | number | boolean)[]): boolean {
  * their enumeration belongs to `resolveEffectSet` (handler-narrowing spec).
  */
 export function decomposeCases(
-  type: VariableType | "any",
+  type: VariableType,
   aliases: Record<string, TypeAliasEntry>,
 ): CaseSet {
   if (isAnyType(type)) return OPEN;

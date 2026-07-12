@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { diagnostic } from "./diagnostics.js";
 import {
   AgencyNode,
@@ -47,9 +48,9 @@ import { isSchemaTypeHint } from "../utils/schemaParam.js";
  */
 function variadicElementType(
   param: FunctionParameter,
-): VariableType | "any" | undefined {
+): VariableType | undefined {
   if (param.typeHint?.type === "arrayType") return param.typeHint.elementType;
-  return param.typeHint ?? "any";
+  return param.typeHint ?? ANY_T;
 }
 
 /**
@@ -71,7 +72,7 @@ function variadicNamedSlotType(
 }
 
 export type ParamSlot = {
-  type: VariableType | "any" | undefined;
+  type: VariableType | undefined;
   validated: boolean;
   /** Original parameter name. Absent for builtins (which can't take named args). */
   name?: string;
@@ -976,7 +977,7 @@ function validatePipeArg(
 function pipeRhsSlotType(
   rhs: AgencyNode,
   ctx: TypeCheckerContext,
-): VariableType | "any" | undefined {
+): VariableType | undefined {
   if (rhs.type === "variableName") {
     const params = getParamsForNodeOrFunc(rhs.value, ctx);
     return params?.[0]?.typeHint;

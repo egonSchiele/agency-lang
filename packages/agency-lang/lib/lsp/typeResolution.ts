@@ -1,3 +1,4 @@
+import { isAnyType } from "../typeChecker/utils.js";
 import { getWordAtPosition } from "../cli/definition.js";
 import type { AgencyProgram, VariableType } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
@@ -20,6 +21,6 @@ export function resolveTypeAtPosition(
   if (!scope) return null;
 
   const resolved = scope.scope.lookup(word);
-  if (!resolved || resolved === "any") return null;
+  if (!resolved || isAnyType(resolved)) return null;
   return resolved;
 }

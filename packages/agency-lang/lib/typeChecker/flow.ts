@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { isAnyType } from "./utils.js";
 import type { AgencyNode, TypeAliasEntry, VariableType } from "../types.js";
 import type { Refine, NarrowCandidate } from "./narrowing.js";
@@ -38,16 +39,16 @@ function resolvePath(
 ): ScopeType {
   let current: ScopeType = baseType;
   for (const seg of chain) {
-    if (isAnyType(current)) return "any";
+    if (isAnyType(current)) return ANY_T;
     const resolved = safeResolveType(current, aliases);
     if (seg.kind === "prop") {
       if (resolved.type === "objectType") {
         const p = resolved.properties.find((pr) => pr.key === seg.name);
-        current = p ? p.value : "any";
+        current = p ? p.value : ANY_T;
       } else if (resolved.type === "genericType" && resolved.name === "Record") {
         current = resolved.typeArgs[1];
       } else {
-        return "any";
+        return ANY_T;
       }
     } else {
       // index segment: array element, or Record value (Record<K,V>[i] → V)
@@ -56,7 +57,7 @@ function resolvePath(
       } else if (resolved.type === "genericType" && resolved.name === "Record") {
         current = resolved.typeArgs[1];
       } else {
-        return "any";
+        return ANY_T;
       }
     }
   }
@@ -69,7 +70,7 @@ export function declaredPathType(
   ref: Reference,
   aliases: Record<string, TypeAliasEntry>,
 ): ScopeType {
-  return resolvePath(scope.lookup(ref.variable) ?? "any", ref.chain, aliases);
+  return resolvePath(scope.lookup(ref.variable) ?? ANY_T, ref.chain, aliases);
 }
 
 /**
@@ -156,7 +157,7 @@ export function uniteTypes(
   types: ScopeType[],
   aliases: Record<string, TypeAliasEntry>,
 ): ScopeType {
-  if (types.some((t) => isAnyType(t))) return "any";
+  if (types.some((t) => isAnyType(t))) return ANY_T;
   const concrete = (types as VariableType[]).filter((t) => !isNever(t));
   if (concrete.length === 0) return NEVER_T;
   const seen: Record<string, VariableType> = {};
@@ -223,7 +224,7 @@ function computeTypeAt(
 ): ScopeType {
   switch (at.kind) {
     case "start": {
-      const base = at.scope.lookup(ref.variable) ?? "any";
+      const base = at.scope.lookup(ref.variable) ?? ANY_T;
       return ref.chain.length === 0 ? base : resolvePath(base, ref.chain, env.typeAliases);
     }
     case "assign": {
@@ -241,7 +242,7 @@ function computeTypeAt(
     case "narrow": {
       if (referenceKey(at.ref) !== key) return typeAt(ref, at.prev, env);
       const base = typeAt(ref, at.prev, env);
-      if (isAnyType(base)) return "any";
+      if (isAnyType(base)) return ANY_T;
       return applyRefine(base, at.refine, env.typeAliases) ?? base;
     }
     case "join":

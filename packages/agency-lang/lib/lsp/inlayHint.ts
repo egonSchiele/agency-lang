@@ -1,3 +1,4 @@
+import { isAnyType } from "../typeChecker/utils.js";
 import { InlayHint, InlayHintKind } from "vscode-languageserver-protocol";
 import type { AgencyProgram } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
@@ -21,7 +22,7 @@ export function getInlayHints(
     if (!containingScope) continue;
 
     const resolved = containingScope.scope.lookup(node.variableName);
-    if (!resolved || resolved === "any") continue;
+    if (!resolved || isAnyType(resolved)) continue;
 
     // Position hint after variable name: loc.col is start of let/const,
     // so variable name starts at loc.col + declKind.length + 1

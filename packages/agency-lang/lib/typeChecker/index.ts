@@ -84,7 +84,7 @@ export class TypeChecker {
   private symbolTable?: SymbolTable;
   private currentFile?: string;
   private errors: TypeCheckError[] = [];
-  private inferredReturnTypes: Record<string, VariableType | "any"> = {};
+  private inferredReturnTypes: Record<string, VariableType> = {};
   private inferringReturnType = new Set<string>();
   private sourceText: string | undefined;
 
@@ -475,8 +475,8 @@ export class TypeChecker {
 
   /** Delegating method preserved for test compatibility. */
   isAssignable(
-    source: VariableType | "any",
-    target: VariableType | "any",
+    source: VariableType,
+    target: VariableType,
   ): boolean {
     return _isAssignable(source, target, this.typeAliases);
   }

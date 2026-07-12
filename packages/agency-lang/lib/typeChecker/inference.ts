@@ -35,7 +35,7 @@ export function inferReturnTypeFor(
   name: string,
   def: FunctionDefinition | GraphNodeDefinition,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   if (name in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[name];
   }
@@ -43,7 +43,7 @@ export function inferReturnTypeFor(
   // in a cycle trying to infer the return type,
   // just bail out and return "any" to avoid infinite recursion.
   if (ctx.inferringReturnType.has(name)) {
-    return "any";
+    return ANY_T;
   }
 
   ctx.inferringReturnType.add(name);
@@ -56,7 +56,7 @@ export function inferReturnTypeFor(
   return ctx.withScope(defScopeKey, () => {
     const scope = new Scope(defScopeKey);
     for (const param of def.parameters) {
-      scope.declare(param.name, param.typeHint ?? "any");
+      scope.declare(param.name, param.typeHint ?? ANY_T);
     }
     walkScopeBody(def.body, scope, ctx);
 
@@ -75,14 +75,14 @@ export function inferReturnTypeFor(
       }
     }
 
-    let inferred: VariableType | "any";
+    let inferred: VariableType;
     if (returnValues.length === 0) {
       inferred = { type: "primitiveType", value: "void" };
     } else {
       const typeAliases = ctx.getTypeAliases();
       const types = returnValues.map((v) => synthType(v, scope, ctx));
       if (types.some((t) => isAnyType(t))) {
-        inferred = "any";
+        inferred = ANY_T;
       } else {
         const concrete = types as VariableType[];
         // Returns that are all Result-typed merge into a single Result<T, E>
@@ -102,7 +102,7 @@ export function inferReturnTypeFor(
               isAssignable(t, first, typeAliases) &&
               isAssignable(first, t, typeAliases),
           );
-          inferred = allSame ? first : "any";
+          inferred = allSame ? first : ANY_T;
         }
       }
     }

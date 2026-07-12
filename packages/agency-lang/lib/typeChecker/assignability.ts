@@ -339,12 +339,7 @@ function collectLiteralKeys(keyType: VariableType): string[] | null {
   return null;
 }
 
-export function widenType(vt: VariableType | "any"): VariableType | "any" {
-  // NOTE: string-only check on purpose. widenType is a structure-preserving
-  // map; the ANY_T *object* must fall through to `return vt` (default) so it
-  // stays an object. Collapsing it to the string here corrupts nested fields
-  // (e.g. resultType.successType). Task 5 deletes this line with the sentinel.
-  if (vt === "any") return "any";
+export function widenType(vt: VariableType): VariableType {
   switch (vt.type) {
     case "stringLiteralType":
       return STRING_T;
@@ -357,35 +352,35 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         type: "objectType",
         properties: vt.properties.map((p) => ({
           key: p.key,
-          value: widenType(p.value) as VariableType,
+          value: widenType(p.value),
         })),
       };
     case "arrayType":
       return {
         type: "arrayType",
-        elementType: widenType(vt.elementType) as VariableType,
+        elementType: widenType(vt.elementType),
       };
     case "unionType":
       return {
         type: "unionType",
-        types: vt.types.map((t) => widenType(t) as VariableType),
+        types: vt.types.map((t) => widenType(t)),
       };
     case "resultType":
       return {
         type: "resultType",
-        successType: widenType(vt.successType) as VariableType,
-        failureType: widenType(vt.failureType) as VariableType,
+        successType: widenType(vt.successType),
+        failureType: widenType(vt.failureType),
       };
     case "schemaType":
       return {
         type: "schemaType",
-        inner: widenType(vt.inner) as VariableType,
+        inner: widenType(vt.inner),
       };
     case "genericType":
       return {
         type: "genericType",
         name: vt.name,
-        typeArgs: vt.typeArgs.map((a) => widenType(a) as VariableType),
+        typeArgs: vt.typeArgs.map((a) => widenType(a)),
       };
     default:
       return vt;
@@ -393,7 +388,7 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
 }
 
 /** True iff `vt` is the bottom type `never`. */
-export function isNever(vt: VariableType | "any"): boolean {
+export function isNever(vt: VariableType): boolean {
   return !isAnyType(vt) && vt.type === "primitiveType" && vt.value === "never";
 }
 
@@ -415,8 +410,8 @@ export function isOptionalType(
 }
 
 export function isAssignable(
-  source: VariableType | "any",
-  target: VariableType | "any",
+  source: VariableType,
+  target: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
   return isAssignableGuarded(source, target, typeAliases, new Set());
@@ -435,8 +430,8 @@ export function isAssignable(
  * repeats recompute real results.
  */
 function isAssignableGuarded(
-  source: VariableType | "any",
-  target: VariableType | "any",
+  source: VariableType,
+  target: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
   inProgress: Set<string>,
 ): boolean {

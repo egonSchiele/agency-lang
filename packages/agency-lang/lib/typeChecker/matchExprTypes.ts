@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import type { VariableType } from "../types.js";
 import type { MatchYield } from "../types/matchYield.js";
 import type { SourceLocation } from "../types/base.js";
@@ -65,7 +66,7 @@ export function computeMatchExprTypes(
         const typeExpr = (y: MatchYield) => y.typeSource ?? y.value;
         const types = yields.map((y) => {
           const e = typeExpr(y);
-          return e ? synthType(e, info.scope, ctx) : "any";
+          return e ? synthType(e, info.scope, ctx) : ANY_T;
         });
         // Record each yield's UNWIDENED type + loc for CHECKED-position
         // per-arm assignability checking (see `checkMatchExprYields`).
@@ -76,7 +77,7 @@ export function computeMatchExprTypes(
         // A yield of `any` makes the whole match's value type `any` — the
         // union can't be narrowed.
         ctx.matchExprTypes[id] = types.some(isAnyType)
-          ? "any"
+          ? ANY_T
           : unionTypes(
               (types as VariableType[]).map((t) => widenType(t) as VariableType),
             );

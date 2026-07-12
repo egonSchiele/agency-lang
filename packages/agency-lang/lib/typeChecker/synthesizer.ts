@@ -61,7 +61,7 @@ const RESULT_BRANCH_FIELDS = new Set(
  * Resolve a field access on a `ResultType` against the narrowing layer.
  * Returns:
  *  - a `VariableType`  → caller should set `currentType = ...; break;`
- *  - the string `"any"` → caller should `return "any"` (Result field on an
+ *  - the string `"any"` → caller should `return ANY_T` (Result field on an
  *    un-narrowed Result; un-typed escape hatch until Increment 3 tightens
  *    `.value` on Failure into a hard error)
  *  - `null` → no resolution; fall through to the next case in `synthValueAccess`
@@ -73,12 +73,12 @@ const RESULT_BRANCH_FIELDS = new Set(
 function resolveResultFieldType(
   _resolved: ResultType,
   fieldName: string,
-): VariableType | "any" | null {
+): VariableType | null {
   // Narrowed Results are now real member object types (narrowed via the
   // discriminant engine), so this only sees UN-narrowed Results: keep the
   // lenient `any` for known Result fields. Task 2 deletes this entirely and
   // routes un-narrowed Results through strict union access.
-  if (RESULT_FIELDS.has(fieldName)) return "any";
+  if (RESULT_FIELDS.has(fieldName)) return ANY_T;
   return null;
 }
 
@@ -197,7 +197,7 @@ function accessResultField(
   aliases: Record<string, TypeAliasEntry>,
   ctx: TypeCheckerContext,
   loc: SourceLocation | undefined,
-): VariableType | "any" | null {
+): VariableType | null {
   const severity = strictMemberAccessSeverity(ctx);
   if (severity === "silent") {
     return resolveResultFieldType(result, fieldName);
@@ -234,7 +234,7 @@ function accessResultField(
  * which is just `VariableType`), convert the sentinel into the equivalent
  * primitiveType("any") so the inner field is a real VariableType.
  */
-function maybeAny(t: VariableType | "any"): VariableType {
+function maybeAny(t: VariableType): VariableType {
   return isAnyType(t) ? ANY_T : t;
 }
 
@@ -254,7 +254,7 @@ export function synthType(
   expr: AgencyNode,
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   switch (expr.type) {
     case "variableName": {
       // Expression-match temp: `__matchval_<id>` is the synthetic ref the
@@ -263,7 +263,7 @@ export function synthType(
       // outer yield that reads an inner match's temp gets the inner union.
       const matchvalId = parseMatchValId(expr.value);
       if (matchvalId !== undefined) {
-        return ctx.matchExprTypes[matchvalId] ?? "any";
+        return ctx.matchExprTypes[matchvalId] ?? ANY_T;
       }
       const scopeType = scope.lookup(expr.value);
       if (scopeType) {
@@ -321,7 +321,7 @@ export function synthType(
           returnType: imported.returnType ?? null,
         };
       }
-      return "any";
+      return ANY_T;
     }
     case "number":
     case "unitLiteral":
@@ -365,7 +365,7 @@ export function synthType(
       // their own `def schema()` (which would create parse ambiguity).
       return { type: "schemaType", inner: expr.typeArg };
     default:
-      return "any";
+      return ANY_T;
   }
 }
 
@@ -378,7 +378,7 @@ function synthTryExpression(
   expr: AgencyNode & { type: "tryExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const inner = synthType(expr.call, scope, ctx);
   if (isAnyType(inner)) return inner;
   if (inner.type === "resultType") return inner;
@@ -410,7 +410,7 @@ function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const op = expr.operator;
   if (op === "catch") return synthCatch(expr, scope, ctx);
   if (op === "|>") return synthPipe(expr, scope, ctx);
@@ -440,7 +440,7 @@ function synthBinOp(
   if (op === "+") {
     const leftType = synthType(expr.left, scope, ctx);
     const rightType = synthType(expr.right, scope, ctx);
-    const isString = (t: VariableType | "any") =>
+    const isString = (t: VariableType) =>
       !isAnyType(t) &&
       ((t.type === "primitiveType" && t.value === "string") ||
         t.type === "stringLiteralType");
@@ -464,10 +464,10 @@ function synthLogical(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const left = synthType(expr.left, scope, ctx);
   const right = synthType(expr.right, scope, ctx);
-  if (isAnyType(left) || isAnyType(right)) return "any";
+  if (isAnyType(left) || isAnyType(right)) return ANY_T;
   const seen = new Map<string, VariableType>();
   const aliases = ctx.getTypeAliases();
   const collect = (t: VariableType) => {
@@ -495,7 +495,7 @@ function synthNullishCoalesce(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const left = synthType(expr.left, scope, ctx);
   if (isAnyType(left)) return synthType(expr.right, scope, ctx);
   const stripped = stripNullable(left);
@@ -530,7 +530,7 @@ function synthCatch(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const left = synthType(expr.left, scope, ctx);
   if (isAnyType(left)) return left;
   if (left.type === "resultType") {
@@ -554,7 +554,7 @@ function synthPipe(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const right = synthPipeRhs(expr.right, scope, ctx);
   if (isAnyType(right)) return right;
   if (right.type === "resultType") return right;
@@ -570,7 +570,7 @@ function synthPipeRhs(
   rhs: AgencyNode,
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const rhsType = synthType(rhs, scope, ctx);
   if (!isAnyType(rhsType) && rhsType.type === "functionRefType") {
     const returnType =
@@ -587,7 +587,7 @@ function synthFunctionCall(
   expr: AgencyNode & { type: "functionCall" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   // Result constructors: parameterize ResultType from the argument so callers
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
   // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
@@ -622,29 +622,29 @@ function synthFunctionCall(
       return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
     }
   }
-  return "any";
+  return ANY_T;
 }
 
 function synthArray(
   expr: AgencyNode & { type: "agencyArray" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   if (expr.items.length === 0)
     return { type: "arrayType", elementType: ANY_T };
-  const itemTypes: (VariableType | "any")[] = [];
+  const itemTypes: (VariableType)[] = [];
   for (const item of expr.items) {
     if (item.type === "splat") {
       const splatType = synthType(item.value, scope, ctx);
-      if (isAnyType(splatType)) return "any";
-      if (splatType.type !== "arrayType") return "any";
+      if (isAnyType(splatType)) return ANY_T;
+      if (splatType.type !== "arrayType") return ANY_T;
       itemTypes.push(splatType.elementType);
       continue;
     }
     itemTypes.push(synthType(item, scope, ctx));
   }
   const concreteTypes = itemTypes.filter((t): t is VariableType => !isAnyType(t));
-  if (concreteTypes.length === 0) return "any";
+  if (concreteTypes.length === 0) return ANY_T;
   if (concreteTypes.length === 1) {
     return { type: "arrayType", elementType: concreteTypes[0] };
   }
@@ -675,7 +675,7 @@ function synthObject(
   expr: AgencyNode & { type: "agencyObject" },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   // Use a Map so later entries overwrite earlier ones (later-wins for splats
   // followed by explicit keys, e.g. { ...a, x: "new" } produces x's literal type).
   const properties = new Map<string, VariableType>();
@@ -687,8 +687,8 @@ function synthObject(
   for (const entry of expr.entries) {
     if ("type" in entry && entry.type === "splat") {
       const splatType = synthType(entry.value, scope, ctx);
-      if (isAnyType(splatType)) return "any";
-      if (splatType.type !== "objectType") return "any";
+      if (isAnyType(splatType)) return ANY_T;
+      if (splatType.type !== "objectType") return ANY_T;
       for (const prop of splatType.properties)
         properties.set(prop.key, prop.value);
       continue;
@@ -709,7 +709,7 @@ function synthObject(
       ? NULL_T
       : synthType(kv.value, scope, ctx);
     if (isAnyType(valueType)) {
-      return "any";
+      return ANY_T;
     }
     if (kv.computedKey) {
       hasComputedKey = true;
@@ -723,7 +723,7 @@ function synthObject(
       ...Array.from(properties.values()),
       ...computedValueTypes,
     ];
-    if (allValueTypes.length === 0) return "any";
+    if (allValueTypes.length === 0) return ANY_T;
     const unique = uniqBy(allValueTypes, (t) => typeKey(t, ctx.getTypeAliases()));
     const valueType: VariableType =
       unique.length === 1
@@ -847,7 +847,7 @@ function validateAgencyFunctionMethod(
 function narrowedPathPrefix(
   expr: ValueAccess,
   ctx: TypeCheckerContext,
-): { type: VariableType | "any"; consumed: number } | null {
+): { type: VariableType; consumed: number } | null {
   if (!ctx.flowEnv || expr.base.type !== "variableName") return null;
   const flow = ctx.flowEnv.flowOf.get(expr);
   if (!flow) return null;
@@ -883,7 +883,7 @@ export function synthValueAccess(
   expr: ValueAccess,
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const typeAliases = ctx.getTypeAliases();
 
   // When a narrowed stable prefix applies, start the structural walk from its
@@ -901,15 +901,15 @@ export function synthValueAccess(
       const methodName = element.functionCall.functionName;
       if (methodName === "partial" || methodName in AGENCY_FUNCTION_METHOD_TYPES) {
         validateAgencyFunctionMethod(expr, element, methodName, scope, ctx);
-        currentType = "any";
+        currentType = ANY_T;
         continue;
       }
     }
 
-    if (isAnyType(currentType)) return "any";
+    if (isAnyType(currentType)) return ANY_T;
     const resolved = safeResolveType(currentType, typeAliases);
     if (resolved.type === "primitiveType" && resolved.value === "any")
-      return "any";
+      return ANY_T;
     // never is the bottom type: any access on it is itself never, and emits no
     // diagnostic (a provably-unreachable receiver must not flag spurious
     // missing-member errors).
@@ -931,7 +931,7 @@ export function synthValueAccess(
             ctx,
             expr.loc,
           );
-          if (fieldType !== null && isAnyType(fieldType)) return "any";
+          if (fieldType !== null && isAnyType(fieldType)) return ANY_T;
           if (fieldType !== null) {
             currentType = fieldType;
             break;
@@ -949,7 +949,7 @@ export function synthValueAccess(
           );
           if (memberType === null) {
             pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
-            return "any";
+            return ANY_T;
           }
           currentType = memberType;
         } else if (resolved.type === "objectType") {
@@ -958,7 +958,7 @@ export function synthValueAccess(
             currentType = prop.value;
           } else {
             pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
-            return "any";
+            return ANY_T;
           }
         } else if (resolved.type === "genericType" && resolved.name === "Record") {
           // Record<K, V>: property access yields V (key existence is dynamic).
@@ -971,7 +971,7 @@ export function synthValueAccess(
             break;
           }
           pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
-          return "any";
+          return ANY_T;
         }
         break;
       }
@@ -986,7 +986,7 @@ export function synthValueAccess(
           if (recordLike) {
             currentType = recordLike.value;
           } else {
-            return "any";
+            return ANY_T;
           }
         }
         break;
@@ -1043,7 +1043,7 @@ export function synthValueAccess(
           currentType = isAnyType(sig.returnType) ? ANY_T : sig.returnType;
           break;
         }
-        return "any";
+        return ANY_T;
       }
     }
   }
@@ -1113,7 +1113,7 @@ function validatePrimitiveMethodCall(
     const arg = args[i];
     if ("type" in arg && arg.type === "splat") continue; // skip splat element check for primitives
     const slotType =
-      i < sig.params.length ? sig.params[i] : (sig.restParam as VariableType | "any" | undefined);
+      i < sig.params.length ? sig.params[i] : (sig.restParam as VariableType | undefined);
     if (slotType === undefined || isAnyType(slotType)) continue;
     const argType = synthType(arg as AgencyNode, scope, ctx);
     if (isAnyType(argType)) continue;
@@ -1154,7 +1154,7 @@ function synthArrayCallbackMethod(
   call: { functionName: string; arguments: AgencyNode[] | unknown[]; block?: BlockArgument },
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const elementT = receiver.elementType;
   if (cbKind === "sameArray") return receiver;
   if (cbKind === "void") return VOID_T;
@@ -1192,7 +1192,7 @@ function synthArrayCallbackMethod(
     }
     return cbReturn;
   }
-  return "any";
+  return ANY_T;
 }
 
 /**
@@ -1211,17 +1211,17 @@ function synthCallbackReturnType(
   elementT: VariableType,
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   if (call.block) {
     return synthBlockReturnType(call.block, elementT, scope, ctx);
   }
   const args = (call.arguments as AgencyNode[]) ?? [];
-  if (args.length === 0) return "any";
+  if (args.length === 0) return ANY_T;
   const cbType = synthType(args[0], scope, ctx);
-  if (isAnyType(cbType)) return "any";
-  if (cbType.type === "functionRefType") return cbType.returnType ?? "any";
+  if (isAnyType(cbType)) return ANY_T;
+  if (cbType.type === "functionRefType") return cbType.returnType ?? ANY_T;
   if (cbType.type === "blockType") return cbType.returnType;
-  return "any";
+  return ANY_T;
 }
 
 /**
@@ -1239,7 +1239,7 @@ function synthBlockReturnType(
   elementT: VariableType,
   scope: Scope,
   ctx: TypeCheckerContext,
-): VariableType | "any" {
+): VariableType {
   const child = scope.child();
   // First param is the element; second (if present) is the index for
   // most array iteration methods. We don't try to special-case `reduce`
@@ -1248,18 +1248,18 @@ function synthBlockReturnType(
   block.params.forEach((p, i) => {
     if (i === 0) child.declareLocal(p.name, elementT);
     else if (i === 1) child.declareLocal(p.name, NUMBER_T);
-    else child.declareLocal(p.name, "any");
+    else child.declareLocal(p.name, ANY_T);
   });
 
-  const returnTypes: (VariableType | "any")[] = [];
+  const returnTypes: (VariableType)[] = [];
   for (const { node } of walkNodes(block.body)) {
     if (node.type === "returnStatement" && node.value) {
       returnTypes.push(synthType(node.value, child, ctx));
     }
   }
-  if (returnTypes.length === 0) return "any";
+  if (returnTypes.length === 0) return ANY_T;
   const concrete = returnTypes.filter((t): t is VariableType => !isAnyType(t));
-  if (concrete.length === 0) return "any";
+  if (concrete.length === 0) return ANY_T;
   if (concrete.length === 1) return concrete[0];
   // Dedupe structurally identical types.
   const seen = new Map<string, VariableType>();

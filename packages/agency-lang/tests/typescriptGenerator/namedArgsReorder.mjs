@@ -252,7 +252,12 @@ runner.halt(__stack.args.greeting + ` ${__stack.args.name}${__stack.args.punctua
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;

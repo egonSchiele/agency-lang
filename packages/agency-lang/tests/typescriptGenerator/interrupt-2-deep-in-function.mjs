@@ -287,7 +287,12 @@ runner.halt(`Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -473,7 +478,12 @@ runner.halt(__stack.locals.response)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;

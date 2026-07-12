@@ -112,6 +112,7 @@ import { SourceMapBuilder } from "./sourceMap.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
+import { DestructiveTracking } from "./typescriptBuilder/destructiveTracking.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
 import {
@@ -213,6 +214,7 @@ export class TypeScriptBuilder {
   private scopes: ScopeManager;
   private steps: StepPathTracker = new StepPathTracker();
   private names: NameClassifier;
+  private tracking: DestructiveTracking;
   private pipes: PipeChainEmitter;
   private assigns: AssignmentEmitter;
 
@@ -324,6 +326,7 @@ export class TypeScriptBuilder {
     this.compilationUnit = info;
     this.scopes = new ScopeManager(info);
     this.names = new NameClassifier(info);
+    this.tracking = new DestructiveTracking(this.names, info);
     this.pipes = new PipeChainEmitter({
       processNode: (n) => this.processNode(n),
       processValueAccess: (n) => this.processValueAccess(n),
@@ -2078,17 +2081,8 @@ export class TypeScriptBuilder {
       }
     }
 
-    // __self.__destructiveRan — UNCONDITIONAL in every function. Decision 8
-    // sets this at runtime (the tool loop writes frame.locals.__destructiveRan
-    // when a destructive tool runs inside an llm() call), which the builder
-    // cannot see statically; and an unconditional boolean init keeps the exit
-    // stamp from ever computing `x || undefined`.
-    setupStmts.push(
-      ts.assign(
-        ts.self("__destructiveRan"),
-        ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
-      ),
-    );
+    // __self.__destructiveRan init — see DestructiveTracking.init().
+    setupStmts.push(this.tracking.init());
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
@@ -2165,8 +2159,21 @@ export class TypeScriptBuilder {
             threads: $(ts.id("__setupData")).prop("threads").done(),
             body: [...onFunctionStartHook, ...bodyCode],
           }),
-          ts.raw(
-            "if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }",
+          // if (runner.halted) { if (isFailure(runner.haltResult)) { <stamp>; }
+          //   return runner.haltResult; }
+          // The stamp expression comes from DestructiveTracking; the halt
+          // check / return around it is general function-exit control flow.
+          ts.if(
+            ts.prop(ts.id("runner"), "halted"),
+            ts.statements([
+              ts.if(
+                ts.call(ts.id("isFailure"), [
+                  ts.prop(ts.id("runner"), "haltResult"),
+                ]),
+                ts.statements([this.tracking.exitStamp()]),
+              ),
+              ts.return(ts.prop(ts.id("runner"), "haltResult")),
+            ]),
           ),
         ]),
         ts.raw(
@@ -3868,30 +3875,6 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
-  /** If `stmt` is a simple assignment whose value is a direct call to a
-   *  destructive function (optionally `try`-wrapped), return the local
-   *  variable name its result binds to (`__self.<name>`). Used to emit the
-   *  outcome-dependent destructive flip. Returns null for bare calls,
-   *  nested-in-expression calls, patterns, access chains, or non-innermost
-   *  block targets — those get the conservative pre-flip instead. */
-  private destructiveOutcomeVar(stmt: AgencyNode): string | null {
-    if (stmt.type !== "assignment") return null;
-    const asn = stmt as Assignment;
-    if (asn.pattern || asn.accessChain || asn.blockDepth) return null;
-    if (!asn.variableName) return null;
-    const value = asn.value as { type?: string; functionName?: string; call?: { type?: string; functionName?: string } };
-    let call: { type?: string; functionName?: string } | undefined;
-    if (value?.type === "functionCall") {
-      call = value;
-    } else if (value?.type === "tryExpression" && value.call?.type === "functionCall") {
-      call = value.call;
-    }
-    if (!call?.functionName) return null;
-    return this.compilationUnit.destructiveFunctions[call.functionName]
-      ? asn.variableName
-      : null;
-  }
-
   // ── Body processing ──
 
   private processBodyAsParts(body: AgencyNode[], startId = 0): TsNode[] {
@@ -3947,24 +3930,15 @@ export class TypeScriptBuilder {
 
       const stepIndex = nextId();
       this.steps.push(stepIndex);
-      // Destructive-execution tracking (replaces the old __retryable flip).
-      // Rule 1: inside a destructive def, any possibly-effectful statement
-      // marks the activation. Rule 2 (non-destructive function calling a
-      // destructive fn): an outcome-dependent post-flip when the result is
-      // a simple assignment target (covers `const r = burn()` and
-      // `const r = try burn()`), else a conservative pre-flip.
-      let destructivePostVar: string | null = null;
-      if (this.scopes.inDestructiveFunction) {
-        if (this.names.containsImpureCall(stmt)) {
-          if (!currentPart) currentPart = [];
-          currentPart.push(ts.assign(ts.self("__destructiveRan"), ts.bool(true)));
-        }
-      } else {
-        destructivePostVar = this.destructiveOutcomeVar(stmt);
-        if (!destructivePostVar && this.names.containsDestructiveCall(stmt)) {
-          if (!currentPart) currentPart = [];
-          currentPart.push(ts.assign(ts.self("__destructiveRan"), ts.bool(true)));
-        }
+      // Destructive-execution tracking: the pre-flip runs before the
+      // statement, the post-flip after. See DestructiveTracking.statementFlips.
+      const { pre, post } = this.tracking.statementFlips(
+        stmt,
+        this.scopes.inDestructiveFunction,
+      );
+      if (pre) {
+        if (!currentPart) currentPart = [];
+        currentPart.push(pre);
       }
       const processed = this.processStatement(stmt);
       if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
@@ -3973,18 +3947,9 @@ export class TypeScriptBuilder {
         if (!currentPart) currentPart = [];
         currentPart.push(processed);
       }
-      if (destructivePostVar) {
-        // The destructive callee's result is bound at `__self.<var>`
-        // (__self === stack.locals). OR its outcome into the activation:
-        // a returned failure contributes its own destructiveRan (so a
-        // swallowed destructive failure still marks us); success or a
-        // plain value means the destructive work ran, so mark true.
+      if (post) {
         if (!currentPart) currentPart = [];
-        currentPart.push(
-          ts.raw(
-            `__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.${destructivePostVar}) ? __self.${destructivePostVar}.destructiveRan : true);`,
-          ),
-        );
+        currentPart.push(post);
       }
       if (this._asyncBranchCheckNeeded) {
         branchKeys[nextId()] = this.steps.joined();

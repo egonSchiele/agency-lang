@@ -84,3 +84,20 @@ node callerBlockPoisoned() {
   }
   return "unexpected"
 }
+
+// Interrupt survival: a destructive tool marks the caller, then the flow
+// pauses on an interrupt and resumes. The mark lives in the frame's locals,
+// which are deep-cloned into the checkpoint, so after resume the failure
+// still reports destructiveRan == true.
+def destructiveThenPause(): Result {
+  const _ = llm("Use succeedTool on 'i'.", { tools: [succeedTool] })
+  const _ok = interrupt("pause after destructive work")
+  return failure("failed after resume")
+}
+node destructiveSurvivesInterrupt() {
+  const r = destructiveThenPause()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}

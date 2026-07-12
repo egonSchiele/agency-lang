@@ -16,5 +16,8 @@
   },
   "callerBlockPoisoned": {
     "callerDestructiveRan": true
+  },
+  "destructiveSurvivesInterrupt": {
+    "callerDestructiveRan": true
   }
 }

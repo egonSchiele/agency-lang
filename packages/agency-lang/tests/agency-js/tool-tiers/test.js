@@ -4,6 +4,9 @@ import {
   callerPoisonedBySuccess,
   callerNotPoisoned,
   callerBlockPoisoned,
+  destructiveSurvivesInterrupt,
+  respondToInterrupts,
+  approve,
 } from "./agent.js";
 import { writeFileSync } from "fs";
 
@@ -64,6 +67,15 @@ const results = {};
 {
   const result = await callerBlockPoisoned({});
   results.callerBlockPoisoned = { callerDestructiveRan: result.data };
+}
+
+// Interrupts (pause/resume): the destructive mark must survive a checkpoint.
+// The flow marks the caller, pauses on an interrupt, resumes on approve, then
+// fails. destructiveRan must still be true after the round-trip.
+{
+  const paused = await destructiveSurvivesInterrupt({});
+  const resumed = await respondToInterrupts(paused.data, [approve()]);
+  results.destructiveSurvivesInterrupt = { callerDestructiveRan: resumed.data };
 }
 
 writeFileSync("__result.json", JSON.stringify(results, null, 2));

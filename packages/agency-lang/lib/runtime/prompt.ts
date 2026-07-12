@@ -768,13 +768,15 @@ export async function runPrompt(args: {
   retryConfig?: RetryConfig;
   maxToolCallRounds?: number;
   removedTools?: string[];
-  /** The CALLING function's `__self` (its locals object), threaded in by the
-   *  `llm()` codegen as `destructiveSink: __self`. When a tool does
-   *  destructive work, decision 8 marks `destructiveSink.__destructiveRan`
-   *  so the caller's exit stamp reports it. Passed by reference — the same
+  /** The CALLING function's locals object, threaded in by the `llm()` codegen
+   *  as `destructiveSink: __self`. The codegen passes the whole `__self`, but
+   *  runPrompt only ever writes ONE key on it, `__destructiveRan`, so the type
+   *  narrows to exactly that field. When a tool does destructive work,
+   *  decision 8 sets `destructiveSink.__destructiveRan = true`, and the
+   *  caller's exit stamp reads it back. Passed by reference — the same
    *  by-reference trick `removedTools` uses. Absent for direct TS callers
    *  (e.g. `agency.llm`), so the mark is a no-op there. */
-  destructiveSink?: Record<string, any>;
+  destructiveSink?: { __destructiveRan?: boolean };
   checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
   const {
@@ -810,7 +812,8 @@ export async function runPrompt(args: {
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
-  const destructiveSink: Record<string, any> | undefined = args.destructiveSink;
+  const destructiveSink: { __destructiveRan?: boolean } | undefined =
+    args.destructiveSink;
 
   const rawTools: any[] = args.clientConfig?.tools || [];
   const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {

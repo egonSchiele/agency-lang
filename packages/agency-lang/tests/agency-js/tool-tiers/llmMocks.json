@@ -14,5 +14,8 @@
   { "return": "refuseTool refused" },
 
   { "toolCall": { "name": "succeedTool", "args": { "id": "z" } } },
-  { "return": "succeedTool in block done" }
+  { "return": "succeedTool in block done" },
+
+  { "toolCall": { "name": "succeedTool", "args": { "id": "i" } } },
+  { "return": "succeedTool before pause done" }
 ]

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { _readSkill } from "./skills.js";
+import { _readSkill, _docsDir } from "./skills.js";
 
 describe("_readSkill", () => {
   let fakeHome: string;
@@ -52,5 +52,13 @@ describe("_readSkill", () => {
     } finally {
       fs.rmSync(targetPath, { force: true });
     }
+  });
+});
+
+describe("_docsDir", () => {
+  it("resolves the diagnostics section under docs/", () => {
+    // Guards the union widening ("guide" | "cli" | "diagnostics"). Pure path
+    // math — does not depend on the staged docs being present.
+    expect(_docsDir("diagnostics").endsWith(path.join("docs", "diagnostics"))).toBe(true);
   });
 });

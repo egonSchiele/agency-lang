@@ -6,11 +6,9 @@ import type { TypeCheckError } from "./types.js";
  *
  * APPEND-ONLY: a shipped code is never renumbered or reused. A retired
  * diagnostic keeps its entry with `retired: true` so the code stays reserved.
- * Codes are AG#### with category ranges (documentation, not machinery):
- *   AG1xxx types/aliases          AG2xxx assignability/checking
- *   AG3xxx interrupts/effects     AG4xxx names/scope/reserved/const
- *   AG5xxx match/narrowing        AG6xxx tools/llm/blocks
- *   AG7xxx static-init/config/imports
+ * Codes are AG#### (append-only). Category ranges live in
+ * DIAGNOSTIC_CATEGORIES below — the single source for the docs generator
+ * and the `agency explain --list` grouping.
  *
  * Message templates use {param} placeholders. Templates are extracted
  * VERBATIM from the legacy inline strings — rendered output must be
@@ -496,6 +494,30 @@ export const DIAGNOSTICS = {
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;
+
+/**
+ * Category ranges as data (they were prose in the DIAGNOSTICS header comment).
+ * The CLI `explain --list` grouping and the docs generator both key off this
+ * single source. Append-only, like the codes: a new AG8xxx range means a new
+ * entry here. `slug` is the docs filename; `title` is the human heading.
+ */
+export const DIAGNOSTIC_CATEGORIES = [
+  { prefix: "AG1", slug: "types-aliases", title: "Types and aliases" },
+  { prefix: "AG2", slug: "checking", title: "Assignability and checking" },
+  { prefix: "AG3", slug: "effects", title: "Interrupts, effects, and handlers" },
+  { prefix: "AG4", slug: "names", title: "Names, scope, and reserved words" },
+  { prefix: "AG5", slug: "match", title: "Match and narrowing" },
+  { prefix: "AG6", slug: "tools", title: "Calls, tools, and LLM usage" },
+  { prefix: "AG7", slug: "static-init", title: "Static init, config, and imports" },
+] as const;
+
+/** The category a code belongs to, by its AG# prefix, or undefined if none. */
+export function categoryForCode(
+  code: string,
+): (typeof DIAGNOSTIC_CATEGORIES)[number] | undefined {
+  const prefix = code.slice(0, 3);
+  return DIAGNOSTIC_CATEGORIES.find((c) => c.prefix === prefix);
+}
 
 /**
  * The {placeholder} names of a template, as a string-literal union.

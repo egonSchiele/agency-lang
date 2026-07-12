@@ -197,14 +197,16 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
   return buildSkillsTool(dir, layout)
 }
 
-export def docsSkill(section: "guide" | "cli") {
+export def docsSkill(section: "guide" | "cli" | "diagnostics") {
   """
   Build a docs tool for an LLM over the packaged Agency documentation.
   "guide" serves the language guide (syntax, types, control flow);
-  "cli" serves the CLI reference. The returned tool lists every page in
-  its description and lets the model read any one on demand.
+  "cli" serves the CLI reference; "diagnostics" serves the type-checker
+  diagnostic codes (AG####) with explanations and fixes. The returned tool
+  lists every page in its description and lets the model read any one on
+  demand.
 
-  @param section - Which documentation set to serve: "guide" or "cli".
+  @param section - Which documentation set to serve: "guide", "cli", or "diagnostics".
   """
   // No approval interrupt for the startup scan: these docs ship inside
   // the agency package, so scanning them carries the same trust as

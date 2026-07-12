@@ -523,3 +523,16 @@ export function formatErrors(errors: TypeCheckError[]): string {
     })
     .join("\n");
 }
+
+/**
+ * One-line discovery hint printed AFTER the error block, naming the first
+ * error-severity diagnostic. Returns null when no error-severity diagnostic
+ * is present (warnings-only output gets no hint). Kept OUT of formatErrors
+ * so programmatic consumers (compile.ts, serve.ts) are untouched — only the
+ * human/agent-facing print sites append it.
+ */
+export function formatDiagnosticsHint(errors: TypeCheckError[]): string | null {
+  const first = errors.find((e) => e.severity === "error");
+  if (!first) return null;
+  return `Run 'agency explain ${first.code}' for an explanation.`;
+}

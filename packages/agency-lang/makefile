@@ -1,4 +1,4 @@
-.PHONY: all test stdlib agents doc packages-doc refresh-action-pins build clean publish compile-agency
+.PHONY: all test stdlib agents doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency
 
 # Resolve tsc/tsc-alias from the workspace, not from whatever happens to
 # be global. Historically `make build` was only ever reached via
@@ -30,13 +30,14 @@ endef
 # copies must be idempotent.
 define stage-stdlib-docs
 	mkdir -p stdlib/docs
-	rm -rf stdlib/docs/guide stdlib/docs/cli
+	rm -rf stdlib/docs/guide stdlib/docs/cli stdlib/docs/diagnostics
 	cp -r docs/site/guide stdlib/docs/guide
 	cp -r docs/site/cli stdlib/docs/cli
+	cp -r docs/site/diagnostics stdlib/docs/diagnostics
 endef
 
 all:
-	pnpm run templates && $(MAKE) build && $(MAKE) compile-agency && $(MAKE) doc
+	pnpm run templates && $(MAKE) build && $(MAKE) diagnostics-docs && $(MAKE) compile-agency && $(MAKE) doc
 
 # Build the dist/ tree. Invoked by `pnpm run build`. Kept here (rather
 # than as a chain in package.json) so the steps remain readable and easy
@@ -124,6 +125,12 @@ doc:
 	  rm -rf docs/site/stdlib/ && node ./dist/scripts/agency.js doc stdlib -o docs/site/stdlib/ && \
 	  mkdir -p .agency-build && echo "$$STAMP" > .agency-build/doc.stamp; \
 	fi
+
+# Regenerate docs/site/diagnostics/ from the diagnostics registry. Cheap
+# (one node invocation), so no stamp. Must run BEFORE compile-agency stages
+# docs into stdlib/, so `all` sequences it right after build.
+diagnostics-docs:
+	node ./dist/scripts/generateDiagnosticsDocs.js docs/site/diagnostics/
 
 # Documentable packages: each has an index.agency that `agency doc` reads.
 # (brave-search / tui / examples have no library source, so they're skipped.)

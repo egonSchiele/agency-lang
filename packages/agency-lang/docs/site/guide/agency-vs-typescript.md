@@ -25,6 +25,6 @@ On the other hand, Agency has a lot of things built into the language that TypeS
 - [State isolation](/guide/state-isolation).
 - A huge, [agent-focused standard library](/guide/agency-stdlib) — web search, browsers, messaging, and more.
 
-And of course you can easily [call TypeScript code from Agency](http://localhost:5173/guide/ts-interop.html), so you can use the best of both worlds. Agency compiles to TypeScript or JavaScript, so it fits right in with your existing stack.
+And of course you can easily [call TypeScript code from Agency](/guide/ts-interop.md), so you can use the best of both worlds. Agency compiles to TypeScript or JavaScript, so it fits right in with your existing stack.
 
 See [Why Agency?](/guide/why-agency) for a more detailed discussion.

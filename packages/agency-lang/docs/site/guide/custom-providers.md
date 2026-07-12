@@ -1,4 +1,11 @@
-# Custom & local model providers
+---
+name: Custom Providers
+description: How to create and use custom model providers in Agency.
+---
+
+*This feature is in active development. This information was written by an LLM and may be out of date.*
+
+# Custom Providers
 
 Agency selects models through Smoltalk, which ships providers for OpenAI,
 Anthropic, Google, and Ollama, plus various built-in **hosted open-model**

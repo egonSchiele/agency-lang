@@ -76,3 +76,8 @@ These are built-in methods you can call on any Agency function or tool value (th
 | Name | Signature | Description |
 |---|---|---|
 | `debugger` | `debugger "<label>"?` | No-op when running the agent normally, but pauses execution when running under the Agency debugger. Accepts an optional label string. See [Debugger](/cli/debug). |
+
+## MCP
+| Name | Signature | Description |
+|---|---|---|
+| `registerTools` | `registerTools(tools)` | Register MCP tools with the agent. See [MCP](/guide/mcp). |

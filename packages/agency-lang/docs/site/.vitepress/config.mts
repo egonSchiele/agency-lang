@@ -8,7 +8,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
-      /* { text: "Agent", link: "/agent/index" }, */
+      { text: "Agent", link: "/agent/index" },
       { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/index" },
       { text: "Packages", link: "/packages/" },
@@ -175,15 +175,13 @@ export default defineConfig({
               link: "/guide/builtins",
             },
             {
-              text: "Advanced Types",
-              link: "/guide/advanced-types",
+              text: "Notes on Types",
+              link: "/guide/notes-on-types",
             },
             {
               text: "TypeScript Helpers (agency.*)",
               link: "/guide/ts-helpers",
             },
-
-            { text: "CLI Argument Parsing", link: "/guide/cli-args" },
             {
               text: "Schema Parameter Injection",
               link: "/guide/schema-parameter-injection",
@@ -192,7 +190,7 @@ export default defineConfig({
             { text: "Serving Agency Code", link: "/guide/serving" },
             { text: "Build Integration", link: "/guide/build-integration" },
             {
-              text: "Custom & local model providers",
+              text: "Custom Providers",
               link: "/guide/custom-providers",
             },
             {
@@ -207,6 +205,12 @@ export default defineConfig({
           text: "Agent",
           items: [
             { text: "Overview", link: "/agent/index" },
+            { text: "Running the agent", link: "/agent/running" },
+            { text: "The agent team", link: "/agent/subagents" },
+            { text: "Models and settings", link: "/agent/models" },
+            { text: "Approvals and policies", link: "/agent/approvals" },
+            { text: "Memory", link: "/agent/memory" },
+            { text: "Project context and commands", link: "/agent/project-context" },
             { text: "MCP servers", link: "/agent/mcp" },
           ],
         },

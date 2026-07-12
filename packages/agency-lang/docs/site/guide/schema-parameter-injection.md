@@ -3,6 +3,8 @@ name: Schema parameter injection
 description: Explains how the compiler auto-synthesizes a `schema(T)` argument for functions that take a `Schema<...>` parameter, the mechanism behind structured-output calls like `llm()`.
 ---
 
+*This feature is in active development and doesn't work yet. This information was written by an LLM and may be out of date.*
+
 # Schema parameter injection
 
 Agency lets you write functions that take a `Schema<...>` parameter and then automatically passes a Zod schema in for that argument, generated from the call's expected type. This is the mechanism that makes calls like

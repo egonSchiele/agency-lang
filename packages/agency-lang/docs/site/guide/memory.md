@@ -3,7 +3,7 @@ name: Memory
 description: How to give an agent long-term memory — remembering facts across runs, recalling them on demand, auto-injecting them into LLM calls, and approving what gets written.
 ---
 
-*This feature is in active development. This information may be out of date.*
+*This feature is in active development. This information was written by an LLM and may be out of date.*
 
 # Memory
 

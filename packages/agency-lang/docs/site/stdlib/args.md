@@ -38,6 +38,79 @@ Parse command-line flags.
   }
   ```
 
+Invoking the program:
+
+```
+$ greet --name alice --out result.txt -v
+Hello, alice!
+```
+
+```
+$ greet --help
+Usage: greet [options] [args...]
+
+Print a friendly greeting.
+
+Options:
+  -n, --name <string>    Who to greet (default: "world")
+  -r, --repeat <number>  How many times (default: 1)
+  -v, --verbose          Chatty output
+      --out <string>     Output path (required)
+  -h, --help             Show this help and exit
+```
+
+## Important types (see below for details)
+- `FlagSpec` - description of a single flag
+- `FlagGroups` - optional constraints on groups of flags
+- `ArgsSchema` - full schema for one call to `parseArgs`
+
+## Values and coercion
+
+- **String** values come straight through. `--name ""` is allowed.
+- **Number** values are parsed strictly. We accept decimal integers and floats (`-1.5e3`). We reject empty strings, leading or trailing whitespace, hex (`0x10`), octal (`0o10`), binary (`0b10`), `NaN`, and `Infinity`.
+- **Boolean** flags are `true` when present, `false` otherwise. There is no `--no-verbose` form.
+
+Short flags accept either form: `-n alice` or `-nalice`. Boolean shorts can be clustered: `-vh`. Long flags accept either `--name alice` or `--name=alice`.
+
+`--` ends option parsing: everything after it becomes a positional, even if it looks like a flag.
+
+A parameter can't be both `required` and have a `default`.
+
+Boolean flags default to `false` when no default is set. `default: true` is rejected as a schema bug, since without `--no-X` such a flag could never be turned off.
+
+## Choices
+
+String flags can constrain values to an enumerated set:
+
+```ts
+format: { type: "string", choices: ["json", "yaml", "toml"], default: "json" }
+```
+
+Comparison is case-sensitive.
+
+## Auto-help and auto-version
+
+`--help` / `-h` are auto-injected. They print the generated usage to stdout and exit `0`. If your schema declares its own `help` flag, yours wins and auto-help is disabled.
+
+`--version` / `-V` are auto-injected **only** when `schema.version` is set:
+
+```ts
+parseArgs({ version: "1.2.3" ... })
+```
+
+When `--version` is passed, the parser prints the version and exits.
+
+## What's not supported
+
+- Repeated flags (`--include a --include b` → `["a", "b"]`).
+- Subcommands (`mytool serve --port 3000`).
+- Negatable booleans (`--no-verbose`).
+- Per-flag custom validators.
+- Env-var fallback (`MYTOOL_PORT=3000`).
+- Typed positionals.
+- `--help <topic>` per-flag help.
+- "Did you mean --name?" suggestions.
+
 ## Types
 
 ### FlagSpec
@@ -72,7 +145,7 @@ export type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L121))
 
 ### FlagGroups
 
@@ -92,7 +165,7 @@ export type FlagGroups = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L136))
 
 ### ArgsSchema
 
@@ -116,7 +189,7 @@ export type ArgsSchema = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L145))
 
 ### ParsedArgs
 
@@ -138,7 +211,7 @@ export type ParsedArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L159))
 
 ## Functions
 
@@ -158,4 +231,4 @@ Given the schema, parse `process.argv`.
 
 **Returns:** [ParsedArgs](#parsedargs)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L164))

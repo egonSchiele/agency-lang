@@ -76,14 +76,3 @@ export function getImportedToolNames(node: ImportToolStatement): string[] {
 }
 
 
-export function getImportedDestructiveToolNames(
-  node: ImportToolStatement,
-): string[] {
-  return node.importedTools.flatMap((n) => n.destructiveNames ?? []);
-}
-
-export function getImportedIdempotentToolNames(
-  node: ImportToolStatement,
-): string[] {
-  return node.importedTools.flatMap((n) => n.idempotentNames ?? []);
-}

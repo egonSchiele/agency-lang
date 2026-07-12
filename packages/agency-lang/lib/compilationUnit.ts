@@ -113,7 +113,11 @@ export type CompilationUnit = {
   /** Local names (defs + imports + re-exports) marked `destructive`. Read
    *  by codegen's containsDestructiveCall to track destructive execution. */
   destructiveFunctions: Record<string, boolean>;
-  /** Local names marked `idempotent`. */
+  /** Local names marked `idempotent`. Populated for symmetry with
+   *  `destructiveFunctions`, but idempotent has NO codegen role today: the
+   *  tool-loop tier reads `handler.markers?.idempotent` off the registered
+   *  AgencyFunction (fed from the def's own `markers`), not this registry.
+   *  Kept for a future call-site consumer; nothing reads it yet. */
   idempotentFunctions: Record<string, boolean>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
   /**

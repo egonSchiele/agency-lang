@@ -26,7 +26,7 @@ By default, a tool that fails stays callable. The model can call it again. This 
 
 Mark a tool `destructive` when re-running it could cause real damage — charging a card, sending an email, deleting a file:
 
-```ts
+```agency
 destructive def chargeCard(amount: number): string {
   // ... talk to the payment provider ...
   return "charged"
@@ -41,7 +41,7 @@ There is one exception. If the call fails *before the tool body starts* — the 
 
 Mark a tool `idempotent` when re-running it is always safe, no matter how many times it happens — reading a record, looking something up, a pure calculation:
 
-```ts
+```agency
 idempotent def add(a: number, b: number): number {
   return a + b
 }

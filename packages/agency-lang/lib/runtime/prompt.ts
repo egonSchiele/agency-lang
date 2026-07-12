@@ -225,8 +225,7 @@ const TIER_SUFFIX: Record<FailureTier, string> = {
   destructive:
     "The call failed after starting a destructive operation. This tool can no longer be called in this conversation. Verify state manually.",
   neverStarted: "Nothing was executed. Correct the arguments and call again.",
-  idempotent:
-    "This tool is idempotent: calling it again is safe. Correct the arguments and call again.",
+  idempotent: "This tool is idempotent: calling it again is safe.",
   neutral: "The call failed. You may call this tool again.",
 };
 

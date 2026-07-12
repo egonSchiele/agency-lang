@@ -971,7 +971,16 @@ export class TypeScriptBuilder {
       case "variableName": {
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
-        const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
+        // A builtin name (e.g. `color`) is only the *fallback* meaning of the
+        // identifier. A real binding — a parameter, local, etc. — with a
+        // resolved scope shadows it, exactly like in any lexically-scoped
+        // language. Without this guard a parameter named `color` compiles to a
+        // bare JS identifier instead of `__stack.args.color`, so its default
+        // value (and any value restored on resume) is silently lost: the body
+        // reads the undefaulted local while the default lands in the stack
+        // slot. See issue #453.
+        const isBuiltinVar =
+          BUILTIN_VARIABLES.includes(literal.value) && importedOrUnknownScope;
         const isLoopVar = this.loopVars.includes(literal.value);
         if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           // Agency imports may resolve to a `static const` in the source

@@ -381,7 +381,7 @@ function checkCallAgainstBuiltinSig(
     }
     seenNamed.add(a.name);
     // Validate the named-arg value's type against the declared one
-    // (Copilot #4). Skip when the allowlist entry is `"any"`.
+    // (Copilot #4). Skip when the allowlist entry is the `any` type.
     const expected = allowedNamed[a.name];
     if (!isAnyType(expected)) {
       const actual = synthType(a.value, scope, ctx);

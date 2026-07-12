@@ -45,11 +45,14 @@ describe("the 'any' string sentinel stays retired (#472)", () => {
 
   it("no inline object-form any-check outside isAnyType", () => {
     // The one legitimate `.value === "any"` is isAnyType's body in utils.ts.
-    const re = /\.value\s*===\s*"any"/;
+    // Assert a COUNT (1 there, 0 elsewhere) rather than skipping utils.ts, so
+    // a second inline check added to a different function there is still caught.
+    const re = /\.value\s*===\s*"any"/g;
     for (const file of files) {
-      if (path.basename(file) === "utils.ts") continue;
       const src = fs.readFileSync(file, "utf8");
-      expect(re.test(src), path.basename(file)).toBe(false);
+      const matches = src.match(re) ?? [];
+      const expected = path.basename(file) === "utils.ts" ? 1 : 0;
+      expect(matches.length, path.basename(file)).toBe(expected);
     }
   });
 });

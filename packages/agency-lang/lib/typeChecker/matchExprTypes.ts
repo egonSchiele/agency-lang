@@ -78,9 +78,7 @@ export function computeMatchExprTypes(
         // union can't be narrowed.
         ctx.matchExprTypes[id] = types.some(isAnyType)
           ? ANY_T
-          : unionTypes(
-              (types as VariableType[]).map((t) => widenType(t) as VariableType),
-            );
+          : unionTypes(types.map((t) => widenType(t)));
       }
 
     });

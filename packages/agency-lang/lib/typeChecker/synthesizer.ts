@@ -60,10 +60,9 @@ const RESULT_BRANCH_FIELDS = new Set(
 /**
  * Resolve a field access on a `ResultType` against the narrowing layer.
  * Returns:
- *  - a `VariableType`  → caller should set `currentType = ...; break;`
- *  - the string `"any"` → caller should `return ANY_T` (Result field on an
- *    un-narrowed Result; un-typed escape hatch until Increment 3 tightens
- *    `.value` on Failure into a hard error)
+ *  - a concrete `VariableType` → caller should set `currentType = ...; break;`
+ *  - `ANY_T` → the un-typed escape hatch for a Result field on an un-narrowed
+ *    Result (until Increment 3 tightens `.value` on Failure into a hard error)
  *  - `null` → no resolution; fall through to the next case in `synthValueAccess`
  *
  * Pulled out of `synthValueAccess` to keep that function under the

@@ -80,8 +80,8 @@ export type BuiltinSignature = {
    *  builtins use this to permit `fork(items, shared: true)` /
    *  `race(items, shared: true)` without opening the door to typos
    *  silently going through. Values are typechecked against the
-   *  declared type; duplicates are rejected. Use `"any"` to skip
-   *  value validation. */
+   *  declared type; duplicates are rejected. Use the `any` type
+   *  (`ANY_T`) to skip value validation. */
   acceptsNamedArgs?: Record<string, VariableType>;
 };
 

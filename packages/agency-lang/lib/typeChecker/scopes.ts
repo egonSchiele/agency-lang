@@ -422,10 +422,10 @@ export function walkScopeBody(
         // binder over a bare `Result`) is as unknowable as the "any" string —
         // treat both as "could be any iterable" rather than rejecting.
         const recordLike =
-          iterableType === "any" || isAnyType(iterableType)
+          isAnyType(iterableType)
             ? undefined
             : recordLikeKeyValue(iterableType);
-        if (iterableType === "any" || isAnyType(iterableType)) {
+        if (isAnyType(iterableType)) {
           itemType = "any";
           // Iterable kind is unknown, so the second var could be either an
           // index or a value — leave it as `any` rather than assume a number.

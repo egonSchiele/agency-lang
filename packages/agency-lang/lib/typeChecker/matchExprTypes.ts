@@ -73,10 +73,9 @@ export function computeMatchExprTypes(
           type: types[i],
           loc: typeExpr(y)?.loc ?? y.loc,
         }));
-        // A yield of `any` (the sentinel string OR the `any` primitive) makes
-        // the whole match's value type `any` — the union can't be narrowed.
-        const isAny = (t: VariableType | "any") => t === "any" || isAnyType(t);
-        ctx.matchExprTypes[id] = types.some(isAny)
+        // A yield of `any` makes the whole match's value type `any` — the
+        // union can't be narrowed.
+        ctx.matchExprTypes[id] = types.some(isAnyType)
           ? "any"
           : unionTypes(
               (types as VariableType[]).map((t) => widenType(t) as VariableType),
@@ -146,8 +145,7 @@ export function checkMatchExprYields(
   if (!yields) return;
   // If ANY arm yields `any` the match's value type collapses to `any` (same
   // rule as `matchExprTypes`), which is assignable to anything — no error.
-  const isAny = (t: VariableType | "any") => t === "any" || isAnyType(t);
-  if (yields.some((y) => isAny(y.type))) return;
+  if (yields.some((y) => isAnyType(y.type))) return;
   // Report the FIRST arm whose UNWIDENED yield type is not assignable to the
   // expected type. Anchoring on that arm's value gives a precise location and
   // names the offending value; stopping after one keeps the diagnostic count

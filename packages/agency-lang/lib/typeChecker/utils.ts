@@ -45,8 +45,14 @@ export function getBlockSlot(
   return last.typeHint;
 }
 
-export function isAnyType(t: VariableType): boolean {
-  return t.type === "primitiveType" && t.value === "any";
+// Accepts the string sentinel too, only during the #472 migration. Once every
+// signature is narrowed to VariableType, the `| "any"` is removed again.
+// A type predicate so callers narrow the string away in the false branch,
+// exactly as the `x === "any"` comparisons it replaces did.
+export function isAnyType(
+  t: VariableType | "any",
+): t is "any" | (VariableType & { type: "primitiveType"; value: "any" }) {
+  return t === "any" || (t.type === "primitiveType" && t.value === "any");
 }
 
 /**

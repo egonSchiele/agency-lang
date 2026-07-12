@@ -25,7 +25,7 @@ function makeTestExports(): ExportedItem[] {
         schema: z.object({ a: z.number(), b: z.number() }),
       },
       exported: true,
-      safe: true,
+      markers: { idempotent: true },
     },
     registry,
   );
@@ -84,7 +84,7 @@ describe("MCP adapter", () => {
     const addTool = tools.find((t: any) => t.name === "add");
     expect(addTool.description).toBe("Add two numbers");
     expect(addTool.inputSchema).toBeTruthy();
-    expect(addTool.annotations.readOnlyHint).toBe(true);
+    expect(addTool.annotations.idempotentHint).toBe(true);
     const mainTool = tools.find((t: any) => t.name === "main");
     expect(mainTool.description).toContain("main");
     expect(mainTool.inputSchema).toEqual({
@@ -189,6 +189,55 @@ describe("MCP adapter", () => {
     expect(tools[0].description).toBe(
       "Deploy app\n\nInterrupt effects: myapp::deploy, myapp::approve",
     );
+  });
+
+  it("maps markers to MCP hints; unmarked and legacy-safe get none", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const makeFn = (
+      name: string,
+      opts: { markers?: { destructive?: boolean; idempotent?: boolean }; safe?: boolean },
+    ) =>
+      AgencyFunction.create(
+        {
+          name,
+          module: "test",
+          fn: async () => {},
+          params: [],
+          toolDefinition: { name, description: name, schema: null },
+          exported: true,
+          ...opts,
+        },
+        registry,
+      );
+    const exportsList = [
+      { name: "rm", markers: { destructive: true } as const },
+      { name: "compileIt", markers: { idempotent: true } as const },
+      { name: "plain", markers: undefined },
+      { name: "legacySafe", safe: true },
+    ].map(({ name, ...opts }) => {
+      const fn = makeFn(name, opts);
+      return {
+        kind: "function" as const,
+        name,
+        description: name,
+        agencyFunction: fn,
+        interruptEffects: [],
+        invoke: (namedArgs: Record<string, unknown>) =>
+          fn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+      };
+    });
+    const handler = createMcpHandler({
+      serverName: "test",
+      serverVersion: "1.0.0",
+      exports: exportsList,
+    });
+    const response = await handler({ jsonrpc: "2.0", id: 11, method: "tools/list" });
+    const tools = response!.result.tools;
+    const byName = (n: string) => tools.find((t: any) => t.name === n);
+    expect(byName("rm").annotations).toEqual({ destructiveHint: true });
+    expect(byName("compileIt").annotations).toEqual({ idempotentHint: true });
+    expect(byName("plain").annotations).toBeUndefined();
+    expect(byName("legacySafe").annotations).toBeUndefined();
   });
 });
 

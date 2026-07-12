@@ -2264,20 +2264,26 @@ export class TypeScriptBuilder {
     // Build tool definition (Zod schema)
     const toolDef = this.buildToolDefinition(node);
 
+    const createProps: Record<string, TsNode> = {
+      name: ts.str(functionName),
+      module: ts.str(this.moduleId),
+      fn: ts.id(implName),
+      params: ts.arr(paramNodes),
+      toolDefinition: toolDef,
+      safe: ts.bool(!!node.safe),
+      exported: ts.bool(!!node.exported),
+    };
+    // Carry the retry-safety markers so the tool loop and MCP adapter can
+    // read them off the registered AgencyFunction. Emitted only when set.
+    if (node.markers?.destructive || node.markers?.idempotent) {
+      const markerProps: Record<string, TsNode> = {};
+      if (node.markers.destructive) markerProps.destructive = ts.bool(true);
+      if (node.markers.idempotent) markerProps.idempotent = ts.bool(true);
+      createProps.markers = ts.obj(markerProps);
+    }
     const createCall = $.id("__AgencyFunction")
       .prop("create")
-      .call([
-        ts.obj({
-          name: ts.str(functionName),
-          module: ts.str(this.moduleId),
-          fn: ts.id(implName),
-          params: ts.arr(paramNodes),
-          toolDefinition: toolDef,
-          safe: ts.bool(!!node.safe),
-          exported: ts.bool(!!node.exported),
-        }),
-        ts.id("__toolRegistry"),
-      ])
+      .call([ts.obj(createProps), ts.id("__toolRegistry")])
       .done();
 
     const constDecl = ts.varDecl("const", functionName, createCall);

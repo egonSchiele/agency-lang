@@ -204,7 +204,7 @@ type ToolEntry = {
   name: string;
   description: string;
   inputSchema: unknown;
-  annotations?: { readOnlyHint?: boolean };
+  annotations?: { destructiveHint?: boolean; idempotentHint?: boolean };
 };
 
 /**
@@ -218,12 +218,21 @@ function buildToolsListPayload(config: McpConfig): ToolEntry[] {
   const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
   const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
 
-  const functionToolEntries: ToolEntry[] = functions.map((f) => ({
-    name: f.name,
-    description: formatToolDescription(f.description, f.interruptEffects),
-    inputSchema: schemaToJsonSchema(f.agencyFunction.toolDefinition?.schema),
-    ...(f.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
-  }));
+  const functionToolEntries: ToolEntry[] = functions.map((f) => {
+    const entry: ToolEntry = {
+      name: f.name,
+      description: formatToolDescription(f.description, f.interruptEffects),
+      inputSchema: schemaToJsonSchema(f.agencyFunction.toolDefinition?.schema),
+    };
+    // Map the retry-safety markers to MCP hints. Unmarked → no annotations,
+    // letting the MCP client's own defaults apply.
+    if (f.agencyFunction.markers?.destructive) {
+      entry.annotations = { destructiveHint: true };
+    } else if (f.agencyFunction.markers?.idempotent) {
+      entry.annotations = { idempotentHint: true };
+    }
+    return entry;
+  });
 
   const nodeToolEntries: ToolEntry[] = nodes.map((n) => ({
     name: n.name,

@@ -283,6 +283,15 @@ destructive def rm(id: string): string {
     expect(body).toContain("__self.__destructiveRan = true");
   });
 
+  it("emits markers into the AgencyFunction registration", () => {
+    const dOut = generateWithBuilder(`destructive def rm(id: string): string { return id }`);
+    expect(dOut).toMatch(/markers:\s*\{\s*destructive:\s*true/);
+    const iOut = generateWithBuilder(`idempotent def compileIt(s: string): string { return s }`);
+    expect(iOut).toMatch(/markers:\s*\{\s*idempotent:\s*true/);
+    const plainOut = generateWithBuilder(`def plain(id: string): string { return id }`);
+    expect(plainOut).not.toContain("markers:");
+  });
+
   it("an unmarked caller of a destructive fn emits the outcome flip on the result", () => {
     const output = generateWithBuilder(`
 destructive def rm(id: string): string {

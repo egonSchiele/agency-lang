@@ -99,6 +99,11 @@ export type SymbolKind = SymbolInfo["kind"];
 /** Maps symbol name → info for a single file. */
 export type FileSymbols = Record<string, SymbolInfo>;
 
+export type ImportModuleResolution =
+  | { kind: "missing" }
+  | { kind: "notLoaded" }
+  | { kind: "loaded"; symbols: FileSymbols };
+
 /**
  * One named symbol resolved through an import: where it lives, what name
  * the importing file uses, and what it actually is.
@@ -245,6 +250,44 @@ export class SymbolTable {
 
   getFile(absPath: string): FileSymbols | undefined {
     return this.files[absPath];
+  }
+
+  /**
+   * Classify an import's target module for the strict-imports check.
+   * - `missing`   — the path resolves to nothing on disk, or resolution threw
+   *                 (e.g. an unresolvable `pkg::`).
+   * - `notLoaded` — the file exists on disk but was never crawled into this
+   *                 table (a parse failure in it, or a partial single-file
+   *                 check). The caller must stay silent: the view is incomplete.
+   * - `loaded`    — the file was crawled; `symbols` is its FileSymbols.
+   */
+  resolveImportModule(
+    modulePath: string,
+    fromFile: string,
+    config?: AgencyConfig,
+  ): ImportModuleResolution {
+    let resolved: string;
+    try {
+      resolved = path.resolve(resolveAgencyImportPath(modulePath, fromFile));
+    } catch (e) {
+      // An unresolvable `pkg::` throwing is the EXPECTED path here, so we
+      // report it as `missing` rather than crashing. But don't swallow the
+      // error entirely: an unexpected resolution bug (malformed path, internal
+      // fault) would otherwise be silently mislabelled "Cannot find module".
+      // Surface it under verbose, matching how `build` logs.
+      if (config?.verbose) {
+        console.error(`[resolveImportModule] '${modulePath}' failed to resolve:`, e);
+      }
+      return { kind: "missing" };
+    }
+    if (!fs.existsSync(resolved)) {
+      return { kind: "missing" };
+    }
+    const symbols = this.getFile(resolved);
+    if (symbols === undefined) {
+      return { kind: "notLoaded" };
+    }
+    return { kind: "loaded", symbols };
   }
 
   /** Every effect declaration reachable in the closure, tagged with its

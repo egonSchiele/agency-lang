@@ -467,6 +467,27 @@ try {
     "stdinMain",
   );
 
+  // parse: directory support (#438)
+  const parseDir = join(dir, "parse-dir");
+  mkdirSync(parseDir, { recursive: true });
+  writeFileSync(
+    join(parseDir, "alpha.agency"),
+    `node alphaMain() {
+  return "alpha"
+}
+`,
+  );
+  writeFileSync(
+    join(parseDir, "beta.agency"),
+    `node betaMain() {
+  return "beta"
+}
+`,
+  );
+  const parseDirOut = runAgency("17a-parse-dir", ["parse", "parse-dir"]);
+  assertIncludes(parseDirOut, "alphaMain");
+  assertIncludes(parseDirOut, "betaMain");
+
   // coverage
 
   console.log("--- coverage ---");
@@ -528,6 +549,82 @@ try {
   ));
   assertIncludes(strictError, "no type annotation");
   assertIncludes(strictError, "strict mode");
+
+  // tc: directories and '-' stdin (#438)
+  const tcDir = join(dir, "tc-clean");
+  mkdirSync(tcDir, { recursive: true });
+  writeFileSync(
+    join(tcDir, "one.agency"),
+    `node oneCheck(): string {
+  return "ok"
+}
+`,
+  );
+  writeFileSync(
+    join(tcDir, "two.agency"),
+    `node twoCheck(): number {
+  return 42
+}
+`,
+  );
+  const tcDirOut = runAgency("28a-tc-dir", ["tc", "tc-clean"]);
+  assert(
+    (tcDirOut.match(/No type errors found\./g) || []).length >= 2,
+    "tc on a directory should type check every .agency file in it",
+  );
+
+  // tc: a directory whose files import each other divergently. This guards the
+  // multi-entrypoint SymbolTable seed: `consumer.agency` imports from
+  // `helper.agency`, which is NOT reachable from whichever file `findRecursively`
+  // yields first. With a single-file seed, consumer's import resolves to nothing
+  // and typecheck reports a false-positive error (exit 1). Seeding from every
+  // file source keeps it clean.
+  const tcImportDir = join(dir, "tc-imports");
+  mkdirSync(tcImportDir, { recursive: true });
+  writeFileSync(
+    join(tcImportDir, "helper.agency"),
+    `export def greet(name: string): string {
+  return "hi " + name
+}
+`,
+  );
+  writeFileSync(
+    join(tcImportDir, "consumer.agency"),
+    `import { greet } from "./helper.agency"
+
+node useGreet(): string {
+  return greet("there")
+}
+`,
+  );
+  const tcImportOut = runAgency("28a2-tc-dir-imports", ["tc", "tc-imports"]);
+  assert(
+    (tcImportOut.match(/No type errors found\./g) || []).length >= 2,
+    "tc on a directory with cross-file imports must resolve them (seed the SymbolTable from every file, not just the first)",
+  );
+
+  const tcMixedOut = runAgency("28b-tc-dir-mixed", ["tc", "tc-clean", "src/type-ok.agency"]);
+  assert(
+    (tcMixedOut.match(/No type errors found\./g) || []).length >= 3,
+    "tc should accept mixed directory and file arguments",
+  );
+
+  assertIncludes(
+    runAgency("28c-tc-dash", ["tc", "-"], {
+      input: `node dashCheck(): string {
+  return "dash-ok"
+}
+`,
+    }),
+    "No type errors found.",
+  );
+
+  const tcEmptyDir = join(dir, "tc-empty");
+  mkdirSync(tcEmptyDir, { recursive: true });
+  assertIncludes(
+    runAgency("28d-tc-empty-dir", ["tc", "tc-empty"]),
+    "No .agency files found",
+  );
 
   // bundle and unbundle
 

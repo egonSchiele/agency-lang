@@ -101,3 +101,13 @@ An import names a symbol that its target Agency module does not define. The chec
 An import points at a module that does not resolve to any file. The path — a relative `./…` path, a `std::` module, or a `pkg::` package — was resolved the same way the compiler resolves it, and nothing exists there.
 
 **How to fix:** correct the path, create the missing file, or install the package that provides it. Agency imports must resolve to a real module.
+
+<a id="ag4010"></a>
+
+## AG4010 — '&#123;name&#125;' is defined in '&#123;module&#125;' but is not exported. Add the 'export' keyword to its definition.
+
+*Default severity: error.*
+
+An import names a symbol that its target module defines but does not `export`. A plain `import { ... }` can only see `export`ed functions, types, and constants — a bare `def`/`type` without `export` is module-private. (Nodes are the exception: they are importable without `export`.) The compile path already rejects this; the type checker reports it too.
+
+**How to fix:** add the `export` keyword to the definition in the target file, or import a symbol that is exported.

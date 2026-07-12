@@ -444,6 +444,11 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Cannot find module '{module}'.",
   },
+  importNameNotExported: {
+    code: "AG4010",
+    severity: "error",
+    message: "'{name}' is defined in '{module}' but is not exported. Add the 'export' keyword to its definition.",
+  },
   reservedBlockKeyword: {
     code: "AG4006",
     severity: "error",

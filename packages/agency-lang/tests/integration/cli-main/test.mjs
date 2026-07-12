@@ -489,6 +489,17 @@ try {
   const parseDirOut = runAgency("17a-parse-dir", ["parse", "parse-dir"]);
   assertIncludes(parseDirOut, "alphaMain");
   assertIncludes(parseDirOut, "betaMain");
+  // Multi-file parse output must be ONE valid JSON document (an array of
+  // { file, program }), not concatenated top-level objects.
+  const parseDirJson = JSON.parse(parseDirOut);
+  assert(
+    Array.isArray(parseDirJson) && parseDirJson.length === 2,
+    "parse on a directory should emit a JSON array with one entry per file",
+  );
+  assert(
+    parseDirJson.every((r) => typeof r.file === "string" && r.program),
+    "each parse-dir entry should carry its file path and program AST",
+  );
 
   // coverage
 

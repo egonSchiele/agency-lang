@@ -140,6 +140,24 @@ async function defaultLoadMcpStartServer(): Promise<() => void> {
   return startMcpServer;
 }
 
+/**
+ * Print AST/preprocess results as ONE valid JSON document.
+ *
+ * A single input prints the bare AST (backward compatible with the
+ * one-file/stdin case). Multiple inputs — e.g. a directory — print a JSON
+ * array of `{ file, program }` so the output is a single parseable document
+ * instead of concatenated top-level objects. Zero inputs print nothing (the
+ * "no .agency files found" notice already went to stderr).
+ */
+function printAstResults(results: { file: string; program: unknown }[]): void {
+  if (results.length === 0) return;
+  if (results.length === 1) {
+    console.log(JSON.stringify(results[0].program, null, 2));
+    return;
+  }
+  console.log(JSON.stringify(results, null, 2));
+}
+
 export function createProgram(deps: CliDependencies = {}): Command {
   const loadLspStartServer =
     deps.loadLspStartServer ?? defaultLoadLspStartServer;
@@ -573,10 +591,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[inputs...]", "Paths to .agency input files")
     .action(async (inputs: string[]) => {
       const config = getConfig();
-      await forEachSource(inputs, (contents) => {
-        const result = parse(contents, config);
-        console.log(JSON.stringify(result, null, 2));
+      const results: { file: string; program: unknown }[] = [];
+      await forEachSource(inputs, (contents, src) => {
+        results.push({
+          file: src.kind === "file" ? src.path : "<stdin>",
+          program: parse(contents, config),
+        });
       });
+      printAstResults(results);
     });
 
   program
@@ -588,7 +610,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (inputs: string[]) => {
       const config = getConfig();
 
-      const processInput = (contents: string) => {
+      const preprocessInput = (contents: string): unknown => {
         const parsedProgram = parse(contents, config);
         const info = buildCompilationUnit(parsedProgram);
         const preprocessor = new TypescriptPreprocessor(
@@ -597,12 +619,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
           info,
         );
         preprocessor.preprocess();
-        console.log(JSON.stringify(preprocessor.program, null, 2));
+        return preprocessor.program;
       };
 
-      await forEachSource(inputs, (contents) => {
-        processInput(contents);
+      const results: { file: string; program: unknown }[] = [];
+      await forEachSource(inputs, (contents, src) => {
+        results.push({
+          file: src.kind === "file" ? src.path : "<stdin>",
+          program: preprocessInput(contents),
+        });
       });
+      printAstResults(results);
     });
 
   function formatDuration(ms: number): string {

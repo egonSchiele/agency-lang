@@ -184,4 +184,68 @@ describe("checkMissingImports", () => {
     expect(errors.find((err) => err.name === "importNameNotFound")).toBeUndefined();
     expect(errors.find((err) => err.name === "importModuleNotFound")).toBeUndefined();
   });
+
+  it("errors when importing a defined-but-not-exported name", () => {
+    const errors = check(
+      {
+        "lib.agency": "def privateFn(): string {\n  return \"p\"\n}\n",
+        "use.agency": 'import { privateFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+      },
+      "use.agency",
+    );
+    const e = errors.find((err) => err.name === "importNameNotExported");
+    expect(e).toBeDefined();
+    expect(e?.message).toContain("privateFn");
+  });
+
+  it("does not require export for a node import (nodes are exempt)", () => {
+    const errors = check(
+      {
+        // plain `node`, no `export` keyword
+        "lib.agency": "node plainNode(): string {\n  return \"n\"\n}\n",
+        "use.agency": 'import node { plainNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+      },
+      "use.agency",
+    );
+    expect(errors.find((err) => err.name === "importNameNotExported")).toBeUndefined();
+    expect(errors.find((err) => err.name === "importNameNotFound")).toBeUndefined();
+  });
+
+  it("lets `import test { }` see a non-exported name", () => {
+    const errors = check(
+      {
+        "lib.agency": "def privateFn(): string {\n  return \"p\"\n}\n",
+        "use.agency": 'import test { privateFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+      },
+      "use.agency",
+    );
+    expect(errors.find((err) => err.name === "importNameNotExported")).toBeUndefined();
+  });
+
+  it("errors on importing a non-exported type", () => {
+    const errors = check(
+      {
+        "lib.agency": "type Secret = number\n",
+        "use.agency": 'import { Secret } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+      },
+      "use.agency",
+    );
+    const e = errors.find((err) => err.name === "importNameNotExported");
+    expect(e).toBeDefined();
+    expect(e?.message).toContain("Secret");
+  });
+
+  it("exempts a node imported via the plain `import { }` form", () => {
+    // The node exemption must hold on the importStatement path, not just via
+    // `import node { }` — importResolver rewrites this to a node import.
+    const errors = check(
+      {
+        "lib.agency": "node plainNode(): string {\n  return \"n\"\n}\n",
+        "use.agency": 'import { plainNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+      },
+      "use.agency",
+    );
+    expect(errors.find((err) => err.name === "importNameNotExported")).toBeUndefined();
+    expect(errors.find((err) => err.name === "importNameNotFound")).toBeUndefined();
+  });
 });

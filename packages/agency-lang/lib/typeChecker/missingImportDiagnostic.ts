@@ -2,6 +2,7 @@ import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext } from "./types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { AgencyNode } from "../types.js";
+import { isExportedSymbol } from "../symbolTable.js";
 
 /** A plain Agency import, normalized so the checker doesn't care which node
  *  kind it came from. */
@@ -9,6 +10,10 @@ type ImportSpec = {
   modulePath: string;
   names: readonly string[];
   loc: SourceLocation | null;
+  // `import test { ... }` may see non-exported symbols (first-party test wiring),
+  // so it bypasses the export-visibility check — matching the importResolver
+  // preprocessor's `assertImportable`.
+  testOnly: boolean;
 };
 
 /**
@@ -21,10 +26,11 @@ function toImportSpec(node: AgencyNode): ImportSpec | null {
     const names = node.importedNames
       .filter((nameType) => nameType.type === "namedImport")
       .flatMap((nameType) => nameType.importedNames);
-    return { modulePath: node.modulePath, names, loc: node.loc ?? null };
+    return { modulePath: node.modulePath, names, loc: node.loc ?? null, testOnly: !!node.testOnly };
   }
   if (node.type === "importNodeStatement") {
-    return { modulePath: node.agencyFile, names: node.importedNodes, loc: node.loc ?? null };
+    // Nodes are importable without `export`, so testOnly is irrelevant here.
+    return { modulePath: node.agencyFile, names: node.importedNodes, loc: node.loc ?? null, testOnly: false };
   }
   return null;
 }
@@ -64,6 +70,23 @@ export function checkMissingImports(ctx: TypeCheckerContext): void {
       if (!Object.prototype.hasOwnProperty.call(resolution.symbols, name)) {
         ctx.errors.push(
           diagnostic("importNameNotFound", { name, module: spec.modulePath }, spec.loc),
+        );
+        continue;
+      }
+      // Export-visibility: a name that exists but isn't `export`ed can't be
+      // imported. `isExportedSymbol` owns the rule (nodes are exempt —
+      // importable without `export`); `import test` is exempt too. Mirrors
+      // importResolver's `assertImportable`, which already throws for this on
+      // the compile path — this surfaces it in `tc` too.
+      //
+      // Note: a non-exported *constant* never reaches here — a `const` is only
+      // recorded as a symbol when `exported && static` (classifySymbols), so it
+      // trips importNameNotFound (AG4008) above instead. Consistent with
+      // importResolver, which throws "is not defined" for the same case.
+      const symbol = resolution.symbols[name];
+      if (!spec.testOnly && !isExportedSymbol(symbol)) {
+        ctx.errors.push(
+          diagnostic("importNameNotExported", { name, module: spec.modulePath }, spec.loc),
         );
       }
     }

@@ -75,6 +75,7 @@ or suppress one on the next line with `// @tc-ignore AG####`.
 | [AG4007](names.md#ag4007) | Variable '&#123;name&#125;' is not defined. |
 | [AG4008](names.md#ag4008) | '&#123;name&#125;' is not defined in '&#123;module&#125;'. |
 | [AG4009](names.md#ag4009) | Cannot find module '&#123;module&#125;'. |
+| [AG4010](names.md#ag4010) | '&#123;name&#125;' is defined in '&#123;module&#125;' but is not exported. Add the 'export' keyword to its definition. |
 
 ## Match and narrowing
 

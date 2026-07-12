@@ -265,7 +265,7 @@ return;
           });
 }, { matchId: 1 });
       await runner.step(2, async (runner) => {
-__stack.locals.val = __stack.locals.__matchval_1;
+__stack.locals.val = __nn(__stack.locals.__matchval_1);
       });
       await runner.step(3, async (runner) => {
 runner.halt({

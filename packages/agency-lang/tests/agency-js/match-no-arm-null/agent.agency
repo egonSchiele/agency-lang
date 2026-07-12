@@ -1,0 +1,19 @@
+node classify(s: string) {
+  const result = match (s) {
+    "a" => "got-a"
+    "b" => "got-b"
+  }
+  return result
+}
+
+// Guards spec case 5: an arm that genuinely yields `null` must stay `null` (no
+// double-coercion surprise), and a real-valued arm passes through `__nn`
+// unchanged. `classifyNullable("z")` also exercises the no-arm path alongside an
+// explicit null arm so the two null sources are not conflated.
+node classifyNullable(s: string) {
+  const result = match (s) {
+    "a" => "got-a"
+    "n" => null
+  }
+  return result
+}

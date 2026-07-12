@@ -1031,7 +1031,14 @@ export class TypeScriptBuilder {
           // var / builtin / agency import, and must resolve through the
           // normal paths untouched.
           if (!isBuiltinVar && !isLoopVar && isMatchValName(literal.value)) {
-            return ts.scopedVar(literal.value, "local", this.moduleId);
+            // A `match` expression with no matching arm (and no `_`) never
+            // writes `__matchval_<id>`, so the read is `undefined`. Normalize
+            // to Agency's single nothing-value, `null`. This one read site is
+            // the chokepoint for every match-result path (stepped no-arm and
+            // the plain-mode IIFE that returns `undefined`). See #409.
+            return ts.call(ts.id("__nn"), [
+              ts.scopedVar(literal.value, "local", this.moduleId),
+            ]);
           }
           return ts.id(literal.value);
         }
@@ -1560,7 +1567,7 @@ export class TypeScriptBuilder {
     this.assertMatchArmValueNotGraphNode(node.value);
     const value = node.value
       ? this.processNode(node.value)
-      : ts.id("undefined");
+      : ts.id("null");
     // Plain-mode (handler) match expressions wrap their arms in an async IIFE
     // (see processMatchExpressionPlain): a yield is a real `return` out of that
     // IIFE, not the stepped `runner.exitMatch` unwind — so the handler never

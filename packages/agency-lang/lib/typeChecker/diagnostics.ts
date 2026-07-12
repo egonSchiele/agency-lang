@@ -434,6 +434,16 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Function '{name}' is not defined.",
   },
+  importNameNotFound: {
+    code: "AG4008",
+    severity: "error",
+    message: "'{name}' is not defined in '{module}'.",
+  },
+  importModuleNotFound: {
+    code: "AG4009",
+    severity: "error",
+    message: "Cannot find module '{module}'.",
+  },
   reservedBlockKeyword: {
     code: "AG4006",
     severity: "error",

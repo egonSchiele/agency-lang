@@ -17,6 +17,9 @@ const SKIP_TYPECHECK = new Set([
   "blockParams",        // calls append() which doesn't exist (should use .push())
   "ifElse",             // calls undefined isReady(), uses undeclared variables
   "setLLMClient",       // setLLMClient() is runtime-injected, not visible to typechecker
+  "imports",            // exercises import SYNTAX/codegen with intentionally-dangling
+                        // modules (./foo.agency etc. don't exist); strict imports (AG4009)
+                        // now flags them, which is correct for real code but not this fixture
 ]);
 
 // Stdlib files with known warnings from typechecker limitations

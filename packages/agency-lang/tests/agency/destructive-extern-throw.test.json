@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "destructiveThrow", "description": "a throwing destructive JS extern yields a failure with destructiveRan true", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "plainThrow", "description": "a throwing plain JS extern yields destructiveRan false", "input": "", "expectedOutput": "false", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

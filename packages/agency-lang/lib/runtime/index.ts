@@ -139,6 +139,8 @@ export {
   failure,
   isSuccess,
   isFailure,
+  stampFailureBoundary,
+  markDestructiveWork,
   __pipeBind,
   __tryCall,
   __catchResult,

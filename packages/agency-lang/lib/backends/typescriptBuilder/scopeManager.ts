@@ -12,13 +12,13 @@ import { scopeKey } from "../../compilationUnit.js";
  * symbol lookups, …) so callers can use a declarative API instead of
  * touching a raw array.
  *
- * `inSafeFunction` is tracked here because "safety" is a property of the
- * function currently being emitted, which conceptually belongs to the
- * scope stack.
+ * `inDestructiveFunction` is tracked here because destructiveness is a
+ * property of the function currently being emitted, which conceptually
+ * belongs to the scope stack.
  */
 export class ScopeManager {
   private stack: Scope[] = [{ type: "global" }];
-  private _inSafeFunction: boolean = false;
+  private _inDestructiveFunction: boolean = false;
 
   constructor(private readonly compilationUnit: CompilationUnit) {}
 
@@ -74,14 +74,14 @@ export class ScopeManager {
     return `__bframe_${blocks[idx].blockName}`;
   }
 
-  // ---- Safe-function flag ----
+  // ---- Destructive-function flag ----
 
-  get inSafeFunction(): boolean {
-    return this._inSafeFunction;
+  get inDestructiveFunction(): boolean {
+    return this._inDestructiveFunction;
   }
 
-  set inSafeFunction(value: boolean) {
-    this._inSafeFunction = value;
+  set inDestructiveFunction(value: boolean) {
+    this._inDestructiveFunction = value;
   }
 
   // ---- Compilation-unit-backed queries ----

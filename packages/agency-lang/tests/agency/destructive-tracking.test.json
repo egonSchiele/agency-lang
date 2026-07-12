@@ -1,0 +1,11 @@
+{
+  "tests": [
+    { "nodeName": "cleanRefusal", "description": "refused destructive call does not poison the caller", "input": "", "expectedOutput": "[false,false]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "startedThenFailed", "description": "failure after destructive work carries destructiveRan", "input": "", "expectedOutput": "[false,true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "succeededThenFailed", "description": "destructive success then later failure carries destructiveRan", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "trySwallowed", "description": "try over a returned destructive failure ORs it into the activation", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "blockHalt", "description": "destructive work and failure inside a block: escaping failure stamped at block halt", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "blockJoin", "description": "destructive work in a block, failure after: join folds the flag", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "plainFailure", "description": "unmarked function failure is neither started nor destructive", "input": "", "expectedOutput": "[false,false]", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

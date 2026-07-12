@@ -4,6 +4,7 @@
     "succeeded": true
   },
   "destructive": {
+    "scriptedCalls": 2,
     "toolCallCount": 1,
     "hasResult": true
   }

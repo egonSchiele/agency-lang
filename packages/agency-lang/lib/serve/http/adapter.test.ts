@@ -123,6 +123,50 @@ describe("HTTP adapter", () => {
     expect(body.nodes[0].interruptEffects).toEqual([]);
   });
 
+  it("GET /list reports destructive/idempotent markers as booleans", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const mk = (name: string, markers?: { destructive?: boolean; idempotent?: boolean }) =>
+      AgencyFunction.create(
+        {
+          name,
+          module: "test",
+          fn: async () => 1,
+          params: [],
+          toolDefinition: { name, description: name, schema: null },
+          exported: true,
+          ...(markers ? { markers } : {}),
+        },
+        registry,
+      );
+    const exports: ExportedItem[] = (
+      [
+        ["rm", { destructive: true }],
+        ["lookup", { idempotent: true }],
+        ["plainFn", undefined],
+      ] as const
+    ).map(([name, markers]) => ({
+      kind: "function",
+      name,
+      description: name,
+      agencyFunction: mk(name, markers),
+      interruptEffects: [],
+      invoke: (namedArgs: Record<string, unknown>) =>
+        mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs }),
+    }));
+    const h = createHttpHandler({
+      exports,
+      port: 3545,
+      logger: createLogger("error"),
+      hasInterrupts: () => false,
+      respondToInterrupts: async () => ({ data: "resumed" }),
+    });
+    const body = (await h("GET", "/list", undefined)).body as any;
+    const byName = (n: string) => body.functions.find((f: any) => f.name === n);
+    expect(byName("rm")).toMatchObject({ destructive: true, idempotent: false });
+    expect(byName("lookup")).toMatchObject({ destructive: false, idempotent: true });
+    expect(byName("plainFn")).toMatchObject({ destructive: false, idempotent: false });
+  });
+
   it("POST /function/:name calls function", async () => {
     const result = await handler("POST", "/function/add", { a: 3, b: 4 });
     expect(result.status).toBe(200);

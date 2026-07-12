@@ -1,4 +1,5 @@
 import { isAnyType } from "./utils.js";
+import { ANY_T } from "./primitives.js";
 import {
   AgencyNode,
   FunctionDefinition,
@@ -124,7 +125,6 @@ export function inferReturnTypeFor(
 
 type ResultTypes = readonly ResultType[];
 
-const ANY_T: VariableType = { type: "primitiveType", value: "any" };
 
 /**
  * Merge multiple Result types from different return paths. The success type

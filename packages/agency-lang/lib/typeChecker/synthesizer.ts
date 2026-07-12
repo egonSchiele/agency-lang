@@ -228,17 +228,6 @@ function accessResultField(
 }
 
 /**
- * `synthType` returns `VariableType | "any"` where `"any"` is the literal
- * string sentinel meaning "we don't know". When we want to embed that
- * result inside a structured VariableType (e.g. as ResultType.successType,
- * which is just `VariableType`), convert the sentinel into the equivalent
- * primitiveType("any") so the inner field is a real VariableType.
- */
-function maybeAny(t: VariableType): VariableType {
-  return isAnyType(t) ? ANY_T : t;
-}
-
-/**
  * Return the inner expression for a plain positional argument, or undefined
  * for splat / named args. Synth-time special cases (success/failure) decline
  * to fire on those forms because the per-arg type isn't directly available.
@@ -598,7 +587,7 @@ function synthFunctionCall(
   ) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
-      const innerType = maybeAny(synthType(inner, scope, ctx));
+      const innerType = synthType(inner, scope, ctx);
       return expr.functionName === "success"
         ? { type: "resultType", successType: innerType, failureType: ANY_T }
         : { type: "resultType", successType: ANY_T, failureType: innerType };

@@ -189,7 +189,6 @@ export function _attachToReply(attachment: unknown): void {
       message:
         "attachToReply called outside a tool invocation; attachment dropped",
       functionName: "attachToReply",
-      retryable: false,
     });
     return;
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall, stampFailureBoundary, markDestructiveWork } from "./result.js";
+import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall, stampFailureBoundary, markDestructiveWork, propagateFailure } from "./result.js";
 import {
   AgencyAbort,
   AgencyCancelledError,
@@ -228,10 +228,13 @@ describe("failure", () => {
   });
 
   it("propagateFailure preserves the new fields", () => {
-    const f = failure("boom", { destructiveRan: true });
-    // propagateFailure spreads; new fields must survive.
-    expect(f.destructiveRan).toBe(true);
-    expect(f.neverStarted).toBe(false);
+    const f = failure("boom", { destructiveRan: true, neverStarted: true });
+    const p = propagateFailure(f, { name: "wrap", param: "x" });
+    // propagateFailure spreads the original; the new classification fields
+    // must survive onto the propagated copy, and a skip entry is appended.
+    expect(p.destructiveRan).toBe(true);
+    expect(p.neverStarted).toBe(true);
+    expect(p.skippedFunctions).toEqual([{ name: "wrap", param: "x" }]);
   });
 });
 

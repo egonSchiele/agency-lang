@@ -1215,7 +1215,6 @@ export class StatelogClient {
     errorType,
     message,
     functionName,
-    retryable,
     neverStarted,
     destructiveRan,
     sourceLocation,
@@ -1224,7 +1223,6 @@ export class StatelogClient {
     errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded" | "structuredOutput";
     message: string;
     functionName?: string;
-    retryable?: boolean;
     /** Tool-failure classification for the tool loop's retry policy. */
     neverStarted?: boolean;
     destructiveRan?: boolean;
@@ -1241,7 +1239,6 @@ export class StatelogClient {
       errorType,
       message,
       functionName,
-      retryable,
       neverStarted,
       destructiveRan,
       sourceLocation,

@@ -231,6 +231,14 @@ node main() {
 
 **How to fix:** define the function, import it from the module that provides it, or fix a typo in the call.`,
 
+  importNameNotFound: `An import names a symbol that its target Agency module does not define. The checker resolves every \`import { ... }\` (and \`import node { ... }\`) against the actual exports of the file it points to, so a name the file never declares — often a typo, or a symbol that was renamed or removed — is an error.
+
+**How to fix:** import a name the module actually defines, correct the spelling, or add the missing definition to the target file. Unlike an undefined bare call (which might be an uncatalogued JavaScript global), an Agency import is unambiguous, so this always errors.`,
+
+  importModuleNotFound: `An import points at a module that does not resolve to any file. The path — a relative \`./…\` path, a \`std::\` module, or a \`pkg::\` package — was resolved the same way the compiler resolves it, and nothing exists there.
+
+**How to fix:** correct the path, create the missing file, or install the package that provides it. Agency imports must resolve to a real module.`,
+
   reassignToConst: `A \`const\` binding is fixed after its initial value: it cannot be reassigned. This assignment targets a name that was declared \`const\`.
 
 **How to fix:** declare it with \`let\` if it needs to change, or assign to a different variable.

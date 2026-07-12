@@ -654,6 +654,31 @@ node beeMain(): string {
     "No .agency files found",
   );
 
+  // tc: a directory where a file imports a name its target does not define (#438 follow-up)
+  const tcBadImportDir = join(dir, "tc-bad-import");
+  mkdirSync(tcBadImportDir, { recursive: true });
+  writeFileSync(
+    join(tcBadImportDir, "lib.agency"),
+    `export def realFn(): string {
+  return "x"
+}
+`,
+  );
+  writeFileSync(
+    join(tcBadImportDir, "use.agency"),
+    `import { missingFn } from "./lib.agency"
+
+node u(): string {
+  return "y"
+}
+`,
+  );
+  const tcBadImportOut = stripAnsi(
+    runAgency("28e-tc-missing-import", ["tc", "tc-bad-import"], { expectFail: true }),
+  );
+  assertIncludes(tcBadImportOut, "AG4008");
+  assertIncludes(tcBadImportOut, "missingFn");
+
   // bundle and unbundle
 
   console.log("--- bundle/unbundle ---");

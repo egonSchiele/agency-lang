@@ -49,6 +49,7 @@ import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
+import { checkMissingImports } from "./missingImportDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
@@ -335,6 +336,9 @@ export class TypeChecker {
 
     // Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);
+
+    // Error on plain imports that don't resolve to a real export.
+    checkMissingImports(ctx);
 
     // Check for undefined variable references (config-controlled severity).
     checkUndefinedVariables(scopes, ctx);

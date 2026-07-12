@@ -73,6 +73,8 @@ or suppress one on the next line with `// @tc-ignore AG####`.
 | [AG4005](names.md#ag4005) | Cannot reassign to constant '&#123;name&#125;'. |
 | [AG4006](names.md#ag4006) | `&#123;keyword&#125;` is a reserved block keyword. Write `&#123;keyword&#125; &#123; ... &#125;` or `&#123;keyword&#125;(args) &#123; ... &#125;` directly — the `as` keyword is not supported on &#123;keyword&#125; blocks (there's nothing to bind). |
 | [AG4007](names.md#ag4007) | Variable '&#123;name&#125;' is not defined. |
+| [AG4008](names.md#ag4008) | '&#123;name&#125;' is not defined in '&#123;module&#125;'. |
+| [AG4009](names.md#ag4009) | Cannot find module '&#123;module&#125;'. |
 
 ## Match and narrowing
 

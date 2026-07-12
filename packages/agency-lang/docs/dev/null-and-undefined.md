@@ -122,6 +122,21 @@ The design therefore does not *ignore* `undefined` — it **absorbs** it. `null`
 and `undefined` are made to behave identically everywhere a user can observe
 them, and `undefined` is normalized to `null` where it enters typed data.
 
+As of the index/match normalization work (issue #409), the two most common of
+these value leaks — a missing object key / out-of-bounds index (`obj[key]`,
+`arr[i]`) and an unmatched `match` expression — are normalized to `null` at the
+value level via the `__nn` runtime helper (`x ?? null`). A *terminal* index read
+of an access chain and the `__matchval_<id>` read that consumes a match result
+are wrapped in `__nn`, so they yield `null` rather than `undefined` as an
+observable value. This complements `__eq` (which unifies the two only at
+*comparison* sites) by unifying them at the *value* level too. The wrap is
+terminal-only and skipped for assignment/update targets, so JS optional-chain
+short-circuit is preserved (`a?.[b].c` stays `undefined`, does not throw) and
+lvalues (`x[i]++`, `x[i] += v`) stay valid. The remaining leak sites (optional
+chaining, destructuring a missing field, falling off a function without
+`return`, and TypeScript interop) are not yet normalized and are tracked as
+follow-ups.
+
 ## Alternatives considered
 
 ### A. Full TypeScript parity (keep both, distinct)

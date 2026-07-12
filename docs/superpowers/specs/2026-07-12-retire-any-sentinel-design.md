@@ -19,9 +19,11 @@ return either a real object or that string. Its signature reads
 
 Two spellings of one idea tax every reader. Three symptoms recur:
 
-1. **Every check asks the question twice.** The pattern `t === "any" ||
-   isAnyType(t)` appears across the checker. It tests the string form, then
-   the object form.
+1. **Comparisons test the string by hand.** About 65 sites compare against the
+   literal, as `t === "any"` (56 sites) or `t !== "any"` (9 sites). Each one
+   knows only the string form. Four of them pair the check with the object
+   form as `t === "any" || isAnyType(t)`, spelling out the redundancy in a
+   single line.
 2. **A conversion helper exists only to bridge the two.** `maybeAny()` turns
    the string into `ANY_T` so it fits inside a structured type. It has no
    other reason to exist.
@@ -75,31 +77,54 @@ lists most of the remaining work for you.
 returns `VariableType | "any"` and carries `as VariableType` casts to paper
 over the union. Those casts disappear once its signature narrows.
 
+## The core invariant
+
+One rule makes this safe, and breaking it is the main hazard:
+
+> **Change a function's returns and narrow its signature in the same commit.
+> Never change returns ahead of the narrowing.**
+
+Here is why. Suppose a producer changes `return "any"` to `return ANY_T` but
+keeps its wide `VariableType | "any"` signature. A consumer that does
+`if (t === "any")` still type-checks, because the signature still allows the
+string. But `t` now holds the object, so the comparison is `false` at runtime
+and the any-handling branch silently dies. Behavior changes and nothing fails
+to compile.
+
+The narrowing is what protects us. Once the signature is `VariableType`, a
+leftover `t === "any"` becomes a "no overlap" compile error (TS2367). The
+return change alone protects nothing. So the two always travel together.
+
 ## Migration mechanics
 
-The order is what makes this safe. We lean on one temporary widening so that
-no intermediate state is ever half-broken.
+Four moves, in order. The first two are behavior-preserving and
+compiler-clean. The third does the retirement under the invariant above.
 
-**Step 1: Teach `isAnyType` to accept both forms.** Widen its parameter from
-`VariableType` to `VariableType | "any"` (`utils.ts:48`). Every
-`t === "any" || isAnyType(t)` then collapses to `isAnyType(t)`. Behavior is
-unchanged, because both forms already count as `any`. This is the safety mat
-for every later step.
+**Move 1: Teach `isAnyType` to accept both forms.** Widen its parameter from
+`VariableType` to `VariableType | "any"` (`utils.ts:48`). This is small, and
+it lets the next move rewrite every check to a single helper call.
 
-**Step 2: Produce the object, not the string.** Change each `return "any"` to
-`return ANY_T`. Both mean "I don't know," so the meaning is identical. Start
-with the innermost helpers and work outward.
+**Move 2: Route every comparison through `isAnyType`.** Replace all 65 literal
+comparisons. `t === "any"` becomes `isAnyType(t)`. `t !== "any"` becomes
+`!isAnyType(t)`. The four paired sites collapse to one call. This move is the
+bulk of the change, and it is behavior-preserving: `isAnyType` on the string
+returns exactly what `=== "any"` did. After it, no code reads the literal by
+hand. That is what closes the silent-break window. When producers switch to
+`ANY_T` in the next move, no string comparison is left to go quietly false.
 
-**Step 3: Narrow one signature; let the compiler find the fallout.** When a
-function starts returning a real object, narrow its signature from
-`VariableType | "any"` to `VariableType`. The compiler flags every caller that
-still expected the string. Follow the errors outward, one function at a time,
-until a file is clean. The compiler enumerates the work; we do not hunt by
-hand.
+**Move 3: Retire the string, producer by producer.** For each producer, in one
+commit: change its `return "any"` to `return ANY_T`, narrow its signature from
+`VariableType | "any"` to `VariableType`, and fix whatever the compiler then
+flags. Because Move 2 already converted the comparisons, the fallout is small
+and mechanical. Any comparison Move 2 missed surfaces here as a TS2367 error
+the moment its producing signature narrows. That is the invariant working as a
+backstop. Start with the spine (`synthType`, `ScopeType`,
+`inferredReturnTypes`) and let the compiler pull in each producer's consumers.
 
-**Step 4: Delete the dead machinery.** Once nothing produces the string:
+**Move 4: Delete the dead machinery.** Once nothing produces the string:
 - Delete `maybeAny` (`synthesizer.ts:236`). Nothing is left to convert.
-- Delete the duplicate `isAnyType` in `inference.ts:129`. Use the shared one.
+- In `inference.ts`, delete the local `const ANY_T` (`:126`) and the duplicate
+  `isAnyType` (`:129`). Import both from `primitives.js` and `utils.js`.
 - Narrow `isAnyType`'s parameter back to `VariableType`. The string no longer
   exists, so the helper should stop pretending it might.
 - Remove the `as VariableType` casts in `widenType`.
@@ -131,35 +156,55 @@ Where it branched on `"any"` specifically, rewrite the branch by hand.
 
 ## Suggested commit order
 
-Innermost first, so each commit compiles and the compiler guides the next.
+Commits follow the moves above, not the file layout. Moves 1 and 2 are global
+sweeps. Move 3's commits are scoped by *a producer signature plus the
+consumers the compiler flags when it narrows*, because those cannot be split:
+narrowing `synthType` alone turns every `=== "any"` on its result across
+`checker.ts`, `flow.ts`, and `scopes.ts` into a compile error at once. A
+file-scoped commit could not compile in isolation. Each commit here does
+compile and pass tests on its own.
 
-1. Widen `isAnyType` to accept both forms; collapse every
-   `t === "any" || isAnyType(t)`.
-2. `synthesizer.ts` internals: `return ANY_T`, narrow `synthType` and its
-   helpers. Handle the two `| null` signal sites here.
-3. `scope.ts` / `flow.ts`: collapse `ScopeType`, narrow the flow walker.
-4. `checker.ts` / `scopes.ts`: narrow, including the `| undefined` signal sites.
-5. `resolveCall.ts` / `builtins.ts` / `inference.ts`: narrow; delete the
-   duplicate `isAnyType`.
-6. Remaining consumers: `matchExprTypes.ts`, `typeCases.ts`,
-   `interruptAnalysis.ts`, `functionTypeRaises.ts`, `functionValueEffects.ts`,
-   `effectSets.ts`, `effectPayloadCheck.ts`, `matchExhaustiveness.ts`,
-   `narrowing.ts`, `flowBuilder.ts`, `index.ts`, `types.ts`.
-7. Cleanup: delete `maybeAny`; narrow `isAnyType` back to `VariableType`;
-   remove `widenType`'s casts; update `types.ts` `inferredReturnTypes`.
+1. **Widen `isAnyType`** to accept `VariableType | "any"` (Move 1). Collapse
+   the four paired sites while here.
+2. **Route all comparisons through `isAnyType`** (Move 2). All 65 sites. No
+   producer changes yet, so this is behavior-preserving and compiles green.
+3. **Narrow the spine and its fallout** (Move 3). `synthType`,
+   `ScopeType`, and `inferredReturnTypes` are interlinked; narrowing one drags
+   in the others plus their consumers. Expect one large, atomic commit here,
+   including the `| null` signal sites in `synthesizer.ts` and the `ScopeType`
+   collapse in `scope.ts` / `flow.ts`.
+4. **Narrow the remaining producers**, each with its consumers, as the
+   compiler surfaces them: `checker.ts` (with its `| undefined` signal sites),
+   `scopes.ts`, `resolveCall.ts`, `builtins.ts`, `inference.ts`,
+   `matchExprTypes.ts`, `typeCases.ts`, `interruptAnalysis.ts`,
+   `functionTypeRaises.ts`, `functionValueEffects.ts`, and the rest. Split into
+   as many commits as compile cleanly on their own.
+5. **Cleanup** (Move 4): delete `maybeAny`; fold `inference.ts`'s local
+   `ANY_T` and duplicate `isAnyType` into imports; narrow `isAnyType` back to
+   `VariableType`; remove `widenType`'s casts; collapse the `ScopeType` alias.
 
-The counts are a guide, not a contract. The compiler decides when a step is
-done: a file is finished when it type-checks with the narrowed signatures.
+The counts are a guide, not a contract. The compiler decides when a commit is
+done: it is finished when it type-checks with the narrowed signatures and the
+suite passes.
 
 ## Testing and the safety net
 
 This change must alter no behavior, so the existing suite is the gate.
 
-- Run the full `lib/typeChecker/` unit suite. Every test passes unchanged.
+- Run the full `lib/typeChecker/` unit suite. Every test passes, with one
+  expected exception below.
 - Run the fixture integration tests. Diagnostics stay byte-identical.
-- If any test flips, stop. A flip means the string and the object were **not**
-  treated identically somewhere. That is a real asymmetry, and it needs a look
-  before the migration continues.
+- If a test flips for any other reason, stop. A flip means the string and the
+  object were **not** treated identically somewhere. That is a real asymmetry,
+  and it needs a look before the migration continues.
+
+**One test file changes on purpose: `flow.test.ts`.** It asserts on the
+sentinel *value* at nine sites, as `expect(...).toBe("any")`. Those functions
+return `ANY_T` after Move 3, so `.toBe("any")` would fail. Migrate each to an
+object check, `expect(isAnyType(...)).toBe(true)`, in the commit that narrows
+the producing signature. This is an assertion update, not a behavior change.
+No other test asserts on a `| "any"` signature, so the rest of the suite needs
+nothing beyond passing.
 
 Add one cheap regression guard so the sentinel cannot creep back: a test that
 scans `lib/typeChecker/` source and asserts no `VariableType | "any"`
@@ -176,6 +221,8 @@ stray reintroduction in review.
 - **Signal sites.** The `| null` and `| undefined` sites are the one place a
   mechanical swap could change control flow. They are enumerated above and get
   per-site review.
-- **Size.** The change touches roughly 283 spots across 30 files. It is wide.
-  It is also mechanical and compiler-guarded, so width is low-risk. One PR
-  keeps it atomic and avoids a lingering half-migrated state.
+- **Size.** The change spans 23 non-test files in `lib/typeChecker/`: 65
+  comparison sites, 35 `return "any"` producers, and roughly 240 sentinel-
+  related occurrences in all. It is wide. It is also mechanical and
+  compiler-guarded, so width is low-risk. One PR keeps it atomic and avoids a
+  lingering half-migrated state.

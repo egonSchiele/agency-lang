@@ -304,9 +304,11 @@ def caller(id: string): string {
 `);
     const body = bodyOf(output, "caller");
     // Outcome-dependent: a returned failure contributes its own bit, a
-    // success/plain value marks true.
+    // success/plain value marks true. This is the raw builder output (the
+    // ternary printer parenthesizes each arm); the compile pipeline's
+    // formatter collapses the redundant parens in the emitted .js.
     expect(body).toContain(
-      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? __self.r.destructiveRan : true)",
+      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true))",
     );
   });
 });

@@ -240,7 +240,12 @@ runner.halt(__stack.args.x * 2)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -384,7 +389,12 @@ runner.halt(__stack.args.a * __stack.args.b)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -549,7 +559,12 @@ runner.halt(await success(__stack.args.a / __stack.args.b))
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;

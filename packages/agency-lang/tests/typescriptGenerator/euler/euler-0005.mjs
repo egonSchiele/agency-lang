@@ -265,7 +265,12 @@ runner.halt(__stack.locals.x)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -419,7 +424,12 @@ runner.halt(__stack.args.a / await __call(gcd, {
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;

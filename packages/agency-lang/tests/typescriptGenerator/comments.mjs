@@ -248,7 +248,12 @@ runner.halt(__stack.locals.message)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;

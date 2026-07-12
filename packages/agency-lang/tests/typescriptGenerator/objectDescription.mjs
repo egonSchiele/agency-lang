@@ -214,6 +214,7 @@ __stack.locals.url = await runPrompt({
           clientConfig: {},
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 // halt if this is an interrupt

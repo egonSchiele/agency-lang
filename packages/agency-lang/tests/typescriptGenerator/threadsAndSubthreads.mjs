@@ -239,6 +239,7 @@ __stack.locals.res1 = await runPrompt({
             clientConfig: {},
             maxToolCallRounds: 10,
             removedTools: __self.__removedTools,
+            destructiveSink: __self,
             checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt
@@ -260,6 +261,7 @@ __stack.locals.res2 = await runPrompt({
               clientConfig: {},
               maxToolCallRounds: 10,
               removedTools: __self.__removedTools,
+              destructiveSink: __self,
               checkpointInfo: runner.getCheckpointInfo()
             });
 // halt if this is an interrupt
@@ -281,6 +283,7 @@ __stack.locals.res3 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 removedTools: __self.__removedTools,
+                destructiveSink: __self,
                 checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
@@ -303,6 +306,7 @@ __stack.locals.res5 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 removedTools: __self.__removedTools,
+                destructiveSink: __self,
                 checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
@@ -326,6 +330,7 @@ __stack.locals.res4 = await runPrompt({
               clientConfig: {},
               maxToolCallRounds: 10,
               removedTools: __self.__removedTools,
+              destructiveSink: __self,
               checkpointInfo: runner.getCheckpointInfo()
             });
 // halt if this is an interrupt
@@ -499,6 +504,7 @@ __stack.locals.res1 = await runPrompt({
             clientConfig: {},
             maxToolCallRounds: 10,
             removedTools: __self.__removedTools,
+            destructiveSink: __self,
             checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt
@@ -523,6 +529,7 @@ __stack.locals.res2 = await runPrompt({
               clientConfig: {},
               maxToolCallRounds: 10,
               removedTools: __self.__removedTools,
+              destructiveSink: __self,
               checkpointInfo: runner.getCheckpointInfo()
             });
 // halt if this is an interrupt
@@ -547,6 +554,7 @@ __stack.locals.res3 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 removedTools: __self.__removedTools,
+                destructiveSink: __self,
                 checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
@@ -572,6 +580,7 @@ __stack.locals.res5 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 removedTools: __self.__removedTools,
+                destructiveSink: __self,
                 checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
@@ -598,6 +607,7 @@ __stack.locals.res4 = await runPrompt({
               clientConfig: {},
               maxToolCallRounds: 10,
               removedTools: __self.__removedTools,
+              destructiveSink: __self,
               checkpointInfo: runner.getCheckpointInfo()
             });
 // halt if this is an interrupt

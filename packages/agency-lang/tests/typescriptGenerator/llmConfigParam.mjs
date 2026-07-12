@@ -217,6 +217,7 @@ __stack.locals.foo = await runPrompt({
           clientConfig: __globals()!.get("llmConfigParam.agency", "config"),
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 // halt if this is an interrupt
@@ -242,6 +243,7 @@ __stack.locals.foo2 = await runPrompt({
           },
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 // halt if this is an interrupt

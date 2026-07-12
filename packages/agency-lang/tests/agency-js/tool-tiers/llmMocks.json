@@ -5,5 +5,17 @@
 
   { "toolCall": { "name": "destructiveTool", "args": { "id": "b" } } },
   { "toolCall": { "name": "destructiveTool", "args": { "id": "b" } } },
-  { "return": "Gave up on b" }
+  { "return": "Gave up on b" },
+
+  { "toolCall": { "name": "succeedTool", "args": { "id": "y" } } },
+  { "return": "succeedTool done" },
+
+  { "toolCall": { "name": "refuseTool", "args": { "id": "x" } } },
+  { "return": "refuseTool refused" },
+
+  { "toolCall": { "name": "succeedTool", "args": { "id": "z" } } },
+  { "return": "succeedTool in block done" },
+
+  { "toolCall": { "name": "succeedTool", "args": { "id": "i" } } },
+  { "return": "succeedTool before pause done" }
 ]

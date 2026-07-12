@@ -213,6 +213,7 @@ __stack.locals.response = await runPrompt({
           },
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 // halt if this is an interrupt
@@ -250,6 +251,7 @@ __stack.locals.response2 = await runPrompt({
           },
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 // halt if this is an interrupt

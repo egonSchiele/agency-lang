@@ -12,7 +12,9 @@ agency typecheck foo.agency
 agency tc src/
 ```
 
-`tc` is a shorter alias. If no input is given, the type checker reads from stdin.
+`tc` is a shorter alias. Arguments may be files, directories (scanned recursively for `.agency` files), or a mix of both. If no input is given, the type checker reads from stdin.
+
+You can also pass a literal `-` to read from stdin explicitly, and mix it with file and directory arguments (for example, `agency tc src/ extra.agency -`).
 
 ## Options
 

@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "writeFails", "description": "a failed destructive stdlib write carries destructiveRan", "input": "", "expectedOutput": "[true,false]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "readFails", "description": "a failed non-destructive stdlib read does not leak destructiveRan", "input": "", "expectedOutput": "[false]", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

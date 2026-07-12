@@ -5,6 +5,7 @@ import type { AgencyConfig } from "./config.js";
 import type {
   AgencyNode,
   AgencyProgram,
+  FunctionMarkers,
   FunctionParameter,
   Tag,
   TypeParam,
@@ -42,7 +43,7 @@ export type FunctionSymbol = {
   kind: "function";
   name: string;
   loc?: SourceLocation;
-  safe: boolean;
+  markers?: FunctionMarkers;
   exported: boolean;
   parameters: FunctionParameter[];
   returnType: VariableType | null;
@@ -373,7 +374,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "function",
           name: node.functionName,
           loc: node.loc,
-          safe: !!node.safe,
+          markers: node.markers,
           exported: !!node.exported,
           parameters: node.parameters,
           returnType: node.returnType ?? null,
@@ -475,7 +476,9 @@ export function mergeExportsFrom(
   if (stmt.body.kind === "starExport") {
     for (const [name, sym] of Object.entries(sourceSymbols)) {
       if (!isExportedSymbol(sym)) continue;
-      mergeOne(targetSymbols, name, name, sym, false, sourcePath, stmt);
+      // Star re-exports carry no per-name modifiers; markers are inherited
+      // from the source symbol via the spread inside mergeOne.
+      mergeOne(targetSymbols, name, name, sym, false, false, sourcePath, stmt);
     }
     return;
   }
@@ -500,14 +503,26 @@ export function mergeExportsFrom(
           `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
       );
     }
-    const isSafe = stmt.body.safeNames.includes(originalName);
-    if (sym.kind === "node" && isSafe) {
+    const isDestructive =
+      stmt.body.destructiveNames?.includes(originalName) ?? false;
+    const isIdempotent =
+      stmt.body.idempotentNames?.includes(originalName) ?? false;
+    if (sym.kind === "node" && (isDestructive || isIdempotent)) {
       throw new Error(
-        `The 'safe' modifier cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
-          `'safe' is only meaningful for functions; nodes do not carry a safe flag.`,
+        `A retry-safety marker (destructive/idempotent) cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
+          `Markers are only meaningful for functions.`,
       );
     }
-    mergeOne(targetSymbols, localName, originalName, sym, isSafe, sourcePath, stmt);
+    mergeOne(
+      targetSymbols,
+      localName,
+      originalName,
+      sym,
+      isDestructive,
+      isIdempotent,
+      sourcePath,
+      stmt,
+    );
   }
 }
 
@@ -516,7 +531,8 @@ function mergeOne(
   localName: string,
   originalName: string,
   sourceSym: SymbolInfo,
-  forceSafe: boolean,
+  forceDestructive: boolean,
+  forceIdempotent: boolean,
   sourcePath: string,
   stmt: ExportFromStatement,
 ): void {
@@ -540,7 +556,7 @@ function mergeOne(
   }
 
   // Build the merged entry. We copy the source's SymbolInfo fields and
-  // override name, loc, exported, and (for functions) safe.
+  // override name, loc, and exported.
   const base = {
     name: localName,
     loc: stmt.loc,
@@ -554,8 +570,17 @@ function mergeOne(
         ...sourceSym,
         ...base,
         exported: true,
-        safe: forceSafe ? true : sourceSym.safe,
       };
+      // `markers` is copied by the spread above (inherited from the source
+      // definition); a `destructive`/`idempotent` modifier on the re-export
+      // itself adds it on top. This is the re-export propagation the plan
+      // review flagged.
+      if (forceDestructive) {
+        copied.markers = { ...(copied.markers ?? {}), destructive: true };
+      }
+      if (forceIdempotent) {
+        copied.markers = { ...(copied.markers ?? {}), idempotent: true };
+      }
       break;
     case "node":
       copied = { ...sourceSym, ...base, exported: true };

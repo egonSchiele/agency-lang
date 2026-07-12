@@ -23,7 +23,7 @@ type SmsResult = {
 effect std::sendSms { to: string }
 
 /** Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env vars, or pass them directly. */
-export def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = "", allowList: string[] = [], blockList: string[] = []): Result {
+export destructive def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """
   Send an SMS text message via the Twilio API.
 

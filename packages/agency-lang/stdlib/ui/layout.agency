@@ -62,7 +62,7 @@ export type Width = number | "full" | string
 // code, LLM tool calls, ad-hoc construction).
 // ------------------------------------------------------------------
 
-export safe def text(
+export def text(
   content: string,
   fgColor: string = "",
   bgColor: string = "",
@@ -103,7 +103,7 @@ export safe def text(
 /** Wraps to its container by default; pass `wrap: false` to preserve exact
 layout. Wrapping is ANSI-aware, so embedded color survives without bleeding
 into surrounding borders. */
-export safe def raw(content: string, align: Alignment = "start", wrap: boolean = true): LayoutNode {
+export def raw(content: string, align: Alignment = "start", wrap: boolean = true): LayoutNode {
   """
   A pre-styled string (may carry its own ANSI or newlines). Wraps to the
   container width by default; pass wrap: false to render exactly as-is and
@@ -124,7 +124,7 @@ export safe def raw(content: string, align: Alignment = "start", wrap: boolean =
   }
 }
 
-export safe def space(count: number = 1): LayoutNode {
+export def space(count: number = 1): LayoutNode {
   """
   Blank space. Inside a row it adds columns; inside a column, rows.
 
@@ -139,7 +139,7 @@ export safe def space(count: number = 1): LayoutNode {
   }
 }
 
-export safe def hline(
+export def hline(
   char: string = "─",
   length: number = 0,
   fgColor: string = "",
@@ -168,7 +168,7 @@ export safe def hline(
   }
 }
 
-export safe def vline(
+export def vline(
   char: string = "│",
   length: number = 0,
   fgColor: string = "",
@@ -341,7 +341,7 @@ def _makeBuilder(kids: any[]): LayoutBuilder {
 // appends after), or neither (empty container).
 // ------------------------------------------------------------------
 
-export safe def row(
+export def row(
   gap: number = 0,
   align: Alignment = "start",
   width: Width = null,
@@ -380,7 +380,7 @@ export safe def row(
   }
 }
 
-export safe def column(
+export def column(
   gap: number = 0,
   align: Alignment = "start",
   width: Width = null,
@@ -419,7 +419,7 @@ export safe def column(
   }
 }
 
-export safe def box(
+export def box(
   title: string = "",
   titleColor: string = "",
   borderStyle: BorderStyle = "rounded",
@@ -467,7 +467,7 @@ export safe def box(
   }
 }
 
-export safe def render(
+export def render(
   node: LayoutNode,
   color: "auto" | boolean = "auto",
   cols: number = 0,

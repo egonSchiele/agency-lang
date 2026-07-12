@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -193,7 +193,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "gcd", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -265,7 +265,7 @@ runner.halt(__stack.locals.x)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -296,14 +296,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "gcd",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "gcd",
     args: __stack.args,
   }
@@ -346,7 +345,6 @@ export const gcd = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __lcm_impl(a: number, b: number) {
@@ -363,7 +361,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "lcm", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -421,7 +419,7 @@ runner.halt(__stack.args.a / await __call(gcd, {
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -452,14 +450,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "lcm",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "lcm",
     args: __stack.args,
   }
@@ -502,7 +499,6 @@ export const lcm = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

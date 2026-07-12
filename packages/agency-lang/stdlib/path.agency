@@ -15,7 +15,7 @@ import { _join, _resolve, _basename, _dirname, _extname, _relative, _isAbsolute 
   ```
 */
 
-export safe def join(...parts: string[]): string {
+export def join(...parts: string[]): string {
   """
   Join path segments using the platform separator and normalize the result.
 
@@ -24,7 +24,7 @@ export safe def join(...parts: string[]): string {
   return _join(parts)
 }
 
-export safe def resolve(...parts: string[]): string {
+export def resolve(...parts: string[]): string {
   """
   Resolve path segments into an absolute path, relative to the current working directory.
 
@@ -33,7 +33,7 @@ export safe def resolve(...parts: string[]): string {
   return _resolve(parts)
 }
 
-export safe def basename(p: string, ext: string = ""): string {
+export def basename(p: string, ext: string = ""): string {
   """
   Return the last portion of a path.
 
@@ -43,7 +43,7 @@ export safe def basename(p: string, ext: string = ""): string {
   return _basename(p, ext)
 }
 
-export safe def dirname(p: string): string {
+export def dirname(p: string): string {
   """
   Return the directory portion of a path.
 
@@ -52,7 +52,7 @@ export safe def dirname(p: string): string {
   return _dirname(p)
 }
 
-export safe def extname(p: string): string {
+export def extname(p: string): string {
   """
   Return the extension of a path (including the leading dot), or an empty string if there is none.
 
@@ -61,7 +61,7 @@ export safe def extname(p: string): string {
   return _extname(p)
 }
 
-export safe def relative(from: string, to: string): string {
+export def relative(from: string, to: string): string {
   """
   Return the relative path from one path to another.
 
@@ -71,7 +71,7 @@ export safe def relative(from: string, to: string): string {
   return _relative(from, to)
 }
 
-export safe def isAbsolute(p: string): boolean {
+export def isAbsolute(p: string): boolean {
   """
   Return true if the path is absolute.
 

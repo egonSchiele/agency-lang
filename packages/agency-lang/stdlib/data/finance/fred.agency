@@ -87,7 +87,7 @@ def appendParam(path: string, key: string, value: string): string {
 }
 
 /** Build the series/observations query path. Pure — no network. */
-safe def buildFredObservationsPath(seriesId: string, apiKey: string, observationStart: string, observationEnd: string, frequency: string, units: string, limit: number): string {
+def buildFredObservationsPath(seriesId: string, apiKey: string, observationStart: string, observationEnd: string, frequency: string, units: string, limit: number): string {
   let path = "series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json"
   path = appendParam(path, "observation_start", observationStart)
   path = appendParam(path, "observation_end", observationEnd)
@@ -101,12 +101,12 @@ safe def buildFredObservationsPath(seriesId: string, apiKey: string, observation
 }
 
 /** Build the series (metadata) query path. Pure — no network. */
-safe def buildFredSeriesPath(seriesId: string, apiKey: string): string {
+def buildFredSeriesPath(seriesId: string, apiKey: string): string {
   return "series?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json"
 }
 
 /** Convert a FRED value string to a number, or null for the missing marker "." or a non-number. Pure. */
-safe def toFredValue(raw: string): number | null {
+def toFredValue(raw: string): number | null {
   if (raw == ".") {
     return null
   }
@@ -118,7 +118,7 @@ safe def toFredValue(raw: string): number | null {
 }
 
 /** Reshape a series/observations response. Pure — total on missing/null input. */
-safe def parseFredObservations(seriesId: string, raw: any): FredSeries {
+def parseFredObservations(seriesId: string, raw: any): FredSeries {
   const r: any = raw ?? {}
   const rawObs = r.observations ?? []
   const observations = map(rawObs) as obs {
@@ -128,7 +128,7 @@ safe def parseFredObservations(seriesId: string, raw: any): FredSeries {
 }
 
 /** Reshape a series (metadata) response, taking the first series. Pure — total on null input. */
-safe def parseFredInfo(raw: any): FredSeriesInfo {
+def parseFredInfo(raw: any): FredSeriesInfo {
   const r: any = raw ?? {}
   const list = r.seriess ?? []
   const info: any = list[0] ?? {}
@@ -144,7 +144,7 @@ safe def parseFredInfo(raw: any): FredSeriesInfo {
 }
 
 /** Finalize an observations fetch into a Result. Pure. */
-safe def fredObservationsFinalize(seriesId: string, fetchResult: any): Result {
+def fredObservationsFinalize(seriesId: string, fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
       if (((body.observations ?? null) == null)) {
@@ -157,7 +157,7 @@ safe def fredObservationsFinalize(seriesId: string, fetchResult: any): Result {
 }
 
 /** Finalize a series-info fetch into a Result. Pure. */
-safe def fredInfoFinalize(fetchResult: any): Result {
+def fredInfoFinalize(fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
       const list = body.seriess ?? []
@@ -170,7 +170,7 @@ safe def fredInfoFinalize(fetchResult: any): Result {
   }
 }
 
-export safe def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::http::fetchJSON> {
+export def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::http::fetchJSON> {
   """
   Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
   unemployment rate, "CPIAUCSL" for CPI, "FEDFUNDS" for the fed funds rate). Returns the
@@ -197,7 +197,7 @@ export safe def fredSeries(seriesId: string, observationStart: string = "", obse
   return fredObservationsFinalize(seriesId, result)
 }
 
-export safe def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::http::fetchJSON> {
+export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::http::fetchJSON> {
   """
   Fetch metadata about a FRED series by its id: its human title, display units, frequency, and
   the date range it covers. Requires the FRED_API_KEY environment variable.

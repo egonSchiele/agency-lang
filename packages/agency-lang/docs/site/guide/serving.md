@@ -11,8 +11,13 @@ Agency can serve your functions and nodes over MCP or HTTP.
 
 Only items marked with `export` are exposed by the serve system:
 
-```ts
-export def add(a: number, b: number): number {
+```agency
+export idempotent def add(a: number, b: number): number {
+  """
+  Adds two numbers together.
+  @param a - First number
+  @param b - Second number
+  """
   return a + b
 }
 
@@ -21,6 +26,8 @@ export node main(message: string) {
 }
 
 ```
+
+The [`destructive` and `idempotent` markers](/guide/llm-part-2#when-a-tool-call-fails) are surfaced to clients so they know which tools are safe to re-run. MCP clients see `idempotent` as an `idempotentHint` annotation and `destructive` as a `destructiveHint`; an unmarked function gets no annotation. The HTTP `/list` manifest reports the same information as `destructive` and `idempotent` booleans (see below).
 
 ## MCP Server
 
@@ -61,7 +68,7 @@ The `http` command has similar options as the `mcp` command. Run `agency serve h
 ```json
 {
   "functions": [
-    { "name": "add", "description": "Adds two numbers together.", "safe": true }
+    { "name": "add", "description": "Adds two numbers together.", "destructive": false, "idempotent": true }
   ],
   "nodes": [
     { "name": "main", "parameters": ["message"] }

@@ -105,10 +105,10 @@ describe("formatSource", () => {
     expect(formatted).toContain('} from "./utils.agency"');
   });
 
-  it("preserves safe and alias in wrapped imports", () => {
-    const input = 'import { safe alpha, bravo as b, charlie, delta, echo, foxtrot } from "./utils.agency"\nnode main() {\n  print(1)\n}\n';
+  it("preserves a marker and alias in wrapped imports", () => {
+    const input = 'import { idempotent alpha, bravo as b, charlie, delta, echo, foxtrot } from "./utils.agency"\nnode main() {\n  print(1)\n}\n';
     const formatted = formatSource(input);
-    expect(formatted).toContain("  safe alpha,");
+    expect(formatted).toContain("  idempotent alpha,");
     expect(formatted).toContain("  bravo as b,");
   });
 
@@ -294,8 +294,8 @@ describe("formatSource", () => {
       'export { foo } from "./tools.agency"',
       'export { foo as bar } from "./tools.agency"',
       'export { search as wikipediaSearch, fetch } from "std::wikipedia"',
-      'export { safe foo, bar } from "std::wikipedia"',
-      'export { safe foo as bar } from "std::wikipedia"',
+      'export { idempotent foo, bar } from "std::wikipedia"',
+      'export { destructive foo as bar } from "std::wikipedia"',
       'export * from "std::wikipedia"',
     ])("round-trips: %s", (input) => {
       const formatted = formatSource(input + "\n");

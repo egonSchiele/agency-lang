@@ -66,6 +66,7 @@ import {
   Expression,
   FunctionCall,
   FunctionDefinition,
+  FunctionMarkers,
   FunctionParameter,
   InterpolationSegment,
   Literal,
@@ -138,7 +139,7 @@ import {
   NamedImport,
   NamespaceImport,
 } from "../types/importStatement.js";
-import { ExportFromStatement } from "../types/exportFromStatement.js";
+import { ExportFromStatement, NamedExportBody } from "../types/exportFromStatement.js";
 import { DefaultCase, MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
@@ -3396,13 +3397,26 @@ const nameWithOptionalAlias = or(
   ),
 );
 
-const safeNameItem = or(
+// A named import/export item, optionally carrying a retry-safety marker.
+// `destructive` and `idempotent` are the two markers; an unmarked item
+// carries neither. (There is no `safe` — it was removed.)
+const markedNameItem = or(
   map(
-    seqC(str("safe "), captureCaptures(nameWithOptionalAlias)),
+    seqC(str("destructive "), captureCaptures(nameWithOptionalAlias)),
     (r) => ({
       name: r.name,
       alias: r.alias as string | undefined,
-      isSafe: true,
+      isDestructive: true,
+      isIdempotent: false,
+    }),
+  ),
+  map(
+    seqC(str("idempotent "), captureCaptures(nameWithOptionalAlias)),
+    (r) => ({
+      name: r.name,
+      alias: r.alias as string | undefined,
+      isDestructive: false,
+      isIdempotent: true,
     }),
   ),
   map(
@@ -3410,7 +3424,8 @@ const safeNameItem = or(
     (r) => ({
       name: r.name,
       alias: r.alias,
-      isSafe: false,
+      isDestructive: false,
+      isIdempotent: false,
     }),
   ),
 );
@@ -3422,25 +3437,40 @@ const namedImportParser: Parser<NamedImport> = memo(
     seqC(
       char("{"),
       optionalSpacesOrNewline,
-      capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+      capture(sepBy1(commaWithNewline, markedNameItem), "items"),
       optional(commaWithNewline),
       optionalSpacesOrNewline,
       char("}"),
     ),
     (result) => {
       const importedNames: string[] = [];
-      const safeNames: string[] = [];
+      const destructiveNames: string[] = [];
+      const idempotentNames: string[] = [];
       const aliases: Record<string, string> = {};
       for (const item of result.items) {
         importedNames.push(item.name);
         if (item.alias) {
           aliases[item.name] = item.alias;
         }
-        if (item.isSafe) {
-          safeNames.push(item.name);
+        if (item.isDestructive) {
+          destructiveNames.push(item.name);
+        }
+        if (item.isIdempotent) {
+          idempotentNames.push(item.name);
         }
       }
-      return { type: "namedImport" as const, importedNames, safeNames, aliases };
+      const node: NamedImport = {
+        type: "namedImport" as const,
+        importedNames,
+        aliases,
+      };
+      if (destructiveNames.length > 0) {
+        node.destructiveNames = destructiveNames;
+      }
+      if (idempotentNames.length > 0) {
+        node.idempotentNames = idempotentNames;
+      }
+      return node;
     },
   ),
 );
@@ -3526,21 +3556,34 @@ const namedExportBodyParser = map(
   seqC(
     char("{"),
     optionalSpacesOrNewline,
-    capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+    capture(sepBy1(commaWithNewline, markedNameItem), "items"),
     optional(commaWithNewline),
     optionalSpacesOrNewline,
     char("}"),
   ),
   (result) => {
     const names: string[] = [];
-    const safeNames: string[] = [];
+    const destructiveNames: string[] = [];
+    const idempotentNames: string[] = [];
     const aliases: Record<string, string> = {};
     for (const item of result.items) {
       names.push(item.name);
       if (item.alias) aliases[item.name] = item.alias;
-      if (item.isSafe) safeNames.push(item.name);
+      if (item.isDestructive) destructiveNames.push(item.name);
+      if (item.isIdempotent) idempotentNames.push(item.name);
     }
-    return { kind: "namedExport" as const, names, safeNames, aliases };
+    const body: NamedExportBody = {
+      kind: "namedExport" as const,
+      names,
+      aliases,
+    };
+    if (destructiveNames.length > 0) {
+      body.destructiveNames = destructiveNames;
+    }
+    if (idempotentNames.length > 0) {
+      body.idempotentNames = idempotentNames;
+    }
+    return body;
   },
 );
 
@@ -4655,45 +4698,67 @@ const exportKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
-const safeKeywordParser: Parser<boolean> = or(
-  map(seqC(str("safe"), spaces), () => true),
-  succeed(false),
-);
+// The modifiers that may precede `def`, in any order, each at most once.
+// A table looped to fixpoint keeps this order-independent and makes a new
+// modifier a one-line addition.
+const FUNCTION_MODIFIER_KEYWORDS = [
+  "export",
+  "destructive",
+  "idempotent",
+] as const;
+type FunctionModifierKeyword = (typeof FUNCTION_MODIFIER_KEYWORDS)[number];
 
-// Parse "export" and "safe" in any order before "def"
-function parseFunctionModifiers(input: string): { success: true; rest: string; isExported: boolean; isSafe: boolean } | { success: false } {
+const modifierKeywordParser = (kw: string): Parser<boolean> =>
+  or(map(seqC(str(kw), spaces), () => true), succeed(false));
+
+type FunctionModifiers = {
+  isExported: boolean;
+  isDestructive: boolean;
+  isIdempotent: boolean;
+};
+
+function parseFunctionModifiers(
+  input: string,
+): { success: true; rest: string; modifiers: FunctionModifiers } | { success: false } {
   let rest = input;
-  let isExported = false;
-  let isSafe = false;
-
-  // Try up to 2 modifiers in any order
-  for (let i = 0; i < 2; i++) {
-    if (!isExported) {
-      const exportResult = exportKeywordParser(rest);
-      if (exportResult.success && exportResult.result) {
-        isExported = true;
-        rest = exportResult.rest;
-        continue;
+  const seen: Record<FunctionModifierKeyword, boolean> = {
+    export: false,
+    destructive: false,
+    idempotent: false,
+  };
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const kw of FUNCTION_MODIFIER_KEYWORDS) {
+      if (seen[kw]) continue;
+      const r = modifierKeywordParser(kw)(rest);
+      if (r.success && r.result) {
+        seen[kw] = true;
+        rest = r.rest;
+        progressed = true;
       }
     }
-    if (!isSafe) {
-      const safeResult = safeKeywordParser(rest);
-      if (safeResult.success && safeResult.result) {
-        isSafe = true;
-        rest = safeResult.rest;
-        continue;
-      }
-    }
-    break;
   }
 
-  return { success: true, rest, isExported, isSafe };
+  // `destructive` and `idempotent` are mutually exclusive, but we do NOT
+  // reject the conflict here: both are set on the AST and the type checker
+  // reports a clear diagnostic (AG7006). A parse failure would only surface
+  // a generic "unexpected modifier".
+  return {
+    success: true,
+    rest,
+    modifiers: {
+      isExported: seen.export,
+      isDestructive: seen.destructive,
+      isIdempotent: seen.idempotent,
+    },
+  };
 }
 
 const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const mods = parseFunctionModifiers(input);
   if (!mods.success) return failure("unexpected modifier", input);
-  const { isExported, isSafe } = mods;
+  const { isExported, isDestructive, isIdempotent } = mods.modifiers;
 
   const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
@@ -4705,7 +4770,16 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   // keeps the AST shape unchanged for functions without a raises clause.
   if (_raises) result.raises = _raises;
   if (isExported) result.exported = true;
-  if (isSafe) result.safe = true;
+  // Markers travel as one object, present only when at least one is set,
+  // each field only when true — keeps AST JSON and exact-match tests clean.
+  // Both may be set when the source conflicts (`destructive idempotent`);
+  // the type checker reports that as AG7006.
+  if (isDestructive || isIdempotent) {
+    const markers: FunctionMarkers = {};
+    if (isDestructive) markers.destructive = true;
+    if (isIdempotent) markers.idempotent = true;
+    result.markers = markers;
+  }
 
   // Validate parameter ordering: required → optional (with defaults) → variadic
   const params = result.parameters;

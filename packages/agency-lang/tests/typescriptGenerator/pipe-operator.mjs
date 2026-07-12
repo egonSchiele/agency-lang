@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -190,7 +190,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["x"] = x;
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -240,7 +240,7 @@ runner.halt(__stack.args.x * 2)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -271,14 +271,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "double",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "double",
     args: __stack.args,
   }
@@ -314,7 +313,6 @@ export const double = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __multiply_impl(a: number, b: number) {
@@ -331,7 +329,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -386,7 +384,7 @@ runner.halt(__stack.args.a * __stack.args.b)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -417,14 +415,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "multiply",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "multiply",
     args: __stack.args,
   }
@@ -467,7 +464,6 @@ export const multiply = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __safeDivide_impl(a: number, b: number) {
@@ -484,7 +480,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -553,7 +549,7 @@ runner.halt(await success(__stack.args.a / __stack.args.b))
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -584,14 +580,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "safeDivide",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "safeDivide",
     args: __stack.args,
   }
@@ -634,7 +629,6 @@ export const safeDivide = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

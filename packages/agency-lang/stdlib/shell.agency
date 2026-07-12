@@ -38,7 +38,7 @@ effect std::ls { dir: string, recursive: boolean, maxResults: number }
 effect std::grep { pattern: string, dir: string, flags: string, maxResults: number }
 effect std::glob { pattern: string, dir: string, maxResults: number }
 
-export def exec(
+export destructive def exec(
   command: string,
   args: string[] = [],
   cwd: string = "",
@@ -102,7 +102,7 @@ export def exec(
  * shell command string itself, so prefer running an executable directly with
  * structured arguments when capability narrowing matters.
  */
-export def bash(
+export destructive def bash(
   command: string,
   cwd: string = "",
   timeout: number = 0,
@@ -151,7 +151,7 @@ type LsEntry = {
   size: number
 }
 
-export safe def ls(
+export idempotent def ls(
   dir: string = ".",
   recursive: boolean = false,
   maxResults: number = 1000,
@@ -187,7 +187,7 @@ type GrepMatch = {
   text: string
 }
 
-export safe def grep(
+export idempotent def grep(
   pattern: string,
   dir: string = ".",
   flags: string = "",
@@ -220,7 +220,7 @@ export safe def grep(
   return try _grep(pattern, dir, flags, maxResults, allowedPaths)
 }
 
-export safe def glob(
+export idempotent def glob(
   pattern: string,
   dir: string = ".",
   maxResults: number = 500,
@@ -255,7 +255,7 @@ type StatInfo = {
   modifiedMs: number
 }
 
-export safe def stat(
+export def stat(
   filename: string,
   dir: string = "",
   allowedPaths: string[] = [],
@@ -277,7 +277,7 @@ export safe def stat(
   return _stat(filename, dir, allowedPaths, followSymlinks)
 }
 
-export safe def exists(
+export def exists(
   filename: string,
   dir: string = "",
   allowedPaths: string[] = [],
@@ -297,7 +297,7 @@ export safe def exists(
   return _exists(filename, dir, allowedPaths)
 }
 
-export safe def which(command: string): string {
+export def which(command: string): string {
   """
   Locate an executable in PATH and return its absolute path, or an empty string if not found. On Windows, also tries PATHEXT extensions.
 

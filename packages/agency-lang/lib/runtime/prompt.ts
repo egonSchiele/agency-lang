@@ -30,7 +30,7 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { failure, isFailure, isSuccess } from "./result.js";
+import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -201,6 +201,33 @@ function unwrapToolResultForLlm(result: any, toolName: string): any {
 function toolErrorMessage(error: any): string {
   return typeof error === "string" ? error : stringifyToolResult(error);
 }
+
+/** A failed tool is removed only after this many failures (the circuit
+ *  breaker against retry spirals), or immediately on the destructive tier. */
+const MAX_TOOL_FAILURES = 5;
+
+type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
+
+/** Classify a tool failure. Most-specific fact wins: a started destructive
+ *  operation, then a proved-nothing-ran, then the tool's own idempotent
+ *  declaration, else neutral. */
+function failureTier(
+  f: { destructiveRan?: boolean; neverStarted?: boolean },
+  markers?: { idempotent?: boolean },
+): FailureTier {
+  if (f.destructiveRan) return "destructive";
+  if (f.neverStarted) return "neverStarted";
+  if (markers?.idempotent) return "idempotent";
+  return "neutral";
+}
+
+const TIER_SUFFIX: Record<FailureTier, string> = {
+  destructive:
+    "The call failed after starting a destructive operation. This tool can no longer be called in this conversation. Verify state manually.",
+  neverStarted: "Nothing was executed. Correct the arguments and call again.",
+  idempotent: "This tool is idempotent: calling it again is safe.",
+  neutral: "The call failed. You may call this tool again.",
+};
 
 /** Truncate a tool result for the LLM if its serialized form exceeds
  *  `cap` characters. Returns the ORIGINAL value untouched when within
@@ -451,6 +478,9 @@ export const _internal = {
   assertUniqueToolNames,
   unwrapToolResultForLlm,
   toolErrorMessage,
+  failureTier,
+  TIER_SUFFIX,
+  MAX_TOOL_FAILURES,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -1082,28 +1112,43 @@ export async function runPrompt(args: {
         }
         const errorMessage =
           error instanceof Error ? error.message : String(error);
+        // Keep the crash visible in the terminal, then convert to a failure
+        // and fall through to the unified failure branch below. The tool
+        // STAYS callable (the old remove-on-crash policy is abolished): a
+        // pre-execution tag (argument binding failed → body never ran) maps
+        // to the neverStarted tier; any other crash is neutral.
         console.error(
           `Tool call "${handler.name}" crashed: ${errorMessage}`,
         );
-        ctx.statelogClient.error({
-          errorType: "toolError",
-          message: errorMessage,
-          functionName: handler.name,
-          retryable: false,
-        });
-        toolErrorCounts[handler.name] =
-          (toolErrorCounts[handler.name] || 0) + 1;
-        messages.push(
-          smoltalk.toolMessage(
-            `Error: ${String(capToolResultForLlm(errorMessage, toolResultCap))}. This tool failed after performing side effects and cannot be retried.`,
-            { tool_call_id: toolCall.id, name: toolCall.name },
-          ),
-        );
-        removedTools.push(handler.name);
-        stack.deleteBranch(branchKey);
-        return { toolResult, invokeOutcome: "crashed" };
+        const preExecution = !!(error as { preExecution?: boolean })
+          ?.preExecution;
+        toolResult = failure(errorMessage, { neverStarted: preExecution });
       } finally {
         ctx.exitToolCall();
+      }
+
+      // Decision 8: destructive work performed via a tool inside an llm()
+      // call must propagate to the calling function's activation, so a later
+      // failure THERE reports destructiveRan. Write the same locals slot the
+      // codegen flag lives in; the enclosing function's exit stamp reads it.
+      //
+      // Mirror the codegen assignment-flip EXACTLY (`isFailure(r) ?
+      // r.destructiveRan : true` for a destructive callee): a FAILURE carries
+      // precisely whether destructive work ran, so trust that bit rather than
+      // the marker. A destructive tool that failed pre-execution
+      // (neverStarted) or cleanly refused (returned a failure before its
+      // effectful work) has destructiveRan === false and must NOT poison the
+      // caller — otherwise a later failure in an enclosing agent-as-tool would
+      // wrongly report destructiveRan. A SUCCESS of a destructive-marked tool
+      // is taken to have done its work (successes carry no destructiveRan bit).
+      const toolDidDestructiveWork = isFailure(toolResult)
+        ? toolResult.destructiveRan
+        : !!handler.markers?.destructive;
+      if (toolDidDestructiveWork) {
+        // `stack` is the calling function's activation frame (a State with
+        // `.locals`); its exit stamp reads `__self.__destructiveRan` ===
+        // `stack.locals.__destructiveRan`.
+        markDestructiveWork(stack);
       }
 
       if (isFailure(toolResult)) {
@@ -1118,31 +1163,28 @@ export async function runPrompt(args: {
           errorType: "toolError",
           message: errorMessage,
           functionName: handler.name,
-          retryable: !!toolResult.retryable,
+          neverStarted: !!toolResult.neverStarted,
+          destructiveRan: !!toolResult.destructiveRan,
         });
-        if (toolResult.retryable && toolErrorCounts[handler.name] < 5) {
+        const tier = failureTier(toolResult, handler.markers);
+        const pushMessage = (suffix: string) => {
           messages.push(
-            smoltalk.toolMessage(
-              `Error: ${cappedError}. You may retry this tool call with corrected arguments.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
+            smoltalk.toolMessage(`Error: ${cappedError}. ${suffix}`, {
+              tool_call_id: toolCall.id,
+              name: toolCall.name,
+            }),
           );
-        } else if (toolResult.retryable) {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${cappedError}. This tool has failed too many times and can no longer be called.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
+        };
+        if (tier === "destructive") {
+          pushMessage(TIER_SUFFIX.destructive);
+          removedTools.push(handler.name);
+        } else if (toolErrorCounts[handler.name] >= MAX_TOOL_FAILURES) {
+          pushMessage(
+            "This tool has failed too many times and can no longer be called.",
           );
           removedTools.push(handler.name);
         } else {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${cappedError}. This operation failed and cannot be retried.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-          removedTools.push(handler.name);
+          pushMessage(TIER_SUFFIX[tier]);
         }
         stack.deleteBranch(branchKey);
         return { toolResult, invokeOutcome: "failed" };

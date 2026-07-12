@@ -69,7 +69,7 @@ export def authorizeCalendar(clientId: string, clientSecret: string): Result {
   return try _authorizeCalendar(clientId, clientSecret)
 }
 
-export safe def isCalendarAuthorized(): boolean {
+export def isCalendarAuthorized(): boolean {
   """
   Check if Google Calendar has been authorized. Returns true if OAuth tokens exist locally.
   """
@@ -101,7 +101,7 @@ export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: st
   })
 }
 
-export def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
+export destructive def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
   """
   Create a new event on Google Calendar. Returns the created event.
 
@@ -130,7 +130,7 @@ export def createEvent(summary: string, start: string, end: string, description:
   })
 }
 
-export def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
+export destructive def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
   """
   Update an existing event on Google Calendar. Pass the eventId and any fields to change. An empty string means "don't change". Returns the updated event.
 
@@ -160,7 +160,7 @@ export def updateEvent(eventId: string, summary: string = "", start: string = ""
   })
 }
 
-export def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
+export destructive def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
   """
   Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.
 

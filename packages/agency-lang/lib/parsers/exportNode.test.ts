@@ -21,21 +21,21 @@ describe("export node", () => {
 });
 
 describe("function modifier order", () => {
-  it("parses export safe def", () => {
-    const result = functionParser(`export safe def foo() {\n  return 1\n}`);
+  it("parses export destructive def", () => {
+    const result = functionParser(`export destructive def foo() {\n  return 1\n}`);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.exported).toBe(true);
-      expect(result.result.safe).toBe(true);
+      expect(result.result.markers?.destructive).toBe(true);
     }
   });
 
-  it("parses safe export def (any order)", () => {
-    const result = functionParser(`safe export def foo() {\n  return 1\n}`);
+  it("parses destructive export def (any order)", () => {
+    const result = functionParser(`destructive export def foo() {\n  return 1\n}`);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.exported).toBe(true);
-      expect(result.result.safe).toBe(true);
+      expect(result.result.markers?.destructive).toBe(true);
     }
   });
 });

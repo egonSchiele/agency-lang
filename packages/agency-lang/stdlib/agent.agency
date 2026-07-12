@@ -46,7 +46,7 @@ effect std::question {
   prompt: string
 }
 
-export safe def todoAdd(todo: Todo): Todo[] {
+export def todoAdd(todo: Todo): Todo[] {
   """
   Add a new todo to the list.
   """
@@ -54,7 +54,7 @@ export safe def todoAdd(todo: Todo): Todo[] {
   return _todos
 }
 
-export safe def todoUpdate(
+export def todoUpdate(
   id: string,
   status: "pending" | "in_progress" | "completed",
 ): Todo[] {
@@ -70,7 +70,7 @@ export safe def todoUpdate(
   return _todos
 }
 
-export safe def todoWrite(todos: Todo[]): Todo[] {
+export def todoWrite(todos: Todo[]): Todo[] {
   """
   Replace the current todo list.
   """
@@ -78,7 +78,7 @@ export safe def todoWrite(todos: Todo[]): Todo[] {
   return _todos
 }
 
-export safe def todoList(): Todo[] {
+export def todoList(): Todo[] {
   """
   Return the current todo list.
   """
@@ -178,7 +178,7 @@ let _firstEntry: Record<string, boolean> = {}
  * This keeps the LLM from accidentally handing off to itself or to
  * an unregistered specialist.
  */
-export safe def handoff(
+export def handoff(
   category: string,
   reason: string,
   validCategories: string[],
@@ -210,7 +210,7 @@ export safe def handoff(
  * `route` after each LLM call. Returns `""` when no handoff was
  * requested.
  */
-safe def consumeHandoff(): string {
+def consumeHandoff(): string {
   """
   Read and clear the pending handoff target. Returns "" when no handoff
   was requested.

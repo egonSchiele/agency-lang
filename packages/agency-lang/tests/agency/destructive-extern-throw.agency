@@ -1,0 +1,30 @@
+import { destructive boomDestructive, boomPlain } from "../helpers/destructiveExterns.js"
+
+// A destructive JS extern that THROWS (raw error, not a returned failure)
+// is caught by __tryCall; the constructed failure must carry
+// destructiveRan from the try-site stamping. The try lives in a def
+// (function scope) — that is where the stamping applies.
+def destructiveThrowFn(): Result {
+  const r = try boomDestructive()
+  return r
+}
+node destructiveThrow() {
+  const r = destructiveThrowFn()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}
+
+// A plain (non-destructive) extern that throws: destructiveRan false.
+def plainThrowFn(): Result {
+  const r = try boomPlain()
+  return r
+}
+node plainThrow() {
+  const r = plainThrowFn()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}

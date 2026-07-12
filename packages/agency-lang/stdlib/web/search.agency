@@ -23,7 +23,7 @@ type SearchResult = {
 effect std::search { query: string, count: number, country: string, searchLang: string, safesearch: string, freshness: string }
 effect std::tavilySearch { query: string, count: number, searchDepth: string, topic: string }
 
-export safe def search(
+export def search(
   query: string,
   count: number = 5,
   apiKey: string = "",
@@ -67,7 +67,7 @@ export safe def search(
 /**
   Get a free Tavily key (no credit card) at https://tavily.com.
 */
-export safe def tavilySearch(
+export def tavilySearch(
   query: string,
   count: number = 5,
   apiKey: string = "",

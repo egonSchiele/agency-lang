@@ -4,7 +4,7 @@ and a divide that returns a Result so you can handle division by zero.
 */
 import { _round } from "agency-lang/stdlib-lib/builtins.js"
 
-export safe def round(num: number, precision: number): number {
+export def round(num: number, precision: number): number {
   """
   Round a number to a given number of decimal places.
 
@@ -14,19 +14,19 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export safe def add(a: number, b: number): number {
+export def add(a: number, b: number): number {
   return a + b
 }
 
-export safe def subtract(a: number, b: number): number {
+export def subtract(a: number, b: number): number {
   return a - b
 }
 
-export safe def multiply(a: number, b: number): number {
+export def multiply(a: number, b: number): number {
   return a * b
 }
 
-export safe def divide(a: number, b: number): Result<number> {
+export def divide(a: number, b: number): Result<number> {
   if (b == 0) {
     return failure("Cannot divide by zero")
   }

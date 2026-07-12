@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -189,7 +189,7 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "withModifier.agency", scopeName: "foo", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -237,7 +237,7 @@ if (__response) {
     // rejected, halt
     
     
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+    runner.halt(failure("interrupt rejected", { checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     
     return;
   }
@@ -247,7 +247,7 @@ if (__response) {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }
@@ -269,7 +269,7 @@ if (__response) {
 
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -300,14 +300,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "foo",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "foo",
     args: __stack.args,
   }
@@ -336,7 +335,6 @@ export const foo = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({})
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

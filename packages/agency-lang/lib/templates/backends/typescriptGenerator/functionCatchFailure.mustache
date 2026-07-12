@@ -27,14 +27,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: {{{functionName}}},
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: {{{functionName}}},
     args: __stack.args,
   }

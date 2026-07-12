@@ -81,7 +81,7 @@ export type AwardDetail = {
 
 /** Map a friendly award-type category to its award_type_codes (one category per query — USASpending
     won't mix contract and assistance codes). Unknown → failure listing the valid types. Pure. */
-safe def parseAwardType(t: string): Result<string[]> {
+def parseAwardType(t: string): Result<string[]> {
   const valid = keys(AWARD_TYPE_CODES)
   if (valid.indexOf(t) < 0) {
     return failure("unknown awardType '${t}'; valid: ${valid.join(", ")}")
@@ -91,7 +91,7 @@ safe def parseAwardType(t: string): Result<string[]> {
 
 /** Build the spending_by_award POST body. Optional filters are added only when provided (bracket
     assignment on a mutable Record, as in policy[effect] / _firstEntry[category]). Pure. */
-safe def buildAwardsBody(codes: string[], recipient: string, agency: string, startDate: string, endDate: string, limit: number): Record<string, any> {
+def buildAwardsBody(codes: string[], recipient: string, agency: string, startDate: string, endDate: string, limit: number): Record<string, any> {
   let filters: Record<string, any> = { award_type_codes: codes }
   if (recipient != "") {
     filters["recipient_search_text"] = [recipient]
@@ -113,13 +113,13 @@ safe def buildAwardsBody(codes: string[], recipient: string, agency: string, sta
 }
 
 /** Build the award-detail path (accepts the numeric internal id or the generated hash). Pure. */
-safe def buildAwardPath(awardId: string): string {
+def buildAwardPath(awardId: string): string {
   return "/api/v2/awards/${encodeURIComponent(awardId)}/"
 }
 
 /** Reshape a spending_by_award body into Award[]. Results are keyed by human field names with
     spaces, read via bracket access. Pure/total. */
-safe def parseAwards(raw: any): Award[] {
+def parseAwards(raw: any): Award[] {
   const r: any = raw ?? {}
   const results = r.results ?? []
   return map(results) as a {
@@ -140,7 +140,7 @@ safe def parseAwards(raw: any): Award[] {
 
 /** Join city and state into "City, ST". When only one is present, return it alone; when both are
     missing, return "". Pure. */
-safe def placeString(city: string, state: string): string {
+def placeString(city: string, state: string): string {
   if (city == "") {
     return state
   }
@@ -151,7 +151,7 @@ safe def placeString(city: string, state: string): string {
 }
 
 /** Curate the deep award-detail response into AwardDetail. Pure/total. */
-safe def parseAwardDetail(raw: any): AwardDetail {
+def parseAwardDetail(raw: any): AwardDetail {
   const r: any = raw ?? {}
   const recipient: any = r.recipient ?? {}
   const awarding: any = r.awarding_agency ?? {}
@@ -187,12 +187,12 @@ safe def parseAwardDetail(raw: any): AwardDetail {
 }
 
 /** Shared failure message for a failed USASpending fetch. Pure. */
-safe def usaspendingError(err: any): string {
+def usaspendingError(err: any): string {
   return "USASpending request failed: ${err.message ?? err}"
 }
 
 /** Turn a fetch Result into an Award[] Result. Pure. */
-safe def awardsFinalize(fetchResult: any): Result<Award[]> {
+def awardsFinalize(fetchResult: any): Result<Award[]> {
   return match (fetchResult) {
     success(body) => success(parseAwards(body))
     failure(err) => failure(usaspendingError(err))
@@ -200,7 +200,7 @@ safe def awardsFinalize(fetchResult: any): Result<Award[]> {
 }
 
 /** Turn a fetch Result into an AwardDetail Result; a null body → failure. Pure. */
-safe def awardDetailFinalize(fetchResult: any): Result<AwardDetail> {
+def awardDetailFinalize(fetchResult: any): Result<AwardDetail> {
   return match (fetchResult) {
     success(body) => {
       if (body == null) {
@@ -216,7 +216,7 @@ safe def awardDetailFinalize(fetchResult: any): Result<AwardDetail> {
     std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's own
     std::usaspending prompt while an OUTER fetch handler still receives (and can reject/propagate) the
     fetch — the POST search surfaces with method "POST" for policy gating. Private. */
-safe def usaspendingFetch(path: string, method: HttpMethod, body: Record<string, any> | string | null): Result raises <std::http::fetchJSON> {
+def usaspendingFetch(path: string, method: HttpMethod, body: Record<string, any> | string | null): Result raises <std::http::fetchJSON> {
   handle {
     return fetchJSON(baseUrl: USA_BASE, path: path, allowedDomains: USA_DOMAINS, method: method, body: body)
   } with (data) {
@@ -226,7 +226,7 @@ safe def usaspendingFetch(path: string, method: HttpMethod, body: Record<string,
   }
 }
 
-export safe def usaspendingAwards(recipient: string = "", agency: string = "", awardType: string = "contracts", startDate: string = "", endDate: string = "", limit: number = 20): Result<Award[]> raises <std::usaspending, std::http::fetchJSON> {
+export def usaspendingAwards(recipient: string = "", agency: string = "", awardType: string = "contracts", startDate: string = "", endDate: string = "", limit: number = 20): Result<Award[]> raises <std::usaspending, std::http::fetchJSON> {
   """
   Search U.S. federal awards. Returns each award's id, recipient, amount, awarding agency, dates, and
   description, most-funded first. An empty result set returns an empty list.
@@ -249,7 +249,7 @@ export safe def usaspendingAwards(recipient: string = "", agency: string = "", a
   return awardsFinalize(result)
 }
 
-export safe def usaspendingAward(awardId: string): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON> {
+export def usaspendingAward(awardId: string): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON> {
   """
   Fetch full detail for one federal award. Returns amount, recipient and UEI, awarding agency, dates,
   place of performance, sub-award totals, and recipient executive compensation. Unknown id returns a

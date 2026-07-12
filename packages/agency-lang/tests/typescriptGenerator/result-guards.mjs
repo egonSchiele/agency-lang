@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -190,7 +190,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["r"] = r;
-  __self.__retryable = __self.__retryable ?? true;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -254,7 +254,7 @@ runner.halt(`error`)
 return;
       });
     })
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -285,14 +285,13 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "checkValue",
-    retryable: __self.__retryable,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
+    destructiveRan: __self.__destructiveRan,
     functionName: "checkValue",
     args: __stack.args,
   }
@@ -328,7 +327,6 @@ export const checkValue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"r": z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })]), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 export default graph

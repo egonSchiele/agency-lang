@@ -260,7 +260,6 @@ export class MemoryManager {
             errorType: "llmError",
             message: String(result.error),
             functionName: phase,
-            retryable: false,
           });
         } catch (err) {
           this.logger.debug(
@@ -335,7 +334,6 @@ export class MemoryManager {
             errorType: "llmError",
             message: String(result.error),
             functionName: phase,
-            retryable: false,
           });
         } catch (err) {
           this.logger.debug(

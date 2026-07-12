@@ -1,0 +1,139 @@
+destructive def burn(x: number): Result {
+  if (x < 0) {
+    return failure("refused before doing anything")
+  }
+  print("burning")
+  return failure("failed after starting")
+}
+
+destructive def burnOk(): number {
+  print("burning fine")
+  return 42
+}
+
+def caller(x: number): Result {
+  const r = burn(x)
+  return r
+}
+
+// Refused destructive call: callee reported no destructive work; the
+// caller-side outcome rule must NOT poison the caller.
+node cleanRefusal() {
+  const r = caller(-1)
+  if (isFailure(r)) {
+    return [r.neverStarted, r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Destructive work started, then failure.
+node startedThenFailed() {
+  const r = caller(1)
+  if (isFailure(r)) {
+    return [r.neverStarted, r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Destructive call SUCCEEDS, unrelated failure later. The failure must
+// cross a function boundary to pick up the activation flag.
+def workThenFail(): Result {
+  burnOk()
+  return failure("later unrelated failure")
+}
+node succeededThenFailed() {
+  const r = workThenFail()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// try over a callee that RETURNS a destructive failure: the activation
+// flag must OR in the result even when the user swallows it.
+def swallowsThenFails(): Result {
+  const r = try burn(1)
+  return failure("different failure")
+}
+node trySwallowed() {
+  const r = swallowsThenFails()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// HALT path: destructive work AND the failure both inside a handle block.
+def blockHaltWork(): Result {
+  handle {
+    burnOk()
+    return failure("inside block")
+  } with approve
+}
+node blockHalt() {
+  const r = blockHaltWork()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// JOIN path: destructive work inside the block, failure AFTER it.
+def blockJoinWork(): Result {
+  handle {
+    burnOk()
+  } with approve
+  return failure("after block")
+}
+node blockJoin() {
+  const r = blockJoinWork()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Destructive call inside an `if` block. containsDestructiveCall walks the
+// whole subtree (bodySlots), so the conservative function-level pre-flip
+// fires and the escaping failure carries destructiveRan. (Owner review:
+// nested-block tracking for if/for/thread.)
+def ifBlockWork(x: number): Result {
+  if (x > 0) {
+    burnOk()
+  }
+  return failure("after if")
+}
+node ifBlock() {
+  const r = ifBlockWork(1)
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Destructive call inside a `for` loop body.
+def forBlockWork(): Result {
+  for (i in [1, 2]) {
+    burnOk()
+  }
+  return failure("after for")
+}
+node forBlock() {
+  const r = forBlockWork()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Unmarked function failure: nothing set.
+def plain(): Result {
+  return failure("plain fail")
+}
+node plainFailure() {
+  const r = plain()
+  if (isFailure(r)) {
+    return [r.neverStarted, r.destructiveRan]
+  }
+  return "unexpected"
+}

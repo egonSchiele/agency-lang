@@ -748,20 +748,22 @@ describe("StatelogClient", () => {
       expect(evt.data.error).toBe("boom from onThreadEnd dispatcher");
     });
 
-    it("error emits errorType + retryable", async () => {
+    it("error emits errorType + classification fields", async () => {
       const file = newLogFile("error");
       const client = fileClient(file);
       await client.error({
         errorType: "toolError",
         message: "boom",
         functionName: "doStuff",
-        retryable: true,
+        neverStarted: true,
+        destructiveRan: false,
       });
       const [evt] = readEvents(file);
       expect(evt.data.type).toBe("error");
       expect(evt.data.errorType).toBe("toolError");
       expect(evt.data.functionName).toBe("doStuff");
-      expect(evt.data.retryable).toBe(true);
+      expect(evt.data.neverStarted).toBe(true);
+      expect(evt.data.destructiveRan).toBe(false);
     });
   });
 

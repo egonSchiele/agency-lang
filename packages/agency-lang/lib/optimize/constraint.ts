@@ -18,7 +18,8 @@ export function makeProbeUnit(typeAliases: Record<string, TypeAliasEntry>): Comp
     graphNodes: [],
     importedNodes: [],
     importStatements: [],
-    safeFunctions: {},
+    destructiveFunctions: {},
+    idempotentFunctions: {},
     importedFunctions: {},
     jsImportedNames: {},
   };

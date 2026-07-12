@@ -246,37 +246,68 @@ node main() {
   });
 });
 
-describe("Safe functions and methods", () => {
-  it.each([
-    { safe: true, funcName: "safeFnIf", emitsRetryableFalse: false, block: "if" },
-    { safe: false, funcName: "unsafeFnIf", emitsRetryableFalse: true, block: "if" },
-    { safe: true, funcName: "safeFnFor", emitsRetryableFalse: false, block: "for" },
-    { safe: false, funcName: "unsafeFnFor", emitsRetryableFalse: true, block: "for" },
-    { safe: true, funcName: "safeFnWhile", emitsRetryableFalse: false, block: "while" },
-    { safe: false, funcName: "unsafeFnWhile", emitsRetryableFalse: true, block: "while" },
-  ])("function $funcName with impure call in $block block (safe=$safe) emitsRetryableFalse=$emitsRetryableFalse", ({ safe, funcName, emitsRetryableFalse, block }) => {
-    const safeKeyword = safe ? "safe " : "";
-    const blocks: Record<string, string> = {
-      "if": `if (shouldSave) {\n    return saveItem(id)\n  }`,
-      "for": `for (item in items) {\n    saveItem(item)\n  }`,
-      "while": `while (shouldSave) {\n    return saveItem(id)\n  }`,
-    };
-    const code = `
-import { saveItem } from "./tools.js"
+describe("Destructive-execution tracking codegen", () => {
+  const bodyOf = (output: string, funcName: string): string => {
+    const m = output.match(
+      new RegExp(`async function __${funcName}_impl\\([\\s\\S]*?finally`),
+    );
+    expect(m).toBeTruthy();
+    return m![0];
+  };
 
-${safeKeyword}def ${funcName}(id: string, shouldSave: boolean, items: string[]): string {
-  ${blocks[block]}
+  it("every function inits __destructiveRan and stamps the boundary — even with no destructive content", () => {
+    const output = generateWithBuilder(`
+def plain(id: string): string {
   return id
 }
-`;
-    const output = generateWithBuilder(code);
-    const funcMatch = output.match(new RegExp(`async function __${funcName}_impl\\([\\s\\S]*?finally`));
-    expect(funcMatch).toBeTruthy();
-    if (emitsRetryableFalse) {
-      expect(funcMatch![0]).toContain("__retryable = false");
-    } else {
-      expect(funcMatch![0]).not.toContain("__retryable = false");
-    }
+`);
+    const body = bodyOf(output, "plain");
+    // Unconditional per function: the tool loop can set the flag at runtime
+    // in any llm()-calling function, so both must always be present.
+    expect(body).toContain("__self.__destructiveRan = __self.__destructiveRan ?? false");
+    expect(body).toContain("stampFailureBoundary(runner.haltResult, __self.__destructiveRan)");
+    // The old machinery is gone.
+    expect(body).not.toContain("__retryable");
+  });
+
+  it("a destructive def flips __destructiveRan before an impure statement", () => {
+    const output = generateWithBuilder(`
+import { saveItem } from "./tools.js"
+
+destructive def rm(id: string): string {
+  saveItem(id)
+  return id
+}
+`);
+    const body = bodyOf(output, "rm");
+    expect(body).toContain("__self.__destructiveRan = true");
+  });
+
+  it("emits markers into the AgencyFunction registration", () => {
+    const dOut = generateWithBuilder(`destructive def rm(id: string): string { return id }`);
+    expect(dOut).toMatch(/markers:\s*\{\s*destructive:\s*true/);
+    const iOut = generateWithBuilder(`idempotent def compileIt(s: string): string { return s }`);
+    expect(iOut).toMatch(/markers:\s*\{\s*idempotent:\s*true/);
+    const plainOut = generateWithBuilder(`def plain(id: string): string { return id }`);
+    expect(plainOut).not.toContain("markers:");
+  });
+
+  it("an unmarked caller of a destructive fn emits the outcome flip on the result", () => {
+    const output = generateWithBuilder(`
+destructive def rm(id: string): string {
+  return id
+}
+def caller(id: string): string {
+  const r = rm(id)
+  return r
+}
+`);
+    const body = bodyOf(output, "caller");
+    // Outcome-dependent: a returned failure contributes its own bit, a
+    // success/plain value marks true.
+    expect(body).toContain(
+      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? __self.r.destructiveRan : true)",
+    );
   });
 });
 

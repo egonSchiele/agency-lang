@@ -17,7 +17,7 @@
           "amount1": 3
         },
         "locals": {
-          "__retryable": true,
+          "__destructiveRan": false,
           "localVar": 10,
           "total": 13,
           "result": 13

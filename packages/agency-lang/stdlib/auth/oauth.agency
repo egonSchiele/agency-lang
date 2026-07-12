@@ -82,7 +82,7 @@ export def getAccessToken(name: string): Result {
   return try _getAccessToken(name)
 }
 
-export safe def isAuthorized(name: string): boolean {
+export def isAuthorized(name: string): boolean {
   """
   Check whether OAuth tokens are stored for a provider. Returns true if tokens exist locally; does not verify they are still valid.
 
@@ -91,7 +91,7 @@ export safe def isAuthorized(name: string): boolean {
   return _isAuthorized(name)
 }
 
-export def revokeAuth(name: string): Result {
+export destructive def revokeAuth(name: string): Result {
   """
   Delete stored OAuth tokens for a provider. Re-authorization is required before the provider can be used again.
 

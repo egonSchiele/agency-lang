@@ -109,11 +109,11 @@ export def clearHistory() {
   _clearHistory(_historyFile)
 }
 
-safe def termWidth(): number {
+def termWidth(): number {
   return _termWidth()
 }
 
-export safe def hline(char: string = "─", width: number = null): string {
+export def hline(char: string = "─", width: number = null): string {
   let _width = width || termWidth()
   return char.repeat(_width)
 }

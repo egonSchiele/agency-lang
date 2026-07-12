@@ -18,7 +18,6 @@ function fn(name: string, opts: { exported?: boolean; safe?: boolean } = {}): Fu
     kind: "function",
     name,
     exported: opts.exported ?? false,
-    safe: opts.safe ?? false,
     parameters: [],
     returnType: null,
   };
@@ -48,7 +47,7 @@ function makeImportStatement(
   return {
     type: "importStatement",
     importedNames: [
-      { type: "namedImport", importedNames: names, safeNames: [], aliases: {} },
+      { type: "namedImport", importedNames: names, aliases: {} },
     ],
     modulePath,
     isAgencyImport: modulePath.endsWith(".agency"),
@@ -153,7 +152,6 @@ describe("resolveImports", () => {
             {
               type: "namedImport",
               importedNames: ["add"],
-              safeNames: [],
               aliases: { add: "plus" },
             },
           ],
@@ -186,7 +184,6 @@ describe("resolveImports", () => {
             {
               type: "namedImport",
               importedNames: ["Config"],
-              safeNames: [],
               aliases: { Config: "AppConfig" },
             },
           ],
@@ -207,7 +204,6 @@ describe("resolveImports", () => {
     expect(node.importedNames[0]).toEqual({
       type: "namedImport",
       importedNames: ["Config"],
-      safeNames: [],
       aliases: { Config: "AppConfig" },
     });
   });
@@ -222,7 +218,6 @@ describe("resolveImports", () => {
             {
               type: "namedImport",
               importedNames: ["add", "Config"],
-              safeNames: [],
               aliases: { add: "plus", Config: "AppConfig" },
             },
           ],
@@ -281,7 +276,7 @@ describe("resolveImports", () => {
     const tsImport: ImportStatement = {
       type: "importStatement",
       importedNames: [
-        { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
+        { type: "namedImport", importedNames: ["foo"], aliases: {} },
       ],
       modulePath: "./utils.js",
       isAgencyImport: false,
@@ -308,8 +303,8 @@ describe("resolveImports", () => {
     expect(result.nodes).toEqual([nodeImport]);
   });
 
-  it("rejects 'safe' modifier on an imported node", () => {
-    // `safe` is meaningful only for functions; nodes have no safe flag.
+  it("rejects a retry-safety marker on an imported node", () => {
+    // Markers are meaningful only for functions; nodes have none.
     // Silently dropping the modifier would mislead the user.
     const program: AgencyProgram = {
       type: "agencyProgram",
@@ -322,7 +317,7 @@ describe("resolveImports", () => {
             {
               type: "namedImport",
               importedNames: ["greet"],
-              safeNames: ["greet"],
+              destructiveNames: ["greet"],
               aliases: {},
             },
           ],
@@ -334,7 +329,7 @@ describe("resolveImports", () => {
     });
     expect(() =>
       resolveImports(program, symbolTable, "/project/main.agency"),
-    ).toThrow(/'safe' modifier cannot be applied to node 'greet'/);
+    ).toThrow(/marker.*cannot be applied to node 'greet'/);
   });
 
   // Test-only imports: `import test { ... }`

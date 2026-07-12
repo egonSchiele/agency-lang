@@ -2140,70 +2140,6 @@ describe("functionParser", () => {
   });
 });
 
-describe("functionParser with safe keyword", () => {
-  const testCases = [
-    // Basic safe function
-    {
-      input: "safe def foo() { x = 1 }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "foo",
-          parameters: [],
-          returnType: null,
-          docString: undefined,
-          body: [
-            {
-              type: "assignment",
-              variableName: "x",
-              value: { type: "number", value: "1" },
-            },
-          ],
-          safe: true,
-        },
-      },
-    },
-    // Safe function with parameters and return type
-    {
-      input: "safe def add(x: number, y: number): number { x }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "add",
-          parameters: [
-            {
-              type: "functionParameter",
-              name: "x",
-              typeHint: { type: "primitiveType", value: "number" },
-            },
-            {
-              type: "functionParameter",
-              name: "y",
-              typeHint: { type: "primitiveType", value: "number" },
-            },
-          ],
-          returnType: { type: "primitiveType", value: "number" },
-          docString: undefined,
-          body: [{ type: "variableName", value: "x" }],
-          safe: true,
-        },
-      },
-    },
-  ];
-
-  testCases.forEach(({ input, expected }) => {
-    it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-      const result = functionParser(input);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc(expected.result);
-      }
-    });
-  });
-});
-
 describe("functionParser with export keyword", () => {
   it("parses export def", () => {
     const result = functionParser("export def foo() { x = 1 }");
@@ -2227,13 +2163,11 @@ describe("functionParser with export keyword", () => {
     }
   });
 
-  it("parses export safe def", () => {
+  it("no longer accepts the removed `safe` modifier", () => {
+    // `safe` was removed; it is not a modifier keyword, so `safe def`
+    // fails to parse (the base parser expects `def`, not `safe`).
     const result = functionParser("export safe def foo() { x = 1 }");
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.result.exported).toBe(true);
-      expect(result.result.safe).toBe(true);
-    }
+    expect(result.success).toBe(false);
   });
 
   it("does not set exported on plain def", () => {
@@ -2241,6 +2175,70 @@ describe("functionParser with export keyword", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.exported).toBeUndefined();
+    }
+  });
+});
+
+describe("functionParser with destructive/idempotent markers", () => {
+  it("parses destructive def", () => {
+    const r = functionParser("destructive def rm(p: string) { return 1 }");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.markers?.destructive).toBe(true);
+      expect(r.result.markers?.idempotent).toBeFalsy();
+    }
+  });
+
+  it("parses idempotent def", () => {
+    const r = functionParser("idempotent def f(): number { return 1 }");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.markers?.idempotent).toBe(true);
+    }
+  });
+
+  it("parses export + marker in either order", () => {
+    for (const src of [
+      "export destructive def rm(p: string) { return 1 }",
+      "destructive export def rm(p: string) { return 1 }",
+      "export idempotent def f() { return 1 }",
+    ]) {
+      const r = functionParser(src);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.result.exported).toBe(true);
+      }
+    }
+  });
+
+  it("parses conflicting destructive+idempotent (any order) — conflict is a type-checker error, not a parse error", () => {
+    // The parser accepts both markers so the type checker can report a
+    // clear AG7006 rather than a generic parse failure. Both land on the
+    // AST regardless of order.
+    for (const src of [
+      "destructive idempotent def f() { return 1 }",
+      "idempotent destructive def f() { return 1 }",
+    ]) {
+      const r = functionParser(src);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.result.markers?.destructive).toBe(true);
+        expect(r.result.markers?.idempotent).toBe(true);
+      }
+    }
+  });
+
+  it("a def named destructive still parses", () => {
+    expect(functionParser("def destructive(): number { return 1 }").success).toBe(
+      true,
+    );
+  });
+
+  it("does not set markers on a plain def", () => {
+    const r = functionParser("def f() { return 1 }");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.markers).toBeUndefined();
     }
   });
 });

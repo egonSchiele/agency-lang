@@ -43,6 +43,39 @@ function makeFunction(
   });
 }
 
+describe("pre-execution tagging (the neverStarted producer)", () => {
+  // invoke() tags an argument-binding failure with `preExecution: true`.
+  // This is the SOLE source of `neverStarted: true`: the tool loop reads
+  // the tag off the thrown error (prompt.ts) and maps it to the
+  // neverStarted tier. If this tag stopped being set, a bad-args failure
+  // would silently drop to the neutral tier with no test noticing —
+  // hence both a positive and a negative case here.
+  it("tags a binding failure (unknown named arg) with preExecution:true", async () => {
+    const fn = makeFunction([{ name: "x" }]);
+    await expect(
+      fn.invoke({ type: "named", positionalArgs: [], namedArgs: { nope: 1 } }),
+    ).rejects.toMatchObject({ preExecution: true });
+  });
+
+  it("does NOT tag an in-body throw as preExecution (the body did start)", async () => {
+    const fn = makeNamedFunction(
+      "boom",
+      () => {
+        throw new Error("in-body");
+      },
+      [{ name: "x" }],
+    );
+    let caught: unknown;
+    try {
+      await fn.invoke({ type: "named", positionalArgs: [], namedArgs: { x: 1 } });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as { preExecution?: boolean }).preExecution).toBeUndefined();
+  });
+});
+
 describe("AgencyFunction", () => {
   describe("positional calls", () => {
     it("passes exact args through", async () => {

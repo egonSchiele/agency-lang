@@ -487,6 +487,12 @@ export const DIAGNOSTICS = {
     message:
       "Cannot mutate static `{name}` via `.{method}(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.",
   },
+  conflictingMarkers: {
+    code: "AG7006",
+    severity: "error",
+    message:
+      "Function '{name}' cannot be both destructive and idempotent — those markers are contradictory. Pick one.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

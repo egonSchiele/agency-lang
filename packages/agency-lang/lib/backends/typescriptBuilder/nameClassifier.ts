@@ -109,25 +109,55 @@ export class NameClassifier {
   }
 
   /**
-   * True if `functionName` was imported from a non-Agency source (or an
-   * Agency source that wasn't annotated `safe`). The builder uses this to
-   * decide whether a call site needs the impure-call guards that wrap
-   * non-deterministic code.
+   * True if `functionName` was imported from another module. Any imported
+   * call is treated as possibly-effectful: the compiler cannot see inside
+   * it. (Before the `safe` retirement this also consulted `safeFunctions`;
+   * that registry is gone, so every import is impure.)
    */
   isImpureImportedFunction(functionName: string): boolean {
-    const imported =
+    return (
       this.plainTsImportNames.has(functionName) ||
-      this.agencyImportNames.has(functionName);
-    return imported && !this.compilationUnit.safeFunctions[functionName];
+      this.agencyImportNames.has(functionName)
+    );
+  }
+
+  /** The function name a call-bearing node targets, if any. Handles a plain
+   *  `functionCall` and the `try f()` case (`walkNodes` yields the
+   *  tryExpression node but does not descend into its `.call`, so the common
+   *  `return try _extern(...)` stdlib pattern would otherwise be missed). */
+  private callTarget(subNode: AgencyNode): string | undefined {
+    if (subNode.type === "functionCall") {
+      return subNode.functionName;
+    }
+    if (
+      subNode.type === "tryExpression" &&
+      (subNode as { call?: { type?: string; functionName?: string } }).call
+        ?.type === "functionCall"
+    ) {
+      return (subNode as { call: { functionName: string } }).call.functionName;
+    }
+    return undefined;
   }
 
   /** Recursively walks `node` and returns true if any function call within it is impure. */
   containsImpureCall(node: AgencyNode): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
-      if (subNode.type === "functionCall") {
-        const name = subNode.functionName;
-        if (this.isImpureImportedFunction(name)) return true;
-        if (BUILTIN_FUNCTIONS[name]) return true;
+      const name = this.callTarget(subNode);
+      if (name === undefined) continue;
+      if (this.isImpureImportedFunction(name)) return true;
+      if (BUILTIN_FUNCTIONS[name]) return true;
+    }
+    return false;
+  }
+
+  /** Recursively walks `node` and returns true if any function call within
+   *  it targets a function marked `destructive`. Same walker shape as
+   *  containsImpureCall; reads the destructiveFunctions registry. */
+  containsDestructiveCall(node: AgencyNode): boolean {
+    for (const { node: subNode } of walkNodesArray([node])) {
+      const name = this.callTarget(subNode);
+      if (name !== undefined && this.compilationUnit.destructiveFunctions[name]) {
+        return true;
       }
     }
     return false;

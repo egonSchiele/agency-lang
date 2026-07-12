@@ -2,6 +2,7 @@ import type { AgencyNode, AgencyProgram } from "../types.js";
 import type {
   ImportNodeStatement,
   ImportStatement,
+  NamedImport,
 } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
 import {
@@ -92,7 +93,8 @@ export function resolveImports(
 
     const nodeNames: string[] = [];
     const functionNames: string[] = [];
-    const safeFunctionNames: string[] = [];
+    const destructiveFunctionNames: string[] = [];
+    const idempotentFunctionNames: string[] = [];
     const typeNames: string[] = [];
     const constantNames: string[] = [];
     const aliases: Record<string, string> = {};
@@ -117,10 +119,13 @@ export function resolveImports(
         }
         switch (symbol.kind) {
           case "node":
-            if (nameType.safeNames.includes(name)) {
+            if (
+              nameType.destructiveNames?.includes(name) ||
+              nameType.idempotentNames?.includes(name)
+            ) {
               throw new Error(
-                `The 'safe' modifier cannot be applied to node '${name}' from '${node.modulePath}'. ` +
-                  `'safe' is only meaningful for functions; nodes do not carry a safe flag.`,
+                `A retry-safety marker (destructive/idempotent) cannot be applied to node '${name}' from '${node.modulePath}'. ` +
+                  `Markers are only meaningful for functions; nodes do not carry them.`,
               );
             }
             nodeNames.push(name);
@@ -128,10 +133,19 @@ export function resolveImports(
           case "function":
             assertImportable(name, node.modulePath, symbol.exported, node.testOnly);
             functionNames.push(name);
-            // Mark as safe if the function definition is safe OR if the
-            // original import explicitly marked it safe
-            if (symbol.safe || nameType.safeNames.includes(name)) {
-              safeFunctionNames.push(name);
+            // A marker propagates when the defining function carries it OR
+            // this import explicitly marked the name.
+            if (
+              symbol.markers?.destructive ||
+              (nameType.destructiveNames?.includes(name) ?? false)
+            ) {
+              destructiveFunctionNames.push(name);
+            }
+            if (
+              symbol.markers?.idempotent ||
+              (nameType.idempotentNames?.includes(name) ?? false)
+            ) {
+              idempotentFunctionNames.push(name);
             }
             break;
           case "type":
@@ -165,16 +179,20 @@ export function resolveImports(
       for (const name of allNames) {
         if (aliases[name]) allAliases[name] = aliases[name];
       }
+      const namedImport: NamedImport = {
+        type: "namedImport",
+        importedNames: allNames,
+        aliases: allAliases,
+      };
+      if (destructiveFunctionNames.length > 0) {
+        namedImport.destructiveNames = destructiveFunctionNames;
+      }
+      if (idempotentFunctionNames.length > 0) {
+        namedImport.idempotentNames = idempotentFunctionNames;
+      }
       const importStmt: ImportStatement = {
         type: "importStatement",
-        importedNames: [
-          {
-            type: "namedImport",
-            importedNames: allNames,
-            safeNames: safeFunctionNames,
-            aliases: allAliases,
-          },
-        ],
+        importedNames: [namedImport],
         modulePath: node.modulePath,
         isAgencyImport: true,
       };

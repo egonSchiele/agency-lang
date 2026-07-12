@@ -4,7 +4,6 @@ import {
   _typecheck,
   _typecheckFile,
   _getEffects,
-  _retryableFailure,
   _parseAST,
   _writeAST,
   _format,
@@ -85,7 +84,7 @@ export type TypeCheckReport = {
   warnings: TypeCheckDiagnostic[]
 }
 
-export safe def compile(source: string): Result {
+export idempotent def compile(source: string): Result {
   """
   Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Only standard library (`std::`) imports are allowed in the compiled code.
 
@@ -295,13 +294,12 @@ would have to echo back into run() verbatim (it will not — see the
 compile→run "CompiledProgram has no code" failure mode). runCode takes
 the source directly, so nothing large round-trips through the model.
 
-Declared `safe` (= okay to retry, see the LLM guide) so its pre-execution
-failures — bad limits, code that does not compile — reach a tool-calling
-model as RETRYABLE and it can correct itself instead of losing the tool.
-Re-running the child is handler-gated like any run(): each attempt
+Left unmarked (neither destructive nor idempotent): it runs arbitrary
+code whose danger depends on that code, so its failures reach a
+tool-calling model as the neutral, re-callable tier. Each attempt
 re-raises std::run and the child's own effects re-prompt.
 */
-export safe def runCode(
+export def runCode(
   source: string,
   node: string = "main",
   args: Record<string, any> = {},
@@ -329,14 +327,11 @@ export safe def runCode(
   """
   const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)
   if (limitError != "") {
-    return _retryableFailure(limitError)
+    return failure(limitError)
   }
   const compileResult = try _compile(source)
   if (compileResult is failure(compileErr)) {
-    // Re-wrap as retryable: the model should fix the source and call
-    // again, not lose the tool. (`safe` alone is not enough — try-born
-    // failures start retryable:false; safe only preserves the bit.)
-    return _retryableFailure(compileErr)
+    return compileResult
   }
   const result = run(
     compiled: compileResult.value,
@@ -355,13 +350,6 @@ export safe def runCode(
   if (result is success(envelope)) {
     return success(envelope.data)
   }
-  if (result is failure(runErr)) {
-    // Runtime failures (child crash, timeout, cost trip) are retryable
-    // at the tool level too: the model fixes the source or raises a
-    // limit and calls again, and every attempt re-raises std::run, so
-    // retries stay handler-gated.
-    return _retryableFailure(runErr)
-  }
   return result
 }
 
@@ -369,7 +357,7 @@ export safe def runCode(
 `typecheck` does not restrict imports to the standard library only.
 Relative imports (./foo.agency) cannot be resolved from a source string.
 */
-export safe def typecheck(source: string): Result<TypeCheckReport> {
+export idempotent def typecheck(source: string): Result<TypeCheckReport> {
   """
   Type-check Agency source code.
 
@@ -381,7 +369,7 @@ export safe def typecheck(source: string): Result<TypeCheckReport> {
 /** Per-exported-symbol effect lists, keyed by node/function name. */
 export type EffectsByExport = Record<string, string[]>
 
-export safe def getEffects(source: string): Result<EffectsByExport> {
+export idempotent def getEffects(source: string): Result<EffectsByExport> {
   """
   Map each exported node and function in the source to the list of
   interrupt effects it can raise, transitively. Bare `interrupt(...)`
@@ -565,7 +553,7 @@ If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code.
 Return only the complete program in the code field."""
 
-export safe def writeAgency(
+export def writeAgency(
   task: string,
   context: string = "",
   maxAttempts: number = 3,
@@ -581,7 +569,7 @@ export safe def writeAgency(
   @param maxAttempts - Max generation attempts before giving up (default 3)
   """
   const docsTool = docsSkill("guide")
-  let result: Result<string, WriteFailure> = _retryableFailure({ source: "", errors: [] })
+  let result: Result<string, WriteFailure> = failure({ source: "", errors: [] })
   thread(label: "writeAgency") {
     systemMessage(writeSysPrompt)
     let prompt = "Write an Agency program for this task:\n<task>\n${task}\n</task>"
@@ -596,7 +584,7 @@ export safe def writeAgency(
       const source = generated.code
       const checked = try _typecheck(source)
       if (checked is failure(parseErr)) {
-        result = _retryableFailure({ source: source, errors: [] })
+        result = failure({ source: source, errors: [] })
         // _typecheck throws for import-resolution failures as well as
         // parse failures. In the import case the re-parse succeeds and
         // renders no findings — fall back to the thrown error so the
@@ -607,13 +595,13 @@ export safe def writeAgency(
         }
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else if (checked.value.errors.length > 0) {
-        result = _retryableFailure({ source: source, errors: checked.value.errors })
+        result = failure({ source: source, errors: checked.value.errors })
         const findings = renderFeedback(success(reportFeedback(checked.value)))
         prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
       } else {
         const compiled = try _compile(source)
         if (compiled is failure(compileErr)) {
-          result = _retryableFailure({ source: source, errors: [] })
+          result = failure({ source: source, errors: [] })
           prompt = "That code failed to compile: ${compileErr}\nReturn a corrected complete program."
         } else {
           result = success(source)
@@ -630,7 +618,7 @@ type FilterImportsResult = {
   filtered: boolean
 }
 
-export def typecheckFile(dir: string, filename: string): Result {
+export idempotent def typecheckFile(dir: string, filename: string): Result {
   """
   Type-check an Agency file on disk. The file is read from dir/filename,
   with relative imports inside it resolved against the file's directory.
@@ -656,7 +644,7 @@ export type AST = {
   docComment?: any
 }
 
-export safe def parseAST(source: string): Result<AST> {
+export idempotent def parseAST(source: string): Result<AST> {
   """
   Parse Agency source code into an abstract syntax tree.
 
@@ -690,7 +678,7 @@ export def writeAST(
   return try _writeAST(ast, dir, filename, overwrite)
 }
 
-export safe def format(source: string): Result {
+export idempotent def format(source: string): Result {
   """
   Format Agency source code with the standard Agency formatter.
 
@@ -701,7 +689,7 @@ export safe def format(source: string): Result {
 
 /** Read and write happen inside the same interrupt, so approving it approves both.
   If the file is already formatted, no write occurs and its mtime is preserved. */
-export def formatFile(dir: string, filename: string): Result {
+export idempotent def formatFile(dir: string, filename: string): Result {
   """
   Format an Agency file in place using the standard Agency formatter.
 
@@ -740,7 +728,7 @@ export def walkAST(
   return result.clone
 }
 
-export safe def getNodesOfType(source: string, types: string[]): Result<any[]> {
+export idempotent def getNodesOfType(source: string, types: string[]): Result<any[]> {
   """
   Parse Agency source code and return every AST node whose `type` field matches any of the provided types.
 
@@ -750,7 +738,7 @@ export safe def getNodesOfType(source: string, types: string[]): Result<any[]> {
   return try _getNodesOfType(source, types)
 }
 
-export safe def getImports(source: string): Result<any[]> {
+export idempotent def getImports(source: string): Result<any[]> {
   """
   Return every import statement in the source (i.e. `import { x } from "..."`).
 
@@ -759,7 +747,7 @@ export safe def getImports(source: string): Result<any[]> {
   return getNodesOfType(source, ["importStatement"])
 }
 
-export safe def getFunctions(source: string): Result<any[]> {
+export idempotent def getFunctions(source: string): Result<any[]> {
   """
   Return every function definition (`def foo(...) { ... }`) in the source.
 
@@ -768,7 +756,7 @@ export safe def getFunctions(source: string): Result<any[]> {
   return getNodesOfType(source, ["function"])
 }
 
-export safe def getGraphNodes(source: string): Result<any[]> {
+export idempotent def getGraphNodes(source: string): Result<any[]> {
   """
   Return every graph node definition (`node main() { ... }`) in the source.
 
@@ -795,7 +783,7 @@ export safe def getGraphNodes(source: string): Result<any[]> {
 
   We format the source with the Agency formatter before returning it.
 */
-export safe def filterImports(
+export idempotent def filterImports(
   source: string,
   allowedPackages: string[] = [],
   excludedPackages: string[] = [],
@@ -821,7 +809,7 @@ export safe def filterImports(
   )
 }
 
-export safe def getVersion(): string {
+export idempotent def getVersion(): string {
   """
   Get the current version of the Agency standard library.
   """

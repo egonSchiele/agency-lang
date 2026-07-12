@@ -1269,16 +1269,26 @@ export class TypeScriptBuilder {
     const args: TsNode[] = [ts.arrowFn([], callNode, { async: true })];
     const scope = this.scopes.current();
     if (scope.type === "function") {
-      args.push(
-        ts.obj({
-          // Inside the function body's withAlsFrame wrap — strict
-          // accessor so a missing frame throws cleanly instead of a
-          // generic "Cannot read 'getResultCheckpoint' of undefined".
-          checkpoint: ts.raw("getRuntimeContext().ctx.getResultCheckpoint()"),
-          functionName: ts.str((scope as FunctionScope).functionName),
-          args: ts.raw("__stack.args"),
-        }),
-      );
+      const opts: Record<string, TsNode> = {
+        // Inside the function body's withAlsFrame wrap — strict
+        // accessor so a missing frame throws cleanly instead of a
+        // generic "Cannot read 'getResultCheckpoint' of undefined".
+        checkpoint: ts.raw("getRuntimeContext().ctx.getResultCheckpoint()"),
+        functionName: ts.str((scope as FunctionScope).functionName),
+        args: ts.raw("__stack.args"),
+      };
+      // Thrown-path stamping: if the try'd callee is destructive and THROWS
+      // (a JS extern that raises rather than returning a failure), the
+      // failure __tryCall constructs must carry destructiveRan. A callee
+      // that RETURNS a failure is passed through unchanged and stamped by
+      // the caller-side outcome flip instead.
+      if (
+        node.call.type === "functionCall" &&
+        this.compilationUnit.destructiveFunctions[node.call.functionName]
+      ) {
+        opts.destructiveRan = ts.bool(true);
+      }
+      args.push(ts.obj(opts));
     }
     return ts.await(ts.call(ts.id("__tryCall"), args));
   }
@@ -2059,11 +2069,15 @@ export class TypeScriptBuilder {
       }
     }
 
-    // __self.__retryable
+    // __self.__destructiveRan — UNCONDITIONAL in every function. Decision 8
+    // sets this at runtime (the tool loop writes frame.locals.__destructiveRan
+    // when a destructive tool runs inside an llm() call), which the builder
+    // cannot see statically; and an unconditional boolean init keeps the exit
+    // stamp from ever computing `x || undefined`.
     setupStmts.push(
       ts.assign(
-        ts.self("__retryable"),
-        ts.binOp(ts.self("__retryable"), "??", ts.bool(true)),
+        ts.self("__destructiveRan"),
+        ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
       ),
     );
 
@@ -2143,7 +2157,7 @@ export class TypeScriptBuilder {
             body: [...onFunctionStartHook, ...bodyCode],
           }),
           ts.raw(
-            "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
+            "if (runner.halted) { if (isFailure(runner.haltResult)) { stampFailureBoundary(runner.haltResult, __self.__destructiveRan); } return runner.haltResult; }",
           ),
         ]),
         ts.raw(
@@ -2185,8 +2199,8 @@ export class TypeScriptBuilder {
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
     const { functionName, parameters } = node;
 
-    const prevSafe = this.scopes.inSafeFunction;
-    this.scopes.inSafeFunction = !!node.safe;
+    const prevDestructive = this.scopes.inDestructiveFunction;
+    this.scopes.inDestructiveFunction = !!node.markers?.destructive;
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
@@ -2194,7 +2208,7 @@ export class TypeScriptBuilder {
     // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
     // idempotency on resume).
     const bodyCode = this.processBodyAsParts(node.body, 1);
-    this.scopes.inSafeFunction = prevSafe;
+    this.scopes.inDestructiveFunction = prevDestructive;
     this.scopes.pop();
 
     // Build function params from the source signature. The legacy
@@ -2250,20 +2264,25 @@ export class TypeScriptBuilder {
     // Build tool definition (Zod schema)
     const toolDef = this.buildToolDefinition(node);
 
+    const createProps: Record<string, TsNode> = {
+      name: ts.str(functionName),
+      module: ts.str(this.moduleId),
+      fn: ts.id(implName),
+      params: ts.arr(paramNodes),
+      toolDefinition: toolDef,
+      exported: ts.bool(!!node.exported),
+    };
+    // Carry the retry-safety markers so the tool loop and MCP adapter can
+    // read them off the registered AgencyFunction. Emitted only when set.
+    if (node.markers?.destructive || node.markers?.idempotent) {
+      const markerProps: Record<string, TsNode> = {};
+      if (node.markers.destructive) markerProps.destructive = ts.bool(true);
+      if (node.markers.idempotent) markerProps.idempotent = ts.bool(true);
+      createProps.markers = ts.obj(markerProps);
+    }
     const createCall = $.id("__AgencyFunction")
       .prop("create")
-      .call([
-        ts.obj({
-          name: ts.str(functionName),
-          module: ts.str(this.moduleId),
-          fn: ts.id(implName),
-          params: ts.arr(paramNodes),
-          toolDefinition: toolDef,
-          safe: ts.bool(!!node.safe),
-          exported: ts.bool(!!node.exported),
-        }),
-        ts.id("__toolRegistry"),
-      ])
+      .call([ts.obj(createProps), ts.id("__toolRegistry")])
       .done();
 
     const constDecl = ts.varDecl("const", functionName, createCall);
@@ -3836,6 +3855,30 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
+  /** If `stmt` is a simple assignment whose value is a direct call to a
+   *  destructive function (optionally `try`-wrapped), return the local
+   *  variable name its result binds to (`__self.<name>`). Used to emit the
+   *  outcome-dependent destructive flip. Returns null for bare calls,
+   *  nested-in-expression calls, patterns, access chains, or non-innermost
+   *  block targets — those get the conservative pre-flip instead. */
+  private destructiveOutcomeVar(stmt: AgencyNode): string | null {
+    if (stmt.type !== "assignment") return null;
+    const asn = stmt as Assignment;
+    if (asn.pattern || asn.accessChain || asn.blockDepth) return null;
+    if (!asn.variableName) return null;
+    const value = asn.value as { type?: string; functionName?: string; call?: { type?: string; functionName?: string } };
+    let call: { type?: string; functionName?: string } | undefined;
+    if (value?.type === "functionCall") {
+      call = value;
+    } else if (value?.type === "tryExpression" && value.call?.type === "functionCall") {
+      call = value.call;
+    }
+    if (!call?.functionName) return null;
+    return this.compilationUnit.destructiveFunctions[call.functionName]
+      ? asn.variableName
+      : null;
+  }
+
   // ── Body processing ──
 
   private processBodyAsParts(body: AgencyNode[], startId = 0): TsNode[] {
@@ -3891,9 +3934,24 @@ export class TypeScriptBuilder {
 
       const stepIndex = nextId();
       this.steps.push(stepIndex);
-      if (!this.scopes.inSafeFunction && this.names.containsImpureCall(stmt)) {
-        if (!currentPart) currentPart = [];
-        currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
+      // Destructive-execution tracking (replaces the old __retryable flip).
+      // Rule 1: inside a destructive def, any possibly-effectful statement
+      // marks the activation. Rule 2 (non-destructive function calling a
+      // destructive fn): an outcome-dependent post-flip when the result is
+      // a simple assignment target (covers `const r = burn()` and
+      // `const r = try burn()`), else a conservative pre-flip.
+      let destructivePostVar: string | null = null;
+      if (this.scopes.inDestructiveFunction) {
+        if (this.names.containsImpureCall(stmt)) {
+          if (!currentPart) currentPart = [];
+          currentPart.push(ts.assign(ts.self("__destructiveRan"), ts.bool(true)));
+        }
+      } else {
+        destructivePostVar = this.destructiveOutcomeVar(stmt);
+        if (!destructivePostVar && this.names.containsDestructiveCall(stmt)) {
+          if (!currentPart) currentPart = [];
+          currentPart.push(ts.assign(ts.self("__destructiveRan"), ts.bool(true)));
+        }
       }
       const processed = this.processStatement(stmt);
       if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
@@ -3901,6 +3959,19 @@ export class TypeScriptBuilder {
       } else {
         if (!currentPart) currentPart = [];
         currentPart.push(processed);
+      }
+      if (destructivePostVar) {
+        // The destructive callee's result is bound at `__self.<var>`
+        // (__self === stack.locals). OR its outcome into the activation:
+        // a returned failure contributes its own destructiveRan (so a
+        // swallowed destructive failure still marks us); success or a
+        // plain value means the destructive work ran, so mark true.
+        if (!currentPart) currentPart = [];
+        currentPart.push(
+          ts.raw(
+            `__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.${destructivePostVar}) ? __self.${destructivePostVar}.destructiveRan : true);`,
+          ),
+        );
       }
       if (this._asyncBranchCheckNeeded) {
         branchKeys[nextId()] = this.steps.joined();

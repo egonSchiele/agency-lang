@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall } from "./result.js";
+import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall, stampFailureBoundary, markDestructiveWork, propagateFailure } from "./result.js";
 import {
   AgencyAbort,
   AgencyCancelledError,
@@ -192,7 +192,8 @@ describe("failure", () => {
       success: false,
       error: "something went wrong",
       checkpoint: null,
-      retryable: false,
+      neverStarted: false,
+      destructiveRan: false,
       functionName: null,
       args: null,
       skippedFunctions: [],
@@ -206,23 +207,65 @@ describe("failure", () => {
       success: false,
       error: { code: 404, message: "not found" },
       checkpoint: null,
-      retryable: false,
+      neverStarted: false,
+      destructiveRan: false,
       functionName: null,
       args: null,
       skippedFunctions: [],
     });
   });
 
-  it("accepts opts with checkpoint, retryable, functionName, args", () => {
+  it("births neverStarted and destructiveRan false", () => {
+    const f = failure("boom");
+    expect(f.neverStarted).toBe(false);
+    expect(f.destructiveRan).toBe(false);
+  });
+
+  it("honors explicit neverStarted and destructiveRan opts", () => {
+    const f = failure("boom", { neverStarted: true, destructiveRan: true });
+    expect(f.neverStarted).toBe(true);
+    expect(f.destructiveRan).toBe(true);
+  });
+
+  it("propagateFailure preserves the new fields", () => {
+    const f = failure("boom", { destructiveRan: true, neverStarted: true });
+    const p = propagateFailure(f, { name: "wrap", param: "x" });
+    // propagateFailure spreads the original; the new classification fields
+    // must survive onto the propagated copy, and a skip entry is appended.
+    expect(p.destructiveRan).toBe(true);
+    expect(p.neverStarted).toBe(true);
+    expect(p.skippedFunctions).toEqual([{ name: "wrap", param: "x" }]);
+  });
+});
+
+describe("stampFailureBoundary", () => {
+  it("ORs destructiveRan and is sticky", () => {
+    const f = failure("boom");
+    expect(stampFailureBoundary(f, false).destructiveRan).toBe(false);
+    expect(stampFailureBoundary(f, true).destructiveRan).toBe(true);
+    expect(stampFailureBoundary(f, false).destructiveRan).toBe(true);
+  });
+});
+
+describe("markDestructiveWork", () => {
+  it("sets __destructiveRan on the frame locals", () => {
+    const frame = { locals: {} as Record<string, any> };
+    markDestructiveWork(frame);
+    expect(frame.locals.__destructiveRan).toBe(true);
+  });
+
+  it("is a no-op on an undefined frame", () => {
+    expect(() => markDestructiveWork(undefined)).not.toThrow();
+  });
+
+  it("accepts opts with checkpoint, functionName, args", () => {
     const cp = { id: 1 };
     const result = failure("error", {
       checkpoint: cp,
-      retryable: true,
       functionName: "myFunc",
       args: { x: 10 },
     });
     expect(result.checkpoint).toBe(cp);
-    expect(result.retryable).toBe(true);
     expect(result.functionName).toBe("myFunc");
     expect(result.args).toEqual({ x: 10 });
   });

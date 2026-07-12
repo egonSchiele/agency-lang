@@ -1,0 +1,9 @@
+[
+  { "toolCall": { "name": "flakyTool", "args": { "id": "a" } } },
+  { "toolCall": { "name": "flakyTool", "args": { "id": "a" } } },
+  { "return": "Done: a is ok" },
+
+  { "toolCall": { "name": "destructiveTool", "args": { "id": "b" } } },
+  { "toolCall": { "name": "destructiveTool", "args": { "id": "b" } } },
+  { "return": "Gave up on b" }
+]

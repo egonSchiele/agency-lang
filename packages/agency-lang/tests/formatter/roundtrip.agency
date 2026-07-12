@@ -19,7 +19,7 @@ def greet(name: string): string {
   return "Hello, ${name}!"
 }
 
-safe def add(a: number, b: number): number {
+def add(a: number, b: number): number {
   return a + b
 }
 

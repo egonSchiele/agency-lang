@@ -1,0 +1,31 @@
+import { flaky, destructive boom, resetCounters } from "./tools.js"
+
+// A plain (neutral-tier) tool. Its first call throws; under the new model
+// a failed tool STAYS callable, so the model can retry and succeed.
+def flakyTool(id: string) {
+  return flaky(id)
+}
+
+// A destructive tool: `boom` is imported destructive, so a failure after it
+// starts marks destructiveRan and the tool loop removes the tool.
+def destructiveTool(id: string) {
+  return boom(id)
+}
+
+def resetTool() {
+  return resetCounters()
+}
+
+// Neutral tool stays callable across a failure: two scripted calls, second
+// succeeds.
+node neutralStaysCallable() {
+  resetTool()
+  const result = llm("Use flakyTool on 'a'; if it errors, call it again.", { tools: [flakyTool] })
+  return result
+}
+
+// Destructive tool removed after a failure that started destructive work.
+node destructiveRemoved() {
+  const result = llm("Use destructiveTool on 'b'.", { tools: [destructiveTool] })
+  return result
+}

@@ -13,8 +13,10 @@ export type NamedExportBody = {
   names: string[];
   /** Map of sourceName → localName for entries written as `name as alias`. */
   aliases: Record<string, string>;
-  /** Source-side names marked with the `safe` modifier. */
-  safeNames: string[];
+  /** Source-side names marked `destructive` / `idempotent`. Present only
+   *  when non-empty. */
+  destructiveNames?: string[];
+  idempotentNames?: string[];
 };
 
 export type StarExportBody = {

@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -216,7 +216,7 @@ if (__response) {
   } else if (__response.type === "reject") {
     // reject for tool calls handled separately
     
-    runner.halt({ messages: __threads(), data: failure("interrupt rejected", { retryable: false }) });
+    runner.halt({ messages: __threads(), data: failure("interrupt rejected") });
     
     
     return;
@@ -226,7 +226,7 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
+    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected") });
     
     
     return;

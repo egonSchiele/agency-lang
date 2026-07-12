@@ -80,7 +80,7 @@ export type Relationship = {
 type CategoryFilter = { type: "all" } | { type: "category", id: number }
 
 /** Map a LittleSis category_id (1–12) to its friendly name; unknown id → "". Pure. */
-safe def categoryIdToName(id: number): string {
+def categoryIdToName(id: number): string {
   if (id >= 1 && id < CATEGORY_NAMES.length) {
     return CATEGORY_NAMES[id]
   }
@@ -89,13 +89,13 @@ safe def categoryIdToName(id: number): string {
 
 /** The friendly category names as a comma-separated string (drops the index-0 "" sentinel).
     Single source of truth for the valid-category list in error messages. Pure. */
-safe def categoryNamesList(): string {
+def categoryNamesList(): string {
   return CATEGORY_NAMES.slice(1).join(", ")
 }
 
 /** Parse a friendly category name into a CategoryFilter. "" (or not given) → all; a valid name →
     that category; an unknown name → failure (listing the valid names). Pure. */
-safe def parseCategoryFilter(name: string): Result<CategoryFilter> {
+def parseCategoryFilter(name: string): Result<CategoryFilter> {
   if (name == "") {
     return success({ type: "all" })
   }
@@ -107,7 +107,7 @@ safe def parseCategoryFilter(name: string): Result<CategoryFilter> {
 }
 
 /** Build the entity-search path. `page` is appended only when > 1. Pure. */
-safe def buildSearchPath(name: string, page: number): string {
+def buildSearchPath(name: string, page: number): string {
   const q = encodeURIComponent(name)
   if (page > 1) {
     return "/entities/search?q=${q}&page=${page}"
@@ -116,13 +116,13 @@ safe def buildSearchPath(name: string, page: number): string {
 }
 
 /** Build the single-entity path. Pure. */
-safe def buildEntityPath(id: number): string {
+def buildEntityPath(id: number): string {
   return "/entities/${id}"
 }
 
 /** Build the relationships path from a category filter and optional sort. Builds a present-params
     list and joins it, so it scales linearly with params instead of enumerating combinations. Pure. */
-safe def buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string): string {
+def buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string): string {
   const base = "/entities/${id}/relationships"
   let params: string[] = []
   if (filter is { type: "category", id: catId }) {
@@ -138,7 +138,7 @@ safe def buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string
 }
 
 /** Build the connections path from a category filter. Pure. */
-safe def buildConnectionsPath(id: number, filter: CategoryFilter): string {
+def buildConnectionsPath(id: number, filter: CategoryFilter): string {
   if (filter is { type: "category", id: catId }) {
     return "/entities/${id}/connections?category_id=${catId}"
   }
@@ -147,7 +147,7 @@ safe def buildConnectionsPath(id: number, filter: CategoryFilter): string {
 
 /** Reshape one LittleSis entity node ({ id, attributes, links }) into an Entity.
     Reads connection-only relationship fields defensively (null/"" when absent). Pure/total. */
-safe def parseEntity(node: any): Entity {
+def parseEntity(node: any): Entity {
   const safeNode: any = node ?? {}
   const attrs: any = safeNode.attributes ?? {}
   const links: any = safeNode.links ?? {}
@@ -167,7 +167,7 @@ safe def parseEntity(node: any): Entity {
 }
 
 /** Reshape a LittleSis list body ({ data: [node] }) into Entity[]. Pure/total. */
-safe def parseEntities(raw: any): Entity[] {
+def parseEntities(raw: any): Entity[] {
   const r: any = raw ?? {}
   const data = r.data ?? []
   return map(data) as node {
@@ -176,7 +176,7 @@ safe def parseEntities(raw: any): Entity[] {
 }
 
 /** Reshape a LittleSis relationships body ({ data: [rel] }) into Relationship[]. Pure/total. */
-safe def parseRelationships(raw: any): Relationship[] {
+def parseRelationships(raw: any): Relationship[] {
   const r: any = raw ?? {}
   const data = r.data ?? []
   return map(data) as node {
@@ -200,7 +200,7 @@ safe def parseRelationships(raw: any): Relationship[] {
 }
 
 /** Shared failure message for a failed LittleSis fetch. Pure. */
-safe def littlesisError(err: any): string {
+def littlesisError(err: any): string {
   return "LittleSis request failed (the API may be rate-limited; HTTP 503 = Rate Limit Exceeded): ${err}"
 }
 
@@ -208,7 +208,7 @@ safe def littlesisError(err: any): string {
     approves it internally, so a plain caller sees only the connector's own std::littlesis prompt,
     while any OUTER fetch handler still receives (and can reject or propagate) the fetch — those
     beat this approve(). allowedDomains is enforced inside fetchJSON regardless. Private. */
-safe def littlesisFetch(path: string): Result raises <std::http::fetchJSON> {
+def littlesisFetch(path: string): Result raises <std::http::fetchJSON> {
   handle {
     return fetchJSON(baseUrl: LITTLESIS_BASE, path: path, allowedDomains: LITTLESIS_DOMAINS)
   } with (data) {
@@ -220,7 +220,7 @@ safe def littlesisFetch(path: string): Result raises <std::http::fetchJSON> {
 
 /** Turn a fetchJSON Result into an entity-list Result. Used by BOTH search and connections
     (identical shape). Pure — testable with mock Results. */
-safe def entityListFinalize(fetchResult: any): Result<Entity[]> {
+def entityListFinalize(fetchResult: any): Result<Entity[]> {
   return match (fetchResult) {
     success(body) => success(parseEntities(body))
     failure(err) => failure(littlesisError(err))
@@ -228,7 +228,7 @@ safe def entityListFinalize(fetchResult: any): Result<Entity[]> {
 }
 
 /** Turn a fetchJSON Result into a single-entity Result; missing data → failure. Pure. */
-safe def entityFinalize(fetchResult: any): Result<Entity> {
+def entityFinalize(fetchResult: any): Result<Entity> {
   return match (fetchResult) {
     success(body) => {
       const bodyObj: any = body ?? {}
@@ -242,14 +242,14 @@ safe def entityFinalize(fetchResult: any): Result<Entity> {
 }
 
 /** Turn a fetchJSON Result into a relationships Result. Pure. */
-safe def relationshipsFinalize(fetchResult: any): Result<Relationship[]> {
+def relationshipsFinalize(fetchResult: any): Result<Relationship[]> {
   return match (fetchResult) {
     success(body) => success(parseRelationships(body))
     failure(err) => failure(littlesisError(err))
   }
 }
 
-export safe def littlesisSearch(name: string, page: number = 1): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON> {
+export def littlesisSearch(name: string, page: number = 1): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON> {
   """
   Search LittleSis for people and organizations by name. Returns matching entities (id, name,
   type "Person"/"Org", blurb, aliases, website, url). Use the returned id with the other
@@ -265,7 +265,7 @@ export safe def littlesisSearch(name: string, page: number = 1): Result<Entity[]
   return entityListFinalize(result)
 }
 
-export safe def littlesisEntity(id: number): Result<Entity> raises <std::littlesis, std::http::fetchJSON> {
+export def littlesisEntity(id: number): Result<Entity> raises <std::littlesis, std::http::fetchJSON> {
   """
   Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the full profile
   (name, type, blurb, aliases, website, url). Unknown id returns a failure.
@@ -277,7 +277,7 @@ export safe def littlesisEntity(id: number): Result<Entity> raises <std::littles
   return entityFinalize(result)
 }
 
-export safe def littlesisRelationships(id: number, category: string = "", sort: string = ""): Result<Relationship[]> raises <std::littlesis, std::http::fetchJSON> {
+export def littlesisRelationships(id: number, category: string = "", sort: string = ""): Result<Relationship[]> raises <std::littlesis, std::http::fetchJSON> {
   """
   List an entity's relationships (typed edges) by its id. Each edge carries the two entity IDs,
   role labels (description1/description2), amount, dates, and category. Filter with a friendly
@@ -301,7 +301,7 @@ export safe def littlesisRelationships(id: number, category: string = "", sort: 
   return relationshipsFinalize(result)
 }
 
-export safe def littlesisConnections(id: number, category: string = ""): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON> {
+export def littlesisConnections(id: number, category: string = ""): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON> {
   """
   List the entities connected to an entity (neighbors, by name), optionally filtered by a
   friendly category name. Lighter than littlesisRelationships and name-bearing — the preferred

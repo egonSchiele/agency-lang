@@ -65,6 +65,13 @@ export type ToolDefinition = {
   schema: unknown;
 };
 
+/** Retry-safety markers carried on a registered tool. Inline shape so the
+ *  runtime stays decoupled from the compiler's AST types. */
+export type ToolMarkers = {
+  destructive?: boolean;
+  idempotent?: boolean;
+};
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
@@ -72,7 +79,7 @@ export type AgencyFunctionOpts = {
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
-  safe?: boolean;
+  markers?: ToolMarkers;
   isPreapproved?: boolean;
 };
 
@@ -89,7 +96,7 @@ export class AgencyFunction {
   private readonly _isBound: boolean;
   private readonly _checksFailures: boolean;
   readonly exported: boolean;
-  readonly safe: boolean;
+  readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
 
   constructor(opts: AgencyFunctionOpts) {
@@ -99,7 +106,7 @@ export class AgencyFunction {
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
-    this.safe = opts.safe ?? false;
+    this.markers = opts.markers ?? {};
     this._isPreapproved = opts.isPreapproved ?? false;
     this._unboundParams = opts.params.filter(p => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);
@@ -137,7 +144,7 @@ export class AgencyFunction {
       params: this.params,
       toolDefinition,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: this._isPreapproved,
     });
   }
@@ -158,9 +165,20 @@ export class AgencyFunction {
     // overridable `maxCallDepth`) is resolved from the active execution context
     // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
     return withCallDepth(this.name, () => {
-      const args = this._isBound
-        ? this.mergeWithBound(this.resolveArgs(descriptor))
-        : this.resolveArgs(descriptor);
+      let args: unknown[];
+      try {
+        args = this._isBound
+          ? this.mergeWithBound(this.resolveArgs(descriptor))
+          : this.resolveArgs(descriptor);
+      } catch (err) {
+        // Argument binding failed — the function body never began. Tag the
+        // error so the tool loop maps it to the "nothing was executed"
+        // tier (its sole source of neverStarted: true).
+        if (err && typeof err === "object") {
+          (err as { preExecution?: boolean }).preExecution = true;
+        }
+        throw err;
+      }
       // Failure propagation: a failure landing on a param that does not
       // accept Results skips the body and returns the original failure
       // (spec: docs/superpowers/specs/2026-07-08-failure-propagation-design.md).
@@ -229,7 +247,7 @@ export class AgencyFunction {
       params: newParams,
       toolDefinition: newToolDef,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: this._isPreapproved,
     });
   }
@@ -257,7 +275,7 @@ export class AgencyFunction {
       params: this.params,
       toolDefinition: this.toolDefinition,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: true,
     });
   }
@@ -293,7 +311,7 @@ export class AgencyFunction {
       params: this.params,
       toolDefinition: newToolDef,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: this._isPreapproved,
     });
   }

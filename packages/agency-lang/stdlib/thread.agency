@@ -82,7 +82,7 @@ export def userMessage(msg: string | (string | Attachment)[]) {
   _userMessage(msg)
 }
 
-export safe def image(
+export def image(
   source: string,
   mimeType: string = "",
   base64: boolean = false,
@@ -98,7 +98,7 @@ export safe def image(
   return _imageAttachment(source, mimeType, base64)
 }
 
-export safe def file(
+export def file(
   source: string,
   filename: string = "",
   mimeType: string = "",
@@ -115,7 +115,7 @@ export safe def file(
   return _fileAttachment(source, filename, mimeType, base64)
 }
 
-export safe def attachToReply(attachment: Attachment) {
+export def attachToReply(attachment: Attachment) {
   """
   Queue an attachment to be shown to the model after the current tool
   call completes. Only meaningful while running as a tool inside an
@@ -144,7 +144,7 @@ export def assistantMessage(msg: string) {
  *  sees its own cost plus every branch's cost, including race losers.
  *  Their LLM calls really happened and cost real money. To measure a
  *  section, capture the value before and after and subtract. */
-export safe def getCost(): number {
+export def getCost(): number {
   """
   Return the cumulative cost in USD of all LLM calls contributing to the
   current execution branch.
@@ -152,7 +152,7 @@ export safe def getCost(): number {
   return _getCost()
 }
 
-export safe def getTokens(): number {
+export def getTokens(): number {
   """
   Return the cumulative token count for the current execution branch.
   """
@@ -169,7 +169,7 @@ export type ModelCost = {
 /** Unlike the per-branch cost/token accessors, this reads process-wide
  *  totals across every branch, so it attributes spend per model even for
  *  subagents and tool calls that run on a different model. */
-export safe def getModelCosts(): ModelCost[] {
+export def getModelCosts(): ModelCost[] {
   """
   Return a per-model breakdown of cumulative LLM usage across the whole
   process, one entry per model that has been called, sorted by cost
@@ -381,7 +381,7 @@ export def listThreads(lazySummarize: boolean = true): Result {
   return success(out)
 }
 
-export safe def currentThreadId(): string {
+export def currentThreadId(): string {
   """
   Slug-form id of the active thread (e.g. "t3"), or `""` outside any
   runtime frame. Useful with `thread(continue: id)` when you want to
@@ -391,7 +391,7 @@ export safe def currentThreadId(): string {
   return _currentThreadId()
 }
 
-export safe def getThread(id: string, offset: number = 0, limit: number = 50): Result {
+export def getThread(id: string, offset: number = 0, limit: number = 50): Result {
   """
   Read a slice of a thread's messages. Returns success holding `[]`
   for an unknown id; returns failure when called outside an Agency

@@ -328,7 +328,6 @@ describe("Debugger user interrupt handling", () => {
     expect(result).toMatchObject({
       success: false,
       error: "interrupt rejected",
-      retryable: false,
     });
   });
 });

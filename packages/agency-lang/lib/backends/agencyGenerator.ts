@@ -1000,7 +1000,8 @@ export class AgencyGenerator {
 
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
-    if (node.safe) prefixes.push("safe");
+    if (node.markers?.destructive) prefixes.push("destructive");
+    if (node.markers?.idempotent) prefixes.push("idempotent");
     prefixes.push("def");
     const prefix = `${prefixes.join(" ")} ${node.functionName}`;
     const signature = this.buildSignature(prefix, node, " {");
@@ -1395,7 +1396,12 @@ export class AgencyGenerator {
       const names = namedImport.importedNames.map((name) => {
         const alias = namedImport.aliases[name];
         const base = alias ? `${name} as ${alias}` : name;
-        return namedImport.safeNames?.includes(name) ? `safe ${base}` : base;
+        return this.prefixMarkedName(
+          name,
+          base,
+          namedImport.destructiveNames,
+          namedImport.idempotentNames,
+        );
       });
       return this.indentStr(
         this.wrapList(names, importKeyword, "{ ", " }", suffix),
@@ -1415,7 +1421,12 @@ export class AgencyGenerator {
         const names = node.importedNames.map((name) => {
           const alias = node.aliases[name];
           const base = alias ? `${name} as ${alias}` : name;
-          return node.safeNames?.includes(name) ? `safe ${base}` : base;
+          return this.prefixMarkedName(
+            name,
+            base,
+            node.destructiveNames,
+            node.idempotentNames,
+          );
         });
         return `{ ${names.join(", ")} }`;
       }
@@ -1426,6 +1437,23 @@ export class AgencyGenerator {
     }
   }
 
+  /** Render an imported/re-exported name with its `destructive` or
+   *  `idempotent` prefix. A name carries at most one marker. */
+  private prefixMarkedName(
+    name: string,
+    base: string,
+    destructiveNames?: string[],
+    idempotentNames?: string[],
+  ): string {
+    if (destructiveNames?.includes(name)) {
+      return `destructive ${base}`;
+    }
+    if (idempotentNames?.includes(name)) {
+      return `idempotent ${base}`;
+    }
+    return base;
+  }
+
   protected processImportNodeStatement(node: ImportNodeStatement): string {
     return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
   }
@@ -1434,13 +1462,16 @@ export class AgencyGenerator {
     if (node.body.kind === "starExport") {
       return this.indentStr(`export * from "${node.modulePath}"`);
     }
-    const items = node.body.names.map((name) => {
-      const alias =
-        node.body.kind === "namedExport" ? node.body.aliases[name] : undefined;
-      const safe =
-        node.body.kind === "namedExport" && node.body.safeNames.includes(name);
+    const body = node.body;
+    const items = body.names.map((name) => {
+      const alias = body.aliases[name];
       const base = alias ? `${name} as ${alias}` : name;
-      return safe ? `safe ${base}` : base;
+      return this.prefixMarkedName(
+        name,
+        base,
+        body.destructiveNames,
+        body.idempotentNames,
+      );
     });
     return this.indentStr(
       `export { ${items.join(", ")} } from "${node.modulePath}"`,

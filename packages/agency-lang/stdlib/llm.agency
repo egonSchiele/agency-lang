@@ -163,7 +163,7 @@ export def hostedModelInfo(name: string): HostedModelInfo | null {
   return _hostedModelInfo(name)
 }
 
-export safe def modelSupportsInput(model: string, modality: string): boolean | null {
+export def modelSupportsInput(model: string, modality: string): boolean | null {
   """
   Whether a model accepts a given input modality ("image" or "pdf").
   Tri-state: true / false when the model catalog says so, null when the

@@ -44,9 +44,22 @@ export function prunePreludeShadows(program: AgencyProgram): void {
       spec.importedNames = spec.importedNames.filter(
         (name) => !shadowed.has(spec.aliases[name] ?? name),
       );
-      spec.safeNames = spec.safeNames.filter((n) =>
-        spec.importedNames.includes(n),
-      );
+      // Re-filter the marker lists, and DELETE them when filtering empties
+      // them — `destructiveNames`/`idempotentNames` are present only when
+      // non-empty (the exact-match-AST invariant), so a leftover `[]` would
+      // violate it.
+      if (spec.destructiveNames) {
+        spec.destructiveNames = spec.destructiveNames.filter((n) =>
+          spec.importedNames.includes(n),
+        );
+        if (spec.destructiveNames.length === 0) delete spec.destructiveNames;
+      }
+      if (spec.idempotentNames) {
+        spec.idempotentNames = spec.idempotentNames.filter((n) =>
+          spec.importedNames.includes(n),
+        );
+        if (spec.idempotentNames.length === 0) delete spec.idempotentNames;
+      }
       for (const key of Object.keys(spec.aliases)) {
         if (!spec.importedNames.includes(key)) delete spec.aliases[key];
       }

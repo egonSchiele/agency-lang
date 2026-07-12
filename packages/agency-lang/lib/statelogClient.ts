@@ -1215,14 +1215,17 @@ export class StatelogClient {
     errorType,
     message,
     functionName,
-    retryable,
+    neverStarted,
+    destructiveRan,
     sourceLocation,
     tools,
   }: {
     errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded" | "structuredOutput";
     message: string;
     functionName?: string;
-    retryable?: boolean;
+    /** Tool-failure classification for the tool loop's retry policy. */
+    neverStarted?: boolean;
+    destructiveRan?: boolean;
     sourceLocation?: { moduleId: string; line?: number };
     /** Tool definitions advertised on the failed request, if any. Lets an
      *  `llmError` carry the request's tool list — otherwise lost, because
@@ -1236,7 +1239,8 @@ export class StatelogClient {
       errorType,
       message,
       functionName,
-      retryable,
+      neverStarted,
+      destructiveRan,
       sourceLocation,
       tools,
     });

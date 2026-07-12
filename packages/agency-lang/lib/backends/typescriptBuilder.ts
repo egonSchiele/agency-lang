@@ -1180,9 +1180,15 @@ export class TypeScriptBuilder {
     // `asLValue` skips the wrap when this access is emitted as an
     // assignment/update *target* (`x[i]++`, `x[i] += v`) — `__nn(x[i]) = ...`
     // is not a valid assignment target. Those targets stay raw lvalues.
+    //
+    // An *optional* terminal index (`arr?.[i]`) is left raw: optional chaining
+    // is deliberately deferred (see docs/dev/null-and-undefined.md), so `?.[]`
+    // stays consistent with `?.` property access — both yield `undefined` on a
+    // null base rather than `null`. Only a plain `[i]` — issue #409's actual
+    // target — is normalized.
     // See docs/dev/null-and-undefined.md and issue #409.
     const lastElement = node.chain[node.chain.length - 1];
-    if (!asLValue && lastElement?.kind === "index") {
+    if (!asLValue && lastElement?.kind === "index" && !lastElement.optional) {
       return ts.call(ts.id("__nn"), [result]);
     }
     return result;

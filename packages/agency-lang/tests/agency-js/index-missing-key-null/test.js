@@ -18,6 +18,8 @@ writeFileSync(
       inBoundsValue: r.inBounds,
       falsyZeroPreserved: r.falsyZero === 0,
       optChainDeepIsNull: opt.deep === null,
+      // optional-terminal index on null stays undefined (not normalized) → dropped from JSON
+      optNullIndexIsUndefined: opt.optNull === undefined,
     },
     null,
     2,

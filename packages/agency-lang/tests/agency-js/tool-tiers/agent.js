@@ -286,7 +286,6 @@ const flakyTool = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "id": z.string() })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __destructiveTool_impl(id) {
@@ -406,7 +405,6 @@ const destructiveTool = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "id": z.string() })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __resetTool_impl() {
@@ -511,7 +509,6 @@ const resetTool = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({})
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("neutralStaysCallable", async (__state) => {

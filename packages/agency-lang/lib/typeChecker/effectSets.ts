@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import type { VariableType } from "../types.js";
 import type { TypeAliasEntry } from "../types/typeHints.js";
 
@@ -44,7 +45,7 @@ export function resolveEffectSet(
 
   const walk = (t: VariableType | undefined): void => {
     if (!t) return;
-    if (t.type === "primitiveType" && t.value === "any") {
+    if (isAnyType(t)) {
       any = true;
       return;
     }

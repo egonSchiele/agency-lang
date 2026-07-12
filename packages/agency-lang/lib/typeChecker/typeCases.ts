@@ -117,7 +117,7 @@ export function decomposeCases(
   if (resolved.type === "unionType") {
     if (resolved.isEffectSet) return OPEN; // owned by resolveEffectSet, never re-walked
     const members = resolved.types.map((m) => safeResolveType(m, aliases));
-    if (members.some((rm) => rm.type === "primitiveType" && rm.value === "any")) {
+    if (members.some(isAnyType)) {
       return OPEN; // a union with an open member can't be required to be exhaustive
     }
     // B2: a union whose members are all literal-tagged, distinct-valued objects

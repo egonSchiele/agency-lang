@@ -125,7 +125,7 @@ function typeAcceptsResult(t: VariableType): boolean {
   if (t.type === "resultType") {
     return true;
   }
-  if (t.type === "primitiveType" && t.value === "any") {
+  if (isAnyType(t)) {
     return true;
   }
   if (t.type === "unionType") {

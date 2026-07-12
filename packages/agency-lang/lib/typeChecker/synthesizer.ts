@@ -908,8 +908,7 @@ export function synthValueAccess(
 
     if (isAnyType(currentType)) return ANY_T;
     const resolved = safeResolveType(currentType, typeAliases);
-    if (resolved.type === "primitiveType" && resolved.value === "any")
-      return ANY_T;
+    if (isAnyType(resolved)) return ANY_T;
     // never is the bottom type: any access on it is itself never, and emits no
     // diagnostic (a provably-unreachable receiver must not flag spurious
     // missing-member errors).

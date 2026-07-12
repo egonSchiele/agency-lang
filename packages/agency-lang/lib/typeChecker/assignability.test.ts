@@ -236,3 +236,17 @@ describe("narrowed Result member assignable to Result type", () => {
     expect(isAssignable(other, resultT, {})).toBe(false);
   });
 });
+
+describe("an alias whose body is `any` (#472)", () => {
+  // Regression: the post-resolution any check is the only one that catches an
+  // alias resolving to `any` (the pre-resolution fast path was removed). A
+  // typeAliasVariable is not itself `any`, so deleting the post-resolution
+  // check would make an any-alias non-assignable to anything.
+  const aliases = { Foo: { body: ANY_T } };
+  const FooRef: VariableType = { type: "typeAliasVariable", aliasName: "Foo" };
+
+  it("is assignable both directions", () => {
+    expect(isAssignable(FooRef, NUMBER_T, aliases)).toBe(true); // any-alias -> concrete
+    expect(isAssignable(NUMBER_T, FooRef, aliases)).toBe(true); // concrete -> any-alias
+  });
+});

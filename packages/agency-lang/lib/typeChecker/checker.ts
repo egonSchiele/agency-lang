@@ -521,7 +521,7 @@ function checkBlockArgShape(
     if (
       hint === undefined ||
       hint.type === "blockType" ||
-      (hint.type === "primitiveType" && hint.value === "any")
+      isAnyType(hint)
     ) {
       return true;
     }

@@ -403,7 +403,7 @@ export function isOptionalType(
 ): boolean {
   const resolved = safeResolveType(vt, typeAliases);
   if (resolved.type === "primitiveType")
-    return resolved.value === "null" || resolved.value === "any";
+    return resolved.value === "null" || isAnyType(resolved);
   if (resolved.type === "unionType")
     return resolved.types.some((t) => isOptionalType(t, typeAliases));
   return false;
@@ -435,8 +435,10 @@ function isAssignableGuarded(
   typeAliases: Record<string, TypeAliasEntry>,
   inProgress: Set<string>,
 ): boolean {
-  if (isAnyType(source) || isAnyType(target)) return true;
-
+  // No pre-resolution any fast path: `any` is caught post-resolution in
+  // isAssignableInner, which also covers an alias whose body is `any`
+  // (e.g. `type Foo = any`). A pre-resolution isAnyType(source) would miss
+  // that alias and regress its assignability.
   const named =
     source.type === "typeAliasVariable" ||
     source.type === "genericType" ||
@@ -482,11 +484,9 @@ function isAssignableInner(
     return true;
   }
 
-  // primitiveType("any") behaves the same as the "any" sentinel
-  if (
-    (resolvedSource.type === "primitiveType" && resolvedSource.value === "any") ||
-    (resolvedTarget.type === "primitiveType" && resolvedTarget.value === "any")
-  ) {
+  // `any` on either side (including an alias resolving to `any`) is
+  // assignable both ways.
+  if (isAnyType(resolvedSource) || isAnyType(resolvedTarget)) {
     return true;
   }
 

@@ -2,6 +2,7 @@ import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext } from "./types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { AgencyNode } from "../types.js";
+import { isExportedSymbol } from "../symbolTable.js";
 
 /** A plain Agency import, normalized so the checker doesn't care which node
  *  kind it came from. */
@@ -73,11 +74,17 @@ export function checkMissingImports(ctx: TypeCheckerContext): void {
         continue;
       }
       // Export-visibility: a name that exists but isn't `export`ed can't be
-      // imported. Nodes are exempt (importable without `export`); `import test`
-      // is exempt. Mirrors importResolver's `assertImportable`, which already
-      // throws for this on the compile path — this surfaces it in `tc` too.
+      // imported. `isExportedSymbol` owns the rule (nodes are exempt —
+      // importable without `export`); `import test` is exempt too. Mirrors
+      // importResolver's `assertImportable`, which already throws for this on
+      // the compile path — this surfaces it in `tc` too.
+      //
+      // Note: a non-exported *constant* never reaches here — a `const` is only
+      // recorded as a symbol when `exported && static` (classifySymbols), so it
+      // trips importNameNotFound (AG4008) above instead. Consistent with
+      // importResolver, which throws "is not defined" for the same case.
       const symbol = resolution.symbols[name];
-      if (!spec.testOnly && symbol.kind !== "node" && !symbol.exported) {
+      if (!spec.testOnly && !isExportedSymbol(symbol)) {
         ctx.errors.push(
           diagnostic("importNameNotExported", { name, module: spec.modulePath }, spec.loc),
         );

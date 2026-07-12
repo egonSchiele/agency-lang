@@ -471,7 +471,7 @@ function collectDirectInterruptEffects(body: AgencyNode[]): InterruptEffect[] {
   return effects.map((e) => ({ effect: e }));
 }
 
-function isExportedSymbol(sym: SymbolInfo): boolean {
+export function isExportedSymbol(sym: SymbolInfo): boolean {
   // Nodes are importable without an explicit `export` keyword (see importResolver
   // — node imports skip the assertExported check). Treat them as exported for
   // re-export purposes so `export { main } from "..."` and `export * from "..."`

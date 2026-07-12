@@ -327,7 +327,6 @@ export const checkAge = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"age": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 export default graph

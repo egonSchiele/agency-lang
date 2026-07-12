@@ -332,7 +332,6 @@ export const append = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"sleepTime": z.number(), "value": z.any(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

@@ -336,7 +336,6 @@ export const log = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"prefix": z.string(), "messages": z.array(z.string()), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 export default graph

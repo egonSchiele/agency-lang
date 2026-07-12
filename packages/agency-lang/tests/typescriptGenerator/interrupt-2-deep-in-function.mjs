@@ -367,7 +367,6 @@ export const greet = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), "age": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __foo2_impl(name: string, age: number) {
@@ -553,7 +552,6 @@ export const foo2 = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), "age": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("sayHi", async (__state: GraphState) => {

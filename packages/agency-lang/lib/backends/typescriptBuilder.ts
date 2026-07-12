@@ -2270,7 +2270,6 @@ export class TypeScriptBuilder {
       fn: ts.id(implName),
       params: ts.arr(paramNodes),
       toolDefinition: toolDef,
-      safe: ts.bool(!!node.safe),
       exported: ts.bool(!!node.exported),
     };
     // Carry the retry-safety markers so the tool loop and MCP adapter can

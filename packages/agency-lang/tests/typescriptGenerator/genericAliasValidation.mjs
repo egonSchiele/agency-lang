@@ -330,7 +330,6 @@ export const process = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"c": z.object({ "value": z.number() }), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

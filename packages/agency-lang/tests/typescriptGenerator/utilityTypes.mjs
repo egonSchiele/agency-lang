@@ -319,7 +319,6 @@ export const patch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"changes": z.object({ "name": z.union([z.string(), z.null()]).optional().default(null), "age": z.union([z.number(), z.null()]).optional().default(null) }), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

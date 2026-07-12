@@ -12,7 +12,7 @@ Agency can serve your functions and nodes over MCP (stdio) or HTTP REST, letting
 Only items marked with `export` are exposed by the serve system:
 
 ```agency
-export safe def add(a: number, b: number): number {
+export idempotent def add(a: number, b: number): number {
   """
   Adds two numbers together.
   @param a - First number
@@ -32,7 +32,7 @@ def internal(): string {
 }
 ```
 
-The `safe` modifier tells the serve system that a function is read-only (no side effects). MCP clients see this as a `readOnlyHint` annotation.
+The [`destructive` and `idempotent` markers](/guide/llm-part-2#when-a-tool-call-fails) are surfaced to clients so they know which tools are safe to re-run. MCP clients see `idempotent` as an `idempotentHint` annotation and `destructive` as a `destructiveHint`; an unmarked function gets no annotation. The HTTP `/list` manifest reports the same information as `destructive` and `idempotent` booleans (see below).
 
 ## MCP Server
 
@@ -70,7 +70,7 @@ Options:
 ```json
 {
   "functions": [
-    { "name": "add", "description": "Adds two numbers together.", "safe": true }
+    { "name": "add", "description": "Adds two numbers together.", "destructive": false, "idempotent": true }
   ],
   "nodes": [
     { "name": "main", "parameters": ["message"] }
@@ -158,7 +158,8 @@ This produces a bundled `.server.js` file via esbuild.
 | Syntax | Served as |
 |---|---|
 | `export def foo()` | MCP tool / HTTP function |
-| `export safe def foo()` | MCP tool (with readOnlyHint) / HTTP function |
+| `export idempotent def foo()` | MCP tool (with idempotentHint) / HTTP function |
+| `export destructive def foo()` | MCP tool (with destructiveHint) / HTTP function |
 | `export node main()` | HTTP node |
 | `export static const x = ...` | Available in module but not directly callable |
 | `def foo()` (no export) | Not served |

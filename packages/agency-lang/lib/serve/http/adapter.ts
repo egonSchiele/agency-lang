@@ -140,7 +140,10 @@ export function createHttpHandler(config: HttpConfig): (
           functions: Object.values(functions).map((f) => ({
             name: f.name,
             description: f.description,
-            safe: f.agencyFunction.safe,
+            // Retry-safety markers, mirroring the MCP adapter's
+            // destructiveHint/idempotentHint. Only the set marker appears.
+            destructive: f.agencyFunction.markers?.destructive ?? false,
+            idempotent: f.agencyFunction.markers?.idempotent ?? false,
             interruptEffects: f.interruptEffects.map((ik) => ik.effect),
           })),
           nodes: Object.values(nodes).map((n) => ({

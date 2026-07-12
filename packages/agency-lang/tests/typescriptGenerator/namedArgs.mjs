@@ -347,7 +347,6 @@ export const greet = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: Hello"), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 export default graph

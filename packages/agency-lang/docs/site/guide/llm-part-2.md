@@ -14,17 +14,50 @@ print(response)
 
 Read the section on [LLM calls](/guide/llm) if you need a refresher.
 
-## The `safe` keyword
+## When a tool call fails
 
-LLMs are often flaky. It's possible that your LLM will call a tool incorrectly for some reason. If this happens, it's possible to get the LLM to retry the tool call.
+LLMs are often flaky. A tool the model calls can fail: it might get the arguments wrong, or the tool itself might hit an error partway through. When that happens, the model sees the failure and can try again on its next turn.
 
-Some functions are okay to retry and some aren't. If you have a function that has a side effect, like writing to a database, you probably don't want the LLM to retry it automatically. However, if you have a function that doesn't have any side effects, you can mark it `safe` to retry:
+The question is: should it be *allowed* to try again? For most tools, yes — retrying a failed read or a failed calculation is harmless. But some tools are dangerous to re-run. If a tool charged a credit card and then failed, blindly calling it again might charge the card twice. Agency lets you say which tools are which.
+
+By default, a tool that fails stays callable. The model can call it again. This is the right default for the common case, but note what it does *not* say: it does not promise the tool is safe to re-run automatically. A human or an automated system should not assume an unmarked tool can be blindly repeated.
+
+### `destructive`
+
+Mark a tool `destructive` when re-running it could cause real damage — charging a card, sending an email, deleting a file:
 
 ```ts
-safe def add(a: number, b: number): number {
+destructive def chargeCard(amount: number): string {
+  // ... talk to the payment provider ...
+  return "charged"
+}
+```
+
+If a `destructive` tool starts running and then fails, Agency removes it from the conversation. The model cannot call it again, and the tool result tells it so: the operation may have partially completed, so the state must be verified by hand rather than by retrying.
+
+There is one exception. If the call fails *before the tool body starts* — the model passed the wrong arguments, or too few — then nothing happened yet, so the tool stays callable. Only a failure *after* the destructive work began locks the tool out.
+
+### `idempotent`
+
+Mark a tool `idempotent` when re-running it is always safe, no matter how many times it happens — reading a record, looking something up, a pure calculation:
+
+```ts
+idempotent def add(a: number, b: number): number {
   return a + b
 }
 ```
+
+An `idempotent` tool stays callable after a failure (like the default), but the marker also records a promise you can rely on elsewhere: automated systems may re-run it freely.
+
+### Choosing a marker
+
+| Marker | Re-callable after a failure? | Meaning |
+|---|---|---|
+| *(unmarked)* | Yes | Re-callable, but not promised safe to repeat blindly. |
+| `idempotent` | Yes | Always safe to re-run. |
+| `destructive` | Only if it never started | Dangerous to repeat; locked out once it begins. |
+
+These markers are about *retry safety* only. They are independent of [interrupts](/guide/interrupts), which gate whether a tool runs at all.
 
 ## Retries and timeouts
 

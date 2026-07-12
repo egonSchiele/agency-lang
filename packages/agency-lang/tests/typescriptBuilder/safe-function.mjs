@@ -318,7 +318,6 @@ export const safeLookup = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"id": z.string(), })
   },
-  safe: true,
   exported: false
 }, __toolRegistry);
 async function __unsafeSave_impl(id: string) {
@@ -471,7 +470,6 @@ export const unsafeSave = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"id": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

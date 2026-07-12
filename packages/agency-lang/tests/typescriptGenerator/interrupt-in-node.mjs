@@ -367,7 +367,6 @@ export const greet = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), "age": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("foo2", async (__state: GraphState) => {

@@ -297,7 +297,6 @@ export const test = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({})
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __add_impl(a: any, b: any) {
@@ -447,7 +446,6 @@ export const add = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.string(), "b": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

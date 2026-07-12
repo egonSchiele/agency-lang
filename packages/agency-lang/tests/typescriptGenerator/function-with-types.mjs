@@ -346,7 +346,6 @@ export const add = __AgencyFunction.create({
     description: `Adds two numbers together`,
     schema: z.object({"x": z.number(), "y": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __greet_impl(name: string) {
@@ -502,7 +501,6 @@ export const greet = __AgencyFunction.create({
     description: `Greets a person by name`,
     schema: z.object({"name": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __mixed_impl(count: number, label: any) {
@@ -671,7 +669,6 @@ export const mixed = __AgencyFunction.create({
     description: `Mixed typed and untyped parameters`,
     schema: z.object({"count": z.number(), "label": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __processArray_impl(items: number[]) {
@@ -827,7 +824,6 @@ export const processArray = __AgencyFunction.create({
     description: `Processes an array of numbers`,
     schema: z.object({"items": z.array(z.number()), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __flexible_impl(value: string | number) {
@@ -983,7 +979,6 @@ export const flexible = __AgencyFunction.create({
     description: `Handles either a string or number`,
     schema: z.object({"value": z.union([z.string(), z.number()]), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("foo", async (__state: GraphState) => {

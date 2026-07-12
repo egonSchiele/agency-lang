@@ -325,7 +325,6 @@ export const add = __AgencyFunction.create({
   This is a simple addition function.`,
     schema: z.object({"a": z.string(), "b": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __greet_impl(name: any) {
@@ -459,7 +458,6 @@ export const greet = __AgencyFunction.create({
     description: `Generate a greeting message for the given name.`,
     schema: z.object({"name": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __calculateArea_impl(width: any, height: any) {
@@ -612,7 +610,6 @@ export const calculateArea = __AgencyFunction.create({
   Returns: the area as a number`,
     schema: z.object({"width": z.string(), "height": z.string(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __processData_impl() {
@@ -732,7 +729,6 @@ export const processData = __AgencyFunction.create({
     description: `Single line docstring`,
     schema: z.object({})
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __versionedTool_impl() {
@@ -852,7 +848,6 @@ export const versionedTool = __AgencyFunction.create({
     description: `This tool is version ${__globalCtx.globals.get("docstrings.agency", "toolVersion")}.`,
     schema: z.object({})
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 export default graph

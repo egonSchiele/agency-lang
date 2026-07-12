@@ -313,7 +313,6 @@ export const double = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __multiply_impl(a: number, b: number) {
@@ -465,7 +464,6 @@ export const multiply = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 async function __safeDivide_impl(a: number, b: number) {
@@ -631,7 +629,6 @@ export const safeDivide = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {

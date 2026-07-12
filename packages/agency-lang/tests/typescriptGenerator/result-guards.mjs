@@ -327,7 +327,6 @@ export const checkValue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"r": z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })]), })
   },
-  safe: false,
   exported: false
 }, __toolRegistry);
 export default graph

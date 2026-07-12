@@ -52,6 +52,13 @@ export type ResultSuccess = {
 export type FailureOpts = {
   checkpoint?: any;
   retryable?: boolean;
+  /** The call failed before its function body began (argument binding,
+   *  arity, schema). Its only producer is the tool loop, from the invoke
+   *  layer's pre-execution tag — trust-the-producer, because nothing can
+   *  correct a wrongly-true claim. */
+  neverStarted?: boolean;
+  /** A statement containing a destructive-marked call had started. */
+  destructiveRan?: boolean;
   functionName?: string;
   args?: Record<string, any>;
   /** The guard ids this `try` boundary OWNS. A `guardTrip` cause is
@@ -72,6 +79,15 @@ export type ResultFailure = {
   error: any;
   checkpoint: any;
   retryable: boolean;
+  /** The call failed before its function body began. Birth default false;
+   *  set only by the tool loop from the invoke layer's pre-execution tag.
+   *  Trust-the-producer: there is no correcting machinery, so nothing else
+   *  may set it. */
+  neverStarted: boolean;
+  /** A destructive-marked call had started when this failure was produced.
+   *  Birth default false; boundaries OR the activation's flag in via
+   *  stampFailureBoundary. */
+  destructiveRan: boolean;
   functionName: string | null;
   args: Record<string, any> | null;
   skippedFunctions: SkippedFunction[];
@@ -88,10 +104,40 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
     error,
     checkpoint: opts?.checkpoint ?? null,
     retryable: opts?.retryable ?? false,
+    // Birth false: boundary stamps are the authority. A false birth
+    // default for destructiveRan is safe because the exit stamp ORs the
+    // activation flag in; neverStarted has no correcting stamp, so its
+    // sole producer sets it explicitly.
+    neverStarted: opts?.neverStarted ?? false,
+    destructiveRan: opts?.destructiveRan ?? false,
     functionName: opts?.functionName ?? null,
     args: opts?.args ?? null,
     skippedFunctions: [],
   };
+}
+
+/** Fold an activation's destructive flag into a failure crossing a
+ *  boundary (function exit, block halt, block join). OR: once destructive
+ *  work started anywhere below, the failure reports it. */
+export function stampFailureBoundary(
+  f: ResultFailure,
+  destructiveRan: boolean,
+): ResultFailure {
+  f.destructiveRan = f.destructiveRan || destructiveRan;
+  return f;
+}
+
+/** Record that destructive work ran in the given activation. Writes the
+ *  slot the codegen flag lives in (frame.locals IS the generated
+ *  function's __self — see lib/runtime/node.ts), so the exit stamp picks
+ *  it up with no second source. Sole caller: the tool loop, when a
+ *  destructive-marked tool executed or a tool failed destructively. */
+export function markDestructiveWork(
+  frame: { locals: Record<string, any> } | undefined,
+): void {
+  if (frame) {
+    frame.locals.__destructiveRan = true;
+  }
 }
 
 /** Shallow-clone a failure with one more skip entry. Used by the

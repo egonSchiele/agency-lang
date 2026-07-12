@@ -1,0 +1,23 @@
+node lookups() {
+  const obj: Record<string, number> = { present: 42 }
+  const arr = [1, 2, 3]
+  const zero: Record<string, number> = { z: 0 }
+  return {
+    missingKey: obj["absent"],
+    presentKey: obj["present"],
+    outOfBounds: arr[10],
+    negativeIndex: arr[-1],
+    inBounds: arr[0],
+    falsyZero: zero["z"]
+  }
+}
+
+// Regression guard for the terminal-only wrap decision (Step 3). `a` is null, so
+// `a?.["x"]` short-circuits and `["y"]` is never evaluated: with terminal-only
+// wrapping the whole chain is `__nn(a?.["x"]["y"])` → null (NO throw). If the fix
+// ever regresses to per-element wrapping it becomes `__nn(__nn(a?.["x"])["y"])` →
+// `null["y"]` → THROWS, and this node crashes the test.
+node optChainNoThrow() {
+  const a: Record<string, Record<string, number>> | null = null
+  return { deep: a?.["x"]["y"] }
+}

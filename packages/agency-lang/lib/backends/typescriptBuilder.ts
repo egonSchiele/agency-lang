@@ -1087,7 +1087,7 @@ export class TypeScriptBuilder {
     return ts.template(parts);
   }
 
-  private processValueAccess(node: ValueAccess): TsNode {
+  private processValueAccess(node: ValueAccess, asLValue = false): TsNode {
     let result = this.processNode(node.base);
     // If the base is a function call, await it before accessing properties/methods
     // on the result. Without this, chaining like getGreeting().trim() would call
@@ -1160,7 +1160,34 @@ export class TypeScriptBuilder {
         }
       }
     }
+    // Normalize the observable value of a *terminal* index read (`obj[key]`,
+    // `arr[i]`) to `null` when the key is missing / index is out of bounds.
+    // Wrap only the completed chain, and only when its last element is an
+    // index: wrapping each `case "index"` element individually would insert
+    // `__nn` *between* an optional index and a following access, capturing JS
+    // optional-chain short-circuit and turning `a?.[b].c` (null `a` → whole-
+    // chain `undefined`) into `null.c` → a thrown TypeError. Intermediate
+    // missing reads still throw exactly as before (the terminal `__nn` runs
+    // last), and the emitted shape is a single `__nn(...)`, never nested.
+    //
+    // `asLValue` skips the wrap when this access is emitted as an
+    // assignment/update *target* (`x[i]++`, `x[i] += v`) — `__nn(x[i]) = ...`
+    // is not a valid assignment target. Those targets stay raw lvalues.
+    // See docs/dev/null-and-undefined.md and issue #409.
+    const lastElement = node.chain[node.chain.length - 1];
+    if (!asLValue && lastElement?.kind === "index") {
+      return ts.call(ts.id("__nn"), [result]);
+    }
     return result;
+  }
+
+  /** Emit an assignment/update *target*. A `valueAccess` target must stay a
+   *  raw lvalue (never `__nn`-wrapped); anything else goes through the normal
+   *  value path. Used by `++`/`--` and compound-assignment (`+=` etc.). */
+  private processAssignTarget(node: Expression): TsNode {
+    return node.type === "valueAccess"
+      ? this.processValueAccess(node, true)
+      : this.processNode(node);
   }
 
   private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
@@ -1180,7 +1207,7 @@ export class TypeScriptBuilder {
       return this.processRegexMatchExpression(node);
     }
     if (node.operator === "++" || node.operator === "--") {
-      return ts.postfix(this.processNode(node.left), node.operator);
+      return ts.postfix(this.processAssignTarget(node.left), node.operator);
     }
     if (node.operator === "typeof" || node.operator === "void") {
       return ts.unaryOp(node.operator, this.processNode(node.right));
@@ -1215,7 +1242,14 @@ export class TypeScriptBuilder {
         `((__v) => (${this.str(setCall)}, __v))(${this.str(newValueExpr)})`,
       );
     }
-    const leftNode = this.processNode(node.left);
+    // For a compound assignment (`x[i] += v`, `??=`, ...) the left operand is
+    // also the assignment target, so it must stay a raw lvalue — never wrapped
+    // in `__nn`. For every other binary operator the left is a plain value read
+    // and follows the normal (terminal-index-normalizing) path.
+    const leftNode =
+      COMPOUND_ASSIGN_TO_BINARY[node.operator] !== undefined
+        ? this.processAssignTarget(node.left)
+        : this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     // All equality operators use unified nullish equality via the `__eq`
     // runtime helper (null and undefined compare equal). There is no strict

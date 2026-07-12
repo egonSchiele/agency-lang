@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -214,7 +214,7 @@ __stack.locals.votes = {
 __stack.locals.votes[`carol`] = `approve`;
       });
       await runner.step(3, async (runner) => {
-__stack.locals.v = __stack.locals.votes[`alice`];
+__stack.locals.v = __nn(__stack.locals.votes[`alice`]);
       });
       await runner.step(4, async (runner) => {
 const __funcResult = await __call(print, {

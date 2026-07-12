@@ -1132,10 +1132,20 @@ export async function runPrompt(args: {
       // call must propagate to the calling function's activation, so a later
       // failure THERE reports destructiveRan. Write the same locals slot the
       // codegen flag lives in; the enclosing function's exit stamp reads it.
-      if (
-        handler.markers?.destructive ||
-        (isFailure(toolResult) && toolResult.destructiveRan)
-      ) {
+      //
+      // Mirror the codegen assignment-flip EXACTLY (`isFailure(r) ?
+      // r.destructiveRan : true` for a destructive callee): a FAILURE carries
+      // precisely whether destructive work ran, so trust that bit rather than
+      // the marker. A destructive tool that failed pre-execution
+      // (neverStarted) or cleanly refused (returned a failure before its
+      // effectful work) has destructiveRan === false and must NOT poison the
+      // caller — otherwise a later failure in an enclosing agent-as-tool would
+      // wrongly report destructiveRan. A SUCCESS of a destructive-marked tool
+      // is taken to have done its work (successes carry no destructiveRan bit).
+      const toolDidDestructiveWork = isFailure(toolResult)
+        ? toolResult.destructiveRan
+        : !!handler.markers?.destructive;
+      if (toolDidDestructiveWork) {
         // `stack` is the calling function's activation frame (a State with
         // `.locals`); its exit stamp reads `__self.__destructiveRan` ===
         // `stack.locals.__destructiveRan`.

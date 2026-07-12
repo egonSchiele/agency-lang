@@ -1,4 +1,4 @@
-safe def addKey(key: string, value: string, obj = {}) {
+def addKey(key: string, value: string, obj = {}) {
   obj[key] = value
   return obj
 }

@@ -93,6 +93,39 @@ node blockJoin() {
   return "unexpected"
 }
 
+// Destructive call inside an `if` block. containsDestructiveCall walks the
+// whole subtree (bodySlots), so the conservative function-level pre-flip
+// fires and the escaping failure carries destructiveRan. (Owner review:
+// nested-block tracking for if/for/thread.)
+def ifBlockWork(x: number): Result {
+  if (x > 0) {
+    burnOk()
+  }
+  return failure("after if")
+}
+node ifBlock() {
+  const r = ifBlockWork(1)
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Destructive call inside a `for` loop body.
+def forBlockWork(): Result {
+  for (i in [1, 2]) {
+    burnOk()
+  }
+  return failure("after for")
+}
+node forBlock() {
+  const r = forBlockWork()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
 // Unmarked function failure: nothing set.
 def plain(): Result {
   return failure("plain fail")

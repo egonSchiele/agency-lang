@@ -22,7 +22,7 @@ function table(files: Record<string, FileSymbols>): SymbolTable {
 function fn(opts: {
   name: string;
   exported?: boolean;
-  safe?: boolean;
+  markers?: FunctionSymbol["markers"];
   reExportedFrom?: { sourceFile: string; originalName: string };
   parameters?: FunctionSymbol["parameters"];
   returnType?: FunctionSymbol["returnType"];
@@ -31,10 +31,10 @@ function fn(opts: {
     kind: "function",
     name: opts.name,
     exported: opts.exported ?? true,
-    safe: opts.safe ?? false,
     parameters: opts.parameters ?? [],
     returnType: opts.returnType ?? null,
     reExportedFrom: opts.reExportedFrom,
+    markers: opts.markers,
   };
 }
 
@@ -63,7 +63,6 @@ describe("resolveReExports: function form", () => {
             kind: "namedExport",
             names: ["search"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],
@@ -131,7 +130,6 @@ describe("resolveReExports: function form", () => {
             kind: "namedExport",
             names: ["search"],
             aliases: { search: "wikiSearch" },
-            safeNames: [],
           },
         }),
       ],
@@ -157,7 +155,7 @@ describe("resolveReExports: function form", () => {
     });
   });
 
-  it("propagates safe modifier to the wrapper", () => {
+  it("propagates a destructive marker to the wrapper", () => {
     const sourcePath = "/project/source.agency";
     const reexporterPath = "/project/reexporter.agency";
     const program: AgencyProgram = {
@@ -169,17 +167,20 @@ describe("resolveReExports: function form", () => {
             kind: "namedExport",
             names: ["search"],
             aliases: {},
-            safeNames: ["search"],
+            destructiveNames: ["search"],
           },
         }),
       ],
     };
+    // The re-exporter's symbol carries the marker (symbolTable's mergeOne
+    // folds `destructiveNames` onto it); resolveReExports copies it to the
+    // synthesized wrapper.
     const symbolTable = table({
-      [sourcePath]: { search: fn({ name: "search", safe: false }) },
+      [sourcePath]: { search: fn({ name: "search" }) },
       [reexporterPath]: {
         search: fn({
           name: "search",
-          safe: true,
+          markers: { destructive: true },
           reExportedFrom: { sourceFile: sourcePath, originalName: "search" },
         }),
       },
@@ -189,7 +190,7 @@ describe("resolveReExports: function form", () => {
     const fns = result.nodes.filter(
       (n) => n.type === "function",
     ) as FunctionDefinition[];
-    expect(fns[0].safe).toBe(true);
+    expect(fns[0].markers?.destructive).toBe(true);
   });
 });
 
@@ -208,7 +209,6 @@ describe("resolveReExports: per-kind synthesis", () => {
             kind: "namedExport",
             names: ["main"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],
@@ -264,7 +264,6 @@ describe("resolveReExports: per-kind synthesis", () => {
             kind: "namedExport",
             names: ["Foo"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],
@@ -310,7 +309,6 @@ describe("resolveReExports: per-kind synthesis", () => {
             kind: "namedExport",
             names: ["PROMPT"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],
@@ -358,7 +356,6 @@ describe("resolveReExports: coalescing and star", () => {
             kind: "namedExport",
             names: ["foo"],
             aliases: {},
-            safeNames: [],
           },
         }),
         makeExportFromStmt({
@@ -367,7 +364,6 @@ describe("resolveReExports: coalescing and star", () => {
             kind: "namedExport",
             names: ["bar"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],
@@ -465,7 +461,6 @@ describe("resolveReExports: leading preamble ordering", () => {
             kind: "namedExport",
             names: ["search"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],
@@ -524,7 +519,6 @@ describe("resolveReExports: leading preamble ordering", () => {
       type: "function",
       functionName: "foo",
       exported: true,
-      safe: false,
       parameters: [],
       body: [],
     } as unknown as AgencyNode;
@@ -539,7 +533,6 @@ describe("resolveReExports: leading preamble ordering", () => {
             kind: "namedExport",
             names: ["search"],
             aliases: {},
-            safeNames: [],
           },
         }),
       ],

@@ -1,5 +1,0 @@
-{
-  "tests": [
-    { "nodeName": "safeMigration", "description": "a deprecated `safe def` calling an extern and returning a failure yields destructiveRan false — safe is fully inert", "input": "", "expectedOutput": "false", "evaluationCriteria": [{ "type": "exact" }] }
-  ]
-}

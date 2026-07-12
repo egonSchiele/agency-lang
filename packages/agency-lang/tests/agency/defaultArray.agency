@@ -1,4 +1,4 @@
-safe def appendItem(item: string, items: string[] = []): string[] {
+def appendItem(item: string, items: string[] = []): string[] {
   items.push(item)
   return items
 }

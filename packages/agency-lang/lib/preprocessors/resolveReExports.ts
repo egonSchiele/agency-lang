@@ -161,7 +161,6 @@ function buildCoalescedImport(
       {
         type: "namedImport",
         importedNames,
-        safeNames: [],
         aliases,
       },
     ],
@@ -246,11 +245,13 @@ function buildFunctionWrapper(
     parameters: sym.parameters,
     returnType: sym.returnType ?? null,
     returnTypeValidated: sym.returnTypeValidated,
-    safe: sym.safe,
     exported: true,
     body: [ret],
     loc: sym.loc,
   };
+  // Carry the re-export's retry-safety markers onto the wrapper so it
+  // registers destructive/idempotent like the original.
+  if (sym.markers) out.markers = sym.markers;
   return out;
 }
 

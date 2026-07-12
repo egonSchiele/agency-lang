@@ -1,4 +1,4 @@
-safe def greet(name: string, greeting: string = "Hello", punctuation: string = "!"): string {
+def greet(name: string, greeting: string = "Hello", punctuation: string = "!"): string {
   return greeting + " " + name + punctuation
 }
 

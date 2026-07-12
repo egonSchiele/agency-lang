@@ -93,7 +93,7 @@ describe("runDiagnostics — test-only imports", () => {
       const helperFile = path.join(tmpDir, "helpers.agency");
       fs.writeFileSync(
         helperFile,
-        ["safe def secretDouble(n: number): number {", "  return n * 2", "}", ""].join("\n"),
+        ["def secretDouble(n: number): number {", "  return n * 2", "}", ""].join("\n"),
       );
       const mainFile = path.join(tmpDir, "main.agency");
       const source = [

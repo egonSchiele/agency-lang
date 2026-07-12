@@ -79,7 +79,6 @@ export type AgencyFunctionOpts = {
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
-  safe?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
 };
@@ -97,7 +96,6 @@ export class AgencyFunction {
   private readonly _isBound: boolean;
   private readonly _checksFailures: boolean;
   readonly exported: boolean;
-  readonly safe: boolean;
   readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
 
@@ -108,7 +106,6 @@ export class AgencyFunction {
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
-    this.safe = opts.safe ?? false;
     this.markers = opts.markers ?? {};
     this._isPreapproved = opts.isPreapproved ?? false;
     this._unboundParams = opts.params.filter(p => !p.isBound);
@@ -147,7 +144,7 @@ export class AgencyFunction {
       params: this.params,
       toolDefinition,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: this._isPreapproved,
     });
   }
@@ -250,7 +247,7 @@ export class AgencyFunction {
       params: newParams,
       toolDefinition: newToolDef,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: this._isPreapproved,
     });
   }
@@ -278,7 +275,7 @@ export class AgencyFunction {
       params: this.params,
       toolDefinition: this.toolDefinition,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: true,
     });
   }
@@ -314,7 +311,7 @@ export class AgencyFunction {
       params: this.params,
       toolDefinition: newToolDef,
       exported: this.exported,
-      safe: this.safe,
+      markers: this.markers,
       isPreapproved: this._isPreapproved,
     });
   }

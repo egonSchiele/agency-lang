@@ -20,7 +20,6 @@ function makeHandler() {
       ],
       toolDefinition: { name: "add", description: "Add two numbers", schema: null },
       exported: true,
-      safe: true,
     },
     registry,
   );

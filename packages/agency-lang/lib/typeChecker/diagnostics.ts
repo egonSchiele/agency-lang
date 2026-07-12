@@ -487,11 +487,11 @@ export const DIAGNOSTICS = {
     message:
       "Cannot mutate static `{name}` via `.{method}(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.",
   },
-  deprecatedSafe: {
+  conflictingMarkers: {
     code: "AG7006",
-    severity: "warning",
+    severity: "error",
     message:
-      "'safe' is deprecated and has no effect; use idempotent (okay to re-run) or destructive (dangerous to re-run) instead. safe will be removed in a future release.",
+      "Function '{name}' cannot be both destructive and idempotent — those markers are contradictory. Pick one.",
   },
 } as const;
 

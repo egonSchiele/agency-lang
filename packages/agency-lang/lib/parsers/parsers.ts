@@ -3397,23 +3397,26 @@ const nameWithOptionalAlias = or(
   ),
 );
 
-const safeNameItem = or(
-  map(
-    seqC(str("safe "), captureCaptures(nameWithOptionalAlias)),
-    (r) => ({
-      name: r.name,
-      alias: r.alias as string | undefined,
-      isSafe: true,
-      isDestructive: false,
-    }),
-  ),
+// A named import/export item, optionally carrying a retry-safety marker.
+// `destructive` and `idempotent` are the two markers; an unmarked item
+// carries neither. (There is no `safe` — it was removed.)
+const markedNameItem = or(
   map(
     seqC(str("destructive "), captureCaptures(nameWithOptionalAlias)),
     (r) => ({
       name: r.name,
       alias: r.alias as string | undefined,
-      isSafe: false,
       isDestructive: true,
+      isIdempotent: false,
+    }),
+  ),
+  map(
+    seqC(str("idempotent "), captureCaptures(nameWithOptionalAlias)),
+    (r) => ({
+      name: r.name,
+      alias: r.alias as string | undefined,
+      isDestructive: false,
+      isIdempotent: true,
     }),
   ),
   map(
@@ -3421,8 +3424,8 @@ const safeNameItem = or(
     (r) => ({
       name: r.name,
       alias: r.alias,
-      isSafe: false,
       isDestructive: false,
+      isIdempotent: false,
     }),
   ),
 );
@@ -3434,36 +3437,38 @@ const namedImportParser: Parser<NamedImport> = memo(
     seqC(
       char("{"),
       optionalSpacesOrNewline,
-      capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+      capture(sepBy1(commaWithNewline, markedNameItem), "items"),
       optional(commaWithNewline),
       optionalSpacesOrNewline,
       char("}"),
     ),
     (result) => {
       const importedNames: string[] = [];
-      const safeNames: string[] = [];
       const destructiveNames: string[] = [];
+      const idempotentNames: string[] = [];
       const aliases: Record<string, string> = {};
       for (const item of result.items) {
         importedNames.push(item.name);
         if (item.alias) {
           aliases[item.name] = item.alias;
         }
-        if (item.isSafe) {
-          safeNames.push(item.name);
-        }
         if (item.isDestructive) {
           destructiveNames.push(item.name);
+        }
+        if (item.isIdempotent) {
+          idempotentNames.push(item.name);
         }
       }
       const node: NamedImport = {
         type: "namedImport" as const,
         importedNames,
-        safeNames,
         aliases,
       };
       if (destructiveNames.length > 0) {
         node.destructiveNames = destructiveNames;
+      }
+      if (idempotentNames.length > 0) {
+        node.idempotentNames = idempotentNames;
       }
       return node;
     },
@@ -3551,30 +3556,32 @@ const namedExportBodyParser = map(
   seqC(
     char("{"),
     optionalSpacesOrNewline,
-    capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+    capture(sepBy1(commaWithNewline, markedNameItem), "items"),
     optional(commaWithNewline),
     optionalSpacesOrNewline,
     char("}"),
   ),
   (result) => {
     const names: string[] = [];
-    const safeNames: string[] = [];
     const destructiveNames: string[] = [];
+    const idempotentNames: string[] = [];
     const aliases: Record<string, string> = {};
     for (const item of result.items) {
       names.push(item.name);
       if (item.alias) aliases[item.name] = item.alias;
-      if (item.isSafe) safeNames.push(item.name);
       if (item.isDestructive) destructiveNames.push(item.name);
+      if (item.isIdempotent) idempotentNames.push(item.name);
     }
     const body: NamedExportBody = {
       kind: "namedExport" as const,
       names,
-      safeNames,
       aliases,
     };
     if (destructiveNames.length > 0) {
       body.destructiveNames = destructiveNames;
+    }
+    if (idempotentNames.length > 0) {
+      body.idempotentNames = idempotentNames;
     }
     return body;
   },
@@ -4696,7 +4703,6 @@ const exportKeywordParser: Parser<boolean> = or(
 // modifier a one-line addition.
 const FUNCTION_MODIFIER_KEYWORDS = [
   "export",
-  "safe",
   "destructive",
   "idempotent",
 ] as const;
@@ -4707,7 +4713,6 @@ const modifierKeywordParser = (kw: string): Parser<boolean> =>
 
 type FunctionModifiers = {
   isExported: boolean;
-  isSafe: boolean;
   isDestructive: boolean;
   isIdempotent: boolean;
 };
@@ -4718,7 +4723,6 @@ function parseFunctionModifiers(
   let rest = input;
   const seen: Record<FunctionModifierKeyword, boolean> = {
     export: false,
-    safe: false,
     destructive: false,
     idempotent: false,
   };
@@ -4736,19 +4740,15 @@ function parseFunctionModifiers(
     }
   }
 
-  // The three retry-safety markers are mutually exclusive.
-  const markerCount =
-    (seen.safe ? 1 : 0) + (seen.destructive ? 1 : 0) + (seen.idempotent ? 1 : 0);
-  if (markerCount > 1) {
-    return { success: false };
-  }
-
+  // `destructive` and `idempotent` are mutually exclusive, but we do NOT
+  // reject the conflict here: both are set on the AST and the type checker
+  // reports a clear diagnostic (AG7006). A parse failure would only surface
+  // a generic "unexpected modifier".
   return {
     success: true,
     rest,
     modifiers: {
       isExported: seen.export,
-      isSafe: seen.safe,
       isDestructive: seen.destructive,
       isIdempotent: seen.idempotent,
     },
@@ -4758,7 +4758,7 @@ function parseFunctionModifiers(
 const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const mods = parseFunctionModifiers(input);
   if (!mods.success) return failure("unexpected modifier", input);
-  const { isExported, isSafe, isDestructive, isIdempotent } = mods.modifiers;
+  const { isExported, isDestructive, isIdempotent } = mods.modifiers;
 
   const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
@@ -4770,9 +4770,10 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   // keeps the AST shape unchanged for functions without a raises clause.
   if (_raises) result.raises = _raises;
   if (isExported) result.exported = true;
-  if (isSafe) result.safe = true;
   // Markers travel as one object, present only when at least one is set,
   // each field only when true — keeps AST JSON and exact-match tests clean.
+  // Both may be set when the source conflicts (`destructive idempotent`);
+  // the type checker reports that as AG7006.
   if (isDestructive || isIdempotent) {
     const markers: FunctionMarkers = {};
     if (isDestructive) markers.destructive = true;

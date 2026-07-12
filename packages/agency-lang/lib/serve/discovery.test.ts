@@ -17,7 +17,6 @@ describe("discoverExports", () => {
           schema: null,
         },
         exported: true,
-        safe: false,
       },
       registry,
     );
@@ -137,7 +136,6 @@ describe("discoverExports", () => {
         params: [],
         toolDefinition: { name: "deploy", description: "Deploy", schema: null },
         exported: true,
-        safe: false,
       },
       registry,
     );

@@ -267,32 +267,32 @@ describe("SymbolTable: re-export reachability and merging", () => {
     }
   });
 
-  it("per-name `safe` overrides source's safe flag", () => {
+  it("per-name `destructive` marks the re-exported symbol", () => {
     const { paths, cleanup } = withTempFiles({
       source: `export def foo() { return 1 }`,
-      reexporter: `export { safe foo } from "@source@"`,
+      reexporter: `export { destructive foo } from "@source@"`,
     });
     try {
       const st = SymbolTable.build(paths.reexporter);
       const foo = st.getFile(path.resolve(paths.reexporter))!["foo"];
       expect(foo.kind).toBe("function");
-      expect((foo as any).safe).toBe(true);
+      expect((foo as any).markers?.destructive).toBe(true);
     } finally {
       cleanup();
     }
   });
 
-  it("per-name safe leaves siblings unchanged", () => {
+  it("per-name marker leaves siblings unchanged", () => {
     const { paths, cleanup } = withTempFiles({
       source: `export def foo() { return 1 }
         export def bar() { return 2 }`,
-      reexporter: `export { safe foo, bar } from "@source@"`,
+      reexporter: `export { destructive foo, bar } from "@source@"`,
     });
     try {
       const st = SymbolTable.build(paths.reexporter);
       const reSyms = st.getFile(path.resolve(paths.reexporter))!;
-      expect((reSyms["foo"] as any).safe).toBe(true);
-      expect((reSyms["bar"] as any).safe).toBe(false);
+      expect((reSyms["foo"] as any).markers?.destructive).toBe(true);
+      expect((reSyms["bar"] as any).markers?.destructive).toBeFalsy();
     } finally {
       cleanup();
     }
@@ -378,16 +378,16 @@ describe("SymbolTable: re-export reachability and merging", () => {
     }
   });
 
-  it("rejects 'safe' on a re-exported node", () => {
-    // Nodes don't carry a `safe` flag; silently dropping the user's modifier
-    // would mislead them about what was actually applied.
+  it("rejects a marker on a re-exported node", () => {
+    // Nodes don't carry retry-safety markers; silently dropping the user's
+    // modifier would mislead them about what was actually applied.
     const { paths, cleanup } = withTempFiles({
       source: `export node srcNode() { return 1 }`,
-      reexporter: `export { safe srcNode } from "@source@"`,
+      reexporter: `export { destructive srcNode } from "@source@"`,
     });
     try {
       expect(() => SymbolTable.build(paths.reexporter)).toThrow(
-        /'safe' modifier cannot be applied to node 'srcNode'/,
+        /marker.*cannot be applied to node 'srcNode'/,
       );
     } finally {
       cleanup();

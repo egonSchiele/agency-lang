@@ -1000,7 +1000,6 @@ export class AgencyGenerator {
 
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
-    if (node.safe) prefixes.push("safe");
     if (node.markers?.destructive) prefixes.push("destructive");
     if (node.markers?.idempotent) prefixes.push("idempotent");
     prefixes.push("def");
@@ -1400,8 +1399,8 @@ export class AgencyGenerator {
         return this.prefixMarkedName(
           name,
           base,
-          namedImport.safeNames,
           namedImport.destructiveNames,
+          namedImport.idempotentNames,
         );
       });
       return this.indentStr(
@@ -1425,8 +1424,8 @@ export class AgencyGenerator {
           return this.prefixMarkedName(
             name,
             base,
-            node.safeNames,
             node.destructiveNames,
+            node.idempotentNames,
           );
         });
         return `{ ${names.join(", ")} }`;
@@ -1438,19 +1437,19 @@ export class AgencyGenerator {
     }
   }
 
-  /** Render an imported/re-exported name with its `safe` or `destructive`
-   *  prefix. A name carries at most one marker, so the order is arbitrary. */
+  /** Render an imported/re-exported name with its `destructive` or
+   *  `idempotent` prefix. A name carries at most one marker. */
   private prefixMarkedName(
     name: string,
     base: string,
-    safeNames?: string[],
     destructiveNames?: string[],
+    idempotentNames?: string[],
   ): string {
-    if (safeNames?.includes(name)) {
-      return `safe ${base}`;
-    }
     if (destructiveNames?.includes(name)) {
       return `destructive ${base}`;
+    }
+    if (idempotentNames?.includes(name)) {
+      return `idempotent ${base}`;
     }
     return base;
   }
@@ -1470,8 +1469,8 @@ export class AgencyGenerator {
       return this.prefixMarkedName(
         name,
         base,
-        body.safeNames,
         body.destructiveNames,
+        body.idempotentNames,
       );
     });
     return this.indentStr(

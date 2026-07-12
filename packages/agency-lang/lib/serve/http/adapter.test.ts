@@ -26,7 +26,6 @@ function makeExports(): {
         schema: null,
       },
       exported: true,
-      safe: true,
     },
     registry,
   );
@@ -226,7 +225,6 @@ describe("HTTP adapter", () => {
         params: [],
         toolDefinition: { name: "deploy", description: "Deploy", schema: null },
         exported: true,
-        safe: false,
       },
       registry,
     );
@@ -347,7 +345,6 @@ describe("startHttpServer auth and host validation", () => {
         params: [],
         toolDefinition: { name: "fail", description: "", schema: null },
         exported: true,
-        safe: true,
       },
       registry,
     );

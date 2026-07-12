@@ -44,9 +44,16 @@ export function prunePreludeShadows(program: AgencyProgram): void {
       spec.importedNames = spec.importedNames.filter(
         (name) => !shadowed.has(spec.aliases[name] ?? name),
       );
-      spec.safeNames = spec.safeNames.filter((n) =>
-        spec.importedNames.includes(n),
-      );
+      if (spec.destructiveNames) {
+        spec.destructiveNames = spec.destructiveNames.filter((n) =>
+          spec.importedNames.includes(n),
+        );
+      }
+      if (spec.idempotentNames) {
+        spec.idempotentNames = spec.idempotentNames.filter((n) =>
+          spec.importedNames.includes(n),
+        );
+      }
       for (const key of Object.keys(spec.aliases)) {
         if (!spec.importedNames.includes(key)) delete spec.aliases[key];
       }

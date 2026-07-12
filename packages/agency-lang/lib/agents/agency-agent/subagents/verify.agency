@@ -64,7 +64,7 @@ export def renderGaps(gaps: string[]): string {
 // Failure (verifier crashed / no verdict) — verification can only help,
 // never block. The failure message is kept in `gaps` so it surfaces in the
 // trace instead of being swallowed; `satisfied` stays true so it doesn't
-// re-prompt the agent. Kept as a pure `safe def` so the `match` compiles
+// re-prompt the agent. Kept as a plain `def` so the `match` compiles
 // cleanly and the caller's loop body stays free of binder-in-`if` patterns
 // (which the stepped-loop codegen doesn't handle).
 export def unwrapVerdict(r: Result<Verdict>): Verdict {

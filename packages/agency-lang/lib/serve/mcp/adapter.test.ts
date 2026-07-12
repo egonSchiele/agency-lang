@@ -162,7 +162,6 @@ describe("MCP adapter", () => {
         params: [],
         toolDefinition: { name: "deploy", description: "Deploy app", schema: null },
         exported: true,
-        safe: false,
       },
       registry,
     );
@@ -398,7 +397,6 @@ describe("MCP adapter — policy tools", () => {
         params: [{ name: "name", hasDefault: false, defaultValue: undefined, variadic: false }],
         toolDefinition: { name: "greet", description: "Greet someone", schema: z.object({ name: z.string() }) },
         exported: true,
-        safe: false,
       },
       registry,
     );
@@ -447,7 +445,6 @@ describe("MCP adapter — policy tools", () => {
         params: [],
         toolDefinition: { name: "sendEmail", description: "Send an email", schema: z.object({}) },
         exported: true,
-        safe: false,
       },
       registry,
     );

@@ -1064,9 +1064,9 @@ describe("AgencyGenerator - destructive/idempotent markers", () => {
     ).toContain("destructive rm as remove");
   });
 
-  it("preserves safe during the deprecation window", () => {
-    expect(roundTrip("safe def add(a: number) {\n  return a\n}")).toContain(
-      "safe def add",
+  it("renders an idempotent def", () => {
+    expect(roundTrip("idempotent def add(a: number) {\n  return a\n}")).toContain(
+      "idempotent def add",
     );
   });
 

@@ -6,6 +6,8 @@
     { "nodeName": "trySwallowed", "description": "try over a returned destructive failure ORs it into the activation", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "blockHalt", "description": "destructive work and failure inside a block: escaping failure stamped at block halt", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "blockJoin", "description": "destructive work in a block, failure after: join folds the flag", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "ifBlock", "description": "destructive call inside an if block is tracked via the subtree walk", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "forBlock", "description": "destructive call inside a for loop is tracked via the subtree walk", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "plainFailure", "description": "unmarked function failure is neither started nor destructive", "input": "", "expectedOutput": "[false,false]", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

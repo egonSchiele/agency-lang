@@ -44,7 +44,7 @@ import { checkAllRaises } from "./functionTypeRaises.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
-import { checkDeprecatedSafe } from "./deprecatedSafe.js";
+import { checkConflictingMarkers } from "./conflictingMarkers.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
@@ -330,8 +330,8 @@ export class TypeChecker {
     // on every path. Reads the per-scope terminal flow node from buildFlowGraphs.
     checkDefiniteReturns(scopes, ctx);
 
-    // Warn on any surviving use of the deprecated `safe` keyword.
-    checkDeprecatedSafe(ctx);
+    // A function cannot be both destructive and idempotent.
+    checkConflictingMarkers(ctx);
 
     // Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

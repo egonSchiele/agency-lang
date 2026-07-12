@@ -130,7 +130,6 @@ describe("buildCompilationUnit", () => {
             {
               type: "namedImport",
               importedNames: ["helper"],
-              safeNames: ["helper"],
               aliases: {},
             },
           ],
@@ -216,16 +215,11 @@ describe("buildCompilationUnit: marker registries", () => {
     expect(unit.destructiveFunctions["rm"]).toBe(true);
   });
 
-  it("does not populate safeFunctions anymore", () => {
+  it("the removed `safe` keyword is no longer a modifier", () => {
+    // `safe` is not a keyword anymore: in `safe def f()` it parses as a
+    // stray identifier and `f` is a plain unmarked def — absent from both
+    // marker registries.
     const unit = unitFromSource("safe def f(): number { return 1 }");
-    expect(Object.keys(unit.safeFunctions)).toHaveLength(0);
-  });
-
-  it("a deprecated `safe def` lands in NO marker registry (fully inert)", () => {
-    // Migration guard: `safe` must behave exactly like an unmarked def —
-    // absent from safeFunctions, idempotentFunctions, AND destructiveFunctions.
-    const unit = unitFromSource("safe def f() { return 1 }");
-    expect(Object.keys(unit.safeFunctions)).toHaveLength(0);
     expect(unit.idempotentFunctions["f"]).toBeUndefined();
     expect(unit.destructiveFunctions["f"]).toBeUndefined();
   });

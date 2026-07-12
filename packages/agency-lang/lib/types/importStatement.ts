@@ -16,10 +16,11 @@ export type ImportNameType = NamedImport | NamespaceImport | DefaultImport;
 export type NamedImport = {
   type: "namedImport";
   importedNames: string[];
-  safeNames: string[];
-  /** Source-side names marked `destructive`. Present only when non-empty
-   *  (matching `testOnly` above) so exact-match AST comparisons stay clean. */
+  /** Source-side names marked `destructive` / `idempotent`. Each present
+   *  only when non-empty (matching `testOnly` above) so exact-match AST
+   *  comparisons stay clean. */
   destructiveNames?: string[];
+  idempotentNames?: string[];
   aliases: Record<string, string>;
 };
 
@@ -75,6 +76,14 @@ export function getImportedToolNames(node: ImportToolStatement): string[] {
 }
 
 
-export function getImportedSafeToolNames(node: ImportToolStatement): string[] {
-  return node.importedTools.flatMap((n) => n.safeNames);
+export function getImportedDestructiveToolNames(
+  node: ImportToolStatement,
+): string[] {
+  return node.importedTools.flatMap((n) => n.destructiveNames ?? []);
+}
+
+export function getImportedIdempotentToolNames(
+  node: ImportToolStatement,
+): string[] {
+  return node.importedTools.flatMap((n) => n.idempotentNames ?? []);
 }

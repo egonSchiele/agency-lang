@@ -2,7 +2,7 @@ def applyFn(fn: (number) -> number, x: number): number {
   return fn(x)
 }
 
-safe def addOne(x: number): number {
+def addOne(x: number): number {
   return x + 1
 }
 

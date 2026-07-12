@@ -66,10 +66,6 @@ export type FunctionDefinition = BaseNode & {
   docString?: MultiLineStringLiteral;
   docComment?: AgencyMultiLineComment;
   async?: boolean;
-  /** @deprecated The `safe` keyword is inert and slated for removal.
-   *  Populated by the parser during the deprecation window so the
-   *  formatter round-trips it; nothing else reads it. */
-  safe?: boolean;
   markers?: FunctionMarkers;
   exported?: boolean;
   tags?: Tag[];

@@ -27,7 +27,7 @@ describe("importStatmentParser", () => {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
+          { type: "namedImport", importedNames: ["foo"], aliases: {} },
         ],
         modulePath: "./foo.ts",
         isAgencyImport: false,
@@ -44,7 +44,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [
           { type: "defaultImport", importedNames: "foo" },
-          { type: "namedImport", importedNames: ["bar"], safeNames: [], aliases: {} },
+          { type: "namedImport", importedNames: ["bar"], aliases: {} },
         ],
         modulePath: "./foo.ts",
         isAgencyImport: false,
@@ -106,7 +106,7 @@ describe("importStatmentParser", () => {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
+          { type: "namedImport", importedNames: ["foo"], aliases: {} },
         ],
         modulePath: "./foo.agency",
         isAgencyImport: true,
@@ -140,7 +140,6 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo", "bar", "baz"],
-            safeNames: [],
             aliases: {},
           },
         ],
@@ -150,10 +149,10 @@ describe("importStatmentParser", () => {
     }
   });
 
-  // Safe imports
-  it('should parse: import { safe foo, bar } from "./tools.js"', () => {
+  // Idempotent imports
+  it('should parse: import { idempotent foo, bar } from "./tools.js"', () => {
     const result = importStatmentParser(
-      'import { safe foo, bar } from "./tools.js"',
+      'import { idempotent foo, bar } from "./tools.js"',
     );
     expect(result.success).toBe(true);
     if (result.success) {
@@ -163,7 +162,7 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo", "bar"],
-            safeNames: ["foo"],
+            idempotentNames: ["foo"],
             aliases: {},
           },
         ],
@@ -173,9 +172,9 @@ describe("importStatmentParser", () => {
     }
   });
 
-  it('should parse: import { safe foo, safe bar, baz } from "./tools.js"', () => {
+  it('should parse: import { idempotent foo, idempotent bar, baz } from "./tools.js"', () => {
     const result = importStatmentParser(
-      'import { safe foo, safe bar, baz } from "./tools.js"',
+      'import { idempotent foo, idempotent bar, baz } from "./tools.js"',
     );
     expect(result.success).toBe(true);
     if (result.success) {
@@ -185,7 +184,7 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo", "bar", "baz"],
-            safeNames: ["foo", "bar"],
+            idempotentNames: ["foo", "bar"],
             aliases: {},
           },
         ],
@@ -195,9 +194,9 @@ describe("importStatmentParser", () => {
     }
   });
 
-  it('should parse: import { safe foo } from "./tools.js"', () => {
+  it('should parse: import { idempotent foo } from "./tools.js"', () => {
     const result = importStatmentParser(
-      'import { safe foo } from "./tools.js"',
+      'import { idempotent foo } from "./tools.js"',
     );
     expect(result.success).toBe(true);
     if (result.success) {
@@ -207,7 +206,7 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo"],
-            safeNames: ["foo"],
+            idempotentNames: ["foo"],
             aliases: {},
           },
         ],
@@ -229,7 +228,6 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["rm", "stat"],
-            safeNames: [],
             destructiveNames: ["rm"],
             aliases: {},
           },
@@ -240,9 +238,9 @@ describe("importStatmentParser", () => {
     }
   });
 
-  it('should parse: import { safe a, destructive b } from "./tools.js"', () => {
+  it('should parse: import { idempotent a, destructive b } from "./tools.js"', () => {
     const result = importStatmentParser(
-      'import { safe a, destructive b } from "./tools.js"',
+      'import { idempotent a, destructive b } from "./tools.js"',
     );
     expect(result.success).toBe(true);
     if (result.success) {
@@ -252,7 +250,7 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["a", "b"],
-            safeNames: ["a"],
+            idempotentNames: ["a"],
             destructiveNames: ["b"],
             aliases: {},
           },
@@ -275,7 +273,6 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["rm"],
-            safeNames: [],
             destructiveNames: ["rm"],
             aliases: { rm: "remove" },
           },
@@ -299,7 +296,6 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo"],
-            safeNames: [],
             aliases: { foo: "bar" },
           },
         ],
@@ -321,7 +317,6 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo", "bar", "baz"],
-            safeNames: [],
             aliases: { foo: "f", bar: "b" },
           },
         ],
@@ -331,9 +326,9 @@ describe("importStatmentParser", () => {
     }
   });
 
-  it('should parse: import { safe foo as f } from "./tools.js"', () => {
+  it('should parse: import { idempotent foo as f } from "./tools.js"', () => {
     const result = importStatmentParser(
-      'import { safe foo as f } from "./tools.js"',
+      'import { idempotent foo as f } from "./tools.js"',
     );
     expect(result.success).toBe(true);
     if (result.success) {
@@ -343,7 +338,7 @@ describe("importStatmentParser", () => {
           {
             type: "namedImport",
             importedNames: ["foo"],
-            safeNames: ["foo"],
+            idempotentNames: ["foo"],
             aliases: { foo: "f" },
           },
         ],
@@ -398,7 +393,7 @@ describe("importStatmentParser", () => {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
+          { type: "namedImport", importedNames: ["foo"], aliases: {} },
         ],
         modulePath: "std::x",
         isAgencyImport: true,
@@ -438,7 +433,7 @@ describe("importStatmentParser", () => {
       expect("testOnly" in result.result).toBe(false);
       expect(result.result.importedNames).toEqual([
         { type: "defaultImport", importedNames: "test" },
-        { type: "namedImport", importedNames: ["bar"], safeNames: [], aliases: {} },
+        { type: "namedImport", importedNames: ["bar"], aliases: {} },
       ]);
     }
   });

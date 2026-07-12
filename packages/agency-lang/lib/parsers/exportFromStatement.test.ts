@@ -16,7 +16,6 @@ describe("exportFromStatementParser", () => {
         kind: "namedExport",
         names: ["foo"],
         aliases: {},
-        safeNames: [],
       },
     });
   });
@@ -31,7 +30,6 @@ describe("exportFromStatementParser", () => {
       kind: "namedExport",
       names: ["search"],
       aliases: { search: "wikipediaSearch" },
-      safeNames: [],
     });
     expect(result.result.modulePath).toBe("std::wikipedia");
     expect(result.result.isAgencyImport).toBe(true);
@@ -47,13 +45,12 @@ describe("exportFromStatementParser", () => {
       kind: "namedExport",
       names: ["search", "fetch"],
       aliases: { search: "wikipediaSearch" },
-      safeNames: [],
     });
   });
 
-  it("parses per-name `safe` modifier", () => {
+  it("parses per-name `idempotent` modifier", () => {
     const result = exportFromStatementParser(
-      'export { safe search, fetch } from "std::wikipedia"',
+      'export { idempotent search, fetch } from "std::wikipedia"',
     );
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -61,13 +58,13 @@ describe("exportFromStatementParser", () => {
       kind: "namedExport",
       names: ["search", "fetch"],
       aliases: {},
-      safeNames: ["search"],
+      idempotentNames: ["search"],
     });
   });
 
-  it("parses safe with alias", () => {
+  it("parses idempotent with alias", () => {
     const result = exportFromStatementParser(
-      'export { safe search as wikiSearch } from "std::wikipedia"',
+      'export { idempotent search as wikiSearch } from "std::wikipedia"',
     );
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -75,7 +72,7 @@ describe("exportFromStatementParser", () => {
       kind: "namedExport",
       names: ["search"],
       aliases: { search: "wikiSearch" },
-      safeNames: ["search"],
+      idempotentNames: ["search"],
     });
   });
 
@@ -89,7 +86,6 @@ describe("exportFromStatementParser", () => {
       kind: "namedExport",
       names: ["rm"],
       aliases: {},
-      safeNames: [],
       destructiveNames: ["rm"],
     });
   });

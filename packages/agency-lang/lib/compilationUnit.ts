@@ -110,9 +110,6 @@ export type CompilationUnit = {
   graphNodes: GraphNodeDefinition[];
   importedNodes: ImportNodeStatement[];
   importStatements: ImportStatement[];
-  /** @deprecated inert; never populated once `safe` was retired. Removed
-   *  with the `safe` keyword. */
-  safeFunctions: Record<string, boolean>;
   /** Local names (defs + imports + re-exports) marked `destructive`. Read
    *  by codegen's containsDestructiveCall to track destructive execution. */
   destructiveFunctions: Record<string, boolean>;
@@ -197,7 +194,6 @@ export function buildCompilationUnit(
     importStatements: [],
     importedFunctions: {},
     jsImportedNames: {},
-    safeFunctions: {},
     destructiveFunctions: {},
     idempotentFunctions: {},
     sourceText,

@@ -1,4 +1,4 @@
-safe def join(...parts: string[]): string {
+def join(...parts: string[]): string {
   let result = ""
   for (part in parts) {
     if (result != "") {

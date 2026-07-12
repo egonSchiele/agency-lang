@@ -3757,7 +3757,6 @@ describe("TypeChecker", () => {
                 type: "namedImport",
                 importedNames: ["print"],
                 aliases: {},
-                safeNames: [],
               },
             ],
           },
@@ -6568,7 +6567,6 @@ describe("TypeChecker", () => {
             kind: "function",
             name: "exec",
             exported: true,
-            safe: false,
             parameters: [],
             returnType: { type: "typeAliasVariable", aliasName: "ExecResult" },
           },
@@ -6582,7 +6580,7 @@ describe("TypeChecker", () => {
             modulePath: "./shell.agency",
             isAgencyImport: true,
             importedNames: [
-              { type: "namedImport", importedNames: ["exec"], aliases: {}, safeNames: [] },
+              { type: "namedImport", importedNames: ["exec"], aliases: {} },
             ],
           },
           {
@@ -6624,7 +6622,7 @@ describe("TypeChecker", () => {
         "/project/a.agency": {
           Result2: { kind: "type", name: "Result2", aliasedType: aResult, exported: true },
           getA: {
-            kind: "function", name: "getA", exported: true, safe: false,
+            kind: "function", name: "getA", exported: true,
             parameters: [],
             returnType: { type: "typeAliasVariable", aliasName: "Result2" },
           },
@@ -6638,7 +6636,7 @@ describe("TypeChecker", () => {
             modulePath: "./a.agency",
             isAgencyImport: true,
             importedNames: [
-              { type: "namedImport", importedNames: ["getA"], aliases: {}, safeNames: [] },
+              { type: "namedImport", importedNames: ["getA"], aliases: {} },
             ],
           },
           {
@@ -6702,7 +6700,7 @@ describe("TypeChecker", () => {
         },
         "/project/origin.agency": {
           getThing: {
-            kind: "function", name: "getThing", exported: true, safe: false,
+            kind: "function", name: "getThing", exported: true,
             parameters: [],
             returnType: { type: "typeAliasVariable", aliasName: "Outer" },
           },
@@ -6716,7 +6714,7 @@ describe("TypeChecker", () => {
             modulePath: "./origin.agency",
             isAgencyImport: true,
             importedNames: [
-              { type: "namedImport", importedNames: ["getThing"], aliases: {}, safeNames: [] },
+              { type: "namedImport", importedNames: ["getThing"], aliases: {} },
             ],
           },
           {
@@ -6777,7 +6775,7 @@ describe("TypeChecker", () => {
             modulePath: "./types.agency",
             isAgencyImport: true,
             importedNames: [
-              { type: "namedImport", importedNames: ["Outer"], aliases: {}, safeNames: [] },
+              { type: "namedImport", importedNames: ["Outer"], aliases: {} },
             ],
           },
           {

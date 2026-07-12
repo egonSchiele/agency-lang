@@ -58,7 +58,6 @@ function ensureStdlibImport(
       {
         type: "namedImport",
         importedNames: STDLIB_AUTO_IMPORTS,
-        safeNames: [],
         aliases: {},
       },
     ],

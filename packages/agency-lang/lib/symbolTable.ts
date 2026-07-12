@@ -43,8 +43,6 @@ export type FunctionSymbol = {
   kind: "function";
   name: string;
   loc?: SourceLocation;
-  /** @deprecated inert; kept only for the `safe` deprecation window. */
-  safe: boolean;
   markers?: FunctionMarkers;
   exported: boolean;
   parameters: FunctionParameter[];
@@ -376,7 +374,6 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "function",
           name: node.functionName,
           loc: node.loc,
-          safe: !!node.safe,
           markers: node.markers,
           exported: !!node.exported,
           parameters: node.parameters,
@@ -506,19 +503,14 @@ export function mergeExportsFrom(
           `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
       );
     }
-    const isSafe = stmt.body.safeNames.includes(originalName);
-    if (sym.kind === "node" && isSafe) {
-      throw new Error(
-        `The 'safe' modifier cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
-          `'safe' is only meaningful for functions; nodes do not carry a safe flag.`,
-      );
-    }
     const isDestructive =
       stmt.body.destructiveNames?.includes(originalName) ?? false;
-    if (sym.kind === "node" && isDestructive) {
+    const isIdempotent =
+      stmt.body.idempotentNames?.includes(originalName) ?? false;
+    if (sym.kind === "node" && (isDestructive || isIdempotent)) {
       throw new Error(
-        `The 'destructive' modifier cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
-          `'destructive' is only meaningful for functions.`,
+        `A retry-safety marker (destructive/idempotent) cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
+          `Markers are only meaningful for functions.`,
       );
     }
     mergeOne(
@@ -526,8 +518,8 @@ export function mergeExportsFrom(
       localName,
       originalName,
       sym,
-      isSafe,
       isDestructive,
+      isIdempotent,
       sourcePath,
       stmt,
     );
@@ -539,8 +531,8 @@ function mergeOne(
   localName: string,
   originalName: string,
   sourceSym: SymbolInfo,
-  forceSafe: boolean,
   forceDestructive: boolean,
+  forceIdempotent: boolean,
   sourcePath: string,
   stmt: ExportFromStatement,
 ): void {
@@ -564,7 +556,7 @@ function mergeOne(
   }
 
   // Build the merged entry. We copy the source's SymbolInfo fields and
-  // override name, loc, exported, and (for functions) safe.
+  // override name, loc, and exported.
   const base = {
     name: localName,
     loc: stmt.loc,
@@ -578,13 +570,16 @@ function mergeOne(
         ...sourceSym,
         ...base,
         exported: true,
-        safe: forceSafe ? true : sourceSym.safe,
       };
       // `markers` is copied by the spread above (inherited from the source
-      // definition); a `destructive` modifier on the re-export itself adds
-      // it on top. This is the re-export propagation the plan review flagged.
+      // definition); a `destructive`/`idempotent` modifier on the re-export
+      // itself adds it on top. This is the re-export propagation the plan
+      // review flagged.
       if (forceDestructive) {
         copied.markers = { ...(copied.markers ?? {}), destructive: true };
+      }
+      if (forceIdempotent) {
+        copied.markers = { ...(copied.markers ?? {}), idempotent: true };
       }
       break;
     case "node":

@@ -49,14 +49,14 @@ const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc"
 const GDELT_DOMAINS = ["api.gdeltproject.org"]
 
 /** Build the GDELT DOC query path (query is URL-encoded). Pure — no network. */
-safe def buildGdeltPath(query: string, maxRecords: number, timespan: string): string {
+def buildGdeltPath(query: string, maxRecords: number, timespan: string): string {
   const q = encodeURIComponent(query)
   const t = encodeURIComponent(timespan)
   return "doc?query=${q}&mode=artlist&format=json&maxrecords=${maxRecords}&timespan=${t}"
 }
 
 /** Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing/null input. */
-safe def parseGdelt(raw: any): NewsArticle[] {
+def parseGdelt(raw: any): NewsArticle[] {
   const r: any = raw ?? {}
   const articles = r.articles ?? []
   return map(articles) as article {
@@ -72,14 +72,14 @@ safe def parseGdelt(raw: any): NewsArticle[] {
 }
 
 /** Turn a fetchJSON Result into the final Result. Pure — testable with mock Results. */
-safe def gdeltFinalize(fetchResult: any): Result {
+def gdeltFinalize(fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => success(parseGdelt(body))
     failure(err) => failure("GDELT request failed (the API may be rate-limited to 1 request / 5s): ${err}")
   }
 }
 
-export safe def gdeltNews(query: string, maxRecords: number = 25, timespan: string = "3d"): Result<NewsArticle[]> raises <std::gdelt, std::http::fetchJSON> {
+export def gdeltNews(query: string, maxRecords: number = 25, timespan: string = "3d"): Result<NewsArticle[]> raises <std::gdelt, std::http::fetchJSON> {
   """
   Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns recent
   matching articles (title, URL, source domain, language, source country, and the GDELT

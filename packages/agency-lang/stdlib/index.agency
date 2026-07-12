@@ -43,7 +43,7 @@ effect std::readImage {
   already exists. */
 export type WriteMode = "overwrite" | "append" | "create-only"
 
-export safe def print(...messages: any[]) {
+export def print(...messages: any[]) {
   """
   Print a message to the console.
 
@@ -72,7 +72,7 @@ let _agentCwd = ""
   This is useful if you're building a coding agent,
   to set the current working directory for the agent.
 */
-export safe def setAgentCwd(dir: string) {
+export def setAgentCwd(dir: string) {
   """
   Set the working directory that path-taking tools resolve relative paths against.
 
@@ -81,7 +81,7 @@ export safe def setAgentCwd(dir: string) {
   _agentCwd = dir
 }
 
-export safe def getAgentCwd(): string {
+export def getAgentCwd(): string {
   """
   Return the agent working directory, or an empty string if none is set.
   """
@@ -91,7 +91,7 @@ export safe def getAgentCwd(): string {
 /** Used by read, write, and other functions to resolve
 relative paths against the agent working directory.
 */
-export safe def applyAgentCwd(dir: string): string {
+export def applyAgentCwd(dir: string): string {
   const base = getAgentCwd()
   if (base == "") {
     return dir
@@ -99,7 +99,7 @@ export safe def applyAgentCwd(dir: string): string {
   return _resolve([base, dir])
 }
 
-export safe def printJSON(obj: any, highlight: boolean = false) {
+export def printJSON(obj: any, highlight: boolean = false) {
   """
   Print an object as formatted JSON to the console.
 
@@ -116,7 +116,7 @@ export safe def printJSON(obj: any, highlight: boolean = false) {
 
 /** Ctrl-C, race-loser, or time-guard abort releases a blocked input
 prompt, which surfaces as an AgencyCancelledError. */
-export safe def input(prompt: string): string {
+export def input(prompt: string): string {
   """
   Prompt the user for input and return their response.
 
@@ -127,7 +127,7 @@ export safe def input(prompt: string): string {
 
 /** Use unit literals for clarity: sleep(1s), sleep(500ms), sleep(2m).
 A long sleep wakes immediately on Ctrl-C, race-loser, or time-guard abort. */
-export safe def sleep(ms: number) {
+export def sleep(ms: number) {
   """
   Pause execution for the given duration in milliseconds.
 
@@ -136,7 +136,7 @@ export safe def sleep(ms: number) {
   _sleep(ms)
 }
 
-export safe def read(
+export idempotent def read(
   filename: string,
   dir: string = ".",
   offset: number = 0,
@@ -164,7 +164,7 @@ export safe def read(
   return try _read(dir, filename, offset, limit)
 }
 
-export def write(
+export destructive def write(
   filename: string,
   content: string,
   dir: string = ".",
@@ -192,7 +192,7 @@ export def write(
   return try _write(dir, filename, content, mode)
 }
 
-export def writeBinary(
+export destructive def writeBinary(
   filename: string,
   base64: string,
   dir: string = ".",
@@ -220,7 +220,7 @@ export def writeBinary(
   return try _writeBinary(dir, filename, base64, mode)
 }
 
-export safe def readBinary(
+export idempotent def readBinary(
   filename: string,
   dir: string = ".",
   useAgentCwd: boolean = false,
@@ -243,7 +243,7 @@ export safe def readBinary(
   return try _readBinary(dir, filename)
 }
 
-export safe def range(start: number, end: number = -1): number[] {
+export def range(start: number, end: number = -1): number[] {
   """
   Generate an array of numbers. With one argument, counts from 0 to start-1;
   with two, from start to end-1.

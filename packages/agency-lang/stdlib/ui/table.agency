@@ -113,7 +113,7 @@ def _makeTableBuilder(state: any): TableBuilder {
   }
 }
 
-export safe def table(
+export def table(
   title: string = "",
   titleColor: string = "",
   borderStyle: BorderStyle = "rounded",

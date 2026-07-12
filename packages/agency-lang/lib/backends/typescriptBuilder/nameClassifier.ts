@@ -121,14 +121,31 @@ export class NameClassifier {
     );
   }
 
+  /** The function name a call-bearing node targets, if any. Handles a plain
+   *  `functionCall` and the `try f()` case (`walkNodes` yields the
+   *  tryExpression node but does not descend into its `.call`, so the common
+   *  `return try _extern(...)` stdlib pattern would otherwise be missed). */
+  private callTarget(subNode: AgencyNode): string | undefined {
+    if (subNode.type === "functionCall") {
+      return subNode.functionName;
+    }
+    if (
+      subNode.type === "tryExpression" &&
+      (subNode as { call?: { type?: string; functionName?: string } }).call
+        ?.type === "functionCall"
+    ) {
+      return (subNode as { call: { functionName: string } }).call.functionName;
+    }
+    return undefined;
+  }
+
   /** Recursively walks `node` and returns true if any function call within it is impure. */
   containsImpureCall(node: AgencyNode): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
-      if (subNode.type === "functionCall") {
-        const name = subNode.functionName;
-        if (this.isImpureImportedFunction(name)) return true;
-        if (BUILTIN_FUNCTIONS[name]) return true;
-      }
+      const name = this.callTarget(subNode);
+      if (name === undefined) continue;
+      if (this.isImpureImportedFunction(name)) return true;
+      if (BUILTIN_FUNCTIONS[name]) return true;
     }
     return false;
   }
@@ -138,10 +155,9 @@ export class NameClassifier {
    *  containsImpureCall; reads the destructiveFunctions registry. */
   containsDestructiveCall(node: AgencyNode): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
-      if (subNode.type === "functionCall") {
-        if (this.compilationUnit.destructiveFunctions[subNode.functionName]) {
-          return true;
-        }
+      const name = this.callTarget(subNode);
+      if (name !== undefined && this.compilationUnit.destructiveFunctions[name]) {
+        return true;
       }
     }
     return false;

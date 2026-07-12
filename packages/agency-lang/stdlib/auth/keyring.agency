@@ -26,7 +26,7 @@ effect std::setSecret { key: string, service: string }
 effect std::getSecret { key: string, service: string }
 effect std::deleteSecret { key: string, service: string }
 
-export def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
+export destructive def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
   """
   Store a secret in the system keyring, overwriting any existing value for the same key.
 
@@ -42,7 +42,7 @@ export def setSecret(key: string, value: string, service: string = "agency-lang"
   return try _setSecret(key, value, service)
 }
 
-export safe def getSecret(key: string, service: string = "agency-lang"): Result {
+export def getSecret(key: string, service: string = "agency-lang"): Result {
   """
   Retrieve a secret from the system keyring. Returns the secret value, or null if not found.
 
@@ -57,7 +57,7 @@ export safe def getSecret(key: string, service: string = "agency-lang"): Result 
   return try _getSecret(key, service)
 }
 
-export def deleteSecret(key: string, service: string = "agency-lang"): Result {
+export destructive def deleteSecret(key: string, service: string = "agency-lang"): Result {
   """
   Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.
 
@@ -72,7 +72,7 @@ export def deleteSecret(key: string, service: string = "agency-lang"): Result {
   return try _deleteSecret(key, service)
 }
 
-export safe def isKeyringAvailable(): boolean {
+export def isKeyringAvailable(): boolean {
   """
   Check if the system keyring is available on this platform. Returns true on macOS and on Linux with secret-tool installed, false otherwise.
   """

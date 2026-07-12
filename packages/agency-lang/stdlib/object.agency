@@ -18,7 +18,7 @@ node main() {
 */
 import { _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
 
-export safe def keys(obj: any): string[] {
+export def keys(obj: any): string[] {
   """
   Return an array of an object's own enumerable property names.
 
@@ -27,7 +27,7 @@ export safe def keys(obj: any): string[] {
   return _keys(obj)
 }
 
-export safe def values(obj: any): any[] {
+export def values(obj: any): any[] {
   """
   Return an array of an object's own enumerable property values.
 
@@ -36,7 +36,7 @@ export safe def values(obj: any): any[] {
   return _values(obj)
 }
 
-export safe def entries(obj: any): any[] {
+export def entries(obj: any): any[] {
   """
   Return an array of an object's own enumerable entries, each as { key, value }.
 

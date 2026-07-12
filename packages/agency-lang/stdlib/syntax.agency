@@ -20,7 +20,7 @@ and patches for the terminal or the web.
 
 export type HighlightMode = "shell" | "web"
 
-export safe def detectLanguage(code: string): string {
+export def detectLanguage(code: string): string {
   """
   Guess the programming language of a code snippet. Returns a highlight.js
   language name (e.g. "typescript", "python", "json"), or "plaintext" when it
@@ -111,7 +111,7 @@ export static const colorSchemes: string[] = _builtinThemeNames
  * When `language` is "markdown", fenced code blocks use the default palette
  * regardless of `theme`.
  */
-export safe def highlight(
+export def highlight(
   code: string,
   language: string = "plaintext",
   mode: HighlightMode = "shell",
@@ -128,7 +128,7 @@ export safe def highlight(
   return _syntaxHighlight(code, language, theme)
 }
 
-export safe def diff(
+export def diff(
   oldText: string,
   newText: string,
   context: number = -1,
@@ -176,7 +176,7 @@ export safe def diff(
   )
 }
 
-export safe def patch(
+export def patch(
   oldText: string,
   newText: string,
   filename: string,

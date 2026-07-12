@@ -82,7 +82,7 @@ def _makeChartBuilder(state: any): ChartBuilder {
   }
 }
 
-export safe def barChart(
+export def barChart(
   title: string = "",
   mode: BarMode = "grouped",
   keys: BarKey[] = null,

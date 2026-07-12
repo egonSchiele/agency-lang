@@ -43,6 +43,8 @@ const RESULT_FIELDS = new Set<string>([
   "functionName",
   "args",
   "retryable",
+  "neverStarted",
+  "destructiveRan",
   "success",
   "skippedFunctions",
 ]);

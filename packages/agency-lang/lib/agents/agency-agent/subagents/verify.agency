@@ -67,7 +67,7 @@ export def renderGaps(gaps: string[]): string {
 // re-prompt the agent. Kept as a pure `safe def` so the `match` compiles
 // cleanly and the caller's loop body stays free of binder-in-`if` patterns
 // (which the stepped-loop codegen doesn't handle).
-export safe def unwrapVerdict(r: Result<Verdict>): Verdict {
+export def unwrapVerdict(r: Result<Verdict>): Verdict {
   return match (r) {
     success(v) => v
     failure(err) => failOpenVerdict(err)

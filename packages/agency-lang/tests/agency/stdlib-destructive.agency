@@ -1,0 +1,27 @@
+import { write } from "std::index"
+import { read } from "std::index"
+
+// write is destructive; a failure after its extern started must carry
+// destructiveRan. Writing under a nonexistent directory forces the
+// failure inside write's extern (its std::write interrupt is approved).
+node writeFails() {
+  handle {
+    const r = try write("/nonexistent-dir-xyz/f.txt", "hi")
+    if (isFailure(r)) {
+      return [r.destructiveRan, r.neverStarted]
+    }
+    return "unexpected success"
+  } with approve
+}
+
+// read is NOT destructive: a stdlib failure through the prelude must not
+// leak the destructive marking (guards against registry over-population).
+node readFails() {
+  handle {
+    const r = try read("no-such-file-xyz.txt")
+    if (isFailure(r)) {
+      return [r.destructiveRan]
+    }
+    return "unexpected success"
+  } with approve
+}

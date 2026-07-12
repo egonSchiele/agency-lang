@@ -124,7 +124,7 @@ export type Builder = {
  *
  * @param content - The text to render
  */
-export safe def text(content: string): Element {
+export def text(content: string): Element {
   """
   Build a plain text element. It carries no layout sizing of its own,
   so nest it inside a container to position it.
@@ -163,7 +163,7 @@ def _setStyleIfSet(style: any, key: string, value: any) {
  *
  * @param content - The text to render
  */
-export safe def line(
+export def line(
   content: string,
   flex: number = null,
   width: number = null,
@@ -218,7 +218,7 @@ export safe def line(
  * @param items - The strings to display, one per row
  * @param selectedIndex - 0-based row to highlight (default 0)
  */
-export safe def list(
+export def list(
   items: string[],
   selectedIndex: number = 0,
   flex: number = null,
@@ -359,7 +359,7 @@ def _makeBuilder(kids: any[]): Builder {
  * Always pass at least one named arg: `column() as col { ... }` parses
  * positionally, which lands the block in `flex`.
  */
-export safe def column(
+export def column(
   flex: number = null,
   width: number = null,
   height: number = null,
@@ -418,7 +418,7 @@ export safe def column(
  * A horizontal container. Children stack left-to-right. The trailing
  * block receives a fresh `Builder` to populate the row.
  */
-export safe def row(
+export def row(
   flex: number = null,
   width: number = null,
   height: number = null,
@@ -475,7 +475,7 @@ export safe def row(
  * A direction-neutral container. Use when you want to apply styling
  * (border, padding, background) without setting `flexDirection`.
  */
-export safe def box(
+export def box(
   flex: number = null,
   width: number = null,
   height: number = null,

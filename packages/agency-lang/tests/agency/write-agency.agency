@@ -34,9 +34,9 @@ node exhausts() {
     return "unexpected success"
   }
   if (result is failure(err)) {
-    // retryable: the tool loop must keep writeAgency available so the
-    // model can call it again after exhaustion.
-    return [err.source.includes("const x: number"), err.errors.length > 0, result.retryable]
+    // writeAgency is unmarked (neutral tier), so the failure is not
+    // destructive and the tool loop keeps it callable.
+    return [err.source.includes("const x: number"), err.errors.length > 0, result.destructiveRan]
   }
   return "unreachable"
 }

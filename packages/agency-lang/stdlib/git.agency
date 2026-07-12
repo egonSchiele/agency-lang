@@ -77,7 +77,7 @@ def repoDir(cwd: string): string {
 
 // ---- Reads -----------------------------------------------------------------
 
-export def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
+export idempotent def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
   """
   Show the working-tree status: current branch, ahead/behind counts, and
   changed files.
@@ -90,7 +90,7 @@ export def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may query. */
-export def gitLog(
+export idempotent def gitLog(
   n: number = 20, oneline: boolean = false, path: string = "",
   ref: string = "", author: string = "", allowedPaths: string[] = [],
   cwd: string = "",
@@ -115,7 +115,7 @@ export def gitLog(
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may diff. */
-export def gitDiff(
+export idempotent def gitDiff(
   ref: string = "", ref2: string = "", staged: boolean = false,
   path: string = "", allowedPaths: string[] = [], cwd: string = "",
 ): GitDiff raises <std::git::diff> {
@@ -136,7 +136,7 @@ export def gitDiff(
   return parseDiff(_gitRun(dir, diffArgs({ ref: ref, ref2: ref2, staged: staged, path: path })))
 }
 
-export def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show> {
+export idempotent def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show> {
   """
   Show a commit as a structured per-file summary plus the raw patch. Line
   counts are approximate for merge commits (combined diffs are not counted).
@@ -148,7 +148,7 @@ export def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std:
   return parseDiff(_gitRun(dir, showArgs({ ref: ref })))
 }
 
-export def gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList> {
+export idempotent def gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList> {
   """
   List local branches with their current-marker, upstream, and sha.
   @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
@@ -158,7 +158,7 @@ export def gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branch
   return parseBranchList(_gitRun(dir, branchListArgs()))
 }
 
-export def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList> {
+export idempotent def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList> {
   """
   List configured remotes with their fetch/push URLs.
   @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
@@ -168,7 +168,7 @@ export def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remote
   return parseRemoteList(_gitRun(dir, remoteListArgs()))
 }
 
-export def gitBlame(path: string, ref: string = "", cwd: string = ""): BlameLine[] raises <std::git::blame> {
+export idempotent def gitBlame(path: string, ref: string = "", cwd: string = ""): BlameLine[] raises <std::git::blame> {
   """
   Show line-by-line authorship for a file.
   @param path - The file to blame (may not start with "-").
@@ -180,7 +180,7 @@ export def gitBlame(path: string, ref: string = "", cwd: string = ""): BlameLine
   return parseBlame(_gitRun(dir, blameArgs({ path: path, ref: ref })))
 }
 
-export def gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList> {
+export idempotent def gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList> {
   """
   List stashes with their ref and description.
   @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
@@ -195,7 +195,7 @@ export def gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashLis
 /** `all` and `allowedPaths` are developer guardrails: bind `all: false` and/or
     a prefix list for `allowedPaths` via `.partial()` before handing this to an
     agent. */
-export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::add> {
+export destructive def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::add> {
   """
   Stage changes for commit.
   @param paths - Files to stage (may not start with "-").
@@ -211,7 +211,7 @@ export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: stri
   return "Staged changes"
 }
 
-export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
+export destructive def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
   """
   Create a commit from the staged changes.
   @param message - The commit message.
@@ -223,7 +223,7 @@ export def gitCommit(message: string, cwd: string = ""): string raises <std::git
 }
 
 /** Bind `force: false` via `.partial()` to forbid discarding local changes. */
-export def gitCheckout(target: string, force: boolean = false, cwd: string = ""): string raises <std::git::checkout> {
+export destructive def gitCheckout(target: string, force: boolean = false, cwd: string = ""): string raises <std::git::checkout> {
   """
   Check out a branch, commit, or path.
   @param target - The branch/commit/path (may not start with "-").
@@ -239,7 +239,7 @@ export def gitCheckout(target: string, force: boolean = false, cwd: string = "")
   return _gitRun(dir, checkoutArgs({ target: target, force: force }))
 }
 
-export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""): string raises <std::git::switch> {
+export destructive def gitSwitch(branch: string, create: boolean = false, cwd: string = ""): string raises <std::git::switch> {
   """
   Switch to a branch.
   @param branch - The branch to switch to (may not start with "-").
@@ -251,7 +251,7 @@ export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""):
   return _gitRun(dir, switchArgs({ branch: branch, create: create }))
 }
 
-export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std::git::branchCreate> {
+export destructive def gitBranchCreate(branch: string, cwd: string = ""): string raises <std::git::branchCreate> {
   """
   Create a new branch at HEAD (does not switch to it).
   @param branch - The new branch name (may not start with "-").
@@ -265,7 +265,7 @@ export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std
 
 /** Guardrails: bind `force: false` and/or a `protectedBranches` list via
     `.partial()` before handing this to an agent. */
-export def gitBranchDelete(branch: string, force: boolean = false, protectedBranches: string[] = [], cwd: string = ""): string raises <std::git::branchDelete> {
+export destructive def gitBranchDelete(branch: string, force: boolean = false, protectedBranches: string[] = [], cwd: string = ""): string raises <std::git::branchDelete> {
   """
   Delete a local branch.
   @param branch - The branch to delete (may not start with "-").
@@ -284,7 +284,7 @@ export def gitBranchDelete(branch: string, force: boolean = false, protectedBran
   return "Deleted branch ${branch}"
 }
 
-export def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
+export destructive def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
   """
   Stash the working-tree changes.
   @param message - Optional stash message.
@@ -295,7 +295,7 @@ export def gitStashPush(message: string = "", cwd: string = ""): string raises <
   return _gitRun(dir, stashPushArgs({ message: message }))
 }
 
-export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
+export destructive def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
   """
   Apply and drop the most recent stash.
   @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
@@ -307,7 +307,7 @@ export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may restore. */
-export def gitRestore(paths: string[], staged: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::restore> {
+export destructive def gitRestore(paths: string[], staged: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::restore> {
   """
   Restore files to a previous state.
   @param paths - Files to restore (may not start with "-").

@@ -226,7 +226,7 @@ export type ParseResult = {
   rest: string
 }
 
-export safe def parse(input: string): ParseResult {
+export def parse(input: string): ParseResult {
   """
   Parse a Markdown string into a structured AST. On success, `blocks` holds
   the block-level nodes and `success` is true. On failure, `error` describes
@@ -239,7 +239,7 @@ export safe def parse(input: string): ParseResult {
 }
 
 /** Composes well with the pipe operator, e.g. `read(filename, dir) |> frontmatter`. */
-export safe def frontmatter(input: string): Result {
+export def frontmatter(input: string): Result {
   """
   Extract the YAML-style frontmatter block from a Markdown string. Returns
   `success(data)` with the parsed frontmatter fields as an object, or
@@ -270,7 +270,7 @@ export safe def frontmatter(input: string): Result {
       return node
     }
     ``` */
-export safe def walk(blocks: any[], block: (any) -> any): any[] {
+export def walk(blocks: any[], block: (any) -> any): any[] {
   """
   Walk a Markdown AST top-down, calling `block` on every block and inline
   node and replacing each with the node it returns. Children of the returned
@@ -285,7 +285,7 @@ export safe def walk(blocks: any[], block: (any) -> any): any[] {
 
 /** Code-block bodies are emitted verbatim. Pre-process them with `walk` to add
     syntax highlighting inside the fences. */
-export safe def renderForCli(blocks: any[]): string {
+export def renderForCli(blocks: any[]): string {
   """
   Render a Markdown AST to an ANSI-styled string for printing in a terminal.
   Links use OSC 8 escapes so capable terminals render them as clickable

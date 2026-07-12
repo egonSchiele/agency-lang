@@ -19,7 +19,6 @@ import {
 } from "../types/function.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
-import { failure, type ResultFailure } from "../runtime/result.js";
 
 const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
 
@@ -176,17 +175,6 @@ export function _typecheck(source: string): TypeCheckReport {
 
 export function _getEffects(source: string): Record<string, string[]> {
   return getEffectsFromSource(source);
-}
-
-/**
- * Build a RETRYABLE failure Result. Agency-level `failure(...)` and `try`
- * both produce non-retryable failures, and the LLM tool loop removes a
- * tool after a non-retryable failure — fatal for runCode, whose failure
- * modes (bad limits, code that does not compile) are exactly the ones the
- * model should fix and retry.
- */
-export function _retryableFailure(error: any): ResultFailure {
-  return failure(error, { retryable: true });
 }
 
 // The real file path is handed to the type-checker so relative imports in

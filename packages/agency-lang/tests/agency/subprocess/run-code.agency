@@ -37,39 +37,38 @@ node main() {
   }
 }
 
-// A compile failure comes back as a RETRYABLE failure (the tool loop
-// keeps the tool so the model can fix the source and call again), with
-// no subprocess spawned and no std::run interrupt raised.
+// A compile failure comes back as a plain (neutral-tier) failure: not
+// destructive, so the tool loop keeps runCode callable. No subprocess is
+// spawned and no std::run interrupt is raised.
 node compileFailure() {
   const result = runCode("node {{{")
   if (isFailure(result)) {
-    return ["compile failed as expected", result.retryable]
+    return [result.destructiveRan]
   }
   return "unexpected success"
 }
 
 // Limit params are canonical units (ms / bytes, same as unit literals)
-// with ceilings; a too-large value is a retryable failure naming the
-// limit and maximum.
+// with ceilings; a too-large value is a plain failure naming the limit
+// and maximum, and never destructive.
 node tooLarge() {
   const result = runCode("node main() { return 1 }", wallClock: 999999999)
   if (isFailure(result)) {
     const message = "${result.error}"
-    return [result.retryable, message.includes("3600000")]
+    return [result.destructiveRan, message.includes("3600000")]
   }
   return "unexpected success"
 }
 
 // A run()-level failure (here: the requested node does not exist; same
-// path as child module-init crashes) is retryable too: the model fixes
-// the source or node name and calls again, rather than losing the tool.
+// path as child module-init crashes) is neutral, not destructive.
 // (A crash INSIDE the child node is different: the child converts it to
 // a failure Result and run() succeeds with it as the node's value.)
 node runtimeFailure() {
   handle {
     const result = runCode("node main() { return 1 }", node: "missing")
     if (isFailure(result)) {
-      return ["runtime failure", result.retryable]
+      return [result.destructiveRan]
     }
     return "unexpected success"
   } with (e) {

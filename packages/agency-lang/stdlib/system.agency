@@ -85,14 +85,14 @@ export def exit(code: number = 0) {
   _exit(code)
 }
 
-export safe def args(): string[] {
+export def args(): string[] {
   """
   Return the command-line arguments passed to the Agency program (excluding the node executable and script path).
   """
   return _args()
 }
 
-export safe def cwd(): string {
+export def cwd(): string {
   """
   Return the absolute path of the current working directory of the Agency process.
   """
@@ -112,14 +112,14 @@ export safe def cwd(): string {
  * Falls back to the current working directory when called outside any Agency
  * execution frame (e.g. from non-Agency host code).
  */
-export safe def dirname(): string {
+export def dirname(): string {
   """
   Return the absolute path of the directory containing this Agency module's compiled JavaScript.
   """
   return _dirname()
 }
 
-export safe def env(name: string): string | null {
+export def env(name: string): string | null {
   """
   Read an environment variable. Returns null if the variable is not set.
   """
@@ -140,14 +140,14 @@ export def setEnv(name: string, value: string): Result {
   return try _setEnv(name, value)
 }
 
-export safe def isTTY(): boolean {
+export def isTTY(): boolean {
   """
   Return true if standard input is connected to a terminal. Returns false when stdin is piped or redirected from a file. Use this to detect non-interactive invocations (e.g. `echo "hi" | my-agent`) and adjust output accordingly.
   """
   return _isTTY()
 }
 
-export safe def readStdin(): string {
+export def readStdin(): string {
   """
   Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program.
   """

@@ -58,18 +58,18 @@ const SEC_DATA_BASE = "https://data.sec.gov/"
 const SEC_DATA_DOMAINS = ["data.sec.gov"]
 
 /** Build the submissions path for a 10-digit CIK. Pure — no network. */
-safe def buildSubmissionsPath(cik10: string): string {
+def buildSubmissionsPath(cik10: string): string {
   return "submissions/CIK${cik10}.json"
 }
 
 /** Build the archive URL for a filing's primary document. Pure — no network. */
-safe def buildArchiveUrl(cikNoPad: string, accessionNumber: string, primaryDocument: string): string {
+def buildArchiveUrl(cikNoPad: string, accessionNumber: string, primaryDocument: string): string {
   const accessionNoDashes = accessionNumber.replaceAll("-", "")
   return "https://www.sec.gov/Archives/edgar/data/${cikNoPad}/${accessionNoDashes}/${primaryDocument}"
 }
 
 /** Find a ticker in company_tickers.json and return its 10-digit CIK, or "" if absent. Pure. */
-safe def parseTickerMap(raw: any, ticker: string): string {
+def parseTickerMap(raw: any, ticker: string): string {
   const rows = Object.values(raw ?? {})
   const want = ticker.toUpperCase()
   const row = find(rows) as r {
@@ -83,7 +83,7 @@ safe def parseTickerMap(raw: any, ticker: string): string {
 }
 
 /** Reshape a submissions response into Filing[], optionally filtered by form and capped. Pure. */
-safe def parseSubmissions(cik10: string, raw: any, formType: string, limit: number): Filing[] {
+def parseSubmissions(cik10: string, raw: any, formType: string, limit: number): Filing[] {
   const r: any = raw ?? {}
   const filings: any = r.filings ?? {}
   const recent: any = filings.recent ?? {}
@@ -116,7 +116,7 @@ safe def parseSubmissions(cik10: string, raw: any, formType: string, limit: numb
 }
 
 /** Finalize a submissions fetch into a Result, shared by both orchestrators. Pure. */
-safe def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number, fetchResult: any): Result {
+def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number, fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
       if (((body.filings ?? null) == null)) {
@@ -128,7 +128,7 @@ safe def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number
   }
 }
 
-export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
+export def edgarFilingsByCik(cik: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
   List recent SEC filings for a company by its CIK (Central Index Key). Returns filings with
   form type, filing/report dates, and a direct URL to each primary document. Optionally filter
@@ -146,7 +146,7 @@ export safe def edgarFilingsByCik(cik: string, formType: string = "", limit: num
   return edgarSubmissionsFinalize(cik10, formType, limit, result)
 }
 
-export safe def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
+export def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
   List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").
   Resolves the ticker to a CIK, then returns filings with form type, filing/report dates, and

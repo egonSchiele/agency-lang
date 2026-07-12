@@ -50,7 +50,7 @@ export type StatelogEvalRecord = {
 }
 
 /** Delivered to the host via the `onEmit` callback. */
-export safe def emit(data: any) {
+export def emit(data: any) {
   """
   Emit a custom event to the calling TypeScript code.
 
@@ -101,7 +101,7 @@ export def evalOutput(value: any) {
   _evalOutput(value)
 }
 
-export safe def evalRecord(statelogPath: string, allowedPaths: string[] = []): StatelogEvalRecord {
+export def evalRecord(statelogPath: string, allowedPaths: string[] = []): StatelogEvalRecord {
   """
   Parse a statelog JSONL file and return the same structured EvalRecord
   produced by `agency eval extract`. Use this when an agent needs to inspect
@@ -115,7 +115,7 @@ export safe def evalRecord(statelogPath: string, allowedPaths: string[] = []): S
 }
 
 /** Mirrors `new StatelogParser(path).evalValues()` in TypeScript. */
-export safe def evalValues(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
+export def evalValues(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
   """
   Parse a statelog JSONL file and return the values recorded as eval values.
 
@@ -126,7 +126,7 @@ export safe def evalValues(statelogPath: string, allowedPaths: string[] = []): S
 }
 
 /** Mirrors `new StatelogParser(path).evalOutputs()` in TypeScript. */
-export safe def evalOutputs(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
+export def evalOutputs(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue[] {
   """
   Parse a statelog JSONL file and return the values recorded as eval outputs.
 
@@ -136,7 +136,7 @@ export safe def evalOutputs(statelogPath: string, allowedPaths: string[] = []): 
   return _evalOutputs(statelogPath, allowedPaths)
 }
 
-export safe def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue | null {
+export def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): StatelogEvalValue | null {
   """
   Parse a statelog JSONL file and return the final eval output, or null when
   the trace has no output. This is the canonical judge-ready final-output

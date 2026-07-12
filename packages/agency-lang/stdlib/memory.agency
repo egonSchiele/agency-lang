@@ -76,7 +76,7 @@ effect std::memory::forget { query: string }
 /** Useful for branching in user code (`if (isMemoryActive()) { ... }`)
  *  and for tests that verify memory is on without inspecting internal
  *  state. */
-export safe def isMemoryActive(): boolean {
+export def isMemoryActive(): boolean {
   """
   Return `true` when memory is on for the current branch and reads and
   writes will reach a real store. Returns `false` when memory was never
@@ -102,7 +102,7 @@ export def setMemoryId(id: string) {
   _setMemoryId(id)
 }
 
-export safe def getMemoryId(): string {
+export def getMemoryId(): string {
   """
   Return the current memory scope id, or "default" if it was never set
   or memory is not active.
@@ -180,7 +180,7 @@ export def memory(config: MemoryConfig, block: () -> any = null): Result {
   return result
 }
 
-export def remember(content: string) {
+export destructive def remember(content: string) {
   """
   Extract structured facts (entities, observations, and relations) from
   the given text and store them in the knowledge graph.
@@ -208,7 +208,7 @@ export def remember(content: string) {
   }
 }
 
-export safe def recall(query: string): string {
+export def recall(query: string): string {
   """
   Retrieve relevant facts from the knowledge graph as a formatted
   string. Combines structured lookup, embedding similarity, and

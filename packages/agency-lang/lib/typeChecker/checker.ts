@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { diagnostic } from "./diagnostics.js";
 import {
   AgencyNode,
@@ -47,9 +48,9 @@ import { isSchemaTypeHint } from "../utils/schemaParam.js";
  */
 function variadicElementType(
   param: FunctionParameter,
-): VariableType | "any" | undefined {
+): VariableType | undefined {
   if (param.typeHint?.type === "arrayType") return param.typeHint.elementType;
-  return param.typeHint ?? "any";
+  return param.typeHint ?? ANY_T;
 }
 
 /**
@@ -71,7 +72,7 @@ function variadicNamedSlotType(
 }
 
 export type ParamSlot = {
-  type: VariableType | "any" | undefined;
+  type: VariableType | undefined;
   validated: boolean;
   /** Original parameter name. Absent for builtins (which can't take named args). */
   name?: string;
@@ -380,11 +381,11 @@ function checkCallAgainstBuiltinSig(
     }
     seenNamed.add(a.name);
     // Validate the named-arg value's type against the declared one
-    // (Copilot #4). Skip when the allowlist entry is `"any"`.
+    // (Copilot #4). Skip when the allowlist entry is the `any` type.
     const expected = allowedNamed[a.name];
-    if (expected !== "any") {
+    if (!isAnyType(expected)) {
       const actual = synthType(a.value, scope, ctx);
-      if (actual !== "any" && !isAssignable(actual, expected, typeAliases)) {
+      if (!isAnyType(actual) && !isAssignable(actual, expected, typeAliases)) {
         ctx.errors.push(
           diagnostic(
             "namedArgTypeMismatch",
@@ -520,7 +521,7 @@ function checkBlockArgShape(
     if (
       hint === undefined ||
       hint.type === "blockType" ||
-      (hint.type === "primitiveType" && hint.value === "any")
+      isAnyType(hint)
     ) {
       return true;
     }
@@ -745,7 +746,7 @@ function checkArgsAgainstParams(
     }
     const argType = synthType(innerArg, scope, ctx);
     const paramType = slot?.type;
-    if (paramType === undefined || paramType === "any" || argType === "any") {
+    if (paramType === undefined || isAnyType(paramType) || isAnyType(argType)) {
       continue;
     }
     // Validated params accept either the un-bang'd type T or any Result —
@@ -791,7 +792,7 @@ function checkSplatAgainstRemainingParams(
   ctx: TypeCheckerContext,
 ): void {
   const splatType = synthType(splatSource, scope, ctx);
-  if (splatType === "any") return;
+  if (isAnyType(splatType)) return;
   if (splatType.type !== "arrayType") {
     const splatStr = formatTypeHint(splatType);
     ctx.errors.push(
@@ -813,7 +814,7 @@ function checkSplatAgainstRemainingParams(
     const slot = sig.resolveSlot({ kind: "positional", index: i });
     if (!slot) continue;
     const paramType = slot.type;
-    if (paramType === undefined || paramType === "any") continue;
+    if (paramType === undefined || isAnyType(paramType)) continue;
     if (isAssignable(elementType, paramType, typeAliases)) continue;
     const paramStr = formatTypeHint(paramType);
     ctx.errors.push(
@@ -951,10 +952,10 @@ function validatePipeArg(
   ctx: TypeCheckerContext,
 ): void {
   const slotType = pipeRhsSlotType(expr.right, ctx);
-  if (slotType === undefined || slotType === "any") return;
+  if (slotType === undefined || isAnyType(slotType)) return;
 
   const leftType = synthType(expr.left, scope, ctx);
-  if (leftType === "any") return;
+  if (isAnyType(leftType)) return;
   const flowingType =
     leftType.type === "resultType" ? leftType.successType : leftType;
   if (isAnyType(flowingType)) return;
@@ -976,7 +977,7 @@ function validatePipeArg(
 function pipeRhsSlotType(
   rhs: AgencyNode,
   ctx: TypeCheckerContext,
-): VariableType | "any" | undefined {
+): VariableType | undefined {
   if (rhs.type === "variableName") {
     const params = getParamsForNodeOrFunc(rhs.value, ctx);
     return params?.[0]?.typeHint;
@@ -1005,7 +1006,7 @@ function checkCatchDefaultType(
   ctx: TypeCheckerContext,
 ): void {
   const left = synthType(node.left, scope, ctx);
-  if (left === "any") return;
+  if (isAnyType(left)) return;
   const expected = left.type === "resultType" ? left.successType : left;
   checkType(node.right, expected, scope, "catch default", ctx);
 }

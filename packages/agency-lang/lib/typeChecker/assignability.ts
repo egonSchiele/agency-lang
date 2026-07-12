@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { Tag, TypeAliasEntry, TypeParam, VariableType } from "../types.js";
 import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 import { substituteTypeParams } from "./substitute.js";
@@ -338,8 +339,7 @@ function collectLiteralKeys(keyType: VariableType): string[] | null {
   return null;
 }
 
-export function widenType(vt: VariableType | "any"): VariableType | "any" {
-  if (vt === "any") return "any";
+export function widenType(vt: VariableType): VariableType {
   switch (vt.type) {
     case "stringLiteralType":
       return STRING_T;
@@ -352,35 +352,35 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         type: "objectType",
         properties: vt.properties.map((p) => ({
           key: p.key,
-          value: widenType(p.value) as VariableType,
+          value: widenType(p.value),
         })),
       };
     case "arrayType":
       return {
         type: "arrayType",
-        elementType: widenType(vt.elementType) as VariableType,
+        elementType: widenType(vt.elementType),
       };
     case "unionType":
       return {
         type: "unionType",
-        types: vt.types.map((t) => widenType(t) as VariableType),
+        types: vt.types.map((t) => widenType(t)),
       };
     case "resultType":
       return {
         type: "resultType",
-        successType: widenType(vt.successType) as VariableType,
-        failureType: widenType(vt.failureType) as VariableType,
+        successType: widenType(vt.successType),
+        failureType: widenType(vt.failureType),
       };
     case "schemaType":
       return {
         type: "schemaType",
-        inner: widenType(vt.inner) as VariableType,
+        inner: widenType(vt.inner),
       };
     case "genericType":
       return {
         type: "genericType",
         name: vt.name,
-        typeArgs: vt.typeArgs.map((a) => widenType(a) as VariableType),
+        typeArgs: vt.typeArgs.map((a) => widenType(a)),
       };
     default:
       return vt;
@@ -388,8 +388,8 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
 }
 
 /** True iff `vt` is the bottom type `never`. */
-export function isNever(vt: VariableType | "any"): boolean {
-  return vt !== "any" && vt.type === "primitiveType" && vt.value === "never";
+export function isNever(vt: VariableType): boolean {
+  return !isAnyType(vt) && vt.type === "primitiveType" && vt.value === "never";
 }
 
 /**
@@ -403,15 +403,15 @@ export function isOptionalType(
 ): boolean {
   const resolved = safeResolveType(vt, typeAliases);
   if (resolved.type === "primitiveType")
-    return resolved.value === "null" || resolved.value === "any";
+    return resolved.value === "null" || isAnyType(resolved);
   if (resolved.type === "unionType")
     return resolved.types.some((t) => isOptionalType(t, typeAliases));
   return false;
 }
 
 export function isAssignable(
-  source: VariableType | "any",
-  target: VariableType | "any",
+  source: VariableType,
+  target: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
   return isAssignableGuarded(source, target, typeAliases, new Set());
@@ -430,13 +430,15 @@ export function isAssignable(
  * repeats recompute real results.
  */
 function isAssignableGuarded(
-  source: VariableType | "any",
-  target: VariableType | "any",
+  source: VariableType,
+  target: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
   inProgress: Set<string>,
 ): boolean {
-  if (source === "any" || target === "any") return true;
-
+  // No pre-resolution any fast path: `any` is caught post-resolution in
+  // isAssignableInner, which also covers an alias whose body is `any`
+  // (e.g. `type Foo = any`). A pre-resolution isAnyType(source) would miss
+  // that alias and regress its assignability.
   const named =
     source.type === "typeAliasVariable" ||
     source.type === "genericType" ||
@@ -482,11 +484,9 @@ function isAssignableInner(
     return true;
   }
 
-  // primitiveType("any") behaves the same as the "any" sentinel
-  if (
-    (resolvedSource.type === "primitiveType" && resolvedSource.value === "any") ||
-    (resolvedTarget.type === "primitiveType" && resolvedTarget.value === "any")
-  ) {
+  // `any` on either side (including an alias resolving to `any`) is
+  // assignable both ways.
+  if (isAnyType(resolvedSource) || isAnyType(resolvedTarget)) {
     return true;
   }
 

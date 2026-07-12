@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import type { VariableType } from "../types.js";
 import type { MatchYield } from "../types/matchYield.js";
 import type { SourceLocation } from "../types/base.js";
@@ -65,7 +66,7 @@ export function computeMatchExprTypes(
         const typeExpr = (y: MatchYield) => y.typeSource ?? y.value;
         const types = yields.map((y) => {
           const e = typeExpr(y);
-          return e ? synthType(e, info.scope, ctx) : "any";
+          return e ? synthType(e, info.scope, ctx) : ANY_T;
         });
         // Record each yield's UNWIDENED type + loc for CHECKED-position
         // per-arm assignability checking (see `checkMatchExprYields`).
@@ -73,14 +74,11 @@ export function computeMatchExprTypes(
           type: types[i],
           loc: typeExpr(y)?.loc ?? y.loc,
         }));
-        // A yield of `any` (the sentinel string OR the `any` primitive) makes
-        // the whole match's value type `any` — the union can't be narrowed.
-        const isAny = (t: VariableType | "any") => t === "any" || isAnyType(t);
-        ctx.matchExprTypes[id] = types.some(isAny)
-          ? "any"
-          : unionTypes(
-              (types as VariableType[]).map((t) => widenType(t) as VariableType),
-            );
+        // A yield of `any` makes the whole match's value type `any` — the
+        // union can't be narrowed.
+        ctx.matchExprTypes[id] = types.some(isAnyType)
+          ? ANY_T
+          : unionTypes(types.map((t) => widenType(t)));
       }
 
     });
@@ -146,8 +144,7 @@ export function checkMatchExprYields(
   if (!yields) return;
   // If ANY arm yields `any` the match's value type collapses to `any` (same
   // rule as `matchExprTypes`), which is assignable to anything — no error.
-  const isAny = (t: VariableType | "any") => t === "any" || isAnyType(t);
-  if (yields.some((y) => isAny(y.type))) return;
+  if (yields.some((y) => isAnyType(y.type))) return;
   // Report the FIRST arm whose UNWIDENED yield type is not assignable to the
   // expected type. Anchoring on that arm's value gives a precise location and
   // names the offending value; stopping after one keeps the diagnostic count

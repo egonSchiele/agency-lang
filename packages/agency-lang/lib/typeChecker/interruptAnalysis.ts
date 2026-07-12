@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
@@ -123,7 +124,7 @@ function calleeDeclaredEffects(
   ctx: TypeCheckerContext,
 ): string[] {
   const t = scope.lookup(functionName);
-  if (t === undefined || t === "any") return [];
+  if (t === undefined || isAnyType(t)) return [];
   const resolved = safeResolveType(t, ctx.getTypeAliases());
   if (resolved.type !== "blockType" || !resolved.raises) return [];
   const set = resolveEffectSet(resolved.raises, ctx.getTypeAliases());
@@ -227,8 +228,8 @@ function functionRefsInArgs(
 }
 
 /** Recursively extract function names from a synthesized type. */
-function functionNamesFromType(t: VariableType | "any", out: string[]): void {
-  if (t === "any") return;
+function functionNamesFromType(t: VariableType, out: string[]): void {
+  if (isAnyType(t)) return;
   switch (t.type) {
     case "functionRefType":
       addUnique(out, t.name);

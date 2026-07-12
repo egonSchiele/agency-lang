@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import type { AgencyNode, Expression } from "../types.js";
 import type { BlockType } from "../types/typeHints.js";
 import type { InterruptEffect } from "../symbolTable.js";
@@ -78,7 +79,7 @@ export function functionValueEffects(
   }
 
   const synthed = synthType(expr, info.scope, ctx);
-  if (synthed === "any") {
+  if (isAnyType(synthed)) {
     return NO_EFFECTS; // unknown type — claim nothing (the checker's fail-open convention)
   }
 

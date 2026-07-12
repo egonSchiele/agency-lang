@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { SourceLocation } from "../types/base.js";
 import type { TypeCheckError } from "./types.js";
@@ -35,7 +36,7 @@ type EffectMap = Record<string, InterruptEffect[]>;
 
 /** A function value flowing into a typed slot. `target` is the slot's declared
  *  type, or a nullish value when there is none (then there's nothing to check). */
-type Flow = { source: Expression; target: VariableType | "any" | null | undefined };
+type Flow = { source: Expression; target: VariableType | null | undefined };
 
 // -- WHERE: the sites a node introduces --------------------------------------
 
@@ -128,10 +129,10 @@ function valueFlows(
 /** The effects a function-type target allows, or null for no constraint: not a
  *  function type, no `raises` clause, or `<*>` (which allows anything). */
 function targetAllowed(
-  target: VariableType | "any" | null | undefined,
+  target: VariableType | null | undefined,
   ctx: TypeCheckerContext,
 ): { labels: string[]; name: string } | null {
-  if (!target || target === "any") return null;
+  if (!target || isAnyType(target)) return null;
   const resolved = safeResolveType(target, ctx.getTypeAliases());
   if (resolved.type !== "blockType" || !resolved.raises) return null;
   const allowed = resolveEffectSet(resolved.raises, ctx.getTypeAliases());

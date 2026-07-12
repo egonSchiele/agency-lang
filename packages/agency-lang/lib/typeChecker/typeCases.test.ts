@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { describe, it, expect } from "vitest";
 import { decomposeCases } from "./typeCases.js";
 import { STRING_T, NUMBER_T } from "./primitives.js";
@@ -39,7 +40,7 @@ describe("decomposeCases", () => {
   });
 
   it("any → open", () => {
-    expect(decomposeCases("any", {})).toEqual({ cases: [], closed: false });
+    expect(decomposeCases(ANY_T, {})).toEqual({ cases: [], closed: false });
   });
 
   it("union containing any → open", () => {

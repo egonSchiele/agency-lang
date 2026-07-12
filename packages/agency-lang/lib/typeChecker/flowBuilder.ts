@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import type { AgencyNode, Expression } from "../types.js";
 import type { AccessChainElement } from "../types/access.js";
 import { Scope, type ScopeType } from "./scope.js";
@@ -200,7 +201,7 @@ const statementRules: StatementRuleTable = {
       kind: "assign",
       prev: flow,
       ref: { variable: node.variableName, chain: [] },
-      type: env.scope.lookup(node.variableName) ?? "any",
+      type: env.scope.lookup(node.variableName) ?? ANY_T,
     };
     // Expression-match consumer (`const x = match(...)`): the type snapshotted
     // above is stale — the union isn't computed until computeMatchExprTypes

@@ -191,19 +191,19 @@ const llmContent: VariableType = {
 export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
   describe: {
     params: [string],
-    returnType: "any",
+    returnType: ANY_T,
     description:
       "Override the tool description an LLM sees for this function. Returns a new tool.",
   },
   preapprove: {
     params: [],
-    returnType: "any",
+    returnType: ANY_T,
     description:
       "Auto-approve every interrupt this function raises. Returns a new tool.",
   },
   rename: {
     params: [string],
-    returnType: "any",
+    returnType: ANY_T,
     description:
       "Give this tool a distinct name (the name the LLM sees and that tool-call dispatch matches). Use when deriving several tools from one function — `.partial()`/`.describe()`/import aliases keep the base name, which collides in a single `llm({tools})` call. Returns a new tool.",
   },
@@ -222,23 +222,23 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   // --- Result type (lib/runtime/result.ts) ---
   success: {
-    params: ["any"],
-    returnType: "any",
+    params: [ANY_T],
+    returnType: ANY_T,
     description: "Wrap a value in a successful `Result`.",
   },
   failure: {
-    params: ["any", "any"],
+    params: [ANY_T, ANY_T],
     minParams: 1,
-    returnType: "any",
+    returnType: ANY_T,
     description: "Wrap an error (and optionally a value) in a failed `Result`.",
   },
   isSuccess: {
-    params: ["any"],
+    params: [ANY_T],
     returnType: boolean,
     description: "Check whether a `Result` is a success.",
   },
   isFailure: {
-    params: ["any"],
+    params: [ANY_T],
     returnType: boolean,
     description: "Check whether a `Result` is a failure.",
   },
@@ -247,7 +247,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // processFunctionCall in typescriptBuilder.ts). Registered here so the
   // undefined-function diagnostic doesn't warn on legitimate usage.
   throw: {
-    params: ["any"],
+    params: [ANY_T],
     returnType: voidT,
     description:
       "Raise an exception. Unwinds the current function/node. Argument is coerced to a string for the Error message.",
@@ -259,14 +259,14 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // `emit` stdlib wrapper calls it. Registered here so `std::statelog`
   // (which now owns `emit`) type-checks clean.
   _emit: {
-    params: ["any"],
+    params: [ANY_T],
     returnType: voidT,
     description: "Emit a custom event to the host via the onEmit callback.",
   },
 
   // --- Checkpoint / rewind ---
   restore: {
-    params: ["any", "any"],
+    params: [ANY_T, ANY_T],
     returnType: voidT,
     description:
       "Restore execution to a previously captured checkpoint. Accepts a checkpoint object or ID and an options object (e.g. `{ maxRestores: 3 }` or variable overrides).",
@@ -274,21 +274,21 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   // --- Handler outcomes (reserved names) ---
   approve: {
-    params: ["any"],
+    params: [ANY_T],
     minParams: 0,
-    returnType: "any",
+    returnType: ANY_T,
     description:
       "Inside a `handle ... with` block, approve the wrapped action (optionally substituting a return value).",
   },
   reject: {
-    params: ["any"],
+    params: [ANY_T],
     minParams: 0,
-    returnType: "any",
+    returnType: ANY_T,
     description: "Inside a `handle ... with` block, block the wrapped action.",
   },
   propagate: {
     params: [],
-    returnType: "any",
+    returnType: ANY_T,
     description:
       "Inside a `handle ... with` block, pass the interrupt up to the next handler in the chain.",
   },
@@ -302,7 +302,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   },
   getCheckpoint: {
     params: [number],
-    returnType: "any",
+    returnType: ANY_T,
     description: "Return the full checkpoint object for a given checkpoint ID.",
   },
 
@@ -324,7 +324,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   },
   race: {
     params: [anyArray],
-    returnType: "any",
+    returnType: ANY_T,
     acceptsBlock: true,
     acceptsNamedArgs: { shared: boolean },
     description:
@@ -333,7 +333,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   callback: {
     params: [string],
-    returnType: "any",
+    returnType: ANY_T,
     acceptsBlock: true,
     description:
       "Register a callback. Use as `callback('<eventName>') as data { ... }`. The block receives event data as an argument.",

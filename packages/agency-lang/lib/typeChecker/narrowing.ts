@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import type { AgencyNode, Expression, TypeAliasEntry, IfElse, VariableType } from "../types.js";
 import type {
   StringLiteralType,
@@ -416,7 +417,7 @@ export function applyNarrowing(
     if (cand.ref.chain.length !== 0) continue;
     const name = cand.ref.variable;
     const current = childScope.lookup(name);
-    if (!current || current === "any") continue;
+    if (!current || isAnyType(current)) continue;
     // "what to narrow to" is delegated to narrowByRefine (the same dispatcher
     // the flow path uses). It resolves through type-alias variables itself
     // (mirrors synthValueAccess) so alias-typed scrutinees still narrow; null

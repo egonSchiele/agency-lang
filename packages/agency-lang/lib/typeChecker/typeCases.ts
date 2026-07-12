@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import type { VariableType, TypeAliasEntry } from "../types.js";
 import { safeResolveType } from "./assignability.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
@@ -98,10 +99,10 @@ function allDistinct(values: (string | number | boolean)[]): boolean {
  * their enumeration belongs to `resolveEffectSet` (handler-narrowing spec).
  */
 export function decomposeCases(
-  type: VariableType | "any",
+  type: VariableType,
   aliases: Record<string, TypeAliasEntry>,
 ): CaseSet {
-  if (type === "any") return OPEN;
+  if (isAnyType(type)) return OPEN;
   // safeResolveType yields ANY_T (a primitiveType "any"), never the string
   // "any"; an unresolved/any type falls through to the default OPEN below.
   const resolved = safeResolveType(type, aliases);
@@ -116,7 +117,7 @@ export function decomposeCases(
   if (resolved.type === "unionType") {
     if (resolved.isEffectSet) return OPEN; // owned by resolveEffectSet, never re-walked
     const members = resolved.types.map((m) => safeResolveType(m, aliases));
-    if (members.some((rm) => rm.type === "primitiveType" && rm.value === "any")) {
+    if (members.some(isAnyType)) {
       return OPEN; // a union with an open member can't be required to be exhaustive
     }
     // B2: a union whose members are all literal-tagged, distinct-valued objects

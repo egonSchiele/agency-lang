@@ -64,10 +64,10 @@ export type ScopeInfo = {
 };
 
 export type BuiltinSignature = {
-  params: (VariableType | "any")[];
-  returnType: VariableType | "any";
+  params: (VariableType)[];
+  returnType: VariableType;
   minParams?: number; // if set, arity is [minParams, params.length]; otherwise exact
-  restParam?: VariableType | "any"; // if set, accepts unlimited extra args of this type after the fixed params
+  restParam?: VariableType; // if set, accepts unlimited extra args of this type after the fixed params
   /** One-line markdown description shown in LSP hover. */
   description?: string;
   /** If true, the typechecker allows a block argument on calls to this
@@ -80,9 +80,9 @@ export type BuiltinSignature = {
    *  builtins use this to permit `fork(items, shared: true)` /
    *  `race(items, shared: true)` without opening the door to typos
    *  silently going through. Values are typechecked against the
-   *  declared type; duplicates are rejected. Use `"any"` to skip
-   *  value validation. */
-  acceptsNamedArgs?: Record<string, VariableType | "any">;
+   *  declared type; duplicates are rejected. Use the `any` type
+   *  (`ANY_T`) to skip value validation. */
+  acceptsNamedArgs?: Record<string, VariableType>;
 };
 
 export type TypeCheckerContext = {
@@ -96,14 +96,14 @@ export type TypeCheckerContext = {
   jsImportedNames: Record<string, true>;
   interruptEffectsByFunction: Record<string, InterruptEffect[]>;
   errors: TypeCheckError[];
-  inferredReturnTypes: Record<string, VariableType | "any">;
+  inferredReturnTypes: Record<string, VariableType>;
   inferringReturnType: Set<string>;
   /** The value type of each expression-position `match`, keyed by its match id.
    *  Populated by `computeMatchExprTypes` (runs after buildFlowGraphs, before
    *  checkScopes): the widened union of the match's `matchYield` value types, or
    *  "any" if any yield is "any". Consumed by the `__matchval_<id>` synth hook
    *  and the `matchExprSource` assignment check. */
-  matchExprTypes: Record<number, VariableType | "any">;
+  matchExprTypes: Record<number, VariableType>;
   /** The UNWIDENED value type + source loc of every `matchYield` of each
    *  expression-position `match`, keyed by match id. Populated alongside
    *  `matchExprTypes` by `computeMatchExprTypes`. In a CHECKED position (the
@@ -114,7 +114,7 @@ export type TypeCheckerContext = {
    *  `matchExprTypes` is used only for synthesis (unannotated) positions. */
   matchExprYieldTypes: Record<
     number,
-    { type: VariableType | "any"; loc: SourceLocation | undefined }[]
+    { type: VariableType; loc: SourceLocation | undefined }[]
   >;
   config: AgencyConfig;
   /** Optional symbol table threaded through from `buildCompilationUnit`.
@@ -136,5 +136,5 @@ export type TypeCheckerContext = {
   inferReturnTypeFor(
     name: string,
     def: FunctionDefinition | GraphNodeDefinition,
-  ): VariableType | "any";
+  ): VariableType;
 };

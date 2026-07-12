@@ -1,3 +1,4 @@
+import { ANY_T } from "./primitives.js";
 import { describe, it, expect } from "vitest";
 import { isAssignable, isNever, widenType } from "./assignability.js";
 import { formatTypeHint } from "../cli/util.js";
@@ -32,7 +33,7 @@ describe("never (bottom type)", () => {
   it("isNever recognizes only the never primitive", () => {
     expect(isNever(NEVER_T)).toBe(true);
     expect(isNever(STRING_T)).toBe(false);
-    expect(isNever("any")).toBe(false);
+    expect(isNever(ANY_T)).toBe(false);
   });
 
   it("widenType passes never through unchanged", () => {
@@ -233,5 +234,19 @@ describe("narrowed Result member assignable to Result type", () => {
       properties: [{ key: "nope", value: STRING_T }],
     };
     expect(isAssignable(other, resultT, {})).toBe(false);
+  });
+});
+
+describe("an alias whose body is `any` (#472)", () => {
+  // Regression: the post-resolution any check is the only one that catches an
+  // alias resolving to `any` (the pre-resolution fast path was removed). A
+  // typeAliasVariable is not itself `any`, so deleting the post-resolution
+  // check would make an any-alias non-assignable to anything.
+  const aliases = { Foo: { body: ANY_T } };
+  const FooRef: VariableType = { type: "typeAliasVariable", aliasName: "Foo" };
+
+  it("is assignable both directions", () => {
+    expect(isAssignable(FooRef, NUMBER_T, aliases)).toBe(true); // any-alias -> concrete
+    expect(isAssignable(NUMBER_T, FooRef, aliases)).toBe(true); // concrete -> any-alias
   });
 });

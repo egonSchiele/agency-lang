@@ -45,7 +45,11 @@ export function getBlockSlot(
   return last.typeHint;
 }
 
-export function isAnyType(t: VariableType): boolean {
+/** True when `t` is the `any` type. A type predicate so the false branch
+ *  narrows to the non-`any` variants at call sites. */
+export function isAnyType(
+  t: VariableType,
+): t is VariableType & { type: "primitiveType"; value: "any" } {
   return t.type === "primitiveType" && t.value === "any";
 }
 
@@ -119,7 +123,7 @@ function typeAcceptsResult(t: VariableType): boolean {
   if (t.type === "resultType") {
     return true;
   }
-  if (t.type === "primitiveType" && t.value === "any") {
+  if (isAnyType(t)) {
     return true;
   }
   if (t.type === "unionType") {
@@ -172,7 +176,7 @@ export function checkType(
   }
 
   const actualType = synthType(expr, scope, ctx);
-  if (actualType === "any") return;
+  if (isAnyType(actualType)) return;
 
   // Literal value nodes may carry no loc of their own; anchor on the
   // enclosing statement when the caller supplied one.
@@ -190,13 +194,13 @@ export function checkType(
  * neither hand-rolls the message.
  */
 export function emitAssignabilityError(
-  actual: VariableType | "any",
+  actual: VariableType,
   expected: VariableType,
   loc: SourceLocation | undefined,
   context: string,
   ctx: TypeCheckerContext,
 ): void {
-  if (actual === "any") return;
+  if (isAnyType(actual)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
   ctx.errors.push(
     diagnostic(
@@ -226,7 +230,7 @@ export function checkConditionType(
   ctx: TypeCheckerContext,
 ): void {
   const actualType = synthType(condition, scope, ctx);
-  if (actualType === "any") {
+  if (isAnyType(actualType)) {
     return;
   }
   const typeAliases = ctx.getTypeAliases();
